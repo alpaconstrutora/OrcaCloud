@@ -5,12 +5,13 @@
  * confirmada nem tubo de outra disciplina — e relança num lote só, com o registro.
  */
 import { describe, expect, it } from 'vitest';
-import { ModelHistory, applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { ModelHistory, PARAMETRO_COTA_DA_REDE, applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { planejarEsgotoCompleto } from '../utils/blueprintEsgotoCompleto';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
 import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
   ESCOLHAS_DO_ESGOTO,
+  MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA,
   MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO,
   botaoDeLancarEsgoto,
   comRegistroDoEsgoto,
@@ -114,7 +115,7 @@ describe('esgoto — as escolhas e o aviso (regra B)', () => {
     expect(diferencasDoEsgoto(antiga, premissas({ caimentoPctAte75: 3 }))).toEqual([]);
     const plano = planejarEsgotoCompleto(antiga, P.esgoto, null, opcoesDoEsgoto(antiga, P));
     expect(plano.comandos).toEqual([]);
-    expect(botaoDeLancarEsgoto(antiga, plano, [], null)).toEqual({ modo: 'RELANCAR', motivo: null });
+    expect(botaoDeLancarEsgoto(antiga, plano, [], null)).toEqual({ modo: 'RELANCAR', motivo: null, refazer: null });
   });
 });
 
@@ -195,7 +196,7 @@ describe('esgoto — o Refazer', () => {
     const d = diferencasDoEsgoto(m, TRATAMENTO);
     const plano = planejarEsgotoCompleto(m, TRATAMENTO.esgoto, null, opcoesDoEsgoto(m, TRATAMENTO));
     expect(plano.confirmadosDoOutroDestino.length).toBeGreaterThan(0);
-    expect(botaoDeLancarEsgoto(m, plano, d, null)).toEqual({ modo: 'RELANCAR', motivo: null });
+    expect(botaoDeLancarEsgoto(m, plano, d, null)).toEqual({ modo: 'RELANCAR', motivo: null, refazer: null });
     const texto = textoDaConfirmacaoDoEsgoto(esgotoARefazer(m, TRATAMENTO))!;
     expect(texto).toContain('1 ligação(ões) à rede pública');
     expect(texto).toContain('O que mudou: Destino do esgoto — lançado com: rede pública · agora: tratamento individual.');
@@ -211,16 +212,90 @@ describe('esgoto — o Refazer', () => {
     const m = aceitar(esgotoLancado(P, planta(), true));
     const plano = planejarEsgotoCompleto(m, TRATAMENTO.esgoto, null, opcoesDoEsgoto(m, TRATAMENTO));
     expect(diferencasDoEsgoto(m, TRATAMENTO)).toEqual([]);
-    expect(botaoDeLancarEsgoto(m, plano, [], null)).toEqual({ modo: 'LANCAR', motivo: null });
+    expect(botaoDeLancarEsgoto(m, plano, [], null)).toEqual({ modo: 'LANCAR', motivo: null, refazer: null });
   });
 
-  it('⚠️ com a ligação CONFIRMADA e a rede pública de destino, o Refazer a mantém (só a sugerida é refeita)', () => {
-    const m = aceitar(esgotoLancado());
+  /** A ligação com a cota da rede CONFIRMADA (o "Confirmar cota" do painel do coletor). */
+  function comCotaConfirmada(m: BlueprintModel): BlueprintModel {
+    const ligacao = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO')!;
+    return applyCommand(m, { type: 'SetParametros', familia: 'terminal', id: ligacao.id, valores: { [PARAMETRO_COTA_DA_REDE]: 'confirmada' } }).model;
+  }
+
+  it('⚠️ correção 1 (I2): ligação com a cota CONFIRMADA fica; a profundidade nova não se aplica a ela — a confirmação diz, o aviso não a cobra, e o registro guarda a ANTERIOR', () => {
+    const m = comCotaConfirmada(aceitar(esgotoLancado()));
     const ligacao = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO')!;
     expect(redeDoEsgotoDoSistema(m, 'REDE_PUBLICA').pecas.some((x) => x.id === ligacao.id)).toBe(false);
-    const depois = applyBatch(m, comandosDeRefazerEsgoto(m, premissas({ caimentoPctAte75: 3 }), null).comandos).model;
-    expect((depois.terminais ?? []).filter((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO').map((x) => x.id)).toEqual([ligacao.id]);
+    const funda = premissas({ profundidadeDaRedeMm: 2500, caimentoPctAte75: 3 });
+    // A profundidade não entra no aviso (relançar não a aplicaria) — só o caimento.
+    expect(diferencasDoEsgoto(m, funda).map((d) => d.item)).toEqual(['caimentoPctAte75']);
+    const texto = textoDaConfirmacaoDoEsgoto(esgotoARefazer(m, funda))!;
+    expect(texto).toContain('a ligação à rede pública com a cota confirmada — fica como está; a profundidade da rede nova não se aplica a ela');
+    const depois = applyBatch(m, comandosDeRefazerEsgoto(m, funda, null).comandos).model;
+    const ligacoes = (depois.terminais ?? []).filter((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO');
+    expect(ligacoes.map((x) => [x.id, x.cotaMm])).toEqual([[ligacao.id, ligacao.cotaMm]]);
     expect((depois.trechos ?? []).some((t) => t.rotulo === 'Coletor predial')).toBe(true);
+    // O registro NÃO diz 2500: guarda a profundidade com que a ligação foi posta.
+    expect(registroDe(depois, 'ESGOTO', null)?.escolhas).toMatchObject({ profundidadeDaRedeMm: 1500, caimentoPctAte75: 3 });
+    // Tirada a confirmação da cota (estimada de novo), a profundidade volta a contar: o aviso acende.
+    const estimada = applyCommand(depois, { type: 'SetParametros', familia: 'terminal', id: ligacao.id, valores: { [PARAMETRO_COTA_DA_REDE]: 'estimada' } }).model;
+    expect(diferencasDoEsgoto(estimada, funda).map((d) => d.item)).toEqual(['profundidadeDaRedeMm']);
+  });
+
+  it('⚠️ correção 1 (I2): ligação ACEITA com a cota ESTIMADA e a profundidade nova — a ligação é refeita na cota nova, e a confirmação diz que volta', () => {
+    const m = aceitar(esgotoLancado());
+    const antes = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO')!;
+    expect(antes.sugerida).toBeFalsy();
+    const funda = premissas({ profundidadeDaRedeMm: 2500 });
+    expect(textoDaConfirmacaoDoEsgoto(esgotoARefazer(m, funda))).toContain('1 ligação(ões) aceita(s) com a cota ESTIMADA — volta(m) à posição e à cota do motor');
+    const depois = applyBatch(m, comandosDeRefazerEsgoto(m, funda, null).comandos).model;
+    const nova = (depois.terminais ?? []).filter((x) => x.tipoHidraulico === 'LIGACAO_ESGOTO');
+    expect(nova).toHaveLength(1);
+    expect(nova[0].cotaMm).toBe(antes.cotaMm - 1000);
+    expect(registroDe(depois, 'ESGOTO', null)?.escolhas).toMatchObject({ profundidadeDaRedeMm: 2500 });
+    expect(diferencasDoEsgoto(depois, funda)).toEqual([]);
+  });
+
+  /** As unidades do tratamento (tipo, posição, medidas). */
+  const unidades = (m: BlueprintModel) =>
+    (m.terminais ?? [])
+      .filter((x) => ['TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO'].includes(x.tipoHidraulico ?? ''))
+      .map((x) => `${x.tipoHidraulico}@${x.at.x},${x.at.y} ${x.larguraMm}x${x.profundidadeMm}`)
+      .sort();
+  /** O tratamento lançado e aceito, com o SUMIDOURO arrastado 2 m (decisão do usuário). */
+  function tratamentoArrastado(): BlueprintModel {
+    const m = aceitar(esgotoLancado(TRATAMENTO));
+    const sumidouro = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'SUMIDOURO')!;
+    return applyCommand(m, { type: 'TranslateEntities', wallIds: [], boundaryIds: [], structuralIds: [], terminalIds: [sumidouro.id], delta: point(2000, 0), manterJuncoes: false }).model;
+  }
+
+  it('⚠️ correção 1 (I1): tratamento CONFIRMADO e arrastado, só o caimento muda — as unidades ficam onde estão, e a confirmação diz', () => {
+    const m = tratamentoArrastado();
+    const antes = unidades(m);
+    const sumidouro = (m.terminais ?? []).find((x) => x.tipoHidraulico === 'SUMIDOURO')!;
+    const original = (esgotoLancado(TRATAMENTO).terminais ?? []).find((x) => x.tipoHidraulico === 'SUMIDOURO')!;
+    expect(sumidouro.at.x).toBe(original.at.x + 2000);
+    const outra = premissas({ destino: 'TRATAMENTO', caimentoPctAte75: 3 });
+    const texto = textoDaConfirmacaoDoEsgoto(esgotoARefazer(m, outra))!;
+    expect(texto).toContain('o tanque, o filtro e o sumidouro que você confirmou — ficam onde estão');
+    expect(texto).not.toMatch(/unidade\(s\) do tratamento/);
+    const re = comandosDeRefazerEsgoto(m, outra, null);
+    expect(re.plano?.pendencias.some((x) => /unidades confirmadas/.test(x))).toBe(false);
+    const depois = applyBatch(m, re.comandos).model;
+    expect(unidades(depois)).toEqual(antes);
+    expect(registroDe(depois, 'ESGOTO', null)?.escolhas).toMatchObject({ destino: 'TRATAMENTO', caimentoPctAte75: 3 });
+  });
+
+  it('⚠️ correção 1 (I1): mudou uma premissa do TRATAMENTO — as unidades são refeitas nas medidas e na posição do motor, e a confirmação diz', () => {
+    const m = tratamentoArrastado();
+    const semFiltro = premissas({ destino: 'TRATAMENTO' }, { tratamento: { ...H.tratamento, comFiltro: false } });
+    const texto = textoDaConfirmacaoDoEsgoto(esgotoARefazer(m, semFiltro))!;
+    expect(texto).toContain('3 unidade(s) do tratamento confirmada(s) — volta(m) à posição e às medidas do motor');
+    expect(texto).not.toContain('ficam onde estão');
+    const depois = applyBatch(m, comandosDeRefazerEsgoto(m, semFiltro, null).comandos).model;
+    const tipos = (depois.terminais ?? []).filter((x) => ['TANQUE_SEPTICO', 'FILTRO_ANAEROBIO', 'SUMIDOURO'].includes(x.tipoHidraulico ?? '')).map((x) => x.tipoHidraulico).sort();
+    expect(tipos).toEqual(['SUMIDOURO', 'TANQUE_SEPTICO']);
+    const sumidouro = (depois.terminais ?? []).find((x) => x.tipoHidraulico === 'SUMIDOURO')!;
+    expect(sumidouro.sugerida).toBe(true);
   });
 });
 
@@ -231,8 +306,12 @@ describe('esgoto — regra A', () => {
     expect(b.modo).toBe('LANCAR');
     expect(b.motivo).toBeTruthy();
     const m = planta();
-    expect(botaoDeLancarEsgoto(m, planejarEsgotoCompleto(m), [], null)).toEqual({ modo: 'LANCAR', motivo: null });
-    expect(botaoDeLancarEsgoto(m, planejarEsgotoCompleto(m), [], 'x')).toEqual({ modo: 'LANCAR', motivo: 'x' });
+    expect(botaoDeLancarEsgoto(m, planejarEsgotoCompleto(m), [], null)).toEqual({ modo: 'LANCAR', motivo: null, refazer: null });
+    // Correção 1 (menor 1): bloqueado, mas com pontos NOVOS a ligar — o "Lançar (n)" segue; o relançar fica bloqueado.
+    expect(botaoDeLancarEsgoto(m, planejarEsgotoCompleto(m), [], 'x')).toEqual({ modo: 'LANCAR', motivo: null, refazer: 'x' });
+    // Bloqueado e nada novo a ligar: desligado com o motivo.
+    const completo = aceitar(esgotoLancado(P, planta(), true));
+    expect(botaoDeLancarEsgoto(completo, planejarEsgotoCompleto(completo), [], 'x')).toEqual({ modo: 'LANCAR', motivo: 'x', refazer: 'x' });
   });
 });
 
@@ -293,7 +372,9 @@ describe('esgoto — a Casa Automática (faixa, tubo de queda por grupo, raio do
     expect(comandosDeRefazerEsgoto(antiga, premissas({}, { esgotoDaCasa: null }), null).comandos).toEqual([]);
     // Outro rebaixo no forro dos ambientes: não é a casa dessas premissas.
     const outroRebaixo = lancamentoDoEsgoto(casaAntiga(250), premissas({}, { esgotoDaCasa: { ...EXTRAS, forroDaAgua: FORRO_DA_AGUA } }));
-    expect(outroRebaixo.motivo).toMatch(/^Esgoto lançado antes do registro numa casa .* O forro dos ambientes \(rebaixo 250 mm\) difere das premissas da casa \(rebaixo 300 mm\)/);
+    expect(outroRebaixo.motivo).toMatch(/^Esgoto lançado antes do registro, e a água está no forro como a da Casa Automática .* O forro dos ambientes \(rebaixo 250 mm\) difere das premissas da casa \(rebaixo 300 mm\)/);
+    // Correção 1 (menor 1): enquanto as premissas carregam, o motivo diz isso (não "não foi possível ler").
+    expect(lancamentoDoEsgoto(antiga, premissas({}, { esgotoDaCasa: 'CARREGANDO' })).motivo).toBe(MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA);
     // Forro desligado nas premissas da casa.
     expect(lancamentoDoEsgoto(antiga, premissas({}, { esgotoDaCasa: { ...EXTRAS, forroDaAgua: null } })).motivo).toBe(`${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} O forro está desligado nas premissas da casa.`);
     // Sem água no forro (não é casa): relança pelo estudo, sem motivo, mesmo sem as premissas.

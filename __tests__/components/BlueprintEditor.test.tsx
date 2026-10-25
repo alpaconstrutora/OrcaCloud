@@ -4989,6 +4989,8 @@ describe('BlueprintEditor · ribbon', () => {
       expect(relancar).toBeEnabled();
       expect(relancar).toHaveTextContent('Relançar com as escolhas atuais');
       expect(within(dialog).queryByRole('button', { name: /^lançar/i })).not.toBeInTheDocument();
+      // Correção 1 (menor 4), intencional: no modo RELANCAR o botão principal JÁ é o refazer — sem "Refazer tudo" repetido.
+      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
     });
 
     it('⚠️ registro com outra escolha: aviso com a diferença; com confirmados, refazer pede confirmação dizendo quanto, o quê e o que mudou; refeito, o aviso some; um Desfazer o traz de volta', async () => {
@@ -5006,7 +5008,9 @@ describe('BlueprintEditor · ribbon', () => {
       const titulo = await screen.findByText('Refazer o esgoto?');
       const confirmacao = titulo.closest('[role="dialog"]') as HTMLElement;
       expect(confirmacao).toHaveTextContent(/Esgoto: (\d+) tubo\(s\) \(\1 confirmado\(s\)\), inclusive .*coletor \(\d+\)/);
-      expect(confirmacao).toHaveTextContent(/os aparelhos, os ralos e as caixas que você confirmou ficam/);
+      // Correção 1 (I1): o que volta e o que fica, item por item (a caixa de inspeção confirmada fica).
+      expect(confirmacao).toHaveTextContent(/Voltam: .*tubo\(s\) confirmado\(s\) — voltam ao traçado do motor/);
+      expect(confirmacao).toHaveTextContent(/Ficam: os aparelhos, os ralos e as caixas sifonadas; a caixa de inspeção que você confirmou — fica como está/);
       expect(confirmacao).toHaveTextContent(`O que mudou: ${AVISO}.`);
       await userEvent.setup().click(within(confirmacao).getByRole('button', { name: /^refazer$/i }));
       await waitFor(() => expect(within(gaveta).queryByTestId('aviso-escolhas-mudaram')).not.toBeInTheDocument());
@@ -5027,6 +5031,9 @@ describe('BlueprintEditor · ribbon', () => {
       expect(aviso).toHaveTextContent('Destino do esgoto — lançado com: rede pública · agora: tratamento individual');
       expect(within(dialog).getAllByTestId('aviso-escolhas-mudaram')).toHaveLength(1);
       expect(dialog).not.toHaveTextContent(/há peças confirmadas do outro destino/);
+      // Correção 1 (menor 3): o painel do tratamento não contradiz o aviso ("a ligação … não se aplica").
+      expect(within(gaveta).getByTestId('tratamento-motivo')).toHaveTextContent('A ligação à rede pública sai ao relançar com as escolhas atuais');
+      expect(gaveta).not.toHaveTextContent(/o tratamento individual não se aplica/);
       const relancar = doRodape(dialog, gaveta, /^relançar o esgoto com as escolhas atuais$/i);
       await user.click(relancar);
       const confirmacao = (await screen.findByText('Refazer o esgoto?')).closest('[role="dialog"]') as HTMLElement;
@@ -5064,6 +5071,22 @@ describe('BlueprintEditor · ribbon', () => {
       expect(principal.parentElement).toHaveAttribute('title', motivo);
       expect(principal).toHaveAccessibleDescription(motivo);
       expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+
+      // Correção 1 (menor 1): um ponto NOVO — o "Lançar (1)" volta a ligar (como antes da F4); o "Refazer tudo" fica à vista,
+      // desligado, com o motivo.
+      cleanup();
+      const comNovo = k.applyCommand(m, { type: 'AddTerminal', levelId: t, disciplina: 'ESGOTO', tipo: 'Chuveiro', at: k.point(1500, 2600), cotaMm: 0, tipoHidraulico: 'CHUVEIRO' }).model;
+      loadBranchModel.mockResolvedValue(comNovo);
+      await montar();
+      const novo = await abrirEsgoto();
+      expect(await within(novo.gaveta).findByTestId('esgoto-motivo')).toHaveTextContent(motivo);
+      const lancar = within(novo.dialog).getByRole('button', { name: /^lançar \(1\)$/i });
+      expect(lancar).toBeEnabled();
+      const refazer = within(novo.dialog).getByRole('button', { name: /^refazer tudo$/i });
+      expect(refazer).toBeDisabled();
+      expect(refazer).toHaveAttribute('title', motivo);
+      expect(refazer.parentElement).toHaveAttribute('title', motivo);
+      expect(refazer).toHaveAccessibleDescription(motivo);
     });
   });
 

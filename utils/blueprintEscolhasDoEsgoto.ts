@@ -34,14 +34,16 @@
  *   tratamento — o mesmo critério do "Refazer tudo" de antes) e os tubos com rótulo do motor (TQ, Ventilação, Coletor
  *   predial, Tratamento), confirmados inclusive.
  * - As caixas que o MOTOR põe: a caixa de inspeção SUGERIDA (a proposta) e as do coletor (rótulo "CI do coletor"), a
- *   ligação à rede SUGERIDA (com o destino tratamento, qualquer ligação: é o outro destino), as unidades de tratamento
- *   (o planejador do tratamento recusa relançar com unidade confirmada; com a rede pública, são o outro destino) e as
- *   válvulas de admissão de ar sobre os tubos apagados.
+ *   ligação à rede SUGERIDA ou com a cota ESTIMADA (correção 1, I2; com o destino tratamento, qualquer ligação: é o outro
+ *   destino), as unidades de tratamento — salvo o tratamento CONFIRMADO com o destino tratamento e as premissas dele sem
+ *   mudança (correção 1, I1: fica, com os tubos "Tratamento") — e as válvulas de admissão de ar sobre os tubos apagados.
  * - As peças EM LINHA sobre os tubos apagados (joelhos, tês, luvas, reduções — postas à mão): sem o tubo ficariam
  *   soltas. A confirmação as nomeia.
  * NÃO entram: os aparelhos, os ralos e as caixas sifonadas (as fontes da rede), a caixa de gordura (é âncora da casa,
- * não do esgoto), a caixa de inspeção CONFIRMADA (o motor a reaproveita) e a ligação CONFIRMADA com a rede pública
- * (a cota dela pode estar confirmada com a concessionária), nem tubo de outra disciplina.
+ * não do esgoto), a caixa de inspeção CONFIRMADA (o motor a reaproveita) e a ligação aceita com a cota CONFIRMADA (ou
+ * posta à mão) com a rede pública, nem tubo de outra disciplina. As escolhas que essas peças fixam (a profundidade da
+ * rede, os afastamentos da caixa) não se aplicam enquanto elas ficarem: fora do aviso, e o registro guarda o valor
+ * anterior (correção 1, I2). A confirmação diz, item por item, o que volta à posição/medida do motor e o que fica.
  *
  * ─── A CASA AUTOMÁTICA (faixa do esgoto e tubo de queda por banheiro) ────────
  * A casa lança o esgoto com hipóteses que o painel não tem: a FAIXA do esgoto (`faixa`: o tubo de queda e as colunas de
@@ -68,7 +70,7 @@ import {
   type HipotesesDeEsgoto,
 } from './blueprintEsgotoAutomatico';
 import { planejarEsgotoCompleto, type OpcoesDoEsgotoCompleto, type PlanoDoEsgotoCompleto } from './blueprintEsgotoCompleto';
-import { DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM, DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM, ROTULO_DA_CI_DO_COLETOR, ROTULO_DO_COLETOR } from './blueprintColetorPredial';
+import { DISTANCIA_MAXIMA_ATE_A_LIGACAO_MM, DISTANCIA_MAXIMA_ENTRE_CAIXAS_MM, ROTULO_DA_CI_DO_COLETOR, ROTULO_DO_COLETOR, cotaDaRedeEstimada } from './blueprintColetorPredial';
 import {
   HIPOTESES_TRATAMENTO_PADRAO,
   ROTULO_DO_TRATAMENTO,
@@ -127,7 +129,8 @@ export interface EsgotoDaCasa extends ExtrasDoEsgotoDaCasa {
 
 /**
  * Tudo com que o esgoto se lança. `esgotoDaCasa`: ausente = não verificar a casa (o lançamento usa só o estudo e o
- * registro); `null` = as premissas da casa não puderam ser lidas (carregando, erro); objeto = lidas.
+ * registro); `'CARREGANDO'` = as premissas da casa ainda estão chegando; `null` = não puderam ser lidas (erro); objeto =
+ * lidas.
  */
 export interface PremissasDoEsgoto {
   esgoto: HipotesesDeEsgoto;
@@ -135,7 +138,7 @@ export interface PremissasDoEsgoto {
   reservatorio: HipotesesDeReservatorio;
   /** Para a assinatura da casa (a cota do ramal da água distingue o forro). */
   agua?: Pick<HipotesesDeAgua, 'cotaRamalMm'>;
-  esgotoDaCasa?: EsgotoDaCasa | null;
+  esgotoDaCasa?: EsgotoDaCasa | null | 'CARREGANDO';
 }
 
 /** As chaves que só valem com um destino (fora da comparação quando um dos lados é o outro destino). */
@@ -289,13 +292,60 @@ export const ESCOLHAS_DO_ESGOTO: OpcoesDaComparacao = {
   },
 };
 
-/** O motivo de o esgoto não relançar por aqui: esgoto antigo numa casa, sem como reconstruir a faixa dela. */
+/**
+ * O motivo de o esgoto não relançar por aqui: esgoto antigo, sem registro, numa planta com a água no forro como a da
+ * Casa Automática — sem a faixa dela não há como relançar sem tirar o tubo de queda e a ventilação do lugar. Correção 1
+ * (menor 1): não afirma que É uma casa — só que a água está como a de uma.
+ */
 export const MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO =
-  'Esgoto lançado antes do registro numa casa com a água no forro — relançar aqui, sem a faixa da Casa Automática, tiraria o tubo de queda e a ventilação do lugar.';
+  'Esgoto lançado antes do registro, e a água está no forro como a da Casa Automática — relançar aqui, sem a faixa da casa, poderia tirar o tubo de queda e a ventilação do lugar.';
+/** Correção 1 (menor 1): enquanto as premissas da casa carregam (não é erro: some sozinho). */
+export const MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA = 'Carregando as premissas da Casa Automática…';
 
 /** Há tubo de esgoto no desenho? (o caminho barato, para decidir se vale procurar a casa) */
 function temTuboDeEsgoto(model: BlueprintModel): boolean {
   return (model.trechos ?? []).some((t) => t.disciplina === 'ESGOTO');
+}
+
+// ─── O QUE O DESENHO FIXA (correção 1, I2) ─────────────────────────────────
+// Peças que o Refazer MANTÉM e que uma escolha comandaria se fossem refeitas: a ligação à rede pública que fica (cota
+// confirmada com a concessionária, ou posta à mão) fixa a PROFUNDIDADE presumida da rede; a caixa de inspeção que o
+// usuário confirmou fixa os AFASTAMENTOS da caixa automática. Essas escolhas não se aplicam enquanto as peças ficarem:
+// - não entram no aviso (relançar não as aplicaria — um aviso que nunca apaga);
+// - o registro guarda o valor ANTERIOR delas (ou nenhum), nunca o novo — o registro não pode dizer que a escolha foi
+//   aplicada sem ter sido; tirada a peça, a comparação volta e o aviso acende se a escolha mudou.
+
+/** A ligação à rede pública que o Refazer mantém (rede pública): aceita e com a cota que não é a ESTIMADA. */
+function ligacoesMantidas(model: BlueprintModel): Terminal[] {
+  return (model.terminais ?? []).filter((x) => x.disciplina === 'ESGOTO' && x.tipoHidraulico === 'LIGACAO_ESGOTO' && !x.sugerida && !cotaDaRedeEstimada(x));
+}
+
+/** A caixa de inspeção que o Refazer mantém: a principal (não a do coletor), confirmada. */
+function caixasMantidas(model: BlueprintModel): Terminal[] {
+  return (model.terminais ?? []).filter((x) => x.disciplina === 'ESGOTO' && x.tipoHidraulico === 'CAIXA_INSPECAO' && !x.sugerida && x.rotulo !== ROTULO_DA_CI_DO_COLETOR);
+}
+
+/** As escolhas fixadas pelo desenho, com o que as fixa (para a confirmação dizer o que fica e por quê). */
+function fixadasPeloDesenho(model: BlueprintModel, destino: DestinoDoEsgoto): Map<string, string> {
+  const m = new Map<string, string>();
+  if (destino === 'REDE_PUBLICA' && ligacoesMantidas(model).length) m.set('profundidadeDaRedeMm', 'a ligação à rede pública com a cota confirmada');
+  if (caixasMantidas(model).length) {
+    m.set('afastamentoDaCiMm', 'a caixa de inspeção que você confirmou');
+    m.set('afastamentoDaCiAAguaMm', 'a caixa de inspeção que você confirmou');
+  }
+  return m;
+}
+
+/** As escolhas a registrar: as fixadas pelo desenho levam o valor do registro anterior (ou nenhum). */
+function semAsFixadas(model: BlueprintModel, escolhas: EscolhasDoLancamento, anterior: EscolhasDoLancamento | undefined): EscolhasDoLancamento {
+  const fixadas = fixadasPeloDesenho(model, escolhas.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA');
+  if (!fixadas.size) return escolhas;
+  const out = { ...escolhas };
+  for (const k of fixadas.keys()) {
+    if (anterior && anterior[k] !== undefined && anterior[k] !== null) out[k] = anterior[k];
+    else delete out[k];
+  }
+  return out;
 }
 
 /**
@@ -304,8 +354,9 @@ function temTuboDeEsgoto(model: BlueprintModel): boolean {
  * - com registro: as do estudo completadas pelo que a casa decidiu e o registro guardou (a faixa e o tubo de queda por
  *   grupo, quando o estudo não os tem; o raio do shaft da casa, enquanto o raio do estudo for o mesmo com que ela lançou);
  * - sem registro e sem verificar a casa (`esgotoDaCasa` ausente), ou sem rede: as do estudo;
- * - sem registro, com rede e numa casa (a água no forro): com a assinatura da casa, as do estudo + os extras da casa;
- *   sem as premissas da casa (`null`) ou sem a assinatura, o motivo.
+ * - sem registro, com rede e a água no forro: com a assinatura da casa, as do estudo + os extras da casa; carregando as
+ *   premissas, sem elas (`null`) ou sem a assinatura, o motivo.
+ * Em todos: as escolhas fixadas pelo desenho (correção 1, I2) guardam o valor anterior.
  */
 export function lancamentoDoEsgoto(
   model: BlueprintModel,
@@ -319,6 +370,7 @@ export function lancamentoDoEsgoto(
     ...(x.tuboDeQuedaPorGrupoMm != null && h.tuboDeQuedaPorGrupoMm == null ? { tuboDeQuedaPorGrupoMm: x.tuboDeQuedaPorGrupoMm } : {}),
     ...(x.raioDoShaftMm != null ? { raioDoShaftMm: x.raioDoShaftMm } : {}),
   });
+  const escolhas = (x: ExtrasDoEsgotoDaCasa = {}) => semAsFixadas(model, escolhasDoEsgoto(p, x), e);
   if (e) {
     const n = (k: string) => numeroDe(e, k);
     const fx = n('faixaX');
@@ -330,25 +382,27 @@ export function lancamentoDoEsgoto(
       // Mudou o raio no estudo: vale o novo (a casa decidiu sobre o raio de então).
       raioDoShaftMm: raioDaCasa != null && n('raioDoShaftMm') === (h.raioDoShaftMm ?? RAIO_DO_SHAFT_PADRAO_MM) ? raioDaCasa : null,
     };
-    return { hip: comExtras(extras), escolhas: escolhasDoEsgoto(p, extras), motivo: null };
+    return { hip: comExtras(extras), escolhas: escolhas(extras), motivo: null };
   }
-  const soOEstudo = { hip: h, escolhas: escolhasDoEsgoto(p), motivo: null };
+  const soOEstudo = { hip: h, escolhas: escolhas(), motivo: null };
   if (p.esgotoDaCasa === undefined || !temTuboDeEsgoto(model)) return soOEstudo;
-  const agua = aguaNoForroDaCasa(model, p.esgotoDaCasa?.forroDaAgua ?? null, p.agua?.cotaRamalMm ?? HIPOTESES_AGUA_PADRAO.cotaRamalMm);
+  const c = p.esgotoDaCasa === 'CARREGANDO' ? null : p.esgotoDaCasa;
+  const agua = aguaNoForroDaCasa(model, c?.forroDaAgua ?? null, p.agua?.cotaRamalMm ?? HIPOTESES_AGUA_PADRAO.cotaRamalMm);
   if (!agua.noForro) return soOEstudo;
-  if (!p.esgotoDaCasa) return { ...soOEstudo, motivo: `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} Não foi possível ler as premissas da casa.` };
+  if (p.esgotoDaCasa === 'CARREGANDO') return { ...soOEstudo, motivo: MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA };
+  if (!c) return { ...soOEstudo, motivo: `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} Não foi possível ler as premissas da casa.` };
   if (!agua.daCasa) {
     const porque = agua.porque ?? 'O forro está desligado nas premissas da casa.';
     return { ...soOEstudo, motivo: `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} ${porque}` };
   }
-  const c = p.esgotoDaCasa;
   const extras: ExtrasDoEsgotoDaCasa = { faixa: c.faixa ?? null, tuboDeQuedaPorGrupoMm: c.tuboDeQuedaPorGrupoMm ?? null, raioDoShaftMm: c.raioDoShaftMm ?? null };
-  return { hip: comExtras(extras), escolhas: escolhasDoEsgoto(p, extras), motivo: null };
+  return { hip: comExtras(extras), escolhas: escolhas(extras), motivo: null };
 }
 
 /**
  * Regra B: o que mudou desde o lançamento do esgoto. Sem registro → `[]`. As escolhas de um destino só se comparam
  * quando os DOIS lados são desse destino — a troca de destino já aparece como tal (sem um rosário de "rede pública: —").
+ * As fixadas pelo desenho (correção 1, I2) não se comparam: relançar não as aplicaria.
  */
 export function diferencasDoEsgoto(model: BlueprintModel, p: PremissasDoEsgoto): DiferencaDeEscolha[] {
   const gravadas = registroDe(model, 'ESGOTO', null)?.escolhas ?? null;
@@ -358,6 +412,7 @@ export function diferencasDoEsgoto(model: BlueprintModel, p: PremissasDoEsgoto):
   const fora = new Set<string>([
     ...(destinos.every((d) => d === 'REDE_PUBLICA') ? [] : SO_DA_REDE_PUBLICA),
     ...(destinos.every((d) => d === 'TRATAMENTO') ? [] : SO_DO_TRATAMENTO),
+    ...fixadasPeloDesenho(model, atuais.destino === 'TRATAMENTO' ? 'TRATAMENTO' : 'REDE_PUBLICA').keys(),
   ]);
   const rotulos = Object.fromEntries(Object.entries(ESCOLHAS_DO_ESGOTO.rotulos).filter(([k]) => !fora.has(k)));
   return diferencasDasEscolhas(gravadas, atuais, { ...ESCOLHAS_DO_ESGOTO, rotulos });
@@ -369,16 +424,42 @@ const ROTULOS_DO_MOTOR = new Set(['TQ', ROTULO_DA_VENTILACAO, ROTULO_DO_COLETOR,
 const CONEXOES = new Set(['CONEXAO_JOELHO_90', 'CONEXAO_JOELHO_45', 'CONEXAO_TE', 'CONEXAO_LUVA', 'CONEXAO_REDUCAO']);
 const ehUnidade = (x: Terminal) => (UNIDADES_DE_TRATAMENTO as readonly string[]).includes(x.tipoHidraulico ?? '');
 
-/** A rede de esgoto do sistema — o que o Refazer apaga (ver o critério no cabeçalho), com o destino em vigor. */
-export function redeDoEsgotoDoSistema(model: BlueprintModel, destino: DestinoDoEsgoto): { trechos: Trecho[]; pecas: Terminal[] } {
+/**
+ * Correção 1 (I1): o TRATAMENTO que o usuário confirmou (arrastou, aceitou) fica — unidades e tubos "Tratamento" — quando
+ * o destino é o tratamento e nenhuma premissa dele mudou (sem registro: não se sabe que mudou, e a peça confirmada é
+ * decisão do usuário). Mudou uma premissa do tratamento: as unidades são refeitas nas medidas e na posição do motor (a
+ * confirmação diz isso).
+ */
+export function tratamentoPreservado(model: BlueprintModel, p: Pick<PremissasDoEsgoto, 'esgoto' | 'tratamento' | 'reservatorio'>): boolean {
+  if (destinoDoEsgoto(p.esgoto) !== 'TRATAMENTO') return false;
+  if (!(model.terminais ?? []).some((x) => x.disciplina === 'ESGOTO' && ehUnidade(x) && !x.sugerida)) return false;
+  const gravadas = registroDe(model, 'ESGOTO', null)?.escolhas;
+  if (!gravadas) return true;
+  if (gravadas.destino !== 'TRATAMENTO') return false;
+  const rotulos = Object.fromEntries(SO_DO_TRATAMENTO.map((k) => [k, ESCOLHAS_DO_ESGOTO.rotulos[k]]));
+  return diferencasDasEscolhas(gravadas, escolhasDoEsgoto(p), { ...ESCOLHAS_DO_ESGOTO, rotulos }).length === 0;
+}
+
+/**
+ * A rede de esgoto do sistema — o que o Refazer apaga (ver o critério no cabeçalho), com o destino em vigor. Correção 1:
+ * a ligação aceita só fica com a cota que não é a estimada (I2); o tratamento confirmado fica com `preservarTratamento`
+ * (I1).
+ */
+export function redeDoEsgotoDoSistema(
+  model: BlueprintModel,
+  destino: DestinoDoEsgoto,
+  preservarTratamento = false,
+): { trechos: Trecho[]; pecas: Terminal[] } {
   const raizes = [...caixasDeInspecao(model), ...destinosDoEsgoto(model), ...unidadesDeTratamento(model)];
   const ligados = new Set(raizes.flatMap((r) => redeDaOrigem(model, r, 'ESGOTO')).map((t) => t.id));
-  const trechos = (model.trechos ?? []).filter((t) => t.disciplina === 'ESGOTO' && (ligados.has(t.id) || ROTULOS_DO_MOTOR.has(t.rotulo ?? '')));
+  const trechos = (model.trechos ?? []).filter(
+    (t) => t.disciplina === 'ESGOTO' && (ligados.has(t.id) || ROTULOS_DO_MOTOR.has(t.rotulo ?? '')) && !(preservarTratamento && t.rotulo === ROTULO_DO_TRATAMENTO),
+  );
   const pecas = (model.terminais ?? []).filter((x) => {
     if (x.disciplina !== 'ESGOTO') return false;
     if (x.tipoHidraulico === 'CAIXA_INSPECAO') return !!x.sugerida || x.rotulo === ROTULO_DA_CI_DO_COLETOR;
-    if (x.tipoHidraulico === 'LIGACAO_ESGOTO') return !!x.sugerida || destino === 'TRATAMENTO';
-    if (ehUnidade(x)) return true;
+    if (x.tipoHidraulico === 'LIGACAO_ESGOTO') return !!x.sugerida || destino === 'TRATAMENTO' || cotaDaRedeEstimada(x);
+    if (ehUnidade(x)) return !preservarTratamento;
     if (x.tipo === TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR || CONEXOES.has(x.tipoHidraulico ?? '')) return trechos.some((t) => sobreOTubo(x, t));
     return false;
   });
@@ -405,6 +486,9 @@ export function comRegistroDoEsgoto(model: BlueprintModel, comandos: readonly Co
   return registrar ? [...comandos, comandoDeRegistro('ESGOTO', null, escolhas)] : [...comandos];
 }
 
+/** A pendência que o tratamento dá com unidade confirmada — no Refazer que a preserva, não é pendência. */
+const PENDENCIA_DO_TRATAMENTO_CONFIRMADO = 'O tratamento já tem unidades confirmadas';
+
 /**
  * REFAZER o esgoto: apaga a rede do sistema (confirmada inclusive; o outro destino inclusive) e lança de novo com as
  * escolhas atuais (e a faixa da casa do registro), num lote só — o registro no mesmo lote (Ctrl+Z volta tudo). Se o
@@ -418,13 +502,15 @@ export function comandosDeRefazerEsgoto(
 ): { comandos: Command[]; plano: PlanoDoEsgotoCompleto | null } {
   const { hip, escolhas, motivo } = lancamentoDoEsgoto(model, p);
   if (motivo) return { comandos: [], plano: null };
-  const rede = redeDoEsgotoDoSistema(model, destinoDoEsgoto(hip));
+  const preservar = tratamentoPreservado(model, p);
+  const rede = redeDoEsgotoDoSistema(model, destinoDoEsgoto(hip), preservar);
   const apagar: Command[] = [
     ...rede.trechos.map((t): Command => ({ type: 'DeleteTrecho', trechoId: t.id })),
     ...rede.pecas.map((x): Command => ({ type: 'DeleteTerminal', terminalId: x.id })),
   ];
   const m0 = apagar.length ? applyBatch(model, apagar).model : model;
-  const plano = planejarEsgotoCompleto(m0, hip, terreno, opcoesDoEsgoto(m0, p, true));
+  const bruto = planejarEsgotoCompleto(m0, hip, terreno, opcoesDoEsgoto(m0, p, true));
+  const plano = preservar ? { ...bruto, pendencias: bruto.pendencias.filter((x) => !x.startsWith(PENDENCIA_DO_TRATAMENTO_CONFIRMADO)) } : bruto;
   if (apagar.length === 0 && plano.comandos.length === 0) return { comandos: [], plano };
   const registro: Command = plano.comandos.length ? comandoDeRegistro('ESGOTO', null, escolhas) : { type: 'ApagarRegistroDeLancamento', motor: 'ESGOTO', alvoId: null };
   return { comandos: [...apagar, ...plano.comandos, registro], plano };
@@ -440,6 +526,10 @@ export interface EsgotoARefazer {
   pecasAceitas: number;
   /** As peças que saem, por nome e quantidade ("1 ligação(ões) à rede pública", "2 joelho(s) de 90°"). */
   pecasPorNome: string[];
+  /** Correção 1 (I1): o que o usuário CONFIRMOU e volta à posição/medida do motor (ou sai, sendo do outro destino). */
+  voltam: string[];
+  /** Correção 1 (I1/I2): o que FICA como está — e, quando uma escolha nova não se aplica a ele, isso dito. */
+  ficam: string[];
   /** O que mudou desde o lançamento (`textoDasDiferencas`); `null` = sem registro ou nada mudou. */
   mudou: string | null;
 }
@@ -467,62 +557,110 @@ const NOME_DA_PECA: [string, (x: Terminal) => boolean][] = [
   ['redução(ões)', (x) => x.tipoHidraulico === 'CONEXAO_REDUCAO'],
 ];
 
+/** O nome curto de cada escolha que o desenho pode fixar ("a profundidade nova não se aplica a ela"). */
+const NOME_CURTO_DA_FIXADA: Record<string, string> = {
+  profundidadeDaRedeMm: 'a profundidade da rede nova',
+  afastamentoDaCiMm: 'o afastamento novo da caixa',
+  afastamentoDaCiAAguaMm: 'o afastamento novo da caixa ao alimentador',
+};
+
 export function esgotoARefazer(model: BlueprintModel, p: PremissasDoEsgoto): EsgotoARefazer {
-  const rede = redeDoEsgotoDoSistema(model, destinoDoEsgoto(lancamentoDoEsgoto(model, p).hip));
+  const destino = destinoDoEsgoto(lancamentoDoEsgoto(model, p).hip);
+  const preservar = tratamentoPreservado(model, p);
+  const rede = redeDoEsgotoDoSistema(model, destino, preservar);
   const d = diferencasDoEsgoto(model, p);
+  const conta = (xs: Terminal[], f: (x: Terminal) => boolean) => xs.filter(f).length;
+  const aceitas = rede.pecas.filter((x) => !x.sugerida);
+  // O que o usuário confirmou e o Refazer refaz (ou tira, sendo do outro destino).
+  const voltam: string[] = [];
+  const cisDoColetor = conta(aceitas, (x) => x.tipoHidraulico === 'CAIXA_INSPECAO' && x.rotulo === ROTULO_DA_CI_DO_COLETOR);
+  if (cisDoColetor) voltam.push(`${cisDoColetor} caixa(s) do coletor aceita(s) — voltam à posição do motor`);
+  const ligacoes = conta(aceitas, (x) => x.tipoHidraulico === 'LIGACAO_ESGOTO');
+  if (ligacoes) voltam.push(destino === 'TRATAMENTO' ? `${ligacoes} ligação(ões) à rede pública aceita(s) — saem (o destino agora é o tratamento)` : `${ligacoes} ligação(ões) aceita(s) com a cota ESTIMADA — volta(m) à posição e à cota do motor`);
+  const unidades = conta(aceitas, ehUnidade);
+  if (unidades) voltam.push(destino === 'TRATAMENTO' ? `${unidades} unidade(s) do tratamento confirmada(s) — volta(m) à posição e às medidas do motor` : `${unidades} unidade(s) do tratamento confirmada(s) — sai(em) (o destino agora é a rede pública)`);
+  const confirmados = rede.trechos.filter((t) => !t.sugerido).length;
+  if (confirmados) voltam.push(`${confirmados} tubo(s) confirmado(s) — voltam ao traçado do motor`);
+  // O que fica — e a escolha nova que não se aplica a ele.
+  const gravadas = registroDe(model, 'ESGOTO', null)?.escolhas;
+  const atuais = escolhasDoEsgoto(p);
+  const padroes = ESCOLHAS_DO_ESGOTO.padroes ?? {};
+  const mudouAChave = (k: string) => !!gravadas && (gravadas[k] ?? padroes[k]) !== (atuais[k] ?? padroes[k]);
+  const fixadas = fixadasPeloDesenho(model, destino);
+  const porPeca = new Map<string, string[]>();
+  for (const [k, peca] of fixadas) if (mudouAChave(k)) porPeca.set(peca, [...(porPeca.get(peca) ?? []), NOME_CURTO_DA_FIXADA[k]]);
+  const ficam: string[] = ['os aparelhos, os ralos e as caixas sifonadas'];
+  for (const peca of new Set(fixadas.values())) {
+    const nao = porPeca.get(peca);
+    ficam.push(`${peca} — fica como está${nao ? `; ${nao.join(' e ')} não se aplica a ela` : ''}`);
+  }
+  if (preservar) ficam.push('o tanque, o filtro e o sumidouro que você confirmou — ficam onde estão');
   return {
     tubos: rede.trechos.length,
-    tubosConfirmados: rede.trechos.filter((t) => !t.sugerido).length,
+    tubosConfirmados: confirmados,
     partes: PARTES_DO_ESGOTO.flatMap(([nome, rotulo]) => {
       const n = rede.trechos.filter((t) => t.rotulo === rotulo).length;
       return n ? [`${nome} (${n})`] : [];
     }),
     pecas: rede.pecas.length,
-    pecasAceitas: rede.pecas.filter((x) => !x.sugerida).length,
+    pecasAceitas: aceitas.length,
     pecasPorNome: NOME_DA_PECA.flatMap(([nome, eh]) => {
       const n = rede.pecas.filter(eh).length;
       return n ? [`${n} ${nome}`] : [];
     }),
+    voltam,
+    ficam,
     mudou: d.length ? textoDasDiferencas(d) : null,
   };
 }
 
 /**
  * A lista da confirmação — `null` quando nada do que será apagado foi confirmado/aceito (só sugeridos: refaz direto).
- * Ex.: "Esgoto: 14 tubo(s) (14 confirmado(s)), inclusive ventilação (2), coletor (3) e 3 peça(s) (1 aceita(s)): 2
- * caixa(s) de inspeção do coletor, 1 ligação(ões) à rede pública. O que mudou: Destino do esgoto — lançado com: rede
- * pública · agora: tratamento individual."
+ * Correção 1 (I1): diz, item por item, o que VOLTA à posição/medida do motor e o que FICA. Ex.: "Esgoto: 14 tubo(s) (14
+ * confirmado(s)), inclusive coletor (3) e 2 peça(s) (2 aceita(s)): 2 caixa(s) de inspeção do coletor. Voltam: 2 caixa(s)
+ * do coletor aceita(s) — voltam à posição do motor; 14 tubo(s) confirmado(s) — voltam ao traçado do motor. Ficam: os
+ * aparelhos, os ralos e as caixas sifonadas; a caixa de inspeção que você confirmou — fica como está. O que mudou: …"
  */
 export function textoDaConfirmacaoDoEsgoto(r: EsgotoARefazer): string | null {
   if (r.tubosConfirmados === 0 && r.pecasAceitas === 0) return null;
   const tubos = `${r.tubos} tubo(s)${r.tubosConfirmados ? ` (${r.tubosConfirmados} confirmado(s))` : ''}${r.partes.length ? `, inclusive ${r.partes.join(', ')}` : ''}`;
   const pecas = r.pecas ? ` e ${r.pecas} peça(s)${r.pecasAceitas ? ` (${r.pecasAceitas} aceita(s))` : ''}${r.pecasPorNome.length ? `: ${r.pecasPorNome.join(', ')}` : ''}` : '';
-  return `Esgoto: ${tubos}${pecas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
+  const voltam = r.voltam.length ? ` Voltam: ${r.voltam.join('; ')}.` : '';
+  const ficam = r.ficam.length ? ` Ficam: ${r.ficam.join('; ')}.` : '';
+  return `Esgoto: ${tubos}${pecas}.${voltam}${ficam}${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
 }
 
-/** O botão principal do rodapé do esgoto. `motivo` não nulo = desligado, e é o `title` dele. */
+/**
+ * O botão principal do rodapé do esgoto. `motivo` não nulo = desligado, e é o `title` dele; `refazer` não nulo = o
+ * relançar/Refazer bloqueado, com este motivo (o "Lançar" de pontos novos pode seguir ligado — correção 1, menor 1).
+ */
 export interface BotaoDoEsgoto {
   /** `LANCAR` = o "Lançar" de sempre (com a autorização do outro destino); `RELANCAR` = refaz com as escolhas atuais. */
   modo: 'LANCAR' | 'RELANCAR';
   motivo: string | null;
+  refazer: string | null;
 }
 
 /**
- * REGRA A do esgoto: bloqueado → desligado com o motivo; o DESTINO mudou desde o registro → `RELANCAR` (o aviso diz a
- * troca, e a confirmação do Refazer é a autorização — um caminho só, sem dois avisos); há o que lançar (ou o outro
- * destino confirmado a autorizar, na rede sem registro) → `LANCAR`; nada a lançar e rede existente → `RELANCAR`; nada →
+ * REGRA A do esgoto: bloqueado → o relançar desligado com o motivo, mas há pontos NOVOS a ligar → o "Lançar (n)" segue
+ * (como antes da F4; correção 1, menor 1); o DESTINO mudou desde o registro → `RELANCAR` (o aviso diz a troca, e a
+ * confirmação do Refazer é a autorização — um caminho só, sem dois avisos); há o que lançar (ou o outro destino
+ * confirmado a autorizar, na rede sem registro) → `LANCAR`; nada a lançar e rede existente → `RELANCAR`; nada →
  * desligado, dizendo por quê.
  */
 export function botaoDeLancarEsgoto(
   model: BlueprintModel,
-  plano: Pick<PlanoDoEsgotoCompleto, 'comandos' | 'pendencias' | 'confirmadosDoOutroDestino'> | null,
+  plano: (Pick<PlanoDoEsgotoCompleto, 'comandos' | 'pendencias' | 'confirmadosDoOutroDestino'> & { esgoto?: Pick<PlanoDoEsgotoCompleto['esgoto'], 'comandos'> }) | null,
   diferencas: readonly DiferencaDeEscolha[],
   bloqueio: string | null,
 ): BotaoDoEsgoto {
-  if (bloqueio) return { modo: 'LANCAR', motivo: bloqueio };
-  if (diferencas.some((d) => d.item === 'destino')) return { modo: 'RELANCAR', motivo: null };
-  if (plano && (plano.comandos.length > 0 || plano.confirmadosDoOutroDestino.length > 0)) return { modo: 'LANCAR', motivo: null };
+  if (bloqueio) {
+    const pontosNovos = !!plano?.esgoto && plano.esgoto.comandos.length > 0;
+    return { modo: 'LANCAR', motivo: pontosNovos ? null : bloqueio, refazer: bloqueio };
+  }
+  if (diferencas.some((d) => d.item === 'destino')) return { modo: 'RELANCAR', motivo: null, refazer: null };
+  if (plano && (plano.comandos.length > 0 || plano.confirmadosDoOutroDestino.length > 0)) return { modo: 'LANCAR', motivo: null, refazer: null };
   // Os tubos da rede não dependem do destino (só as peças): o destino aqui é indiferente.
-  if (redeDoEsgotoDoSistema(model, 'REDE_PUBLICA').trechos.length > 0) return { modo: 'RELANCAR', motivo: null };
-  return { modo: 'LANCAR', motivo: plano?.pendencias[0] ?? 'Nada a lançar: não há ponto de esgoto a ligar.' };
+  if (redeDoEsgotoDoSistema(model, 'REDE_PUBLICA').trechos.length > 0) return { modo: 'RELANCAR', motivo: null, refazer: null };
+  return { modo: 'LANCAR', motivo: plano?.pendencias[0] ?? 'Nada a lançar: não há ponto de esgoto a ligar.', refazer: null };
 }

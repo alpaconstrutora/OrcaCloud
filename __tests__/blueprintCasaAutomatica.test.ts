@@ -1545,7 +1545,7 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     expect(conflitosDoEsgoto(comCasa)).toEqual(original.conflitos);
     expect(registroDe(comCasa, 'ESGOTO', null)?.escolhas).toMatchObject({ faixaX: -60, faixaY: -60 });
     // Sem as premissas da casa (erro de leitura): bloqueado, com o motivo.
-    expect(lancamentoDoEsgoto(antiga, { ...P, esgotoDaCasa: null }).motivo).toMatch(/^Esgoto lançado antes do registro numa casa/);
+    expect(lancamentoDoEsgoto(antiga, { ...P, esgotoDaCasa: null }).motivo).toMatch(/^Esgoto lançado antes do registro, e a água está no forro como a da Casa Automática/);
 
     // Sensibilidade: só com o estudo (sem os extras), o sobrado tira as colunas do lugar e cruza as redes.
     if (pav === 2) {

@@ -9323,9 +9323,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * por grupo e o raio do shaft) — das premissas da casa do estudo, pela mesma regra dos eletrodutos e da água
    * (`hipotesesDaCasaDoEstudo`: `null` com erro de leitura). Só vale para o esgoto antigo (sem registro) de uma casa.
    */
+  // Correção 1 (menor 1): carregando ≠ erro de leitura — o motivo diz qual dos dois.
   const esgotoDaCasa = useMemo(
-    () => (hipotesesDaCasaDoEstudo ? { ...esgotoDaCasaNoModelo(hipotesesDaCasaDoEstudo, editor.model), forroDaAgua: forroDaCasaDaAgua } : null),
-    [hipotesesDaCasaDoEstudo, editor.model, forroDaCasaDaAgua],
+    () =>
+      hipotesesDaCasaDoEstudo
+        ? { ...esgotoDaCasaNoModelo(hipotesesDaCasaDoEstudo, editor.model), forroDaAgua: forroDaCasaDaAgua }
+        : casaDoEstudo.carregando
+          ? ('CARREGANDO' as const)
+          : null,
+    [hipotesesDaCasaDoEstudo, casaDoEstudo.carregando, editor.model, forroDaCasaDaAgua],
   );
   /**
    * F4: tudo com que o esgoto se lança. A casa só é procurada com a gaveta aberta (a procura lê a água no forro); fora
@@ -9712,7 +9718,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     }
   };
   const lancarEsgoto = async () => {
-    if (!planoDoEsgotoCompleto || motivoDoEsgoto) return;
+    // Correção 1 (menor 1): o bloqueio da casa vale para o relançar; o "Lançar (n)" de pontos NOVOS segue (`botaoDoEsgoto`).
+    if (!planoDoEsgotoCompleto || botaoDoEsgoto.motivo) return;
     const confirmados = planoDoEsgotoCompleto.confirmadosDoOutroDestino.length;
     // F4: o registro do lançamento no mesmo lote (salvo o lote parcial — `comRegistroDoEsgoto`).
     if (confirmados === 0) {
@@ -9751,7 +9758,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (lista) {
       const ok = await confirmar({
         title: 'Refazer o esgoto?',
-        message: `Apaga e lança de novo com as escolhas atuais — inclusive o que você já confirmou; os aparelhos, os ralos e as caixas que você confirmou ficam. ${lista} Ctrl+Z desfaz.`,
+        // Correção 1 (I1): o que volta e o que fica vêm da lista, item por item (antes uma frase fixa prometia o que não era).
+        message: `Apaga e lança de novo com as escolhas atuais — inclusive o que você já confirmou. ${lista} Ctrl+Z desfaz.`,
         confirmLabel: 'Refazer',
         variant: 'warning',
       });
@@ -18583,7 +18591,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               )}
               {planoDoTratamento && dimDoTratamento && destinoDoEsgoto(hipotesesDeEsgoto) === 'TRATAMENTO' && (
                 <PainelTratamento
-                  plano={planoDoTratamento}
+                  // Correção 1 (menor 3): com a troca de destino no aviso, a ligação que "impede" o tratamento sai no relançar —
+                  // o painel não repete o aviso nem contradiz o botão.
+                  plano={
+                    destinoNoAviso && planoDoTratamento.motivo?.startsWith('O lote tem ligação à rede pública')
+                      ? { ...planoDoTratamento, motivo: 'A ligação à rede pública sai ao relançar com as escolhas atuais (veja o aviso acima); o tratamento é lançado em seguida.' }
+                      : planoDoTratamento
+                  }
                   dim={dimDoTratamento}
                   unidades={unidadesDoTratamento}
                   onSelecionar={selecionar}
@@ -20287,15 +20301,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               </span>
               {/* F4 do relançar (24/10/2026): "Refazer tudo" ao lado do "Lançar" quando há o que lançar; sem nada a lançar, o
                   próprio botão principal vira "Relançar com as escolhas atuais" (regra A). */}
+              {/* Correção 1 (menor 1): com o relançar bloqueado (esgoto antigo com a água no forro como a da casa) e pontos novos
+                  a ligar, o "Refazer tudo" fica À VISTA, desligado, com o motivo — sem a faixa da casa ele tiraria as colunas
+                  do lugar (sobrado: 3 de 15, +18 conflitos de rede). No modo RELANCAR o botão principal JÁ é o refazer. */}
               {temRedeDeEsgoto && botaoDoEsgoto.modo === 'LANCAR' && !botaoDoEsgoto.motivo && (
-                <button
-                  type="button"
-                  onClick={() => void refazerRedeDeEsgoto()}
-                  title="Apaga a rede de esgoto do motor — ramais, tubos de queda, ventilação, coletor ou tratamento e as caixas sugeridas, inclusive o que você já confirmou (não os aparelhos, os ralos e as caixas que você confirmou) — e lança de novo com as escolhas atuais. Ctrl+Z desfaz."
-                  className="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  Refazer tudo
-                </button>
+                <>
+                  {botaoDoEsgoto.refazer && (
+                    <span id="motivo-refazer-esgoto" className="sr-only">
+                      {botaoDoEsgoto.refazer}
+                    </span>
+                  )}
+                  <span className="inline-flex shrink-0" title={botaoDoEsgoto.refazer ?? undefined}>
+                  <button
+                    type="button"
+                    onClick={() => void refazerRedeDeEsgoto()}
+                    disabled={!!botaoDoEsgoto.refazer}
+                    aria-describedby={botaoDoEsgoto.refazer ? 'motivo-refazer-esgoto' : undefined}
+                    title={
+                      botaoDoEsgoto.refazer ??
+                      'Apaga a rede de esgoto do motor — ramais, tubos de queda, ventilação, coletor ou tratamento e as caixas sugeridas, inclusive o que você já confirmou — e lança de novo com as escolhas atuais; a confirmação diz o que volta à posição do motor e o que fica. Ctrl+Z desfaz.'
+                    }
+                    className="inline-flex h-9 shrink-0 items-center whitespace-nowrap gap-1.5 rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    Refazer tudo
+                  </button>
+                  </span>
+                </>
               )}
               {botaoDoEsgoto.motivo && (
                 <span id="motivo-lancar-esgoto" className="sr-only">

@@ -119,8 +119,18 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
 - Esgoto (F4): casa gerada com as premissas da casa mudadas depois (outra faixa do esgoto) e sem registro: a água ainda
   tem a assinatura (o forro), e o esgoto relança com a faixa das premissas ATUAIS — não com a da geração. Casa gerada com
   o forro desligado: não há sinal de casa, e o esgoto antigo relança pelo estudo (no sobrado, tira as colunas do lugar).
-- Esgoto (F4): a caixa de inspeção ACEITA fica onde está — trocar o afastamento da caixa e relançar não a move (o
-  registro passa a dizer o afastamento novo e o aviso apaga).
+- Esgoto (F4, correção 1): o que o Refazer MANTÉM e uma escolha comandaria — a caixa de inspeção CONFIRMADA (os
+  afastamentos da caixa automática) e a ligação com a cota da rede CONFIRMADA (a profundidade presumida) — fica como
+  está: a escolha nova não se aplica a ela. Essas escolhas saem do aviso enquanto a peça ficar, o registro guarda o valor
+  ANTERIOR (nunca diz que aplicou o que não aplicou) e a confirmação diz "fica como está; … não se aplica a ela". A
+  ligação aceita com a cota ESTIMADA é refeita na profundidade nova.
+- Esgoto (F4, correção 1): o tratamento CONFIRMADO fica onde o usuário o pôs quando o destino continua o tratamento e
+  nenhuma premissa dele mudou (sem registro, também). Mudou uma premissa do tratamento: as unidades voltam à posição e às
+  medidas do motor (a confirmação diz). Com a caixa de inspeção SUGERIDA e o tratamento confirmado, a caixa refeita em
+  outro lugar (afastamento novo) deixa o tratamento onde estava.
+- Esgoto (F4, correção 1): esgoto antigo bloqueado (a água no forro como a da casa, sem as premissas ou sem a
+  assinatura): o "Lançar (n)" de pontos NOVOS segue ligado, como antes da F4; o relançar e o "Refazer tudo" ficam
+  desligados, à vista, com o motivo.
 - Prova no app: os cenários estão cobertos pelos testes do editor; prova por imagem no navegador NÃO feita. A planta
   "Garden" real (dados exportados) passa: eletrodutos a 2755 e água a 2598/2630 com a assinatura — relançar disponível.
 

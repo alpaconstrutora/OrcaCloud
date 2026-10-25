@@ -996,10 +996,14 @@ function faixaDaCasaNoModelo(d: number, model: Pick<BlueprintModel, 'boundaries'
  */
 export function esgotoDaCasaNoModelo(
   hipParcial: Partial<HipotesesDaCasa>,
-  model: Pick<BlueprintModel, 'boundaries' | 'levels'>,
+  model: Pick<BlueprintModel, 'boundaries' | 'terminais'>,
 ): { faixa: Point | null; tuboDeQuedaPorGrupoMm: number | null; raioDoShaftMm: number | null } {
   const sobrado = { ...HIPOTESES_DO_SOBRADO_PADRAO, ...(hipParcial.sobrado ?? {}) };
-  const varios = model.levels.length > 1;
+  // Correção 1 da F4 (menor 2): o critério da casa (`niveis.length > 1` — os pavimentos DELA, não os do estudo): as
+  // premissas de pavimentos quando dizem quantos; no "Automático", os pavimentos com peça de esgoto (a casa lança as
+  // louças em cada pavimento dela — um pavimento do estudo sem casa não conta).
+  const pav = hipParcial.pavimentos;
+  const varios = typeof pav === 'number' ? pav > 1 : new Set((model.terminais ?? []).filter((t) => t.disciplina === 'ESGOTO').map((t) => t.levelId)).size > 1;
   return {
     faixa: faixaDaCasaNoModelo({ ...HIPOTESES_DA_CASA_PADRAO.faixas, ...(hipParcial.faixas ?? {}) }.esgotoMm, model),
     tuboDeQuedaPorGrupoMm: varios ? sobrado.grupoDoTuboDeQuedaMm : null,

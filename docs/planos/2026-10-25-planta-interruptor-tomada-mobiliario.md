@@ -132,5 +132,6 @@ setas a 45° sob o triângulo:
   servindo 44808e4 (sem deploy de função)
 - [x] item 5 + testes — `blueprintSobeDesceEntrePavimentos.test.ts` (7); harness local com o rascunho da Garden (11:40):
   a tomada -13- sem os dois círculos e as setas; no conjunto, nenhuma seta em tomada ou interruptor
-- [ ] item 5: PR + CI
-- [ ] item 5: publicação
+- [x] item 5: PR + CI — PR #162, `ci` 23min16s verde; suíte local 11.476 ok, 0 falhas, 34 pulados, total 11.510
+- [x] item 5: publicação — squash `024463ed` em 25/10/2026; `conferir-producao.sh` provou o domínio servindo 024463e
+  (sem texto novo de tela para procurar; sem deploy de função)

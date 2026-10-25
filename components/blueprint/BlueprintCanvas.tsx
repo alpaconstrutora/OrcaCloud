@@ -166,6 +166,7 @@ import {
   trianguloDaTomada,
   segmentosDoEletroduto,
   sentidoDoEletroduto,
+  eletrodutosQuePassamDePavimento,
   giroDaPeca,
   medidasDoQuadro,
   medidasDoTerminal,
@@ -2088,6 +2089,8 @@ export default function BlueprintCanvas({
   const trechosNumeradosDaRede = useMemo(() => trechosNumerados(model, fiacaoDaRede), [model, fiacaoDaRede]);
   // O Ø predominante não se escreve; o diferente, uma vez por trecho contínuo (ver `diametrosAnotados`).
   const diametrosDaRede = useMemo(() => diametrosAnotados(model.trechos ?? []), [model.trechos]);
+  // O sobe/desce só onde o eletroduto passa de pavimento (25/10/2026) — ver `eletrodutosQuePassamDePavimento`.
+  const passamDePavimento = useMemo(() => eletrodutosQuePassamDePavimento(model), [model]);
 
   /** Os itens elétricos ligados, já com a dependência dos fios aplicada (vale também para um objeto "cru"). */
   const exibicaoEletrica = useMemo(() => comDependenciasAplicadas(exibicaoEletricaProp), [exibicaoEletricaProp]);
@@ -6536,6 +6539,8 @@ export default function BlueprintCanvas({
       const hidraulico = t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE' || t.disciplina === 'ESGOTO';
       const larguraPx = t.bitolaMm * vista.escala;
       const ehPrumada = p.x === q.x && p.y === q.y;
+      // A vertical do eletroduto que fica no pavimento (não passa ao de cima nem ao de baixo).
+      const eletrodutoQueNaoPassa = t.disciplina === 'ELETRICA' && !passamDePavimento.has(t.id);
       const detalhado = hidraulico && larguraPx >= LARGURA_MINIMA_DO_DETALHE_PX && (desvios.get(t.id) ?? 0) === 0;
       const faixa = detalhado && !ehPrumada ? faixaDoTubo2D(p, q, larguraPx) : null;
       // C11 (10/10/2026): a LINHA FRIGORÍGENA em par (líquido e sucção) é desenhada como os DOIS
@@ -6619,8 +6624,10 @@ export default function BlueprintCanvas({
         ctx.setLineDash(t.sugerido ? [3, 3] : embutidoNoPiso(t) ? [6, 3] : []);
         ctx.beginPath();
         if (p.x === q.x && p.y === q.y) {
-          // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola.
-          ctx.arc(p.x, p.y, emTela(t.bitolaMm / 2), 0, Math.PI * 2);
+          // A prumada vista de cima é a SEÇÃO do tubo: raio = meia bitola. A do eletroduto que fica no
+          // pavimento (a descida do forro à tomada) não se desenha: o círculo é metade do símbolo de
+          // sobe/desce, e a planta à mão não marca nada ali. Selecionada, aparece — para se ver o que se pegou.
+          if (!eletrodutoQueNaoPassa || selecionado) ctx.arc(p.x, p.y, emTela(t.bitolaMm / 2), 0, Math.PI * 2);
         } else {
           ctx.moveTo(p.x, p.y);
           ctx.quadraticCurveTo(curva.controle.x, curva.controle.y, q.x, q.y);
@@ -6633,7 +6640,11 @@ export default function BlueprintCanvas({
       // Círculo na base com seta saindo a 45° = eletroduto que SOBE; seta
       // chegando ao círculo = que DESCE. Vale para o eletroduto com desnível:
       // a prumada, e o "L" na ponta em que ele sobe pela parede.
-      const sentido = t.disciplina === 'ELETRICA' ? sentidoDoEletroduto(t, MESMA_COTA_MM) : null;
+      //
+      // SÓ ENTRE PAVIMENTOS (25/10/2026, *"o simbolo de subir se trata somente
+      // quando sobe de uma pavimento para outro"*): subir até a laje ou descer do
+      // forro à tomada é o mesmo pavimento, e não leva símbolo.
+      const sentido = t.disciplina === 'ELETRICA' && !eletrodutoQueNaoPassa ? sentidoDoEletroduto(t, MESMA_COTA_MM) : null;
       if (sentido) {
         // Onde está a vertical do "L"? Na ponta oposta à horizontal — a mesma
         // regra do 3D, para a seta ficar onde o cilindro sobe.
@@ -6690,9 +6701,10 @@ export default function BlueprintCanvas({
         const comp = Math.hypot(q.x - p.x, q.y - p.y);
         ctx.fillStyle = '#334155';
         if (prumada || comp <= 24) {
-          // Prumada (círculo) ou trecho curtíssimo: só o Ø, ao lado.
+          // Prumada (círculo) ou trecho curtíssimo: só o Ø, ao lado. A prumada que não se desenha
+          // (fica no pavimento, ver acima) também não leva o Ø — seria um número solto ao lado da tomada.
           const c = prumada ? p : curva.meio;
-          if (diametrosDaRede.escrever.has(t.id) && exibicaoEletrica.diametro) anotar({
+          if (diametrosDaRede.escrever.has(t.id) && exibicaoEletrica.diametro && !(prumada && eletrodutoQueNaoPassa && !selecionado)) anotar({
             id: `diametro:${t.id}`,
             donoId: t.id,
             ancora: caixaDoCirculo(c, Math.max(emTela(t.bitolaMm / 2), 3)),

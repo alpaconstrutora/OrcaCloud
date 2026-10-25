@@ -20,6 +20,11 @@ Pedido seguinte (mesma sessão, tarde, depois do PR #157 no ar, com dois prints 
 > 1. veja print que é possivel arrastar um trecho do eletroduto e desconecta-lo
 > 2. veja print onde movi o interruptor para ao lado da porta e veja que o trecho de eletroduto faz um caminho mais longo, sendo que sair direto do ponto de luz no teto e ir diretamente para ele seria o melhor caminho. Isso aconteceu quando mudei o interruptor de uma parede para outra"*
 
+Mesma sessão, tarde (14h), depois do #159, com print de uma tomada da Garden (TUG -13-, 100 VA) com dois círculos e duas
+setas a 45° sob o triângulo:
+
+> *"Aqui temos um erro: o simbolo de subir se trata somente quando sobe de uma pavimento para outro. para ficar clarono caso do garden a casa tem apenas um pavimento entao os simbolos nao devem aparecer apesar de subir para laje nao devem ter o simbolo por nao se tratar de outro pavimennto. ficou claro?"*
+
 ## Diagnóstico (lido em `origin/main` e no rascunho da Garden, salvo 25/10 09:59)
 
 1. **Interruptor.** O motor lança, para cada ponto, a descida vertical no ponto e um toco de ~50 mm no forro que liga a
@@ -91,6 +96,20 @@ Pedido seguinte (mesma sessão, tarde, depois do PR #157 no ar, com dois prints 
   sai mais dele). Prova no rascunho real: o mesmo gesto do usuário (−1.406 mm em x) leva o nó para `2519,13885`, a luz
   vai direto (2.084 mm) e o toco fica com 50 mm.
 
+### 5. Sobe/desce só entre pavimentos — `utils/blueprintRede.ts`, `components/blueprint/BlueprintCanvas.tsx`, `utils/blueprintPranchaEletrica.ts`
+
+- **Diagnóstico:** o canvas punha o círculo com a seta em TODO eletroduto com desnível (`sentidoDoEletroduto`) — na
+  Garden, a descida do forro até cada tomada e interruptor e o pedaço vertical do forro rebaixado; a prancha punha o
+  círculo com ↑/↓ em toda prumada. A passagem entre pavimentos é gravada como um trecho em cada pavimento (o
+  planejador: até o teto no de baixo, do piso no de cima), então ela se lê pela continuação no mesmo ponto.
+- **O que muda:** `eletrodutosQuePassamDePavimento(model)` — sobe quando a vertical chega ao teto e o pavimento de cima
+  tem eletroduto com ponta ali no piso (ou a cota passa do piso de cima); desce quando chega ao piso e o de baixo tem
+  ponta ali no teto; sem pavimento vizinho, nunca. Só esses levam o símbolo, no canvas e na prancha. A vertical que fica
+  no pavimento não leva o círculo (é metade do símbolo da norma) nem o Ø ao lado; selecionada, o círculo aparece.
+- **Pronto quando:** `blueprintSobeDesceEntrePavimentos.test.ts` (térrea sem símbolo; prumada do quadro ao pavimento de
+  cima com, nos dois lados; descida até a laje sem continuação sem; desce do quadro de cima com; atravessando a laje à
+  mão com; água fora); print da Garden antes × depois.
+
 ## Estado
 
 - [x] item 1 + testes — `__tests__/blueprintNoDeChegadaAcompanha.test.ts` (7); prova no rascunho da Garden: interruptor
@@ -108,5 +127,10 @@ Pedido seguinte (mesma sessão, tarde, depois do PR #157 no ar, com dois prints 
 - [x] publicação — squash `157c0fe5` em 25/10/2026; `conferir-producao.sh "Mobiliário"` provou o domínio servindo 157c0fe
   (sem deploy de função)
 - [x] item 4 + testes
-- [ ] item 4: PR + CI
-- [ ] item 4: publicação
+- [x] item 4: PR + CI — PR #159, `ci` 30min34s verde
+- [x] item 4: publicação — squash `44808e4e` em 25/10/2026; `conferir-producao.sh "não se solta delas"` provou o domínio
+  servindo 44808e4 (sem deploy de função)
+- [x] item 5 + testes — `blueprintSobeDesceEntrePavimentos.test.ts` (7); harness local com o rascunho da Garden (11:40):
+  a tomada -13- sem os dois círculos e as setas; no conjunto, nenhuma seta em tomada ou interruptor
+- [ ] item 5: PR + CI
+- [ ] item 5: publicação

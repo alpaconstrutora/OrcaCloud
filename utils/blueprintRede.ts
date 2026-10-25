@@ -1181,3 +1181,61 @@ export function sentidoDoEletroduto(t: { cotaAMm: number; cotaBMm: number }, tol
   if (Math.abs(desnivel) <= toleranciaMm) return null; // dentro da tolerância é a mesma cota (a VIZINHA de 300 para 330)
   return desnivel > 0 ? 'SOBE' : 'DESCE';
 }
+
+/**
+ * Os eletrodutos cuja vertical PASSA DE UM PAVIMENTO PARA OUTRO — os únicos que levam o símbolo de sobe/desce.
+ *
+ * O pedido (25/10/2026): *"o simbolo de subir se trata somente quando sobe de uma pavimento para outro. para ficar claro
+ * no caso do garden a casa tem apenas um pavimento entao os simbolos nao devem aparecer apesar de subir para laje"*.
+ * Subir até a laje, descer do forro à tomada: é o mesmo pavimento, e a planta à mão não marca nada ali.
+ *
+ * A passagem é gravada como um trecho em CADA pavimento — o planejador põe o pedaço até o teto no de baixo e o que
+ * nasce no piso no de cima (`blueprintEletrodutos`, "a prumada entre pavimentos") —, então ela se lê pela CONTINUAÇÃO,
+ * no mesmo ponto em planta:
+ *
+ *   sobe .... a vertical chega ao teto do pavimento e, no de cima, há eletroduto com ponta ali no piso (cota ≤ 0);
+ *             ou a cota dela passa do piso do de cima (o trecho desenhado à mão atravessando a laje)
+ *   desce ... a vertical chega ao piso e, no de baixo, há eletroduto com ponta ali no teto
+ *
+ * Sem pavimento vizinho, nunca: a casa térrea não tem para onde passar.
+ */
+export function eletrodutosQuePassamDePavimento(model: {
+  levels: readonly { id: string; elevationMm: number; defaultHeightMm: number }[];
+  trechos?: readonly { id: string; levelId: string; disciplina: DisciplinaDeRede; a: Point; b: Point; cotaAMm: number; cotaBMm: number }[];
+}): Set<string> {
+  const passam = new Set<string>();
+  const niveis = [...model.levels].sort((x, y) => x.elevationMm - y.elevationMm);
+  if (niveis.length < 2) return passam;
+  const eletricos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA');
+  /** As cotas das pontas de eletroduto em cada ponto de cada pavimento. */
+  const pontas = new Map<string, number[]>();
+  const anotar = (levelId: string, p: Point, cota: number) => {
+    const k = `${levelId}|${p.x},${p.y}`;
+    const lista = pontas.get(k);
+    if (lista) lista.push(cota);
+    else pontas.set(k, [cota]);
+  };
+  for (const t of eletricos) {
+    anotar(t.levelId, t.a, t.cotaAMm);
+    anotar(t.levelId, t.b, t.cotaBMm);
+  }
+  const cotasEm = (levelId: string, p: Point) => pontas.get(`${levelId}|${p.x},${p.y}`) ?? [];
+  for (const t of eletricos) {
+    if (t.cotaAMm === t.cotaBMm) continue;
+    const i = niveis.findIndex((l) => l.id === t.levelId);
+    if (i < 0) continue;
+    const nivel = niveis[i];
+    const vertical = segmentosDoEletroduto(t, nivel.defaultHeightMm).find((s) => s.a.x === s.b.x && s.a.y === s.b.y);
+    if (!vertical) continue;
+    const baixo = Math.min(vertical.cotaAMm, vertical.cotaBMm);
+    const alto = Math.max(vertical.cotaAMm, vertical.cotaBMm);
+    const deCima = niveis[i + 1];
+    const deBaixo = niveis[i - 1];
+    const sobe =
+      !!deCima &&
+      (nivel.elevationMm + alto > deCima.elevationMm || (alto >= nivel.defaultHeightMm && cotasEm(deCima.id, vertical.a).some((c) => c <= 0)));
+    const desce = !!deBaixo && baixo <= 0 && cotasEm(deBaixo.id, vertical.a).some((c) => c >= deBaixo.defaultHeightMm);
+    if (sobe || desce) passam.add(t.id);
+  }
+  return passam;
+}

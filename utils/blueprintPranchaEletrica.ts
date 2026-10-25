@@ -37,6 +37,7 @@ import {
   alturaDaTomada,
   cantosDaPeca,
   embutidoNoPiso,
+  eletrodutosQuePassamDePavimento,
   giroDaPeca,
   medidasDaPeca,
   apoioDaTomada,
@@ -343,6 +344,8 @@ export function desenharEletrica(
   const numerados = trechosNumerados(model, fiacao);
   // O Ø predominante não se escreve (a legenda diz); o diferente, uma vez por trecho contínuo.
   const diametros = diametrosAnotados(model.trechos ?? []);
+  // O sobe/desce só onde o eletroduto passa de pavimento (25/10/2026) — a MESMA lista da tela.
+  const passamDePavimento = eletrodutosQuePassamDePavimento(model);
   // A flecha base de cada grupo de sobrepostos (a do mais longo), a MESMA conta da tela: sem ela, dois sobrepostos de
   // comprimentos diferentes curvariam cada um pela própria flecha e se cruzariam no papel.
   const { flechas: flechasDosGrupos } = desenhoDosGrupos(model.trechos ?? []);
@@ -356,7 +359,10 @@ export function desenharEletrica(
     const b = { x: px(t.b.x), y: py(t.b.y) };
     const prumada = Math.hypot(b.x - a.x, b.y - a.y) < 0.2 * k;
     if (prumada) {
-      // Prumada: um círculo pequeno com a seta de sobe/desce como texto.
+      // Prumada: um círculo pequeno com a seta de sobe/desce como texto. SÓ a que passa de pavimento
+      // (25/10/2026, *"o simbolo de subir se trata somente quando sobe de uma pavimento para outro"*): a
+      // descida do forro à tomada fica no pavimento, e a planta à mão não marca nada ali.
+      if (!passamDePavimento.has(t.id)) continue;
       circulo(d, a, 1.0 * k, { traco: FINA });
       obstaculos.push({ id: t.id, caixa: caixaEm(a, 1.0 * k) });
       d.texto(a.x + 1.4 * k, a.y + 0.7 * k, t.cotaBMm > t.cotaAMm ? '↑' : '↓', TEXTO_MM, COR_FRACA);

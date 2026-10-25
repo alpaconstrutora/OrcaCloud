@@ -78,10 +78,17 @@ const elevacaoDe = (model: BlueprintModel, levelId: ObjectId) => model.levels.fi
 /** [x, y, cota] do MODELO (mm, cota já com a elevação) → ponto do 3D (m). */
 const para3D = (x: number, y: number, zMm: number): V3 => [x * ESCALA_3D, zMm * ESCALA_3D, y * ESCALA_3D];
 
-export function pecasDasConexoes3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>): PecaDaConexao3D[] {
+/**
+ * `ocultos` (25/10/2026): os ids escondidos no 3D (camada desligada, peça ocultada). A conexão some quando TODOS os tubos
+ * dela estão ocultos — a mesma regra do 2D (`simbolosDasConexoes2D` no canvas). Sem isso, com só a Elétrica à vista, os
+ * joelhos e tês da água ficavam soltos no ar (pedido com print: *"com somente a eletrica visivel aparecem essas
+ * conexões, acho que fazem parte da hidraulica"*).
+ */
+export function pecasDasConexoes3D(model: BlueprintModel, idsVisiveis?: ReadonlySet<ObjectId>, ocultos?: ReadonlySet<ObjectId>): PecaDaConexao3D[] {
   return conexoesDerivadas(model)
     // E10.3: a curva da linha frigorígena não é peça (cobre curvado) — o MESMO predicado do IFC.
     .conexoes.filter((c) => c.ramais && c.ramais.length > 0 && (!idsVisiveis || idsVisiveis.has(c.levelId)) && conexaoViraPeca(c))
+    .filter((c) => !ocultos?.size || c.trechoIds.some((id) => !ocultos.has(id)))
     .map((c) => {
       const z = elevacaoDe(model, c.levelId) + c.cotaMm;
       const no = para3D(c.no.x, c.no.y, z);

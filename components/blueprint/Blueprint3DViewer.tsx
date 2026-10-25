@@ -1453,7 +1453,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
    */
   const conexoes3d = useMemo(
     () =>
-      pecasDasConexoes3D(model, idsVisiveis).map((p) => ({
+      // Os ocultos (camada desligada) entram: a conexão de um tubo escondido some com ele.
+      pecasDasConexoes3D(model, idsVisiveis, ocultos).map((p) => ({
         ...p,
         bolsas: p.bolsas.map((b) => ({
           ...b,
@@ -1464,7 +1465,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         })),
       })),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, levelIds?.join(',')],
+    [model, levelIds?.join(','), chaveOcultos],
   );
   const rotulos3d = useMemo(
     () =>

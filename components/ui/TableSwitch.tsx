@@ -12,6 +12,10 @@ import React from 'react';
  *
  * `onLabel`/`offLabel` são opcionais — sem eles fica só o interruptor, para
  * coluna cujo cabeçalho já diz o que ele liga.
+ *
+ * O `relative` do `<label>` não é enfeite: o input `sr-only` é absoluto e, sem
+ * ele, se ancorava no `<main>` do Layout, escapando do `overflow-x-auto` da
+ * tabela — a página inteira rolava para a direita além da tela (25/10/2026).
  */
 const TableSwitch: React.FC<{
     checked: boolean;
@@ -28,7 +32,7 @@ const TableSwitch: React.FC<{
     ariaDescribedBy?: string;
 }> = ({ checked, onChange, onLabel, offLabel, onColor = 'peer-checked:bg-blue-600', title, disabled, ariaLabel, ariaDescribedBy }) => (
     <label
-        className={`inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
+        className={`relative inline-flex items-center gap-2 ${disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'}`}
         title={title}
         onClick={(e) => e.stopPropagation()}
     >

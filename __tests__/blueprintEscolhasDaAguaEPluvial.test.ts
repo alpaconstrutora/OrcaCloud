@@ -242,6 +242,20 @@ describe('água — forro (Casa Automática)', () => {
     const comRegistro = applyCommand(antiga, { type: 'RegistrarLancamento', motor: 'AGUA', alvoId: null, escolhas: escolhasDaAgua(comAgua({ noForro: FORRO })) }).model;
     expect(motivoParaNaoRelancarAgua(comRegistro, H)).toBeNull();
   });
+
+  it('⚠️ correção 1: sem registro mas COM o forro da casa — relança, no forro da casa, e o registro grava o forro; sem a água no forro, o forro da casa não entra', () => {
+    const antiga = noForroSemRegistro();
+    const comCasa = { ...H, forroDaCasa: FORRO };
+    expect(motivoParaNaoRelancarAgua(antiga, comCasa)).toBeNull();
+    expect(botaoDeLancarAgua(antiga, { comandos: [], pendencias: [] }, comCasa)).toEqual({ modo: 'RELANCAR', motivo: null });
+    const { hip, escolhas } = lancamentoDaAgua(antiga, comCasa);
+    expect(hip.agua.noForro).toEqual(FORRO);
+    expect(escolhas).toMatchObject({ forroFriaAbaixoDoTetoMm: 202, forroQuenteAbaixoDoTetoMm: 170 });
+    const { comandos } = comandosDeRefazerAgua(antiga, comCasa, null);
+    expect(comandos.at(-1)).toMatchObject({ type: 'RegistrarLancamento', escolhas: { forroFriaAbaixoDoTetoMm: 202 } });
+    // Água fora do forro (sem forro de verdade no ambiente): o forro da casa NÃO é aplicado.
+    expect(lancamentoDaAgua(noForroSemRegistro(false), comCasa).hip.agua.noForro).toBeUndefined();
+  });
 });
 
 describe('pluvial', () => {

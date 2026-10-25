@@ -604,7 +604,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
-import { conferirPlanoDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { conferirPlanoDaCasa, forroDaAguaDaCasa, forroDaCasaCompleto, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
@@ -9218,10 +9218,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * quente, a subida do alimentador, a cota enterrada ajustada). Sem registro: as do estudo. Todo plano que LANÇA usa
    * estas (a rede da casa no forro continua no forro); os painéis de premissas mostram e gravam as do estudo.
    */
-  const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDoEstudo.hipoteses).hip, [editor.model, hidroDoEstudo.hipoteses]);
+  /**
+   * Correção 1 da F3 (24/10/2026, relato na planta "Garden": *"alterei e não ficou disponível para relançamento"*): o
+   * FORRO DA CASA — o forro com que a Casa Automática lança a água, montado pela MESMA função dela a partir das premissas
+   * da casa do estudo. A água antiga no forro, lançada antes do registro, relança nele (sem ele, o botão desliga). Não
+   * depende de o estudo ter GRAVADO as premissas: a casa gerada com as do padrão nunca as grava.
+   */
+  const forroDaCasaDaAgua = useMemo(() => {
+    if (casaDoEstudo.carregando || !casaDoEstudo.premissas.disciplinas.hidraulica) return null;
+    return forroDaAguaDaCasa(forroDaCasaCompleto(hipotesesDasPremissas(casaDoEstudo.premissas).forro));
+  }, [casaDoEstudo.carregando, casaDoEstudo.premissas]);
+  /** As premissas da água do estudo com o forro da casa — o que toda chamada da água recebe. */
+  const hidroDaAgua = useMemo(() => ({ ...hidroDoEstudo.hipoteses, forroDaCasa: forroDaCasaDaAgua }), [hidroDoEstudo.hipoteses, forroDaCasaDaAgua]);
+  const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDaAgua).hip, [editor.model, hidroDaAgua]);
   const hipDoPluvialQueLanca = useMemo(() => lancamentoDoPluvial(editor.model, hidroDoEstudo.hipoteses.pluvial).hip, [editor.model, hidroDoEstudo.hipoteses.pluvial]);
   /** F3: água no forro lançada antes do registro — os botões que relançam desligam, com este motivo. */
-  const motivoDaAgua = useMemo(() => motivoParaNaoRelancarAgua(editor.model, hidroDoEstudo.hipoteses), [editor.model, hidroDoEstudo.hipoteses]);
+  const motivoDaAgua = useMemo(() => motivoParaNaoRelancarAgua(editor.model, hidroDaAgua), [editor.model, hidroDaAgua]);
   // F3: o modelo de AGORA — depois do `await` da confirmação, o da closure pode ser velho.
   const modeloDaHidraulicaRef = useRef(editor.model);
   modeloDaHidraulicaRef.current = editor.model;
@@ -9255,7 +9267,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         return origem ? comAjusteDePressao(editor.model, relancarAgua(editor.model, origem, hipDaAguaQueLanca.agua), hipDaAguaQueLanca.pressao).comandos : [];
       });
       // F3: o registro vai junto, salvo se sobrar rede lançada com outras escolhas (lote parcial).
-      return comRegistroDaAgua(editor.model, comandos, hidroDoEstudo.hipoteses);
+      return comRegistroDaAgua(editor.model, comandos, hidroDaAgua);
     }, 'A água não foi lançada');
   };
   const refazerRedeDeAgua = async (plano: PlanoDeAgua) => {
@@ -9273,7 +9285,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const atual = (m.terminais ?? []).find((t) => t.id === origem.id);
     if (!atual) return;
     aplicarLoteHidraulico(
-      () => comRegistroDaAgua(m, comAjusteDePressao(m, refazerAgua(m, atual, hipDaAguaQueLanca.agua), hipDaAguaQueLanca.pressao).comandos, hidroDoEstudo.hipoteses),
+      () => comRegistroDaAgua(m, comAjusteDePressao(m, refazerAgua(m, atual, hipDaAguaQueLanca.agua), hipDaAguaQueLanca.pressao).comandos, hidroDaAgua),
       'A rede não foi refeita',
     );
   };
@@ -9340,7 +9352,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** F3: o "Lançar tudo" da água e do pluvial, com o registro do lançamento no mesmo lote (salvo o lote parcial). */
   const lancarAguaCompleta = () => {
     if (!planoDaAguaCompleta || motivoDaAgua) return;
-    lancarTudo('agua', planoDaAguaCompleta, comRegistroDaAgua(editor.model, planoDaAguaCompleta.comandos, hidroDoEstudo.hipoteses));
+    lancarTudo('agua', planoDaAguaCompleta, comRegistroDaAgua(editor.model, planoDaAguaCompleta.comandos, hidroDaAgua));
   };
   const lancarPluvialCompleta = () => {
     if (!planoDaPluvialCompleta) return;
@@ -9355,7 +9367,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const refazerSistema = async (sistema: 'agua' | 'pluvial') => {
     const agua = sistema === 'agua';
     if (agua && motivoDaAgua) return;
-    const r = agua ? aguaARefazer(editor.model, hidroDoEstudo.hipoteses) : pluvialARefazer(editor.model, hidroDoEstudo.hipoteses.pluvial);
+    const r = agua ? aguaARefazer(editor.model, hidroDaAgua) : pluvialARefazer(editor.model, hidroDoEstudo.hipoteses.pluvial);
     const lista = textoDaConfirmacaoDoSistema(agua ? 'Água' : 'Pluvial', r);
     if (lista) {
       const ok = await confirmar({
@@ -9369,7 +9381,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const m = modeloDaHidraulicaRef.current;
     let re: { comandos: Command[]; plano: { presumido: string[]; pendencias: string[] } | null };
     try {
-      re = agua ? comandosDeRefazerAgua(m, hidroDoEstudo.hipoteses, terrenoParaCorte) : comandosDeRefazerPluvial(m, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte);
+      re = agua ? comandosDeRefazerAgua(m, hidroDaAgua, terrenoParaCorte) : comandosDeRefazerPluvial(m, hidroDoEstudo.hipoteses.pluvial, terrenoParaCorte);
     } catch (e) {
       setAvisoColar(`${agua ? 'A água' : 'A rede pluvial'} não foi refeita: ${e instanceof Error ? e.message : String(e)}`);
       return;
@@ -9381,9 +9393,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     setResumoDoLancamento(pl && (pl.presumido.length > 0 || pl.pendencias.length > 0) ? { tarefa: sistema, presumido: pl.presumido, pendencias: pl.pendencias } : null);
   };
   /** F3, regra A: o botão principal de cada rodapé; regra B: o que mudou desde o lançamento. */
-  const botaoDaAgua = useMemo(() => botaoDeLancarAgua(editor.model, planoDaAguaCompleta, hidroDoEstudo.hipoteses), [editor.model, planoDaAguaCompleta, hidroDoEstudo.hipoteses]);
+  const botaoDaAgua = useMemo(() => botaoDeLancarAgua(editor.model, planoDaAguaCompleta, hidroDaAgua), [editor.model, planoDaAguaCompleta, hidroDaAgua]);
   const botaoDoPluvial = useMemo(() => botaoDeLancarPluvial(editor.model, planoDaPluvialCompleta), [editor.model, planoDaPluvialCompleta]);
-  const diferencasNaAgua = useMemo(() => (tarefaAberta === 'agua' ? diferencasDaAgua(editor.model, hidroDoEstudo.hipoteses) : []), [tarefaAberta, editor.model, hidroDoEstudo.hipoteses]);
+  const diferencasNaAgua = useMemo(() => (tarefaAberta === 'agua' ? diferencasDaAgua(editor.model, hidroDaAgua) : []), [tarefaAberta, editor.model, hidroDaAgua]);
   const diferencasNoPluvial = useMemo(
     () => (tarefaAberta === 'pluvial' ? diferencasDoPluvial(editor.model, hidroDoEstudo.hipoteses.pluvial) : []),
     [tarefaAberta, editor.model, hidroDoEstudo.hipoteses.pluvial],

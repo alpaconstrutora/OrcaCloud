@@ -8,7 +8,7 @@ import { applyBatch, applyCommand, conflitosDoModelo, emptyModel, furosDaEscada,
 import { ROTULO_DO_ALIMENTADOR } from '../utils/blueprintAlimentador';
 import { medirTerreno, type Recuos } from '../utils/blueprintTerreno';
 import { ZONA_DA_MASSA_VAZIA, type ZonaDaMassa } from '../utils/blueprintMassa';
-import { conferirPlanoDaCasa, forroEletricoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
+import { forroDaAguaDaCasa, forroDaCasaCompleto, forroEletricoDaCasa, conferirPlanoDaCasa, problemasDoPlano, HIPOTESES_DO_FORRO_DA_CASA_PADRAO, rebaixoDoForroMm, HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO, HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, HIPOTESES_DA_ESTRUTURA_DA_CASA_PADRAO, motivoParaNaoGerar, planejarCasa, type EntradaDaCasa } from '../utils/blueprintCasaAutomatica';
 import { prumadasPeloMeioDoComodo } from '../utils/blueprintSobrado';
 import { amostradorDaGrade, type GradeDeElevacao } from '../utils/blueprintTopografia';
 import { pressoesDoModelo } from '../utils/blueprintPressaoDaRede';
@@ -1432,10 +1432,21 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     const semForro = applyBatch(applyBatch(r, apagar).model, planejarAguaCompleta(applyBatch(r, apagar).model, outra, null).comandos).model;
     expect(horizontaisNoForro(semForro).filter(naFaixa).length).toBe(0);
 
-    // A água no forro SEM registro (a casa de antes): não relança pela gaveta.
+    // A água no forro SEM registro (a casa de antes), sem o forro da casa: não relança pela gaveta.
     const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'AGUA', alvoId: null }).model;
     expect(motivoParaNaoRelancarAgua(antiga, outra)).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
     expect(comandosDeRefazerAgua(antiga, outra, null).comandos).toEqual([]);
+
+    // Correção 1 (relato na planta "Garden"): COM o forro da casa (as premissas do estudo, pela mesma função da casa), relança
+    // — e a água refeita volta à faixa do forro, com o forro no registro.
+    const forroDaCasa = forroDaAguaDaCasa(forroDaCasaCompleto());
+    expect(forroDaCasa).not.toBeNull();
+    const comCasa = { ...outra, forroDaCasa };
+    expect(motivoParaNaoRelancarAgua(antiga, comCasa)).toBeNull();
+    const refeita = applyBatch(antiga, comandosDeRefazerAgua(antiga, comCasa, null).comandos).model;
+    expect(registroDe(refeita, 'AGUA', null)?.escolhas).toMatchObject({ velocidadeMaxMs: 2.5, forroFriaAbaixoDoTetoMm: F.aguaFria.abaixoDoTetoMm });
+    expect(horizontaisNoForro(refeita).filter(naFaixa).length).toBeGreaterThan(0);
+    expect(horizontaisNoForro(refeita).filter((t) => !naFaixa(t)).map((t) => `${t.disciplina}@${t.cotaAMm}`)).toEqual([]);
   });
 
   it('térrea: nenhuma dessas redes em vão de porta ou janela (o aquecedor ao lado da janela; o dreno do ar é a F14d)', () => {

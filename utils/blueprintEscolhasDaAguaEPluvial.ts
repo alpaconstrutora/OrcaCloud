@@ -36,8 +36,12 @@
  * quente (`agua.faixaDaAguaQuente`), o alimentador subindo pela fachada (`alimentacao.subida`) e, depois do esgoto, o
  * alimentador e o condutor pluvial enterrados numa cota ajustada para cruzar por cima (F18). O registro guarda tudo isso
  * em chaves SEM rótulo (fora do aviso) e `lancamentoDaAgua`/`lancamentoDoPluvial` as devolvem a todo relançamento — o
- * relançar pelo editor mantém a água no forro. Rede da casa no forro lançada ANTES do registro não relança por aqui
- * (`motivoParaNaoRelancarAgua`), como nos eletrodutos.
+ * relançar pelo editor mantém a água no forro.
+ *
+ * Correção 1 (24/10/2026, relato do usuário na planta "Garden": *"alterei e não ficou disponível para relançamento"*):
+ * água da casa no forro lançada ANTES do registro relança pelo FORRO DA CASA (`forroDaCasa`, montado pelo editor com
+ * `forroDaAguaDaCasa` a partir das premissas da casa do estudo). O forro do registro tem prioridade; o bloqueio
+ * (`motivoParaNaoRelancarAgua`) só vale sem registro E sem `forroDaCasa`.
  *
  * Puro: sem React, sem banco.
  */
@@ -78,6 +82,15 @@ function numeroDe(e: EscolhasDoLancamento | undefined, k: string): number | null
 // ═══════════════════════════════════════════════════════════════════════════
 // ÁGUA
 // ═══════════════════════════════════════════════════════════════════════════
+
+/** As faixas da água no forro (`agua.noForro`). */
+export type ForroDaAgua = NonNullable<HipotesesDaAguaCompleta['agua']['noForro']>;
+
+/**
+ * As premissas da água com que se lança: as do estudo e, opcional, o FORRO DA CASA (correção 1) — o forro com que a Casa
+ * Automática lançaria a água, das premissas da casa do estudo. Só é usado para a água no forro lançada antes do registro.
+ */
+export type HipotesesDaAguaDoLancamento = HipotesesDaAguaCompleta & { forroDaCasa?: ForroDaAgua | null };
 
 /** O que a casa ajustou DEPOIS de lançar e que não é premissa do estudo (F18: o alimentador por cima do esgoto). */
 export interface AjustesDaAgua {
@@ -223,9 +236,16 @@ export const ESCOLHAS_DA_AGUA: OpcoesDaComparacao = {
  * alimentador (quando o estudo não diz) e a cota enterrada ajustada (enquanto a cota do estudo for a mesma com que a casa
  * lançou; mudou a premissa, vale a nova). Sem registro: `h` como veio.
  */
-export function lancamentoDaAgua<H extends HipotesesDaAguaCompleta>(model: Pick<BlueprintModel, 'registrosDeLancamento'>, h: H): { hip: H; escolhas: EscolhasDoLancamento } {
+export function lancamentoDaAgua<H extends HipotesesDaAguaDoLancamento>(model: BlueprintModel, h: H): { hip: H; escolhas: EscolhasDoLancamento } {
   const e = registroDe(model, 'AGUA', null)?.escolhas;
-  if (!e) return { hip: h, escolhas: escolhasDaAgua(h) };
+  if (!e) {
+    // Correção 1: sem registro, a água que já está no forro relança no forro da casa (se o editor o deu).
+    if (h.forroDaCasa && !h.agua.noForro && aguaNoForroSemRegistro(model, h.agua.cotaRamalMm)) {
+      const comForro = { ...h, agua: { ...h.agua, noForro: h.forroDaCasa } } as H;
+      return { hip: comForro, escolhas: escolhasDaAgua(comForro) };
+    }
+    return { hip: h, escolhas: escolhasDaAgua(h) };
+  }
   const n = (k: string) => numeroDe(e, k);
   let agua = h.agua;
   if (!agua.noForro) {
@@ -263,7 +283,7 @@ export function lancamentoDaAgua<H extends HipotesesDaAguaCompleta>(model: Pick<
 }
 
 /** Regra B: o que mudou desde o lançamento da água. Sem registro → `[]`. */
-export function diferencasDaAgua(model: BlueprintModel, h: HipotesesDaAguaCompleta): DiferencaDeEscolha[] {
+export function diferencasDaAgua(model: BlueprintModel, h: HipotesesDaAguaDoLancamento): DiferencaDeEscolha[] {
   return diferencasDasEscolhas(registroDe(model, 'AGUA', null)?.escolhas ?? null, lancamentoDaAgua(model, h).escolhas, ESCOLHAS_DA_AGUA);
 }
 
@@ -329,8 +349,9 @@ export function aguaNoForroSemRegistro(model: BlueprintModel, cotaRamalMm: numbe
   return false;
 }
 
-/** Por que a água não relança por aqui (`null` = relança). */
-export function motivoParaNaoRelancarAgua(model: BlueprintModel, h?: Pick<HipotesesDaAguaCompleta, 'agua'>): string | null {
+/** Por que a água não relança por aqui (`null` = relança). Correção 1: com o forro da casa, relança (no forro dela). */
+export function motivoParaNaoRelancarAgua(model: BlueprintModel, h?: Pick<HipotesesDaAguaDoLancamento, 'agua' | 'forroDaCasa'>): string | null {
+  if (h?.forroDaCasa) return null;
   return aguaNoForroSemRegistro(model, h?.agua.cotaRamalMm) ? MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO : null;
 }
 
@@ -339,7 +360,7 @@ export function motivoParaNaoRelancarAgua(model: BlueprintModel, h?: Pick<Hipote
  * água lançada antes com outras escolhas (ou sem registro). Aí o registro antigo fica e o aviso continua aceso: ligar
  * um ponto novo não "aceita" a rede antiga (correção 1 da F2).
  */
-export function comRegistroDaAgua(model: BlueprintModel, comandos: readonly Command[], h: HipotesesDaAguaCompleta): Command[] {
+export function comRegistroDaAgua(model: BlueprintModel, comandos: readonly Command[], h: HipotesesDaAguaDoLancamento): Command[] {
   if (comandos.length === 0) return [];
   const apagados = new Set(comandos.flatMap((c) => (c.type === 'DeleteTrecho' ? [c.trechoId] : [])));
   const sobra = redeDaAguaDoSistema(model).trechos.some((t) => !apagados.has(t.id));
@@ -355,7 +376,7 @@ export function comRegistroDaAgua(model: BlueprintModel, comandos: readonly Comm
  */
 export function comandosDeRefazerAgua(
   model: BlueprintModel,
-  h: HipotesesDaAguaCompleta,
+  h: HipotesesDaAguaDoLancamento,
   terreno: LeitorDoTerreno | null = null,
 ): { comandos: Command[]; plano: PlanoDaAguaCompleta | null } {
   if (motivoParaNaoRelancarAgua(model, h)) return { comandos: [], plano: null };
@@ -381,7 +402,7 @@ export interface RedeHidraulicaARefazer {
   mudou: string | null;
 }
 
-export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaCompleta): RedeHidraulicaARefazer {
+export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamento): RedeHidraulicaARefazer {
   const rede = redeDaAguaDoSistema(model);
   const d = diferencasDaAgua(model, h);
   return {
@@ -423,7 +444,7 @@ function botaoDoSistema(plano: { comandos: Command[]; pendencias: string[] } | n
   return { modo: 'LANCAR', motivo: plano?.pendencias[0] ?? nada };
 }
 
-export function botaoDeLancarAgua(model: BlueprintModel, plano: { comandos: Command[]; pendencias: string[] } | null, h?: Pick<HipotesesDaAguaCompleta, 'agua'>): BotaoDoSistema {
+export function botaoDeLancarAgua(model: BlueprintModel, plano: { comandos: Command[]; pendencias: string[] } | null, h?: Pick<HipotesesDaAguaDoLancamento, 'agua' | 'forroDaCasa'>): BotaoDoSistema {
   return botaoDoSistema(plano, redeDaAguaDoSistema(model).trechos.length > 0, 'Nada a lançar: não há ponto de água a ligar.', motivoParaNaoRelancarAgua(model, h));
 }
 

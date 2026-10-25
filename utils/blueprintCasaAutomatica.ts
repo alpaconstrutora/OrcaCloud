@@ -103,6 +103,7 @@ import { REGRA_DE_CAIXAS_PADRAO } from './blueprintCaixasDePassagem';
 import { escolhasDoEletroduto } from './blueprintEscolhasDoEletroduto';
 import { comandoDeRegistro, registroDe } from './blueprintRegistroDeLancamento';
 import { escolhasDaAgua, escolhasDoPluvial } from './blueprintEscolhasDaAguaEPluvial';
+import type { HipotesesDeAgua } from './blueprintAguaAutomatica';
 import type { CaixasDePassagem } from './preferencias/catalogoLancamento';
 import { gerarClimatizacao, type ContextoDoGeradorDeClimatizacao } from './blueprintGeradorClimatizacao';
 import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blueprintClimatizacao';
@@ -900,6 +901,24 @@ export const HIPOTESES_DO_FORRO_DA_CASA_PADRAO: HipotesesDoForroDaCasa = {
 };
 
 const FAIXAS_DO_FORRO = ['eletrica', 'frigorigena', 'aguaQuente', 'aguaFria'] as const;
+
+/** As hipóteses do forro da casa, completas: o padrão, as premissas por cima e cada faixa completada pela do padrão. */
+export function forroDaCasaCompleto(parcial: Partial<HipotesesDoForroDaCasa> = {}): HipotesesDoForroDaCasa {
+  return {
+    ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
+    ...parcial,
+    ...(Object.fromEntries(FAIXAS_DO_FORRO.map((k) => [k, { ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO[k], ...(parcial[k] ?? {}) }])) as Pick<HipotesesDoForroDaCasa, (typeof FAIXAS_DO_FORRO)[number]>),
+  };
+}
+
+/**
+ * O forro da ÁGUA da casa — o `agua.noForro` com que a etapa ÁGUA lança (as faixas da fria e da quente e a folga sob a
+ * viga) —, ou `null` com o forro desligado. Correção 1 da F3 (24/10/2026): o editor monta com esta MESMA função, a partir
+ * das premissas da casa do estudo, o forro da água antiga lançada antes do registro.
+ */
+export function forroDaAguaDaCasa(forro: HipotesesDoForroDaCasa): NonNullable<HipotesesDeAgua['noForro']> | null {
+  return forro.lancar ? { aguaFria: forro.aguaFria, aguaQuente: forro.aguaQuente, folgaSobAVigaMm: forro.folgaSobAVigaMm } : null;
+}
 /** O raio do tubo da faixa mais baixa (a água fria) na conta do rebaixo — DN 32 de PVC, o maior ramal da casa. */
 const RAIO_NO_PLENUM_MM = 16;
 
@@ -2268,7 +2287,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       agua: {
         ...hidroDoEstudo.agua,
         faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
-        noForro: forroLigado ? { aguaFria: hip.forro.aguaFria, aguaQuente: hip.forro.aguaQuente, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
+        noForro: forroDaAguaDaCasa(hip.forro),
       },
       // F17 (decisão do usuário, "sobe pela fachada"): o alimentador enterrado só até a parede da frente — sobe nela e
       // corre sobre a laje até a caixa; sob o piso ele cruzava o esgoto enterrado. A premissa do estudo, se houver, vale.

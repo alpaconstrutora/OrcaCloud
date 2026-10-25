@@ -4816,7 +4816,9 @@ describe('BlueprintEditor · ribbon', () => {
       expect(await within(gaveta).findByTestId('aviso-escolhas-mudaram')).toHaveTextContent(AVISO);
     });
 
-    it('⚠️ água no FORRO lançada antes do registro: o botão do rodapé desligado, com o motivo (texto, dica e descrição acessível)', async () => {
+    // Correção 1 (24/10/2026, relato na planta "Garden"): o estudo tem as premissas da casa (aqui, as do padrão, forro
+    // ligado) — a água antiga no forro relança pelo forro da casa; sem ele, o módulo mantém o bloqueio (testes do módulo).
+    it('⚠️ correção 1: água no FORRO lançada antes do registro, com as premissas da casa no estudo — relançar DISPONÍVEL, sem motivo', async () => {
       const k = await import('../../utils/blueprintKernel');
       let m = k.applyCommand(k.emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
       const t = m.levels[0].id;
@@ -4836,14 +4838,11 @@ describe('BlueprintEditor · ribbon', () => {
       loadBranchModel.mockResolvedValue(m);
       await montar();
       const { gaveta, dialog } = await abrirAgua();
-      const MOTIVO = 'Água no forro lançada antes do registro — relançar aqui a tiraria do forro.';
-      expect(within(gaveta).getByTestId('agua-motivo')).toHaveTextContent(MOTIVO);
+      await waitFor(() => expect(within(gaveta).queryByTestId('agua-motivo')).not.toBeInTheDocument());
       const principal = within(dialog).getByRole('button', { name: /^(lançar|relançar) tudo$/i });
-      expect(principal).toBeDisabled();
-      expect(principal).toHaveAttribute('title', MOTIVO);
-      expect(principal.parentElement).toHaveAttribute('title', MOTIVO);
-      expect(principal).toHaveAccessibleDescription(MOTIVO);
-      expect(within(dialog).queryByRole('button', { name: /^refazer tudo$/i })).not.toBeInTheDocument();
+      expect(principal).toBeEnabled();
+      expect(principal).not.toHaveAttribute('aria-describedby');
+      expect(within(dialog).getByRole('button', { name: /^refazer tudo$/i })).toBeEnabled();
     });
 
     it('pluvial só com SUGERIDOS e outra escolha: o botão do aviso refaz direto, sem confirmação', async () => {

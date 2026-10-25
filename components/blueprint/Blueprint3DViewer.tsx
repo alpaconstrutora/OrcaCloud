@@ -45,9 +45,33 @@ import {
   medidasDoQuadro,
   medidasDoTerminal,
   rotacaoY3D,
+  ESCALA_3D,
 } from '../../utils/blueprintRede';
+
+/**
+ * A linha do eletroduto flexível (`caminhosDosEletrodutos`) como curva do three: percorrida pelo COMPRIMENTO, para o
+ * `TubeGeometry` espaçar os anéis por igual (a curva do canto tem os pontos mais juntos que as retas).
+ */
+class CurvaDoEletroduto extends THREE.Curve {
+  constructor(pontos) {
+    super();
+    this.pontos = pontos;
+    this.acumulado = [0];
+    for (let i = 1; i < pontos.length; i++) this.acumulado.push(this.acumulado[i - 1] + pontos[i].distanceTo(pontos[i - 1]));
+  }
+  getPoint(t, alvo = new THREE.Vector3()) {
+    const total = this.acumulado[this.acumulado.length - 1];
+    const d = Math.min(Math.max(t, 0), 1) * total;
+    let i = 1;
+    while (i < this.acumulado.length - 1 && this.acumulado[i] < d) i++;
+    const ini = this.acumulado[i - 1];
+    const trecho = this.acumulado[i] - ini || 1;
+    return alvo.copy(this.pontos[i - 1]).lerp(this.pontos[i], (d - ini) / trecho);
+  }
+}
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { embutimentoEletrico } from '../../utils/blueprintEletricaEmbutida';
+import { caminhosDosEletrodutos } from '../../utils/blueprintEletrodutoFlexivel3D';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -1346,6 +1370,26 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   // A elétrica EMBUTIDA (25/10/2026, "Conduites descem embutidos na parede. as caixas de tomadas e interrrptores
   // tambem"): a caixa com a frente na face e a descida na face dentro da parede — `blueprintEletricaEmbutida`.
   const embutido = useMemo(() => embutimentoEletrico(model), [model]);
+  // O ELETRODUTO FLEXÍVEL (25/10/2026, "o conduite e flexivel e nao deve fazer curva em 90 graus… refaça com curva
+  // continuada e sem corte"): a elétrica vira um tubo por trecho, ao longo da sua parte da linha curva de caixa a caixa
+  // (`blueprintEletrodutoFlexivel3D`); os que correm juntos, lado a lado. As outras redes seguem em cilindros retos.
+  const caminhosEletricos = useMemo(() => {
+    const ligacaoDaPeca = cotasDeLigacao(model);
+    const caixas = new Set<string>();
+    for (const x of model.terminais ?? []) {
+      if (x.disciplina !== 'ELETRICA') continue;
+      caixas.add(`${x.levelId}|${x.at.x},${x.at.y},${x.cotaMm}`);
+      caixas.add(`${x.levelId}|${x.at.x},${x.at.y},${ligacaoDaPeca(x)}`);
+    }
+    for (const q of model.quadros ?? []) caixas.add(`${q.levelId}|${q.at.x},${q.at.y},${q.cotaMm}`);
+    const elevacao = new Map(model.levels.map((l) => [l.id, l.elevationMm]));
+    const eletricos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && idsVisiveis.has(t.levelId) && !escondida(t.id));
+    return caminhosDosEletrodutos(
+      eletricos.map((t) => ({ id: t.id, levelId: t.levelId, a: t.a, b: t.b, cotaAMm: t.cotaAMm, cotaBMm: t.cotaBMm, bitolaMm: t.bitolaMm, circuitoIds: t.circuitoIds, segmentos: embutido.segmentos(t), elevacaoMm: elevacao.get(t.levelId) ?? 0 })),
+      (levelId, x, y, cota) => caixas.has(`${levelId}|${x},${y},${cota}`),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [model, levelIds?.join(','), chaveOcultos, embutido]);
   const redes = useMemo(
     () =>
       (model.trechos ?? [])
@@ -1358,12 +1402,35 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         // seguindo a parede, teto ou piso".
         .flatMap((t) => {
           const nivel = model.levels.find((l) => l.id === t.levelId);
+          const tubo = t.disciplina === 'ELETRICA' ? caminhosEletricos.get(t.id) : undefined;
+          if (tubo && tubo.length >= 2) return [{ t, k: 'tubo', c: null, tubo }];
           // C11 (10/10/2026): a linha frigorígena em par vira DOIS cilindros (líquido e sucção) — `cilindrosDoTrecho`.
           return embutido.segmentos(t).flatMap((seg, k) =>
-            cilindrosDoTrecho({ ...t, ...seg }, nivel?.elevationMm ?? 0).map((c, j) => ({ t, k: `${k}-${j}`, c })),
+            cilindrosDoTrecho({ ...t, ...seg }, nivel?.elevationMm ?? 0).map((c, j) => ({ t, k: `${k}-${j}`, c, tubo: null })),
           );
         })
-        .map(({ t, k, c }) => {
+        .map(({ t, k, c, tubo }) => {
+          if (tubo) {
+            // mm do mundo [x, y, z] → o 3D [x, z, y], em metros.
+            const pts = tubo.map((p) => new THREE.Vector3(p[0] * ESCALA_3D, p[2] * ESCALA_3D, p[1] * ESCALA_3D));
+            // SEM CORTE: a borda aberta de um tubo encostada na do vizinho deixa um fio de luz entre os anéis (eles giram
+            // diferente). Cada ponta avança 4 mm na própria direção, por dentro do vizinho — mesma cor, a emenda some.
+            const avanco = 0.004;
+            pts[0] = pts[0].clone().addScaledVector(pts[0].clone().sub(pts[1]).normalize(), avanco);
+            const ult = pts.length - 1;
+            pts[ult] = pts[ult].clone().addScaledVector(pts[ult].clone().sub(pts[ult - 1]).normalize(), avanco);
+            const curva = new CurvaDoEletroduto(pts);
+            return {
+              chave: `${t.id}-${k}`,
+              id: t.id,
+              uid: t.uid,
+              cor: COR_DA_DISCIPLINA[t.disciplina],
+              // O mesmo piso de 15 mm de raio dos cilindros (espessura de traço, não medida).
+              geom: new THREE.TubeGeometry(curva, Math.max(8, tubo.length * 2), Math.max((t.bitolaMm / 2) * ESCALA_3D, 0.015), 10, false),
+              position: new THREE.Vector3(0, 0, 0),
+              quaternion: new THREE.Quaternion(),
+            };
+          }
           // O `CylinderGeometry` nasce alinhado ao Y — daí a prumada ser o caso
           // trivial e a rotação sair de um `setFromUnitVectors` só.
           // E7.1 (05/10/2026): o duto RETANGULAR gira pela base completa (largura deitada, altura em
@@ -1404,7 +1471,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           };
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, levelIds?.join(','), chaveOcultos],
+    [model, levelIds?.join(','), chaveOcultos, caminhosEletricos],
   );
 
   /**

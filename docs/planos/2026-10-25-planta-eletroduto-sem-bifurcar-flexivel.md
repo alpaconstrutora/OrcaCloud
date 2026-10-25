@@ -65,7 +65,11 @@ forro; os cantos de 90° dos eletrodutos):
   com as descidas repetidas; a conta de anel conta os que correm juntos como um caminho; a travessia da Cozinha com dois
   eletrodutos e um furo) — 62/62; conjunto elétrico 615/615. Sonda da Garden relançada: nenhum nó sem caixa bifurca
   (o do quadro e o do forro têm só pares que passam)
-- [ ] item 3 + testes + print
+- [x] item 3 + testes + print — `blueprintEletrodutoFlexivel3D.test.ts` (6: o "L" vira curva sem quebra > 15° e começa a
+  6 × Ø; até 45 % do pedaço; emenda sem corte, mesmo ponto e direção; na caixa a linha termina; os juntos lado a lado;
+  cada um segue o de mesmos circuitos). Harness local: a Garden gravada no viewer de `origin/main` × refeita pelo motor
+  novo no viewer novo — do QDC sobem DOIS eletrodutos lado a lado, cada um curva para o seu lado; os cantos viraram
+  curvas; as emendas entre trechos sem fio de luz (cada ponta avança 4 mm por dentro da vizinha, mesma cor)
 - [ ] tsc + suíte
 - [ ] PR + CI
 - [ ] publicação

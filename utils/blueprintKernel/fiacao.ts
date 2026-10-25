@@ -51,6 +51,7 @@
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, ObjectId, Terminal, Trecho } from './model';
 import { caminhoEntre, comprimentoMm, distanciasDesde, fazerChave, type Aresta, type No } from './grafoDeRede';
 import { comandosDoModelo } from './comandos';
+import { cotasDeLigacao } from './ligacaoDaPeca';
 import { condutoresDoEletroduto, secoesDosCondutores, type TipoDeCondutor } from './condutores';
 
 export interface CondutorDerivado {
@@ -113,7 +114,9 @@ export function composicaoDaRede(model: BlueprintModel): ComposicaoDaRede {
     mm: comprimentoMm(t),
   }));
   const indiceDoTrecho = new Map(trechos.map((t, i) => [t.id, i]));
-  const noDoPonto = (t: Terminal): No => chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+  // A luz de teto com a caixa na rede (25/10/2026) liga no nó acima dela, e não na cota da luminária — `ligacaoDaPeca`.
+  const ligacao = cotasDeLigacao(model);
+  const noDoPonto = (t: Terminal): No => chave(t.levelId, t.at.x, t.at.y, ligacao(t));
 
   // acumulado[trecho][circuito]
   const acum = new Map<ObjectId, Map<ObjectId, Acumulado>>();

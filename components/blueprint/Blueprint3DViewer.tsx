@@ -22,6 +22,7 @@ import {
   ehConjunto,
   contornoDaAguaEm3d,
   contornoExternoDoNivel,
+  cotasDeLigacao,
   DEFAULT_TOLERANCE_MM,
   FORMA_ESTRUTURAL,
   baseDaEscadaMm,
@@ -1412,6 +1413,9 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
    * ⚠️ Caixa, e não esfera, porque é o que o IFC emite: duas formas para a mesma
    * peça fariam o 3D e o arquivo entregue discordarem sobre o que existe.
    */
+  // A caixa da luz de teto NA REDE (25/10/2026, "a caixa tem 6 entradas e é por onde cada conduite chega"): desenhada na
+  // cota em que a luz se liga — o nó onde os eletrodutos chegam —, e não na luminária, na face do forro.
+  const ligacao = useMemo(() => cotasDeLigacao(model), [model]);
   const terminais3d = useMemo(
     () =>
       (model.terminais ?? [])
@@ -1421,11 +1425,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           const md = medidasDoTerminal(t);
           // O ponto elétrico de parede: a caixa embutida (frente rente à face), e não centrada na face.
           const at = embutido.caixa(t) ?? t.at;
-          const c = caixaDaPeca(at, t.cotaMm, nivel?.elevationMm ?? 0, md);
+          // A luz de teto com a caixa na rede: na cota em que ela se liga (o nó da rede), e não na luminária.
+          const cota = ligacao(t);
+          const c = caixaDaPeca(at, cota, nivel?.elevationMm ?? 0, md);
           // A CAIXA D'ÁGUA apoia na cota (o fundo, pela ficha), sobre a laje —
           // com a cota no centro ela nascia meio enfiada na parede (print de 27/09/2026).
           const centro = centroDoTerminal3D(
-            { ...t, at },
+            { ...t, at, cotaMm: cota },
             nivel?.elevationMm ?? 0,
             md.alturaMm,
             t.tipoHidraulico === 'RESERVATORIO' ? apoioDaCaixaDagua(model, t) : undefined,

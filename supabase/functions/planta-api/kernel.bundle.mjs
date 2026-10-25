@@ -4009,6 +4009,30 @@ function comandosDoModelo(model) {
   });
 }
 
+// utils/blueprintKernel/ligacaoDaPeca.ts
+var ALCANCE_DA_CAIXA_DA_LUZ_MM = 600;
+function cotasDeLigacao(model) {
+  const pontas = /* @__PURE__ */ new Map();
+  const anotar = (levelId, x, y, cota) => {
+    const k = `${levelId}|${x},${y}`;
+    const lista = pontas.get(k);
+    if (lista) lista.push(cota);
+    else pontas.set(k, [cota]);
+  };
+  for (const t of model.trechos ?? []) {
+    if (t.disciplina !== "ELETRICA") continue;
+    anotar(t.levelId, t.a.x, t.a.y, t.cotaAMm);
+    anotar(t.levelId, t.b.x, t.b.y, t.cotaBMm);
+  }
+  return (t) => {
+    if (t.disciplina !== "ELETRICA" || t.tipoEletrico !== "ILUMINACAO_TETO") return t.cotaMm;
+    const cotas = pontas.get(`${t.levelId}|${t.at.x},${t.at.y}`);
+    if (!cotas || cotas.includes(t.cotaMm)) return t.cotaMm;
+    const acima = cotas.filter((c) => c > t.cotaMm && c - t.cotaMm <= ALCANCE_DA_CAIXA_DA_LUZ_MM);
+    return acima.length > 0 ? Math.min(...acima) : t.cotaMm;
+  };
+}
+
 // utils/blueprintKernel/condutores.ts
 var ROTULO_DO_CONDUTOR = {
   FASE: "fase",
@@ -4084,7 +4108,8 @@ function composicaoDaRede(model) {
     mm: comprimentoMm(t)
   }));
   const indiceDoTrecho = new Map(trechos.map((t, i) => [t.id, i]));
-  const noDoPonto = (t) => chave(t.levelId, t.at.x, t.at.y, t.cotaMm);
+  const ligacao = cotasDeLigacao(model);
+  const noDoPonto = (t) => chave(t.levelId, t.at.x, t.at.y, ligacao(t));
   const acum = /* @__PURE__ */ new Map();
   const acumDe = (trechoId, circuitoId) => {
     const porCircuito = acum.get(trechoId) ?? /* @__PURE__ */ new Map();

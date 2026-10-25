@@ -158,6 +158,7 @@ import type {
   Wall,
 } from './blueprintKernel';
 import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, caixaDaLuzNaRede, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
+import { desdobrarDerivacoes } from './blueprintEletrodutoSemDerivacao';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
@@ -455,7 +456,6 @@ export function planejarEletrodutos(
 
   // ── Os trechos NOVOS, como comandos, e as arestas deles ─────────────────
   const novos: Extract<Command, { type: 'AddTrecho' }>[] = [];
-  let mmNovos = 0;
   const addTrecho = (levelId: ObjectId, a: { x: number; y: number }, cotaA: number, b: { x: number; y: number }, cotaB: number): void => {
     const de = chave(levelId, a.x, a.y, cotaA);
     const para = chave(levelId, b.x, b.y, cotaB);
@@ -473,7 +473,6 @@ export function planejarEletrodutos(
     });
     const mm = comprimentoMm({ a, b, cotaAMm: cotaA, cotaBMm: cotaB });
     arestas.push({ ref: { novo: novos.length - 1 }, de, para, mm });
-    mmNovos += mm;
   };
 
   // ── E6.3: a cota da rede em cada pavimento (teto, ou sob a viga) ─────────
@@ -891,12 +890,36 @@ export function planejarEletrodutos(
   // ── Os CIRCUITOS de cada trecho: quem passa por ele a caminho do quadro ──
   // O destino é o QUADRO na cota dele — assim a prumada do quadro entra no
   // caminho de todo ponto (e carrega todos os circuitos).
-  const caminhoAteOQuadro = (origem: No): number[] | null => caminhoEntre(origem, noDoQuadro, arestas);
+  //
+  // 25/10/2026 (eletroduto não bifurca): eletrodutos EXISTENTES que correm juntos (as mesmas pontas — os repetidos de
+  // `desdobrarDerivacoes`) são eletrodutos diferentes. O caminho do circuito passa pelo que já o leva; sem isso, um
+  // segundo lançamento escolhia qualquer um deles e somava os circuitos de volta num tronco só.
+  const juntos = new Map<string, number[]>();
+  arestas.forEach((a, i) => {
+    if (!('existente' in a.ref)) return;
+    const k = a.de < a.para ? `${a.de}~${a.para}` : `${a.para}~${a.de}`;
+    juntos.set(k, [...(juntos.get(k) ?? []), i]);
+  });
+  const circuitosDaExistente = (i: number) => {
+    const ref = arestas[i].ref;
+    return 'existente' in ref ? redeExistente.find((t) => t.id === ref.existente)?.circuitoIds ?? [] : [];
+  };
+  const caminhoAteOQuadro = (origem: No, circuitoId: ObjectId): number[] | null => {
+    const indices = arestas.map((_, i) => i).filter((i) => {
+      const a = arestas[i];
+      if (!('existente' in a.ref)) return true;
+      const grupo = juntos.get(a.de < a.para ? `${a.de}~${a.para}` : `${a.para}~${a.de}`) ?? [];
+      if (grupo.length < 2 || !grupo.some((j) => circuitosDaExistente(j).includes(circuitoId))) return true;
+      return circuitosDaExistente(i).includes(circuitoId);
+    });
+    const caminho = caminhoEntre(origem, noDoQuadro, indices.map((i) => arestas[i]));
+    return caminho ? caminho.map((k) => indices[k]) : null;
+  };
   const circuitosPorAresta = new Map<number, Set<ObjectId>>();
   for (const p of pontos) {
     const origem = noDoPonto.get(p.id);
     if (!origem || !p.circuitoId) continue;
-    const caminho = caminhoAteOQuadro(origem);
+    const caminho = caminhoAteOQuadro(origem, p.circuitoId);
     if (!caminho) continue;
     for (const i of caminho) {
       const s = circuitosPorAresta.get(i) ?? new Set<ObjectId>();
@@ -1046,6 +1069,27 @@ export function planejarEletrodutos(
     for (let j = 1; j < nos.length; j++) novosFinais.push({ ...n, a: { x: nos[j - 1].x, y: nos[j - 1].y }, b: { x: nos[j].x, y: nos[j].y } });
   });
 
+  // 25/10/2026 ("eletrodutos conduite nao bifurca"): onde a árvore se divide FORA de uma caixa, cada ramo ganha o próprio
+  // eletroduto até a caixa anterior (ou o quadro) — `desdobrarDerivacoes`. Caixa: o ponto (a luz com a caixa na rede, no
+  // nó dela), o quadro, a caixa de passagem do plano e a rede que já existe (não se mexe nela).
+  const nosComCaixa = new Set<No>([noDoQuadro]);
+  for (const x of model.terminais ?? []) {
+    if (x.disciplina !== 'ELETRICA' || !redeDe.has(x.levelId)) continue;
+    nosComCaixa.add(chave(x.levelId, x.at.x, x.at.y, x.cotaMm));
+    if (caixaDaLuzNaRede(x, rede(x.levelId))) nosComCaixa.add(chave(x.levelId, x.at.x, x.at.y, rede(x.levelId)));
+  }
+  for (const c of caixasCmds) if (c.type === 'AddTerminal') nosComCaixa.add(chave(c.levelId, c.at.x, c.at.y, c.cotaMm));
+  for (const t of redeExistente) {
+    nosComCaixa.add(chave(t.levelId, t.a.x, t.a.y, t.cotaAMm));
+    nosComCaixa.add(chave(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+  }
+  const semDerivacao = desdobrarDerivacoes(novosFinais as Extract<Command, { type: 'AddTrecho' }>[], {
+    no: chave,
+    raiz: noDoQuadro,
+    ehCaixa: (k) => nosComCaixa.has(k),
+    bitolaDe: (ids) => Math.max(composicao(ids).bitola, hip.bitolaMm),
+  });
+
   return {
     quadroId: quadro.id,
     nome: quadro.nome,
@@ -1057,8 +1101,9 @@ export function planejarEletrodutos(
     trechosAtualizados: atualizacoes.length,
     sugeridos: sugeridosDoQuadro,
     trechosDoQuadro: trechosDoQuadro.length,
-    comandos: [...novosFinais, ...atualizacoes, ...caixasCmds],
-    metrosPrevistos: Math.round(mmNovos / 100) / 10,
+    comandos: [...semDerivacao, ...atualizacoes, ...caixasCmds],
+    // Os repetidos de `desdobrarDerivacoes` também se compram: os metros saem do lote final.
+    metrosPrevistos: Math.round(semDerivacao.reduce((mm, c) => mm + comprimentoMm(c), 0) / 100) / 10,
     motivo: null,
     caixas: caixasCmds.length,
     avisos,
@@ -1144,13 +1189,46 @@ export function caixasDaRedeDoQuadro(model: BlueprintModel, quadro: Pick<Quadro,
  * por isso quem chama pede confirmação antes. Um Ctrl+Z desfaz.
  * F2 (24/10/2026): as caixas de passagem da rede saem junto, inclusive as aceitas (`caixasDaRedeDoQuadro`).
  */
+/**
+ * As SOBRAS sem circuito presas à rede do quadro (25/10/2026). `redeDoQuadro` acha a rede pelos circuitos, então o
+ * eletroduto sem circuito nunca saía num refazer: na Garden, 10 tocos de um lançamento antigo subiam do quadro até a
+ * rede de então (2,15 m) e um paralelo seguia ao lado de um trecho da luz — e todo relançamento os deixava ali, o feixe
+ * parecendo o tronco no 3D. Sai o sem circuito ligado PELAS PONTAS (em cadeia) à rede ou ao quadro; o solto, longe
+ * dela, fica (pode ser reserva desenhada à mão).
+ */
+export function sobrasSemCircuito(model: BlueprintModel, quadro: Pick<Quadro, 'levelId' | 'at' | 'cotaMm'>, rede: readonly Trecho[]): Trecho[] {
+  const no = (levelId: string, x: number, y: number, z: number) => `${levelId}|${x},${y},${z}`;
+  const nos = new Set<string>([no(quadro.levelId, quadro.at.x, quadro.at.y, quadro.cotaMm)]);
+  for (const t of rede) {
+    nos.add(no(t.levelId, t.a.x, t.a.y, t.cotaAMm));
+    nos.add(no(t.levelId, t.b.x, t.b.y, t.cotaBMm));
+  }
+  const candidatos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && (t.circuitoIds ?? []).length === 0);
+  const sobras: Trecho[] = [];
+  for (let mudou = true; mudou; ) {
+    mudou = false;
+    for (const t of candidatos) {
+      if (sobras.includes(t)) continue;
+      const a = no(t.levelId, t.a.x, t.a.y, t.cotaAMm);
+      const b = no(t.levelId, t.b.x, t.b.y, t.cotaBMm);
+      if (!nos.has(a) && !nos.has(b)) continue;
+      sobras.push(t);
+      nos.add(a);
+      nos.add(b);
+      mudou = true;
+    }
+  }
+  return sobras;
+}
+
 export function refazerEletrodutos(
   model: BlueprintModel,
   quadro: Quadro,
   hip: HipotesesDeEletroduto = HIPOTESES_ELETRODUTO_PADRAO,
   hipEletricas: HipotesesEletricas = HIPOTESES_PADRAO,
 ): PlanoDeEletrodutos {
-  const daRede = redeDoQuadro(model, quadro);
+  const daRedeComCircuito = redeDoQuadro(model, quadro);
+  const daRede = [...daRedeComCircuito, ...sobrasSemCircuito(model, quadro, daRedeComCircuito)];
   if (daRede.length === 0) return planejarEletrodutos(model, quadro, hip, hipEletricas);
   const apagados = new Set(daRede.map((t) => t.id));
   const caixas = caixasDaRedeDoQuadro(model, quadro, daRede);

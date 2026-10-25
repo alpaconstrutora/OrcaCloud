@@ -82,11 +82,15 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
     expect(plano.motivo).toBeNull();
     expect(plano).toMatchObject({ pontos: 4, ligados: 0, aLigar: 4, prumadasEntrePavimentos: 0, trechosAtualizados: 0 });
     expect(plano.pavimentos).toEqual([{ levelId: m.levels[0].id, nome: 'Térreo', pontos: 4, ligados: 0, aLigar: 4 }]);
+    // 25/10/2026 ("eletrodutos conduite nao bifurca"): no teto sobre um ponto que a rede atravessa, o eletroduto que
+    // chega DESCE até a caixa e outro SOBE dela — a descida se repete (uma por eletroduto). A TUG da ponta só recebe.
     expect(prumadas(plano.comandos).map((c) => [c.a.x, c.a.y, c.cotaAMm, c.cotaBMm])).toEqual([
       [75, 1000, 1600, 2800], // o quadro sobe ao teto
-      [1000, 75, 1100, 2800], // interruptor
-      [2000, 75, 300, 2800], // TUG
-      [5925, 3000, 300, 2800], // TUG
+      [1000, 75, 1100, 2800], // interruptor: o que chega do quadro…
+      [1000, 75, 1100, 2800], // …e o que sai para a TUG
+      [2000, 75, 300, 2800], // TUG: o que chega…
+      [2000, 75, 300, 2800], // …e o que sai para a luz
+      [5925, 3000, 300, 2800], // TUG da ponta
     ]);
     const hz = horizontais(plano.comandos);
     expect(hz).toHaveLength(4);
@@ -101,9 +105,9 @@ describe('planejarEletrodutos — UMA rede por quadro, compartilhada', () => {
     // E2.2: o lançamento não declara mais a contagem — a fiação é derivada (`blueprintFiacao.ts`).
     expect(prumadaDoQuadro.condutores).toBeUndefined();
     expect(hz[0].circuitoIds).toEqual([c1, c2]);
-    // A prumada do interruptor é só C1; a da TUG, só C2.
-    expect(prumadas(plano.comandos)[1]).toMatchObject({ circuitoIds: [c1] });
-    expect(prumadas(plano.comandos)[2]).toMatchObject({ circuitoIds: [c2] });
+    // As descidas do interruptor levam o que passa pela caixa dele (o C2 segue para a TUG); a da TUG da ponta, só C2.
+    expect(prumadas(plano.comandos)[1]).toMatchObject({ circuitoIds: [c1, c2] });
+    expect(prumadas(plano.comandos)[5]).toMatchObject({ circuitoIds: [c2] });
     expect(prumadas(plano.comandos)[1].condutores).toBeUndefined();
     expect(plano.metrosPrevistos).toBeGreaterThan(5);
   });
@@ -658,13 +662,21 @@ const descidaEm = (cmds: Command[], p: XY, de: number, ate: number) =>
 /** O grafo dos trechos novos não tem ANEL: arestas = nós − componentes. */
 const semAnel = (cmds: Command[]) => {
   const no = (p: XY, z: number) => `${p.x},${p.y},${z}`;
+  // 25/10/2026: os eletrodutos repetidos (correm juntos, as mesmas pontas — `desdobrarDerivacoes`) são um caminho só
+  // para esta conta: um anel é um caminho FECHADO, não dois tubos lado a lado.
   const pai = new Map<string, string>();
   const raiz = (k: string): string => {
     let r = k;
     while (pai.get(r) !== r) r = pai.get(r)!;
     return r;
   };
-  const ts = adds(cmds);
+  const vistos = new Set<string>();
+  const ts = adds(cmds).filter((c) => {
+    const [u, v] = [no(c.a, c.cotaAMm), no(c.b, c.cotaBMm)].sort();
+    if (vistos.has(`${u}~${v}`)) return false;
+    vistos.add(`${u}~${v}`);
+    return true;
+  });
   for (const c of ts) for (const k of [no(c.a, c.cotaAMm), no(c.b, c.cotaBMm)]) if (!pai.has(k)) pai.set(k, k);
   for (const c of ts) pai.set(raiz(no(c.a, c.cotaAMm)), raiz(no(c.b, c.cotaBMm)));
   const componentes = new Set([...pai.keys()].map(raiz)).size;
@@ -1160,8 +1172,11 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     expect(chegaEm(plano.comandos, TA, 300)).toBe(true);
     expect(semAnel(plano.comandos)).toBe(true);
     expect(adds(plano.comandos).filter((c) => (c.circuitoIds ?? []).length === 0)).toEqual([]);
-    // A Sala/Cozinha é cruzada uma vez só (a travessia que a luz usou serve aos dois).
-    expect(naFaixa(plano.comandos).filter(cruzaADivisoria)).toHaveLength(1);
+    // A Sala/Cozinha é cruzada num lugar só (a travessia que a luz usou serve aos dois) — e, desde 25/10/2026 ("eletrodutos
+    // conduite nao bifurca"), por DOIS eletrodutos: um até a luz da Cozinha, outro que segue para a Área. O furo é um.
+    const cruzam = naFaixa(plano.comandos).filter(cruzaADivisoria);
+    expect(new Set(cruzam.map((c) => `${c.a.x},${c.a.y}>${c.b.x},${c.b.y}`)).size).toBe(1);
+    expect(cruzam).toHaveLength(2);
   });
 
   it('Correção 2: rede existente ÓRFÃ (um trecho do C2 no anel da Área, sem ligação ao quadro) — a tomada da Área não pendura nela: chega ao quadro, todo trecho novo com circuito', () => {

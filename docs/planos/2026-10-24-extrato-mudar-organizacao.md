@@ -32,5 +32,5 @@
 ## Estado
 - [x] util + testes 10/10; `tsc --noEmit` rc=0 (0 erros); `check-ui-standard.sh` 0 violações nos 3 `.tsx`
 - [x] tela real SEM gravar (escritas abortadas no navegador; 0 tentativas de PATCH/POST): seletor com as 4 orgs graváveis atendidas pela conta; mudar org de linha com CC de outra org abre a confirmação ("Centro de Custo é de outra organização e será limpo") e Cancelar não grava; linha conciliada sem seletor e com o motivo; lote com o campo e o aviso. Script `c:/tmp/pwtest/extrato-mudar-org.js`
-- [ ] gravação real (mover um lançamento e devolver) — depende de autorização do usuário
+- [x] gravação real, autorizada pelo usuário em 25/10/2026 ("autorizado"): conta Sicredi, 26/06/2026, destino Garden. Célula: MUNICIPIO DE CAMBUI R$ 201,71 → Garden (banco confirmou; tela atualizou sem recarregar) → Alpa (banco confirmou). Lote: CAMBUI CARTORIO R$ 6.445,63 + R$ 7.189,02 → Garden (banco confirmou os 2; o 3º lançamento não foi tocado) → Alpa. Foto antes × depois dos 3 lançamentos idêntica campo a campo; a restauração por SQL do `finally` não precisou agir. Script `c:/tmp/pwtest/extrato-mudar-org-grava.js`
 - [ ] PR + CI

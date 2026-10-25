@@ -45,6 +45,8 @@ em coluna. O resultado do cálculo (instalada, demanda, IB, seção, geral, qued
   circuito (C2 antes de C10; o DR geral primeiro); botões do Centro de cargas juntos à direita
 - [x] prova no navegador (Garden, antes × depois) — harness local com o rascunho da Garden (11:40) no PainelEletrica, em
   1700 e 1280 px, e o mesmo com o QDC trifásico 380 V / 15 m (IB 20,1 A · 4 mm² · geral 25 A · queda 0,7 %)
-- [ ] tsc + suíte
+- [x] tsc + suíte — tsc 0 erros; suíte (sem `blueprintCasaAutomatica`, que vai na CI): 11.464 ok + 5 testes de tela que
+  caíram por tempo sob carga e passaram sozinhos (`BlueprintEditor`, `PainelVersoes`, `TelaWebhooks`: 327/327) = 11.469 ok,
+  0 falhas, 34 pulados, total 11.503
 - [ ] PR + CI
 - [ ] publicação

@@ -75,7 +75,11 @@ Esclarecimento do item 2 (mesma sessão, com print de uma planta elétrica feita
 - [x] item 2 + testes — `blueprintTomadaSimbolo.test.ts`; retratos do desenho da prancha e do canvas atualizados (mesmos
   textos, geometria nova da tomada)
 - [x] item 3 + testes — `blueprintCamadasPorDisciplina.test.ts`, `PainelCamadas.test.tsx`, `PainelConflitosCamadas.test.tsx`
-- [ ] prova no navegador (os três itens)
-- [ ] tsc, suíte, bundle da planta-api regerado (o kernel mudou de comportamento)
+- [x] prova no navegador (os três itens) — harness local com o rascunho da Garden no canvas real: interruptor movido sem
+  toco diagonal; tomadas com o ponto na face, barra e triângulo no ambiente; Arquitetura › Construção 75 / Mobiliário 13,
+  oculto some cama/armário/criado/geladeira/máquina e ficam lavatório/vaso/box/tanque
+- [x] tsc 0 erros; suíte (sem `blueprintCasaAutomatica`, que vai na CI): 11.437 ok + 7 que caíram por tempo sob carga e
+  passaram sozinhos (329/329) = 11.444 ok, 0 falhas, 34 pulados, total 11.478; bundle da planta-api regerado SEM diferença
+  (ele não empacota os comandos de edição — não há função para publicar)
 - [ ] PR + CI
-- [ ] publicação (+ deploy da `planta-api` só com autorização do usuário)
+- [ ] publicação

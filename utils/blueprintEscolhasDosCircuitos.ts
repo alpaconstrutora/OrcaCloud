@@ -27,11 +27,16 @@
  * A assinatura sobrevive ao payload e à reexecução, e responde exatamente a pergunta: "o circuito está como o motor o
  * criou?". Circuito do motor com o nome trocado, ou com disjuntor/seção/curva/DR/ligação declarados depois, deixa de
  * bater: conta como do USUÁRIO e FICA (`alterados`, quando só o resto mudou e o nome ainda bate — a confirmação diz
- * "do motor, alterado"). A `fase` fica FORA da assinatura: é do balanceamento do quadro (refazível pelo botão de lá), e
+ * "do motor, alterado"). Correção 1 (I3): o NÚMERO do nome ("C3 — ") fica fora — "Renumerar circuitos" não muda o
+ * circuito. A `fase` fica FORA da assinatura: é do balanceamento do quadro (refazível pelo botão de lá), e
  * a confirmação avisa que os novos nascem sem fase. Os PONTOS também ficam fora: apagar ou mover um ponto não é editar
  * o circuito (e o uid do ponto criado pela casa não sobrevive à reexecução).
  * Circuito com ponto em OUTRO pavimento nunca é do motor deste (o motor só junta pontos de um pavimento).
- * Rede antiga, criada antes do registro: nenhum circuito é identificável — o botão desliga com o motivo.
+ * Circuitos criados antes do registro (correção 1, I1 — a planta Garden, 31 circuitos): nenhum é identificável, e o
+ * painel oferece "Refazer todos os circuitos deste pavimento" (os com pontos só nele) com uma confirmação FORTE — cada
+ * circuito pelo nome, o que estava editado à mão e se perde, os eletrodutos apagados. Antes, o motivo do botão mandava
+ * apagar os circuitos no Quadro de cargas: isso deixava os 319 eletrodutos órfãos e o relançar seguinte saía FORA do
+ * forro, por cima deles. Nenhum motivo manda apagar circuito.
  *
  * ─── O QUE O REFAZER FAZ ────────────────────────────────────────────────────
  * Num lote só (Ctrl+Z volta tudo): apaga os circuitos do motor (o `DeleteCircuito` do kernel solta os pontos, tira o
@@ -39,7 +44,9 @@
  * nós deles) — sem isso, eles ficariam órfãos (sem circuito nenhum): o planejador dos eletrodutos não os vê como rede e
  * lançaria trechos novos por cima deles —, recria os circuitos dos pontos soltos do pavimento com as escolhas atuais e
  * grava o registro. O eletroduto que leva também outro circuito fica (sem os refeitos). Depois, o painel dos eletrodutos
- * mostra os pontos a ligar ("Lançar em todos (N)") — a fiação é derivada dos eletrodutos e acompanha.
+ * mostra os pontos a ligar ("Lançar em todos (N)") — a fiação é derivada dos eletrodutos e acompanha. Correção 1: a rede
+ * antiga no forro ganha, no mesmo lote, o registro dos eletrodutos com o forro da casa (o relançar continua no forro); e
+ * os DRs são refeitos (os vazios saem; os circuitos novos que pedem DR ganham o da norma).
  *
  * Puro: sem React, sem banco.
  */
@@ -58,13 +65,25 @@ import {
   HIPOTESES_CIRCUITOS_PADRAO,
   conferirPlano,
   planejarCircuitos,
+  secaoMinimaDaFuncaoMm2,
   type CriterioDeCircuito,
+  type FuncaoDoCircuito,
   type HipotesesDeCircuitos,
   type PlanoDeCircuitos,
 } from './blueprintCircuitosAutomaticos';
 import { HIPOTESES_PADRAO, type HipotesesEletricas } from './blueprintEletricaDimensionamento';
-import { caixasDaRedeDoQuadro } from './blueprintEletrodutos';
+import { caixasDaRedeDoQuadro, type HipotesesDeEletroduto } from './blueprintEletrodutos';
 import {
+  MOTIVO_REDE_NO_FORRO_SEM_REGISTRO,
+  escolhasAtuaisDoQuadro,
+  forroDaCasaQueVale,
+  motivoParaNaoRelancar,
+  redeNoForroSemRegistro,
+  type ForroDaCasaOuEstado,
+} from './blueprintEscolhasDoEletroduto';
+import { comandosDasSugestoesDeDR, sugerirDRs } from './blueprintNbr5410';
+import {
+  TEXTO_NADA_MUDOU,
   comandoDeRegistro,
   diferencasDasEscolhas,
   registroDe,
@@ -143,7 +162,13 @@ function fnv(texto: string): string {
   return x.toString(16).padStart(8, '0');
 }
 
-/** As duas metades da assinatura: o nome e o resto das propriedades (a `fase` fica fora — ver o cabeçalho). */
+/**
+ * O nome SEM o número ("C3 — Iluminação Sala" → "Iluminação Sala"). Correção 1 (I3): "Renumerar circuitos" troca só o
+ * número — o circuito continua o mesmo que o motor criou e não pode deixar de ser reconhecido por isso.
+ */
+const nomeSemNumero = (nome: string) => nome.replace(/^C\s*\d+\s*(?:—|–|-)?\s*/i, '').trim();
+
+/** As duas metades da assinatura: o nome (sem o número) e o resto das propriedades (a `fase` fica fora). */
 function metadesDaAssinatura(c: Circuito): { nome: string; resto: string } {
   const resto = [
     c.tipo ?? null,
@@ -157,7 +182,7 @@ function metadesDaAssinatura(c: Circuito): { nome: string; resto: string } {
     c.curva ?? null,
     c.reserva ?? null,
   ];
-  return { nome: fnv(c.nome), resto: fnv(JSON.stringify(resto)) };
+  return { nome: fnv(nomeSemNumero(c.nome)), resto: fnv(JSON.stringify(resto)) };
 }
 
 /** A assinatura de um circuito como o registro a guarda: `<nome>.<resto>`, 17 caracteres. */
@@ -182,7 +207,12 @@ export interface CircuitosDoPavimento {
   doMotor: Circuito[];
   /** Do motor, mas alterados depois (o nome ainda bate; disjuntor, seção, curva, DR… mudaram) — ficam. */
   alterados: Circuito[];
-  /** Os demais com ponto neste pavimento: criados à mão, renomeados, de antes do registro — ficam. */
+  /**
+   * Correção 1 (I1): SEM registro no pavimento, os circuitos com pontos SÓ neste pavimento (pelo menos um) — não se sabe
+   * quais o motor criou; o Refazer, com a confirmação forte, refaz todos eles. Com registro: vazio.
+   */
+  legados: Circuito[];
+  /** Os demais com ponto neste pavimento: criados à mão, renomeados, com ponto em outro pavimento — ficam. */
   outros: Circuito[];
 }
 
@@ -199,38 +229,48 @@ function pavimentosPorCircuito(model: BlueprintModel): Map<ObjectId, Set<ObjectI
 }
 
 /**
- * Classifica os circuitos do pavimento pelo registro: do motor (a assinatura bate inteira), do motor alterados (só o
- * nome bate) e os outros (com ponto aqui). Circuito com ponto em outro pavimento nunca é do motor deste.
+ * Classifica os circuitos do pavimento. Com registro: do motor (a assinatura bate inteira), do motor alterados (só o
+ * nome bate) e os outros. Sem registro: os legados (pontos só aqui) e os outros. Circuito com ponto em outro pavimento
+ * nunca é do motor deste. Correção 1 (M1): circuito SEM ponto só conta como do motor se estiver num quadro dos circuitos
+ * do motor que têm ponto aqui — senão a assinatura de um circuito vazio de outro pavimento bateria por acaso.
  */
 export function circuitosDoPavimento(model: BlueprintModel, levelId: ObjectId): CircuitosDoPavimento {
   const registro = registroDe(model, 'CIRCUITOS', levelId);
   const assinaturas = new Set(assinaturasDoRegistro(registro?.escolhas));
   const nomes = new Set([...assinaturas].map((a) => a.split('.')[0]));
   const pavimentos = pavimentosPorCircuito(model);
-  const out: CircuitosDoPavimento = { temRegistro: !!registro, doMotor: [], alterados: [], outros: [] };
+  const out: CircuitosDoPavimento = { temRegistro: !!registro, doMotor: [], alterados: [], legados: [], outros: [] };
+  const semPonto: { c: Circuito; inteiro: boolean }[] = [];
   for (const c of model.circuitos ?? []) {
     const ps = pavimentos.get(c.id) ?? new Set<ObjectId>();
     const aqui = ps.has(levelId);
-    const soAqui = [...ps].every((l) => l === levelId);
-    if (soAqui && assinaturas.size > 0) {
-      const { nome } = metadesDaAssinatura(c);
-      if (assinaturas.has(assinaturaDoCircuito(c))) {
-        out.doMotor.push(c);
-        continue;
-      }
-      if (nomes.has(nome)) {
-        out.alterados.push(c);
-        continue;
-      }
+    const soAqui = aqui && ps.size === 1;
+    if (!registro) {
+      if (soAqui) out.legados.push(c);
+      else if (aqui) out.outros.push(c);
+      continue;
     }
-    if (aqui) out.outros.push(c);
+    const inteiro = assinaturas.has(assinaturaDoCircuito(c));
+    const peloNome = !inteiro && nomes.has(metadesDaAssinatura(c).nome);
+    if (ps.size === 0) {
+      if (inteiro || peloNome) semPonto.push({ c, inteiro });
+      continue;
+    }
+    if (soAqui && inteiro) out.doMotor.push(c);
+    else if (soAqui && peloNome) out.alterados.push(c);
+    else if (aqui) out.outros.push(c);
   }
+  const quadrosDoMotor = new Set([...out.doMotor, ...out.alterados].map((c) => c.quadroId));
+  for (const { c, inteiro } of semPonto) if (quadrosDoMotor.has(c.quadroId)) (inteiro ? out.doMotor : out.alterados).push(c);
   return out;
 }
 
-/** O quadro dos circuitos do motor do pavimento (o primeiro) — o padrão do seletor do painel. `null` = nenhum. */
+/** Os circuitos que o Refazer do pavimento refaz: com registro, os do motor; sem registro, os legados. */
+const refaziveis = (cls: CircuitosDoPavimento) => (cls.temRegistro ? cls.doMotor : cls.legados);
+
+/** O quadro dos circuitos a refazer do pavimento (o primeiro) — o padrão do seletor do painel. `null` = nenhum. */
 export function quadroDosCircuitosDoMotor(model: BlueprintModel, levelId: ObjectId): ObjectId | null {
-  return circuitosDoPavimento(model, levelId).doMotor[0]?.quadroId ?? null;
+  return refaziveis(circuitosDoPavimento(model, levelId))[0]?.quadroId ?? null;
 }
 
 /**
@@ -246,6 +286,11 @@ export function diferencasDosCircuitos(
   if (!registro) return [];
   if (circuitosDoPavimento(model, levelId).doMotor.length === 0) return [];
   return diferencasDasEscolhas(registro.escolhas, atuais, opcoesDaComparacao(registro.escolhas, atuais));
+}
+
+/** Correção 1 (M2): os OUTROS pavimentos cujos circuitos do motor foram criados com outras escolhas (os nomes). */
+export function pavimentosComDiferenca(model: BlueprintModel, atuais: Record<string, ValorDeEscolha | undefined>, exceto: ObjectId | null): string[] {
+  return model.levels.filter((l) => l.id !== exceto && diferencasDosCircuitos(model, l.id, atuais).length > 0).map((l) => l.name);
 }
 
 /** As escolhas do registro sem as assinaturas. */
@@ -310,13 +355,42 @@ export function comandosDeCriarCircuitos(
 
 // ─── O Refazer ───────────────────────────────────────────────────────────────
 
+/**
+ * Correção 1 (I1): o painel dos eletrodutos, para o Refazer dos circuitos não tirar a rede do forro. A rede antiga no
+ * forro (sem registro dos eletrodutos) só é reconhecida enquanto os trechos têm circuito — apagados os circuitos, ela
+ * sai de `redeDoQuadro` e o "Lançar em todos" seguinte desce para a cota do painel. Por isso, no MESMO lote e antes de
+ * apagar, o Refazer grava o registro dos eletrodutos do quadro COM o forro da casa (`forroDaCasaQueVale`); sem como
+ * saber o forro, o Refazer fica bloqueado com o motivo dos eletrodutos.
+ */
+export interface EletrodutosDoPainel {
+  hip: HipotesesDeEletroduto;
+  hipEletricas: HipotesesEletricas;
+  forroDaCasa?: ForroDaCasaOuEstado;
+}
+
+export interface OpcoesDoRefazer {
+  hipEletricas?: HipotesesEletricas;
+  eletrodutos?: EletrodutosDoPainel | null;
+}
+
+/** Um circuito que sai, com o que estava declarado nele à mão e se perde. */
+export interface EdicaoQueSePerde {
+  nome: string;
+  /** "disjuntor 20 A", "seção 4 mm²", "curva C", "DR declarado", "fase R"… */
+  oQue: string[];
+}
+
 export interface CircuitosARefazer {
   levelId: ObjectId;
   nomeDoPavimento: string;
-  /** Os circuitos do motor (inteiros) — saem e são recriados. */
+  /** `MOTOR` = os do motor (há registro); `TODOS` = sem registro, todos os circuitos com pontos só neste pavimento. */
+  modo: 'MOTOR' | 'TODOS';
+  /** Os circuitos que saem e são recriados. */
   circuitos: Circuito[];
   /** Os pontos desses circuitos (voltam a ser distribuídos). */
   pontos: number;
+  /** O que estava declarado à mão nesses circuitos e se perde (só os que têm algo). */
+  edicoes: EdicaoQueSePerde[];
   /** Os que ficam: do motor alterados, e os demais com ponto neste pavimento. */
   alterados: Circuito[];
   outros: Circuito[];
@@ -325,43 +399,92 @@ export interface CircuitosARefazer {
   caixas: Terminal[];
   /** Eletrodutos que levam esses circuitos E outros — ficam, sem os refeitos. */
   trechosQueFicam: number;
-  /** DRs do quadro que citavam algum desses circuitos (deixam de citá-los). */
+  /** DRs do quadro que citavam algum desses circuitos — os que ficarem vazios saem; os circuitos novos ganham os da norma. */
   drs: number;
-  /** Desses circuitos, quantos tinham fase (balanceamento) — os novos nascem sem. */
-  comFase: number;
   /** Os nomes dos quadros onde eles estavam. */
   quadros: string[];
+  /** Os quadros cuja rede está no forro sem registro e que o lote registra com o forro da casa (para relançar nele). */
+  quadrosNoForro: string[];
+  /** Comandos que o lote põe ANTES de apagar (o registro dos eletrodutos com o forro). */
+  antes: Command[];
+  /** Por que o Refazer não pode rodar (`null` = pode). */
+  bloqueio: string | null;
 }
 
-/** O que o Refazer do pavimento apaga, e o que fica — para a confirmação e para o lote. */
-export function circuitosARefazer(model: BlueprintModel, levelId: ObjectId): CircuitosARefazer {
+const FUNCOES = new Set(['ILUMINACAO', 'TUG', 'TUE']);
+
+/** O que estava declarado à mão no circuito (o que o motor não põe) — e se perde quando ele é refeito. */
+function edicoesDoCircuito(c: Circuito, hipEletricas: HipotesesEletricas): string[] {
+  const out: string[] = [];
+  if (c.disjuntorA != null) out.push(`disjuntor ${num(c.disjuntorA)} A`);
+  if (c.secaoMm2 != null && (!c.tipo || !FUNCOES.has(c.tipo) || c.secaoMm2 !== secaoMinimaDaFuncaoMm2(c.tipo as FuncaoDoCircuito, hipEletricas))) {
+    out.push(`seção ${num(c.secaoMm2)} mm²`);
+  }
+  if (c.secaoNeutroMm2 != null) out.push(`neutro ${num(c.secaoNeutroMm2)} mm²`);
+  if (c.secaoPeMm2 != null) out.push(`PE ${num(c.secaoPeMm2)} mm²`);
+  if (c.curva != null) out.push(`curva ${c.curva}`);
+  if (c.protecaoDR != null) out.push('DR declarado');
+  if (c.fase != null) out.push(`fase ${c.fase}`);
+  return out;
+}
+
+/** O que o Refazer do pavimento apaga, e o que fica — para a confirmação, para o botão e para o lote. */
+export function circuitosARefazer(model: BlueprintModel, levelId: ObjectId, opcoes: OpcoesDoRefazer = {}): CircuitosARefazer {
+  const hipEletricas = opcoes.hipEletricas ?? HIPOTESES_PADRAO;
   const cls = circuitosDoPavimento(model, levelId);
-  const ids = new Set(cls.doMotor.map((c) => c.id));
+  const circuitos = refaziveis(cls);
+  const ids = new Set(circuitos.map((c) => c.id));
   const eletricos = (model.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && (t.circuitoIds ?? []).some((id) => ids.has(id)));
   const trechos = eletricos.filter((t) => (t.circuitoIds ?? []).every((id) => ids.has(id)));
   const caixas = trechos.length ? caixasDaRedeDoQuadro(model, { id: '' }, trechos) : [];
   const nomeDoQuadro = new Map((model.quadros ?? []).map((q) => [q.id, q.nome]));
+  // O forro: a rede dos quadros desses circuitos, no forro e sem registro dos eletrodutos.
+  const antes: Command[] = [];
+  const quadrosNoForro: string[] = [];
+  let bloqueio: string | null = null;
+  if (trechos.length) {
+    const quadros = [...new Set(circuitos.map((c) => c.quadroId))];
+    for (const q of quadros) {
+      if (!redeNoForroSemRegistro(model, q)) continue;
+      const e = opcoes.eletrodutos;
+      if (e && forroDaCasaQueVale(model, q, e.forroDaCasa)) {
+        antes.push(comandoDeRegistro('ELETRODUTOS', q, escolhasAtuaisDoQuadro(model, q, e.hip, e.hipEletricas, e.forroDaCasa)));
+        quadrosNoForro.push(nomeDoQuadro.get(q) ?? q);
+      } else {
+        bloqueio ??= `Os eletrodutos de ${nomeDoQuadro.get(q) ?? q} saem com esses circuitos: ${motivoParaNaoRelancar(model, q, e?.forroDaCasa) ?? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO}`;
+      }
+    }
+  }
   return {
     levelId,
     nomeDoPavimento: model.levels.find((l) => l.id === levelId)?.name ?? '',
-    circuitos: cls.doMotor,
+    modo: cls.temRegistro ? 'MOTOR' : 'TODOS',
+    circuitos,
     pontos: (model.terminais ?? []).filter((t) => t.circuitoId != null && ids.has(t.circuitoId)).length,
+    edicoes: circuitos.flatMap((c) => {
+      const oQue = edicoesDoCircuito(c, hipEletricas);
+      return oQue.length ? [{ nome: c.nome, oQue }] : [];
+    }),
     alterados: cls.alterados,
     outros: cls.outros,
     trechos,
     caixas,
     trechosQueFicam: eletricos.length - trechos.length,
     drs: (model.quadros ?? []).reduce((n, q) => n + (q.drs ?? []).filter((d) => d.circuitoIds.some((id) => ids.has(id))).length, 0),
-    comFase: cls.doMotor.filter((c) => c.fase != null).length,
-    quadros: [...new Set(cls.doMotor.map((c) => nomeDoQuadro.get(c.quadroId) ?? ''))].filter(Boolean),
+    quadros: [...new Set(circuitos.map((c) => nomeDoQuadro.get(c.quadroId) ?? ''))].filter(Boolean),
+    quadrosNoForro,
+    antes,
+    bloqueio,
   };
 }
 
 /**
- * REFAZER os circuitos do motor do pavimento: apaga os circuitos do motor (os pontos ficam soltos), os eletrodutos que
- * só os levavam e as caixas de passagem dos nós deles, recria os circuitos dos pontos soltos do pavimento com as
- * escolhas atuais no quadro dado e grava o registro — tudo num lote (Ctrl+Z volta tudo). Sem circuito do motor: nada.
- * Se nada for recriado, o registro sai. Recusa do kernel → `Error` (quem chama diz o motivo).
+ * REFAZER os circuitos do pavimento (os do motor; sem registro, todos os com pontos só aqui), num lote só (Ctrl+Z volta
+ * tudo): o registro dos eletrodutos com o forro (quando a rede antiga está no forro), apaga os eletrodutos que só levavam
+ * esses circuitos e as caixas de passagem dos nós deles, apaga os circuitos (os pontos ficam soltos), recria os
+ * circuitos dos pontos soltos do pavimento com as escolhas atuais no quadro dado, refaz os DRs (correção 1, I2: os que
+ * ficaram vazios saem; os circuitos novos que pedem DR ganham o da norma, como a Casa Automática faz) e grava o
+ * registro. Nada a refazer, ou bloqueado: nada. Se nada for recriado, o registro sai. Recusa do kernel → `Error`.
  */
 export function comandosDeRefazerCircuitos(
   model: BlueprintModel,
@@ -369,32 +492,46 @@ export function comandosDeRefazerCircuitos(
   quadroId: ObjectId | null,
   hip: HipotesesDeCircuitos,
   hipEletricas: HipotesesEletricas,
+  eletrodutos?: EletrodutosDoPainel | null,
 ): { comandos: Command[]; plano: PlanoDeCircuitos | null } {
-  const alvo = circuitosARefazer(model, levelId);
-  if (alvo.circuitos.length === 0) return { comandos: [], plano: null };
+  const alvo = circuitosARefazer(model, levelId, { hipEletricas, eletrodutos });
+  if (!quadroId || alvo.circuitos.length === 0 || alvo.bloqueio) return { comandos: [], plano: null };
+  const ids = new Set(alvo.circuitos.map((c) => c.id));
   const remocoes: Command[] = [
+    ...alvo.antes,
     ...alvo.trechos.map((t): Command => ({ type: 'DeleteTrecho', trechoId: t.id })),
     ...alvo.caixas.map((x): Command => ({ type: 'DeleteTerminal', terminalId: x.id })),
     ...alvo.circuitos.map((c): Command => ({ type: 'DeleteCircuito', circuitoId: c.id })),
   ];
-  const semOsDoMotor = applyBatch(model, remocoes).model;
-  const plano = planejarCircuitos(semOsDoMotor, levelId, quadroId, hip, hipEletricas);
-  if (plano.comandos.length === 0) {
-    return { comandos: [...remocoes, { type: 'ApagarRegistroDeLancamento', motor: 'CIRCUITOS', alvoId: levelId }], plano };
+  const semOsAntigos = applyBatch(model, remocoes).model;
+  // Os DRs que citavam algum dos refeitos e ficaram vazios saem (o geral, que vale para o quadro todo, fica).
+  const drsVazios: Command[] = [];
+  for (const q of model.quadros ?? []) {
+    for (const d of q.drs ?? []) {
+      if (d.geral || !d.circuitoIds.some((id) => ids.has(id))) continue;
+      if (d.circuitoIds.every((id) => ids.has(id))) drsVazios.push({ type: 'DeleteDR', drId: d.id });
+    }
   }
-  const depois = modeloDepoisDoPlano(semOsDoMotor, plano);
+  const plano = planejarCircuitos(semOsAntigos, levelId, quadroId, hip, hipEletricas);
+  if (plano.comandos.length === 0) {
+    return { comandos: [...remocoes, ...drsVazios, { type: 'ApagarRegistroDeLancamento', motor: 'CIRCUITOS', alvoId: levelId }], plano };
+  }
+  const depois = modeloDepoisDoPlano(semOsAntigos, plano);
+  const comDrsVazios = drsVazios.length ? applyBatch(depois, drsVazios).model : depois;
+  const novos = new Set(plano.circuitos.map((c) => c.idPrevisto));
+  const drs = plano.quadroId ? comandosDasSugestoesDeDR(sugerirDRs(comDrsVazios, plano.quadroId, hipEletricas).filter((s) => novos.has(s.circuitoId))) : [];
   // Os alterados continuam reconhecidos como "do motor, alterados" (a confirmação seguinte ainda os nomeia assim).
   const nomesAlterados = new Set(alvo.alterados.map((c) => metadesDaAssinatura(c).nome));
   const alterados = assinaturasDoRegistro(registroDe(model, 'CIRCUITOS', levelId)?.escolhas).filter((a) => nomesAlterados.has(a.split('.')[0]));
   const escolhas = { ...escolhasDosCircuitos(hip, hipEletricas), [CHAVE_DOS_CIRCUITOS_DO_MOTOR]: textoDasAssinaturas([...alterados, ...assinaturasDoPlano(depois, plano)]) };
-  return { comandos: [...remocoes, ...plano.comandos, comandoDeRegistro('CIRCUITOS', levelId, escolhas)], plano };
+  return { comandos: [...remocoes, ...plano.comandos, ...drsVazios, ...drs, comandoDeRegistro('CIRCUITOS', levelId, escolhas)], plano };
 }
 
 const nomes = (cs: readonly Circuito[], max = 4) =>
   cs.length <= max ? cs.map((c) => c.nome).join(', ') : `${cs.slice(0, max).map((c) => c.nome).join(', ')}… (+${cs.length - max})`;
 
 export interface ContextoDaConfirmacao {
-  /** Quantos circuitos o Refazer recria (o plano sobre o modelo já sem os do motor). */
+  /** Quantos circuitos o Refazer recria (o plano sobre o modelo já sem os antigos). */
   novos: number;
   /** O quadro onde eles nascem. */
   quadro: string | null;
@@ -402,35 +539,49 @@ export interface ContextoDaConfirmacao {
 }
 
 /**
- * A confirmação do Refazer — HONESTA: o que sai e volta, o que precisa ser relançado depois (eletrodutos e fiação), o
- * que perde (DR, fase) e o que FICA (e a que a escolha nova não se aplica). Sem circuito do motor: `null`.
+ * A confirmação do Refazer — HONESTA: o que sai e volta, o que se perde (edições à mão), os eletrodutos e a fiação a
+ * relançar, os DRs refeitos e o que FICA. Correção 1 (I1): sem registro ("TODOS") é a confirmação FORTE — diz que são
+ * todos os circuitos do pavimento e lista cada um pelo nome. Nada a refazer: `null`.
  */
 export function textoDaConfirmacaoDosCircuitos(alvo: CircuitosARefazer, ctx: ContextoDaConfirmacao): string | null {
   if (alvo.circuitos.length === 0) return null;
   const partes: string[] = [];
   const pav = alvo.nomeDoPavimento ? `${alvo.nomeDoPavimento}: ` : '';
   const antes = ctx.quadro && alvo.quadros.length > 0 && !(alvo.quadros.length === 1 && alvo.quadros[0] === ctx.quadro) ? ` (antes: ${alvo.quadros.join(', ')})` : '';
-  partes.push(
-    `${pav}saem ${alvo.circuitos.length} circuito(s) do motor (${nomes(alvo.circuitos)}) e os ${alvo.pontos} ponto(s) deles — inclusive algum que você tenha posto à mão num deles — voltam a ser distribuídos com as escolhas atuais: ${ctx.novos} circuito(s) novo(s)${ctx.quadro ? ` no quadro ${ctx.quadro}${antes}` : ''}.`,
-  );
+  const voltam = `os ${alvo.pontos} ponto(s) deles — inclusive algum que você tenha posto à mão num deles — voltam a ser distribuídos com as escolhas atuais: ${ctx.novos} circuito(s) novo(s)${ctx.quadro ? ` no quadro ${ctx.quadro}${antes}` : ''}`;
+  if (alvo.modo === 'TODOS') {
+    partes.push(
+      `${pav}saem TODOS os ${alvo.circuitos.length} circuito(s) deste pavimento — foram criados antes do registro, e não há como saber quais o motor criou: ${alvo.circuitos.map((c) => c.nome).join(', ')}. E ${voltam}.`,
+    );
+  } else {
+    partes.push(`${pav}saem ${alvo.circuitos.length} circuito(s) do motor (${nomes(alvo.circuitos)}) e ${voltam}.`);
+  }
   if (ctx.diferencas.length) partes.push(`O que mudou: ${textoDasDiferencas([...ctx.diferencas])}.`);
+  else if (alvo.modo === 'MOTOR') partes.push(TEXTO_NADA_MUDOU);
+  if (alvo.edicoes.length) {
+    partes.push(`Perdem-se as edições à mão: ${alvo.edicoes.map((e) => `${e.nome} (${e.oQue.join(', ')})`).join('; ')}.`);
+  } else if (alvo.modo === 'TODOS') {
+    partes.push('Nenhum deles tem disjuntor, seção, DR ou fase editados à mão.');
+  }
   if (alvo.trechos.length > 0 || alvo.trechosQueFicam > 0) {
     const sai = alvo.trechos.length
-      ? `${alvo.trechos.length} eletroduto(s) que só os levavam saem (${alvo.trechos.filter((t) => !t.sugerido).length} confirmado(s))${alvo.caixas.length ? `, com ${alvo.caixas.length} caixa(s) de passagem` : ''}`
+      ? `${alvo.trechos.length} eletroduto(s) que só os levavam são apagados (${alvo.trechos.filter((t) => !t.sugerido).length} confirmado(s))${alvo.caixas.length ? `, com ${alvo.caixas.length} caixa(s) de passagem` : ''}`
       : '';
     const fica = alvo.trechosQueFicam ? `${alvo.trechosQueFicam} eletroduto(s) que levam também outros circuitos ficam, sem eles` : '';
     partes.push(
-      `Os eletrodutos e a fiação desses circuitos precisam ser relançados: ${[sai, fica].filter(Boolean).join('; ')}. Depois, relance os eletrodutos — o painel dos eletrodutos mostra os pontos a ligar.`,
+      `Os eletrodutos e a fiação desses circuitos precisarão ser relançados: ${[sai, fica].filter(Boolean).join('; ')}. Depois, relance os eletrodutos — o painel dos eletrodutos mostra os pontos a ligar.`,
     );
+    if (alvo.quadrosNoForro.length) {
+      partes.push(`A rede de ${alvo.quadrosNoForro.join(', ')} está no forro: o registro dos eletrodutos guarda o forro da casa, e o relançamento continua nele.`);
+    }
   } else {
     partes.push('Esses circuitos ainda não têm eletroduto; ao lançar os eletrodutos, eles saem pelos circuitos novos.');
   }
-  if (alvo.drs > 0) partes.push(`${alvo.drs} DR(s) do quadro deixam de proteger esses circuitos — os novos nascem sem DR (o quadro volta a sugerir).`);
-  if (alvo.comFase > 0) partes.push(`${alvo.comFase} deles tinham fase (balanceamento) — os novos nascem sem fase; balanceie o quadro de novo.`);
+  if (alvo.drs > 0) partes.push(`Os DRs são refeitos: ${alvo.drs} DR(s) do quadro citavam esses circuitos — os que ficarem vazios saem, e os circuitos novos que pedem DR ganham o de 30 mA da norma.`);
   if (alvo.alterados.length || alvo.outros.length) {
     const ficam = [
       alvo.alterados.length ? `${alvo.alterados.length} do motor alterado(s) depois de criado(s) — disjuntor, seção, curva, DR… (${nomes(alvo.alterados)})` : '',
-      alvo.outros.length ? `${alvo.outros.length} criado(s) à mão, renomeado(s) ou de antes do registro (${nomes(alvo.outros)})` : '',
+      alvo.outros.length ? `${alvo.outros.length} criado(s) à mão, renomeado(s) ou com ponto em outro pavimento (${nomes(alvo.outros)})` : '',
     ].filter(Boolean);
     partes.push(`Ficam como estão, com os pontos deles: ${ficam.join('; ')} — a escolha nova não se aplica a eles.`);
   }
@@ -439,39 +590,53 @@ export function textoDaConfirmacaoDosCircuitos(alvo: CircuitosARefazer, ctx: Con
 
 // ─── Regra A: o botão do rodapé ──────────────────────────────────────────────
 
-export const MOTIVO_CIRCUITOS_SEM_REGISTRO =
-  'Circuitos criados antes do registro — o motor não sabe quais são dele; refaça-os à mão ou apague os circuitos (Quadro de cargas) para relançar.';
-
 export interface BotaoDosCircuitos {
   /** `CRIAR` = o "Criar N circuito(s)"; `RELANCAR` = o Refazer com as escolhas atuais (sempre com confirmação). */
   modo: 'CRIAR' | 'RELANCAR';
   rotulo: string;
   /** Por que está desligado (`null` = ligado). */
   motivo: string | null;
-  /** Há circuitos do motor no pavimento: o "Refazer circuitos automáticos" aparece ao lado do "Criar". */
-  podeRefazer: boolean;
+  /**
+   * Correção 1 (M4): o "Refazer tudo" ao lado do "Criar" (no modo `CRIAR`, sempre à vista) — `null` = ligado; texto = o
+   * motivo de estar desligado.
+   */
+  refazer: string | null;
 }
 
+const NADA_A_REFAZER = 'Nada a refazer: nenhum circuito deste pavimento é do motor (criados à mão, renomeados ou com ponto em outro pavimento).';
+
 /**
- * REGRA A: há o que criar → "Criar N circuito(s)"; nada a criar e há circuitos do motor → "Relançar com as escolhas
- * atuais"; nada → desligado, SEMPRE dizendo por quê (sem quadro; circuitos de antes do registro; só circuitos à mão ou
- * alterados; nenhum ponto solto).
+ * REGRA A: há o que criar → "Criar N circuito(s)" (e "Refazer tudo" ao lado); nada a criar e há o que refazer → com
+ * registro, "Relançar com as escolhas atuais"; sem registro (correção 1, I1), "Refazer todos os circuitos deste
+ * pavimento" — os dois com confirmação; nada → desligado, SEMPRE dizendo por quê, e NUNCA mandando apagar circuito.
  */
-export function botaoDosCircuitos(model: BlueprintModel, levelId: ObjectId, plano: Pick<PlanoDeCircuitos, 'circuitos' | 'quadroId' | 'motivo'>): BotaoDosCircuitos {
-  const cls = circuitosDoPavimento(model, levelId);
-  const podeRefazer = cls.doMotor.length > 0;
+export function botaoDosCircuitos(
+  model: BlueprintModel,
+  levelId: ObjectId,
+  plano: Pick<PlanoDeCircuitos, 'circuitos' | 'quadroId' | 'motivo'>,
+  eletrodutos?: EletrodutosDoPainel | null,
+): BotaoDosCircuitos {
+  // Sem quadro, nada nasce: o Refazer apagaria os circuitos e deixaria os pontos soltos.
+  const SEM_QUADRO = 'Nenhum quadro no desenho — coloque um quadro de distribuição (Instalações › Componentes).';
+  if (!plano.quadroId) return { modo: 'CRIAR', rotulo: `Criar ${plano.circuitos.length} circuito(s)`, motivo: SEM_QUADRO, refazer: SEM_QUADRO };
+  const alvo = circuitosARefazer(model, levelId, { eletrodutos });
+  const temOQueRefazer = alvo.circuitos.length > 0;
+  const refazer = temOQueRefazer ? alvo.bloqueio : NADA_A_REFAZER;
   const criar = `Criar ${plano.circuitos.length} circuito(s)`;
-  if (plano.circuitos.length > 0) return { modo: 'CRIAR', rotulo: criar, motivo: null, podeRefazer };
-  if (podeRefazer) return { modo: 'RELANCAR', rotulo: 'Relançar com as escolhas atuais', motivo: null, podeRefazer };
-  const desligado = (motivo: string): BotaoDosCircuitos => ({ modo: 'CRIAR', rotulo: criar, motivo, podeRefazer: false });
-  if (!plano.quadroId) return desligado('Nenhum quadro no desenho — coloque um quadro de distribuição (Instalações › Componentes).');
-  if (cls.alterados.length > 0) {
-    return desligado(
-      `Nada a criar: os circuitos do motor neste pavimento foram alterados depois de criados (${nomes(cls.alterados, 2)}) — ficam como estão; para relançar, apague-os (Quadro de cargas).`,
-    );
+  if (plano.circuitos.length > 0) return { modo: 'CRIAR', rotulo: criar, motivo: null, refazer };
+  if (temOQueRefazer) {
+    return { modo: 'RELANCAR', rotulo: alvo.modo === 'MOTOR' ? 'Relançar com as escolhas atuais' : 'Refazer todos os circuitos deste pavimento', motivo: alvo.bloqueio, refazer };
   }
-  if (cls.outros.length > 0) {
-    return desligado(cls.temRegistro ? 'Nada a criar: os circuitos deste pavimento foram criados à mão ou renomeados — o motor não os refaz.' : MOTIVO_CIRCUITOS_SEM_REGISTRO);
+  const desligado = (motivo: string): BotaoDosCircuitos => ({ modo: 'CRIAR', rotulo: criar, motivo, refazer });
+  if (alvo.alterados.length > 0) {
+    return desligado(`Nada a criar: os circuitos do motor neste pavimento foram alterados depois de criados (${nomes(alvo.alterados, 2)}) — ficam como estão; o motor não refaz circuito alterado à mão.`);
+  }
+  if (alvo.outros.length > 0) {
+    return desligado(
+      alvo.modo === 'MOTOR'
+        ? 'Nada a criar: os circuitos deste pavimento foram criados à mão ou renomeados — o motor não os refaz.'
+        : 'Nada a criar: os circuitos deste pavimento têm pontos também em outro pavimento — o motor não os refaz.',
+    );
   }
   return desligado('Nada a criar: nenhum ponto elétrico sem circuito neste pavimento.');
 }

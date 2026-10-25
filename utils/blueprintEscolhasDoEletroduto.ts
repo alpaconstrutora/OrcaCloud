@@ -36,7 +36,13 @@
  * Puro: sem React, sem banco. O alvo do registro é o QUADRO (a rede é uma por quadro).
  */
 import { applyBatch, type BlueprintModel, type Command, type ObjectId, type Trecho, type ValorDeEscolha } from './blueprintKernel';
-import { horizontaisNoForro, motivoSemAssinaturaDaCasa, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
+import {
+  horizontaisNoForro,
+  motivoDasPremissasDaCasa,
+  motivoSemAssinaturaDaCasa,
+  temAssinaturaDaCasa,
+  type PremissasDaCasaIndisponiveis,
+} from './blueprintAssinaturaDaCasa';
 import {
   HIPOTESES_ELETRODUTO_PADRAO,
   caixasDaRedeDoQuadro,
@@ -59,6 +65,7 @@ import {
   type EscolhasDoLancamento,
   type OpcoesDaComparacao,
 } from './blueprintRegistroDeLancamento';
+import { TEXTO_NADA_MUDOU } from './blueprintRegistroDeLancamento';
 
 /**
  * Correção 3: o forro elétrico das premissas da Casa Automática do estudo (`forroEletricoDaCasa`) — a faixa e a folga com
@@ -68,6 +75,16 @@ export type ForroDaCasa = NonNullable<HipotesesDeEletroduto['noForro']> & {
   /** Correção 2 da F3: o rebaixo do forro da casa — sem ele não há como conferir a assinatura (`temAssinaturaDaCasa`). */
   rebaixoMm?: number;
 };
+
+/**
+ * Correção 1 da F5 (M6, 25/10/2026): o forro da casa, OU por que ele não está à mão (carregando, erro de leitura, forro
+ * desligado nas premissas) — o motivo do bloqueio diz qual dos três, como o esgoto já dizia. `null` = sem premissas
+ * (quem chama não as tem).
+ */
+export type ForroDaCasaOuEstado = ForroDaCasa | PremissasDaCasaIndisponiveis | null;
+
+/** O forro da casa, quando é um forro (e não o estado das premissas). */
+const forroLido = (f: ForroDaCasaOuEstado | undefined): ForroDaCasa | null => (f && typeof f === 'object' ? f : null);
 
 /**
  * As tabelas de catálogo das hipóteses elétricas que mudam a bitola (disjuntores → seção calculada; diâmetros do
@@ -135,7 +152,7 @@ export function escolhasDoEletroduto(hip: HipotesesDeEletroduto, hipEletricas: H
  * Correção 3: o forro do REGISTRO tem prioridade. Sem ele, a rede no forro lançada antes do registro
  * (`redeNoForroSemRegistro`) usa o forro das premissas da casa (`forroDaCasa`), quando o editor o tem.
  */
-export function hipotesesDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: HipotesesDeEletroduto, forroDaCasa?: ForroDaCasa | null): HipotesesDeEletroduto {
+export function hipotesesDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: HipotesesDeEletroduto, forroDaCasa?: ForroDaCasaOuEstado): HipotesesDeEletroduto {
   const e = registroDe(model, 'ELETRODUTOS', quadroId)?.escolhas;
   const n = (k: string) => (e && typeof e[k] === 'number' ? (e[k] as number) : null);
   const abaixo = n('forroAbaixoDoTetoMm');
@@ -157,7 +174,7 @@ export function escolhasAtuaisDoQuadro(
   quadroId: ObjectId,
   hip: HipotesesDeEletroduto,
   hipEletricas: HipotesesEletricas,
-  forroDaCasa?: ForroDaCasa | null,
+  forroDaCasa?: ForroDaCasaOuEstado,
 ): EscolhasDoLancamento {
   return escolhasDoEletroduto(hipotesesDoQuadro(model, quadroId, hip, forroDaCasa), hipEletricas);
 }
@@ -166,7 +183,7 @@ export function escolhasAtuaisDoQuadro(
  * Os planos de todos os quadros, cada um com as hipóteses DELE (o forro do registro; sem registro, o das premissas da
  * casa para a rede antiga no forro) — o que o painel mostra e lança.
  */
-export function planejarEletrodutosPorQuadro(model: BlueprintModel, hip: HipotesesDeEletroduto, hipEletricas: HipotesesEletricas, forroDaCasa?: ForroDaCasa | null): PlanoDeEletrodutos[] {
+export function planejarEletrodutosPorQuadro(model: BlueprintModel, hip: HipotesesDeEletroduto, hipEletricas: HipotesesEletricas, forroDaCasa?: ForroDaCasaOuEstado): PlanoDeEletrodutos[] {
   return (model.quadros ?? []).map((q) => planejarEletrodutos(model, q, hipotesesDoQuadro(model, q.id, hip, forroDaCasa), hipEletricas));
 }
 
@@ -224,7 +241,7 @@ export function diferencasDoEletroduto(
   quadroId: ObjectId,
   hip: HipotesesDeEletroduto,
   hipEletricas: HipotesesEletricas,
-  forroDaCasa?: ForroDaCasa | null,
+  forroDaCasa?: ForroDaCasaOuEstado,
 ): DiferencaDeEscolha[] {
   return diferencasDasEscolhas(registroDe(model, 'ELETRODUTOS', quadroId)?.escolhas ?? null, escolhasAtuaisDoQuadro(model, quadroId, hip, hipEletricas, forroDaCasa), ESCOLHAS_DO_ELETRODUTO);
 }
@@ -276,7 +293,8 @@ export function horizontaisDaRedeNoForro(model: BlueprintModel, quadroId: Object
  * (`temAssinaturaDaCasa`). Sem a assinatura (uma planta sem casa, com um eletroduto à mão acima da face do forro),
  * `null`: a rede continua bloqueada com o motivo, em vez de ir para o forro da casa e o registro perpetuar isso.
  */
-export function forroDaCasaQueVale(model: BlueprintModel, quadroId: ObjectId, forroDaCasa?: ForroDaCasa | null): NonNullable<HipotesesDeEletroduto['noForro']> | null {
+export function forroDaCasaQueVale(model: BlueprintModel, quadroId: ObjectId, forroDaCasaOuEstado?: ForroDaCasaOuEstado): NonNullable<HipotesesDeEletroduto['noForro']> | null {
+  const forroDaCasa = forroLido(forroDaCasaOuEstado);
   if (!forroDaCasa || forroDaCasa.rebaixoMm == null) return null;
   const horizontais = horizontaisDaRedeNoForro(model, quadroId);
   if (!temAssinaturaDaCasa(model, horizontais, { faixas: [forroDaCasa.faixa], rebaixoMm: forroDaCasa.rebaixoMm })) return null;
@@ -289,9 +307,12 @@ export function forroDaCasaQueVale(model: BlueprintModel, quadroId: ObjectId, fo
  * Correção 3 (24/10/2026, pedido literal: *"então verifique pois alterei e não ficou disponível para relançamento"*):
  * bloqueia SÓ a rede no forro sem registro E sem as premissas da casa (`forroDaCasa`). Com elas, relança no forro.
  */
-export function motivoParaNaoRelancar(model: BlueprintModel, quadroId: ObjectId, forroDaCasa?: ForroDaCasa | null): string | null {
+export function motivoParaNaoRelancar(model: BlueprintModel, quadroId: ObjectId, forroDaCasaOuEstado?: ForroDaCasaOuEstado): string | null {
   // Correção 2 da F3: o forro da casa só livra a rede antiga com a assinatura da casa (`forroDaCasaQueVale`).
-  if (!redeNoForroSemRegistro(model, quadroId) || forroDaCasaQueVale(model, quadroId, forroDaCasa)) return null;
+  if (!redeNoForroSemRegistro(model, quadroId) || forroDaCasaQueVale(model, quadroId, forroDaCasaOuEstado)) return null;
+  // Correção 1 da F5 (M6): sem o forro, diz por quê — carregando, erro de leitura ou forro desligado (o texto do esgoto).
+  if (typeof forroDaCasaOuEstado === 'string') return motivoDasPremissasDaCasa(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO, forroDaCasaOuEstado);
+  const forroDaCasa = forroLido(forroDaCasaOuEstado);
   // Correção 3 da F3: com as premissas da casa, diz POR QUE a rede não é da casa (e o que fazer).
   const porque = forroDaCasa?.rebaixoMm != null ? motivoSemAssinaturaDaCasa(model, horizontaisDaRedeNoForro(model, quadroId), { faixas: [forroDaCasa.faixa], rebaixoMm: forroDaCasa.rebaixoMm }) : null;
   return porque ? `${MOTIVO_REDE_NO_FORRO_SEM_REGISTRO} ${porque}` : MOTIVO_REDE_NO_FORRO_SEM_REGISTRO;
@@ -321,7 +342,7 @@ export function comandosDeLancarEletrodutos(
   planos: readonly PlanoDeEletrodutos[],
   hip: HipotesesDeEletroduto,
   hipEletricas: HipotesesEletricas,
-  forroDaCasa?: ForroDaCasa | null,
+  forroDaCasa?: ForroDaCasaOuEstado,
 ): Command[] {
   const saida: Command[] = [];
   let m = model;
@@ -361,7 +382,7 @@ export function comandosDeRefazerEletrodutos(
   quadroIds: readonly ObjectId[],
   hip: HipotesesDeEletroduto,
   hipEletricas: HipotesesEletricas,
-  forroDaCasa?: ForroDaCasa | null,
+  forroDaCasa?: ForroDaCasaOuEstado,
 ): Command[] {
   const saida: Command[] = [];
   let m = model;
@@ -394,6 +415,8 @@ export interface RedeARefazer {
   caixasAceitas: number;
   /** O que mudou desde o lançamento (`textoDasDiferencas`); `null` = sem registro, nada mudou ou sem as hipóteses. */
   mudou: string | null;
+  /** Correção 1 da F5 (M5): há registro e NENHUMA escolha mudou — refazer dá o mesmo resultado. */
+  nadaMudou: boolean;
 }
 
 /**
@@ -403,7 +426,7 @@ export interface RedeARefazer {
 export function redesARefazer(
   model: BlueprintModel,
   quadroIds?: readonly ObjectId[],
-  atuais?: { hip: HipotesesDeEletroduto; hipEletricas: HipotesesEletricas; forroDaCasa?: ForroDaCasa | null },
+  atuais?: { hip: HipotesesDeEletroduto; hipEletricas: HipotesesEletricas; forroDaCasa?: ForroDaCasaOuEstado },
 ): RedeARefazer[] {
   const saida: RedeARefazer[] = [];
   for (const q of model.quadros ?? []) {
@@ -421,6 +444,7 @@ export function redesARefazer(
       caixas: caixas.length,
       caixasAceitas: caixas.filter((c) => !c.sugerida).length,
       mudou: d.length ? textoDasDiferencas(d) : null,
+      nadaMudou: !!atuais && !!registroDe(model, 'ELETRODUTOS', q.id) && d.length === 0,
     });
   }
   return saida;
@@ -437,7 +461,7 @@ export function textoDaConfirmacaoDeRefazer(redes: readonly RedeARefazer[]): str
     .map((r) => {
       const trechos = `${r.trechos} eletroduto(s)${r.trechosConfirmados ? ` (${r.trechosConfirmados} confirmado(s))` : ''}`;
       const caixas = r.caixas ? ` e ${r.caixas} caixa(s) de passagem${r.caixasAceitas ? ` (${r.caixasAceitas} aceita(s))` : ''}` : '';
-      return `${r.nome}: ${trechos}${caixas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
+      return `${r.nome}: ${trechos}${caixas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : r.nadaMudou ? ` ${TEXTO_NADA_MUDOU}` : ''}`;
     })
     .join(' ');
 }
@@ -459,7 +483,7 @@ export interface BotaoDeLancarEletrodutos {
  * com as premissas da casa (`forroDaCasa`, correção 3): aí relança no forro. Os `planos` devem vir de
  * `planejarEletrodutosPorQuadro` com o MESMO `forroDaCasa`.
  */
-export function botaoDeLancarEletrodutos(model: BlueprintModel, planos: readonly PlanoDeEletrodutos[], forroDaCasa?: ForroDaCasa | null): BotaoDeLancarEletrodutos {
+export function botaoDeLancarEletrodutos(model: BlueprintModel, planos: readonly PlanoDeEletrodutos[], forroDaCasa?: ForroDaCasaOuEstado): BotaoDeLancarEletrodutos {
   const livres = planos.filter((p) => !motivoParaNaoRelancar(model, p.quadroId, forroDaCasa));
   const aLigar = livres.reduce((n, p) => n + p.aLigar, 0);
   const lancar = `Lançar em todos (${aLigar})`;

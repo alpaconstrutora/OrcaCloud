@@ -500,6 +500,7 @@ import {
   comandosDeRefazerCircuitos,
   diferencasDosCircuitos,
   escolhasDosCircuitos,
+  pavimentosComDiferenca,
   quadroDosCircuitosDoMotor,
   textoDaConfirmacaoDosCircuitos,
 } from '../../utils/blueprintEscolhasDosCircuitos';
@@ -8788,7 +8789,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (casaDoEstudo.carregando || casaDoEstudo.persistenciaIndisponivel ? null : hipotesesDasPremissas(casaDoEstudo.premissas)),
     [casaDoEstudo.carregando, casaDoEstudo.persistenciaIndisponivel, casaDoEstudo.premissas],
   );
-  const forroDaCasa = useMemo(() => (hipotesesDaCasaDoEstudo ? forroEletricoDaCasa(hipotesesDaCasaDoEstudo) : null), [hipotesesDaCasaDoEstudo]);
+  // Correção 1 da F5 (M6): sem o forro, POR QUÊ — carregando, erro de leitura ou forro desligado nas premissas (o motivo
+  // do bloqueio diz qual dos três, nos eletrodutos, na água e no esgoto).
+  const estadoDasPremissasDaCasa: 'CARREGANDO' | 'ERRO' | null = casaDoEstudo.carregando ? 'CARREGANDO' : casaDoEstudo.persistenciaIndisponivel ? 'ERRO' : null;
+  const forroDaCasa = useMemo(
+    () => (hipotesesDaCasaDoEstudo ? (forroEletricoDaCasa(hipotesesDaCasaDoEstudo) ?? ('DESLIGADO' as const)) : estadoDasPremissasDaCasa),
+    [hipotesesDaCasaDoEstudo, estadoDasPremissasDaCasa],
+  );
   const hipotesesDeEletroduto = useMemo(
     () => ({ ...HIPOTESES_ELETRODUTO_PADRAO, bitolaMm: bitolaDeEletroduto, rotaMaximaVezes: rotaMaxima, rotaPelaParede, caixas: caixasAutomaticas ? REGRA_DE_CAIXAS_PADRAO : null, encaminhamento: encaminhamentoDoEletroduto }),
     [bitolaDeEletroduto, rotaMaxima, rotaPelaParede, caixasAutomaticas, encaminhamentoDoEletroduto],
@@ -8929,9 +8936,21 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (levelId ? diferencasDosCircuitos(editor.model, levelId, escolhasDosCircuitosAtuais) : []),
     [editor.model, levelId, escolhasDosCircuitosAtuais],
   );
+  // Correção 1 (I1): o painel dos eletrodutos — o Refazer dos circuitos grava o registro deles com o forro da casa (a rede
+  // antiga no forro continua no forro ao relançar) ou fica bloqueado com o motivo.
+  const eletrodutosDoPainel = useMemo(
+    () => ({ hip: hipotesesDeEletroduto, hipEletricas: hipotesesEletricas, forroDaCasa }),
+    [hipotesesDeEletroduto, hipotesesEletricas, forroDaCasa],
+  );
   const botaoDeCircuitos = useMemo(
-    () => (levelId && planoDeCircuitos ? botaoDosCircuitos(editor.model, levelId, planoDeCircuitos) : null),
-    [editor.model, levelId, planoDeCircuitos],
+    () => (levelId && planoDeCircuitos ? botaoDosCircuitos(editor.model, levelId, planoDeCircuitos, eletrodutosDoPainel) : null),
+    [editor.model, levelId, planoDeCircuitos, eletrodutosDoPainel],
+  );
+  const nomeDoPavimentoDosCircuitos = editor.model.levels.find((l) => l.id === levelId)?.name ?? 'este pavimento';
+  // Correção 1 (M2): os OUTROS pavimentos com circuitos do motor criados com outras escolhas.
+  const outrosPavimentosComDiferenca = useMemo(
+    () => (tarefaAberta === 'circuitos' ? pavimentosComDiferenca(editor.model, escolhasDosCircuitosAtuais, levelId ?? null) : []),
+    [tarefaAberta, editor.model, escolhasDosCircuitosAtuais, levelId],
   );
   const modeloDosCircuitosRef = useRef(editor.model);
   modeloDosCircuitosRef.current = editor.model;
@@ -9286,7 +9305,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     // Correção 3: o lote do MODELO (o pavimento da frente), não o do pavimento ativo.
   }, [hipotesesDaCasaDoEstudo, editor.model]);
   /** As premissas da água do estudo com o forro da casa — o que toda chamada da água recebe. */
-  const hidroDaAgua = useMemo(() => ({ ...hidroDoEstudo.hipoteses, forroDaCasa: forroDaCasaDaAgua }), [hidroDoEstudo.hipoteses, forroDaCasaDaAgua]);
+  const hidroDaAgua = useMemo(
+    () => ({ ...hidroDoEstudo.hipoteses, forroDaCasa: forroDaCasaDaAgua ?? (hipotesesDaCasaDoEstudo ? ('DESLIGADO' as const) : estadoDasPremissasDaCasa) }),
+    [hidroDoEstudo.hipoteses, forroDaCasaDaAgua, hipotesesDaCasaDoEstudo, estadoDasPremissasDaCasa],
+  );
   const hipDaAguaQueLanca = useMemo(() => lancamentoDaAgua(editor.model, hidroDaAgua).hip, [editor.model, hidroDaAgua]);
   const hipDoPluvialQueLanca = useMemo(() => lancamentoDoPluvial(editor.model, hidroDoEstudo.hipoteses.pluvial).hip, [editor.model, hidroDoEstudo.hipoteses.pluvial]);
   /** F3: água no forro lançada antes do registro — os botões que relançam desligam, com este motivo. */
@@ -9855,12 +9877,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const quadro = quadroDosCircuitos;
     let previa: ReturnType<typeof comandosDeRefazerCircuitos>;
     try {
-      previa = comandosDeRefazerCircuitos(editor.model, nivel, quadro?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas);
+      previa = comandosDeRefazerCircuitos(editor.model, nivel, quadro?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas, eletrodutosDoPainel);
     } catch (e) {
       setResultadoDeCircuitos({ ok: false, texto: `Nada foi refeito: ${e instanceof Error ? e.message : String(e)}` });
       return;
     }
-    const alvo = circuitosARefazer(editor.model, nivel);
+    const alvo = circuitosARefazer(editor.model, nivel, { hipEletricas: hipotesesEletricas, eletrodutos: eletrodutosDoPainel });
+    if (alvo.bloqueio) {
+      setResultadoDeCircuitos({ ok: false, texto: `Nada foi refeito: ${alvo.bloqueio}` });
+      return;
+    }
     const texto = textoDaConfirmacaoDosCircuitos(alvo, { novos: previa.plano?.circuitos.length ?? 0, quadro: quadro?.nome ?? null, diferencas: diferencasNosCircuitos });
     if (!texto) return;
     const ok = await confirmar({
@@ -9873,7 +9899,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     // Depois do `await`: o lote sobre o modelo de AGORA (o usuário pode ter mexido enquanto a confirmação estava aberta).
     let lote: ReturnType<typeof comandosDeRefazerCircuitos>;
     try {
-      lote = comandosDeRefazerCircuitos(modeloDosCircuitosRef.current, nivel, quadro?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas);
+      lote = comandosDeRefazerCircuitos(modeloDosCircuitosRef.current, nivel, quadro?.id ?? null, hipotesesDeCircuitos, hipotesesEletricas, eletrodutosDoPainel);
     } catch (e) {
       setResultadoDeCircuitos({ ok: false, texto: `Nada foi refeito: ${e instanceof Error ? e.message : String(e)}` });
       return;
@@ -20030,8 +20056,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               <AvisoDeEscolhasMudaram
                 diferencas={diferencasNosCircuitos}
                 onRelancar={() => void refazerCircuitos()}
-                rotuloAcessivel="Relançar os circuitos com as escolhas atuais"
+                desabilitado={botaoDeCircuitos?.refazer ?? null}
+                prefixo={nomeDoPavimentoDosCircuitos}
+                complemento={outrosPavimentosComDiferenca.length ? `Também no ${outrosPavimentosComDiferenca.join(', ')} — abra este painel lá para relançar.` : null}
+                rotuloAcessivel={`Relançar os circuitos do ${nomeDoPavimentoDosCircuitos} com as escolhas atuais`}
               />
+              {diferencasNosCircuitos.length === 0 && outrosPavimentosComDiferenca.length > 0 && (
+                <p className="text-xs text-amber-700" data-testid="circuitos-outros-pavimentos">
+                  Circuitos do {outrosPavimentosComDiferenca.join(', ')} criados com outras escolhas — abra este painel lá para relançar.
+                </p>
+              )}
+              {/* Correção 1 (M3): o motivo do botão desligado também em texto visível, como na água e no esgoto. */}
+              {botaoDeCircuitos?.motivo && (
+                <p className="text-xs text-amber-700" data-testid="circuitos-motivo">
+                  {botaoDeCircuitos.motivo}
+                </p>
+              )}
               {/* As HIPÓTESES, escritas — o que é norma e o que é escolha, separados. */}
               <div className="rounded-[10px] border border-slate-200 bg-slate-50 px-3 py-2 text-xs text-slate-600">
                 <p className="font-semibold text-slate-700">Hipóteses da criação</p>
@@ -20793,19 +20833,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   ? 'Nada a criar.'
                   : `${planoDeCircuitos.circuitos.length} circuito(s) para ${planoDeCircuitos.circuitos.reduce((s, c) => s + c.terminalIds.length, 0)} ponto(s).`}
               </span>
-              {/* F5 do relançar (24/10/2026): "Refazer circuitos automáticos" ao lado do "Criar" quando há circuitos do
-                  motor neste pavimento; sem nada a criar, o próprio botão principal vira "Relançar com as escolhas atuais"
-                  (regra A) — nunca desligado sem dizer por quê (motivo no invólucro, no `title` e, para o leitor de tela,
-                  num texto ligado por `aria-describedby`). */}
-              {botaoDeCircuitos.modo === 'CRIAR' && botaoDeCircuitos.podeRefazer && (
-                <button
-                  type="button"
-                  onClick={() => void refazerCircuitos()}
-                  title="Apaga os circuitos que o motor criou neste pavimento (os criados à mão ou alterados ficam) e cria de novo com as escolhas atuais, junto com os pontos soltos — pede confirmação; Ctrl+Z desfaz."
-                  className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50"
-                >
-                  Refazer circuitos automáticos
-                </button>
+              {/* F5 do relançar (24/10/2026; correção 1, M4 — o vocabulário dos outros motores): "Refazer tudo" ao lado do
+                  "Criar", sempre à vista nesse modo e, desligado, com o motivo; sem nada a criar, o próprio botão principal
+                  relança (regra A) — nunca desligado sem dizer por quê (motivo no invólucro, no `title`, em texto no painel
+                  e, para o leitor de tela, num texto ligado por `aria-describedby`). */}
+              {botaoDeCircuitos.modo === 'CRIAR' && (
+                <>
+                  {botaoDeCircuitos.refazer && (
+                    <span id="motivo-refazer-circuitos" className="sr-only">
+                      {botaoDeCircuitos.refazer}
+                    </span>
+                  )}
+                  <span className="inline-flex shrink-0" title={botaoDeCircuitos.refazer ?? undefined}>
+                    <button
+                      type="button"
+                      onClick={() => void refazerCircuitos()}
+                      disabled={!!botaoDeCircuitos.refazer}
+                      aria-describedby={botaoDeCircuitos.refazer ? 'motivo-refazer-circuitos' : undefined}
+                      aria-label={`Refazer tudo — circuitos do ${nomeDoPavimentoDosCircuitos}`}
+                      title={
+                        botaoDeCircuitos.refazer ??
+                        'Apaga os circuitos que o motor criou neste pavimento (sem registro: todos os com pontos só nele) e cria de novo com as escolhas atuais, junto com os pontos soltos — pede confirmação; Ctrl+Z desfaz.'
+                      }
+                      className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"
+                    >
+                      Refazer tudo
+                    </button>
+                  </span>
+                </>
               )}
               {botaoDeCircuitos.motivo && (
                 <span id="motivo-criar-circuitos" className="sr-only">
@@ -20820,13 +20875,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   aria-describedby={botaoDeCircuitos.motivo ? 'motivo-criar-circuitos' : undefined}
                   aria-label={
                     botaoDeCircuitos.modo === 'RELANCAR'
-                      ? `Relançar com as escolhas atuais — circuitos do motor de ${editor.model.levels.find((l) => l.id === levelId)?.name ?? 'este pavimento'}`
+                      ? `${botaoDeCircuitos.rotulo} — circuitos do ${nomeDoPavimentoDosCircuitos}`
                       : undefined
                   }
                   title={
                     botaoDeCircuitos.motivo ??
                     (botaoDeCircuitos.modo === 'RELANCAR'
-                      ? 'Apaga os circuitos que o motor criou neste pavimento e cria de novo com as escolhas atuais — pede confirmação; Ctrl+Z desfaz'
+                      ? 'Apaga os circuitos deste pavimento que o motor refaz (sem registro: todos os com pontos só nele) e cria de novo com as escolhas atuais — pede confirmação; Ctrl+Z desfaz'
                       : undefined)
                   }
                   className="inline-flex h-9 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-[6px] border border-slate-300 bg-white px-3.5 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-40"

@@ -10,7 +10,7 @@ import { planejarEsgotoCompleto } from '../utils/blueprintEsgotoCompleto';
 import { trechosDeEsgotoSemDestino } from '../utils/blueprintEsgotoAutomatico';
 import { redeDaOrigem } from '../utils/blueprintAguaAutomatica';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
-import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
+import { TEXTO_NADA_MUDOU, registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
   ESCOLHAS_DO_ESGOTO,
   MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA,
@@ -164,6 +164,8 @@ describe('esgoto — o Refazer', () => {
     const outra = premissas({ caimentoPctAte75: 3 });
 
     const r = esgotoARefazer(m, outra);
+    // Correção 1 da F5 (M5): com registro e nada mudado, a frase comum a todos os motores.
+    expect(textoDaConfirmacaoDoEsgoto({ ...r, tubosConfirmados: 1, mudou: null, nadaMudou: true })).toContain(TEXTO_NADA_MUDOU);
     expect(r.tubosConfirmados).toBe(r.tubos);
     expect(r.pecasPorNome).toContain('1 joelho(s) de 90°');
     expect(r.pecasPorNome.some((x) => /caixa\(s\) de inspeção sugerida/.test(x))).toBe(false);

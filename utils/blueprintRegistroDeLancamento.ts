@@ -151,3 +151,9 @@ export function diferencasDasEscolhas(
 export function textoDasDiferencas(diferencas: DiferencaDeEscolha[]): string {
   return diferencas.map((d) => `${d.rotulo} — lançado com: ${d.antes} · agora: ${d.agora}`).join('; ');
 }
+
+/**
+ * Correção 1 da F5 (M5, 25/10/2026): a frase das confirmações de Refazer quando há registro e NENHUMA escolha mudou — a
+ * mesma em todos os motores. Refazer assim não muda o resultado; só desfaz o que o usuário confirmou ou ajustou.
+ */
+export const TEXTO_NADA_MUDOU = 'Nenhuma escolha mudou — o resultado será o mesmo (e os itens confirmados se perdem).';

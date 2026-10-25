@@ -28,6 +28,7 @@ import { registroDe } from '../utils/blueprintRegistroDeLancamento';
 import {
   MOTIVO_REDE_NO_FORRO_SEM_REGISTRO,
   botaoDeLancarEletrodutos,
+  comandosDeLancarEletrodutos,
   comandosDeRefazerEletrodutos,
   diferencasDoEletroduto,
   hipotesesDoQuadro,
@@ -42,7 +43,15 @@ import { HIPOTESES_PADRAO as HIPOTESES_ELETRICAS_PADRAO } from '../utils/bluepri
 import { comandosDeRefazerEsgoto, diferencasDoEsgoto, lancamentoDoEsgoto } from '../utils/blueprintEscolhasDoEsgoto';
 import { MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, comandosDeRefazerAgua, diferencasDaAgua, diferencasDoPluvial, lancamentoDaAgua, motivoParaNaoRelancarAgua } from '../utils/blueprintEscolhasDaAguaEPluvial';
 import { planejarAguaCompleta } from '../utils/blueprintAguaCompleta';
-import { circuitosDoPavimento, comandosDeRefazerCircuitos, diferencasDosCircuitos, escolhasDosCircuitos } from '../utils/blueprintEscolhasDosCircuitos';
+import {
+  botaoDosCircuitos,
+  circuitosARefazer,
+  circuitosDoPavimento,
+  comandosDeRefazerCircuitos,
+  diferencasDosCircuitos,
+  escolhasDosCircuitos,
+  textoDaConfirmacaoDosCircuitos,
+} from '../utils/blueprintEscolhasDosCircuitos';
 
 // Cada teste aqui gera a CASA INTEIRA (arquitetura → estrutura → telhado → louças → água, esgoto e pluvial):
 // ~0,5–0,8 s nesta máquina, e a CI, disputando CPU com a suíte toda, chegou a passar dos 5 s do padrão
@@ -1375,6 +1384,55 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'ELETRODUTOS', alvoId: q }).model;
     expect(motivoParaNaoRelancar(antiga, q)).toBe(MOTIVO_REDE_NO_FORRO_SEM_REGISTRO);
     expect(comandosDeRefazerEletrodutos(antiga, [q], painel, HIPOTESES_ELETRICAS_PADRAO)).toEqual([]);
+    // Correção 1 da F5 (M6): o motivo diz qual dos três casos das premissas — o mesmo texto do esgoto.
+    expect(motivoParaNaoRelancar(antiga, q, 'CARREGANDO')).toBe('Carregando as premissas da Casa Automática…');
+    expect(motivoParaNaoRelancar(antiga, q, 'ERRO')).toBe(`${MOTIVO_REDE_NO_FORRO_SEM_REGISTRO} Não foi possível ler as premissas da casa.`);
+    expect(motivoParaNaoRelancar(antiga, q, 'DESLIGADO')).toBe(`${MOTIVO_REDE_NO_FORRO_SEM_REGISTRO} O forro está desligado nas premissas da casa.`);
+  });
+
+  // Correção 1 da F5 (I1, 25/10/2026) — o caso da planta Garden: casa gerada ANTES do registro (sem registro dos
+  // eletrodutos nem dos circuitos). "Refazer todos os circuitos deste pavimento" apaga os eletrodutos com os circuitos; sem
+  // gravar o forro, o relançar seguinte descia para a cota do painel, por cima dos órfãos. O lote grava o registro dos
+  // eletrodutos COM o forro da casa — o relançar continua no forro. Sem as premissas, o Refazer fica bloqueado.
+  it('⚠️ F5 correção 1: casa antiga — refazer todos os circuitos grava o forro dos eletrodutos; o relançar sai no forro; sem premissas, bloqueado', () => {
+    const r = casa(1).resultado;
+    const q = (r.quadros ?? [])[0].id;
+    const L = r.levels.find((l) => (r.terminais ?? []).some((t) => t.levelId === l.id && t.circuitoId))!.id;
+    const antiga = applyBatch(r, [
+      { type: 'ApagarRegistroDeLancamento', motor: 'ELETRODUTOS', alvoId: q },
+      { type: 'ApagarRegistroDeLancamento', motor: 'CIRCUITOS', alvoId: L },
+    ]).model;
+    const horizontais = (m: BlueprintModel) =>
+      (m.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && t.cotaAMm === t.cotaBMm && !(t.a.x === t.b.x && t.a.y === t.b.y));
+    const painel = { ...HIPOTESES_ELETRODUTO_PADRAO, caixas: null };
+    const forroDaCasa = forroEletricoDaCasa(hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO));
+    const eletrodutos = { hip: painel, hipEletricas: HIPOTESES_ELETRICAS_PADRAO, forroDaCasa };
+    const porFuncao = { ...HIPOTESES_CIRCUITOS_PADRAO, criterio: 'funcao' as const };
+    const plano = planejarCircuitos(antiga, L, q, HIPOTESES_CIRCUITOS_PADRAO, HIPOTESES_ELETRICAS_PADRAO);
+    expect(botaoDosCircuitos(antiga, L, plano, eletrodutos)).toMatchObject({ modo: 'RELANCAR', rotulo: 'Refazer todos os circuitos deste pavimento', motivo: null });
+    const alvo = circuitosARefazer(antiga, L, { eletrodutos });
+    expect(alvo.circuitos).toHaveLength((antiga.circuitos ?? []).length);
+    expect(alvo.quadrosNoForro).toEqual([(r.quadros ?? [])[0].nome]);
+    expect(textoDaConfirmacaoDosCircuitos(alvo, { novos: 1, quadro: 'QDC', diferencas: [] })).toContain('está no forro: o registro dos eletrodutos guarda o forro da casa');
+
+    const depois = applyBatch(antiga, comandosDeRefazerCircuitos(antiga, L, q, porFuncao, HIPOTESES_ELETRICAS_PADRAO, eletrodutos).comandos).model;
+    expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ forroAbaixoDoTetoMm: F.eletrica.abaixoDoTetoMm });
+    expect((depois.trechos ?? []).filter((t) => t.disciplina === 'ELETRICA' && !(t.circuitoIds ?? []).length)).toEqual([]);
+    expect((depois.quadros ?? [])[0].drs?.filter((d) => d.circuitoIds.length === 0) ?? []).toEqual([]);
+    // O relançar dos eletrodutos (o "Lançar em todos" do painel, que lê o forro do registro): no forro, na faixa da casa.
+    const planos = planejarEletrodutosPorQuadro(depois, painel, HIPOTESES_ELETRICAS_PADRAO, forroDaCasa);
+    expect(botaoDeLancarEletrodutos(depois, planos, forroDaCasa)).toMatchObject({ modo: 'LANCAR', motivo: null });
+    const relancado = applyBatch(depois, comandosDeLancarEletrodutos(depois, planos, painel, HIPOTESES_ELETRICAS_PADRAO, forroDaCasa)).model;
+    const faixa = 2800 - F.eletrica.abaixoDoTetoMm;
+    expect(horizontais(relancado).filter((t) => t.cotaAMm === faixa).length).toBeGreaterThan(0);
+    const cotasDaCasa = new Set(horizontais(r).map((t) => t.cotaAMm));
+    expect([...new Set(horizontais(relancado).map((t) => t.cotaAMm))].filter((c) => !cotasDaCasa.has(c))).toEqual([]);
+
+    // Sem as premissas (erro de leitura): o Refazer fica bloqueado, com o motivo dos eletrodutos.
+    const semPremissas = { ...eletrodutos, forroDaCasa: 'ERRO' as const };
+    const bloqueado = botaoDosCircuitos(antiga, L, plano, semPremissas);
+    expect(bloqueado.motivo).toContain('Não foi possível ler as premissas da casa.');
+    expect(comandosDeRefazerCircuitos(antiga, L, q, porFuncao, HIPOTESES_ELETRICAS_PADRAO, semPremissas).comandos).toEqual([]);
   });
 
   // Correção 3 (24/10/2026, pedido literal: "então verifique pois alterei e não ficou disponível para relançamento"):
@@ -1463,6 +1521,10 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
     // A água no forro SEM registro (a casa de antes), sem o forro da casa: não relança pela gaveta.
     const antiga = applyCommand(r, { type: 'ApagarRegistroDeLancamento', motor: 'AGUA', alvoId: null }).model;
     expect(motivoParaNaoRelancarAgua(antiga, outra)).toBe(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO);
+    // Correção 1 da F5 (M6): o motivo diz qual dos três casos das premissas — o mesmo texto do esgoto.
+    expect(motivoParaNaoRelancarAgua(antiga, { ...outra, forroDaCasa: 'CARREGANDO' })).toBe('Carregando as premissas da Casa Automática…');
+    expect(motivoParaNaoRelancarAgua(antiga, { ...outra, forroDaCasa: 'ERRO' })).toBe(`${MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO} Não foi possível ler as premissas da casa.`);
+    expect(motivoParaNaoRelancarAgua(antiga, { ...outra, forroDaCasa: 'DESLIGADO' })).toBe(`${MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO} O forro está desligado nas premissas da casa.`);
     expect(comandosDeRefazerAgua(antiga, outra, null).comandos).toEqual([]);
 
     // Correção 1 (relato na planta "Garden"): COM o forro da casa (as premissas do estudo, pela mesma função da casa), relança

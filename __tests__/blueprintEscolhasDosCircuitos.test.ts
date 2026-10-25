@@ -23,14 +23,14 @@ import {
   type BlueprintModel,
   type Command,
 } from '../utils/blueprintKernel';
-import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, type HipotesesDeCircuitos } from '../utils/blueprintCircuitosAutomaticos';
+import { HIPOTESES_CIRCUITOS_PADRAO, planejarCircuitos, renumerarCircuitos, type HipotesesDeCircuitos } from '../utils/blueprintCircuitosAutomaticos';
 import { HIPOTESES_PADRAO } from '../utils/blueprintEletricaDimensionamento';
 import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutos } from '../utils/blueprintEletrodutos';
-import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
+import { TEXTO_NADA_MUDOU, registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
+import { comandosDasSugestoesDeDR, sugerirDRs } from '../utils/blueprintNbr5410';
 import {
   CHAVE_DOS_CIRCUITOS_DO_MOTOR,
   ESCOLHAS_DOS_CIRCUITOS,
-  MOTIVO_CIRCUITOS_SEM_REGISTRO,
   botaoDosCircuitos,
   circuitosARefazer,
   circuitosDoPavimento,
@@ -39,6 +39,7 @@ import {
   comandosDeRefazerCircuitos,
   diferencasDosCircuitos,
   escolhasDosCircuitos,
+  pavimentosComDiferenca,
   quadroDosCircuitosDoMotor,
   textoDaConfirmacaoDosCircuitos,
 } from '../utils/blueprintEscolhasDosCircuitos';
@@ -122,6 +123,19 @@ describe('escolhas dos circuitos e diferenças (regra B)', () => {
     expect(ESCOLHAS_DOS_CIRCUITOS.rotulos).not.toHaveProperty(CHAVE_DOS_CIRCUITOS_DO_MOTOR);
   });
 
+  it('correção 1 (M2): os OUTROS pavimentos com circuitos do motor criados com outras escolhas', () => {
+    const { m, t, quadroId } = planta();
+    let c = criar(m, t, quadroId);
+    c = applyCommand(c, { type: 'AddLevel', name: 'Superior', elevationMm: 2800, defaultHeightMm: 2800 }).model;
+    const s = c.levels[1].id;
+    c = applyBatch(c, [ponto(s, 1000, 1000, 'TUG', 100), ponto(s, 2000, 1000, 'ILUMINACAO_TETO', 100)]).model;
+    c = criar(c, s, quadroId);
+    const carga = escolhasDosCircuitos({ ...HIP, criterio: 'carga' }, HIPOTESES_PADRAO);
+    expect(pavimentosComDiferenca(c, carga, t)).toEqual(['Superior']);
+    expect(pavimentosComDiferenca(c, carga, s)).toEqual(['Térreo']);
+    expect(pavimentosComDiferenca(c, escolhasDosCircuitos(HIP, HIPOTESES_PADRAO), t)).toEqual([]);
+  });
+
   it('circuitos antigos, sem registro: nenhuma diferença', () => {
     const { m, t, quadroId } = planta();
     const plano = planejarCircuitos(m, t, quadroId, HIP, HIPOTESES_PADRAO);
@@ -161,6 +175,41 @@ describe('quais circuitos são do motor', () => {
     expect(cls.doMotor.map((x) => x.id)).toContain(f.id);
     expect(cls.doMotor.map((x) => x.id)).not.toContain(a.id);
     expect(cls.doMotor.map((x) => x.id)).not.toContain(b.id);
+  });
+  it('I3: "Renumerar circuitos" não tira o circuito do motor (o número fica fora da assinatura)', () => {
+    const { m, t, quadroId, manual } = planta();
+    // Sem o C1 à mão, os do motor (C2…) ficam fora de sequência — o "Renumerar" troca os números.
+    const c = applyCommand(criar(m, t, quadroId), { type: 'DeleteCircuito', circuitoId: manual }).model;
+    const antes = circuitosDoPavimento(c, t).doMotor.map((x) => x.id).sort();
+    const renumerado = applyBatch(c, renumerarCircuitos(c, quadroId)).model;
+    expect(renumerado.circuitos!.map((x) => x.nome)).not.toEqual(c.circuitos!.map((x) => x.nome));
+    expect(circuitosDoPavimento(renumerado, t).doMotor.map((x) => x.id).sort()).toEqual(antes);
+    // Refazer → renumerar → continuam do motor.
+    const refeito = applyBatch(renumerado, comandosDeRefazerCircuitos(renumerado, t, quadroId, POR_FUNCAO, HIPOTESES_PADRAO).comandos).model;
+    const motor = circuitosDoPavimento(refeito, t).doMotor.map((x) => x.id).sort();
+    expect(motor.length).toBeGreaterThan(0);
+    // Outro número em cada um (o que o "Renumerar" faz quando há lacuna).
+    const deNovo = applyBatch(
+      refeito,
+      circuitosDoPavimento(refeito, t).doMotor.map((x): Command => ({ type: 'SetCircuitoProps', circuitoId: x.id, nome: x.nome.replace(/^C(\d+)/, (_, n) => `C${Number(n) + 10}`) })),
+    ).model;
+    expect(deNovo.circuitos!.map((x) => x.nome)).not.toEqual(refeito.circuitos!.map((x) => x.nome));
+    expect(circuitosDoPavimento(deNovo, t).doMotor.map((x) => x.id).sort()).toEqual(motor);
+  });
+
+  it('M1: circuito SEM ponto só é do motor no quadro dos circuitos do motor deste pavimento', () => {
+    const { m, t, quadroId } = planta();
+    const c = criar(m, t, quadroId);
+    const [a] = circuitosDoPavimento(c, t).doMotor;
+    // Um segundo quadro, e nele um circuito vazio com a MESMA assinatura de um do motor: não é do motor deste pavimento.
+    let m2 = applyCommand(c, { type: 'AddQuadro', levelId: t, nome: 'QD2', at: point(9000, 3000), cotaMm: 1500, tensaoV: 127, ligacao: 'FN' }).model;
+    const q2 = m2.quadros![1].id;
+    m2 = applyCommand(m2, { type: 'AddCircuito', quadroId: q2, nome: a.nome, tipo: a.tipo, tensaoV: a.tensaoV, ligacao: a.ligacao, secaoMm2: a.secaoMm2 }).model;
+    const vazioNoOutro = m2.circuitos![m2.circuitos!.length - 1];
+    expect(circuitosDoPavimento(m2, t).doMotor.map((x) => x.id)).not.toContain(vazioNoOutro.id);
+    // O próprio circuito do motor que perdeu os pontos (mesmo quadro dos outros do motor): continua do motor.
+    const semPontos = applyBatch(c, (c.terminais ?? []).filter((x) => x.circuitoId === a.id).map((x): Command => ({ type: 'SetTerminalProps', terminalId: x.id, circuitoId: null }))).model;
+    expect(circuitosDoPavimento(semPontos, t).doMotor.map((x) => x.id)).toContain(a.id);
   });
 });
 
@@ -246,7 +295,7 @@ describe('refazer', () => {
     expect(plano.comandos.length).toBeGreaterThan(0);
   });
 
-  it('a confirmação diz o que sai, o que volta, o que fica, e que os eletrodutos e a fiação precisam ser relançados', () => {
+  it('a confirmação diz o que sai, o que volta, o que fica, e que os eletrodutos e a fiação precisarão ser relançados', () => {
     const { m, t, quadroId } = planta();
     const c = criar(m, t, quadroId);
     const quadro = c.quadros![0];
@@ -260,44 +309,114 @@ describe('refazer', () => {
     expect(texto).toContain(`os ${alvo.pontos} ponto(s) deles`);
     expect(texto).toContain('2 circuito(s) novo(s) no quadro QDC');
     expect(texto).toContain('O que mudou: Dividir luz e TUG — lançado com: por ambiente · agora: um por função');
-    expect(texto).toContain('Os eletrodutos e a fiação desses circuitos precisam ser relançados');
-    expect(texto).toContain(`${alvo.trechos.length} eletroduto(s) que só os levavam saem`);
+    expect(texto).toContain('Os eletrodutos e a fiação desses circuitos precisarão ser relançados');
+    expect(texto).toContain(`${alvo.trechos.length} eletroduto(s) que só os levavam são apagados`);
     expect(texto).toContain('que levam também outros circuitos ficam');
     expect(texto).toContain(`1 do motor alterado(s) depois de criado(s) — disjuntor, seção, curva, DR… (${alterado.nome})`);
-    expect(texto).toContain('1 criado(s) à mão, renomeado(s) ou de antes do registro (C1 — Existente)');
+    expect(texto).toContain('1 criado(s) à mão, renomeado(s) ou com ponto em outro pavimento (C1 — Existente)');
     expect(texto).toContain('a escolha nova não se aplica a eles');
-    expect(textoDaConfirmacaoDosCircuitos(circuitosARefazer(m, t), { novos: 0, quadro: 'QDC', diferencas: [] })).toBeNull();
+    const semNenhumDoMotor = applyBatch(c, circuitosDoPavimento(c, t).doMotor.map((x): Command => ({ type: 'DeleteCircuito', circuitoId: x.id }))).model;
+    expect(textoDaConfirmacaoDosCircuitos(circuitosARefazer(semNenhumDoMotor, t), { novos: 0, quadro: 'QDC', diferencas: [] })).toBeNull();
   });
 
-  it('DR e fase dos circuitos refeitos: a confirmação avisa que se perdem', () => {
+  it('M5: com registro e nenhuma escolha mudada, a confirmação diz que o resultado será o mesmo', () => {
+    const { m, t, quadroId } = planta();
+    const c = criar(m, t, quadroId);
+    const texto = textoDaConfirmacaoDosCircuitos(circuitosARefazer(c, t), { novos: 3, quadro: 'QDC', diferencas: [] })!;
+    expect(texto).toContain(TEXTO_NADA_MUDOU);
+  });
+
+  it('fase de um circuito do motor: a confirmação diz que se perde (edições à mão)', () => {
     const { m, t, quadroId } = planta();
     const c = criar(m, t, quadroId);
     const [a] = circuitosDoPavimento(c, t).doMotor;
     const comFase = applyCommand(c, { type: 'SetCircuitoProps', circuitoId: a.id, fase: 'S' }).model;
     const texto = textoDaConfirmacaoDosCircuitos(circuitosARefazer(comFase, t), { novos: 3, quadro: 'QDC', diferencas: [] })!;
-    expect(texto).toContain('1 deles tinham fase (balanceamento) — os novos nascem sem fase');
+    expect(texto).toContain(`Perdem-se as edições à mão: ${a.nome} (fase S).`);
+  });
+
+  it('I2: os DRs são refeitos — nenhum DR vazio depois, e o circuito novo que pede DR ganha o seu', () => {
+    const { m, t, quadroId } = planta();
+    const c = criar(m, t, quadroId);
+    const comDr = applyBatch(c, comandosDasSugestoesDeDR(sugerirDRs(c, quadroId, HIPOTESES_PADRAO))).model;
+    const antes = comDr.quadros![0].drs ?? [];
+    expect(antes.length).toBeGreaterThan(0);
+    const alvo = circuitosARefazer(comDr, t);
+    expect(alvo.drs).toBe(antes.length);
+    expect(textoDaConfirmacaoDosCircuitos(alvo, { novos: 3, quadro: 'QDC', diferencas: [] })).toContain('Os DRs são refeitos');
+    const depois = applyBatch(comDr, comandosDeRefazerCircuitos(comDr, t, quadroId, POR_FUNCAO, HIPOTESES_PADRAO).comandos).model;
+    const drs = depois.quadros![0].drs ?? [];
+    expect(drs.filter((d) => d.circuitoIds.length === 0)).toEqual([]);
+    // O TUG da cozinha (refeito) pede DR e tem o seu.
+    const cozinha = depois.circuitos!.find((x) => x.nome.includes('TUG Cozinha'))!;
+    expect(drs.some((d) => d.circuitoIds.includes(cozinha.id))).toBe(true);
+    const doMotor = new Set(circuitosDoPavimento(depois, t).doMotor.map((x) => x.id));
+    expect(sugerirDRs(depois, quadroId, HIPOTESES_PADRAO).filter((s) => doMotor.has(s.circuitoId))).toEqual([]);
+  });
+});
+
+describe('I1: circuitos de ANTES do registro (a planta Garden)', () => {
+  const plano = (m: BlueprintModel, t: string, q: string | null) => planejarCircuitos(m, t, q, HIP, HIPOTESES_PADRAO);
+
+  it('o botão oferece "Refazer todos os circuitos deste pavimento"; a confirmação é FORTE (cada nome, as edições que se perdem, os eletrodutos)', () => {
+    const { m, t, quadroId } = planta();
+    let antigo = applyBatch(m, plano(m, t, quadroId).comandos).model;
+    antigo = applyBatch(antigo, planejarEletrodutos(antigo, antigo.quadros![0], HIPOTESES_ELETRODUTO_PADRAO, HIPOTESES_PADRAO).comandos).model;
+    const [a, b] = (antigo.circuitos ?? []).filter((x) => x.nome !== 'C1 — Existente');
+    antigo = applyBatch(antigo, [
+      { type: 'SetCircuitoProps', circuitoId: a.id, disjuntorA: 20 },
+      { type: 'SetCircuitoProps', circuitoId: b.id, fase: 'R' },
+    ]).model;
+    const botao = botaoDosCircuitos(antigo, t, plano(antigo, t, quadroId));
+    expect(botao).toEqual({ modo: 'RELANCAR', rotulo: 'Refazer todos os circuitos deste pavimento', motivo: null, refazer: null });
+    const alvo = circuitosARefazer(antigo, t);
+    expect(alvo.modo).toBe('TODOS');
+    expect(alvo.circuitos).toHaveLength((antigo.circuitos ?? []).length);
+    const texto = textoDaConfirmacaoDosCircuitos(alvo, { novos: 5, quadro: 'QDC', diferencas: [] })!;
+    expect(texto).toContain(`Térreo: saem TODOS os ${alvo.circuitos.length} circuito(s) deste pavimento — foram criados antes do registro`);
+    for (const x of antigo.circuitos ?? []) expect(texto).toContain(x.nome);
+    expect(texto).toContain(`${a.nome} (disjuntor 20 A)`);
+    expect(texto).toContain(`${b.nome} (fase R)`);
+    expect(texto).toContain(`${alvo.trechos.length} eletroduto(s) que só os levavam são apagados`);
+    expect(texto).not.toContain(TEXTO_NADA_MUDOU);
+    // Refeito: todos saem, os pontos voltam a ter circuito, o registro passa a existir — e nada de eletroduto órfão.
+    const depois = applyBatch(antigo, comandosDeRefazerCircuitos(antigo, t, quadroId, POR_FUNCAO, HIPOTESES_PADRAO).comandos).model;
+    for (const x of antigo.circuitos ?? []) expect(depois.circuitos!.some((y) => y.id === x.id)).toBe(false);
+    expect(plano(depois, t, quadroId).circuitos).toEqual([]);
+    expect(registroDe(depois, 'CIRCUITOS', t)!.escolhas.criterio).toBe('funcao');
+    expect((depois.trechos ?? []).filter((x) => x.disciplina === 'ELETRICA' && !(x.circuitoIds ?? []).length)).toEqual([]);
+  });
+
+  it('nenhum motivo manda apagar circuito', () => {
+    const { m, t, quadroId } = planta();
+    const c = criar(m, t, quadroId);
+    const todosAlterados = applyBatch(c, circuitosDoPavimento(c, t).doMotor.map((x): Command => ({ type: 'SetCircuitoProps', circuitoId: x.id, disjuntorA: 16 }))).model;
+    for (const mm of [todosAlterados, m]) {
+      const b = botaoDosCircuitos(mm, t, plano(mm, t, quadroId));
+      expect(`${b.motivo ?? ''} ${b.refazer ?? ''}`).not.toMatch(/apague/i);
+    }
   });
 });
 
 describe('regra A (o botão do rodapé)', () => {
   const plano = (m: BlueprintModel, t: string, q: string | null) => planejarCircuitos(m, t, q, HIP, HIPOTESES_PADRAO);
 
-  it('há o que criar → "Criar N"; nada a criar e circuitos do motor → "Relançar com as escolhas atuais"', () => {
+  it('há o que criar → "Criar N" (com "Refazer tudo" ao lado); nada a criar e circuitos do motor → "Relançar com as escolhas atuais"', () => {
     const { m, t, quadroId } = planta();
-    expect(botaoDosCircuitos(m, t, plano(m, t, quadroId))).toMatchObject({ modo: 'CRIAR', motivo: null, podeRefazer: false });
+    expect(botaoDosCircuitos(m, t, plano(m, t, quadroId))).toMatchObject({ modo: 'CRIAR', motivo: null });
     const c = criar(m, t, quadroId);
-    expect(botaoDosCircuitos(c, t, plano(c, t, quadroId))).toEqual({ modo: 'RELANCAR', rotulo: 'Relançar com as escolhas atuais', motivo: null, podeRefazer: true });
+    expect(botaoDosCircuitos(c, t, plano(c, t, quadroId))).toEqual({ modo: 'RELANCAR', rotulo: 'Relançar com as escolhas atuais', motivo: null, refazer: null });
     const novo = applyCommand(c, ponto(t, 4000, 3000, 'TUG', 100)).model;
-    expect(botaoDosCircuitos(novo, t, plano(novo, t, quadroId))).toMatchObject({ modo: 'CRIAR', rotulo: 'Criar 1 circuito(s)', podeRefazer: true });
+    expect(botaoDosCircuitos(novo, t, plano(novo, t, quadroId))).toMatchObject({ modo: 'CRIAR', rotulo: 'Criar 1 circuito(s)', refazer: null });
   });
 
-  it('desligado SEMPRE com motivo: circuitos de antes do registro; alterados todos; sem quadro; nenhum ponto', () => {
+  it('desligado SEMPRE com motivo: alterados todos; sem quadro; nenhum ponto — e o "Refazer tudo" desligado diz por quê', () => {
     const { m, t, quadroId } = planta();
-    const antigo = applyBatch(m, plano(m, t, quadroId).comandos).model;
-    expect(botaoDosCircuitos(antigo, t, plano(antigo, t, quadroId)).motivo).toBe(MOTIVO_CIRCUITOS_SEM_REGISTRO);
     const c = criar(m, t, quadroId);
     const todosAlterados = applyBatch(c, circuitosDoPavimento(c, t).doMotor.map((x): Command => ({ type: 'SetCircuitoProps', circuitoId: x.id, disjuntorA: 16 }))).model;
-    expect(botaoDosCircuitos(todosAlterados, t, plano(todosAlterados, t, quadroId)).motivo).toMatch(/^Nada a criar: os circuitos do motor neste pavimento foram alterados/);
+    const b = botaoDosCircuitos(todosAlterados, t, plano(todosAlterados, t, quadroId));
+    expect(b.motivo).toMatch(/^Nada a criar: os circuitos do motor neste pavimento foram alterados/);
+    expect(b.refazer).toMatch(/^Nada a refazer/);
     expect(botaoDosCircuitos(m, t, plano(m, t, null)).motivo).toMatch(/^Nenhum quadro no desenho/);
     const vazio = applyCommand(emptyModel(), { type: 'AddLevel', name: 'T', elevationMm: 0, defaultHeightMm: 2800 }).model;
     const l = vazio.levels[0].id;

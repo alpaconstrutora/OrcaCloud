@@ -21,6 +21,22 @@
 import type { BlueprintModel, DisciplinaDeRede, ObjectId, Trecho } from './blueprintKernel';
 import type { FaixaDoForro } from './blueprintRotaPeloForro';
 
+/**
+ * Correção 1 da F5 (M6, 25/10/2026): POR QUE as premissas da casa não servem — os mesmos três casos e os mesmos textos nos
+ * três motores (eletrodutos, água, esgoto). `'CARREGANDO'` = ainda chegando (some sozinho); `'ERRO'` = a leitura falhou
+ * (timeout, RLS, tabela ausente — não vira padrão); `'DESLIGADO'` = o forro está desligado nas premissas.
+ */
+export type PremissasDaCasaIndisponiveis = 'CARREGANDO' | 'ERRO' | 'DESLIGADO';
+export const MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA = 'Carregando as premissas da Casa Automática…';
+export const MOTIVO_PREMISSAS_DA_CASA_ILEGIVEIS = 'Não foi possível ler as premissas da casa.';
+export const MOTIVO_FORRO_DESLIGADO_NAS_PREMISSAS = 'O forro está desligado nas premissas da casa.';
+
+/** O motivo do bloqueio por premissas: carregando → só isso; erro ou forro desligado → o motivo do motor + o porquê. */
+export function motivoDasPremissasDaCasa(base: string, estado: PremissasDaCasaIndisponiveis): string {
+  if (estado === 'CARREGANDO') return MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA;
+  return `${base} ${estado === 'ERRO' ? MOTIVO_PREMISSAS_DA_CASA_ILEGIVEIS : MOTIVO_FORRO_DESLIGADO_NAS_PREMISSAS}`;
+}
+
 /** A folga da assinatura: a casa lança em milímetro inteiro; 2 mm cobre o arredondamento do caminho. */
 export const TOLERANCIA_DA_ASSINATURA_MM = 2;
 

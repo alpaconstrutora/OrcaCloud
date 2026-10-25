@@ -103,9 +103,13 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   água no forro). Água antiga no forro sem registro → botões desligados com o motivo.
 - Correção 1 + conciliação com o #154 (24/10/2026): água antiga no forro sem registro relança pelo forro da casa
   (`forroDaAguaDaCasa`, irmão de `forroEletricoDaCasa`, os dois sobre `hipotesesDoForroDaCasa`). A regra das premissas é
-  UMA para eletrodutos e água (`hipotesesDaCasaDoEstudo` no editor): as gravadas; sem linha gravada ou sem a tabela, o
-  padrão (o mesmo que gerar a casa usa — gerar NÃO grava a linha). "Tem casa" é decidido pelo desenho (rede no forro de
-  verdade, sem registro). Bloqueio só com o forro desligado nas premissas.
+  UMA para eletrodutos e água (`hipotesesDaCasaDoEstudo` no editor): as gravadas; sem linha gravada (`vazio`), o padrão
+  (o mesmo que gerar a casa usa — gerar NÃO grava a linha). ~~Sem a tabela, o padrão; bloqueio só com o forro desligado~~
+  — SUPERADO pela correção 2 da F3 (I1/I2): erro de leitura (sem a tabela, timeout, RLS) NÃO vira padrão e bloqueia; e o
+  forro da casa só vale com a ASSINATURA da casa. "Tem casa" é decidido pelo desenho (rede no forro de verdade, sem
+  registro). Desde a correção 1 da F5 (M6), o motivo diz qual dos três casos: "Carregando as premissas…", "Não foi
+  possível ler as premissas da casa." ou "O forro está desligado nas premissas da casa." — o mesmo texto nos eletrodutos,
+  na água e no esgoto.
 
 **Limitações conhecidas** (atualizadas na correção 2 da F3, 24/10/2026 — depois da conciliação com o #154):
 - Rede antiga no forro, SEM registro: relança no forro da casa só com a ASSINATURA da casa (`temAssinaturaDaCasa`:
@@ -179,9 +183,29 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
   ou com disjuntor/seção/curva/DR declarados depois deixa de bater e FICA (só o resto mudou → "do motor, alterado" na
   confirmação). A `fase` fica fora (balanceamento do quadro; a confirmação avisa que os novos nascem sem fase). Os pontos
   ficam fora (apagar ou mover ponto não é editar o circuito). Circuito com ponto em outro pavimento nunca é do motor deste.
-- Circuitos de antes do registro: nenhum é identificável — sem aviso; com nada a criar, o botão desliga com o motivo
-  "Circuitos criados antes do registro — o motor não sabe quais são dele; refaça-os à mão ou apague os circuitos (Quadro
-  de cargas) para relançar." O padrão de nome foi descartado: confundiria o circuito que o usuário batizou igual.
+- Circuitos de antes do registro: nenhum é identificável — sem aviso. ~~Com nada a criar, o botão desligava com o motivo
+  "… ou apague os circuitos (Quadro de cargas) para relançar."~~ — SUPERADO pela correção 1 da F5 (I1, abaixo): o
+  conselho de apagar quebrava a rede da Garden. O padrão de nome foi descartado: confundiria o circuito que o usuário
+  batizou igual.
+- **Correção 1 da F5 (25/10/2026, revisão final do PR 2):**
+  - I1 (a planta Garden: 31 circuitos, todos de antes do registro, e 319 eletrodutos no forro): sem registro no pavimento,
+    o painel oferece "Refazer todos os circuitos deste pavimento" — entram todos os circuitos com pontos SÓ nele — com
+    confirmação FORTE: cada circuito pelo nome, o que estava editado à mão e se perde (disjuntor, seção, curva, DR, fase) e
+    quantos eletrodutos são apagados e precisarão ser relançados. No MESMO lote, antes de apagar trechos, a rede antiga no
+    forro (sem registro dos eletrodutos) ganha o registro ELETRODUTOS do quadro com o forro da casa (`forroDaCasaQueVale`):
+    o relançar continua no forro. Sem como saber o forro (sem premissas, sem a assinatura), o Refazer fica bloqueado, com o
+    motivo dos eletrodutos. Medido na Garden real: relançados 85 horizontais a 2755 (o forro) e 0 a 2150 — antes, apagar
+    os circuitos e criar de novo dava 62 a 2150, fora do forro e por cima dos órfãos. Nenhum motivo manda apagar circuito.
+  - I2: o Refazer refaz os DRs — os que citavam só circuitos refeitos saem (o geral fica) e os circuitos novos que pedem
+    DR ganham o de 30 mA da norma (`sugerirDRs`/`comandosDasSugestoesDeDR`, como a Casa Automática). Na Garden, 9 DRs →
+    9, nenhum vazio (antes: 9 vazios).
+  - I3: o número do nome ("C3 — ") fica fora da assinatura — "Renumerar circuitos" não tira mais o circuito do motor.
+  - M1: circuito sem ponto só conta como do motor num quadro dos circuitos do motor que têm ponto no pavimento.
+  - M2: o aviso diz o pavimento ("Térreo — …"), e uma linha "Também no Superior" aparece quando há outro pavimento com
+    diferença. M3: o motivo do botão desligado aparece também em texto no painel. M4: "Refazer tudo" (o nome dos outros
+    motores) fica à vista ao lado do "Criar" e, desligado, diz por quê.
+  - M5: com registro e nenhuma escolha mudada, a confirmação diz "Nenhuma escolha mudou — o resultado será o mesmo (e os
+    itens confirmados se perdem)." — a mesma frase nos eletrodutos, na água, no pluvial e no esgoto (`TEXTO_NADA_MUDOU`).
 - **Refazer** (sempre com confirmação — circuito não tem "sugerido"): num lote, apaga os circuitos do motor (o
   `DeleteCircuito` solta os pontos e os tira dos eletrodutos e dos DRs), apaga os ELETRODUTOS que só levavam esses
   circuitos e as caixas de passagem dos nós deles, recria os circuitos dos pontos soltos do pavimento no quadro do painel
@@ -198,15 +222,19 @@ circuitos para um segundo PR"* — resposta do usuário: *"sim"*. **PR 1 = Tasks
 - Casa Automática: grava o registro CIRCUITOS por pavimento com os circuitos que o lote dela criou (os do pavimento e os
   do ar-condicionado, mesmas escolhas), depois do DR e antes dos eletrodutos.
 - Limitações (F5):
-  - "Renumerar circuitos" (Quadro de cargas) troca o nome: os circuitos renumerados deixam de ser reconhecidos como do motor
-    e ficam no Refazer (a confirmação os lista como "renomeados"). Trocar disjuntor/seção também (de propósito).
-  - Os circuitos do ar-condicionado criados pelo gerador de Climatização avulso (fora da casa) não entram no registro:
-    ficam no Refazer, como os criados à mão.
-  - Um circuito criado à mão com exatamente as mesmas propriedades (nome inclusive) de um do motor, no mesmo pavimento,
-    seria tomado como do motor. A confirmação lista por nome o que sai; Ctrl+Z desfaz.
-  - DR e fase dos circuitos refeitos se perdem (os novos nascem sem): a confirmação diz; o quadro volta a sugerir o DR.
-  - O aviso é do pavimento em que o usuário está: trocar a escolha e refazer o térreo não refaz o andar de cima — o aviso
-    aparece lá quando o painel for aberto naquele pavimento.
+  - ~~"Renumerar circuitos" tirava o circuito do motor~~ — resolvido na correção 1 (I3). Trocar o resto do nome, ou
+    disjuntor/seção, continua tirando (de propósito).
+  - Sem registro, o Refazer leva TODOS os circuitos com pontos só no pavimento, inclusive os criados à mão — por isso a
+    confirmação forte, com cada nome e as edições que se perdem. Circuito com ponto em outro pavimento fica.
+  - (M8 da revisão, deixado como limitação) Os circuitos do ar-condicionado criados pelo gerador de Climatização avulso
+    (fora da casa) não entram no registro: com registro no pavimento, ficam no Refazer, como os criados à mão.
+  - Um circuito criado à mão com exatamente as mesmas propriedades (o nome sem o número inclusive) de um do motor, no
+    mesmo pavimento, seria tomado como do motor. A confirmação lista por nome o que sai; Ctrl+Z desfaz.
+  - A fase (balanceamento) dos circuitos refeitos se perde — a confirmação a lista entre as edições; balanceie de novo. Os
+    DRs são refeitos pela norma (correção 1, I2); um DR que o usuário montou à mão com circuitos refeitos é substituído
+    pelos da norma.
+  - O Refazer é do pavimento em que o usuário está: refazer o térreo não refaz o andar de cima — o aviso diz "Também no
+    Superior" (correção 1, M2) e o relançar é feito com o painel aberto lá.
   - Prova no app: coberta pelos testes do editor; prova por imagem no navegador NÃO feita.
 
 ## Estado

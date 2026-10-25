@@ -8,7 +8,7 @@ import { ModelHistory, applyBatch, applyCommand, emptyModel, point, type Bluepri
 import { planejarAguaCompleta } from '../utils/blueprintAguaCompleta';
 import { planejarPluvialCompleta } from '../utils/blueprintPluvialCompleto';
 import { HIPOTESES_HIDRO_PADRAO, type HipotesesHidro } from '../utils/blueprintMemorialHidro';
-import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
+import { TEXTO_NADA_MUDOU, registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
   ESCOLHAS_DA_AGUA,
   MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO,
@@ -164,6 +164,8 @@ describe('água — Refazer', () => {
     const lancada = aguaLancada();
     const dn25 = comAgua({ dnMinimoAguaFriaMm: 25 });
     expect(textoDaConfirmacaoDoSistema('Água', aguaARefazer(lancada, dn25))).toBeNull();
+    // Correção 1 da F5 (M5): com registro e nada mudado, a frase comum a todos os motores.
+    expect(textoDaConfirmacaoDoSistema('Água', { ...aguaARefazer(lancada, dn25), tubosConfirmados: 1, mudou: null, nadaMudou: true })).toContain(TEXTO_NADA_MUDOU);
     const aceita = aceitar(lancada);
     const r = aguaARefazer(aceita, dn25);
     expect(r.tubos).toBe(tubosDeAgua(aceita).length);

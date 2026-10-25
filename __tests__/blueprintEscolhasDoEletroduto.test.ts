@@ -14,7 +14,7 @@ import { ModelHistory, applyBatch, applyCommand, emptyModel, point, type Bluepri
 import { HIPOTESES_ELETRODUTO_PADRAO, planejarEletrodutosDoModelo, type HipotesesDeEletroduto } from '../utils/blueprintEletrodutos';
 import { REGRA_DE_CAIXAS_PADRAO } from '../utils/blueprintCaixasDePassagem';
 import { HIPOTESES_PADRAO } from '../utils/blueprintEletricaDimensionamento';
-import { registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
+import { TEXTO_NADA_MUDOU, registroDe, textoDasDiferencas } from '../utils/blueprintRegistroDeLancamento';
 import {
   ESCOLHAS_DO_ELETRODUTO,
   MOTIVO_REDE_NO_FORRO_SEM_REGISTRO,
@@ -139,10 +139,18 @@ describe('botaoDeLancarEletrodutos — a regra A (o botão nunca fica sem ação
 });
 
 describe('redesARefazer + textoDaConfirmacaoDeRefazer — confirmação só com o que foi confirmado', () => {
+  it('correção 1 da F5 (M5): com registro e nenhuma escolha mudada, a confirmação diz que o resultado será o mesmo', () => {
+    const lancada = lancadaComCaixas();
+    const m = applyBatch(lancada, (lancada.trechos ?? []).map((t): Command => ({ type: 'SetTrechoProps', trechoId: t.id, sugerido: false }))).model;
+    const redes = redesARefazer(m, undefined, { hip: COM_CAIXAS, hipEletricas: HIPOTESES_PADRAO });
+    expect(redes[0]).toMatchObject({ mudou: null, nadaMudou: true });
+    expect(textoDaConfirmacaoDeRefazer(redes)).toContain(TEXTO_NADA_MUDOU);
+  });
+
   it('só sugeridos → refaz direto (sem confirmação)', () => {
     const m = lancadaComCaixas();
     const redes = redesARefazer(m);
-    expect(redes).toEqual([{ quadroId: m.quadros[0].id, nome: 'QDC', trechos: m.trechos!.length, trechosConfirmados: 0, caixas: 2, caixasAceitas: 0, mudou: null }]);
+    expect(redes).toEqual([{ quadroId: m.quadros[0].id, nome: 'QDC', trechos: m.trechos!.length, trechosConfirmados: 0, caixas: 2, caixasAceitas: 0, mudou: null, nadaMudou: false }]);
     expect(textoDaConfirmacaoDeRefazer(redes)).toBeNull();
   });
 

@@ -83,6 +83,8 @@ import { ROTULO_DA_VENTILACAO, TIPO_DA_VALVULA_DE_ADMISSAO_DE_AR, VENTILACAO_ATE
 import { HIPOTESES_RESERVATORIO_PADRAO, type HipotesesDeReservatorio } from './blueprintReservacao';
 import { aguaNoForroDaCasa, sobreOTubo, type ForroDaAguaDaCasa } from './blueprintEscolhasDaAguaEPluvial';
 import type { LeitorDoTerreno } from './blueprintAncorasHidro';
+import { motivoDasPremissasDaCasa } from './blueprintAssinaturaDaCasa';
+import { TEXTO_NADA_MUDOU } from './blueprintRegistroDeLancamento';
 import {
   comandoDeRegistro,
   diferencasDasEscolhas,
@@ -299,8 +301,11 @@ export const ESCOLHAS_DO_ESGOTO: OpcoesDaComparacao = {
  */
 export const MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO =
   'Esgoto lançado antes do registro, e a água está no forro como a da Casa Automática — relançar aqui, sem a faixa da casa, poderia tirar o tubo de queda e a ventilação do lugar.';
-/** Correção 1 (menor 1): enquanto as premissas da casa carregam (não é erro: some sozinho). */
-export const MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA = 'Carregando as premissas da Casa Automática…';
+/**
+ * Correção 1 (menor 1): enquanto as premissas da casa carregam (não é erro: some sozinho). Correção 1 da F5 (M6): os
+ * textos das premissas moram em `blueprintAssinaturaDaCasa` — os mesmos nos três motores.
+ */
+export { MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA } from './blueprintAssinaturaDaCasa';
 
 /** Há tubo de esgoto no desenho? (o caminho barato, para decidir se vale procurar a casa) */
 function temTuboDeEsgoto(model: BlueprintModel): boolean {
@@ -408,10 +413,11 @@ export function lancamentoDoEsgoto(
   const c = p.esgotoDaCasa === 'CARREGANDO' ? null : p.esgotoDaCasa;
   const agua = aguaNoForroDaCasa(model, c?.forroDaAgua ?? null, p.agua?.cotaRamalMm ?? HIPOTESES_AGUA_PADRAO.cotaRamalMm);
   if (!agua.noForro) return soOEstudo;
-  if (p.esgotoDaCasa === 'CARREGANDO') return { ...soOEstudo, motivo: MOTIVO_CARREGANDO_AS_PREMISSAS_DA_CASA };
-  if (!c) return { ...soOEstudo, motivo: `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} Não foi possível ler as premissas da casa.` };
+  if (p.esgotoDaCasa === 'CARREGANDO') return { ...soOEstudo, motivo: motivoDasPremissasDaCasa(MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO, 'CARREGANDO') };
+  if (!c) return { ...soOEstudo, motivo: motivoDasPremissasDaCasa(MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO, 'ERRO') };
   if (!agua.daCasa) {
-    const porque = agua.porque ?? 'O forro está desligado nas premissas da casa.';
+    if (!agua.porque) return { ...soOEstudo, motivo: motivoDasPremissasDaCasa(MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO, 'DESLIGADO') };
+    const porque = agua.porque;
     return { ...soOEstudo, motivo: `${MOTIVO_ESGOTO_DA_CASA_SEM_REGISTRO} ${porque}` };
   }
   const extras: ExtrasDoEsgotoDaCasa = { faixa: c.faixa ?? null, tuboDeQuedaPorGrupoMm: c.tuboDeQuedaPorGrupoMm ?? null, raioDoShaftMm: c.raioDoShaftMm ?? null };
@@ -553,6 +559,8 @@ export interface EsgotoARefazer {
   ficam: string[];
   /** O que mudou desde o lançamento (`textoDasDiferencas`); `null` = sem registro ou nada mudou. */
   mudou: string | null;
+  /** Correção 1 da F5 (M5): há registro e NENHUMA escolha mudou — refazer dá o mesmo resultado. */
+  nadaMudou: boolean;
 }
 
 const PARTES_DO_ESGOTO: [string, string][] = [
@@ -632,6 +640,7 @@ export function esgotoARefazer(model: BlueprintModel, p: PremissasDoEsgoto): Esg
     voltam,
     ficam,
     mudou: d.length ? textoDasDiferencas(d) : null,
+    nadaMudou: !!gravadas && d.length === 0,
   };
 }
 
@@ -648,7 +657,7 @@ export function textoDaConfirmacaoDoEsgoto(r: EsgotoARefazer): string | null {
   const pecas = r.pecas ? ` e ${r.pecas} peça(s)${r.pecasAceitas ? ` (${r.pecasAceitas} aceita(s))` : ''}${r.pecasPorNome.length ? `: ${r.pecasPorNome.join(', ')}` : ''}` : '';
   const voltam = r.voltam.length ? ` Voltam: ${r.voltam.join('; ')}.` : '';
   const ficam = r.ficam.length ? ` Ficam: ${r.ficam.join('; ')}.` : '';
-  return `Esgoto: ${tubos}${pecas}.${voltam}${ficam}${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
+  return `Esgoto: ${tubos}${pecas}.${voltam}${ficam}${r.mudou ? ` O que mudou: ${r.mudou}.` : r.nadaMudou ? ` ${TEXTO_NADA_MUDOU}` : ''}`;
 }
 
 /**

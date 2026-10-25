@@ -52,7 +52,14 @@ import { planejarAguaCompleta, type HipotesesDaAguaCompleta, type PlanoDaAguaCom
 import { HIPOTESES_ALIMENTACAO_PADRAO } from './blueprintAlimentador';
 import { RUGOSIDADE_DA_CALHA, ROTULO_DA_CALHA, ROTULO_DO_BOCAL } from './blueprintCalhas';
 import { ROTULO_DO_CONDUTOR_HORIZONTAL, ROTULO_DO_CONDUTOR_VERTICAL } from './blueprintCondutoresPluviais';
-import { horizontaisNoForro, motivoSemAssinaturaDaCasa, temAssinaturaDaCasa } from './blueprintAssinaturaDaCasa';
+import {
+  horizontaisNoForro,
+  motivoDasPremissasDaCasa,
+  motivoSemAssinaturaDaCasa,
+  temAssinaturaDaCasa,
+  type PremissasDaCasaIndisponiveis,
+} from './blueprintAssinaturaDaCasa';
+import { TEXTO_NADA_MUDOU } from './blueprintRegistroDeLancamento';
 import { HIPOTESES_PLUVIAIS_PADRAO, INTENSIDADE_POR_CIDADE, type HipotesesPluviais } from './blueprintPluvial';
 import { planejarPluvialCompleta, type PlanoDaPluvialCompleta } from './blueprintPluvialCompleto';
 import { HIPOTESES_PRESSAO_PADRAO } from './blueprintPressaoDaRede';
@@ -92,7 +99,11 @@ export type ForroDaAgua = NonNullable<HipotesesDaAguaCompleta['agua']['noForro']
  * As premissas da água com que se lança: as do estudo e, opcional, o FORRO DA CASA (correção 1) — o forro com que a Casa
  * Automática lançaria a água, das premissas da casa do estudo. Só é usado para a água no forro lançada antes do registro.
  */
-export type HipotesesDaAguaDoLancamento = HipotesesDaAguaCompleta & { forroDaCasa?: ForroDaAguaDaCasa | null };
+/**
+ * Correção 1 da F5 (M6, 25/10/2026): `forroDaCasa` pode ser o ESTADO das premissas da casa (carregando, erro de leitura,
+ * forro desligado) — o motivo do bloqueio diz qual, como o esgoto e os eletrodutos.
+ */
+export type HipotesesDaAguaDoLancamento = HipotesesDaAguaCompleta & { forroDaCasa?: ForroDaAguaDaCasa | PremissasDaCasaIndisponiveis | null };
 
 /**
  * O forro da água da casa, como o editor o monta das premissas do estudo (`forroDaAguaDaCasa`): as faixas, o REBAIXO
@@ -389,7 +400,7 @@ export function forroDaCasaQueValeNaAgua(
   model: BlueprintModel,
   h: Pick<HipotesesDaAguaDoLancamento, 'agua' | 'forroDaCasa'>,
 ): { noForro: ForroDaAgua; faixaDaAguaQuente: { x: number; y: number } | null; subidaDoAlimentador: 'FACHADA' | 'SOB_A_CAIXA' | null } | null {
-  const f = h.forroDaCasa;
+  const f = typeof h.forroDaCasa === 'object' ? h.forroDaCasa : null;
   if (!f || f.rebaixoMm == null) return null;
   const horizontais = horizontaisDaAguaNoForro(model, h.agua.cotaRamalMm);
   if (!temAssinaturaDaCasa(model, horizontais, assinaturaDaAgua(f, f.rebaixoMm))) return null;
@@ -409,6 +420,8 @@ export function motivoParaNaoRelancarAgua(model: BlueprintModel, h?: Pick<Hipote
   const cota = h?.agua.cotaRamalMm;
   if (!aguaNoForroSemRegistro(model, cota)) return null;
   if (h && forroDaCasaQueValeNaAgua(model, h)) return null;
+  // Correção 1 da F5 (M6): sem o forro, diz por quê — carregando, erro de leitura ou forro desligado (o texto do esgoto).
+  if (typeof h?.forroDaCasa === 'string') return motivoDasPremissasDaCasa(MOTIVO_AGUA_NO_FORRO_SEM_REGISTRO, h.forroDaCasa);
   // Correção 3: com as premissas da casa, diz POR QUE a água não é da casa (e o que fazer).
   const f = h?.forroDaCasa;
   const porque = f && f.rebaixoMm != null ? motivoSemAssinaturaDaCasa(model, horizontaisDaAguaNoForro(model, cota), assinaturaDaAgua(f, f.rebaixoMm)) : null;
@@ -464,6 +477,8 @@ export interface RedeHidraulicaARefazer {
   pecasPorNome: string[];
   /** O que mudou desde o lançamento (`textoDasDiferencas`); `null` = sem registro ou nada mudou. */
   mudou: string | null;
+  /** Correção 1 da F5 (M5): há registro e NENHUMA escolha mudou — refazer dá o mesmo resultado. */
+  nadaMudou?: boolean;
 }
 
 /** O nome de cada peça em linha na confirmação. A VRP leva o alerta: muda a pressão e o motor não a repõe. */
@@ -502,6 +517,7 @@ export function aguaARefazer(model: BlueprintModel, h: HipotesesDaAguaDoLancamen
       return n ? [`${nome} (${n})`] : [];
     }),
     mudou: d.length ? textoDasDiferencas(d) : null,
+    nadaMudou: !!registroDe(model, 'AGUA', null) && d.length === 0,
   };
 }
 
@@ -514,7 +530,7 @@ export function textoDaConfirmacaoDoSistema(sistema: string, r: RedeHidraulicaAR
   if (r.tubosConfirmados === 0 && r.pecasAceitas === 0) return null;
   const tubos = `${r.tubos} tubo(s)${r.tubosConfirmados ? ` (${r.tubosConfirmados} confirmado(s))` : ''}${r.partes.length ? `, inclusive ${r.partes.join(', ')}` : ''}`;
   const pecas = r.pecas ? ` e ${r.pecas} peça(s)${r.pecasAceitas ? ` (${r.pecasAceitas} aceita(s))` : ''}${r.pecasPorNome.length ? `: ${r.pecasPorNome.join(', ')}` : ''}` : '';
-  return `${sistema}: ${tubos}${pecas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : ''}`;
+  return `${sistema}: ${tubos}${pecas}.${r.mudou ? ` O que mudou: ${r.mudou}.` : r.nadaMudou ? ` ${TEXTO_NADA_MUDOU}` : ''}`;
 }
 
 /** O botão principal do rodapé de um sistema. `motivo` não nulo = desligado, e é o `title` dele. */
@@ -669,6 +685,7 @@ export function pluvialARefazer(model: BlueprintModel, h: HipotesesPluviais): Re
     partes: [],
     pecasPorNome: [],
     mudou: d.length ? textoDasDiferencas(d) : null,
+    nadaMudou: !!registroDe(model, 'PLUVIAL', null) && d.length === 0,
   };
 }
 

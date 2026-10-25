@@ -20,8 +20,12 @@ perguntei se a Alpa tem certificado e-CNPJ A1. Resposta, mesma sessão:
 |---|---|---|
 | 25/10/2026 | Seguir pela API oficial (Integra Contador), com plano antes de código? | **Sim** |
 | 25/10/2026 | A Alpa tem certificado e-CNPJ A1 (.pfx)? | **Sim, A1** |
+| 25/10/2026 | D1 — quem contrata | **Alpa Construtora**, um contrato só, com o A1 dela; as outras empresas dão autorização de acesso 00103 no e-CAC |
+| 25/10/2026 | D2 — escopo da v1 | **DCTFWeb primeiro**; Sicalc em seguida (Fase 3) |
+| 25/10/2026 | D3 — quem transmite a DCTFWeb | **A própria Alpa** (no e-CAC). O app continua só emitindo a guia na v1; transmitir pelo app fica para depois |
+| 25/10/2026 | D4 — total da guia ≠ total do app | **Mostrar as duas somas e pedir confirmação**; tributos nunca mudam sozinhos |
 
-### Decisões pendentes (perguntar antes da Fase 1)
+### Decisões D1–D4 como foram perguntadas (respondidas acima, todas na recomendação, exceto D3 = "a própria Alpa")
 
 | # | Pergunta | Minha recomendação |
 |---|---|---|
@@ -182,7 +186,7 @@ automática); pagar o DARF pela Asaas; FGTS.
 ## Estado
 
 - [x] Pesquisa da documentação, TLS do SERPRO testado (25/10/2026)
-- [ ] D1–D4 respondidas
+- [x] D1–D4 respondidas (25/10/2026)
 - [ ] Fase 0: 0 de 4
 - [ ] Fase 1: 0 de 4
 - [ ] Fase 2: 0 de 3

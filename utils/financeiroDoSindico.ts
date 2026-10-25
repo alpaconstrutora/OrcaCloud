@@ -105,21 +105,18 @@ export function resumoDoMes(titulos: TituloDoCondominio[], competencia: string, 
 // ── O que o síndico pode fazer ───────────────────────────────────────────────
 
 export interface ContextoDeOperacao {
-    /** Prévia do admin ("Ver como o síndico"). */
-    somenteLeitura: boolean;
-    /** Entrou com e-mail e senha (o link sozinho não grava). */
+    /** Entrou com e-mail e senha, ou é a administradora abrindo o portal pelo
+     *  app (Portais › Portal do Condomínio) — o link sozinho não grava. */
     logado: boolean;
     /** `motivoNaoOpera` do condomínio (null = opera; 007 sem org própria = motivo). */
     motivoDoCondominio: string | null;
 }
 
-export const MOTIVO_PREVIA = 'Prévia somente leitura.';
 /** Mesma frase de `fn_sindico_operar`. */
 export const MOTIVO_SEM_LOGIN = 'Para lançar, pagar ou cadastrar, entre no Portal do Síndico com seu e-mail e senha.';
 
 /** Por que nada pode ser gravado neste condomínio agora (null = pode). */
 export function motivoNaoOpera(ctx: ContextoDeOperacao): string | null {
-    if (ctx.somenteLeitura) return MOTIVO_PREVIA;
     if (!ctx.logado) return MOTIVO_SEM_LOGIN;
     return ctx.motivoDoCondominio;
 }

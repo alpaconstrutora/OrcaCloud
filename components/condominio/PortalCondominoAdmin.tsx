@@ -26,7 +26,8 @@
 //
 // SÍNDICO (20/10/2026): o acesso dele ao Portal do Síndico nasce AQUI, e só
 // aqui (`SindicoAcessoCard`): gerar/copiar link, convidar por e-mail, revogar e
-// "Ver como o síndico". Quem é o síndico continua sendo escolhido na Ficha.
+// "Abrir o portal do síndico" (a administradora OPERA por ali desde 25/10/2026).
+// Quem é o síndico continua sendo escolhido na Ficha.
 //
 // ⚠️ O NOME É HERANÇA. Havia um "Portal do Condômino" de verdade — link por
 // ocupação, rota pública `/portal-condomino?token=` — aposentado em 23/09/2026
@@ -399,8 +400,9 @@ const AcessosDoCondominio: React.FC<{
     if (previa) {
         return <PreviaDoPortal previa={previa} condominio={condominio} onVoltar={() => setPrevia(null)} />;
     }
-    // Mesma doutrina da prévia do morador: o COMPONENTE do portal, em modo
-    // somente leitura (a RPC aceita membro da organização só para LER).
+    // O COMPONENTE do portal do síndico, aberto pela administradora: ela grava o
+    // mesmo que o síndico (a RPC aceita membro da organização do condomínio e
+    // registra quem gravou); aprovar/devolver rateio continua só dele.
     if (previaSindico) {
         return (
             <div className="space-y-6 pb-20">
@@ -412,13 +414,13 @@ const AcessosDoCondominio: React.FC<{
                     >
                         <ArrowLeft className="w-4 h-4" /> Voltar
                     </button>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Ver como o síndico</h1>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Síndico</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">
-                        {condominio.name} · o Portal do Síndico como ele vê, sem gravar nada
+                        {condominio.name} · o mesmo portal do síndico, operado pela administradora
                     </p>
                 </div>
                 <div className="h-[75vh] rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
-                    <SindicoPortal clientId={previaSindico} somenteLeitura embutido />
+                    <SindicoPortal clientId={previaSindico} comoAdministradora embutido />
                 </div>
             </div>
         );

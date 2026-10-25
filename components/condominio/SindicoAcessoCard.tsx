@@ -197,11 +197,11 @@ const SindicoAcessoCard: React.FC<Props> = ({ condominio, notify, onVerComoSindi
                             type="button"
                             onClick={() => onVerComoSindico(s.clientId)}
                             disabled={acesso.situacao === 'MANDATO_FORA'}
-                            title={acesso.situacao === 'MANDATO_FORA' ? 'Com o mandato fora da vigência o portal não abre — nem a prévia.' : 'Prévia somente leitura do que o síndico vê'}
+                            title={acesso.situacao === 'MANDATO_FORA' ? 'Com o mandato fora da vigência o portal não abre — nem para a administradora.' : 'Abre o portal do síndico para você operar como administradora'}
                             className={BTN_SECUNDARIO}
                         >
                             <Eye className="w-[15px] h-[15px]" />
-                            Ver como o síndico
+                            Abrir o portal do síndico
                         </button>
                         {estado.acesso?.ativo && (
                             <button

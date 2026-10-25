@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    MOTIVO_PREVIA, MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, motivoNaoAltera, motivoNaoDesfazBaixa,
+    MOTIVO_SEM_LOGIN, condominioDoFinanceiro, doCondominio, motivoNaoAltera, motivoNaoDesfazBaixa,
     motivoNaoRecebe, motivoNaoSalvaConta, motivoNaoBaixa, motivoNaoOpera, resumoDoMes, situacaoDoTitulo,
     type TituloDoCondominio,
 } from '../utils/financeiroDoSindico';
@@ -65,11 +65,10 @@ describe('resumoDoMes', () => {
 });
 
 describe('o que o síndico pode fazer (espelho das RPCs)', () => {
-    it('contexto: prévia, link sem login e condomínio sem organização própria', () => {
-        expect(motivoNaoOpera({ somenteLeitura: true, logado: true, motivoDoCondominio: null })).toBe(MOTIVO_PREVIA);
-        expect(motivoNaoOpera({ somenteLeitura: false, logado: false, motivoDoCondominio: null })).toBe(MOTIVO_SEM_LOGIN);
-        expect(motivoNaoOpera({ somenteLeitura: false, logado: true, motivoDoCondominio: 'sem org' })).toBe('sem org');
-        expect(motivoNaoOpera({ somenteLeitura: false, logado: true, motivoDoCondominio: null })).toBeNull();
+    it('contexto: link sem login e condomínio sem organização própria', () => {
+        expect(motivoNaoOpera({ logado: false, motivoDoCondominio: null })).toBe(MOTIVO_SEM_LOGIN);
+        expect(motivoNaoOpera({ logado: true, motivoDoCondominio: 'sem org' })).toBe('sem org');
+        expect(motivoNaoOpera({ logado: true, motivoDoCondominio: null })).toBeNull();
     });
     it('editar/cancelar: só MANUAL a pagar, em aberto, sem Asaas', () => {
         expect(motivoNaoAltera(titulo())).toBeNull();

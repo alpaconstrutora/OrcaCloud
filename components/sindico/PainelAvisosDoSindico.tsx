@@ -25,7 +25,6 @@ interface Props {
     identidade: IdentidadeDoSindico;
     avisos: AvisoParaSindico[];
     condominios: CondominioDoSindico[];
-    somenteLeitura: boolean;
     onAlterado: () => void;
     notify: (m: string, t?: 'success' | 'error') => void;
 }
@@ -33,7 +32,7 @@ interface Props {
 const CAMPO = 'w-full h-10 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-[#E1553C]/20 focus:border-[#E1553C]';
 const ROTULO = 'text-xs font-semibold text-slate-500';
 
-const PainelAvisosDoSindico: React.FC<Props> = ({ identidade, avisos, condominios, somenteLeitura, onAlterado, notify }) => {
+const PainelAvisosDoSindico: React.FC<Props> = ({ identidade, avisos, condominios, onAlterado, notify }) => {
     const confirm = useConfirm();
     const multi = condominios.length > 1;
     const [aberto, setAberto] = React.useState(false);
@@ -88,13 +87,11 @@ const PainelAvisosDoSindico: React.FC<Props> = ({ identidade, avisos, condominio
                 <CardHeader
                     title="Avisos do condomínio"
                     subtitle="O que você publica aparece no mural dos moradores"
-                    right={!somenteLeitura && (
-                        <PrimaryButton onClick={abrir}><Plus className="w-4 h-4" /> Publicar aviso</PrimaryButton>
-                    )}
+                    right={<PrimaryButton onClick={abrir}><Plus className="w-4 h-4" /> Publicar aviso</PrimaryButton>}
                 />
                 {avisos.length === 0 ? (
                     <PortalEmpty icon={<Megaphone className="w-10 h-10" />} title="Nenhum aviso publicado"
-                        subtitle={somenteLeitura ? undefined : 'Publique o primeiro: assembleia, obra, manutenção…'} />
+                        subtitle="Publique o primeiro: assembleia, obra, manutenção…" />
                 ) : (
                     <ul className="divide-y divide-[#ECECEF] border-t border-[#ECECEF]">
                         {avisos.map(a => (
@@ -116,7 +113,7 @@ const PainelAvisosDoSindico: React.FC<Props> = ({ identidade, avisos, condominio
                                         ].filter(Boolean).join(' · ')}
                                     </p>
                                 </div>
-                                {!somenteLeitura && a.meu && a.vigente && (
+                                {a.meu && a.vigente && (
                                     <GhostButton onClick={() => encerrar(a)} disabled={encerrando === a.id}>
                                         {encerrando === a.id && <Loader2 className="w-4 h-4 animate-spin" />}
                                         Encerrar

@@ -33,12 +33,11 @@ interface Props {
     identidade: IdentidadeDoSindico;
     chamados: ChamadoParaSindico[];
     multi: boolean;
-    somenteLeitura: boolean;
     onAlterado: () => void;
     notify: (m: string, t?: 'success' | 'error') => void;
 }
 
-const PainelChamadosDoSindico: React.FC<Props> = ({ identidade, chamados, multi, somenteLeitura, onAlterado, notify }) => {
+const PainelChamadosDoSindico: React.FC<Props> = ({ identidade, chamados, multi, onAlterado, notify }) => {
     const [abertoId, setAbertoId] = React.useState<string | null>(null);
     const aberto = chamados.find(c => c.id === abertoId) ?? null;
     const [mensagem, setMensagem] = React.useState('');
@@ -104,7 +103,7 @@ const PainelChamadosDoSindico: React.FC<Props> = ({ identidade, chamados, multi,
                                         <Td><StatusPill tone={TOM[c.status] ?? 'muted'}>{c.status}</StatusPill></Td>
                                         <Td className="text-right whitespace-nowrap">
                                             <TextLinkButton onClick={e => { e.stopPropagation(); abrir(c); }}>
-                                                {somenteLeitura ? 'Ver' : 'Responder'}
+                                                Responder
                                             </TextLinkButton>
                                         </Td>
                                     </tr>
@@ -166,37 +165,33 @@ const PainelChamadosDoSindico: React.FC<Props> = ({ identidade, chamados, multi,
                                 )}
                             </div>
 
-                            {!somenteLeitura && (
-                                <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                            <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-4">
+                                <div className="space-y-1.5">
+                                    <label className={ROTULO} htmlFor="chamado-resposta">Resposta ao morador</label>
+                                    <textarea id="chamado-resposta" rows={4} value={mensagem}
+                                        className={`${CAMPO} h-auto py-2`}
+                                        placeholder="O que foi feito, o que falta, quando volta a ser visto…"
+                                        onChange={e => setMensagem(e.target.value)} />
+                                </div>
+                                <div className="grid grid-cols-2 gap-x-6">
                                     <div className="space-y-1.5">
-                                        <label className={ROTULO} htmlFor="chamado-resposta">Resposta ao morador</label>
-                                        <textarea id="chamado-resposta" rows={4} value={mensagem}
-                                            className={`${CAMPO} h-auto py-2`}
-                                            placeholder="O que foi feito, o que falta, quando volta a ser visto…"
-                                            onChange={e => setMensagem(e.target.value)} />
-                                    </div>
-                                    <div className="grid grid-cols-2 gap-x-6">
-                                        <div className="space-y-1.5">
-                                            <label className={ROTULO} htmlFor="chamado-situacao">Situação</label>
-                                            <select id="chamado-situacao" className={CAMPO} value={situacao} onChange={e => setSituacao(e.target.value)}>
-                                                {SITUACOES_DO_CHAMADO.map(s => <option key={s} value={s}>{s}</option>)}
-                                            </select>
-                                        </div>
+                                        <label className={ROTULO} htmlFor="chamado-situacao">Situação</label>
+                                        <select id="chamado-situacao" className={CAMPO} value={situacao} onChange={e => setSituacao(e.target.value)}>
+                                            {SITUACOES_DO_CHAMADO.map(s => <option key={s} value={s}>{s}</option>)}
+                                        </select>
                                     </div>
                                 </div>
-                            )}
+                            </div>
                         </>
                     )}
                 </SheetPanel>
-                {!somenteLeitura && (
-                    <SheetFooter>
-                        <GhostButton onClick={() => setAbertoId(null)}>Cancelar</GhostButton>
-                        <PrimaryButton onClick={enviar} disabled={!!motivoEnviar || enviando} title={motivoEnviar ?? undefined}>
-                            {enviando && <Loader2 className="w-4 h-4 animate-spin" />}
-                            Enviar
-                        </PrimaryButton>
-                    </SheetFooter>
-                )}
+                <SheetFooter>
+                    <GhostButton onClick={() => setAbertoId(null)}>Cancelar</GhostButton>
+                    <PrimaryButton onClick={enviar} disabled={!!motivoEnviar || enviando} title={motivoEnviar ?? undefined}>
+                        {enviando && <Loader2 className="w-4 h-4 animate-spin" />}
+                        Enviar
+                    </PrimaryButton>
+                </SheetFooter>
             </Sheet>
         </>
     );

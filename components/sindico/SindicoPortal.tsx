@@ -1,7 +1,7 @@
 import React from 'react';
 import {
-    AlertTriangle, Building, CalendarClock, CheckCircle2, ChevronDown, ClipboardList, Eye, FileText, Home,
-    Loader2, LogOut, Megaphone, Package, Wallet, Wrench,
+    AlertTriangle, Building, CalendarClock, CheckCircle2, ChevronDown, ClipboardList, FileText, Home,
+    Loader2, LogOut, Megaphone, Package, ShieldCheck, Wallet, Wrench,
 } from 'lucide-react';
 import {
     KpiStrip, PortalCard, CardHeader, DetailField, fmtBRLCents, fmtDate, type KpiItem,
@@ -24,8 +24,11 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
 
 /**
  * Portal do Síndico — /portal-sindico (link com token ou login por e-mail, que
- * entrega o mesmo token) e prévia "Ver como o síndico" em Portais › Portal do
- * Condomínio (por clientId, somente leitura).
+ * entrega o mesmo token) e, em Portais › Portal do Condomínio, a administradora
+ * abrindo o mesmo portal por clientId. Pedido de 25/10/2026: "nao faz o menor
+ * sentido bloquear o portal do condominio na visão do app. Deve ter a mesma
+ * funcionalidade da visão do sindico." — ela grava tudo o que o síndico grava
+ * (o banco registra quem foi); só aprovar/devolver rateio fica com ele.
  *
  * Pedido de 20/10/2026: "Vamos implementar portal do sindico em [portais >
  * portal do condominio". Plano: docs/planos/2026-10-20-portal-do-sindico.md
@@ -48,11 +51,11 @@ import { hojeEmBrasilia } from '../../utils/mandatoSindico';
 interface Props {
     token?: string;
     clientId?: string;
-    /** Prévia do admin: nada de ação, e uma faixa dizendo isso. */
-    somenteLeitura?: boolean;
+    /** A administradora pelo app (por clientId): opera, com uma faixa dizendo isso. */
+    comoAdministradora?: boolean;
     /** Só no login por e-mail ("Sair" no menu de conta). Pelo link não há sessão. */
     onLogout?: () => void;
-    /** Dentro de outra tela (prévia): altura do contêiner, não da janela. */
+    /** Dentro de outra tela (app): altura do contêiner, não da janela. */
     embutido?: boolean;
 }
 
@@ -70,7 +73,7 @@ const TAB_ICONS: Record<SindicoPortalTabId, React.ComponentType<{ className?: st
 const iniciaisDe = (nome: string | undefined) =>
     (nome || '?').split(/\s+/).filter(Boolean).slice(0, 2).map(p => p[0]?.toUpperCase()).join('') || '?';
 
-const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = false, onLogout, embutido = false }) => {
+const SindicoPortal: React.FC<Props> = ({ token, clientId, comoAdministradora = false, onLogout, embutido = false }) => {
     const identidade = React.useMemo<IdentidadeDoSindico>(
         () => (token ? { token } : { clientId: clientId ?? '' }), [token, clientId]);
     const { dados, carregando, erro, recarregar } = useSindicoPortal(identidade);
@@ -151,10 +154,10 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
                 )}
             </header>
 
-            {somenteLeitura && (
-                <div className="flex items-center gap-2 px-4 md:px-6 py-2 bg-sky-50 border-b border-sky-100 text-sm text-sky-800 shrink-0">
-                    <Eye className="w-4 h-4 shrink-0" />
-                    Prévia do que o síndico vê — somente leitura, nada é gravado.
+            {comoAdministradora && (
+                <div className="flex items-start gap-2 px-4 md:px-6 py-2 bg-sky-50 border-b border-sky-100 text-sm text-sky-800 shrink-0">
+                    <ShieldCheck className="w-4 h-4 shrink-0 mt-0.5" />
+                    <span>Você está no portal do síndico como administradora: o que gravar aqui vale e fica registrado com o seu nome. Aprovar ou devolver rateio continua com o síndico.</span>
                 </div>
             )}
 
@@ -179,7 +182,7 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
                 </aside>
 
                 {/* Fora do <main> do <Layout>: gutter §20.2 reaplicado aqui. */}
-                <main className="flex-1 bg-[#F2F2F4] overflow-y-auto p-4 md:p-6 pb-24 md:pb-6 relative">
+                <main className={`flex-1 bg-[#F2F2F4] overflow-y-auto p-4 md:p-6 ${embutido ? '' : 'pb-24'} md:pb-6 relative`}>
                     {carregando ? (
                         <div className="min-h-[300px] flex items-center justify-center">
                             <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
@@ -200,16 +203,17 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
                             )}
                             {aba === 'chamados' && (
                                 <PainelChamadosDoSindico identidade={identidade} chamados={dados.chamados ?? []} multi={multi}
-                                    somenteLeitura={somenteLeitura} onAlterado={recarregar} notify={notify} />
+                                    onAlterado={recarregar} notify={notify} />
                             )}
                             {aba === 'avisos' && (
                                 <PainelAvisosDoSindico identidade={identidade} avisos={dados.avisos} condominios={dados.condominios}
-                                    somenteLeitura={somenteLeitura} onAlterado={recarregar} notify={notify} />
+                                    onAlterado={recarregar} notify={notify} />
                             )}
                             {aba === 'financeiro' && (
-                                // Operar e decidir exigem LOGIN: `onLogout` só existe na entrada por e-mail e senha.
-                                <PainelFinanceiroDoSindico identidade={identidade} dados={dados} somenteLeitura={somenteLeitura}
-                                    logado={!!onLogout} notify={notify} onAlteradoPortal={recarregar}
+                                // Operar exige LOGIN (`onLogout` só existe na entrada por e-mail e senha)
+                                // ou a administradora pelo app; decidir rateio é só do síndico.
+                                <PainelFinanceiroDoSindico identidade={identidade} dados={dados} comoAdministradora={comoAdministradora}
+                                    logado={!!onLogout || comoAdministradora} notify={notify} onAlteradoPortal={recarregar}
                                     resolverComprovantes={resolverComprovantes} />
                             )}
                             {(aba === 'documentos' || aba === 'manutencao' || aba === 'equipamentos') && (
@@ -230,29 +234,29 @@ const SindicoPortal: React.FC<Props> = ({ token, clientId, somenteLeitura = fals
 
             {/* Barra inferior no celular. `z-40`, ABAIXO dos painéis laterais
                 (Sheet = z-50): no mesmo z-50 ela vinha depois no DOM e cobria o
-                rodapé do painel — "Salvar" sumia no celular (print de 24/10). */}
-            {!embutido && (
-                <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] overflow-x-auto">
-                    <div className="flex min-w-max">
-                        {SINDICO_PORTAL_TAB_IDS.map(id => {
-                            const Icon = TAB_ICONS[id];
-                            const ativa = aba === id;
-                            return (
-                                <button
-                                    key={id}
-                                    type="button"
-                                    onClick={() => setAba(id)}
-                                    className={`flex flex-col items-center justify-center gap-1 min-w-[72px] py-3 px-2 relative ${ativa ? 'text-sky-700' : 'text-gray-400'}`}
-                                >
-                                    {ativa && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sky-600 rounded-full" />}
-                                    <Icon className="w-4 h-4" />
-                                    <span className="text-[10px] font-medium leading-none whitespace-nowrap">{SINDICO_PORTAL_TAB_LABELS[id]}</span>
-                                </button>
-                            );
-                        })}
-                    </div>
+                rodapé do painel — "Salvar" sumia no celular (print de 24/10).
+                Embutida no app ela fica no pé do quadro, não da janela: sem ela
+                a administradora no celular não saía da Visão geral (25/10). */}
+            <div className={`md:hidden ${embutido ? 'shrink-0' : 'fixed bottom-0 left-0 right-0 z-40'} bg-white border-t border-gray-100 shadow-[0_-4px_24px_rgba(0,0,0,0.06)] overflow-x-auto`}>
+                <div className="flex min-w-max">
+                    {SINDICO_PORTAL_TAB_IDS.map(id => {
+                        const Icon = TAB_ICONS[id];
+                        const ativa = aba === id;
+                        return (
+                            <button
+                                key={id}
+                                type="button"
+                                onClick={() => setAba(id)}
+                                className={`flex flex-col items-center justify-center gap-1 min-w-[72px] py-3 px-2 relative ${ativa ? 'text-sky-700' : 'text-gray-400'}`}
+                            >
+                                {ativa && <span className="absolute top-0 left-1/2 -translate-x-1/2 w-8 h-0.5 bg-sky-600 rounded-full" />}
+                                <Icon className="w-4 h-4" />
+                                <span className="text-[10px] font-medium leading-none whitespace-nowrap">{SINDICO_PORTAL_TAB_LABELS[id]}</span>
+                            </button>
+                        );
+                    })}
                 </div>
-            )}
+            </div>
 
             {toast && (
                 // No TOPO: embaixo ele cobria o botão principal do painel lateral

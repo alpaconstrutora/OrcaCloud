@@ -1,6 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { UNIDADE_DE_POTENCIA } from '../../utils/blueprintRede';
-import { AlertTriangle, Plus, Zap } from 'lucide-react';
+import { AlertTriangle, Crosshair, Plus, Zap } from 'lucide-react';
+import SecaoTitulo from '../ui/SecaoTitulo';
 import type { BlueprintModel, Command, CurvaDoDisjuntor, DispositivoDPS, DRDoQuadro, FaseDoCircuito, LigacaoDoCircuito, ObjectId, TipoDeQuadro } from '../../utils/blueprintKernel';
 import { CURVAS_DO_DISJUNTOR, drDoCircuito, drsDoQuadro, rotuloDoDR } from '../../utils/blueprintKernel';
 import { sugerirDRs } from '../../utils/blueprintNbr5410';
@@ -1189,7 +1190,7 @@ export default function PainelEletrica({
                     </button>
                   )}
                 </div>
-                <div className="px-4 py-3">
+                <div className="space-y-8 p-6">
                   {pq && quadro && onQuadroProps ? (
                     // F6 — o QUADRO: alimentação declarada, demanda, alimentador, fases.
                     <PainelQuadroAlimentador
@@ -1242,8 +1243,10 @@ export default function PainelEletrica({
                   {onCentroDeCargasNaPlanta && onDR && (() => {
                     const c = centroDeCargas(model, q.quadroId);
                     return (
-                      <div className="mt-2 text-sm">
+                      <section className="space-y-4 text-sm">
+                        <SecaoTitulo icon={Crosshair} titulo="Centro de cargas" />
                         <LinhaCentroDeCargas
+                          semRotulo
                           nomeDoQuadro={q.nome}
                           centro={c}
                           naPlanta={centroDeCargasNaPlanta === q.quadroId}
@@ -1252,7 +1255,7 @@ export default function PainelEletrica({
                           trechosNoQuadro={trechosNoQuadro(model, q.quadroId)}
                           onLevar={onDR}
                         />
-                      </div>
+                      </section>
                     );
                   })()}
                 </div>

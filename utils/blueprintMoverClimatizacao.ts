@@ -33,7 +33,7 @@ import { pecasDoSistemaParaRefazer, planejarLinhasFrigorigenas, sistemasDoNivel 
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import type { HipotesesDaLinha } from './blueprintClimatizacao';
 import { relancarEletrodutos, type HipotesesDeEletroduto } from './blueprintEletrodutos';
-import { hipotesesDoQuadro } from './blueprintEscolhasDoEletroduto';
+import { hipotesesDoQuadro, type ForroDaCasa } from './blueprintEscolhasDoEletroduto';
 import type { HipotesesEletricas } from './blueprintEletricaDimensionamento';
 
 /**
@@ -79,7 +79,7 @@ export function comandosAoMoverClimatizacao(
   depois: BlueprintModel,
   movidos: { terminalIds: readonly ObjectId[]; trechoIds: readonly ObjectId[] },
   hip: HipotesesDaLinha,
-  eletrica?: { eletroduto: HipotesesDeEletroduto; eletricas: HipotesesEletricas } | null,
+  eletrica?: { eletroduto: HipotesesDeEletroduto; eletricas: HipotesesEletricas; forroDaCasa?: ForroDaCasa | null } | null,
 ): Command[] {
   const lote: Command[] = [];
   let m = depois;
@@ -137,7 +137,8 @@ export function comandosAoMoverClimatizacao(
       const quadro = circuito ? (m.quadros ?? []).find((q) => q.id === circuito.quadroId) : undefined;
       aplicar(ramal.map((trechoId) => ({ type: 'DeleteTrecho', trechoId }) as Command));
       // Correção 1 da F2 (24/10/2026): com as hipóteses DO QUADRO — a rede no forro (registro) continua no forro.
-      if (quadro) aplicar(relancarEletrodutos(m, quadro, hipotesesDoQuadro(m, quadro.id, eletrica.eletroduto), eletrica.eletricas).comandos);
+      // Correção 3 (24/10/2026): sem registro, a rede antiga no forro usa o forro das premissas da casa (`forroDaCasa`).
+      if (quadro) aplicar(relancarEletrodutos(m, quadro, hipotesesDoQuadro(m, quadro.id, eletrica.eletroduto, eletrica.forroDaCasa), eletrica.eletricas).comandos);
     }
   }
 

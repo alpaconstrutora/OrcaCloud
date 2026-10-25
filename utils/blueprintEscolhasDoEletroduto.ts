@@ -27,6 +27,12 @@
  * - Lançamento PARCIAL não regrava o registro quando sobra rede lançada com outras escolhas (ou sem registro): o aviso
  *   continua aceso até refazer.
  *
+ * Correção 3 (24/10/2026, plano `docs/planos/2026-10-24-relancar-forro-pelas-premissas.md`). Pedido literal: *"então
+ * verifique pois alterei e não ficou disponível para relançamento"* — a planta Garden (rede da Casa Automática no forro,
+ * lançada antes do registro) ficava com o botão desligado. Agora o editor passa o forro elétrico das PREMISSAS da casa
+ * do estudo (`forroDaCasa`, de `forroEletricoDaCasa`): com ele, a rede antiga no forro relança NO FORRO (e o lote grava
+ * o registro com a faixa — dali em diante vale o registro); sem ele, o bloqueio continua, com o motivo.
+ *
  * Puro: sem React, sem banco. O alvo do registro é o QUADRO (a rede é uma por quadro).
  */
 import { applyBatch, type BlueprintModel, type Command, type ObjectId, type ValorDeEscolha } from './blueprintKernel';
@@ -52,6 +58,12 @@ import {
   type EscolhasDoLancamento,
   type OpcoesDaComparacao,
 } from './blueprintRegistroDeLancamento';
+
+/**
+ * Correção 3: o forro elétrico das premissas da Casa Automática do estudo (`forroEletricoDaCasa`) — a faixa e a folga com
+ * que a casa lança a rede no forro. `null`/ausente = o estudo não tem casa, ou o forro está desligado nas premissas.
+ */
+export type ForroDaCasa = NonNullable<HipotesesDeEletroduto['noForro']>;
 
 /**
  * As tabelas de catálogo das hipóteses elétricas que mudam a bitola (disjuntores → seção calculada; diâmetros do
@@ -115,14 +127,19 @@ export function escolhasDoEletroduto(hip: HipotesesDeEletroduto, hipEletricas: H
  * As hipóteses com que a rede DESTE quadro se relança: as do painel (`hip`) mais o FORRO que o registro guardou — a
  * rede que a Casa Automática pôs no forro continua no forro. O encaminhamento continua o do painel (a árvore no teto
  * também corre no forro). Sem registro de forro: `hip` como veio.
+ *
+ * Correção 3: o forro do REGISTRO tem prioridade. Sem ele, a rede no forro lançada antes do registro
+ * (`redeNoForroSemRegistro`) usa o forro das premissas da casa (`forroDaCasa`), quando o editor o tem.
  */
-export function hipotesesDoQuadro(model: Pick<BlueprintModel, 'registrosDeLancamento'>, quadroId: ObjectId, hip: HipotesesDeEletroduto): HipotesesDeEletroduto {
+export function hipotesesDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: HipotesesDeEletroduto, forroDaCasa?: ForroDaCasa | null): HipotesesDeEletroduto {
   const e = registroDe(model, 'ELETRODUTOS', quadroId)?.escolhas;
   const n = (k: string) => (e && typeof e[k] === 'number' ? (e[k] as number) : null);
   const abaixo = n('forroAbaixoDoTetoMm');
   const afastamento = n('forroAfastamentoDaFaceMm');
   const folga = n('forroFolgaSobAVigaMm');
-  if (abaixo == null || afastamento == null || folga == null) return hip;
+  if (abaixo == null || afastamento == null || folga == null) {
+    return forroDaCasa && redeNoForroSemRegistro(model, quadroId) ? { ...hip, noForro: forroDaCasa } : hip;
+  }
   return {
     ...hip,
     noForro: { faixa: { abaixoDoTetoMm: abaixo, afastamentoDaFaceMm: afastamento, degrauNaParedeMm: n('forroDegrauNaParedeMm') ?? 0 }, folgaSobAVigaMm: folga },
@@ -130,13 +147,22 @@ export function hipotesesDoQuadro(model: Pick<BlueprintModel, 'registrosDeLancam
 }
 
 /** As escolhas ATUAIS do quadro (as do painel + o forro do registro) — o que o aviso compara e o lote registra. */
-export function escolhasAtuaisDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: HipotesesDeEletroduto, hipEletricas: HipotesesEletricas): EscolhasDoLancamento {
-  return escolhasDoEletroduto(hipotesesDoQuadro(model, quadroId, hip), hipEletricas);
+export function escolhasAtuaisDoQuadro(
+  model: BlueprintModel,
+  quadroId: ObjectId,
+  hip: HipotesesDeEletroduto,
+  hipEletricas: HipotesesEletricas,
+  forroDaCasa?: ForroDaCasa | null,
+): EscolhasDoLancamento {
+  return escolhasDoEletroduto(hipotesesDoQuadro(model, quadroId, hip, forroDaCasa), hipEletricas);
 }
 
-/** Os planos de todos os quadros, cada um com as hipóteses DELE (o forro do registro) — o que o painel mostra e lança. */
-export function planejarEletrodutosPorQuadro(model: BlueprintModel, hip: HipotesesDeEletroduto, hipEletricas: HipotesesEletricas): PlanoDeEletrodutos[] {
-  return (model.quadros ?? []).map((q) => planejarEletrodutos(model, q, hipotesesDoQuadro(model, q.id, hip), hipEletricas));
+/**
+ * Os planos de todos os quadros, cada um com as hipóteses DELE (o forro do registro; sem registro, o das premissas da
+ * casa para a rede antiga no forro) — o que o painel mostra e lança.
+ */
+export function planejarEletrodutosPorQuadro(model: BlueprintModel, hip: HipotesesDeEletroduto, hipEletricas: HipotesesEletricas, forroDaCasa?: ForroDaCasa | null): PlanoDeEletrodutos[] {
+  return (model.quadros ?? []).map((q) => planejarEletrodutos(model, q, hipotesesDoQuadro(model, q.id, hip, forroDaCasa), hipEletricas));
 }
 
 const num = (v: ValorDeEscolha) => String(v).replace('.', ',');
@@ -188,8 +214,14 @@ export const ESCOLHAS_DO_ELETRODUTO: OpcoesDaComparacao = {
 };
 
 /** Regra B: o que mudou desde o lançamento da rede do quadro (com as hipóteses DELE). Rede sem registro → `[]`. */
-export function diferencasDoEletroduto(model: BlueprintModel, quadroId: ObjectId, hip: HipotesesDeEletroduto, hipEletricas: HipotesesEletricas): DiferencaDeEscolha[] {
-  return diferencasDasEscolhas(registroDe(model, 'ELETRODUTOS', quadroId)?.escolhas ?? null, escolhasAtuaisDoQuadro(model, quadroId, hip, hipEletricas), ESCOLHAS_DO_ELETRODUTO);
+export function diferencasDoEletroduto(
+  model: BlueprintModel,
+  quadroId: ObjectId,
+  hip: HipotesesDeEletroduto,
+  hipEletricas: HipotesesEletricas,
+  forroDaCasa?: ForroDaCasa | null,
+): DiferencaDeEscolha[] {
+  return diferencasDasEscolhas(registroDe(model, 'ELETRODUTOS', quadroId)?.escolhas ?? null, escolhasAtuaisDoQuadro(model, quadroId, hip, hipEletricas, forroDaCasa), ESCOLHAS_DO_ELETRODUTO);
 }
 
 /** Correção 1: o motivo de os botões da rede deste quadro ficarem desligados. */
@@ -199,6 +231,11 @@ export const MOTIVO_REDE_NO_FORRO_SEM_REGISTRO = 'Rede no forro lançada antes d
  * Rede no FORRO lançada antes do registro (a Casa Automática de antes): sem registro, não há como saber a faixa, e
  * relançar com as hipóteses do painel desceria a rede para a cota do teto/sob a viga. Com registro, o forro vem dele
  * (`hipotesesDoQuadro`).
+ *
+ * Correção 3 (24/10/2026, pedido literal: *"então verifique pois alterei e não ficou disponível para relançamento"*):
+ * detectar a rede antiga no forro não desliga mais o botão por si só. Com as premissas da casa do estudo
+ * (`forroDaCasa`), ela relança NO FORRO (`hipotesesDoQuadro`); sem elas, o bloqueio continua, com o motivo
+ * (`motivoParaNaoRelancar`).
  *
  * Correção 2 (revisão final, 24/10/2026): só com sinal de forro DE VERDADE. Antes, qualquer horizontal perto do teto
  * contava — e a "rota pela parede" cria um horizontal na cota do ponto (eixo da parede → face), comum a 2,2 m (TUE do ar,
@@ -235,9 +272,14 @@ export function redeNoForroSemRegistro(model: BlueprintModel, quadroId: ObjectId
   return false;
 }
 
-/** Por que a rede deste quadro não relança por aqui (`null` = relança). */
-export function motivoParaNaoRelancar(model: BlueprintModel, quadroId: ObjectId): string | null {
-  return redeNoForroSemRegistro(model, quadroId) ? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO : null;
+/**
+ * Por que a rede deste quadro não relança por aqui (`null` = relança).
+ *
+ * Correção 3 (24/10/2026, pedido literal: *"então verifique pois alterei e não ficou disponível para relançamento"*):
+ * bloqueia SÓ a rede no forro sem registro E sem as premissas da casa (`forroDaCasa`). Com elas, relança no forro.
+ */
+export function motivoParaNaoRelancar(model: BlueprintModel, quadroId: ObjectId, forroDaCasa?: ForroDaCasa | null): string | null {
+  return !forroDaCasa && redeNoForroSemRegistro(model, quadroId) ? MOTIVO_REDE_NO_FORRO_SEM_REGISTRO : null;
 }
 
 /**
@@ -264,14 +306,15 @@ export function comandosDeLancarEletrodutos(
   planos: readonly PlanoDeEletrodutos[],
   hip: HipotesesDeEletroduto,
   hipEletricas: HipotesesEletricas,
+  forroDaCasa?: ForroDaCasa | null,
 ): Command[] {
   const saida: Command[] = [];
   let m = model;
   for (const p of planos) {
-    if (motivoParaNaoRelancar(m, p.quadroId)) continue;
+    if (motivoParaNaoRelancar(m, p.quadroId, forroDaCasa)) continue;
     const quadro = (m.quadros ?? []).find((q) => q.id === p.quadroId);
     if (!quadro) continue;
-    const hipQ = hipotesesDoQuadro(m, p.quadroId, hip);
+    const hipQ = hipotesesDoQuadro(m, p.quadroId, hip, forroDaCasa);
     let comandos: Command[] = p.comandos;
     if (comandos.length === 0) {
       if (p.sugeridos === 0) continue;
@@ -280,7 +323,7 @@ export function comandosDeLancarEletrodutos(
     if (comandos.length === 0) continue;
     const apagados = new Set(comandos.flatMap((c) => (c.type === 'DeleteTrecho' ? [c.trechoId] : [])));
     const sobra = redeDoQuadro(m, quadro).some((t) => !apagados.has(t.id));
-    const registrar = !sobra || (!!registroDe(m, 'ELETRODUTOS', p.quadroId) && diferencasDoEletroduto(m, p.quadroId, hip, hipEletricas).length === 0);
+    const registrar = !sobra || (!!registroDe(m, 'ELETRODUTOS', p.quadroId) && diferencasDoEletroduto(m, p.quadroId, hip, hipEletricas, forroDaCasa).length === 0);
     const lote = registrar ? [...comandos, comandoDeRegistro('ELETRODUTOS', p.quadroId, escolhasDoEletroduto(hipQ, hipEletricas))] : [...comandos];
     m = applyBatch(m, lote).model;
     const bitolas = bitolasDoForro(m, p.quadroId, hipQ, hipEletricas);
@@ -303,13 +346,14 @@ export function comandosDeRefazerEletrodutos(
   quadroIds: readonly ObjectId[],
   hip: HipotesesDeEletroduto,
   hipEletricas: HipotesesEletricas,
+  forroDaCasa?: ForroDaCasa | null,
 ): Command[] {
   const saida: Command[] = [];
   let m = model;
   for (const id of quadroIds) {
     const quadro = (m.quadros ?? []).find((q) => q.id === id);
-    if (!quadro || motivoParaNaoRelancar(m, id)) continue;
-    const hipQ = hipotesesDoQuadro(m, id, hip);
+    if (!quadro || motivoParaNaoRelancar(m, id, forroDaCasa)) continue;
+    const hipQ = hipotesesDoQuadro(m, id, hip, forroDaCasa);
     const re = refazerEletrodutos(m, quadro, hipQ, hipEletricas);
     if (re.comandos.length === 0) continue;
     const lancou = re.comandos.some((c) => c.type === 'AddTrecho');
@@ -344,16 +388,16 @@ export interface RedeARefazer {
 export function redesARefazer(
   model: BlueprintModel,
   quadroIds?: readonly ObjectId[],
-  atuais?: { hip: HipotesesDeEletroduto; hipEletricas: HipotesesEletricas },
+  atuais?: { hip: HipotesesDeEletroduto; hipEletricas: HipotesesEletricas; forroDaCasa?: ForroDaCasa | null },
 ): RedeARefazer[] {
   const saida: RedeARefazer[] = [];
   for (const q of model.quadros ?? []) {
     if (quadroIds && !quadroIds.includes(q.id)) continue;
-    if (motivoParaNaoRelancar(model, q.id)) continue;
+    if (motivoParaNaoRelancar(model, q.id, atuais?.forroDaCasa)) continue;
     const rede = redeDoQuadro(model, q);
     if (rede.length === 0) continue;
     const caixas = caixasDaRedeDoQuadro(model, q, rede);
-    const d = atuais ? diferencasDoEletroduto(model, q.id, atuais.hip, atuais.hipEletricas) : [];
+    const d = atuais ? diferencasDoEletroduto(model, q.id, atuais.hip, atuais.hipEletricas, atuais.forroDaCasa) : [];
     saida.push({
       quadroId: q.id,
       nome: q.nome,
@@ -396,10 +440,12 @@ export interface BotaoDeLancarEletrodutos {
 /**
  * REGRA A: o botão nunca fica sem ação quando há rede. Falta ligar algo → "Lançar em todos (N)". Nada a lançar e
  * alguma rede lançada → "Relançar com as escolhas atuais" (refaz por quadro; a confirmação é de quem chama). Sem rede e
- * sem nada a lançar → desligado, dizendo por quê. Quadro com rede no forro sem registro não entra (correção 1).
+ * sem nada a lançar → desligado, dizendo por quê. Quadro com rede no forro sem registro não entra (correção 1) — salvo
+ * com as premissas da casa (`forroDaCasa`, correção 3): aí relança no forro. Os `planos` devem vir de
+ * `planejarEletrodutosPorQuadro` com o MESMO `forroDaCasa`.
  */
-export function botaoDeLancarEletrodutos(model: BlueprintModel, planos: readonly PlanoDeEletrodutos[]): BotaoDeLancarEletrodutos {
-  const livres = planos.filter((p) => !motivoParaNaoRelancar(model, p.quadroId));
+export function botaoDeLancarEletrodutos(model: BlueprintModel, planos: readonly PlanoDeEletrodutos[], forroDaCasa?: ForroDaCasa | null): BotaoDeLancarEletrodutos {
+  const livres = planos.filter((p) => !motivoParaNaoRelancar(model, p.quadroId, forroDaCasa));
   const aLigar = livres.reduce((n, p) => n + p.aLigar, 0);
   const lancar = `Lançar em todos (${aLigar})`;
   if (livres.some((p) => p.comandos.length > 0)) {

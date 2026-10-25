@@ -902,6 +902,34 @@ const FAIXAS_DO_FORRO = ['eletrica', 'frigorigena', 'aguaQuente', 'aguaFria'] as
 /** O raio do tubo da faixa mais baixa (a água fria) na conta do rebaixo — DN 32 de PVC, o maior ramal da casa. */
 const RAIO_NO_PLENUM_MM = 16;
 
+/**
+ * O grupo do forro COMPLETO (cada faixa campo a campo sobre o padrão) — o mesmo que `planejarCasa` usa. Correção 3 dos
+ * eletrodutos (24/10/2026): exportado para o editor montar o forro elétrico das premissas sem copiar valores.
+ */
+export function hipotesesDoForroDaCasa(parcial: Partial<HipotesesDoForroDaCasa> = {}): HipotesesDoForroDaCasa {
+  return {
+    ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
+    ...parcial,
+    ...Object.fromEntries(FAIXAS_DO_FORRO.map((k) => [k, { ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO[k], ...(parcial[k] ?? {}) }])),
+  };
+}
+
+/** O forro da REDE ELÉTRICA (a faixa do eletroduto e a folga sob a viga), como a casa passa ao motor dos eletrodutos. */
+function forroDaEletrica(f: HipotesesDoForroDaCasa): { faixa: FaixaDoForro; folgaSobAVigaMm: number } {
+  return { faixa: f.eletrica, folgaSobAVigaMm: f.folgaSobAVigaMm };
+}
+
+/**
+ * Correção 3 dos eletrodutos (24/10/2026, pedido literal: *"então verifique pois alterei e não ficou disponível para
+ * relançamento"*): o forro elétrico com que a casa lança a rede, a partir das hipóteses parciais do estudo
+ * (`hipotesesDasPremissas`). `null` com o forro desligado. O editor passa isto ao painel dos eletrodutos para relançar
+ * NO FORRO a rede antiga (sem registro do lançamento).
+ */
+export function forroEletricoDaCasa(hipParcial: Partial<HipotesesDaCasa>): { faixa: FaixaDoForro; folgaSobAVigaMm: number } | null {
+  const f = hipotesesDoForroDaCasa(hipParcial.forro ?? {});
+  return f.lancar ? forroDaEletrica(f) : null;
+}
+
 /** O rebaixo do forro (da laje à face de cima dele): a faixa mais baixa, o raio do tubo e a folga. */
 export function rebaixoDoForroMm(f: HipotesesDoForroDaCasa): number {
   return Math.max(...FAIXAS_DO_FORRO.map((k) => f[k].abaixoDoTetoMm)) + RAIO_NO_PLENUM_MM + f.folgaSobAFaixaMm;
@@ -1479,11 +1507,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     climatizacao: { ...HIPOTESES_DA_CASA_PADRAO.climatizacao, ...(hipParcial.climatizacao ?? {}) },
     pressao: { ...HIPOTESES_DA_PRESSAO_DA_CASA_PADRAO, ...(hipParcial.pressao ?? {}) },
     faixas: { aguaQuenteMm: 45, esgotoMm: -60, ...(hipParcial.faixas ?? {}) },
-    forro: {
-      ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO,
-      ...(hipParcial.forro ?? {}),
-      ...Object.fromEntries(FAIXAS_DO_FORRO.map((k) => [k, { ...HIPOTESES_DO_FORRO_DA_CASA_PADRAO[k], ...(hipParcial.forro?.[k] ?? {}) }])),
-    },
+    forro: hipotesesDoForroDaCasa(hipParcial.forro ?? {}),
   };
   // Item 9 (decisão do usuário, 19/10/2026: "cozinha + serviço juntos"): no R1-B a área de serviço fica na frente, com a
   // cozinha (hipótese do gerador; a do estudo, se dada, vale).
@@ -2743,7 +2767,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         // pelo painel usaria as escolhas de lá).
         const caixas = entrada.caixasDePassagem === 'CAIXAS' ? REGRA_DE_CAIXAS_PADRAO : null;
         const hipEletrodutos: HipotesesDeEletroduto = forroLigado
-          ? { ...HIPOTESES_ELETRODUTO_PADRAO, caixas, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: { faixa: hip.forro.eletrica, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } }
+          ? { ...HIPOTESES_ELETRODUTO_PADRAO, caixas, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: forroDaEletrica(hip.forro) }
           : { ...HIPOTESES_ELETRODUTO_PADRAO, caixas };
         const planos = planejarEletrodutosDoModelo(m, hipEletrodutos, hipEletricas);
         // O REGISTRO do lançamento (com que escolhas), por quadro, no mesmo lote — o painel dos eletrodutos avisa quando

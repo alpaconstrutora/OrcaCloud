@@ -261,7 +261,7 @@ describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
     expect(registroDe(depois, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ caixasDePassagem: 'CAIXAS', forroAbaixoDoTetoMm: 45 });
   });
 
-  it('⚠️ rede no forro SEM registro (antiga): não relança por aqui — botões desligados com o motivo, lotes vazios', () => {
+  it('⚠️ rede no forro SEM registro (antiga), sem as premissas da casa: não relança por aqui — botões desligados com o motivo, lotes vazios', () => {
     const m = comForro(sala());
     const q = m.quadros[0].id;
     const antiga = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, NO_FORRO)[0].comandos).model);
@@ -274,6 +274,16 @@ describe('correção 1 — a rede no FORRO continua no forro (C1)', () => {
     expect(comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
     expect(comandosDeLancarEletrodutos(antiga, planos, SEM_CAIXAS, HIPOTESES_PADRAO)).toEqual([]);
     expect(redesARefazer(antiga)).toEqual([]);
+    // Correção 3 (24/10/2026): com o forro das premissas da casa (`forroDaCasa`), relança — e continua no forro.
+    expect(motivoParaNaoRelancar(antiga, q, FORRO)).toBeNull();
+    const planosComCasa = planejarEletrodutosPorQuadro(antiga, SEM_CAIXAS, HIPOTESES_PADRAO, FORRO);
+    expect(botaoDeLancarEletrodutos(antiga, planosComCasa, FORRO)).toMatchObject({ modo: 'RELANCAR', motivo: null, quadros: [q] });
+    const refeita = applyBatch(antiga, comandosDeRefazerEletrodutos(antiga, [q], SEM_CAIXAS, HIPOTESES_PADRAO, FORRO)).model;
+    expect(horizontaisEletricas(refeita).length).toBeGreaterThan(0);
+    expect(horizontaisEletricas(refeita).map((t) => t.cotaAMm).filter((c) => c !== 2800 - 45)).toEqual([]);
+    expect(registroDe(refeita, 'ELETRODUTOS', q)?.escolhas).toMatchObject({ forroAbaixoDoTetoMm: 45, forroFolgaSobAVigaMm: 20 });
+    // O registro do forro tem prioridade sobre o da casa: outra faixa nas premissas não muda a rede já registrada.
+    expect(hipotesesDoQuadro(refeita, q, SEM_CAIXAS, { ...FORRO, folgaSobAVigaMm: 99 }).noForro).toEqual(FORRO);
     // Controle: a rede na cota do painel, sem registro, relança.
     const doPainel = aceitarTudo(applyBatch(m, planejarEletrodutosDoModelo(m, SEM_CAIXAS)[0].comandos).model);
     expect(motivoParaNaoRelancar(doPainel, q)).toBeNull();

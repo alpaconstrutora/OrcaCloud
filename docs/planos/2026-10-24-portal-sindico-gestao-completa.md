@@ -228,7 +228,7 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     - [x] PR + CI + publicação — PR #156, `ci` verde; squash `a4ca532`; CI de `main` no squash verde;
       `conferir-producao.sh "Extrato e conciliação"` ✅.
   - [ ] G2c
-- [ ] **Administradora opera pelo portal** (fora da ordem, pedido de 25/10/2026, transcrito literalmente):
+- [x] **Administradora opera pelo portal** (fora da ordem, pedido de 25/10/2026, transcrito literalmente):
   ```
   nao faz o menor sentido bloquear o portal do condominio na visão do app. Deve ter a mesma funcionalidade da visão do sindico.
   ```
@@ -254,5 +254,6 @@ Fora da G1: emitir boleto/PIX (Asaas do condomínio) → G2.
     bloqueadas), desktop e 390px: faixa, Publicar aviso, Lançar conta e Novo rateio ligados; no 007 Devolver e Fechar
     desligados com o motivo; 0 escrita, 0 erro, sem rolagem lateral. **O print achou:** embutida no app, no celular
     não havia barra de abas (só a Visão geral) → a barra vai no pé do quadro.
-  - [ ] PR + CI + publicação.
+  - [x] PR + CI + publicação — PR #161, squash `7408df3` (25/10/2026); CI de `main` verde;
+    `conferir-producao.sh "Abrir o portal do síndico"` ✅.
 - [ ] G3 · [ ] G4 · [ ] G5 · [ ] G6 · [ ] G7

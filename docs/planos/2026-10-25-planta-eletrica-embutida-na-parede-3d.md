@@ -39,6 +39,6 @@ fora da face (85 do eixo numa parede de 150).
   `Blueprint3DViewer` de `origin/main` e no novo: a TUG (3113, 5100) e o interruptor (2569, 13885) com paredes opacas.
   Antes, tubo descendo na frente da parede e caixa saindo dela; depois, só o espelho na face. O conjunto, com paredes
   transparentes, mostra as descidas dentro delas.
-- [ ] tsc + suíte
+- [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.498 ok + 2 testes de tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes`, 39/39) = 11.500 ok, 0 falhas, 34 pulados, total 11.534.
 - [ ] PR + CI
 - [ ] publicação

@@ -5,6 +5,7 @@ import {
     valorDaRubrica,
     valorRecorrente,
     valorParaGravar,
+    rubricasEmAbertoSemLancamento,
 } from '../lib/payrollRubricaRecorrente';
 
 const r = (extra: Record<string, unknown> = {}) => ({
@@ -70,5 +71,38 @@ describe('rubrica recorrente do colaborador — o que vai para o banco', () => {
         expect(valorParaGravar({ valor_tipo: 'percentual', valor: 10 })).toEqual({ valor_tipo: 'percentual', valor: 10 });
         expect(valorParaGravar({ valor_tipo: 'fixo', valor: null })).toEqual({ valor_tipo: null, valor: null });
         expect(valorParaGravar({ valor_tipo: null, valor: null })).toEqual({ valor_tipo: null, valor: null });
+    });
+});
+
+describe('rubrica recorrente do colaborador — em aberto nos Eventos da folha', () => {
+    // 25/10/2026: a Gratificação recorrente do Rogério (manual, sem valor) não aparecia
+    // nos Eventos de 07/2026 para preencher — o modal não lia os vínculos.
+    const catalogo = [
+        r({ code: 'GRATIFICAÇÃO', name: 'Gratificação' }),
+        r({ code: 'VA', name: 'Vale Alimentação' }),
+        r({ code: 'AUXEDU', name: 'Auxílio Educação' }),
+        r({ code: 'ADIANTAMENTO', calculation_type: 'percentage' }),
+        r({ code: 'IRRF', category: 'tax' }),
+    ];
+
+    it('lista as manuais sem valor que ainda não têm lançamento no mês', () => {
+        const vinculos = [
+            { code: 'ADIANTAMENTO', valor_tipo: null, valor: null },   // cálculo próprio: não está em aberto
+            { code: 'VA', valor_tipo: null, valor: null },
+            { code: 'AUXEDU', valor_tipo: 'fixo' as const, valor: 200 }, // tem valor: entra sozinha
+            { code: 'GRATIFICAÇÃO', valor_tipo: 'fixo' as const, valor: null },
+            { code: 'IRRF', valor_tipo: null, valor: null },            // travada
+        ];
+        expect(rubricasEmAbertoSemLancamento(vinculos, catalogo, []).map(x => x.code)).toEqual(['VA', 'GRATIFICAÇÃO']);
+    });
+
+    it('some da lista quando o mês já tem lançamento da rubrica', () => {
+        const vinculos = [{ code: 'GRATIFICAÇÃO', valor_tipo: null, valor: null }];
+        expect(rubricasEmAbertoSemLancamento(vinculos, catalogo, [{ rubric_code: 'GRATIFICAÇÃO' }])).toEqual([]);
+        expect(rubricasEmAbertoSemLancamento(vinculos, catalogo, [{ rubric_code: null, code: 'GRATIFICAÇÃO' }])).toEqual([]);
+    });
+
+    it('ignora vínculo de rubrica fora do catálogo (apagada ou inativa)', () => {
+        expect(rubricasEmAbertoSemLancamento([{ code: 'SUMIU', valor_tipo: null, valor: null }], catalogo, [])).toEqual([]);
     });
 });

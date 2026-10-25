@@ -103,3 +103,22 @@ export function valorRecorrente(
     // salário × pontos já é o valor em centavos: evita `1621 × 0,075 = 121,57499…`.
     return { amount: Math.round(salario * v.valor) / 100, base_amount: salario, reference: v.valor / 100 };
 }
+
+/**
+ * Recorrentes EM ABERTO do colaborador que o mês ainda não lançou — o que os
+ * Eventos da folha oferecem para preencher. Sem isto o modal só tinha o seletor
+ * genérico e nada dizia que a Gratificação do Rogério esperava o valor do mês
+ * (25/10/2026). Ordem = a dos vínculos (a da aba do colaborador).
+ */
+export function rubricasEmAbertoSemLancamento<R extends RubricaParaRecorrente>(
+    vinculos: ({ code: string } & ValorRecorrente)[],
+    catalogo: R[],
+    eventosDoMes: { rubric_code?: string | null; code?: string | null }[],
+): R[] {
+    const lancadas = new Set(eventosDoMes.map(e => e.rubric_code || e.code));
+    return vinculos.flatMap(v => {
+        const r = catalogo.find(x => x.code === v.code);
+        if (!r || v.valor != null || !ficaEmAbertoSemValor(r) || lancadas.has(r.code)) return [];
+        return [r];
+    });
+}

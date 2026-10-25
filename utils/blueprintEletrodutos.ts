@@ -157,7 +157,7 @@ import type {
   Trecho,
   Wall,
 } from './blueprintKernel';
-import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
+import { TIPOS_DE_INFRAESTRUTURA_ELETRICA, caixaDaLuzNaRede, composicaoDaRede, pointInPolygon, type Point } from './blueprintKernel';
 import { PENALIDADE_DO_CONTORNO_NO_FORRO_MM, cotaDaFaixa, descidaDoForro, encaixaNoAnel, paredesDoForro, prumadasQueCruzam, ramaisDaLajeDeCima, saidaDoRebaixoPelaParede, type FaixaDoForro } from './blueprintRotaPeloForro';
 import { ABAIXO_DA_VIGA_MM, CONTORNO_DO_PILAR_MM, anelDoPilar, desvioDoPilar, fracaoDentro, fundoDaVigaMaisBaixaMm, pegadasDePilares } from './blueprintObstaculosEstruturais';
 import { arvorePelasParedes, chaveP, encaixarNaParede } from './blueprintRotaPelasParedes';
@@ -587,7 +587,8 @@ export function planejarEletrodutos(
     const pendentes = doNivel.filter((p) => !pontasEmPlanta.has(`${p.at.x},${p.at.y}`));
     // O nó do ponto é na COTA DELE: o caminho até o quadro começa na peça e
     // passa pela prumada — é assim que a prumada ganha o circuito.
-    for (const p of doNivel) noDoPonto.set(p.id, chave(nivel.id, p.at.x, p.at.y, p.cotaMm));
+    // A luz de teto com a caixa na rede (25/10/2026): o nó dela é a caixa, no teto — não há descida até a luminária.
+    for (const p of doNivel) noDoPonto.set(p.id, chave(nivel.id, p.at.x, p.at.y, caixaDaLuzNaRede(p, teto) ? teto : p.cotaMm));
     pavimentos.push({ levelId: nivel.id, nome: nivel.name, pontos: doNivel.length, ligados: ligados.length, aLigar: pendentes.length });
     if (pendentes.length === 0) continue;
 
@@ -701,7 +702,10 @@ export function planejarEletrodutos(
           if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: saida.s.x, y: saida.s.y });
           continue;
         }
-        if (p.cotaMm !== teto) addTrecho(nivel.id, p.at, p.cotaMm, p.at, teto);
+        // 25/10/2026 ("a caixa tem 6 entradas e é por onde cada conduite chega"): a luz de teto abaixo da rede (na face do
+        // forro) tem a caixa NA REDE — os eletrodutos entram nela pelas laterais e até a luminária desce só cabo. Sem a
+        // descida; a fiação liga a luz no nó acima dela (`cotasDeLigacao`).
+        if (p.cotaMm !== teto && !caixaDaLuzNaRede(p, teto)) addTrecho(nivel.id, p.at, p.cotaMm, p.at, teto);
         const k = chave(nivel.id, p.at.x, p.at.y, teto);
         if (!alcancados.has(k)) pendentesNoTeto.set(k, { x: p.at.x, y: p.at.y });
       }

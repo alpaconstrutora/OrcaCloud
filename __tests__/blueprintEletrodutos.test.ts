@@ -992,8 +992,10 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     const { m } = umComodo();
     const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
     expect(plano.motivo).toBeNull();
-    // A luz sobe reta da face do forro até a faixa.
-    expect(descidaEm(plano.comandos, LUZ, FAIXA, 2500)).toBeDefined();
+    // 25/10/2026: a caixa da luz fica NA FAIXA (os eletrodutos entram nela pelas laterais) — nenhuma descida até a
+    // luminária na face do forro; a rede chega à luz na cota da faixa.
+    expect(descidaEm(plano.comandos, LUZ, FAIXA, 2500)).toBeUndefined();
+    expect(chegaEm(plano.comandos, LUZ, FAIXA)).toBe(true);
     for (const [q, T] of [[qA, TA], [q2, T2]] as const) {
       // Na faixa, da luz até q — e é o ÚNICO trecho da faixa que chega a q (nada de anel entre tomadas).
       expect(trechoEntre(plano.comandos, LUZ, q, FAIXA)).toBeDefined();
@@ -1132,7 +1134,8 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     const plano = planejarEletrodutos(m, quadroDe(m), FORRO);
     expect(plano.motivo).toBeNull();
     expect(trechoEntre(plano.comandos, LS2, LC2, FAIXA)).toBeDefined();
-    expect(descidaEm(plano.comandos, LC2, FAIXA, 2500)).toBeDefined();
+    // 25/10/2026: a caixa da luz na faixa — sem descida até a luminária.
+    expect(descidaEm(plano.comandos, LC2, FAIXA, 2500)).toBeUndefined();
   });
 
   it('sem anel (arestas = nós − componentes) e idempotente: aplicado, nada mais a lançar', () => {
@@ -1195,7 +1198,8 @@ describe('24/10/2026 (Task 3) — pela luz do ambiente NO FORRO', () => {
     const arvore = planejarEletrodutos(m, quadroDe(m), { ...FORRO, encaminhamento: 'ARVORE_NO_TETO' });
     // A árvore de antes liga luz → luz em reta, pela viga.
     expect(trechoEntre(arvore.comandos, LS, LC, FAIXA)).toBeDefined();
-    expect(fnv(JSON.stringify(arvore.comandos))).toBe('cd0bef12');
+    // 25/10/2026: o hash muda UMA vez, pela caixa da luz na faixa (as duas descidas luz → faixa saíram do lote).
+    expect(fnv(JSON.stringify(arvore.comandos))).toBe('834c2112');
   });
 });
 

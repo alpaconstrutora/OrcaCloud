@@ -126,5 +126,6 @@ export * from './grafoDeRede';
 export * from './comandos';
 export * from './condutores';
 export * from './fiacao';
+export * from './ligacaoDaPeca';
 // E3.1 (29/09/2026): o DR como peça do quadro, com o legado `protecaoDR` lido igual.
 export * from './protecaoDr';

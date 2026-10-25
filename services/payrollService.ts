@@ -10,7 +10,7 @@ import {
     type TerceiroTax,
 } from '../utils/folhaFinanceiro';
 import type { DadosDaFolhaDoMes } from '../utils/relacoesDaFolha';
-import type { ValorRecorrente } from '../lib/payrollRubricaRecorrente';
+import { valorParaGravar, type ValorRecorrente } from '../lib/payrollRubricaRecorrente';
 import type { OrganizacaoParaHolerite } from '../utils/empregadorDoHolerite';
 
 /** Vínculo colaborador↔rubrica recorrente (`employee_automatic_rubrics`), com o valor dele. */
@@ -743,11 +743,7 @@ export const payrollService = {
         const { error } = await supabase.rpc('salvar_rubricas_recorrentes_colaborador', {
             p_employee_id: employeeId,
             p_org_id: orgId,
-            p_rubricas: rubricas.map(r => ({
-                code: r.code,
-                valor_tipo: r.valor == null ? null : r.valor_tipo,
-                valor: r.valor_tipo == null ? null : r.valor,
-            })),
+            p_rubricas: rubricas.map(r => ({ code: r.code, ...valorParaGravar(r) })),
         });
 
         if (error) throw error;

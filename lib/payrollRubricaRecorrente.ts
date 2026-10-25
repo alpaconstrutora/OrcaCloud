@@ -76,6 +76,17 @@ export function valorDaRubrica(r: RubricaParaRecorrente): string {
     }
 }
 
+/**
+ * O vínculo no formato que o banco aceita (CHECK: os dois NULL, ou tipo + valor).
+ * Tipo NULL com valor vira `fixo`: é o "R$" que a tela mostra para o vínculo sem
+ * tipo (antigo, ou salvo vazio). Antes o valor digitado nessa linha era descartado
+ * ao salvar (VA e Gratificação do Rogério, 25/10/2026).
+ */
+export function valorParaGravar(v: ValorRecorrente): ValorRecorrente {
+    if (v.valor == null) return { valor_tipo: null, valor: null };
+    return { valor_tipo: v.valor_tipo ?? 'fixo', valor: v.valor };
+}
+
 const centavos = (v: number) => Math.round(v * 100) / 100;
 
 /**

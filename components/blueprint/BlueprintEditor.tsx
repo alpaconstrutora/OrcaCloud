@@ -613,7 +613,12 @@ import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
-import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import { planejarCasaNoWorker, useCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import TelaCasasDosLotes, { type ResultadoDoLote } from './TelaCasasDosLotes';
+import { lotesParaCasas, modeloDoLote, programaDoLote } from '../../utils/blueprintCasasDoLoteamento';
+import { criarPlantaDaCasaDoLote, plantasDosLotes } from '../../services/blueprintCasasDoLoteamentoService';
+import type { PedidoDaCasa } from '../../utils/blueprintCasaAutomatica';
+import type { ProgramaCurtoDaCasa } from '../../utils/blueprintPrograma';
 import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, esgotoDaCasaNoModelo, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { PROGRAMA_CURTO_PADRAO, programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
@@ -2184,7 +2189,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa' | 'casas-lotes';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -9003,20 +9008,24 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const casa = useCasaAutomatica();
   const [lancadoCasa, setLancadoCasa] = useState<string | null>(null);
   const motivoParaNaoGerarCasa = useMemo(() => (levelId ? motivoParaNaoGerarACasa(editor.model, levelId) : 'Abra um pavimento.'), [editor.model, levelId]);
-  const gerarCasa = useCallback(() => {
-    if (!levelId) return;
-    setLancadoCasa(null);
+  /**
+   * O PEDIDO da casa para um modelo/pavimento/lote e um programa — o da tela Casa (o desenho aberto) e o de cada lote
+   * em "Casas dos lotes" (26/10/2026): as hipóteses do estudo (zona, hidráulica, elétrica, clima, topografia) são as
+   * mesmas; mudam o modelo, o lote e o programa.
+   */
+  const montarPedidoDaCasa = useCallback(
+    (original: BlueprintModel, nivel: string, terrenoDoPedido: typeof terreno, limites: typeof limitesDoNivel, curto: ProgramaCurtoDaCasa): PedidoDaCasa => {
     const p = casaDoEstudo.premissas;
     const cidade = zona.cidade?.name ?? null;
     const hidro = hidroDoEstudo.hipoteses;
     const v = topografia.selecionada;
-    casa.gerar({
-      original: editor.model,
+    return {
+      original,
       entrada: {
-        levelId,
+        levelId: nivel,
         ctx: {
-          terreno,
-          limites: limitesDoNivel,
+          terreno: terrenoDoPedido,
+          limites,
           recuosBase: zona.recuos,
           zona: {
             afastamentoProgressivo: zona.afastamentoProgressivo,
@@ -9030,7 +9039,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             taxaPermeabilidadeMinPct: zona.taxaPermeabilidadeMin,
           },
         },
-        curto: p.curto,
+        curto,
         zonaDasRegras: zonaParaRegras(zona),
         rotacaoNorteDeg: norteDoDesenho,
         latitudeGraus: latitudeDoEstudo ?? hipotesesDeInsolacao.latitudeManual,
@@ -9046,8 +9055,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       },
       terreno: v ? { grade: v.grade, cotaZeroM: cotaZeroDoTerrenoM } : null,
       hip: hipotesesDasPremissas(p),
-    });
-  }, [levelId, casaDoEstudo.premissas, zona, hidroDoEstudo.hipoteses, topografia.selecionada, casa, editor.model, terreno, limitesDoNivel, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeCircuitos, hipotesesEletricas, caixasDePassagem, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, cotaZeroDoTerrenoM]);
+    };
+    },
+    [casaDoEstudo.premissas, zona, hidroDoEstudo.hipoteses, topografia.selecionada, norteDoDesenho, latitudeDoEstudo, hipotesesDeInsolacao.latitudeManual, hipotesesDeCircuitos, hipotesesEletricas, caixasDePassagem, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, cotaZeroDoTerrenoM],
+  );
+  const gerarCasa = useCallback(() => {
+    if (!levelId) return;
+    setLancadoCasa(null);
+    casa.gerar(montarPedidoDaCasa(editor.model, levelId, terreno, limitesDoNivel, casaDoEstudo.premissas.curto));
+  }, [levelId, casa, montarPedidoDaCasa, editor.model, terreno, limitesDoNivel, casaDoEstudo.premissas.curto]);
   /** A trava, só com a tela aberta: o lote recria os mesmos ids no desenho de agora? */
   const provaDaCasa = useMemo(() => (telaAberta === 'casa' && casa.plano ? conferirPlanoDaCasa(editor.model, casa.plano) : null), [telaAberta, casa.plano, editor.model]);
   // O CUB do padrão escolhido, na UF do produto (ou da cidade da zona) — o custo da prévia.
@@ -9068,7 +9084,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // da massa monta o mix por elas (25/10/2026: um hook para as duas telas; era um efeito só da Casa).
   const empreendimentoDaCasa = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido || null;
   const nomeDoEmpreendimentoDaCasa = empreendimentos.find((e) => e.id === empreendimentoDaCasa)?.name ?? null;
-  const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(empreendimentoDaCasa, telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa');
+  const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(empreendimentoDaCasa, telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa' || telaAberta === 'casas-lotes');
   const torresDoEmpreendimento = unidadesDoEmpreendimento.carregadoDe === empreendimentoDaCasa ? unidadesDoEmpreendimento.torres : null;
   const unidadesDaCasa = useMemo(() => {
     const porId = new Map<string, EmpreendimentoUnit>();
@@ -9080,6 +9096,72 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       }
     return { opcoes, porId };
   }, [torresDoEmpreendimento]);
+  // CASAS DOS LOTES (26/10/2026, etapa 2 de docs/planos/2026-10-26-planta-empreendimento-tres-etapas.md): uma planta
+  // por lote, com a casa gerada no worker, um lote por vez.
+  const unidadesDosLotes = useMemo(() => (torresDoEmpreendimento ?? []).flatMap((t) => t.units ?? []), [torresDoEmpreendimento]);
+  const lotesDasCasas = useMemo(() => (telaAberta === 'casas-lotes' ? lotesParaCasas(editor.model, unidadesDosLotes) : []), [telaAberta, editor.model, unidadesDosLotes]);
+  const [plantasDosLotesDoEstudo, setPlantasDosLotesDoEstudo] = useState<Map<string, { studyId: string; nome: string }> | null>(null);
+  useEffect(() => {
+    if (telaAberta !== 'casas-lotes') return;
+    let vivo = true;
+    setPlantasDosLotesDoEstudo(null);
+    plantasDosLotes(study.id)
+      .then((m) => vivo && setPlantasDosLotesDoEstudo(m))
+      .catch((e) => {
+        console.warn('[casas dos lotes] plantas existentes indisponíveis:', e);
+        if (vivo) setPlantasDosLotesDoEstudo(new Map());
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, study.id]);
+  const [gerandoLotes, setGerandoLotes] = useState<{ rotulo: string; indice: number; total: number; etapa: string | null } | null>(null);
+  const [resultadosDosLotes, setResultadosDosLotes] = useState<Record<string, ResultadoDoLote>>({});
+  const cancelarCasaDoLote = useRef<(() => void) | null>(null);
+  const pararLotes = useRef(false);
+  const gerarCasasDosLotes = async (uids: string[]) => {
+    pararLotes.current = false;
+    const alvo = lotesDasCasas.filter((l) => uids.includes(l.loteUid));
+    for (let i = 0; i < alvo.length; i++) {
+      if (pararLotes.current) break;
+      const l = alvo[i];
+      setGerandoLotes({ rotulo: l.rotulo, indice: i + 1, total: alvo.length, etapa: null });
+      const lote = (editor.model.lotes ?? []).find((x) => x.uid === l.loteUid);
+      const modelo = lote ? modeloDoLote(editor.model, lote) : { problema: 'o lote não está mais no desenho' };
+      if ('problema' in modelo) {
+        setResultadosDosLotes((r) => ({ ...r, [l.loteUid]: { ok: false, motivo: modelo.problema } }));
+        continue;
+      }
+      const limites = modelo.model.boundaries.filter((b) => b.levelId === modelo.levelId);
+      const { curto, avisos } = programaDoLote(casaDoEstudo.premissas.curto, l.unidade);
+      try {
+        const run = planejarCasaNoWorker(montarPedidoDaCasa(modelo.model, modelo.levelId, medirTerreno(limites), limites, curto), (e) =>
+          setGerandoLotes((g) => (g ? { ...g, etapa: `etapa ${e.indice} de ${e.total}: ${e.rotulo}` } : g)),
+        );
+        cancelarCasaDoLote.current = run.cancelar;
+        const plano = await run.promessa;
+        cancelarCasaDoLote.current = null;
+        if (plano.comandos.length === 0) throw new Error(plano.pendencias[0]?.texto ?? 'a casa não coube no lote');
+        const salvo = await criarPlantaDaCasaDoLote({
+          loteamento: { studyId: study.id, organizationId: study.organization_id, projectId: study.project_id ?? null, nome: study.name },
+          loteUid: l.loteUid,
+          rotulo: l.rotulo,
+          modelo: plano.resultado,
+          premissas: { ...casaDoEstudo.premissas, curto, unidadeId: l.unidade?.id ?? null },
+        });
+        setResultadosDosLotes((r) => ({ ...r, [l.loteUid]: { ok: true, studyId: salvo.studyId, nome: salvo.nome, avisos } }));
+      } catch (e) {
+        cancelarCasaDoLote.current = null;
+        if (pararLotes.current) break;
+        setResultadosDosLotes((r) => ({ ...r, [l.loteUid]: { ok: false, motivo: e instanceof Error ? e.message : String(e) } }));
+      }
+    }
+    setGerandoLotes(null);
+  };
+  const pararCasasDosLotes = () => {
+    pararLotes.current = true;
+    cancelarCasaDoLote.current?.();
+  };
   // GERAR MASSA seguindo as torres do Empreendimento (26/10/2026, etapa 1): enquanto carregam, o motivo diz.
   const massaDoEmpreendimentoNaTela = useMemo(
     () =>
@@ -12083,6 +12165,32 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           </div>
         </div>
       )}
+      {telaAberta === 'casas-lotes' && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="casas-lotes">
+          {cabecalhoDaTela(
+            'Casas dos lotes',
+            'A casa automática de cada lote do loteamento numa planta própria — as divisas do lote, a zona desta planta e o programa comum, com o que a unidade do lote tiver. Um lote por vez; esta planta não muda.',
+            Home,
+            'Analisar',
+          )}
+          <TelaCasasDosLotes
+            lotes={lotesDasCasas}
+            plantas={plantasDosLotesDoEstudo}
+            // Com Empreendimento ligado, o programa de cada lote depende da unidade: gerar antes de carregar usaria o
+            // programa comum em silêncio (achado na conferência de 26/10/2026).
+            carregandoUnidades={!!empreendimentoDaCasa && !torresDoEmpreendimento}
+            programa={casaDoEstudo.premissas.curto}
+            onEditarPrograma={() => setTelaAberta('casa')}
+            gerando={gerandoLotes}
+            resultados={resultadosDosLotes}
+            onGerar={(uids) => void gerarCasasDosLotes(uids)}
+            onParar={pararCasasDosLotes}
+            onAbrir={(id) => {
+              window.location.hash = `#/blueprint?studyId=${id}`;
+            }}
+          />
+        </div>
+      )}
       {telaAberta === 'casa' && levelId && (
         <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="casa">
           {cabecalhoDaTela(
@@ -14571,6 +14679,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                     ativo={telaAberta === 'casa'}
                     onClick={() => alternarTela('casa')}
                     ajuda="Casa automática: do terreno e da lei, a casa térrea inteira — arquitetura, estrutura, telhado, hidráulica, elétrica e climatização — numa prévia, e um lote só para lançar"
+                  />
+                )}
+                {relatorioVisivel('quantitativos') && (editor.model.lotes ?? []).length > 0 && (
+                  <BotaoDoRibbon
+                    icone={Home}
+                    rotulo="Casas dos lotes"
+                    ativo={telaAberta === 'casas-lotes'}
+                    onClick={() => alternarTela('casas-lotes')}
+                    ajuda="Casas dos lotes: a casa automática de cada lote do loteamento, cada uma numa planta própria"
                   />
                 )}
                 {relatorioVisivel('quantitativos') && (

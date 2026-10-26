@@ -25,7 +25,9 @@ import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { asaasContaService } from '../services/asaasContaService';
 import { supplierPaymentService, type SupplierPayment } from '../services/supplierPaymentService';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
-import { idsComAlcadaPendente, MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
+import { MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
+import { financialApprovalService } from '../services/financialApprovalService';
+import { situacaoDoTitulo, type SituacaoTitulo } from '../utils/situacaoAprovacaoTitulo';
 import { darfService } from '../services/darfService';
 import { competenciaBR, linhaContemId } from '../utils/darf';
 import { hojeLocal } from '../utils/baixaRecebivel';
@@ -43,6 +45,9 @@ export const STATUS_PT: Record<string, string> = {
        Pagar quando o boleto deixou de se autoaprovar (15/08/2026) — antes o
        vocabulário existia no banco mas nenhuma parcela chegava aqui com ele. */
     AGUARDANDO_APROVACAO: 'Aguardando aprovação',
+    /* Desde 26/10/2026 todo título a pagar passa pela alçada: aprovado = liberado
+       para pagar (utils/situacaoAprovacaoTitulo). "Aprovado" fica para linha antiga. */
+    LIBERADO_PARA_PAGAMENTO: 'Liberado para pagamento',
     APROVADO: 'Aprovado',
     BLOQUEADO: 'Bloqueado',
     VENCIDO: 'Vencido',
@@ -61,6 +66,7 @@ const SEM_PAGAMENTO_A_FAZER = ['PAGO', 'CANCELADO', 'RETIDO'];
 const STATUS_COLORS: Record<string, string> = {
     PAGO: 'text-green-700',
     APROVADO: 'text-blue-700',
+    LIBERADO_PARA_PAGAMENTO: 'text-blue-700',
     AGUARDANDO_APROVACAO: 'text-orange-700',
     BLOQUEADO: 'text-red-700',
     PREVISTO: 'text-yellow-700',
@@ -124,8 +130,22 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 250,
 };
 
-const STATUS_FILTROS = ['all', 'AGUARDANDO_APROVACAO', 'PREVISTO', 'VENCIDO', 'PAGO'] as const;
+/* 26/10/2026: "Previsto" saiu — todo título em aberto está aguardando aprovação,
+   liberado ou bloqueado. "Vencido" recorta pelo vencimento, em qualquer dessas. */
+const STATUS_FILTROS = ['all', 'AGUARDANDO_APROVACAO', 'LIBERADO_PARA_PAGAMENTO', 'VENCIDO', 'PAGO'] as const;
 type StatusFiltro = typeof STATUS_FILTROS[number];
+
+/** Situação da linha na alçada (regra única: utils/situacaoAprovacaoTitulo). */
+const situacaoDaLinha = (r: Payable): SituacaoTitulo => situacaoDoTitulo(r, hojeLocal());
+
+/** A linha passa no filtro de status? Filtro persistido de antes ("PREVISTO") vale como "Todos". */
+function passaNoFiltroDeStatus(r: Payable, filtro: string): boolean {
+    if (filtro === 'all' || !(STATUS_FILTROS as readonly string[]).includes(filtro)) return true;
+    if (filtro === 'PAGO') return r.effective_status === 'PAGO';
+    const s = situacaoDaLinha(r);
+    if (filtro === 'VENCIDO') return s.vencido && !['PAGO', 'CANCELADO', 'RETIDO'].includes(r.effective_status);
+    return s.chave === filtro;
+}
 
 /* O filtro de Origem é DERIVADO das linhas carregadas (ver `origensPresentes`
    no componente), não de uma lista fixa. Até 15/08/2026 era
@@ -203,7 +223,8 @@ function renderParcelaCell(
                 </div>
             );
         case 'vencimento': {
-            const vencido = row.effective_status === 'VENCIDO';
+            // Pela data (situacaoDaLinha): o business_status antigo AGUARDANDO_APROVACAO não vira VENCIDO na view.
+            const vencido = row.effective_status === 'VENCIDO' || (situacaoDaLinha(row).vencido && row.effective_status !== 'PAGO');
             return (
                 <div className={`text-center text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`}>
                     {formatDateBR(row.due_date)}
@@ -352,7 +373,7 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
         case 'plano_contas': return chavePorNome(r.plano_de_contas_name);
         case 'imovel': return chavePorNome(r.imovel_label);
         case 'vencimento': return chavePorMes(r.due_date);
-        case 'status': return chavePorRotulo(r.effective_status, STATUS_PT);
+        case 'status': return chavePorRotulo(situacaoDaLinha(r).chave, STATUS_PT);
     }
 }
 
@@ -484,18 +505,31 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             .catch(err => console.error('[ContasPagarParcelas] Erro ao carregar recibos:', err));
     }, [organizationId, loading]);
 
-    // Títulos pendentes na alçada (17/10/2026, item H.1): a baixa manual deles é
-    // recusada no serviço; aqui o botão desliga e diz por quê. Mesma régua dos
-    // recibos — depois da lista, com guarda de resposta fora de ordem.
-    const [alcadaPendente, setAlcadaPendente] = useState<Set<string>>(new Set());
-    const alcadaSeq = useRef(0);
-    useEffect(() => {
-        if (loading) return;
-        const seq = ++alcadaSeq.current;
-        idsComAlcadaPendente(organizationId ?? null)
-            .then(ids => { if (seq === alcadaSeq.current) setAlcadaPendente(ids); })
-            .catch(err => console.error('[ContasPagarParcelas] Erro ao conferir a alçada:', err));
-    }, [organizationId, loading]);
+    // Alçada (17/10/2026, item H.1; 26/10/2026 todo título): a baixa manual e o PIX
+    // de título pendente ou rejeitado são recusados no serviço; aqui os botões
+    // desligam e dizem por quê. Desde 26/10 a alçada vem na própria linha
+    // (vw_payables.approval_status) — antes era uma consulta à parte.
+    const [reenviando, setReenviando] = useState<string | null>(null);
+
+    /** "Reenviar para aprovação" do Bloqueado (rejeitado) — volta para a fila de Aprovações. */
+    async function reenviarParaAprovacao(row: ParcelaRow) {
+        setReenviando(row.id);
+        try {
+            if (row.darf) {
+                await darfService.enviarParaAprovacao(row.darf.id);
+                onReload();
+            } else {
+                await financialApprovalService.reenviar(row.id);
+                const vencido = !!row.due_date && row.due_date.slice(0, 10) < hojeLocal();
+                onRowChanged({ ...row, approval_status: 'PENDENTE', business_status: 'PREVISTO', effective_status: vencido ? 'VENCIDO' : 'PREVISTO' });
+            }
+            notify('Reenviado para aprovação em Financeiro › Aprovações.');
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Não foi possível reenviar para aprovação.', 'error');
+        } finally {
+            setReenviando(null);
+        }
+    }
 
     // ─── Pagar pela Asaas (Fase 3 — docs/planos/2026-10-16-asaas-pendencias-e-pix.md)
     // A ação só aparece nas linhas cuja organização tem conta Asaas ativa
@@ -569,7 +603,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
 
     const filtered = useMemo(() => {
         let result = rowsWithNames.filter(r => {
-            if (statusFiltro !== 'all' && r.effective_status !== statusFiltro) return false;
+            if (!passaNoFiltroDeStatus(r, statusFiltro)) return false;
             if (origemFiltro !== 'all' && r.source_system !== origemFiltro) return false;
             // Parcela sem vencimento passa pelo período (mesma semântica da visão de
             // notas): esconder o que não tem data é pior do que mostrar fora do filtro.
@@ -606,7 +640,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     case 'obra':         return (r.obra_name ?? '').toLowerCase();
                     case 'valor':        return r.amount ?? 0;
                     case 'vencimento':   return r.due_date ?? '';
-                    case 'status':       return r.effective_status;
+                    case 'status':       return STATUS_PT[situacaoDaLinha(r).chave] ?? situacaoDaLinha(r).chave;
                     case 'centro_custo': return (r.cost_center_name ?? '').toLowerCase();
                     case 'plano_contas': return (r.plano_de_contas_name ?? '').toLowerCase();
                     case 'imovel':       return (r.imovel_label ?? '').toLowerCase();
@@ -994,9 +1028,19 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                 </div>
             );
         }
+        const situacao = situacaoDaLinha(row);
         return (
-            <div className="text-center">
-                <StatusBadge status={row.effective_status} />
+            <div className="text-center" title={situacao.motivoRejeicao ? `Rejeitado: ${situacao.motivoRejeicao}` : undefined}>
+                <StatusBadge status={situacao.chave} />
+                {situacao.detalhes.length > 0 && (
+                    <div className="text-xs font-normal">
+                        {situacao.detalhes.map((d, i) => (
+                            <span key={d} className={d === 'Vencido' ? 'text-red-600' : 'text-amber-700'}>
+                                {i > 0 ? ' · ' : ''}{d}
+                            </span>
+                        ))}
+                    </div>
+                )}
                 {asaas && (
                     <div className="flex items-center justify-center gap-1 text-xs font-normal text-blue-700"
                         title={sp?.asaas_authorized === false
@@ -1030,10 +1074,14 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         );
     }
 
-    /** Pendente na alçada? No DARF, basta um componente pendente (o banco recusa a baixa do DARF inteiro). */
-    const naAlcada = (row: Payable) => row.darf
-        ? row.darf.alcada_pendente || row.darf.componentes.some(c => alcadaPendente.has(c.id))
-        : alcadaPendente.has(row.id);
+    /** Motivo para não pagar pela alçada (pendente ou rejeitado), ou null. No DARF vale a aprovação
+     *  do DARF inteiro (linha sintética) — o banco recusa a baixa se algum membro não está liberado. */
+    const motivoAlcada = (row: Payable): string | null => {
+        const s = situacaoDaLinha(row);
+        if (s.motivo) return s.motivo;
+        return row.darf?.alcada_pendente ? MOTIVO_ALCADA_PENDENTE : null;
+    };
+    const naAlcada = (row: Payable) => !!motivoAlcada(row);
 
     // Títulos em aberto da seleção — os que a baixa em lote alcança.
     const selecionadasNaoQuitadas = selectedVisible.filter(r => !SEM_PAGAMENTO_A_FAZER.includes(r.effective_status));
@@ -1324,7 +1372,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             onClick={() => setBaixando([row])}
                                                             disabled={salvando === row.id || naAlcada(row)}
                                                             className="text-green-700 hover:text-green-800 text-sm font-medium p-1.5 hover:bg-green-50 rounded-[6px] transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1"
-                                                            title={naAlcada(row) ? MOTIVO_ALCADA_PENDENTE
+                                                            title={naAlcada(row) ? motivoAlcada(row) ?? undefined
                                                                 : row.darf ? 'Dar baixa no DARF inteiro: todos os tributos e encargos, com a mesma data e forma'
                                                                 : 'Dar baixa: data, forma de pagamento e recibo'}
                                                         >
@@ -1359,8 +1407,10 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                         return (
                                                             <button
                                                                 onClick={() => setPagandoAsaas(row)}
-                                                                className="text-blue-700 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1"
-                                                                title={sp?.status === 'FAILED'
+                                                                disabled={naAlcada(row)}
+                                                                className="text-blue-700 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                                                title={naAlcada(row) ? motivoAlcada(row) ?? undefined
+                                                                    : sp?.status === 'FAILED'
                                                                     ? `A última tentativa falhou: ${sp.failure_reason ?? 'sem motivo informado'}. Clique para tentar de novo.`
                                                                     : row.source_system === 'BOLETO' ? 'Pagar o boleto pela conta Asaas' : 'Pagar por PIX pela conta Asaas'}
                                                             >
@@ -1370,6 +1420,17 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             </button>
                                                         );
                                                     })()}
+                                                    {!quitado && situacaoDaLinha(row).chave === 'BLOQUEADO' && (
+                                                        <button
+                                                            onClick={() => reenviarParaAprovacao(row)}
+                                                            disabled={reenviando === row.id}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all disabled:opacity-50 flex items-center gap-1 whitespace-nowrap"
+                                                            title="Rejeitado na aprovação — reenviar para Financeiro › Aprovações"
+                                                        >
+                                                            {reenviando === row.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Undo2 className="w-3.5 h-3.5" />}
+                                                            Reenviar
+                                                        </button>
+                                                    )}
                                                     {row.effective_status === 'PAGO' && (
                                                         <>
                                                             {/* Sem "Quitado" aqui: a coluna Status já diz "Pago". */}
@@ -1580,7 +1641,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     onClick={() => setBaixando(selecionadasEmAberto)}
                     disabled={selecionadasEmAberto.length === 0}
                     title={selecionadasEmAberto.length
-                        ? `Dar baixa nas parcelas em aberto da seleção (data, forma e recibo)${presasNaAlcada ? ` — ${presasNaAlcada} aguardando aprovação na alçada fica${presasNaAlcada === 1 ? '' : 'm'} de fora` : ''}`
+                        ? `Dar baixa nas parcelas em aberto da seleção (data, forma e recibo)${presasNaAlcada ? ` — ${presasNaAlcada} aguardando aprovação ou bloqueada${presasNaAlcada === 1 ? '' : 's'} na alçada fica${presasNaAlcada === 1 ? '' : 'm'} de fora` : ''}`
                         : presasNaAlcada
                             ? MOTIVO_ALCADA_PENDENTE
                             : 'Todas as parcelas selecionadas já estão pagas ou canceladas.'}

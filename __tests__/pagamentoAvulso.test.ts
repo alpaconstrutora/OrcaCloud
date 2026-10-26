@@ -106,10 +106,22 @@ describe('pagamento avulso · montarTitulosAvulsos', () => {
         expect(sem.category).toBeNull();
     });
 
-    it('"Já pago" NÃO grava pago no INSERT — a baixa vem depois, pela alçada', () => {
+    // 26/10/2026 (plano 2026-10-26-todo-titulo-a-pagar-passa-pela-aprovacao, S5): todo título a
+    // pagar nasce PENDENTE na alçada, e a baixa logo depois do INSERT seria recusada. O pagamento
+    // já aconteceu — como na conciliação, o título nasce pago e não entra na fila.
+    // (Até 26/10: "Já pago" gravava PENDING e baixava em seguida, pela alçada.)
+    it('"Já pago" grava pago no INSERT, com a data do pagamento', () => {
         const [t] = montarTitulosAvulsos(form({ jaPago: true, dataPagamento: '2026-10-15', paymentAccountId: 'acc1' }), 'g');
+        expect(t.status).toBe('CONCILIATED');
+        expect(t.business_status).toBe('PAGO');
+        expect(t.payment_date).toBe('2026-10-15');
+    });
+
+    it('sem "Já pago" o título nasce em aberto, sem data de pagamento', () => {
+        const [t] = montarTitulosAvulsos(form({ jaPago: false, dataPagamento: '2026-10-15' }), 'g');
         expect(t.status).toBe('PENDING');
         expect(t.business_status).toBe('PREVISTO');
+        expect(t.payment_date).toBeNull();
     });
 
     it('credor vazio grava NULL, não string vazia', () => {

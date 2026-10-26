@@ -13,6 +13,14 @@ import { exportService } from '../services/exportService';
 import { Invoice, Payable, type Darf } from '../types/financial';
 import type { Organization } from '../types';
 import ContasPagarParcelas, { origemLabel as payableOrigemLabel, STATUS_PT as PAYABLE_STATUS_PT } from './ContasPagarParcelas';
+import { situacaoDoTitulo } from '../utils/situacaoAprovacaoTitulo';
+import { hojeLocal } from '../utils/baixaRecebivel';
+
+/** Rótulo da exportação = o MESMO da coluna Status (Aguardando aprovação / Liberado para pagamento / Bloqueado…). */
+const rotuloDaSituacao = (p: Payable): string => {
+    const chave = situacaoDoTitulo(p, hojeLocal()).chave;
+    return PAYABLE_STATUS_PT[chave] ?? chave;
+};
 import FechamentoCentroCusto, { type LinhaFechamento } from './financeiro/FechamentoCentroCusto';
 import type { CostCenterClosing } from '../services/costCenterClosingService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -708,7 +716,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                     obra: p.obra_name ?? '',
                     vencimento: p.due_date,
                     valor: p.amount ?? 0,
-                    status: PAYABLE_STATUS_PT[p.effective_status] ?? p.effective_status,
+                    status: rotuloDaSituacao(p),
                 })),
                 { organization: orgAtual, fileName: 'ContasAPagar_Parcelas', title: 'Contas a Pagar — Parcelas' },
             );
@@ -744,7 +752,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                     obra: p.obra_name ?? '',
                     vencimento: p.due_date,
                     valor: p.amount ?? 0,
-                    status: PAYABLE_STATUS_PT[p.effective_status] ?? p.effective_status,
+                    status: rotuloDaSituacao(p),
                 })),
                 { fileName: 'ContasAPagar_Parcelas' },
             );

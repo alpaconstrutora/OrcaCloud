@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { AlertTriangle, ChevronDown, ChevronRight, Copy, FileText, Receipt, Ungroup } from 'lucide-react';
+import { AlertTriangle, ChevronDown, ChevronRight, Copy, FileText, Loader2, Receipt, Send, Ungroup } from 'lucide-react';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
@@ -7,7 +7,7 @@ import { formatMoney, formatDateBR } from '../ui/Format';
 import { useStore } from '../../store/useStore';
 import { darfService } from '../../services/darfService';
 import { taxPayableService } from '../../services/taxPayableService';
-import { competenciaBR, formatarLinhaDigitavel } from '../../utils/darf';
+import { aprovacaoDoDarfNaTela, competenciaBR, formatarLinhaDigitavel, motivoNaoEnviaDarfParaAprovacao } from '../../utils/darf';
 import type { Darf, DarfStatus, TaxPayable } from '../../types/financial';
 import DarfSheet from './DarfSheet';
 
@@ -142,6 +142,24 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
         }
     }
 
+    /**
+     * "Enviar para aprovação" (pedido de 26/10/2026): o DARF entra em Financeiro ›
+     * Aprovações como UM item, e aprovar/rejeitar vale para todos os tributos dele.
+     * Estado local (§22): a RPC não devolve a linha, mas só a aprovação muda.
+     */
+    async function enviarParaAprovacao(d: Darf) {
+        setOcupado(d.id);
+        try {
+            await darfService.enviarParaAprovacao(d.id);
+            setDarfs(prev => prev.map(x => (x.id === d.id ? { ...x, aprovacao: 'PENDENTE', alcada_pendente: true } : x)));
+            notify('DARF enviado para aprovação em Financeiro › Aprovações.');
+        } catch (e) {
+            notify(e instanceof Error ? e.message : 'Não foi possível enviar o DARF para aprovação.', 'error');
+        } finally {
+            setOcupado(null);
+        }
+    }
+
     async function copiarLinha(d: Darf) {
         try {
             await navigator.clipboard.writeText(d.codigo_barras ?? '');
@@ -200,11 +218,19 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
                 return <span className="block truncate text-sm font-normal text-gray-700" title={d.numero_documento ?? ''}>{d.numero_documento || '—'}</span>;
             case 'status': {
                 const s = STATUS_DARF[d.status_efetivo] ?? { rotulo: d.status_efetivo, cor: 'text-gray-600' };
+                // Segunda linha: a aprovação do DARF inteiro (26/10/2026), no vocabulário de Contas a Pagar.
+                const a = aprovacaoDoDarfNaTela(d);
+                const rejeicao = d.aprovacao === 'REJEITADO'
+                    ? [...(d.aprovacao_cadeia ?? [])].reverse().find(p => p.action === 'REJEITADO')?.notes
+                    : undefined;
                 return (
-                    <span className={`text-sm font-normal ${s.cor}`}
-                        title={d.status_efetivo === 'PARCIAL' ? 'Lançamentos do DARF em estados diferentes (parte paga, parte em aberto)' : undefined}>
-                        {s.rotulo}
-                    </span>
+                    <div title={rejeicao ? `Rejeitado: ${rejeicao}` : undefined}>
+                        <span className={`text-sm font-normal ${s.cor}`}
+                            title={d.status_efetivo === 'PARCIAL' ? 'Lançamentos do DARF em estados diferentes (parte paga, parte em aberto)' : undefined}>
+                            {s.rotulo}
+                        </span>
+                        {a && <div className={`text-xs font-normal ${a.cor}`}>{a.rotulo}</div>}
+                    </div>
                 );
             }
             default:
@@ -294,6 +320,7 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
 
     const renderAcoes = (d: Darf) => {
         const motivoDesagrupa = motivoNaoDesagrupa(d);
+        const motivoEnvio = motivoNaoEnviaDarfParaAprovacao(d);
         return (
             <div className="flex items-center gap-1.5">
                 <button
@@ -304,6 +331,16 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
                 >
                     Ver em Contas a Pagar
                 </button>
+                {/* Botão desligado diz o motivo — o ActionIconButton desligado engole o title, por isso o span. */}
+                <span title={motivoEnvio ?? undefined}>
+                    <ActionIconButton
+                        kind="share"
+                        title="Enviar para aprovação (Financeiro › Aprovações)"
+                        icon={ocupado === d.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+                        disabled={!!motivoEnvio || ocupado === d.id}
+                        onClick={() => enviarParaAprovacao(d)}
+                    />
+                </span>
                 <ActionIconButton kind="edit" title="Editar DARF" onClick={() => setEditando(d)} />
                 <span title={motivoDesagrupa ?? undefined}>
                     <ActionIconButton

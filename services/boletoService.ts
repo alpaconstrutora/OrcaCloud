@@ -10,7 +10,7 @@ import { decidirLinhaManual, colunasParaGravar } from '../utils/boletoLinhaManua
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
-import { MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
+import { motivoParaNaoPagar } from '../utils/situacaoAprovacaoTitulo';
 import { validateCpfCnpj } from '../lib/validators';
 import { MOTIVO_STATUS_PROGRAMADO, planoDeStatusDoBoleto } from '../utils/boletoStatus';
 import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR } from '../utils/boletoAprovacaoLote';
@@ -766,20 +766,23 @@ export const boletoService = {
     },
 
     /**
-     * O título que nasceu deste boleto está pendente na alçada? É o que desliga o
-     * "Marcar como pago" (com o motivo) e o que `marcarPago` confere antes de gravar.
+     * Por que o título que nasceu deste boleto não pode ser baixado à mão — pendente
+     * ou rejeitado na alçada — ou null. É o que desliga o "Marcar como pago" (com o
+     * motivo) e o que `marcarPago` confere antes de gravar. Desde 26/10/2026 todo
+     * título a pagar nasce pendente (plano 2026-10-26-todo-titulo-a-pagar-passa-pela-aprovacao).
      * Sem filtro de org: `reference_id` é o uuid do boleto (ver `marcarPago`).
      */
-    async alcadaPendente(boletoId: string): Promise<boolean> {
+    async motivoDaAlcada(boletoId: string): Promise<string | null> {
         const { data, error } = await supabase
             .from('internal_transactions')
-            .select('id')
+            .select('id, approval_status')
             .eq('source_system', 'BOLETO')
             .eq('reference_id', boletoId)
-            .eq('approval_status', 'PENDENTE')
+            .in('approval_status', ['PENDENTE', 'REJEITADO'])
             .limit(1);
         if (error) throw new Error(`Não foi possível conferir a alçada do boleto: ${error.message}`);
-        return ((data ?? []) as unknown[]).length > 0;
+        const linha = ((data ?? []) as { approval_status?: string }[])[0];
+        return linha ? motivoParaNaoPagar(linha.approval_status) : null;
     },
 
     /**
@@ -788,7 +791,8 @@ export const boletoService = {
      */
     async marcarPago(boletoId: string, organizationId: string, userEmail?: string): Promise<Boleto> {
         // Antes de mexer no boleto: o título dele ainda pendente na alçada não é baixado à mão (item H.1).
-        if (await this.alcadaPendente(boletoId)) throw new Error(MOTIVO_ALCADA_PENDENTE);
+        const motivoAlcada = await this.motivoDaAlcada(boletoId);
+        if (motivoAlcada) throw new Error(motivoAlcada);
         const boleto = await this.transitar(boletoId, organizationId, 'pago', userEmail);
         const hoje = new Date().toISOString().slice(0, 10);
         const [, txResult] = await Promise.all([

@@ -103,6 +103,39 @@ export const financialApprovalService = {
         }
     },
 
+    /**
+     * "Reenviar para aprovação" de um título REJEITADO (Bloqueado em Contas a
+     * Pagar) — plano 2026-10-26-todo-titulo-a-pagar-passa-pela-aprovacao, S2.
+     * Não usa `approvalService.submit`, que zera a cadeia: o histórico da
+     * rejeição fica, e `approve` só conta a rodada depois dela
+     * (`niveisAprovadosNaRodada`). Abaixo do piso = 1 nível, como o gatilho.
+     * `business_status` sai de BLOQUEADO (a view volta a Previsto/Vencido).
+     */
+    async reenviar(transactionId: string): Promise<void> {
+        const { data: row, error: fErr } = await supabase
+            .from('internal_transactions')
+            .select('approval_status, amount, organization_id')
+            .eq('id', transactionId)
+            .single();
+        if (fErr) throw new Error(`Erro ao carregar o título: ${fErr.message}`);
+        if ((row as { approval_status?: string }).approval_status !== 'REJEITADO') {
+            throw new Error('Só título rejeitado é reenviado para aprovação.');
+        }
+        const { organization_id, amount } = row as { organization_id: string; amount: number };
+        const cfg = await approvalService.resolveRequiredLevels(organization_id, Number(amount) || 0);
+        const { error } = await supabase
+            .from('internal_transactions')
+            .update({
+                approval_status:          'PENDENTE',
+                approval_required_levels: cfg?.required_levels ?? 1,
+                business_status:          null,
+                updated_at:               new Date().toISOString(),
+            })
+            .eq('id', transactionId)
+            .eq('approval_status', 'REJEITADO');
+        if (error) throw new Error(`Erro ao reenviar para aprovação: ${error.message}`);
+    },
+
     async approve(
         transactionId: string,
         level: 1 | 2,

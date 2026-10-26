@@ -18,7 +18,7 @@ const svc = vi.hoisted(() => ({
     podeMudarOrganizacao: vi.fn().mockReturnValue(true),
     motivoParaNaoMudarOrganizacao: vi.fn().mockReturnValue(null),
     listAuditoria: vi.fn().mockResolvedValue([]),
-    alcadaPendente: vi.fn().mockResolvedValue(false),
+    motivoDaAlcada: vi.fn().mockResolvedValue(null),
     marcarRevisao: vi.fn(),
     cancelar: vi.fn(),
     reverterParaRascunho: vi.fn(),

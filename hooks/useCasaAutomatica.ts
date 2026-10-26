@@ -95,3 +95,69 @@ export function useCasaAutomatica(): EstadoDaCasaAutomatica {
 
   return { rodando, plano, erro, progresso, gerar, cancelar, limpar };
 }
+
+/**
+ * CASAS DO LOTEAMENTO (26/10/2026): uma casa por vez, como PROMESSA — a tela "Casas dos lotes" gera lote a lote e
+ * espera cada uma (o hook acima guarda um plano só). Mesmo worker e mesmo fio-principal de reserva do hook.
+ * `cancelar` termina o worker e rejeita a promessa.
+ */
+export function planejarCasaNoWorker(
+  pedido: PedidoDaCasa,
+  onEtapa?: (e: { indice: number; total: number; rotulo: string }) => void,
+): { promessa: Promise<PlanoDaCasa>; cancelar: () => void } {
+  let w: Worker | null = null;
+  let rejeitar: (e: Error) => void = () => {};
+  let terminado = false;
+  const promessa = new Promise<PlanoDaCasa>((resolve, reject) => {
+    rejeitar = reject;
+    const fim = () => {
+      terminado = true;
+      w?.terminate();
+      w = null;
+    };
+    if (typeof Worker !== 'undefined') {
+      try {
+        w = new Worker(new URL('../utils/blueprintCasaAutomatica.worker.ts', import.meta.url), { type: 'module' });
+      } catch {
+        w = null;
+      }
+    }
+    if (w) {
+      w.onmessage = (ev: MessageEvent<RespostaDaCasa>) => {
+        const r = ev.data;
+        if (r.tipo === 'etapa') {
+          onEtapa?.({ indice: r.indice, total: r.total, rotulo: r.etapa.rotulo });
+          return;
+        }
+        fim();
+        if (r.tipo === 'resultado') resolve(r.plano);
+        else reject(new Error(r.mensagem));
+      };
+      w.onerror = (ev) => {
+        fim();
+        reject(new Error(ev.message || 'falha no worker da casa automática'));
+      };
+      w.postMessage(pedido);
+      return;
+    }
+    setTimeout(() => {
+      if (terminado) return;
+      try {
+        resolve(planejarCasaDoPedido(pedido));
+      } catch (e) {
+        reject(e instanceof Error ? e : new Error(String(e)));
+      }
+      terminado = true;
+    }, 0);
+  });
+  return {
+    promessa,
+    cancelar: () => {
+      if (terminado) return;
+      terminado = true;
+      w?.terminate();
+      w = null;
+      rejeitar(new Error('cancelado'));
+    },
+  };
+}

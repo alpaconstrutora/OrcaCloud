@@ -116,7 +116,46 @@ continua num PR próprio.
   pavimentos na grade e no recozimento (5 testes novos no gerador).
 - [x] 7 — `utils/blueprintMassaDoEmpreendimento.ts` + 5 testes.
 - [x] 8 — caixa "Seguir o Empreendimento" (`TelaGeradorDeMassaEmpreendimento.test.tsx`, 3 testes).
-- [ ] 9 · [ ] 10 · [ ] 11 (Etapa 2)
+Etapas 3 e 1 **publicadas** no PR #176 (2e2dd5b), confirmadas no domínio por `conferir-producao.sh "Seguir o Empreendimento"`.
+
+- [x] 9 — `utils/blueprintCasasDoLoteamento.ts` + 5 testes (`lotesParaCasas`, `modeloDoLote`, `programaDoLote`).
+- [x] 10 — `services/blueprintCasasDoLoteamentoService.ts` + 3 testes (ordem das gravações, zona copiada sem ids,
+  arquivamento na falha). Premissa nova `loteDeOrigem` em `PremissasDaCasa`: é por ela, e não pelo nome, que se sabe
+  que o lote já tem planta.
+- [x] 11 — tela `TelaCasasDosLotes.tsx` (7 testes); botão "Casas dos lotes" no ribbon Analisar, só com lotes;
+  `planejarCasaNoWorker` (a casa como promessa); `montarPedidoDaCasa` (a tela Casa e os lotes montam o MESMO pedido).
+
+### Mudanças de rumo na etapa 2 (26/10/2026)
+
+- **Item 9, esquina:** o lote de esquina fica com as DUAS frentes, como o loteamento já mede, em vez de "a mais
+  longa". A casa se implanta pela mais longa (`quadroDaFrente`) e as regras somam as duas como testada. É o fato do
+  lote; escolher uma seria inventar.
+- **Item 9, coordenadas:** o lote não é transladado. As coordenadas do loteamento já cabem no limite do kernel, e
+  assim a georreferência e a topografia do loteamento valem iguais na planta da casa.
+- **Item 10, terraplenagem:** o platô de terraplenagem não vai para a planta da casa (a planta nova não tem a
+  topografia do loteamento). A casa vai inteira e a tela diz isso.
+
+### Achado na conferência (26/10/2026)
+
+- **Defeito:** na 1ª rodada, o clique em "Gerar casas" saiu antes de as unidades do Empreendimento carregarem. O lote 2
+  foi gerado com o programa COMUM, sem aviso: era a unidade de 2 dormitórios, e a casa saiu com 3.
+  - **Diagnóstico:** sonda no app. O serviço devolvia a unidade com o `uid` certo, e um registro temporário no editor
+    mostrou `casam: 1`, só que DEPOIS do clique.
+  - **Correção:** com Empreendimento ligado, o botão espera as unidades e diz por quê (`carregandoUnidades`). Há um
+    teste novo, e o roteiro agora exige ver a unidade antes de clicar.
+- **Ajuste:** o lote que acabou de ganhar planta sai da escolha, para "Gerar casas" não convidar a gerar de novo.
+
+### Conferência no app real (etapa 2, 2ª rodada)
+
+`c:/tmp/pwtest/conferencia-casas-lotes.cjs`, com um loteamento descartável (quadra A, rua, lotes 1 e 2 de 12 × 30) e
+a unidade do lote 2 com 2 dormitórios e 1 suíte. Os 12 portões passaram:
+
+1. Os dois lotes vieram escolhidos, e a unidade aparece ligada.
+2. As duas plantas foram criadas.
+3. No banco, cada planta tem a casa (15 e 13 paredes) e as 4 divisas do lote, com 1 FRENTE. O lote 2 tem 2
+   dormitórios, 1 suíte e a unidade; o lote 1 tem o programa comum (3 dormitórios).
+4. Ao reabrir, os dois lotes aparecem com "Já tem planta" e nada vem escolhido.
+5. Limpeza: 3 plantas arquivadas e Empreendimento apagado, conferido no banco. Nenhum erro de página, console ou HTTP.
 
 ### Conferência no app real (26/10/2026, dev server da frente, descartáveis apagados)
 

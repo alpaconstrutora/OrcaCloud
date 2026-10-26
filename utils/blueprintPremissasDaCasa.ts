@@ -70,6 +70,11 @@ export interface PremissasDaCasa {
    * sincronismo atualiza ela. `null` = nenhuma: o sincronismo cria a torre "Casa" com 1 unidade.
    */
   unidadeId: string | null;
+  /**
+   * 26/10/2026 (casas do loteamento): a planta desta casa nasceu de um lote do loteamento — o estudo e o `uid` do lote.
+   * É o que a tela "Casas dos lotes" usa para saber que o lote já tem planta. `null` = casa comum.
+   */
+  loteDeOrigem: { estudoId: string; loteUid: string } | null;
 }
 
 export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
@@ -88,6 +93,7 @@ export const PREMISSAS_DA_CASA_PADRAO: PremissasDaCasa = {
   pressao: { caixaElevadaAteMm: 2000, potenciaDoPressurizadorW: 370 },
   forro: { lancar: true, peDireitoLivrePermanenciaMm: 2500, peDireitoLivreDemaisMm: 2300, pisoAcabadoMm: 50 },
   unidadeId: null,
+  loteDeOrigem: null,
 };
 
 /** Os valores aceitos de cada enumerado (o resto cai no padrão). */
@@ -146,7 +152,14 @@ export function premissasDaCasaDaColuna(raw: unknown): PremissasDaCasa {
     pressao: completar(r.pressao, PREMISSAS_DA_CASA_PADRAO.pressao),
     forro: completar(r.forro, PREMISSAS_DA_CASA_PADRAO.forro),
     unidadeId: typeof r.unidadeId === 'string' && r.unidadeId.trim() ? r.unidadeId : null,
+    loteDeOrigem: loteDeOrigemDaColuna(r.loteDeOrigem),
   };
+}
+
+function loteDeOrigemDaColuna(v: unknown): PremissasDaCasa['loteDeOrigem'] {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const o = v as Record<string, unknown>;
+  return typeof o.estudoId === 'string' && o.estudoId && typeof o.loteUid === 'string' && o.loteUid ? { estudoId: o.estudoId, loteUid: o.loteUid } : null;
 }
 
 /** As premissas → as hipóteses PARCIAIS que o motor completa (`planejarCasa(…, hipParcial)`). */

@@ -108,29 +108,28 @@ export const speService = {
         if (error) throw error;
     },
 
+    // Os dois totalizadores são incrementados NO BANCO (UPDATE ... SET x = x + n),
+    // nunca lendo e regravando daqui: `capitalCallService.createCall` dispara os
+    // incrementos em paralelo, e ler-somar-gravar perdia um deles. A RPC também
+    // falha quando a RLS não deixa alterar o sócio — antes o UPDATE pegava 0
+    // linhas e o total ficava errado calado.
+    // Migration: 20271026900000_spe_capital_incremento_atomico.sql
+
     /** Registra chamada de capital — incrementa capital_calls_total */
     async addCapitalCall(partnerId: string, amount: number): Promise<void> {
         const { error } = await supabase.rpc('increment_spe_capital_call', {
             p_partner_id: partnerId,
             p_amount: amount,
         });
-        // Fallback se o RPC não existir: update direto
-        if (error) {
-            const { data: current } = await supabase
-                .from('spe_partners').select('capital_calls_total').eq('id', partnerId).single();
-            await supabase.from('spe_partners')
-                .update({ capital_calls_total: (current?.capital_calls_total ?? 0) + amount })
-                .eq('id', partnerId);
-        }
+        if (error) throw error;
     },
 
     /** Registra pagamento de chamada — incrementa capital_paid */
     async addCapitalPayment(partnerId: string, amount: number): Promise<void> {
-        const { data: current } = await supabase
-            .from('spe_partners').select('capital_paid').eq('id', partnerId).single();
-        const { error } = await supabase.from('spe_partners')
-            .update({ capital_paid: (current?.capital_paid ?? 0) + amount })
-            .eq('id', partnerId);
+        const { error } = await supabase.rpc('increment_spe_capital_paid', {
+            p_partner_id: partnerId,
+            p_amount: amount,
+        });
         if (error) throw error;
     },
 };

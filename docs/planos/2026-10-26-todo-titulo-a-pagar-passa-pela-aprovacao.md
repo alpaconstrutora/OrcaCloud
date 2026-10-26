@@ -49,6 +49,8 @@ Com este plano, o título passa a cair SEMPRE em Aprovações (item M1).
 | 26/10 | O que trava enquanto aguarda? | **Baixa manual/lote + PIX/Asaas**; conciliação com extrato segue liberada (aviso "Pago sem aprovação") |
 | 26/10 | Parte 1 (regra e banco) | Aprovada |
 | 26/10 | Parte 2 (telas) | Aprovada |
+| 26/10 | Plano | Aprovado ("ok") |
+| 26/10 | Títulos de organização de CONDOMÍNIO entram na regra? (o síndico dá baixa pelo portal, que não tem tela de aprovação) | **Não — condomínio fica fora** (`empreendimentos.condominio_org_id`) |
 
 Decorrências registradas no desenho aprovado:
 - Níveis continuam pelas faixas; **abaixo do piso = 1 nível** (rótulo do nível 1 da menor faixa da org, ou "Gestor").
@@ -174,10 +176,27 @@ REGRA #7: toda função nova com `REVOKE … FROM PUBLIC, anon` + `GRANT … TO 
   prova REGRA #7 (sem credencial → 401). **Pronto quando:** chamada com título pendente
   devolve erro com o motivo; sonda sem header = 401.
 
+## Achados da revisão final (26/10/2026) e o que foi feito
+
+| Achado | Grau | Feito |
+|---|---|---|
+| `CREATE OR REPLACE VIEW` sem `security_invoker = on` tiraria a RLS de `vw_payables`/`vw_darfs` (vazamento entre organizações) | Crítico | ✅ opção repetida + conferência no fim da migration; `viewSecurityGuard.test` vermelho → verde |
+| Editar valor de avulso pendente o liberava (submit `semFaixa: 'liberar'` abaixo do piso) | Importante | ✅ gatilho `trg_titulo_volta_a_alcada` (BEFORE UPDATE): aberto em RASCUNHO volta PENDENTE |
+| Recálculo de comissão (`fn_comissao_titulo_gravar`) devolve RASCUNHO pagável | Importante | ✅ mesmo gatilho |
+| Estorno/desfazer conciliação reabre título nunca aprovado | Importante | ✅ mesmo gatilho (prova: estorno → PENDENTE) |
+| Condomínio: portal do síndico recusaria a baixa sem ter onde aprovar | Importante | ✅ decisão do usuário: condomínio fora (gatilhos e virada) |
+| "Aprovar selecionados" levava itens escondidos pelo filtro | Menor → Importante (reclassificado: aprovação de dinheiro que o usuário não vê) | ✅ `utils/filaAprovacao.itensDoLote` + teste |
+| Enviar DARF já liberado o volta à fila sem confirmar; memória só guarda APROVADO; texto da virada com data fixa; `fn_darf_aprovar` aceita nível 2 sem o 1 por chamada direta; REJEITADO conciliado sem carimbo; conciliação de divergência cria título que fica "Pago sem aprovação" | Menor | adiados (relatados ao usuário) |
+
 ## Estado
 
-- [ ] Plano aprovado pelo usuário
-- Implementação: 0 de 19 itens
+- [x] Plano aprovado pelo usuário (26/10)
+- [x] M1–M6 — migration `aplicar_20271026400000` (provada em transação desfeita; ainda NÃO aplicada)
+- [x] S1–S6, U1, T1–T5 — commits `c55bddd1`, `5bafa0f6` e o da revisão
+- [x] E1 — sem código: `bloqueiosDoDisparo` já recusava PENDENTE/REJEITADO; função publicada = origin/main
+- [ ] Aplicar a migration no banco e conferir as contagens
+- [ ] Conferência no navegador (Contas a Pagar, DARFs, Aprovações, Boleto)
+- [ ] Publicar (PR + CI verde + merge)
 
 ## Verificação
 

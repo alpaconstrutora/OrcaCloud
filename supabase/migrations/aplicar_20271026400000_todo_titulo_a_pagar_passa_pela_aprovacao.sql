@@ -7,8 +7,16 @@
 -- 1 nível. Na virada, os títulos em aberto VENCIDOS ficam liberados e os A VENCER
 -- entram na fila.
 --
+-- Revisão final (26/10/2026): (a) as views recriadas mantêm `security_invoker = on`
+-- (CREATE OR REPLACE VIEW sem a opção a remove — a view passaria a ignorar a RLS);
+-- (b) título que VOLTA a aberto (estorno, desfazer conciliação) ou volta a RASCUNHO
+-- (edição de valor do avulso, recálculo de comissão) também cai na alçada — gatilho
+-- BEFORE UPDATE com a mesma regra; (c) decisão do usuário: organização de
+-- CONDOMÍNIO (empreendimentos.condominio_org_id) fica FORA da regra — o síndico
+-- dá baixa pelo portal, que não tem tela de aprovação.
+--
 -- REGRA #7:
---   • fn_titulo_nasce_na_alcada / fn_titulo_aprovacao_memoriza — de gatilho, ninguém
+--   • fn_titulo_nasce_na_alcada / fn_titulo_aprovacao_memoriza / fn_org_e_condominio — de gatilho, ninguém
 --     chama por RPC. SECURITY DEFINER só para ler/gravar `titulo_aprovacao_memoria`
 --     (RLS ligada e sem policy: invisível pela API). EXECUTE revogado de todos.
 --   • fn_approval_action_queue — recriada (o retorno ganhou `origem`), mesma ACL de antes.
@@ -70,6 +78,19 @@ CREATE TRIGGER trg_titulo_aprovacao_memoriza
     FOR EACH ROW WHEN (OLD.direction = 'DEBIT' AND OLD.approval_status = 'APROVADO')
     EXECUTE FUNCTION public.fn_titulo_aprovacao_memoriza();
 
+-- Organização de CONDOMÍNIO (decisão do usuário, 26/10/2026): fica fora da regra.
+-- É a org própria do condomínio, `empreendimentos.condominio_org_id` (fn_org_do_condominio).
+CREATE OR REPLACE FUNCTION public.fn_org_e_condominio(p_organization_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+    SELECT EXISTS (SELECT 1 FROM public.empreendimentos e WHERE e.condominio_org_id = p_organization_id);
+$$;
+REVOKE EXECUTE ON FUNCTION public.fn_org_e_condominio(uuid) FROM PUBLIC, anon, authenticated;
+
 -- ── M1. Todo título a pagar nasce na alçada ─────────────────────────────────
 -- Um ponto só no banco porque são 15 origens que criam título a pagar; um
 -- `submitForApproval` por serviço deixaria de fora a próxima origem que surgir.
@@ -78,8 +99,14 @@ CREATE TRIGGER trg_titulo_aprovacao_memoriza
 --   • tributo RETIDO pelo cliente;
 --   • ASAAS_FEE (o banco já debitou);
 --   • multa/juros de DARF (source_system 'DARF' — seguem a aprovação do DARF);
---   • entry_type CONTRA.
+--   • entry_type CONTRA;
+--   • organização de CONDOMÍNIO (decisão do usuário).
 -- Respeita quem já grava PENDENTE/APROVADO/REJEITADO explicitamente.
+--
+-- No UPDATE (gatilho trg_titulo_volta_a_alcada): título que volta a aberto em
+-- RASCUNHO — estorno de baixa, desfazer conciliação, edição de valor que zera a
+-- alçada, recálculo de comissão — cai na alçada de novo, com a cadeia zerada (a
+-- aprovação, se havia, valia para outro estado). A memória (M2) é só do INSERT.
 CREATE OR REPLACE FUNCTION public.fn_titulo_nasce_na_alcada()
 RETURNS trigger
 LANGUAGE plpgsql
@@ -94,12 +121,13 @@ BEGIN
        OR COALESCE(NEW.business_status, '') IN ('RETIDO', 'CANCELADO', 'PAGO')
        OR COALESCE(NEW.source_system, '') IN ('ASAAS_FEE', 'DARF')
        OR COALESCE(NEW.entry_type, 'PRINCIPAL') = 'CONTRA'
-       OR COALESCE(NEW.approval_status, 'RASCUNHO') <> 'RASCUNHO' THEN
+       OR COALESCE(NEW.approval_status, 'RASCUNHO') <> 'RASCUNHO'
+       OR public.fn_org_e_condominio(NEW.organization_id) THEN
         RETURN NEW;
     END IF;
 
     -- Mesmo título recriado pelo sync, mesmo valor, nos últimos 30 dias → continua aprovado.
-    IF NEW.reference_id IS NOT NULL AND NEW.source_system IS NOT NULL THEN
+    IF TG_OP = 'INSERT' AND NEW.reference_id IS NOT NULL AND NEW.source_system IS NOT NULL THEN
         SELECT * INTO m
           FROM public.titulo_aprovacao_memoria mm
          WHERE mm.organization_id = NEW.organization_id
@@ -137,8 +165,17 @@ CREATE TRIGGER trg_titulo_nasce_na_alcada
     FOR EACH ROW WHEN (NEW.direction = 'DEBIT')
     EXECUTE FUNCTION public.fn_titulo_nasce_na_alcada();
 
+DROP TRIGGER IF EXISTS trg_titulo_volta_a_alcada ON public.internal_transactions;
+CREATE TRIGGER trg_titulo_volta_a_alcada
+    BEFORE UPDATE ON public.internal_transactions
+    FOR EACH ROW WHEN (NEW.direction = 'DEBIT' AND NEW.status = 'PENDING'
+                       AND COALESCE(NEW.approval_status, 'RASCUNHO') = 'RASCUNHO')
+    EXECUTE FUNCTION public.fn_titulo_nasce_na_alcada();
+
 -- ── M4. vw_payables expõe a alçada (colunas no FIM; effective_status igual) ──
-CREATE OR REPLACE VIEW public.vw_payables AS
+-- ⚠️ `security_invoker = on` repetido: CREATE OR REPLACE VIEW sem a opção a REMOVE,
+-- e a view passaria a rodar como o dono, ignorando a RLS (vazamento de 2026-08-06).
+CREATE OR REPLACE VIEW public.vw_payables WITH (security_invoker = on) AS
  SELECT it.id,
     it.organization_id,
     it.source_system,
@@ -231,7 +268,7 @@ $function$;
 REVOKE EXECUTE ON FUNCTION public.fn_darf_aprovacao(uuid) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.fn_darf_aprovacao(uuid) TO authenticated;
 
-CREATE OR REPLACE VIEW public.vw_darfs AS
+CREATE OR REPLACE VIEW public.vw_darfs WITH (security_invoker = on) AS
  SELECT d.id,
     d.organization_id,
     d.competencia,
@@ -817,6 +854,7 @@ SELECT t.id, t.approval_status, t.approval_chain, t.approval_required_levels, t.
    AND COALESCE(t.business_status, '') NOT IN ('RETIDO', 'CANCELADO', 'PAGO')
    AND COALESCE(t.source_system, '') NOT IN ('ASAAS_FEE', 'DARF')
    AND COALESCE(t.entry_type, 'PRINCIPAL') <> 'CONTRA'
+   AND NOT public.fn_org_e_condominio(t.organization_id)
 ON CONFLICT (id) DO NOTHING;
 
 UPDATE public.internal_transactions t
@@ -840,5 +878,13 @@ UPDATE public.internal_transactions t
   FROM public._reversao_virada_alcada_20271026 r
  WHERE r.id = t.id AND r.acao = 'PENDENTE'
    AND COALESCE(t.approval_status, 'RASCUNHO') = 'RASCUNHO';
+
+DO $chk$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'vw_payables' AND 'security_invoker=on' = ANY(reloptions))
+       OR NOT EXISTS (SELECT 1 FROM pg_class WHERE relname = 'vw_darfs' AND 'security_invoker=on' = ANY(reloptions)) THEN
+        RAISE EXCEPTION 'vw_payables/vw_darfs perderam security_invoker — abortado.';
+    END IF;
+END $chk$;
 
 COMMIT;

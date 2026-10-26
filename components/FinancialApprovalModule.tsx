@@ -25,6 +25,7 @@ import { idsPagosSemAlcada } from '../services/alcadaDaBaixa';
 import { darfService } from '../services/darfService';
 import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
 import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
+import { itensDoLote } from '../utils/filaAprovacao';
 import { ORIGEM_PT, origemLabel } from '../utils/origemLabel';
 
 // ─── dispatch por entidade ───────────────────────────────────
@@ -377,8 +378,8 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
         () => [...new Set(items.map(origemDaFila).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
         [items],
     );
-    // Lote: só o que está selecionado e ainda pendente na fila carregada.
-    const selecionados = useMemo(() => items.filter(i => selected.has(i.id) && i.approval_status === 'PENDENTE'), [items, selected]);
+    // Lote: selecionado, pendente e NA TELA — o que o filtro escondeu não entra (utils/filaAprovacao).
+    const selecionados = useMemo(() => itensDoLote(rows, selected), [rows, selected]);
     const totalSelecionado = selecionados.reduce((soma, i) => soma + (Number(i.amount) || 0), 0);
 
     /**

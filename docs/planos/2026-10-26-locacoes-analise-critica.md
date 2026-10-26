@@ -69,14 +69,14 @@ regra, isso entra no guia como seção nova antes de ser usado.
 
 ## Estado
 
-- [x] 1 — lib + tela (tsc 0 erros; 183 testes de locação verdes; `check-ui-standard` limpo). Conferência visual: pendente de login no app local.
-- [x] 2 — idem (sem o link direto para o Financeiro: o aviso nomeia o caminho "Financeiro › Contas a Pagar").
-- [ ] 3
-- [ ] 4
-- [ ] 5
-- [ ] 6
-- [ ] 7
-- [ ] 8
+- [x] 1 — `6170844c` (tsc 0 erros; 183 testes de locação verdes; `check-ui-standard` limpo).
+- [x] 2 — `6170844c`; o link para o Financeiro entrou no passo 5 (ação "Apropriar despesas" do NOI).
+- [x] 3 — desenho acima, aprovado pelo usuário em 26/10.
+- [x] 4 — `41d3dcf7`. Os três serviços ganharam `{ throwOnError }` opcional (só a aba usa). `SortableHeader` virou botão + `aria-sort` no app inteiro; 3 testes de outras telas ancorados (`/^Origem/` etc.). Trava nova: `SortableHeaderAcessivel.test.tsx` (falha sem a correção: 3 de 4).
+- [x] 5 — duas leituras, `KpiCard destaque` (§4.5 nova no guia), `LIMIAR` nomeado, faixa secundária e detalhamento neutros, coluna do nome fixa, gráficos por leitura, vencimentos com ≤ 2 meses viram lista.
+- [x] 6 — avisos `text-gray-600`; rótulos/legendas `text-gray-500`; nada abaixo de 12 px. Legenda do `KpiCard` (`sub`) trocada NO COMPONENTE → vale para todo o app (guia §4 atualizado).
+- [x] 7 — exportar XLSX (colunas visíveis, ordem da tela, linha de total, números como número) e link `#/rentals?aba=analise&emp=…&leitura=…` com botão "Copiar link".
+- [ ] 8 — conferência na tela: pendente de login no app local (`localhost:3100`).
 
 ## Verificação
 

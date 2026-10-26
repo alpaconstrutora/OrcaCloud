@@ -173,7 +173,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §1 Imports obrigatórios
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas (+ §3.1 busca de seletor em drawer é transitória)
-- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência)
+- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência, §4.5 `destaque` em painel analítico)
 - [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela; §5.5 filtro avançado: campo com valores conhecidos traz `options` e `getValue` = o que a célula mostra)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita
@@ -347,10 +347,16 @@ Snippet de referência (o que `KpiCard.tsx` renderiza — só para entender, nã
   <div className="min-w-0">
     <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">Label do KPI</p>
     <p className="text-sm font-bold text-blue-700 truncate">{valor}</p>
-    <p className="text-[11px] text-gray-400 truncate">Dica de apoio</p>
+    <p className="text-xs text-gray-500 truncate">Dica de apoio</p>
   </div>
 </div>
 ```
+
+> ℹ️ **Legenda (`sub`) em `text-xs text-gray-500` desde 26/10/2026.** Era
+> `text-[11px] text-gray-400`: 2,6:1 sobre branco, abaixo dos 4,5:1 do WCAG AA —
+> medido na crítica de Locações › Análise, onde a legenda é justamente a base do
+> número ("12 de 35 unidades"). A troca foi no componente, então vale para todo
+> `KpiCard` do app.
 
 > ❌ Nunca reimplementar o card manualmente numa tela nova — foi assim que o
 > valor de um KPI apareceu com `font-normal` em vez de `font-bold` em
@@ -428,6 +434,47 @@ colorido (↑ verde / ↓ vermelho) + texto. **Ainda não implementado** em
   numa tela — isso reintroduziria o problema que o componente único resolve.
   Primeiro atualizar `KpiCard.tsx` (ex: prop `trend?: { value: string;
   direction: 'up' | 'down' }` e `divider?: boolean`), depois usar em telas novas.
+
+### 4.5 Indicador principal de painel analítico — `destaque` (exceção à cor por KPI)
+
+**Criado em 26/10/2026 (Comercial › Gestão de Locações › Análise), por decisão
+do usuário** na crítica de design da aba (*"Variante nova no guia"*). Plano:
+`docs/planos/2026-10-26-locacoes-analise-critica.md`.
+
+O §4 manda "cada KPI com sua própria cor semântica, nunca monocromático" — e em
+tela de LISTAGEM isso continua valendo. Num **painel analítico** (a tela existe
+para ler números, não para operar uma lista) a crítica mediu o efeito contrário:
+oito cards de mesmo peso, cada um numa cor fixa que não dizia estado
+("Vencem em 30 dias: 0" saía vermelho). Quando algo é de fato alarmante, não se
+destaca. Aqui a cor passa a significar **estado**, e só aparece por limiar.
+
+```tsx
+<KpiCard destaque label="Vencido há mais de 90 dias" icon={<AlertCircle />}
+  value={moneyBRL(vencido90)}
+  sub={`${percent1(taxa)} do lançado`}                       // a BASE do número
+  tom={vencido90 > LIMIAR.vencido90Alerta ? 'alerta' : 'neutro'}
+  acao={{ label: 'Cobrar em Contas a Receber', onClick: () => irPara('contas-a-receber') }} />
+```
+
+- **3–4 por leitura**, em `grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3`.
+  Rótulo `text-sm font-medium text-gray-600`, valor `text-2xl font-semibold
+  tabular-nums`, legenda `text-xs text-gray-500`, ícone neutro `text-gray-400`.
+- **`tom`**: `neutro` (padrão, `text-gray-900`) · `atencao` (`text-amber-700`) ·
+  `alerta` (`text-red-700`). Fora de `neutro` o valor ganha um ícone de alerta e
+  um texto `sr-only` — a cor nunca é o único sinal.
+- **Limiar com nome, num lugar só** (`LIMIAR` no topo do componente da tela),
+  nunca um número solto no JSX: é hipótese de gestão, e alguém vai querer mudá-la.
+- **`acao`**: link de texto azul com seta para a tela onde o número se resolve.
+  Só quando há o que fazer (vencido > 0, contrato vencendo) — ação morta não aparece.
+- **Faixa secundária** logo abaixo, com `KpiCard size="sm" color="gray"`: no painel
+  analítico os cards de apoio também são neutros, e qualquer cor que apareça
+  vem de limiar (o mesmo vale para o detalhamento recolhível).
+
+> ❌ Não usar `destaque` em tela de listagem/CRUD (Fornecedores, Contas a Pagar…):
+> lá o §4 inteiro continua valendo.
+> ❌ Não pintar `tom` por gosto: sem limiar escrito, é `neutro`.
+> ℹ️ Em uso: `components/rentals/RentalAnalysisOverview.tsx` (leituras Operação e
+> Investimento).
 
 ---
 
@@ -1148,7 +1195,15 @@ todo** — não só depois de clicada. Coluna inativa: `ChevronsUpDown`
 
 Automático: é comportamento do próprio `SortableHeader` (`ui/TableUtils.tsx`),
 não algo que cada tela precisa montar — quem já usa o componente ganhou o
-ícone sem alterar nada. Existe porque, sem ele, nada no cabeçalho indica que
+ícone sem alterar nada.
+
+**Teclado e leitor de tela (26/10/2026).** O rótulo do `SortableHeader` é um
+`<button>` (Tab chega nele, Enter/Espaço ordena, o clique sobe ao `onClick` do
+`<th>`), e o `<th>` leva `aria-sort` (`ascending`/`descending`/`none`). Antes era
+`<div>`: ordenar só funcionava com mouse em todas as tabelas do app. Efeito em
+teste: o nome acessível do cabeçalho é "Ordenar por X" — teste que procura um
+botão de filtro por `/X/` passa a achar dois; ancore no início (`/^X/`).
+Trava: `__tests__/components/SortableHeaderAcessivel.test.tsx`. Existe porque, sem ele, nada no cabeçalho indica que
 uma coluna que ainda não foi clicada é clicável — o cursor `pointer` sozinho
 não é uma affordance visível o bastante.
 
@@ -3176,9 +3231,27 @@ Toda paleta categórica ou ordinal passa por
 ### 28.5 Estado vazio e "não medido"
 
 Gráfico cujo insumo é `null` ("não medido") mostra **texto explicando o motivo**
-dentro do card — `min-h-[160px] text-sm text-gray-400`, sem ícone de 48px (o card
+dentro do card — `min-h-[160px] text-sm text-gray-500`, sem ícone de 48px (o card
 é pequeno) — nunca um gráfico zerado, que afirma "zero" sobre o que não foi medido.
 Insumo presente mas vazio (nenhum contrato vigente) também ganha frase própria.
+(Era `text-gray-400`, 2,6:1; trocado em 26/10/2026, junto com o subtítulo do card
+e as legendas, que também passaram a `text-gray-500`.)
+
+**Carregando e falhou não são "não medido"** (26/10/2026). Quando o insumo vem de
+consulta própria, o card tem três caras além do gráfico: esqueleto
+(`animate-pulse`, três barras `h-3 bg-gray-100`, `aria-busy`) enquanto carrega;
+"Não foi possível carregar X. **Tentar de novo**" se a consulta falhou; e só
+então a frase de "não medido". Referência: `ChartSourceState` em
+`RentalAnalysisOverview.tsx`. O spinner do §11 continua sendo o de TABELA.
+
+**Poucos pontos viram lista.** Série temporal com 1 ou 2 meses preenchidos em 12
+é um gráfico de colunas vazias: mostre a lista "mês · contagem · valor" no lugar
+(mesmo card, mesmo título).
+
+**Nome acessível.** O contêiner do gráfico leva `role="img"` e um `aria-label`
+que diz os números (não "gráfico de barras"); o gráfico vai com
+`accessibilityLayer={false}` — sem isso o Recharts deixa o SVG focável com
+`role="application"` e nenhum nome.
 
 > ℹ️ `scripts/check-ui-standard.sh` não olha gráfico. A conferência desta seção é
 > visual: abrir a tela e comparar com `RentalAnalysisOverview.tsx`.
@@ -3535,7 +3608,7 @@ Percorrer antes de dizer "aplicado". Reportar item a item, não em bloco.
 |---|---|---|
 | 1 | `h1` solto + subtítulo `mt-1.5` (§20) | título dentro de card/hero |
 | 2 | Abas em card branco, **antes dos KPIs** (§19.1/§19.3) | "tela sem abas" sem olhar o pai |
-| 3 | `KpiCard`, cor semântica por KPI (§4) | card reimplementado à mão |
+| 3 | `KpiCard`, cor semântica por KPI (§4) — em painel analítico, `destaque` com cor por limiar (§4.5) | card reimplementado à mão |
 | 4 | Escopo em barra própria (§5.3) | escopo fundido na barra de busca |
 | 5 | Toolbar acoplada; **`px-6` + `border-r` nas células** (§5.2/§6.6) | `px-4` sem separador |
 | 5b | Se redimensiona: espaçador antes de "Ações" + botão de autofit (§6.1.1/§6.1.2) | borda de "Ações" anda ao arrastar coluna |

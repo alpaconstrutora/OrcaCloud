@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders, Download, Link2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -40,7 +40,9 @@ import { pricingRuleApplicationService, buildApplicationRows } from '../services
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
-import RentalAnalysisOverview, { type AnalysisSources, type AnalysisSourceState } from './rentals/RentalAnalysisOverview';
+import RentalAnalysisOverview, { type AnalysisSources, type AnalysisSourceState, type AnalysisLeitura, type AnalysisDestino } from './rentals/RentalAnalysisOverview';
+import { useStore } from '../store/useStore';
+import { parseHashView } from '../lib/tabRouter';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep, getDealStatusDisplay as statusDaNegociacao } from '../lib/dealWorkflow';
 // Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
@@ -261,6 +263,39 @@ const ANALYSIS_COLUMNS: ColumnConfig[] = [
     { key: 'valuePerSqmMin', label: 'Valor mín. locação /m²', sortable: true },
     { key: 'valuePerSqmAvg', label: 'Valor médio locação /m²', sortable: true },
 ];
+/** Colunas que cada leitura mostra de saída (as outras ficam na engrenagem).
+ *  Cada leitura guarda as próprias escolhas — trocar de leitura não desfaz o
+ *  que o usuário ligou ou desligou na outra. */
+const ANALYSIS_VISIVEIS: Record<AnalysisLeitura, string[]> = {
+    operacao: ['name', 'unitsCount', 'occupancyRate', 'vacancyDays', 'overdue90Rate', 'monthlyRevenue'],
+    investimento: ['name', 'monthlyRevenue', 'referenceMonthlyRevenue', 'financialRate', 'noi', 'waleYears', 'valuePerSqmAvg'],
+};
+const analysisColumnsDa = (leitura: AnalysisLeitura): ColumnConfig[] =>
+    ANALYSIS_COLUMNS.map(c => ({ ...c, defaultHidden: !ANALYSIS_VISIVEIS[leitura].includes(c.key) }));
+const ANALYSIS_COLUMNS_OPERACAO = analysisColumnsDa('operacao');
+const ANALYSIS_COLUMNS_INVESTIMENTO = analysisColumnsDa('investimento');
+
+const LEITURAS: { id: AnalysisLeitura; label: string; dica: string }[] = [
+    { id: 'operacao', label: 'Operação', dica: 'Ocupação, cobrança, vencimentos e vacância — o dia a dia da locação' },
+    { id: 'investimento', label: 'Investimento', dica: 'Receita contra o potencial, NOI, WALE e yield — a leitura da diretoria' },
+];
+
+/**
+ * Recorte da aba Análise lido do link (`#/rentals?aba=analise&emp=…&leitura=…`).
+ * Até 26/10/2026 o recorte vivia só no localStorage: não dava para mandar
+ * "olha a Galeria Altavista" para alguém.
+ */
+const linkDaAnalise = (): { emp?: string; leitura?: AnalysisLeitura } | null => {
+    if (typeof window === 'undefined') return null;
+    const q = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+    if (q.get('aba') !== 'analise') return null;
+    const leitura = q.get('leitura');
+    return {
+        emp: q.get('emp') ?? undefined,
+        leitura: leitura === 'operacao' || leitura === 'investimento' ? leitura : undefined,
+    };
+};
+
 const ANALYSIS_DEFAULT_COL_WIDTHS: Record<string, number> = {
     name: 230, unitsCount: 150, occupancyRate: 130, financialRate: 155,
     monthlyRevenue: 140, referenceMonthlyRevenue: 150, annualRevenue: 140,
@@ -300,7 +335,7 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
             return row.empreendimentoId === SEM_EMPREENDIMENTO
                 // O balde dos não vinculados existe para as colunas fecharem com
                 // o topo — mas ele é resíduo de cadastro, não um empreendimento.
-                ? <span className="text-gray-400">{row.name}</span>
+                ? <span className="text-gray-500">{row.name}</span>
                 : row.name;
         case 'unitsCount':
             return `${row.rentedCount}/${row.unitsCount}`;
@@ -374,7 +409,7 @@ const renderClientTypeCell = (key: string, row: RentalClientTypeScope): React.Re
     switch (key) {
         case 'label':
             return row.categoryId === SEM_CATEGORIA
-                ? <span className="text-gray-400">{row.label}</span>
+                ? <span className="text-gray-500">{row.label}</span>
                 : row.label;
         case 'clientCount':
             return row.clientCount;
@@ -724,7 +759,7 @@ function renderBrokerCell(key: string, broker: BrokerProfile, ctx: BrokerRowCtx)
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<RentalsTab>(
-        (localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory'
+        linkDaAnalise() ? 'analysis' : ((localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory')
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
@@ -756,6 +791,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // volta para a tela querendo o recorte em que estava.
     const [analysisEmpId, setAnalysisEmpId] = usePersistedState('rentals:analysisEmpreendimento', 'ALL');
     const [analysisSearch, setAnalysisSearch] = usePersistedState('rentals:analysisSearch', '');
+    // Operação | Investimento — ver `AnalysisLeitura`. Persistido como o recorte.
+    const [analysisLeitura, setAnalysisLeitura] = usePersistedState<AnalysisLeitura>('rentals:analysisLeitura', 'operacao');
+    const [linkCopiado, setLinkCopiado] = useState(false);
     // O painel executivo são 8 indicadores; o resto fica recolhido. "20 não é
     // dashboard, é relatório" — decisão registrada no plano da Fase 3.
     const [showDetail, setShowDetail] = usePersistedState('rentals:analysisDetail', false);
@@ -828,7 +866,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         .reduce((sum, c) => sum + brokerCols.getWidth(c.key), 0);
 
     // Colunas + ordenação + redimensionamento da tabela "Por empreendimento".
-    const analysisTableColumns = useTableColumns(ANALYSIS_COLUMNS, 'rentalsAnalysisColumns');
+    const analysisColumnsOperacao = useTableColumns(ANALYSIS_COLUMNS_OPERACAO, 'rentalsAnalysisColumns:operacao');
+    const analysisColumnsInvestimento = useTableColumns(ANALYSIS_COLUMNS_INVESTIMENTO, 'rentalsAnalysisColumns:investimento');
+    const analysisTableColumns = analysisLeitura === 'investimento' ? analysisColumnsInvestimento : analysisColumnsOperacao;
     const analysisCols = useResizableColumns(ANALYSIS_DEFAULT_COL_WIDTHS, 'rentalsAnalysisColWidths');
     const analysisTableTotalWidth = ANALYSIS_COLUMNS
         .filter(c => analysisTableColumns.visibleColumns.includes(c.key))
@@ -1402,6 +1442,101 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             .then(setBrokers)
             .catch(err => console.error('[Commercial] Error loading brokers:', err));
     }, [effectiveOrganizationId]);
+
+    // Link do recorte. O primeiro efeito LÊ (precisa vir antes do segundo, que
+    // reescreve o endereço); o segundo mantém `?aba=analise&emp=…&leitura=…`
+    // em dia com a tela, por `replaceState` — não cria entrada no histórico
+    // nem dispara `hashchange` (o roteador do app só olha a vista, não a query).
+    useEffect(() => {
+        const link = linkDaAnalise();
+        if (link?.emp) setAnalysisEmpId(link.emp);
+        if (link?.leitura) setAnalysisLeitura(link.leitura);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const vista = parseHashView(window.location.hash);
+        if (!vista) return;
+        const alvo = activeTab === 'analysis'
+            ? `#/${vista}?${new URLSearchParams({
+                aba: 'analise',
+                ...(analysisEmpId !== 'ALL' ? { emp: analysisEmpId } : {}),
+                leitura: analysisLeitura,
+            }).toString()}`
+            : `#/${vista}`;
+        if (window.location.hash !== alvo) window.history.replaceState(null, '', alvo);
+    }, [activeTab, analysisEmpId, analysisLeitura]);
+
+    // Ação de um indicador principal da Análise: leva aonde o número se resolve.
+    const irParaDaAnalise = (destino: AnalysisDestino) => {
+        if (destino === 'renovacoes') setActiveTab('renewals');
+        else if (destino === 'imoveis') setActiveTab('inventory');
+        else useStore.getState().setActiveView(destino);
+    };
+
+    const copiarLinkDaAnalise = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            setLinkCopiado(true);
+            window.setTimeout(() => setLinkCopiado(false), 2000);
+        } catch {
+            notify('Não foi possível copiar o link — copie da barra de endereço.', 'error');
+        }
+    };
+
+    // Exporta a tabela "Por empreendimento" como está na tela: colunas visíveis
+    // na ordem, linhas filtradas e ordenadas, e a linha de total. Números vão
+    // como NÚMERO (com formato de célula), não como texto — é para continuar a
+    // conta no Excel.
+    const exportarAnalise = async () => {
+        const XLSX = await import('xlsx');
+        const colunas = ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key));
+        const MOEDA = '"R$" #,##0';
+        const PCT = '0.0%';
+        const celula = (key: string, r: RentalAnalysisScope): { v: string | number | null; z?: string } => {
+            switch (key) {
+                case 'name': return { v: r.name };
+                case 'unitsCount': return { v: `${r.rentedCount}/${r.unitsCount}` };
+                case 'occupancyRate': return { v: r.occupancyRate, z: PCT };
+                case 'financialRate': return { v: r.financial.rate, z: PCT };
+                case 'monthlyRevenue': return { v: r.monthlyRevenue, z: MOEDA };
+                case 'referenceMonthlyRevenue': return { v: r.financial.potential, z: MOEDA };
+                case 'annualRevenue': return { v: r.monthlyRevenue * 12, z: MOEDA };
+                case 'vacancyDays': return { v: vacancyDaysOf(r) };
+                case 'noi': return { v: noiMeasured(r.noi) ? r.noi!.noi : null, z: MOEDA };
+                case 'waleYears': return { v: r.executive?.wale.years ?? null, z: '0.0' };
+                case 'overdue90Rate': return { v: r.executive?.collection.overdue90Rate ?? null, z: PCT };
+                case 'valuePerSqmMax': return { v: r.valuePerSqm.max, z: MOEDA };
+                case 'valuePerSqmMin': return { v: r.valuePerSqm.min, z: MOEDA };
+                case 'valuePerSqmAvg': return { v: r.valuePerSqm.avg, z: MOEDA };
+                default: return { v: null };
+            }
+        };
+        const rodape = (key: string): { v: string | number | null; z?: string } => {
+            switch (key) {
+                case 'name': return { v: analysisSearch.trim() ? 'Total das linhas filtradas' : 'Total da carteira' };
+                case 'monthlyRevenue': return { v: analysisFooter.monthlyRevenue, z: MOEDA };
+                case 'referenceMonthlyRevenue': return { v: analysisFooter.potentialMonthlyRevenue, z: MOEDA };
+                case 'annualRevenue': return { v: analysisFooter.annualRevenue, z: MOEDA };
+                case 'occupancyRate': return { v: analysisFooter.occupancyRate, z: PCT };
+                case 'financialRate': return { v: analysisFooter.financialRate, z: PCT };
+                case 'valuePerSqmAvg': return { v: analysisFooter.valuePerSqmAvg, z: MOEDA };
+                default: return { v: null };
+            }
+        };
+        const linhas = [...analysisRows.map(r => colunas.map(c => celula(c.key, r))), colunas.map(c => rodape(c.key))];
+        const ws = XLSX.utils.aoa_to_sheet([colunas.map(c => c.label), ...linhas.map(l => l.map(x => x.v))]);
+        // "Não medido" sai como célula vazia, nunca 0 — mesma regra da tela.
+        linhas.forEach((l, i) => l.forEach((x, j) => {
+            const ref = XLSX.utils.encode_cell({ r: i + 1, c: j });
+            if (x.v != null && x.z && ws[ref]) ws[ref].z = x.z;
+        }));
+        ws['!cols'] = colunas.map(c => ({ wch: c.key === 'name' ? 34 : 18 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Por empreendimento');
+        const leituraNome = analysisLeitura === 'investimento' ? 'investimento' : 'operacao';
+        XLSX.writeFile(wb, `locacoes-analise-${leituraNome}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
 
     // Vacância (Fase 1). Só busca na aba Análise — o log pode ter muitos eventos
     // e não faz sentido pagar essa consulta em quem está mexendo no inventário.
@@ -2008,7 +2143,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 abaixo descrevem. Fica acima dos KPIs de propósito: o dado não
                 pode aparecer antes do controle que decide de quem ele fala. */}
             {!currentBuilding && activeTab === 'analysis' && (
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <label htmlFor="analysis-emp" className="text-xs font-semibold text-slate-500">Empreendimento</label>
                         <select
@@ -2029,15 +2164,43 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             ))}
                         </select>
                     </div>
-                    {!isAllEmpreendimentos && (
+                    {/* Leitura: quais indicadores sobem para a primeira dobra.
+                        Mesmo trilho das abas (§19.1), em escala de escopo. */}
+                    <div role="radiogroup" aria-label="Leitura da análise" className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
+                        {LEITURAS.map(l => (
+                            <button
+                                key={l.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={analysisLeitura === l.id}
+                                onClick={() => setAnalysisLeitura(l.id)}
+                                title={l.dica}
+                                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${analysisLeitura === l.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            >
+                                {l.label}
+                            </button>
+                        ))}
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        {!isAllEmpreendimentos && (
+                            <button
+                                onClick={() => setAnalysisEmpId('ALL')}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
+                            >
+                                <X className="w-4 h-4" />
+                                Ver todos os empreendimentos
+                            </button>
+                        )}
                         <button
-                            onClick={() => setAnalysisEmpId('ALL')}
-                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
+                            type="button"
+                            onClick={copiarLinkDaAnalise}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all"
+                            title="Copia o endereço desta análise — abre no mesmo empreendimento e na mesma leitura"
                         >
-                            <X className="w-4 h-4" />
-                            Ver todos os empreendimentos
+                            {linkCopiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Link2 className="w-4 h-4" />}
+                            {linkCopiado ? 'Link copiado' : 'Copiar link'}
                         </button>
-                    )}
+                    </div>
                 </div>
             )}
 
@@ -2057,6 +2220,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     onToggleDetail={() => setShowDetail(!showDetail)}
                     sources={analysisSources}
                     onRetry={() => setAnalysisReload(n => n + 1)}
+                    leitura={analysisLeitura}
+                    onNavigate={irParaDaAnalise}
                 />
             )}
 
@@ -2089,8 +2254,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     onClick={() => analysisCols.autoFit()}
                                     className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
                                     title="Ajustar largura das colunas ao conteúdo"
+                                    aria-label="Ajustar largura das colunas ao conteúdo"
                                 >
                                     <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={exportarAnalise}
+                                    disabled={analysisRows.length === 0}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title={analysisRows.length === 0 ? 'Nada para exportar: nenhuma linha na tabela' : 'Exportar a tabela para Excel (colunas visíveis, na ordem da tela)'}
+                                    aria-label="Exportar a tabela para Excel"
+                                >
+                                    <Download className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -2130,7 +2305,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 sortColumn={analysisTableColumns.sortColumn}
                                                 sortDirection={analysisTableColumns.sortDirection}
                                                 onSort={analysisTableColumns.handleColumnSort}
-                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                className={`px-6 py-2 border-r border-gray-100 overflow-hidden ${c.key === 'name' ? 'sticky left-0 z-20 bg-white' : ''}`}
                                             >
                                                 <analysisCols.ResizeHandle colKey={c.key} />
                                             </SortableHeader>
@@ -2152,6 +2327,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 <td
                                                     key={c.key}
                                                     className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                        // Fixa à esquerda: a partir de "Vencido > 90 dias" o
+                                                        // nome sumia e não se sabia de qual linha era o número.
+                                                        c.key === 'name' ? 'sticky left-0 z-[1] bg-white group-hover:bg-[#f7fbff] ' : ''
+                                                    }${
                                                         c.key === 'monthlyRevenue' || c.key === 'noi'
                                                             || c.key === 'referenceMonthlyRevenue' || c.key === 'annualRevenue'
                                                             || c.key === 'valuePerSqmMax' || c.key === 'valuePerSqmMin' || c.key === 'valuePerSqmAvg'
@@ -2188,7 +2367,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map((c, idx) => (
                                             <td
                                                 key={c.key}
-                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${c.key === 'name' ? 'sticky left-0 z-[1] bg-gray-50 ' : ''}${
                                                     ['monthlyRevenue', 'referenceMonthlyRevenue', 'annualRevenue', 'valuePerSqmAvg'].includes(c.key)
                                                         ? 'font-medium text-gray-800'
                                                         : 'font-normal text-gray-500'

@@ -38,7 +38,40 @@ interface Props {
     sources: AnalysisSources;
     /** "Tentar de novo": refaz as consultas que falharam. */
     onRetry: () => void;
+    /** Qual das duas leituras está na tela — ver `AnalysisLeitura`. */
+    leitura: AnalysisLeitura;
+    /** Ação de um indicador principal: leva à tela onde o número se resolve. */
+    onNavigate: (destino: AnalysisDestino) => void;
 }
+
+/**
+ * As duas leituras da aba (decisão do usuário, 26/10/2026 — plano
+ * docs/planos/2026-10-26-locacoes-analise-critica.md). Os DADOS são os mesmos
+ * (`RentalAnalysisScope`); muda o que sobe para a primeira dobra:
+ * - `operacao`: quem administra a locação — ocupação, cobrança, vencimentos, vacância;
+ * - `investimento`: a diretoria — receita × potencial, NOI, WALE, yield.
+ */
+export type AnalysisLeitura = 'operacao' | 'investimento';
+
+export type AnalysisDestino = 'renovacoes' | 'imoveis' | 'contas-a-receber' | 'contas-a-pagar';
+
+/**
+ * Limiares de cor dos indicadores principais (guia §4.5): fora deles o
+ * indicador é neutro. Ficam aqui, num lugar só e com nome, porque são
+ * hipóteses de gestão — não constantes escondidas no JSX.
+ * - vencido > 90 dias: QUALQUER valor acima de zero é alerta (decisão do
+ *   usuário, 26/10/2026);
+ * - contrato vencendo em 30 dias: atenção;
+ * - unidade vaga há mais de 90 dias (estoque envelhecido): atenção.
+ */
+const LIMIAR = {
+    vencido90Alerta: 0,
+    vencem30Atencao: 0,
+    estoqueEnvelhecidoAtencao: 0,
+} as const;
+
+/** Até quantos meses com vencimento o cronograma vira lista (ver LeaseExpiryChart). */
+const POUCOS_MESES = 2;
 
 export type AnalysisSourceState = 'loading' | 'ready' | 'error';
 
@@ -89,6 +122,7 @@ const decimalBR = (v: number, casas: number) =>
 
 const percent1 = (v: number) => `${decimalBR(v * 100, 1)}%`;
 const percent2 = (v: number) => `${decimalBR(v * 100, 2)}%`;
+const anos1 = (v: number) => `${decimalBR(v, 1)} anos`;
 
 /** `—` para "não medido". */
 const orDash = (v: number | null | undefined, formata: (n: number) => string) =>
@@ -150,7 +184,7 @@ const ChartCard: React.FC<{
     <div className={`bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 flex flex-col ${className}`}>
         <div>
             <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-            {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+            {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
         </div>
         <div className="mt-3 flex-1 min-h-0">{children}</div>
     </div>
@@ -219,7 +253,7 @@ const ExpiryTooltip: React.FC<{ active?: boolean; payload?: { payload: { label: 
 
 /** Receita contratada × valor base, por empreendimento. Só em "Todos" e com
  *  2+ baldes — com um só, o KPI do topo já é o gráfico. */
-const RevenueByEmpreendimentoChart: React.FC<{ rows: RentalAnalysisScope[]; onSelect: (id: string) => void }> = ({ rows, onSelect }) => {
+const RevenueByEmpreendimentoChart: React.FC<{ rows: RentalAnalysisScope[]; onSelect: (id: string) => void; className?: string }> = ({ rows, onSelect, className }) => {
     const data = rows.map(r => ({
         id: r.empreendimentoId,
         name: r.name,
@@ -229,6 +263,7 @@ const RevenueByEmpreendimentoChart: React.FC<{ rows: RentalAnalysisScope[]; onSe
     const selecionar = (d: { payload?: { id?: string } }) => d?.payload?.id && onSelect(d.payload.id);
     return (
         <ChartCard
+            className={className}
             title="Receita mensal por empreendimento"
             subtitle="Contratada (parcelas dos contratos fechados) contra a receita potencial de todas as unidades. Clique na barra para recortar a aba."
         >
@@ -280,6 +315,7 @@ const RevenueByEmpreendimentoChart: React.FC<{ rows: RentalAnalysisScope[]; onSe
 const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSourceState; onRetry: () => void }> = ({ scope, state, onRetry }) => {
     const exp = scope.leaseExpiry;
     const yTicks = niceTicks(exp ? Math.max(...exp.months.map(m => m.value)) : 0);
+    const mesesComVencimento = exp ? exp.months.filter(m => m.count > 0) : [];
     return (
         <ChartCard
             title="Vencimento de contratos — próximos 12 meses"
@@ -293,6 +329,21 @@ const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSo
                 <ChartEmpty>Nenhum contrato vigente neste recorte.</ChartEmpty>
             ) : (
                 <>
+                    {mesesComVencimento.length <= POUCOS_MESES ? (
+                        // Com um ou dois meses com vencimento, doze colunas são
+                        // dez vazias: a lista diz o mesmo sem a régua.
+                        <ul className="min-h-[160px] flex flex-col justify-center divide-y divide-gray-100">
+                            {mesesComVencimento.length === 0 ? (
+                                <li className="py-2 text-sm text-gray-500 text-center">Nenhum contrato vence nos próximos 12 meses.</li>
+                            ) : mesesComVencimento.map(m => (
+                                <li key={m.label} className="flex items-center justify-between gap-3 py-2 text-sm">
+                                    <span className="text-gray-700">{m.label}</span>
+                                    <span className="text-gray-500">{plural(m.count, 'contrato', 'contratos')}</span>
+                                    <span className="font-medium text-gray-800 tabular-nums">{moneyBRL(m.value)}/mês</span>
+                                </li>
+                            ))}
+                        </ul>
+                    ) : (
                     <div
                         style={{ height: 200 }}
                         role="img"
@@ -316,6 +367,7 @@ const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSo
                             </BarChart>
                         </ResponsiveContainer>
                     </div>
+                    )}
                     {/* A leitura sem passar o mouse: os acumulados por prazo. */}
                     <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
                         {[
@@ -324,7 +376,7 @@ const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSo
                             { rotulo: 'Vencem em 12 meses', b: exp.within365 },
                         ].map(({ rotulo, b }) => (
                             <div key={rotulo} className="min-w-0">
-                                <p className="text-xs text-gray-400 truncate">{rotulo}</p>
+                                <p className="text-xs text-gray-500 truncate">{rotulo}</p>
                                 <p className="text-sm font-medium text-gray-800 truncate">{plural(b.count, 'contrato', 'contratos')}</p>
                                 <p className="text-xs text-gray-500 truncate">{moneyBRL(b.value)}/mês</p>
                             </div>
@@ -388,7 +440,7 @@ const UnitStatusChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) =>
                             <span className="text-2xl font-bold text-gray-900 leading-none">
                                 {orDash(scope.occupancyRate, v => `${Math.round(v * 100)}%`)}
                             </span>
-                            <span className="text-[11px] text-gray-400 mt-1">ocupação</span>
+                            <span className="text-xs text-gray-500 mt-1">ocupação</span>
                         </div>
                     </div>
                     {/* Legenda com os números: é a "vista de tabela" do gráfico —
@@ -399,7 +451,7 @@ const UnitStatusChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) =>
                                 <span className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: f.color }} />
                                 <span className="text-gray-600 truncate flex-1">{f.label}</span>
                                 <span className="font-medium text-gray-800 tabular-nums">{f.value}</span>
-                                <span className="text-gray-400 tabular-nums w-11 text-right">{Math.round((f.value / us.total) * 100)}%</span>
+                                <span className="text-gray-500 tabular-nums w-11 text-right">{Math.round((f.value / us.total) * 100)}%</span>
                             </li>
                         ))}
                         <li className="flex items-center gap-2 text-sm pt-1.5 border-t border-gray-100">
@@ -472,22 +524,22 @@ const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; sta
                     </div>
                     <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
                         <div className="min-w-0">
-                            <p className="text-xs text-gray-400 truncate">Vencido</p>
+                            <p className="text-xs text-gray-500 truncate">Vencido</p>
                             <p className="text-sm font-medium text-gray-800 truncate">{moneyBRL(ag.totalOverdue)}</p>
                             {overdueRate != null && <p className="text-xs text-gray-500 truncate">{percent1(overdueRate)} do lançado</p>}
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs text-gray-400 truncate">Em aberto</p>
+                            <p className="text-xs text-gray-500 truncate">Em aberto</p>
                             <p className="text-sm font-medium text-gray-800 truncate">{moneyBRL(ag.totalOpen)}</p>
                         </div>
                         <div className="min-w-0">
-                            <p className="text-xs text-gray-400 truncate">Recebido</p>
+                            <p className="text-xs text-gray-500 truncate">Recebido</p>
                             <p className="text-sm font-medium text-gray-800 truncate">{moneyBRL(ag.received)}</p>
                         </div>
                     </div>
                     {/* A mesma ressalva do KPI de cobrança: baixa no sistema ≠ saúde do inquilino. */}
                     {ag.withoutDueDate > 0 && (
-                        <p className="text-xs text-gray-400 mt-2">
+                        <p className="text-xs text-gray-600 mt-2">
                             {plural(ag.withoutDueDate, 'parcela em aberto está', 'parcelas em aberto estão')} sem data de vencimento
                             e {ag.withoutDueDate === 1 ? 'conta' : 'contam'} como “a vencer”.
                         </p>
@@ -502,7 +554,7 @@ const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; sta
 // O painel
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEmpreendimento, showDetail, onToggleDetail, sources, onRetry }) => {
+const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEmpreendimento, showDetail, onToggleDetail, sources, onRetry, leitura, onNavigate }) => {
     const ex = scope.executive;
     const exp = scope.leaseExpiry;
     const temComparativo = isAll && rows.length > 1;
@@ -534,24 +586,77 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
 
     return (
         <>
-            {/* ── PAINEL EXECUTIVO ─────────────────────────────────────────────
-                Os 8 indicadores que respondem praticamente tudo. O catálogo
-                original sugeria 20 no topo; 20 não é dashboard, é relatório —
-                o resto está no detalhamento recolhível e nos gráficos. */}
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-3">
-                <KpiCard shadow={false} size="sm" label="Ocupação física" value={orDash(scope.occupancyRate, percent1)} sub={`${scope.rentedCount} de ${scope.unitsCount} unidades`} icon={<Key className="w-4 h-4" />} color="purple" />
-                {/* Ao lado da física de propósito: a diferença entre as duas é o
-                    que denuncia carteira cheia de unidade barata. */}
-                <KpiCard shadow={false} size="sm" label="Ocupação financeira" value={orDash(scope.financial.rate, percent1)} sub={`${moneyBRL(scope.financial.contracted)} de ${moneyBRL(scope.financial.potential)}`} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                <KpiCard shadow={false} size="sm" label="Vacância média" value={pVac?.value ?? (vacMedida ? `${vac!.averageDays} dias` : '—')} sub={pVac?.sub ?? (vac ? (vacMedida ? `${plural(vac.vacantCount, 'unidade vaga', 'unidades vagas')} · mediana ${vac.medianDays} d` : 'nenhuma unidade vaga medida') : undefined)} icon={<Clock className="w-4 h-4" />} color="amber" />
-                <KpiCard shadow={false} size="sm" label="Receita mensal" value={moneyBRL(scope.monthlyRevenue)} sub={`${moneyBRL(scope.monthlyRevenue * 12)} ao ano`} icon={<Wallet className="w-4 h-4" />} color="indigo" />
-                <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={pEx?.value ?? orDash(ex?.collection.overdue90Rate, percent1)} sub={pEx?.sub ?? (ex ? `${moneyBRL(ex.collection.overdue90)} do lançado` : undefined)} icon={<AlertCircle className="w-4 h-4" />} color="red" />
-                {/* NOI acumulado no ano — o rótulo diz o período, porque o vizinho é a
-                    receita MENSAL. Sem despesa apropriada aos imóveis, o NOI é a
-                    receita com outro nome e a margem sai 100%: "—" e o motivo. */}
-                <KpiCard shadow={false} size="sm" label="NOI no ano" value={pNoi?.value ?? (noiOk ? moneyBRL(scope.noi!.noi) : '—')} sub={pNoi?.sub ?? (scope.noi ? (noiOk ? `margem ${orDash(scope.noi.margin, percent1)}` : 'sem despesa lançada nos imóveis') : undefined)} icon={<TrendingUp className="w-4 h-4" />} color={noiOk && scope.noi!.noi < 0 ? 'red' : 'teal'} />
-                <KpiCard shadow={false} size="sm" label="WALE da carteira" value={pEx?.value ?? orDash(ex?.wale.years, anos => `${decimalBR(anos, 1)} anos`)} sub={pEx?.sub ?? (ex ? `${ex.wale.counted} de ${plural(ex.activeContracts, 'contrato vigente', 'contratos vigentes')}` : undefined)} icon={<Calendar className="w-4 h-4" />} color="blue" />
-                <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={pEx?.value ?? orDash(ex?.renewal.rate, v => `${Math.round(v * 100)}%`)} sub={pEx?.sub ?? (ex && ex.renewal.expired > 0 ? `${ex.renewal.renewed} de ${ex.renewal.expired} vencidos no ano` : undefined)} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
+            {/* ── INDICADORES PRINCIPAIS ───────────────────────────────────────
+                Quatro por leitura, em destaque (guia §4.5): cor só por limiar,
+                e cada um diz a base do número e leva aonde ele se resolve.
+                Antes eram oito cards de mesmo peso, cada um numa cor que não
+                dizia estado — "Vencem em 30 dias: 0" saía vermelho. */}
+            {leitura === 'operacao' ? (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
+                    <KpiCard destaque label="Ocupação física" icon={<Key />}
+                        value={orDash(scope.occupancyRate, percent1)}
+                        sub={`${scope.rentedCount} de ${plural(scope.unitsCount, 'unidade alugada', 'unidades alugadas')}`} />
+                    <KpiCard destaque label="Vencido há mais de 90 dias" icon={<AlertCircle />}
+                        value={pEx?.value ?? (ex ? moneyBRL(ex.collection.overdue90) : '—')}
+                        sub={pEx?.sub ?? (ex ? (ex.collection.overdue90Rate != null ? `${percent1(ex.collection.overdue90Rate)} do lançado` : 'nada lançado') : undefined)}
+                        tom={ex && ex.collection.overdue90 > LIMIAR.vencido90Alerta ? 'alerta' : 'neutro'}
+                        acao={ex && ex.collection.overdue90 > 0 ? { label: 'Cobrar em Contas a Receber', onClick: () => onNavigate('contas-a-receber') } : undefined} />
+                    <KpiCard destaque label="Contratos que vencem em 90 dias" icon={<CalendarClock />}
+                        value={pEx?.value ?? (exp ? exp.within90.count : '—')}
+                        sub={pEx?.sub ?? (exp ? `${moneyBRL(exp.within90.value)}/mês em jogo · ${exp.within30.count} em 30 dias` : undefined)}
+                        tom={exp && exp.within30.count > LIMIAR.vencem30Atencao ? 'atencao' : 'neutro'}
+                        acao={exp && exp.within90.count > 0 ? { label: 'Ver renovações', onClick: () => onNavigate('renovacoes') } : undefined} />
+                    <KpiCard destaque label="Vacância média" icon={<Clock />}
+                        value={pVac?.value ?? (vacMedida ? `${vac!.averageDays} dias` : '—')}
+                        sub={pVac?.sub ?? (vac ? (vacMedida ? `${plural(vac.vacantCount, 'unidade vaga', 'unidades vagas')} · mediana ${vac.medianDays} dias` : 'nenhuma unidade vaga medida') : undefined)}
+                        tom={vac && vac.over90 > LIMIAR.estoqueEnvelhecidoAtencao ? 'atencao' : 'neutro'}
+                        acao={scope.unitStatus.available > 0 ? { label: 'Ver imóveis disponíveis', onClick: () => onNavigate('imoveis') } : undefined} />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3 mb-3">
+                    {/* Contratada contra o potencial no MESMO card: a distância
+                        entre os dois é a pergunta da diretoria. */}
+                    <KpiCard destaque label="Receita mensal contratada" icon={<Wallet />}
+                        value={moneyBRL(scope.monthlyRevenue)}
+                        sub={`${orDash(scope.financial.rate, percent1)} de ${moneyBRL(scope.financial.potential)} potencial`}
+                        acao={receitaPerdida > 0 ? { label: 'Ver imóveis disponíveis', onClick: () => onNavigate('imoveis') } : undefined} />
+                    {/* NOI acumulado no ano — o rótulo diz o período, porque o
+                        vizinho é a receita MENSAL. Sem despesa apropriada aos
+                        imóveis, o NOI é a receita com outro nome: "—" e o motivo. */}
+                    <KpiCard destaque label="NOI no ano" icon={<TrendingUp />}
+                        value={pNoi?.value ?? (noiOk ? moneyBRL(scope.noi!.noi) : '—')}
+                        sub={pNoi?.sub ?? (scope.noi ? (noiOk ? `margem ${orDash(scope.noi.margin, percent1)}` : 'sem despesa lançada nos imóveis') : 'despesa por imóvel indisponível')}
+                        tom={noiOk && scope.noi!.noi < 0 ? 'alerta' : 'neutro'}
+                        acao={scope.noi && !noiOk ? { label: 'Apropriar despesas', onClick: () => onNavigate('contas-a-pagar') } : undefined} />
+                    <KpiCard destaque label="WALE da carteira" icon={<Calendar />}
+                        value={pEx?.value ?? orDash(ex?.wale.years, anos1)}
+                        sub={pEx?.sub ?? (ex ? `prazo médio de ${ex.wale.counted} de ${plural(ex.activeContracts, 'contrato vigente', 'contratos vigentes')}` : undefined)} />
+                    <KpiCard destaque label="Yield bruto anual" icon={<Percent />}
+                        value={orDash(scope.monthlyYield, v => percent2(v * 12))}
+                        sub={scope.monthlyYield != null ? `sobre ${moneyBRL(scope.portfolioValue)} de patrimônio` : 'sem valor patrimonial cadastrado'} />
+                </div>
+            )}
+
+            {/* Faixa secundária — o contexto de cada leitura, em tamanho de
+                apoio e cor neutra (o painel analítico pinta por estado, §4.5). */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-3">
+                {leitura === 'operacao' ? (
+                    <>
+                        <KpiCard size="sm" color="gray" label="Receita mensal" value={moneyBRL(scope.monthlyRevenue)} sub={`${moneyBRL(scope.monthlyRevenue * 12)} ao ano`} icon={<Wallet />} />
+                        {/* Ao lado da física de propósito: a diferença entre as
+                            duas denuncia carteira cheia de unidade barata. */}
+                        <KpiCard size="sm" color="gray" label="Ocupação financeira" value={orDash(scope.financial.rate, percent1)} sub={`${moneyBRL(scope.financial.contracted)} de ${moneyBRL(scope.financial.potential)}`} icon={<DollarSign />} />
+                        <KpiCard size="sm" color="gray" label="Taxa de renovação" value={pEx?.value ?? orDash(ex?.renewal.rate, v => `${Math.round(v * 100)}%`)} sub={pEx?.sub ?? (ex && ex.renewal.expired > 0 ? `${ex.renewal.renewed} de ${ex.renewal.expired} vencidos no ano` : undefined)} icon={<RefreshCw />} />
+                        <KpiCard size="sm" color="gray" label="Aluguel médio por locação" value={orDash(ticketMedio, moneyBRL)} sub={scope.dealsCount > 0 ? plural(scope.dealsCount, 'locação fechada', 'locações fechadas') : undefined} icon={<Receipt />} />
+                    </>
+                ) : (
+                    <>
+                        <KpiCard size="sm" color="gray" label="Valor patrimonial" value={moneyBRL(scope.portfolioValue)} icon={<Home />} />
+                        <KpiCard size="sm" color="gray" label="Receita perdida por vacância" value={moneyBRL(Math.max(0, receitaPerdida))} sub="potencial − contratada, por mês" icon={<AlertCircle />} />
+                        <KpiCard size="sm" color="gray" label="Cap rate" value={pNoi?.value ?? (noiOk ? orDash(scope.noi!.capRate, percent2) : '—')} sub="NOI anualizado ÷ patrimônio" icon={<Percent />} />
+                        <KpiCard size="sm" color="gray" label="Taxa de renovação" value={pEx?.value ?? orDash(ex?.renewal.rate, v => `${Math.round(v * 100)}%`)} sub={pEx?.sub ?? (ex && ex.renewal.expired > 0 ? `${ex.renewal.renewed} de ${ex.renewal.expired} vencidos no ano` : undefined)} icon={<RefreshCw />} />
+                    </>
+                )}
             </div>
 
             {fontesComErro.length > 0 && (
@@ -569,7 +674,7 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                     {/* Sem isto, "98% de ocupação financeira" parece carteira
                         rentabilizada quando pode ser meia carteira sem preço. */}
                     {scope.financial.withoutPrice > 0 && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                             {scope.financial.withoutPrice} de {scope.financial.leafCount} unidades não têm aluguel de
                             referência cadastrado e ficam fora da <strong>ocupação financeira</strong> — a taxa
                             fala apenas das {scope.financial.leafCount - scope.financial.withoutPrice} precificadas.
@@ -578,33 +683,33 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                     {/* Sem este aviso, "0,8% recebido" é lido como inadimplência
                         de 99% — quando o que falta é baixa no sistema. */}
                     {ex && ex.collection.collectionRate != null && ex.collection.collectionRate < 0.5 && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                             Apenas {percent1(ex.collection.collectionRate)} dos aluguéis lançados
                             estão baixados como recebidos. O indicador mede <strong>conciliação no sistema</strong>,
                             não necessariamente atraso do locatário.
                         </p>
                     )}
                     {ex && ex.wale.expiredStillActive > 0 && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                             {ex.wale.expiredStillActive} contrato{ex.wale.expiredStillActive > 1 ? 's' : ''} com
                             data de término já vencida e ainda em vigor — fora do WALE e do cronograma de vencimentos, porque prazo negativo
                             distorceria a média. Renove ou encerre para o número refletir a carteira.
                         </p>
                     )}
                     {disponiveisSemHistorico > 0 && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                             {plural(disponiveisSemHistorico, 'unidade disponível ainda não tem', 'unidades disponíveis ainda não têm')} histórico
                             de status e {disponiveisSemHistorico === 1 ? 'fica' : 'ficam'} fora da <strong>vacância média</strong>.
                         </p>
                     )}
                     {scope.noi && !noiOk && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                             NOI sem base: nenhuma despesa foi apropriada aos imóveis no ano. Sem despesa, o NOI seria
                             a própria receita, com margem de 100%. Aproprie as despesas em Financeiro › Contas a Pagar.
                         </p>
                     )}
                     {ex && ex.renewal.rate == null && ex.contractsConsidered > 0 && (
-                        <p className="text-xs text-gray-400">
+                        <p className="text-xs text-gray-600">
                             Taxa de renovação sem base: nenhum contrato terminou no período. Não é 0%.
                         </p>
                     )}
@@ -612,18 +717,23 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
             )}
 
             {/* ── GRÁFICOS ─────────────────────────────────────────────────────
-                Quatro perguntas que o número sozinho não responde: quanto cada
-                empreendimento pesa, quando os contratos vencem, como a carteira
-                está composta e quão velho é o que está em aberto. Todos leem o
-                MESMO `scope` dos KPIs. */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
-                {temComparativo && <RevenueByEmpreendimentoChart rows={rows} onSelect={onSelectEmpreendimento} />}
-                <LeaseExpiryChart scope={scope} state={sources.executive} onRetry={onRetry} />
-                <UnitStatusChart scope={scope} />
-                {/* Sem o comparativo sobram 3 cards numa grade de 2: o aging
-                    ocupa a linha inteira em vez de deixar um vão ao lado. */}
-                <AgingChart scope={scope} className={temComparativo ? undefined : 'lg:col-span-2'} state={sources.executive} onRetry={onRetry} />
-            </div>
+                Por leitura. Operação: o que está em aberto, o que vence e como
+                a carteira está composta. Investimento: quanto cada
+                empreendimento rende contra o potencial. Todos leem o MESMO
+                `scope` dos indicadores. */}
+            {leitura === 'operacao' ? (
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+                    <AgingChart scope={scope} state={sources.executive} onRetry={onRetry} />
+                    <LeaseExpiryChart scope={scope} state={sources.executive} onRetry={onRetry} />
+                    <UnitStatusChart scope={scope} />
+                </div>
+            ) : (
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+                    {temComparativo && <RevenueByEmpreendimentoChart rows={rows} onSelect={onSelectEmpreendimento} className="lg:col-span-2" />}
+                    <UnitStatusChart scope={scope} />
+                    <LeaseExpiryChart scope={scope} state={sources.executive} onRetry={onRetry} />
+                </div>
+            )}
 
             {/* Detalhamento — recolhido por padrão (decisão da Fase 3). */}
             <button
@@ -639,27 +749,27 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                     <div className="mb-3">
                         <GroupLabel>Carteira e patrimônio</GroupLabel>
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                            <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={scope.activeAssets} icon={<Building2 className="w-4 h-4" />} color="blue" />
-                            <KpiCard shadow={false} size="sm" label="Contratos vigentes" value={ex ? ex.activeContracts : '—'} sub={ex ? `de ${plural(ex.contractsConsidered, 'contrato cadastrado', 'contratos cadastrados')}` : undefined} icon={<FileText className="w-4 h-4" />} color="indigo" />
+                            <KpiCard shadow={false} size="sm" label="Ativos sob gestão" value={scope.activeAssets} icon={<Building2 className="w-4 h-4" />} color="gray" />
+                            <KpiCard shadow={false} size="sm" label="Contratos vigentes" value={ex ? ex.activeContracts : '—'} sub={ex ? `de ${plural(ex.contractsConsidered, 'contrato cadastrado', 'contratos cadastrados')}` : undefined} icon={<FileText className="w-4 h-4" />} color="gray" />
                             {/* Ticket médio = receita ÷ negócios fechados: a mesma
                                 população do KPI "Receita mensal". */}
-                            <KpiCard shadow={false} size="sm" label="Aluguel médio por locação" value={orDash(ticketMedio, moneyBRL)} sub={scope.dealsCount > 0 ? plural(scope.dealsCount, 'locação fechada', 'locações fechadas') : undefined} icon={<Receipt className="w-4 h-4" />} color="violet" />
-                            <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={moneyBRL(scope.portfolioValue)} icon={<Home className="w-4 h-4" />} color="amber" />
+                            <KpiCard shadow={false} size="sm" label="Aluguel médio por locação" value={orDash(ticketMedio, moneyBRL)} sub={scope.dealsCount > 0 ? plural(scope.dealsCount, 'locação fechada', 'locações fechadas') : undefined} icon={<Receipt className="w-4 h-4" />} color="gray" />
+                            <KpiCard shadow={false} size="sm" label="Valor patrimonial" value={moneyBRL(scope.portfolioValue)} icon={<Home className="w-4 h-4" />} color="gray" />
                             {/* Yield bruto anual = receita mensal × 12 ÷ patrimônio; o
                                 mensal fica de legenda. Yield LÍQUIDO é o cap rate, no
                                 bloco de rentabilidade. */}
-                            <KpiCard shadow={false} size="sm" label="Yield bruto anual" value={orDash(scope.monthlyYield, v => percent2(v * 12))} sub={scope.monthlyYield != null ? `${percent2(scope.monthlyYield)} ao mês` : undefined} icon={<Percent className="w-4 h-4" />} color="emerald" />
+                            <KpiCard shadow={false} size="sm" label="Yield bruto anual" value={orDash(scope.monthlyYield, v => percent2(v * 12))} sub={scope.monthlyYield != null ? `${percent2(scope.monthlyYield)} ao mês` : undefined} icon={<Percent className="w-4 h-4" />} color="gray" />
                         </div>
                     </div>
 
                     <div className="mb-3">
                         <GroupLabel>Receita e cobrança</GroupLabel>
                         <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                            <KpiCard shadow={false} size="sm" label="Receita potencial" value={moneyBRL(scope.financial.potential)} sub="tudo alugado, ao valor base ou ao contratado" icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                            <KpiCard shadow={false} size="sm" label="Receita perdida por vacância" value={moneyBRL(Math.max(0, receitaPerdida))} sub="potencial − contratada, por mês" icon={<AlertCircle className="w-4 h-4" />} color="rose" />
-                            <KpiCard shadow={false} size="sm" label="Aluguéis lançados" value={ex ? moneyBRL(ex.collection.billed) : '—'} icon={<Receipt className="w-4 h-4" />} color="indigo" />
-                            <KpiCard shadow={false} size="sm" label="Aluguéis recebidos" value={ex ? moneyBRL(ex.collection.received) : '—'} icon={<Check className="w-4 h-4" />} color="teal" />
-                            <KpiCard shadow={false} size="sm" label="Taxa de arrecadação" value={orDash(ex?.collection.collectionRate, percent1)} sub="recebido ÷ lançado" icon={<Percent className="w-4 h-4" />} color="blue" />
+                            <KpiCard shadow={false} size="sm" label="Receita potencial" value={moneyBRL(scope.financial.potential)} sub="tudo alugado, ao valor base ou ao contratado" icon={<DollarSign className="w-4 h-4" />} color="gray" />
+                            <KpiCard shadow={false} size="sm" label="Receita perdida por vacância" value={moneyBRL(Math.max(0, receitaPerdida))} sub="potencial − contratada, por mês" icon={<AlertCircle className="w-4 h-4" />} color="gray" />
+                            <KpiCard shadow={false} size="sm" label="Aluguéis lançados" value={ex ? moneyBRL(ex.collection.billed) : '—'} icon={<Receipt className="w-4 h-4" />} color="gray" />
+                            <KpiCard shadow={false} size="sm" label="Aluguéis recebidos" value={ex ? moneyBRL(ex.collection.received) : '—'} icon={<Check className="w-4 h-4" />} color="gray" />
+                            <KpiCard shadow={false} size="sm" label="Taxa de arrecadação" value={orDash(ex?.collection.collectionRate, percent1)} sub="recebido ÷ lançado" icon={<Percent className="w-4 h-4" />} color="gray" />
                         </div>
                     </div>
 
@@ -669,10 +779,10 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                         <div className="mb-3">
                             <GroupLabel>Vencimento dos contratos vigentes</GroupLabel>
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                <KpiCard shadow={false} size="sm" label="Vencem em 30 dias" value={exp.within30.count} sub={`${moneyBRL(exp.within30.value)}/mês`} icon={<CalendarClock className="w-4 h-4" />} color="red" />
-                                <KpiCard shadow={false} size="sm" label="Vencem em 90 dias" value={exp.within90.count} sub={`${moneyBRL(exp.within90.value)}/mês`} icon={<CalendarClock className="w-4 h-4" />} color="orange" />
-                                <KpiCard shadow={false} size="sm" label="Vencem em 12 meses" value={exp.within365.count} sub={`${moneyBRL(exp.within365.value)}/mês`} icon={<Calendar className="w-4 h-4" />} color="amber" />
-                                <KpiCard shadow={false} size="sm" label="Vencidos e em vigor" value={exp.expired.count} sub={exp.expired.count > 0 ? `${moneyBRL(exp.expired.value)}/mês` : undefined} icon={<AlertCircle className="w-4 h-4" />} color={exp.expired.count > 0 ? 'rose' : 'gray'} />
+                                <KpiCard shadow={false} size="sm" label="Vencem em 30 dias" value={exp.within30.count} sub={`${moneyBRL(exp.within30.value)}/mês`} icon={<CalendarClock className="w-4 h-4" />} color={exp.within30.count > LIMIAR.vencem30Atencao ? 'amber' : 'gray'} />
+                                <KpiCard shadow={false} size="sm" label="Vencem em 90 dias" value={exp.within90.count} sub={`${moneyBRL(exp.within90.value)}/mês`} icon={<CalendarClock className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="Vencem em 12 meses" value={exp.within365.count} sub={`${moneyBRL(exp.within365.value)}/mês`} icon={<Calendar className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="Vencidos e em vigor" value={exp.expired.count} sub={exp.expired.count > 0 ? `${moneyBRL(exp.expired.value)}/mês` : undefined} icon={<AlertCircle className="w-4 h-4" />} color={exp.expired.count > 0 ? 'red' : 'gray'} />
                                 <KpiCard shadow={false} size="sm" label="Sem data de término" value={exp.noEndDate} icon={<FileText className="w-4 h-4" />} color={exp.noEndDate > 0 ? 'amber' : 'gray'} />
                             </div>
                         </div>
@@ -686,19 +796,19 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                         <div className="mb-3">
                             <GroupLabel>Vacância</GroupLabel>
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                <KpiCard shadow={false} size="sm" label="Unidades vagas" value={scope.vacancy.vacantCount} icon={<Home className="w-4 h-4" />} color="blue" />
-                                <KpiCard shadow={false} size="sm" label="Vacância média" value={vacMedida ? `${scope.vacancy.averageDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="amber" />
+                                <KpiCard shadow={false} size="sm" label="Unidades vagas" value={scope.vacancy.vacantCount} icon={<Home className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="Vacância média" value={vacMedida ? `${scope.vacancy.averageDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="gray" />
                                 {/* Mediana ao lado da média de propósito: uma unidade parada
                                     há anos distorce a média e esconde a carteira saudável. */}
-                                <KpiCard shadow={false} size="sm" label="Vacância mediana" value={vacMedida ? `${scope.vacancy.medianDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="indigo" />
-                                <KpiCard shadow={false} size="sm" label="Estoque envelhecido" value={scope.vacancy.over90} sub="vagas há mais de 90 dias" icon={<AlertCircle className="w-4 h-4" />} color="red" />
-                                <KpiCard shadow={false} size="sm" label="Absorção líquida (30d)" value={scope.vacancy.netAbsorption30d.net} sub={`${scope.vacancy.netAbsorption30d.rented} alugadas · ${scope.vacancy.netAbsorption30d.vacated} desocupadas`} icon={<TrendingUp className="w-4 h-4" />} color="emerald" />
+                                <KpiCard shadow={false} size="sm" label="Vacância mediana" value={vacMedida ? `${scope.vacancy.medianDays} dias` : '—'} icon={<Clock className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="Estoque envelhecido" value={scope.vacancy.over90} sub="vagas há mais de 90 dias" icon={<AlertCircle className="w-4 h-4" />} color={scope.vacancy.over90 > LIMIAR.estoqueEnvelhecidoAtencao ? 'amber' : 'gray'} />
+                                <KpiCard shadow={false} size="sm" label="Absorção líquida (30d)" value={scope.vacancy.netAbsorption30d.net} sub={`${scope.vacancy.netAbsorption30d.rented} alugadas · ${scope.vacancy.netAbsorption30d.vacated} desocupadas`} icon={<TrendingUp className="w-4 h-4" />} color="gray" />
                             </div>
                             {/* Enquanto houver marco de backfill entre as vagas, os dias são
                                 um PISO — o `changed_at` daquelas linhas é o `updated_at` do
                                 imóvel, não a data real da mudança de status. */}
                             {scope.vacancy.approximateCount > 0 && (
-                                <p className="text-xs text-gray-400 mt-2">
+                                <p className="text-xs text-gray-600 mt-2">
                                     {scope.vacancy.approximateCount === scope.vacancy.vacantCount
                                         ? 'Tempo de vacância ainda estimado: o histórico começou a ser medido agora.'
                                         : `${scope.vacancy.approximateCount} de ${scope.vacancy.vacantCount} unidades vagas ainda usam a data estimada do início da medição.`}
@@ -715,14 +825,14 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                         <div className="mb-3">
                             <GroupLabel>Rentabilidade (ano corrente até o mês atual)</GroupLabel>
                             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-                                <KpiCard shadow={false} size="sm" label="Receita no período" value={moneyBRL(scope.noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                                <KpiCard shadow={false} size="sm" label="Despesa no período" value={moneyBRL(scope.noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="orange" />
-                                <KpiCard shadow={false} size="sm" label="NOI" value={noiOk ? moneyBRL(scope.noi.noi) : '—'} sub={noiOk ? undefined : 'sem despesa lançada'} icon={<TrendingUp className="w-4 h-4" />} color={!noiOk || scope.noi.noi >= 0 ? 'teal' : 'red'} />
+                                <KpiCard shadow={false} size="sm" label="Receita no período" value={moneyBRL(scope.noi.revenue)} icon={<DollarSign className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="Despesa no período" value={moneyBRL(scope.noi.expense)} icon={<Briefcase className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="NOI" value={noiOk ? moneyBRL(scope.noi.noi) : '—'} sub={noiOk ? undefined : 'sem despesa lançada'} icon={<TrendingUp className="w-4 h-4" />} color={noiOk && scope.noi.noi < 0 ? 'red' : 'gray'} />
                                 {/* Margem e cap rate são `null` quando indefinidos (sem
                                     receita / sem patrimônio) — mostrar "0%" afirmaria algo
                                     que a conta não sustenta. */}
-                                <KpiCard shadow={false} size="sm" label="Margem NOI" value={noiOk ? orDash(scope.noi.margin, percent1) : '—'} icon={<BarChart3 className="w-4 h-4" />} color="violet" />
-                                <KpiCard shadow={false} size="sm" label="Cap rate" value={noiOk ? orDash(scope.noi.capRate, percent2) : '—'} sub="NOI anualizado ÷ patrimônio" icon={<Percent className="w-4 h-4" />} color="cyan" />
+                                <KpiCard shadow={false} size="sm" label="Margem NOI" value={noiOk ? orDash(scope.noi.margin, percent1) : '—'} icon={<BarChart3 className="w-4 h-4" />} color="gray" />
+                                <KpiCard shadow={false} size="sm" label="Cap rate" value={noiOk ? orDash(scope.noi.capRate, percent2) : '—'} sub="NOI anualizado ÷ patrimônio" icon={<Percent className="w-4 h-4" />} color="gray" />
                             </div>
                         </div>
                     )}

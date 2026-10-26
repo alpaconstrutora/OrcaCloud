@@ -25,7 +25,7 @@ import { idsPagosSemAlcada } from '../services/alcadaDaBaixa';
 import { darfService } from '../services/darfService';
 import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
 import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
-import { itensDoLote } from '../utils/filaAprovacao';
+import { itensDoLote, tiposPresentes } from '../utils/filaAprovacao';
 import { ORIGEM_PT, origemLabel } from '../utils/origemLabel';
 
 // ─── dispatch por entidade ───────────────────────────────────
@@ -489,7 +489,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                             className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                         >
                             <option value="all">Todos os tipos</option>
-                            {(Object.keys(ENTITY_TAG) as ActionQueueItem['entity'][]).map(k => (
+                            {tiposPresentes(items, Object.keys(ENTITY_TAG) as ActionQueueItem['entity'][], entityFilter).map(k => (
                                 <option key={k} value={k}>{ENTITY_TAG[k]}</option>
                             ))}
                         </select>

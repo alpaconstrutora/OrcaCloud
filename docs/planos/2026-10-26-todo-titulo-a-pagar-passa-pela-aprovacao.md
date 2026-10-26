@@ -11,6 +11,13 @@
 
 Sessão `28d65126-a526-45e0-8d6a-3e30e5f1eef2` · 26/10/2026.
 
+### Pedido posterior (26/10/2026, mesma sessão, depois da publicação do PR #178)
+
+> financeiro > aprovações:
+> o contrato CTS-042-0001 (suprimentos > contratos) tem o valor total de R$2.850,00. Porem o que deve ir para financeiro > aprovações e financeiro > contas a pagar, se encontra em contratos > financeiro > parcelas. são as parcelas que são efetivamente pagas e não o valor total do contrato
+
+Decisão (pergunta ao usuário): sai da fila o contrato **e** o pedido de compra — item M7.
+
 ### Resposta dada ao item 3 (não gera código)
 
 "Aprovar e lançar" (`boletoService.aprovarECriarInvoice`): confere fornecedor e
@@ -116,6 +123,13 @@ REGRA #7: toda função nova com `REVOKE … FROM PUBLIC, anon` + `GRANT … TO 
   a vencer → `PENDENTE` com níveis por faixa/1. PENDENTE e APROVADO existentes intocados.
   **Pronto quando:** contagem pós-virada = nenhum título aberto RASCUNHO fora de
   RETIDO; vencidos liberados + a vencer pendentes = total da reversão.
+
+- [x] **M7. Fila sem contrato e sem pedido de compra** (`aplicar_20271026600000`) — o que se aprova
+  é a parcela (título). Medido antes: 27 contratos + 10 pedidos na fila pelo valor TOTAL (o
+  CTS-042-0001 com R$ 2.850). A aprovação deles nunca foi usada (0/43 contratos, 0/21 pedidos).
+  Filtro "Tipo" só com os tipos presentes (`utils/filaAprovacao.tiposPresentes`); Central com o
+  rótulo "DARFs" no resumo (o resumo lê a fila). **Pronto quando:** a fila do desenvolvedor só
+  traz `transaction` (teste a seco: 409 títulos, 0 contratos, 0 pedidos) e o resumo idem.
 
 ### Serviços
 

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { itensDoLote } from '../utils/filaAprovacao';
+import { itensDoLote, tiposPresentes } from '../utils/filaAprovacao';
 
 const item = (id: string, approval_status = 'PENDENTE') => ({ id, approval_status });
 
@@ -12,5 +12,16 @@ describe('itensDoLote', () => {
 
     it('nada selecionado = lote vazio', () => {
         expect(itensDoLote([item('a')], new Set())).toEqual([]);
+    });
+});
+
+describe('tiposPresentes', () => {
+    it('só os tipos que existem na fila, na ordem do mapa', () => {
+        const itens = [{ entity: 'darf' }, { entity: 'transaction' }, { entity: 'darf' }];
+        expect(tiposPresentes(itens, ['transaction', 'darf', 'contract'], 'all')).toEqual(['transaction', 'darf']);
+    });
+
+    it('o tipo escolhido continua na lista mesmo sem itens (para o usuário poder trocar)', () => {
+        expect(tiposPresentes([{ entity: 'transaction' }], ['transaction', 'contract'], 'contract')).toEqual(['transaction', 'contract']);
     });
 });

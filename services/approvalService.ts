@@ -110,7 +110,8 @@ export interface RoleLabels {
 
 /** Pendências de aprovação por entidade (enforcement soft). */
 export interface ApprovalPendingSummary {
-    entity: ApprovalEntity;
+    /** Lê a fila (`fn_approval_action_queue`), então inclui `darf`. */
+    entity: QueueEntity;
     qtd: number;
     soma: number;
 }

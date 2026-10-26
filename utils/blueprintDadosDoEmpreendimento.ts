@@ -29,6 +29,9 @@ type Ficha = Pick<
   | 'endereco_neighborhood'
   | 'endereco_city'
   | 'endereco_state'
+  | 'terreno_frente_azimute'
+  | 'terreno_latitude'
+  | 'terreno_longitude'
 >;
 
 export interface DadosDoEmpreendimentoParaPlanta {
@@ -45,7 +48,14 @@ export interface DadosDoEmpreendimentoParaPlanta {
     profundidadePelaAreaMm: number | null;
     areaM2: number | null;
     origem: string;
+    /**
+     * Para onde a frente está voltada (azimute em graus do norte, horário) — `terreno_frente_azimute` da ficha,
+     * 26/10/2026. `null` = a ficha não diz: o lote entra na orientação padrão do painel, com aviso.
+     */
+    frenteVoltadaPara: number | null;
   } | null;
+  /** Latitude/longitude da ficha (26/10/2026), para a georreferência do desenho; só as duas juntas. */
+  coordenadas: { latitude: number; longitude: number; origem: string } | null;
   /** O que procurar em "Desenhar no mapa". */
   endereco: { texto: string; origem: string } | null;
   /** UF para o CUB da Casa automática. */
@@ -56,6 +66,8 @@ export interface DadosDoEmpreendimentoParaPlanta {
 
 const positivo = (v: number | null | undefined): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
 const texto = (v: string | null | undefined): string => (v ?? '').trim();
+/** 0–360 (360 = 0); fora disso ou vazio, `null`. */
+const azimute = (v: number | null | undefined): number | null => (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 360 ? v % 360 : null);
 
 function montarEndereco(rua: string, numero: string, bairro: string, cidade: string, uf: string): string | null {
   if (!rua && !cidade) return null;
@@ -64,7 +76,7 @@ function montarEndereco(rua: string, numero: string, bairro: string, cidade: str
 }
 
 export function dadosDoEmpreendimentoParaPlanta(e: Partial<Ficha> | null | undefined): DadosDoEmpreendimentoParaPlanta {
-  if (!e) return { lote: null, endereco: null, uf: null, cidade: null };
+  if (!e) return { lote: null, endereco: null, uf: null, cidade: null, coordenadas: null };
   const origem = texto(e.name) || 'empreendimento';
 
   const frente = positivo(e.terreno_frente);
@@ -84,7 +96,14 @@ export function dadosDoEmpreendimentoParaPlanta(e: Partial<Ficha> | null | undef
           profundidadePelaAreaMm: pelaArea !== null ? Math.round(pelaArea * 1000) : null,
           areaM2: area,
           origem,
+          frenteVoltadaPara: azimute(e.terreno_frente_azimute),
         }
+      : null;
+  const lat = e.terreno_latitude;
+  const lon = e.terreno_longitude;
+  const coordenadas =
+    typeof lat === 'number' && typeof lon === 'number' && Number.isFinite(lat) && Number.isFinite(lon) && Math.abs(lat) <= 90 && Math.abs(lon) <= 180
+      ? { latitude: lat, longitude: lon, origem }
       : null;
 
   const ufTerreno = texto(e.terreno_state).toUpperCase();
@@ -103,5 +122,6 @@ export function dadosDoEmpreendimentoParaPlanta(e: Partial<Ficha> | null | undef
       : texto(e.endereco_city)
         ? { nome: texto(e.endereco_city), uf: ufDivulgacao || null }
         : null,
+    coordenadas,
   };
 }

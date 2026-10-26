@@ -165,7 +165,8 @@ export default function PainelLoteDigitado({ rotacaoNorteDeg, georreferencia, te
     return (((fMm + bMm) / 2) * pMm) / 1_000_000;
   };
   const m2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const [voltadaPara, setVoltadaPara] = useState(ret ? anguloTexto(ret.frenteVoltadaPara) : '');
+  // A ficha pode dizer para onde a frente está voltada (26/10/2026, `terreno_frente_azimute`).
+  const [voltadaPara, setVoltadaPara] = useState(ret ? anguloTexto(ret.frenteVoltadaPara) : daFicha?.frenteVoltadaPara != null ? anguloTexto(daFicha.frenteVoltadaPara) : '');
   const [confrontantesRet, setConfrontantesRet] = useState({
     FRENTE: ret?.lados.FRENTE.confrontante ?? '',
     LATERAL_DIREITA: ret?.lados.LATERAL_DIREITA.confrontante ?? '',

@@ -103,6 +103,11 @@ export interface Empreendimento {
     terreno_profundidade?: number;
     terreno_lateral_direita?: number;
     terreno_lateral_esquerda?: number;
+    /** Para onde a FRENTE (o lado da rua) está voltada: azimute em graus do norte, horário (26/10/2026). */
+    terreno_frente_azimute?: number | null;
+    /** Graus decimais, negativo ao sul / a oeste (26/10/2026). */
+    terreno_latitude?: number | null;
+    terreno_longitude?: number | null;
 
     // Comercial
     vgv_total?: number;

@@ -2238,6 +2238,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     onRetry={() => setAnalysisReload(n => n + 1)}
                     leitura={analysisLeitura}
                     onNavigate={irParaDaAnalise}
+                    onOpenUnit={cell => {
+                        // A torre da unidade, no inventário — onde ela se edita.
+                        if (cell.parentId) setSelectedBuildingId(cell.parentId);
+                        setActiveTab('inventory');
+                    }}
                 />
             )}
 

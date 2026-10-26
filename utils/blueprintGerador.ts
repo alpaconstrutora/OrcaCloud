@@ -256,10 +256,12 @@ export function maiorRetanguloInscrito(anel: Point[], passoMm = 250): Retangulo 
   for (let j = 0; j < ny; j++) {
     const linha: boolean[] = [];
     for (let i = 0; i < nx; i++) {
-      const cx = minX + (i + 0.5) * passoMm;
-      const cy = minY + (j + 0.5) * passoMm;
+      // Milímetro inteiro: com passo ÍMPAR o centro caía em meio milímetro e o `point` do kernel recusava
+      // ("x deve ser milímetro inteiro … recebido 255.5" — Gerar massa em lote trapézio, 26/10/2026).
+      const cx = Math.round(minX + (i + 0.5) * passoMm);
+      const cy = Math.round(minY + (j + 0.5) * passoMm);
       // A célula inteira tem de estar dentro: testa o centro e os 4 cantos.
-      const d = passoMm / 2 - 1;
+      const d = Math.floor(passoMm / 2) - 1;
       linha.push([point(cx, cy), point(cx - d, cy - d), point(cx + d, cy - d), point(cx + d, cy + d), point(cx - d, cy + d)].every((p) => pointInPolygon(anel, p)));
     }
     ocupado.push(linha);

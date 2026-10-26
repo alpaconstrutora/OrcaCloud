@@ -23,6 +23,12 @@ describe('gerador determinístico', () => {
     // L: 10 × 10 sem o canto 5 × 5 superior direito → o maior retângulo tem 50 m² (10 × 5 ou 5 × 10).
     const L = maiorRetanguloInscrito([point(0, 0), point(10000, 0), point(10000, 5000), point(5000, 5000), point(5000, 10000), point(0, 10000)])!;
     expect(((L.x1 - L.x0) * (L.y1 - L.y0)) / 1e6).toBeCloseTo(50, 0);
+    // 26/10/2026: passo ÍMPAR (o Gerar massa usa a maior dimensão ÷ 150) — o centro da célula caía em meio
+    // milímetro e o kernel recusava ("x deve ser milímetro inteiro … recebido 255.5"). Trapézio: a busca em grade roda.
+    const T = maiorRetanguloInscrito([point(0, 0), point(18000, 0), point(19500, 55030), point(-1500, 55030)], 367)!;
+    expect(T).not.toBeNull();
+    for (const v of [T.x0, T.y0, T.x1, T.y1]) expect(Number.isInteger(v)).toBe(true);
+    expect(T.x1 - T.x0).toBeGreaterThanOrEqual(17000);
     expect(ladoDaFrente(null)).toBe('S');
     expect(ladoDaFrente(point(0, 1))).toBe('N');
     expect(ladoDaFrente({ x: 1, y: 0.2 })).toBe('L');

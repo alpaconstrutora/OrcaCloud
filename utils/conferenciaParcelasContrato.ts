@@ -14,6 +14,7 @@
 import type { ContractInstallment } from '../types/contracts';
 import { parcelaBaixada } from './contratoParcelaVariavel';
 import { gerarCronogramaContrato, type ParametrosCronograma } from './contractInstallments';
+import { somarMeses } from './paymentPlan';
 
 export interface ContratoConferido {
     is_recurring?: boolean | null;
@@ -234,4 +235,10 @@ export function planoDoGerador(
             ...parcelas.filter(p => p.source_system === 'CONTRACT_AVISTA' && ativa(p) && !parcelaBaixada(p)).map(p => p.id),
         ],
     };
+}
+
+/** Vencimento sugerido para o complemento: um mês depois da última linha do cronograma (ou de hoje). */
+export function vencimentoSugerido(cronograma: ContractInstallment[], hoje: string): string {
+    const ultima = cronograma.map(l => (l.date ?? '').slice(0, 10)).filter(Boolean).sort().pop();
+    return somarMeses(ultima ?? hoje, 1);
 }

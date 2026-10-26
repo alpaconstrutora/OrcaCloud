@@ -7,6 +7,7 @@ import {
     baseParaCorrecao,
     novoValorOriginal,
     motivoNaoAjustaContrato,
+    vencimentoSugerido,
     type ParcelaConferida,
 } from '../utils/conferenciaParcelasContrato';
 
@@ -186,5 +187,14 @@ describe('ajustar o valor do contrato', () => {
     it('recusa Original zerado ou negativo', () => {
         const c = conferirParcelas({ ...cts042, original_value: 300, current_value: 450 }, [parcela(1, 100)], aditivoAD001);
         expect(motivoNaoAjustaContrato(cts042, c, aditivoAD001)).toMatch(/zerado ou negativo/);
+    });
+});
+
+describe('vencimentoSugerido', () => {
+    it('um mês depois da última linha do cronograma', () => {
+        expect(vencimentoSugerido(cronograma042, '2026-10-26')).toBe('2026-07-11');
+    });
+    it('sem cronograma, um mês depois de hoje', () => {
+        expect(vencimentoSugerido([], '2026-10-26')).toBe('2026-11-26');
     });
 });

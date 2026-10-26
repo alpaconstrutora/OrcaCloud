@@ -16,6 +16,7 @@ import {
     Contract,
     ContractItem,
     ContractAddendum,
+    ContractInstallment,
     ContractMeasurement,
     ContractMeasurementItem,
     ContractUtilityBill,
@@ -110,7 +111,7 @@ function isReceivableContract(contract: { domain?: string | null; direction?: st
  */
 const STATUS_CONTRATO_FATURAVEL = ['ativo', 'assinado', 'concluído', 'concluido'];
 
-function podeFaturarContratoComercial(contract: {
+export function podeFaturarContratoComercial(contract: {
     domain?: string | null; status?: string | null; signature_status?: string | null;
     minuta_versions?: { emitted?: boolean }[] | null;
 }): boolean {
@@ -3073,6 +3074,63 @@ export const contractService = {
         });
         if (fnError) throw new Error(fnError.message);
         return fnData;
+    },
+
+    // ─── Financeiro › Parcelas: correção da divergência e gerador ─────────────
+    // Plano docs/planos/2026-10-26-contrato-parcelas-conferencia-e-gerador.md.
+    // O cronograma novo vem de utils/conferenciaParcelasContrato (regra pura, testada);
+    // aqui só se grava, pelo MESMO caminho de sempre: `updateContract` com o cronograma
+    // sincroniza as parcelas (pagas intocadas, abertas recriadas — e a aberta cujo
+    // valor mudou nasce de novo "Aguardando aprovação", pelo gatilho da alçada).
+
+    /**
+     * Grava o cronograma corrigido (complemento, distribuição ou gerador). Antes,
+     * limpa a marca de valor/vencimento MANUAL das abertas que ele reescreve: com
+     * ela, `planejarSyncParcelas` manteria o valor antigo — e a correção não
+     * mudaria nada, em silêncio. O contrato passa a Parcelado (à vista corrigido
+     * vira cronograma; a cobrança à vista aberta já entrou como 1ª linha).
+     */
+    aplicarCronogramaCorrigido: async (
+        contract: Contract,
+        cronograma: ContractInstallment[],
+        reescritas: string[],
+    ): Promise<Contract> => {
+        // As marcas de antes — para devolvê-las se a gravação falhar (revisão de 26/10:
+        // sem isso o valor manual ficava sem a marca e o próximo "Salvar" o desfazia).
+        let marcas: { id: string; valor_manual: boolean | null; vencimento_manual: boolean | null }[] = [];
+        if (reescritas.length) {
+            const { data, error: eLer } = await supabase
+                .from('internal_transactions')
+                .select('id, valor_manual, vencimento_manual')
+                .in('id', reescritas);
+            if (eLer) throw new Error(`Não foi possível preparar as parcelas: ${eLer.message}`);
+            marcas = ((data ?? []) as typeof marcas).filter(r => r.valor_manual || r.vencimento_manual);
+            const { error } = await supabase
+                .from('internal_transactions')
+                .update({ valor_manual: false, vencimento_manual: false })
+                .in('id', reescritas)
+                .eq('status', 'PENDING');
+            if (error) throw new Error(`Não foi possível preparar as parcelas: ${error.message}`);
+        }
+        try {
+            return await contractService.updateContract(contract.id, {
+                payment_schedule: cronograma,
+                payment_term_type: 'Parcelado',
+                payment_installments: cronograma.length,
+            });
+        } catch (e) {
+            for (const r of marcas) {
+                await supabase.from('internal_transactions')
+                    .update({ valor_manual: !!r.valor_manual, vencimento_manual: !!r.vencimento_manual })
+                    .eq('id', r.id);
+            }
+            throw e;
+        }
+    },
+
+    /** "Ajustar o valor do contrato": grava o Original; `updateContract` recalcula o Atual (+ aditivos). */
+    ajustarValorDoContrato: async (contract: Contract, novoOriginal: number): Promise<Contract> => {
+        return await contractService.updateContract(contract.id, { original_value: novoOriginal });
     },
 
     // ─── Aprovação Multinível ─────────────────────────────────────────────────

@@ -233,8 +233,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
         return [];
     });
 
-    /** Regera o cronograma a partir dos campos + Valor Original. */
-    const regerarCronograma = (g: GeradorParcelas, total = formData.original_value ?? 0) =>
+    /**
+     * O que os aditivos aprovados (e reajustes) somaram ao contrato: Atual − Original de quando
+     * a tela abriu. As parcelas devem somar o VALOR ATUAL (decisão do usuário, 26/10/2026 —
+     * Financeiro › Parcelas confere por ele); comparar e regerar pelo Original desfazia a
+     * correção feita lá (o complemento de um aditivo sumia ao "Redistribuir").
+     */
+    const acrescimoDoContrato = initialData && !initialData.is_recurring
+        ? Number(initialData.current_value ?? initialData.original_value ?? 0) - Number(initialData.original_value ?? 0)
+        : 0;
+    const valorAtualDoContrato = (formData.original_value ?? 0) + acrescimoDoContrato;
+
+    /** Regera o cronograma a partir dos campos + Valor Atual (Original + aditivos). */
+    const regerarCronograma = (g: GeradorParcelas, total = valorAtualDoContrato) =>
         setInstallmentSchedule(gerarCronogramaContrato({ ...g, total }));
 
     /** Muda um campo do gerador: espelha o nº em `payment_installments` e regera as linhas. */
@@ -1533,7 +1544,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                 </div>
 
                                 {formData.payment_term_type === 'Parcelado' && !formData.is_recurring && (() => {
-                                    const total = formData.original_value ?? 0;
+                                    const total = valorAtualDoContrato;
                                     const soma = somaDoCronograma(installmentSchedule);
                                     const divergente = Math.abs(soma - total) > 0.01;
                                     const parcelasDoPlano = installmentSchedule.filter(l => l.installment_type !== TIPO_ENTRADA);
@@ -1619,16 +1630,13 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                             lugares). Aqui ficam os campos que montam o plano; o aviso de soma
                                             divergente continua, senão mudar o Valor Original deixaria o
                                             cronograma antigo em silêncio (ele não se regera sozinho). */}
+                                        {/* 26/10/2026: sem "Redistribuir" aqui — ele regerava tudo pelo total e
+                                            ignorava parcela paga. A correção mora em Financeiro › Parcelas, que
+                                            parte dos títulos (pagas ficam, valor/vencimento manual preservados). */}
                                         {inline && installmentSchedule.length > 0 && divergente && (
                                             <p className="text-xs text-red-500 ml-1">
-                                                Soma das parcelas (R$ {fmt(soma)}) difere do valor do contrato (R$ {fmt(total)}).{' '}
-                                                <button
-                                                    type="button"
-                                                    onClick={() => regerarCronograma(gerador)}
-                                                    className="text-blue-600 hover:text-blue-800 font-medium"
-                                                >
-                                                    Redistribuir igualmente
-                                                </button>
+                                                Soma das parcelas (R$ {fmt(soma)}) difere do valor do contrato (R$ {fmt(total)}, com aditivos).
+                                                {' '}Corrija em Financeiro › Parcelas › "Corrigir divergência".
                                             </p>
                                         )}
 

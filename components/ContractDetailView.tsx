@@ -8,7 +8,8 @@ import {
     Camera, ExternalLink, HandCoins, CreditCard, X,
     Video, Image as ImageIcon, Send, FileDown,
     Package, Pencil, Settings, Search,
-    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock
+    ClipboardList, MapPin, Users, XCircle as XCircleIcon, Loader2, MoveHorizontal, PencilLine, CalendarClock,
+    Scale, AlertTriangle, ListPlus
 } from 'lucide-react';
 import { ContractModal, ContractFormSection } from './ContractModal';
 import {
@@ -20,9 +21,12 @@ import {
     DocumentRequirementPhase, ContractAcceptance, ContractTechnicalResponsibility, ContractEvaluation,
     AcceptanceKind, ArtType, ContractSupplyMatrixItem, ContractInterface
 } from '../types';
-import { contractService, type ParcelaDoContrato } from '../services/contractService';
+import { contractService, podeFaturarContratoComercial, type ParcelaDoContrato } from '../services/contractService';
 import AlterarValorParcelaSheet, { descreverAlteracaoManual } from './contracts/AlterarValorParcelaSheet';
 import AlterarVencimentoParcelaSheet, { descreverVencimentoManual } from './contracts/AlterarVencimentoParcelaSheet';
+import CorrigirDivergenciaSheet from './contracts/CorrigirDivergenciaSheet';
+import GerarParcelasSheet from './contracts/GerarParcelasSheet';
+import { conferirParcelas } from '../utils/conferenciaParcelasContrato';
 import { parcelaBaixada } from '../utils/contratoParcelaVariavel';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
@@ -310,6 +314,9 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
     // Parcela aberta no painel "Alterar valor da parcela".
     const [parcelaEmEdicao, setParcelaEmEdicao] = React.useState<ParcelaDoContrato | null>(null);
     const [vencimentoEmEdicao, setVencimentoEmEdicao] = React.useState<ParcelaDoContrato | null>(null);
+    // Financeiro › Parcelas: corrigir divergência / gerar parcelas (26/10/2026).
+    const [corrigindoDivergencia, setCorrigindoDivergencia] = React.useState(false);
+    const [gerandoParcelas, setGerandoParcelas] = React.useState(false);
     const financeColumns = useTableColumns(FINANCE_COLUMNS, 'contractFinanceEntriesColumns');
     // §6.1 — largura arrastável pelo divisor do cabeçalho + auto-ajuste sob comando.
     const financeWidths = useResizableColumns(FINANCE_COL_WIDTHS, 'contractFinanceEntriesColWidths');
@@ -1229,6 +1236,27 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         } catch (e) {
             notify(e instanceof Error && e.message ? e.message : 'Não foi possível atualizar o valor do contrato.', 'error');
         }
+    };
+
+    /**
+     * As parcelas batem com o Valor Atual do contrato? (pedido de 26/10/2026 — regra
+     * em utils/conferenciaParcelasContrato; recorrente e medição não se conferem).
+     */
+    const conferencia = React.useMemo(() => contract
+        ? conferirParcelas(
+            contract,
+            financialEntries,
+            addendums.map(a => ({ number: a.number, value_impact: Number(a.value_impact || 0), status: a.status })),
+            // Comercial ainda sem assinatura/minuta não lança títulos: sem eles a conferência mentiria.
+            { podeLancar: podeFaturarContratoComercial(contract) },
+        )
+        : null, [contract, financialEntries, addendums]);
+
+    /** Correção/gerador gravados: troca o contrato e relê as parcelas sem o spinner (§22). */
+    const aposCorrecao = async (atualizado: Contract, mensagem: string) => {
+        setContract(atualizado);
+        await recarregarParcelas(atualizado);
+        notify(mensagem, 'success');
     };
 
     const totalMeasurements = measurements.reduce((sum, m) => sum + (m.total_value || 0), 0);
@@ -3138,11 +3166,48 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             <p className="text-xs font-medium text-gray-400 mt-1">Boletos, parcelas e valores gerados a partir deste contrato no módulo Financeiro.</p>
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-3">
+                        <div className={`grid grid-cols-1 md:grid-cols-2 ${conferencia?.aplica ? 'lg:grid-cols-4' : 'lg:grid-cols-3'} gap-4 mb-3`}>
                             <KpiCard label="TOTAL LANÇADO" value={`R$ ${fmt(totalGeral)}`} icon={<DollarSign className="w-5 h-5" />} color="blue" />
                             <KpiCard label="PAGO / CONCILIADO" value={`R$ ${fmt(totalPago)}`} icon={<CheckCircle2 className="w-5 h-5" />} color="emerald" />
                             <KpiCard label="PENDENTE" value={`R$ ${fmt(totalPendente)}`} icon={<Clock className="w-5 h-5" />} color="amber" />
+                            {/* Parcelas × Valor Atual (26/10/2026): recorrente e medição não têm total a casar. */}
+                            {conferencia?.aplica && (
+                                <KpiCard
+                                    label="SALDO VS. CONTRATO"
+                                    value={conferencia.situacao === 'confere' ? 'Confere'
+                                        : conferencia.situacao === 'faltam' ? `Faltam R$ ${fmt(conferencia.saldo)}`
+                                        : `Excedem R$ ${fmt(-conferencia.saldo)}`}
+                                    sub={`Contrato R$ ${fmt(conferencia.valorContrato)} · Parcelas R$ ${fmt(conferencia.somaParcelas)}`}
+                                    icon={<Scale className="w-5 h-5" />}
+                                    color={conferencia.situacao === 'confere' ? 'emerald' : 'red'}
+                                />
+                            )}
                         </div>
+
+                        {/* Aviso de divergência — com a causa provável e a correção a um clique. */}
+                        {conferencia?.aplica && conferencia.situacao !== 'confere' && (
+                            <div className="flex flex-col md:flex-row md:items-center gap-3 px-4 py-3 mb-3 bg-red-50 border border-red-100 rounded-[10px]">
+                                <AlertTriangle className="w-4 h-4 text-red-600 shrink-0" />
+                                <p className="flex-1 text-sm text-red-700">
+                                    {conferencia.situacao === 'faltam'
+                                        ? `As parcelas somam R$ ${fmt(conferencia.somaParcelas)} e o contrato vale R$ ${fmt(conferencia.valorContrato)}: faltam R$ ${fmt(conferencia.saldo)} em parcelas.`
+                                        : `As parcelas somam R$ ${fmt(conferencia.somaParcelas)} e o contrato vale R$ ${fmt(conferencia.valorContrato)}: excedem em R$ ${fmt(-conferencia.saldo)}.`}
+                                    {conferencia.aditivosSemParcela.length > 0 && (
+                                        <> {conferencia.aditivosSemParcela.length === 1 ? 'O aditivo' : 'Os aditivos'}{' '}
+                                            {conferencia.aditivosSemParcela.map(a => `${a.numero} (+R$ ${fmt(a.valor)})`).join(', ')}{' '}
+                                            {conferencia.aditivosSemParcela.length === 1 ? 'mudou o valor do contrato e não virou parcela.' : 'mudaram o valor do contrato e não viraram parcela.'}</>
+                                    )}
+                                </p>
+                                <button
+                                    type="button"
+                                    onClick={() => setCorrigindoDivergencia(true)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-red-700 border border-red-200 rounded-[6px] text-[13px] font-medium hover:bg-red-100 transition-all active:scale-95 shrink-0"
+                                >
+                                    <Scale className="w-[15px] h-[15px]" />
+                                    Corrigir divergência
+                                </button>
+                            </div>
+                        )}
 
                         {/* §5.2 — toolbar acoplada: busca à esquerda, colunas à direita, tabela no mesmo card */}
                         <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
@@ -3157,6 +3222,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                     />
                                 </div>
+                                {/* Gerador (26/10/2026): pelo Valor Atual, mantendo as pagas. Recorrente/medição não. */}
+                                {conferencia?.aplica && (
+                                    <button
+                                        type="button"
+                                        onClick={() => setGerandoParcelas(true)}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 border border-gray-200 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 transition-all active:scale-95 shrink-0"
+                                        title="Gerar as parcelas a partir do valor do contrato (as pagas ficam)"
+                                    >
+                                        <ListPlus className="w-[15px] h-[15px]" />
+                                        Gerar parcelas
+                                    </button>
+                                )}
                                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     <ColumnConfigButton
                                         columns={FINANCE_DATA_COLUMNS}
@@ -3315,6 +3392,23 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                                 );
                                             })}
                                         </tbody>
+                                        {conferencia?.aplica && (
+                                            <tfoot>
+                                                <tr className="bg-gray-50 border-t-2 border-gray-200">
+                                                    <td colSpan={FINANCE_DATA_COLUMNS.filter(c => visibleFinCols.includes(c.key)).length + 2} className="px-6 py-2.5 text-sm text-gray-700">
+                                                        <span className="text-xs font-semibold text-gray-500 mr-2">Total</span>
+                                                        Parcelas <span className="font-medium text-gray-800">R$ {fmt(conferencia.somaParcelas)}</span>
+                                                        {' · '}Contrato <span className="font-medium text-gray-800">R$ {fmt(conferencia.valorContrato)}</span>
+                                                        {' · '}Saldo{' '}
+                                                        <span className={`font-medium ${conferencia.situacao === 'confere' ? 'text-emerald-700' : 'text-red-600'}`}>
+                                                            {conferencia.situacao === 'confere' ? 'confere'
+                                                                : conferencia.situacao === 'faltam' ? `faltam R$ ${fmt(conferencia.saldo)}`
+                                                                : `excedem R$ ${fmt(-conferencia.saldo)}`}
+                                                        </span>
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        )}
                                     </table>
                                 </div>
                             )}
@@ -3659,6 +3753,29 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 onClose={() => setParcelaEmEdicao(null)}
                 onSalvar={handleSalvarValorParcela}
             />
+
+            {/* Financeiro › Parcelas › Corrigir divergência / Gerar parcelas (26/10/2026). */}
+            {contract && conferencia?.aplica && (
+                <>
+                    <CorrigirDivergenciaSheet
+                        open={corrigindoDivergencia}
+                        contrato={contract}
+                        conferencia={conferencia}
+                        parcelas={financialEntries}
+                        aditivos={addendums}
+                        onClose={() => setCorrigindoDivergencia(false)}
+                        onAplicado={aposCorrecao}
+                    />
+                    <GerarParcelasSheet
+                        open={gerandoParcelas}
+                        contrato={contract}
+                        valorContrato={conferencia.valorContrato}
+                        parcelas={financialEntries}
+                        onClose={() => setGerandoParcelas(false)}
+                        onAplicado={aposCorrecao}
+                    />
+                </>
+            )}
 
             {/* Financeiro › Parcelas › Alterar vencimento (24/10/2026). */}
             <AlterarVencimentoParcelaSheet

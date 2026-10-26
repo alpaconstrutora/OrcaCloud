@@ -7,12 +7,16 @@
  * O que este teste trava:
  *  1. embutido (Dados Gerais) não mostra a tabela; os campos que montam o plano
  *     (Entrada, Nº de Parcelas, Periodicidade, 1º vencimento) continuam;
- *  2. o aviso de soma divergente sobrevive sem a tabela, com "Redistribuir
- *     igualmente" — mudar o Valor Original não regera o cronograma sozinho;
+ *  2. o aviso de soma divergente sobrevive sem a tabela — mudar o Valor Original
+ *     não regera o cronograma sozinho. Desde 26/10/2026 ele compara com o Valor
+ *     ATUAL (original + aditivos) e aponta para Financeiro › Parcelas › "Corrigir
+ *     divergência": o "Redistribuir igualmente" daqui regerava tudo pelo total,
+ *     ignorava parcela paga e desfazia em silêncio a correção feita lá
+ *     (plano 2026-10-26-contrato-parcelas-conferencia-e-gerador, revisão);
  *  3. a gaveta (contrato novo, sem sub-aba Parcelas ainda) segue com a tabela.
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 // `vi.mock` é içado para o topo do arquivo: nada de variável de módulo dentro
@@ -105,12 +109,12 @@ describe('ContractModal — parcelas só na sub-aba Parcelas', () => {
         expect(screen.queryByText(/difere do valor do contrato/)).toBeNull();
     });
 
-    it('Dados Gerais (embutido): soma divergente avisa e redistribui', () => {
+    it('Dados Gerais (embutido): soma divergente avisa e aponta a correção em Parcelas', () => {
         montar({ inline: true, valores: [1000, 1000, 500] });
 
-        expect(screen.getByText(/Soma das parcelas \(R\$ 2\.500,00\) difere do valor do contrato \(R\$ 3\.000,00\)/)).toBeTruthy();
-        fireEvent.click(screen.getByRole('button', { name: 'Redistribuir igualmente' }));
-        expect(screen.queryByText(/difere do valor do contrato/)).toBeNull();
+        expect(screen.getByText(/Soma das parcelas \(R\$ 2\.500,00\) difere do valor do contrato \(R\$ 3\.000,00, com aditivos\)/)).toBeTruthy();
+        expect(screen.getByText(/Corrija em Financeiro › Parcelas/)).toBeTruthy();
+        expect(screen.queryByRole('button', { name: 'Redistribuir igualmente' })).toBeNull();
     });
 
     it('gaveta (contrato novo/edição pela lista): a tabela continua', () => {

@@ -3192,7 +3192,6 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     study.id,
     study.organization_id,
     empreendimentoSugerido,
-    orgId,
     cidadeDaFicha,
   );
   /**

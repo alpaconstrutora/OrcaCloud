@@ -4,10 +4,16 @@
 // Fluxo: escolhe a cidade → escolhe o mapa cadastrado daquela cidade → marca as zonas
 // aplicáveis → copia para empreendimento_regulatory_zones. É cópia (como o "pin" do SINAPI):
 // depois de importado, editar no empreendimento não altera o cadastro da cidade.
+//
+// Os mapas da cidade vêm de todas as organizações do usuário, não só da do empreendimento
+// (26/10/2026): a lei de Cambuí-MG está na Alpa e o Garden Cambuhy na SPE dele — ver
+// `regulatoryMapService.listByCity`. A cópia continua gravada em `organizationId`.
 import React from 'react';
 import { X, Loader2, FolderInput, AlertCircle, MapPin } from 'lucide-react';
 import { regulatoryMapService } from '../../services/regulatoryMapService';
 import { RegulatoryMapWithCity, RegulatoryMapZone } from '../../types';
+import { useStore } from '../../store/useStore';
+import { rotuloMapaRegulatorio } from '../../utils/rotuloMapaRegulatorio';
 import CitySearchSelect, { CitySearchValue } from './CitySearchSelect';
 
 interface Props {
@@ -28,6 +34,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
     const [checkedIds, setCheckedIds] = React.useState<Set<string>>(new Set());
     const [importing, setImporting] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
+    const organizations = useStore(state => state.organizations);
 
     React.useEffect(() => {
         setSelectedMap(null);
@@ -35,11 +42,11 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
         setCheckedIds(new Set());
         if (!city) { setMaps([]); return; }
         setLoadingMaps(true);
-        regulatoryMapService.list(organizationId, city.id)
+        regulatoryMapService.listByCity(city.id)
             .then(setMaps)
             .catch(err => setError(err.message))
             .finally(() => setLoadingMaps(false));
-    }, [city, organizationId]);
+    }, [city]);
 
     React.useEffect(() => {
         if (!selectedMap) { setZones([]); return; }
@@ -106,7 +113,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
                             </div>
                         ) : maps.length === 0 ? (
                             <p className="text-sm text-gray-500 py-2">
-                                Nenhum mapa regulatório cadastrado para {city.name}. Cadastre em Incorporação → Planta Inteligente, aba Mapa Regulatório.
+                                Nenhum mapa regulatório cadastrado para {city.name} nas suas organizações. Cadastre em Incorporação → Planta Inteligente, aba Mapa Regulatório.
                             </p>
                         ) : (
                             <div>
@@ -117,7 +124,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
                                 >
                                     <option value="">Selecione...</option>
-                                    {maps.map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                                    {maps.map(m => <option key={m.id} value={m.id}>{rotuloMapaRegulatorio(m, maps, organizations)}</option>)}
                                 </select>
                             </div>
                         )

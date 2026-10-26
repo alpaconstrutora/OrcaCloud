@@ -21,7 +21,7 @@ vi.mock('../services/blueprintUrbanContextService', () => ({
   },
 }));
 vi.mock('../services/regulatoryMapService', () => ({
-  regulatoryMapService: { list: vi.fn(async () => []), listZones: vi.fn(async () => []) },
+  regulatoryMapService: { listByCity: vi.fn(async () => []), listZones: vi.fn(async () => []) },
 }));
 const cidades = { current: [] as { id: string; name: string; state_code: string }[] };
 vi.mock('../services/masterDataService', () => ({
@@ -33,10 +33,11 @@ vi.mock('../services/empreendimentoService', () => ({
 
 import { useBlueprintZonaUrbanistica } from '../hooks/useBlueprintZonaUrbanistica';
 import { blueprintUrbanContextService } from '../services/blueprintUrbanContextService';
+import { regulatoryMapService } from '../services/regulatoryMapService';
 
 const ZONA_UNICA = { id: 'z1', zona: 'ZR-2', recuo_frente: '5', recuo_fundos: '3', taxa_ocupacao_maxima: '60' };
 const montar = (studyId: string, sugerido: string | null) =>
-  renderHook(({ s }) => useBlueprintZonaUrbanistica(studyId, 'o1', s, 'o1'), { initialProps: { s: sugerido } });
+  renderHook(({ s }) => useBlueprintZonaUrbanistica(studyId, 'o1', s), { initialProps: { s: sugerido } });
 
 describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
   beforeEach(() => {
@@ -131,7 +132,7 @@ describe('cidade da ficha no caminho do catálogo (22/10/2026)', () => {
     ];
   });
   const comCidade = (studyId: string, cidade: { nome: string; uf: string | null }) =>
-    renderHook(() => useBlueprintZonaUrbanistica(studyId, 'o1', null, 'o1', cidade));
+    renderHook(() => useBlueprintZonaUrbanistica(studyId, 'o1', null, cidade));
 
   it('catálogo sem cidade: entra a cidade que casa nome (sem acento/caixa) e UF, marcada como automática', async () => {
     const h = comCidade('estudo-c1', { nome: 'cambui', uf: 'MG' });
@@ -141,6 +142,15 @@ describe('cidade da ficha no caminho do catálogo (22/10/2026)', () => {
     expect(h.result.current.cidadeAutomatica).toBe(true);
     act(() => h.result.current.setCidade({ id: 'outra', name: 'Outra' }));
     expect(h.result.current.cidadeAutomatica).toBe(false);
+  });
+
+  it('os mapas da cidade vêm de TODAS as organizações do usuário, não só da do estudo (26/10/2026)', async () => {
+    // O mapa de Cambuí-MG mora na Alpa; a planta (e o empreendimento) na SPE. Filtrar pela
+    // organização escondia a lei da cidade — a busca é só pela cidade, a RLS limita.
+    const h = comCidade('estudo-c3', { nome: 'cambui', uf: 'MG' });
+    await waitFor(() => expect(blueprintUrbanContextService.get).toHaveBeenCalled());
+    act(() => h.result.current.setOrigemDaZona('CATALOGO'));
+    await waitFor(() => expect(regulatoryMapService.listByCity).toHaveBeenCalledWith('c-mg'));
   });
 
   it('sem UF e duas cidades com o nome: não chuta', async () => {

@@ -1,6 +1,6 @@
 // components/empreendimento/EmpreendimentoModule.tsx
 import React from 'react';
-import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat, Layers, ChevronDown, ChevronRight } from 'lucide-react';
+import { Plus, Building2, Search, RefreshCw, AlertCircle, MoveHorizontal, HardHat, Layers, ChevronDown, ChevronRight, ArrowDownAZ, ArrowUpZA } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { FilterPopover } from '../ui/FilterPopover';
 import { InlineActionTray } from '../ui/InlineActionTray';
@@ -151,6 +151,9 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
   const [loading, setLoading] = React.useState(true);
   const [search, setSearch] = usePersistedState<string>('empreendimentoList:search', '');
   const [groupBy, setGroupBy] = usePersistedState<GroupByField>('empreendimentoList:groupBy', '');
+  // Direção de exibição dos grupos (não da linha dentro do grupo, que segue a coluna
+  // clicada no cabeçalho) — só faz sentido com agrupamento ativo.
+  const [groupSortDir, setGroupSortDir] = usePersistedState<'asc' | 'desc'>('empreendimentoList:groupSortDir', 'asc');
   // Grupos recolhidos — transitório de propósito: ao reabrir a tela todos voltam abertos.
   const [collapsedGroups, setCollapsedGroups] = React.useState<Set<string>>(new Set());
   const toggleGroup = (key: string) =>
@@ -330,13 +333,14 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
     }
     const list = [...map.values()];
     const statusOrder = Object.keys(STATUS_LABELS);
+    const dir = groupSortDir === 'asc' ? 1 : -1;
     return list.sort((a, b) => {
       if (a.key === '__none__') return 1;
       if (b.key === '__none__') return -1;
-      if (groupBy === 'status') return statusOrder.indexOf(a.key) - statusOrder.indexOf(b.key);
-      return a.label.localeCompare(b.label);
+      if (groupBy === 'status') return dir * (statusOrder.indexOf(a.key) - statusOrder.indexOf(b.key));
+      return dir * a.label.localeCompare(b.label);
     });
-  }, [filtered, groupBy, tipoLabel, orgName]);
+  }, [filtered, groupBy, groupSortDir, tipoLabel, orgName]);
 
   // ── Detalhe ────────────────────────────────────────────────────────────────
   if (selected) {
@@ -434,6 +438,23 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
               onChange={v => { setGroupBy(v); setCollapsedGroups(new Set()); }}
               options={GROUP_BY_OPTIONS}
             />
+
+            {/* Ordem dos grupos — só faz sentido com agrupamento ativo; a ordem dentro de
+                cada grupo continua sendo a da coluna clicada no cabeçalho (§6.8). */}
+            <button
+              onClick={() => setGroupSortDir(d => (d === 'asc' ? 'desc' : 'asc'))}
+              disabled={!groupBy}
+              title={
+                groupBy
+                  ? `Ordem dos grupos: ${groupSortDir === 'asc' ? 'crescente' : 'decrescente'} — clique para inverter`
+                  : 'Escolha um agrupamento para ordenar os grupos'
+              }
+              className={`h-9 w-9 flex items-center justify-center rounded-[6px] transition-all active:scale-95 shrink-0 ${
+                groupBy ? 'text-gray-500 hover:text-gray-700 hover:bg-gray-100' : 'text-gray-300 cursor-not-allowed'
+              }`}
+            >
+              {groupSortDir === 'asc' ? <ArrowDownAZ className="w-4 h-4" /> : <ArrowUpZA className="w-4 h-4" />}
+            </button>
 
             <button
               onClick={load}
@@ -577,8 +598,8 @@ export const EmpreendimentoModule: React.FC<Props> = ({ activeOrganizationId, on
                           <ActionIconButton kind="duplicate" onClick={() => handleDuplicate(item)} />
                           <ActionIconButton
                             kind="move"
-                            title="Criar obra para este empreendimento"
-                            icon={<HardHat className="w-4 h-4" />}
+                            title={item.project_id ? 'Obra já criada e vinculada a este empreendimento' : 'Criar obra para este empreendimento'}
+                            icon={<HardHat className={`w-4 h-4 ${item.project_id ? 'text-emerald-600' : ''}`} />}
                             onClick={() => setCreatingObraFor(item)}
                           />
                           <InlineActionTray>

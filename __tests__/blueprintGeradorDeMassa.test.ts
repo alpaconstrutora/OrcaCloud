@@ -312,6 +312,19 @@ describe('gerador de massa · folga na TO e piso do sol', () => {
 // 22/10/2026, o caso real ("Planta 15/10/2026"): lote 10 × 30 m, laterais sem recuo, produto de 1 vaga por unidade
 // com vagas de ré. Nenhuma vaga cabe no subsolo (a fileira de ré com circulação pede 10 m), e o gerador dizia só
 // "faltam vagas (393)"; o rótulo dizia "Embasamento + torre · 19 × 18 m" num lote de 10 m de largura.
+// 26/10/2026: lote IRREGULAR — o trapézio da ficha (frente 18 m, fundos 21 m, 63,03 m) quebrava o gerador inteiro
+// com "x deve ser milímetro inteiro … recebido 255.5": o passo da busca em grade dava ímpar.
+describe('gerador de massa · lote trapézio', () => {
+  it('gera sem erro de milímetro inteiro e com implantações', () => {
+    let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
+    const t = m.levels[0].id;
+    const d = (ax: number, ay: number, bx: number, by: number, papel: Papel): Command => ({ type: 'AddBoundary', levelId: t, a: point(ax, ay), b: point(bx, by), kind: 'TERRENO', papel });
+    m = applyBatch(m, [d(-1500, 63030, 0, 0, 'LATERAL_ESQUERDA'), d(0, 0, 18000, 0, 'FRENTE'), d(18000, 0, 19500, 63030, 'LATERAL_DIREITA'), d(19500, 63030, -1500, 63030, 'FUNDOS')]).model;
+    const r = gerarMassa(entrada(m), 1);
+    expect(r.melhores.length).toBeGreaterThan(0);
+  });
+});
+
 describe('gerador de massa · lote estreito', () => {
   const ESTREITO = lote(10, 30);
   const produto = produtoDaColuna({

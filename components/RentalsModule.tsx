@@ -40,7 +40,7 @@ import { pricingRuleApplicationService, buildApplicationRows } from '../services
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
-import RentalAnalysisOverview from './rentals/RentalAnalysisOverview';
+import RentalAnalysisOverview, { type AnalysisSources, type AnalysisSourceState } from './rentals/RentalAnalysisOverview';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep, getDealStatusDisplay as statusDaNegociacao } from '../lib/dealWorkflow';
 // Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
@@ -740,6 +740,17 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // `null` = não medido (log de status / contratos indisponíveis), nunca zero.
     const [vacancyEvents, setVacancyEvents] = useState<StatusEvent[] | null>(null);
     const [executiveRaw, setExecutiveRaw] = useState<RentalExecutiveRaw | null>(null);
+    // Estado de cada insumo da aba Análise. `null` nos dados acima significa
+    // "não medido"; sem este estado, "ainda carregando" e "a consulta falhou"
+    // chegavam à tela iguais a ele ("—", "Contratos indisponíveis") — com rede
+    // lenta o gestor lia que não havia contratos. `analysisReload` é o
+    // "Tentar de novo": muda a chave e os três efeitos rodam outra vez.
+    const [analysisSources, setAnalysisSources] = useState<AnalysisSources>({
+        vacancy: 'loading', noi: 'loading', executive: 'loading',
+    });
+    const [analysisReload, setAnalysisReload] = useState(0);
+    const marcarFonte = (fonte: keyof AnalysisSources, estado: AnalysisSourceState) =>
+        setAnalysisSources(prev => (prev[fonte] === estado ? prev : { ...prev, [fonte]: estado }));
     // Recorte da aba Análise. 'ALL' = a carteira inteira (o comportamento
     // original da aba). Persistido pelo mesmo motivo do `showDetail`: o usuário
     // volta para a tela querendo o recorte em que estava.
@@ -1404,11 +1415,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
+        marcarFonte('vacancy', 'loading');
         rentalVacancyService
-            .getVacancyEvents(effectiveOrganizationId, selectedBuildingId)
-            .then(eventos => { if (alive) setVacancyEvents(eventos); });
+            .getVacancyEvents(effectiveOrganizationId, selectedBuildingId, { throwOnError: true })
+            .then(eventos => { if (alive) { setVacancyEvents(eventos); marcarFonte('vacancy', 'ready'); } })
+            .catch(() => { if (alive) marcarFonte('vacancy', 'error'); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId, selectedBuildingId]);
+    }, [activeTab, effectiveOrganizationId, selectedBuildingId, analysisReload]);
 
     // NOI (Fase 2). Janela: ano corrente até o mês atual — a despesa é somada no
     // período, e o cap rate é anualizado a partir dela.
@@ -1422,11 +1435,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
+        marcarFonte('noi', 'loading');
         rentalNoiService
-            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`, properties)
-            .then(data => { if (alive) setNoi(data); });
+            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`, properties, { throwOnError: true })
+            .then(data => { if (alive) { setNoi(data); marcarFonte('noi', 'ready'); } })
+            .catch(() => { if (alive) marcarFonte('noi', 'error'); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId, properties]);
+    }, [activeTab, effectiveOrganizationId, properties, analysisReload]);
 
     // WALE, taxa de renovação e cobrança (Fase 3). Vem de `contracts` +
     // `vw_receivables`, não de `deals` — por isso não cabe no `stats`.
@@ -1435,11 +1450,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
+        marcarFonte('executive', 'loading');
         rentalExecutiveService
-            .loadRaw(effectiveOrganizationId)
-            .then(data => { if (alive) setExecutiveRaw(data); });
+            .loadRaw(effectiveOrganizationId, null, { throwOnError: true })
+            .then(data => { if (alive) { setExecutiveRaw(data); marcarFonte('executive', 'ready'); } })
+            .catch(() => { if (alive) marcarFonte('executive', 'error'); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId]);
+    }, [activeTab, effectiveOrganizationId, analysisReload]);
 
     // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
     const getStatusColor = (status: PropertyStatus) => {
@@ -2038,6 +2055,8 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     onSelectEmpreendimento={setAnalysisEmpId}
                     showDetail={showDetail}
                     onToggleDetail={() => setShowDetail(!showDetail)}
+                    sources={analysisSources}
+                    onRetry={() => setAnalysisReload(n => n + 1)}
                 />
             )}
 
@@ -2051,6 +2070,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 <input
                                     type="text"
                                     placeholder="Buscar empreendimento..."
+                                    aria-label="Buscar empreendimento"
                                     value={analysisSearch}
                                     onChange={e => setAnalysisSearch(e.target.value)}
                                     className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -2089,6 +2109,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
                             <table ref={analysisCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: analysisTableTotalWidth, minWidth: '100%' }}>
+                                <caption className="sr-only">Análise por empreendimento — escolha um empreendimento para recortar a aba</caption>
                                 <colgroup>
                                     {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
                                         <col key={c.key} data-col-key={c.key} style={{ width: `${analysisCols.getWidth(c.key)}px` }} />
@@ -2140,7 +2161,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                                 : 'font-normal text-gray-600'
                                                     }`}
                                                 >
-                                                    {renderAnalysisCell(c.key, row)}
+                                                    {c.key === 'name' ? (
+                                                        // O clique na linha é do mouse; o teclado e o
+                                                        // leitor de tela chegam pelo nome, que é botão.
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => { e.stopPropagation(); setAnalysisEmpId(row.empreendimentoId); }}
+                                                            className="max-w-full truncate text-left rounded-[4px] hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                                                            aria-label={`Ver a análise de ${row.name}`}
+                                                        >
+                                                            {renderAnalysisCell(c.key, row)}
+                                                        </button>
+                                                    ) : renderAnalysisCell(c.key, row)}
                                                 </td>
                                             ))}
                                             <td aria-hidden="true"></td>
@@ -2190,6 +2222,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 <input
                                     type="text"
                                     placeholder="Buscar tipo de cliente..."
+                                    aria-label="Buscar tipo de cliente"
                                     value={clientTypeSearch}
                                     onChange={e => setClientTypeSearch(e.target.value)}
                                     className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -2228,6 +2261,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
                             <table ref={clientTypeCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: clientTypeTableTotalWidth, minWidth: '100%' }}>
+                                <caption className="sr-only">Análise por tipo de cliente</caption>
                                 <colgroup>
                                     {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
                                         <col key={c.key} data-col-key={c.key} style={{ width: `${clientTypeCols.getWidth(c.key)}px` }} />

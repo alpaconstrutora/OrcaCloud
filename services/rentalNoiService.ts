@@ -58,6 +58,10 @@ export const rentalNoiService = {
          * das linhas divergir do KPI do topo sem nenhum sinal na tela.
          */
         carteira?: NoiPropertyRow[],
+    /** Falha de verdade (rede, erro inesperado) LANÇA em vez de virar `null`.
+     *  Sem isto, "falhou" e "não medido" chegam iguais à tela. Só a aba Análise
+     *  pede — os demais consumidores seguem com o contrato antigo. */
+        opts?: { throwOnError?: boolean },
     ): Promise<RentalNoiMetrics | null> {
         try {
             const expenseByProperty = await propertyExpenseService.expenseByProperty(
@@ -135,6 +139,7 @@ export const rentalNoiService = {
             };
         } catch (err) {
             console.error('[RentalNoi] Erro ao calcular NOI:', err);
+            if (opts?.throwOnError) throw err;
             return null;
         }
     },

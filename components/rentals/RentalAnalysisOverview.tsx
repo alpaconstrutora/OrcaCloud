@@ -34,7 +34,28 @@ interface Props {
     onSelectEmpreendimento: (id: string) => void;
     showDetail: boolean;
     onToggleDetail: () => void;
+    /** Estado de cada insumo — ver `AnalysisSources`. */
+    sources: AnalysisSources;
+    /** "Tentar de novo": refaz as consultas que falharam. */
+    onRetry: () => void;
 }
+
+export type AnalysisSourceState = 'loading' | 'ready' | 'error';
+
+/** Os três insumos da aba que vêm de consulta própria (o resto já chega com a
+ *  carteira). Sem este estado, "carregando" e "falhou" apareciam iguais a "não
+ *  medido" — "—" e "Contratos indisponíveis" com a rede lenta. */
+export interface AnalysisSources {
+    vacancy: AnalysisSourceState;
+    noi: AnalysisSourceState;
+    executive: AnalysisSourceState;
+}
+
+const ROTULO_FONTE: Record<keyof AnalysisSources, string> = {
+    vacancy: 'o histórico de vacância',
+    noi: 'as despesas dos imóveis (NOI)',
+    executive: 'os contratos e as parcelas',
+};
 
 const moneyBRL = (v: number) =>
     new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
@@ -138,10 +159,28 @@ const ChartCard: React.FC<{
 /** Estado vazio de um card de gráfico — texto só, sem ícone grande: o card já
  *  é pequeno e um ícone de 48px competiria com o título. */
 const ChartEmpty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="flex items-center justify-center min-h-[160px] text-sm text-gray-400 text-center px-4">
+    <div className="flex items-center justify-center min-h-[160px] text-sm text-gray-500 text-center px-4">
         {children}
     </div>
 );
+
+/** Gráfico que depende de consulta própria: carregando e falhou têm cara
+ *  própria — nunca a do "indisponível" (que é afirmação sobre o dado). */
+const ChartSourceState: React.FC<{ state: AnalysisSourceState; onRetry: () => void; what: string }> = ({ state, onRetry, what }) =>
+    state === 'loading' ? (
+        <div className="min-h-[160px] flex flex-col justify-center gap-2 px-2" aria-busy="true" aria-label={`Carregando ${what}`}>
+            <div className="h-3 rounded bg-gray-100 animate-pulse w-3/4" />
+            <div className="h-3 rounded bg-gray-100 animate-pulse w-1/2" />
+            <div className="h-3 rounded bg-gray-100 animate-pulse w-2/3" />
+        </div>
+    ) : (
+        <ChartEmpty>
+            <span>
+                Não foi possível carregar {what}.{' '}
+                <button type="button" onClick={onRetry} className="text-blue-600 hover:text-blue-800 font-medium">Tentar de novo</button>
+            </span>
+        </ChartEmpty>
+    );
 
 /** Legenda HTML — um retângulo por série, no vocabulário de texto da tela.
  *  Legenda sempre presente com 2+ séries (a identidade nunca fica só na cor). */
@@ -197,9 +236,13 @@ const RevenueByEmpreendimentoChart: React.FC<{ rows: RentalAnalysisScope[]; onSe
             {/* Altura por linha, não fixa: barras engordariam com poucos itens.
                 O rótulo é o nome do empreendimento — texto longo, por isso
                 barras horizontais. */}
-            <div style={{ height: Math.max(150, rows.length * 44 + 16) }}>
+            <div
+                style={{ height: Math.max(150, rows.length * 44 + 16) }}
+                role="img"
+                aria-label={`Receita mensal contratada e potencial de ${rows.length} empreendimentos. ${rows.map(r => `${r.name}: ${moneyBRL(r.monthlyRevenue)} de ${moneyBRL(r.financial.potential)}`).join('; ')}.`}
+            >
                 <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                    <BarChart data={data} layout="vertical" margin={{ top: 0, right: 84, bottom: 0, left: 0 }} barGap={2} barCategoryGap={12}>
+                    <BarChart accessibilityLayer={false} data={data} layout="vertical" margin={{ top: 0, right: 84, bottom: 0, left: 0 }} barGap={2} barCategoryGap={12}>
                         <CartesianGrid horizontal={false} stroke={GRID} />
                         <XAxis type="number" hide />
                         <YAxis type="category" dataKey="name" width={170} axisLine={false} tickLine={false} tick={CATEGORY_TICK} />
@@ -234,7 +277,7 @@ const RevenueByEmpreendimentoChart: React.FC<{ rows: RentalAnalysisScope[]; onSe
 
 /** Quanto da receita mensal vence em cada um dos próximos 12 meses. É a
  *  pergunta que o WALE (uma média) não responde: quando o risco chega. */
-const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) => {
+const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSourceState; onRetry: () => void }> = ({ scope, state, onRetry }) => {
     const exp = scope.leaseExpiry;
     const yTicks = niceTicks(exp ? Math.max(...exp.months.map(m => m.value)) : 0);
     return (
@@ -242,15 +285,21 @@ const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) =
             title="Vencimento de contratos — próximos 12 meses"
             subtitle="Aluguel mensal dos contratos vigentes que terminam em cada mês."
         >
-            {!exp ? (
+            {state !== 'ready' && !exp ? (
+                <ChartSourceState state={state} onRetry={onRetry} what="os contratos" />
+            ) : !exp ? (
                 <ChartEmpty>Contratos indisponíveis para este recorte.</ChartEmpty>
             ) : exp.activeCount === 0 ? (
                 <ChartEmpty>Nenhum contrato vigente neste recorte.</ChartEmpty>
             ) : (
                 <>
-                    <div style={{ height: 200 }}>
+                    <div
+                        style={{ height: 200 }}
+                        role="img"
+                        aria-label={`Vencimentos por mês nos próximos 12 meses: ${exp.months.filter(m => m.count > 0).map(m => `${m.label}, ${plural(m.count, 'contrato', 'contratos')}, ${moneyBRL(m.value)} por mês`).join('; ') || 'nenhum'}.`}
+                    >
                         <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                            <BarChart data={exp.months} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
+                            <BarChart accessibilityLayer={false} data={exp.months} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                                 <CartesianGrid vertical={false} stroke={GRID} />
                                 <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} interval={0} />
                                 <YAxis
@@ -305,9 +354,11 @@ const UnitStatusChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) =>
                 <ChartEmpty>Nenhuma unidade locável neste recorte.</ChartEmpty>
             ) : (
                 <div className="flex items-center gap-6">
-                    <div className="relative w-44 h-44 shrink-0">
+                    {/* A legenda ao lado já é a leitura acessível das fatias; o
+                        gráfico só anuncia a ocupação. */}
+                    <div className="relative w-44 h-44 shrink-0" role="img" aria-label={`Ocupação física ${orDash(scope.occupancyRate, percent1)}`}>
                         <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                            <PieChart>
+                            <PieChart accessibilityLayer={false}>
                                 <Pie
                                     data={fatias}
                                     dataKey="value"
@@ -366,7 +417,7 @@ const UnitStatusChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) =>
 
 /** Aberto por faixa de atraso. "Vencido > 90 dias" é a ponta; a faixa de
  *  1–30 é onde a inadimplência nasce. */
-const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string }> = ({ scope, className }) => {
+const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; state: AnalysisSourceState; onRetry: () => void }> = ({ scope, className, state, onRetry }) => {
     const ag = scope.aging;
     const data = ag
         ? [
@@ -385,15 +436,21 @@ const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string }> =
             subtitle="Parcelas lançadas e ainda não baixadas, pela idade do vencimento."
             className={className}
         >
-            {!ag ? (
+            {state !== 'ready' && !ag ? (
+                <ChartSourceState state={state} onRetry={onRetry} what="as parcelas" />
+            ) : !ag ? (
                 <ChartEmpty>Contratos indisponíveis para este recorte.</ChartEmpty>
             ) : ag.billed === 0 ? (
                 <ChartEmpty>Nenhuma parcela de aluguel lançada neste recorte.</ChartEmpty>
             ) : (
                 <>
-                    <div style={{ height: data.length * 32 + 8 }}>
+                    <div
+                        style={{ height: data.length * 32 + 8 }}
+                        role="img"
+                        aria-label={`Aluguéis em aberto por atraso: ${data.map(d => `${d.label}, ${moneyBRL(d.value)}`).join('; ')}.`}
+                    >
                         <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                            <BarChart data={data} layout="vertical" margin={{ top: 0, right: 92, bottom: 0, left: 0 }}>
+                            <BarChart accessibilityLayer={false} data={data} layout="vertical" margin={{ top: 0, right: 92, bottom: 0, left: 0 }}>
                                 <CartesianGrid horizontal={false} stroke={GRID} />
                                 <XAxis type="number" hide />
                                 <YAxis type="category" dataKey="label" width={88} axisLine={false} tickLine={false} tick={CATEGORY_TICK} />
@@ -445,7 +502,7 @@ const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string }> =
 // O painel
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEmpreendimento, showDetail, onToggleDetail }) => {
+const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEmpreendimento, showDetail, onToggleDetail, sources, onRetry }) => {
     const ex = scope.executive;
     const exp = scope.leaseExpiry;
     const temComparativo = isAll && rows.length > 1;
@@ -461,6 +518,19 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
     // fora dos dias de vacância, e o topo precisa dizer isso.
     const disponiveisSemHistorico = vac ? Math.max(0, scope.unitStatus.available - vac.vacantCount) : 0;
     const noiOk = noiMeasured(scope.noi);
+    // Valor e legenda de KPI enquanto a fonte não respondeu, ou se falhou.
+    // Só substitui quando o dado ainda não existe: num recarregamento, o
+    // número anterior fica na tela em vez de piscar "carregando".
+    const pendente = (fonte: keyof AnalysisSources, temDado: boolean): { value: string; sub: string } | null =>
+        sources[fonte] === 'error'
+            ? { value: '—', sub: 'não carregou' }
+            : sources[fonte] === 'loading' && !temDado
+                ? { value: '…', sub: 'carregando' }
+                : null;
+    const pVac = pendente('vacancy', vac != null);
+    const pNoi = pendente('noi', scope.noi != null);
+    const pEx = pendente('executive', ex != null);
+    const fontesComErro = (Object.keys(sources) as (keyof AnalysisSources)[]).filter(f => sources[f] === 'error');
 
     return (
         <>
@@ -473,16 +543,24 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                 {/* Ao lado da física de propósito: a diferença entre as duas é o
                     que denuncia carteira cheia de unidade barata. */}
                 <KpiCard shadow={false} size="sm" label="Ocupação financeira" value={orDash(scope.financial.rate, percent1)} sub={`${moneyBRL(scope.financial.contracted)} de ${moneyBRL(scope.financial.potential)}`} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                <KpiCard shadow={false} size="sm" label="Vacância média" value={vacMedida ? `${vac!.averageDays} dias` : '—'} sub={vac ? (vacMedida ? `${plural(vac.vacantCount, 'unidade vaga', 'unidades vagas')} · mediana ${vac.medianDays} d` : 'nenhuma unidade vaga medida') : undefined} icon={<Clock className="w-4 h-4" />} color="amber" />
+                <KpiCard shadow={false} size="sm" label="Vacância média" value={pVac?.value ?? (vacMedida ? `${vac!.averageDays} dias` : '—')} sub={pVac?.sub ?? (vac ? (vacMedida ? `${plural(vac.vacantCount, 'unidade vaga', 'unidades vagas')} · mediana ${vac.medianDays} d` : 'nenhuma unidade vaga medida') : undefined)} icon={<Clock className="w-4 h-4" />} color="amber" />
                 <KpiCard shadow={false} size="sm" label="Receita mensal" value={moneyBRL(scope.monthlyRevenue)} sub={`${moneyBRL(scope.monthlyRevenue * 12)} ao ano`} icon={<Wallet className="w-4 h-4" />} color="indigo" />
-                <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={orDash(ex?.collection.overdue90Rate, percent1)} sub={ex ? `${moneyBRL(ex.collection.overdue90)} do lançado` : undefined} icon={<AlertCircle className="w-4 h-4" />} color="red" />
+                <KpiCard shadow={false} size="sm" label="Vencido há mais de 90 dias" value={pEx?.value ?? orDash(ex?.collection.overdue90Rate, percent1)} sub={pEx?.sub ?? (ex ? `${moneyBRL(ex.collection.overdue90)} do lançado` : undefined)} icon={<AlertCircle className="w-4 h-4" />} color="red" />
                 {/* NOI acumulado no ano — o rótulo diz o período, porque o vizinho é a
                     receita MENSAL. Sem despesa apropriada aos imóveis, o NOI é a
                     receita com outro nome e a margem sai 100%: "—" e o motivo. */}
-                <KpiCard shadow={false} size="sm" label="NOI no ano" value={noiOk ? moneyBRL(scope.noi!.noi) : '—'} sub={scope.noi ? (noiOk ? `margem ${orDash(scope.noi.margin, percent1)}` : 'sem despesa lançada nos imóveis') : undefined} icon={<TrendingUp className="w-4 h-4" />} color={noiOk && scope.noi!.noi < 0 ? 'red' : 'teal'} />
-                <KpiCard shadow={false} size="sm" label="WALE da carteira" value={orDash(ex?.wale.years, anos => `${decimalBR(anos, 1)} anos`)} sub={ex ? `${ex.wale.counted} de ${plural(ex.activeContracts, 'contrato vigente', 'contratos vigentes')}` : undefined} icon={<Calendar className="w-4 h-4" />} color="blue" />
-                <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={orDash(ex?.renewal.rate, v => `${(v * 100).toFixed(0)}%`)} sub={ex && ex.renewal.expired > 0 ? `${ex.renewal.renewed} de ${ex.renewal.expired} vencidos no ano` : undefined} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
+                <KpiCard shadow={false} size="sm" label="NOI no ano" value={pNoi?.value ?? (noiOk ? moneyBRL(scope.noi!.noi) : '—')} sub={pNoi?.sub ?? (scope.noi ? (noiOk ? `margem ${orDash(scope.noi.margin, percent1)}` : 'sem despesa lançada nos imóveis') : undefined)} icon={<TrendingUp className="w-4 h-4" />} color={noiOk && scope.noi!.noi < 0 ? 'red' : 'teal'} />
+                <KpiCard shadow={false} size="sm" label="WALE da carteira" value={pEx?.value ?? orDash(ex?.wale.years, anos => `${decimalBR(anos, 1)} anos`)} sub={pEx?.sub ?? (ex ? `${ex.wale.counted} de ${plural(ex.activeContracts, 'contrato vigente', 'contratos vigentes')}` : undefined)} icon={<Calendar className="w-4 h-4" />} color="blue" />
+                <KpiCard shadow={false} size="sm" label="Taxa de renovação" value={pEx?.value ?? orDash(ex?.renewal.rate, v => `${Math.round(v * 100)}%`)} sub={pEx?.sub ?? (ex && ex.renewal.expired > 0 ? `${ex.renewal.renewed} de ${ex.renewal.expired} vencidos no ano` : undefined)} icon={<RefreshCw className="w-4 h-4" />} color="violet" />
             </div>
+
+            {fontesComErro.length > 0 && (
+                <p role="alert" className="text-sm text-red-700 -mt-1 mb-3">
+                    Não foi possível carregar {fontesComErro.map(f => ROTULO_FONTE[f]).join(', ')}. Os indicadores
+                    que dependem disso aparecem como “não carregou”.{' '}
+                    <button type="button" onClick={onRetry} className="font-medium underline underline-offset-2 hover:text-red-900">Tentar de novo</button>
+                </p>
+            )}
 
             {/* Avisos que impedem leitura errada dos números acima. Cada um só
                 aparece quando o caso existe — aviso permanente vira ruído. */}
@@ -540,11 +618,11 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                 MESMO `scope` dos KPIs. */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-3">
                 {temComparativo && <RevenueByEmpreendimentoChart rows={rows} onSelect={onSelectEmpreendimento} />}
-                <LeaseExpiryChart scope={scope} />
+                <LeaseExpiryChart scope={scope} state={sources.executive} onRetry={onRetry} />
                 <UnitStatusChart scope={scope} />
                 {/* Sem o comparativo sobram 3 cards numa grade de 2: o aging
                     ocupa a linha inteira em vez de deixar um vão ao lado. */}
-                <AgingChart scope={scope} className={temComparativo ? undefined : 'lg:col-span-2'} />
+                <AgingChart scope={scope} className={temComparativo ? undefined : 'lg:col-span-2'} state={sources.executive} onRetry={onRetry} />
             </div>
 
             {/* Detalhamento — recolhido por padrão (decisão da Fase 3). */}

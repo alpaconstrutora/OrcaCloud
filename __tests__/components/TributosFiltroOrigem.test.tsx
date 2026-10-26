@@ -63,7 +63,7 @@ describe('Tributos a Pagar — filtro de Origem', () => {
         render(<TributosAPagarManager organizationId="org1" />);
         await screen.findByText('FGTS folha');
 
-        fireEvent.click(screen.getByRole('button', { name: /Origem/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Origem/ }));
         fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Comercial/ }));
         fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Manual/ }));
 
@@ -78,7 +78,7 @@ describe('Tributos a Pagar — filtro de Origem', () => {
         await screen.findByText('FGTS folha');
         expect(screen.getByText('4 tributos em aberto')).toBeTruthy();
 
-        fireEvent.click(screen.getByRole('button', { name: /Origem/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Origem/ }));
         for (const nome of [/Pró-labore/, /Comercial/, /Manual/]) fireEvent.click(screen.getByRole('menuitemcheckbox', { name: nome }));
         expect(screen.getByText('1 tributos em aberto')).toBeTruthy();
     });
@@ -86,7 +86,7 @@ describe('Tributos a Pagar — filtro de Origem', () => {
     it('a escolha sobrevive a recarregar a tela (usePersistedState)', async () => {
         const { unmount } = render(<TributosAPagarManager organizationId="org1" />);
         await screen.findByText('FGTS folha');
-        fireEvent.click(screen.getByRole('button', { name: /Origem/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Origem/ }));
         fireEvent.click(screen.getByRole('menuitemcheckbox', { name: /Comercial/ }));
         unmount();
 

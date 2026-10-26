@@ -46,7 +46,11 @@ export const rentalVacancyService = {
      */
     async getVacancyEvents(
         organizationId?: string | null,
-        buildingId?: string | null
+        buildingId?: string | null,
+    /** Falha de verdade (rede, erro inesperado) LANÇA em vez de virar `null`.
+     *  Sem isto, "falhou" e "não medido" chegam iguais à tela. Só a aba Análise
+     *  pede — os demais consumidores seguem com o contrato antigo. */
+        opts?: { throwOnError?: boolean },
     ): Promise<StatusEvent[] | null> {
         try {
             let query = supabase
@@ -115,6 +119,7 @@ export const rentalVacancyService = {
             return events;
         } catch (err) {
             console.error('[RentalVacancy] Erro ao carregar métricas de vacância:', err);
+            if (opts?.throwOnError) throw err;
             return null;
         }
     },

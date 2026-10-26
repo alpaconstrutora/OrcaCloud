@@ -8,6 +8,8 @@ import {
     ResponsiveContainer, PieChart, Pie,
 } from 'recharts';
 import { KpiCard } from '../ui/KpiCard';
+import RentalUnitMirror, { type MirrorDestaque } from './RentalUnitMirror';
+import type { UnitMirrorCell } from '../../lib/rentalUnitMirror';
 import { noiMeasured, type RentalAnalysisScope } from '../../lib/rentalByEmpreendimento';
 
 /**
@@ -42,6 +44,8 @@ interface Props {
     leitura: AnalysisLeitura;
     /** Ação de um indicador principal: leva à tela onde o número se resolve. */
     onNavigate: (destino: AnalysisDestino) => void;
+    /** Enter / clique numa unidade do espelho: abre a torre dela no inventário. */
+    onOpenUnit: (cell: UnitMirrorCell) => void;
 }
 
 /**
@@ -469,7 +473,7 @@ const UnitStatusChart: React.FC<{ scope: RentalAnalysisScope }> = ({ scope }) =>
 
 /** Aberto por faixa de atraso. "Vencido > 90 dias" é a ponta; a faixa de
  *  1–30 é onde a inadimplência nasce. */
-const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; state: AnalysisSourceState; onRetry: () => void }> = ({ scope, className, state, onRetry }) => {
+const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; state: AnalysisSourceState; onRetry: () => void; onFaixa?: (indice: number) => void }> = ({ scope, className, state, onRetry, onFaixa }) => {
     const ag = scope.aging;
     const data = ag
         ? [
@@ -516,6 +520,11 @@ const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; sta
                                     radius={[0, 4, 4, 0]}
                                     barSize={16}
                                     label={{ ...END_LABEL, formatter: (v: unknown) => moneyBRL(Number(v)) }}
+                                    // Clicar numa faixa de ATRASO acende no espelho as unidades
+                                    // daquele contrato (o caminho por teclado são os botões
+                                    // "Destacar" do próprio espelho).
+                                    cursor={onFaixa ? 'pointer' : undefined}
+                                    onClick={onFaixa ? (_: unknown, i: number) => onFaixa(i) : undefined}
                                 >
                                     {data.map((d, i) => <Cell key={d.label} fill={AGING_COLORS[i]} />)}
                                 </Bar>
@@ -554,7 +563,10 @@ const AgingChart: React.FC<{ scope: RentalAnalysisScope; className?: string; sta
 // O painel
 // ─────────────────────────────────────────────────────────────────────────────
 
-const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEmpreendimento, showDetail, onToggleDetail, sources, onRetry, leitura, onNavigate }) => {
+const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEmpreendimento, showDetail, onToggleDetail, sources, onRetry, leitura, onNavigate, onOpenUnit }) => {
+    // O que o espelho acende. Vale nas duas leituras e no recorte; volta a
+    // "nenhum" quando o caso some (ex.: trocar para um empreendimento sem atraso).
+    const [destaque, setDestaque] = React.useState<MirrorDestaque>('nenhum');
     const ex = scope.executive;
     const exp = scope.leaseExpiry;
     const temComparativo = isAll && rows.length > 1;
@@ -716,6 +728,20 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                 </div>
             )}
 
+            {/* ── ESPELHO ──────────────────────────────────────────────────────
+                A carteira como prédio — a peça que os números não substituem:
+                QUAIS unidades, em que andar. Ver RentalUnitMirror.tsx. */}
+            <RentalUnitMirror
+                scope={scope}
+                rows={rows}
+                isAll={isAll}
+                leitura={leitura}
+                destaque={destaque}
+                onDestaque={setDestaque}
+                onSelectEmpreendimento={onSelectEmpreendimento}
+                onOpenUnit={onOpenUnit}
+            />
+
             {/* ── GRÁFICOS ─────────────────────────────────────────────────────
                 Por leitura. Operação: o que está em aberto, o que vence e como
                 a carteira está composta. Investimento: quanto cada
@@ -723,7 +749,8 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                 `scope` dos indicadores. */}
             {leitura === 'operacao' ? (
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
-                    <AgingChart scope={scope} state={sources.executive} onRetry={onRetry} />
+                    <AgingChart scope={scope} state={sources.executive} onRetry={onRetry}
+                        onFaixa={i => setDestaque(i === 0 ? 'nenhum' : i === 4 ? 'atraso90' : 'atraso')} />
                     <LeaseExpiryChart scope={scope} state={sources.executive} onRetry={onRetry} />
                     <UnitStatusChart scope={scope} />
                 </div>

@@ -3256,6 +3256,41 @@ que diz os números (não "gráfico de barras"); o gráfico vai com
 > ℹ️ `scripts/check-ui-standard.sh` não olha gráfico. A conferência desta seção é
 > visual: abrir a tela e comparar com `RentalAnalysisOverview.tsx`.
 
+### 28.6 Espelho de unidades — a carteira desenhada como prédio
+
+**Criado em 26/10/2026 (Locações › Análise, `/impeccable overdrive`, direção escolhida
+pelo usuário: "Espelho vivo").** Referência: `components/rentals/RentalUnitMirror.tsx`
+sobre `lib/rentalUnitMirror.ts`. Plano: `docs/planos/2026-10-26-locacoes-analise-espelho-vivo.md`.
+
+Quando a pergunta é **qual** unidade (e não quanto), o painel desenha o empreendimento:
+torres lado a lado, andares de cima para baixo (térreo "T", subsolo "S1"), uma célula
+`w-16 h-11 rounded-[6px] border` por unidade com o rótulo curto ("301") e uma linha
+de leitura embaixo. Em "Todos", uma **rua de prédios**: células de 18px sem rótulo,
+um prédio por empreendimento sobre a linha do chão, o prédio inteiro é um botão que
+recorta a aba.
+
+- **A cor segue a leitura.** Operação = status nas famílias do donut (§28.4) em tom
+  claro (`bg-*-50 border-*-200`), vaga envelhecida com `ring-2 ring-amber-500`, ponto
+  vermelho para parcela vencida (maior quando > 90 dias). Investimento = contratado ÷
+  valor base em 5 degraus de UM azul; vaga = célula branca tracejada.
+- **"Destacar"** (rádios `h-8`, uma escolha, contagem ao lado, desligado com o motivo
+  quando é 0): o que não casa vai a `opacity-25 saturate-0`. Clicar numa faixa de atraso
+  do gráfico (§28) faz o mesmo — o caminho por teclado são os rádios.
+- **Teclado:** Tab entra UMA vez (roving tabindex), setas andam pela unidade/andar,
+  Home/End no andar, Enter abre a torre no inventário. O cartão de detalhe aparece no
+  foco e no mouse, `aria-hidden` (a frase inteira já é o nome acessível do botão),
+  abre embaixo quando não cabe em cima e nunca passa das bordas do espelho.
+- **Movimento:** um só momento — ao trocar de recorte, os andares sobem do térreo
+  para cima (Web Animations, 320ms, `cubic-bezier(.22,1,.36,1)`, passo ≤ 45ms, total
+  < 0,5s). Trocar de leitura só repinta. `prefers-reduced-motion` = nenhum movimento.
+- **Partição:** as células saem do MESMO balde dos indicadores (`scope.units`); o
+  teste de `rentalUnitMirror` confere que o atraso por contrato fecha com o gráfico.
+
+> ❌ Não usar o `PropertyUnitMap` (Imóveis › Torre) aqui: aquele é ferramenta de
+> cadastro/venda, com outro vocabulário; o espelho é leitura analítica.
+> ❌ Andar não quebra linha (`flex-wrap` mentiria sobre o prédio): torre larga rola na
+> horizontal dentro do card.
+
 ---
 
 ## 29. BARRA DE PROGRESSO SEGMENTADA (`SegmentedProgress`)

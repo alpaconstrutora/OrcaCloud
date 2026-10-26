@@ -49,6 +49,7 @@ import {
     type LeaseExpirySchedule,
     type ReceivablesAging,
 } from './rentalAnalysisCharts';
+import { buildUnitMirror, type UnitMirrorCell } from './rentalUnitMirror';
 
 /** Id do balde dos imóveis sem vínculo com empreendimento.
  *  Existe por obrigação aritmética: sem ele, a soma das linhas não fecha com o
@@ -70,6 +71,10 @@ export interface EmpreendimentoRef {
 
 export interface AnalysisProperty extends PortfolioNode {
     status?: string | null;
+    /** Nome, torre e andar — só o espelho das unidades usa (`rentalUnitMirror`). */
+    name?: string;
+    block?: string;
+    floor?: number;
     type?: string | null;
     // Sem `| null` de propósito: é a forma de `Property` na tela, e alargar aqui
     // obrigaria a um cast em quem passa a lista real.
@@ -194,6 +199,9 @@ export interface RentalAnalysisScope {
     leaseExpiry: LeaseExpirySchedule | null;
     /** Aberto por faixa de atraso. `null` = contratos indisponíveis. */
     aging: ReceivablesAging | null;
+    /** Uma célula por unidade locável do balde — o espelho (torre × andar).
+     *  Mesmas folhas, parcelas e eventos dos indicadores; ver `rentalUnitMirror`. */
+    units: UnitMirrorCell[];
 }
 
 export interface GroupRentalAnalysisInput {
@@ -529,6 +537,16 @@ export const groupRentalAnalysis = (
             dealsCount: b.deals.length,
             leaseExpiry: contracts ? leaseExpirySchedule(contratosVigencia, agora) : null,
             aging: contracts ? receivablesAging(b.receivables, agora) : null,
+            units: buildUnitMirror({
+                leaves: b.leaves,
+                deals,
+                contracts: b.contracts,
+                receivablesByContract,
+                events: b.events,
+                rentalValueOf,
+                contractedValueOf,
+                now: agora,
+            }),
         };
     };
 

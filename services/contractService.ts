@@ -111,7 +111,7 @@ function isReceivableContract(contract: { domain?: string | null; direction?: st
  */
 const STATUS_CONTRATO_FATURAVEL = ['ativo', 'assinado', 'concluído', 'concluido'];
 
-function podeFaturarContratoComercial(contract: {
+export function podeFaturarContratoComercial(contract: {
     domain?: string | null; status?: string | null; signature_status?: string | null;
     minuta_versions?: { emitted?: boolean }[] | null;
 }): boolean {
@@ -3095,7 +3095,16 @@ export const contractService = {
         cronograma: ContractInstallment[],
         reescritas: string[],
     ): Promise<Contract> => {
+        // As marcas de antes — para devolvê-las se a gravação falhar (revisão de 26/10:
+        // sem isso o valor manual ficava sem a marca e o próximo "Salvar" o desfazia).
+        let marcas: { id: string; valor_manual: boolean | null; vencimento_manual: boolean | null }[] = [];
         if (reescritas.length) {
+            const { data, error: eLer } = await supabase
+                .from('internal_transactions')
+                .select('id, valor_manual, vencimento_manual')
+                .in('id', reescritas);
+            if (eLer) throw new Error(`Não foi possível preparar as parcelas: ${eLer.message}`);
+            marcas = ((data ?? []) as typeof marcas).filter(r => r.valor_manual || r.vencimento_manual);
             const { error } = await supabase
                 .from('internal_transactions')
                 .update({ valor_manual: false, vencimento_manual: false })
@@ -3103,11 +3112,20 @@ export const contractService = {
                 .eq('status', 'PENDING');
             if (error) throw new Error(`Não foi possível preparar as parcelas: ${error.message}`);
         }
-        return await contractService.updateContract(contract.id, {
-            payment_schedule: cronograma,
-            payment_term_type: 'Parcelado',
-            payment_installments: cronograma.length,
-        });
+        try {
+            return await contractService.updateContract(contract.id, {
+                payment_schedule: cronograma,
+                payment_term_type: 'Parcelado',
+                payment_installments: cronograma.length,
+            });
+        } catch (e) {
+            for (const r of marcas) {
+                await supabase.from('internal_transactions')
+                    .update({ valor_manual: !!r.valor_manual, vencimento_manual: !!r.vencimento_manual })
+                    .eq('id', r.id);
+            }
+            throw e;
+        }
     },
 
     /** "Ajustar o valor do contrato": grava o Original; `updateContract` recalcula o Atual (+ aditivos). */

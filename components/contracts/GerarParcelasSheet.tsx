@@ -10,6 +10,7 @@ import { PERIODICIDADES_CONTRATO, type PeriodicidadeContrato } from '../../utils
 import { planoDoGerador, vencimentoSugerido } from '../../utils/conferenciaParcelasContrato';
 import { parcelaBaixada } from '../../utils/contratoParcelaVariavel';
 import { hojeLocal } from '../../utils/baixaRecebivel';
+import { destinoDasParcelas } from './CorrigirDivergenciaSheet';
 
 /**
  * Contrato › Financeiro › Parcelas › "Gerar parcelas" (pedido de 26/10/2026).
@@ -44,6 +45,7 @@ const GerarParcelasSheet: React.FC<Props> = ({ open, contrato, valorContrato, pa
     const [entrada, setEntrada] = React.useState('');
     const [vencEntrada, setVencEntrada] = React.useState('');
     const [asaasEmCurso, setAsaasEmCurso] = React.useState<Set<string>>(new Set());
+    const [verificando, setVerificando] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
 
@@ -56,15 +58,17 @@ const GerarParcelasSheet: React.FC<Props> = ({ open, contrato, valorContrato, pa
         setQtd(1); setPeriodicidade('Mensal'); setPrimeiro(sugerido); setEntrada(''); setVencEntrada(hoje);
         setError(null); setSaving(false);
         const abertas = parcelas.filter(p => !parcelaBaixada(p) && p.status !== 'CANCELLED').map(p => p.id);
-        if (!abertas.length) { setAsaasEmCurso(new Set()); return; }
+        if (!abertas.length) { setAsaasEmCurso(new Set()); setVerificando(false); return; }
         let vivo = true;
+        setVerificando(true);
         supplierPaymentService.byTransactions(abertas)
             .then(mapa => {
                 if (vivo) setAsaasEmCurso(new Set(Object.values(mapa)
                     .filter(sp => ASAAS_EM_CURSO.includes(sp.status) && sp.transaction_id)
                     .map(sp => sp.transaction_id as string)));
             })
-            .catch(() => { if (vivo) setAsaasEmCurso(new Set()); });
+            .catch(() => { if (vivo) setError('Não foi possível conferir os pagamentos Asaas das parcelas — feche e abra de novo.'); })
+            .finally(() => { if (vivo) setVerificando(false); });
         return () => { vivo = false; };
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -77,7 +81,9 @@ const GerarParcelasSheet: React.FC<Props> = ({ open, contrato, valorContrato, pa
 
     const pagas = parcelas.filter(p => parcelaBaixada(p) && p.status !== 'CANCELLED');
     const pago = pagas.reduce((s, p) => s + Number(p.original_amount ?? p.amount ?? 0), 0);
-    const motivo = saving ? 'Gravando…' : 'motivo' in plano ? plano.motivo : undefined;
+    const motivo = saving ? 'Gravando…'
+        : verificando ? 'Verificando os pagamentos Asaas das parcelas…'
+        : 'motivo' in plano ? plano.motivo : undefined;
     const novas = 'motivo' in plano ? [] : plano.cronograma.slice(plano.cronograma.length - (qtd + (valorEntrada > 0 ? 1 : 0)));
     const abertasSubstituidas = 'motivo' in plano ? 0 : plano.reescritas.length;
 
@@ -87,7 +93,7 @@ const GerarParcelasSheet: React.FC<Props> = ({ open, contrato, valorContrato, pa
         setSaving(true);
         try {
             const atualizado = await contractService.aplicarCronogramaCorrigido(contrato, plano.cronograma, plano.reescritas);
-            await onAplicado(atualizado, `${novas.length} parcela(s) gerada(s). Elas entram em Contas a Pagar aguardando aprovação.`);
+            await onAplicado(atualizado, `${novas.length} parcela(s) gerada(s) — elas entram em ${destinoDasParcelas(parcelas)}.`);
             onClose();
         } catch (e) {
             setError(e instanceof Error && e.message ? e.message : 'Não foi possível gerar as parcelas.');

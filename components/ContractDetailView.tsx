@@ -21,7 +21,7 @@ import {
     DocumentRequirementPhase, ContractAcceptance, ContractTechnicalResponsibility, ContractEvaluation,
     AcceptanceKind, ArtType, ContractSupplyMatrixItem, ContractInterface
 } from '../types';
-import { contractService, type ParcelaDoContrato } from '../services/contractService';
+import { contractService, podeFaturarContratoComercial, type ParcelaDoContrato } from '../services/contractService';
 import AlterarValorParcelaSheet, { descreverAlteracaoManual } from './contracts/AlterarValorParcelaSheet';
 import AlterarVencimentoParcelaSheet, { descreverVencimentoManual } from './contracts/AlterarVencimentoParcelaSheet';
 import CorrigirDivergenciaSheet from './contracts/CorrigirDivergenciaSheet';
@@ -1243,7 +1243,13 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
      * em utils/conferenciaParcelasContrato; recorrente e medição não se conferem).
      */
     const conferencia = React.useMemo(() => contract
-        ? conferirParcelas(contract, financialEntries, addendums.map(a => ({ number: a.number, value_impact: Number(a.value_impact || 0), status: a.status })))
+        ? conferirParcelas(
+            contract,
+            financialEntries,
+            addendums.map(a => ({ number: a.number, value_impact: Number(a.value_impact || 0), status: a.status })),
+            // Comercial ainda sem assinatura/minuta não lança títulos: sem eles a conferência mentiria.
+            { podeLancar: podeFaturarContratoComercial(contract) },
+        )
         : null, [contract, financialEntries, addendums]);
 
     /** Correção/gerador gravados: troca o contrato e relê as parcelas sem o spinner (§22). */

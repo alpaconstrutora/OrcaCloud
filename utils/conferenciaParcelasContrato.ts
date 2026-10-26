@@ -21,6 +21,8 @@ export interface ContratoConferido {
     payment_term_type?: 'Vista' | 'Parcelado' | null;
     original_value?: number | null;
     current_value?: number | null;
+    /** MEDICAO não tem total a casar — fica fora mesmo antes da 1ª medição (revisão de 26/10). */
+    billing_mode?: string | null;
 }
 
 export interface ParcelaConferida {
@@ -31,8 +33,11 @@ export interface ParcelaConferida {
     business_status?: string | null;
     amount: number;
     original_amount?: number | null;
-    /** Vencimento — só a cobrança à vista o usa (vira a data da 1ª linha do cronograma). */
+    /** Vencimento do TÍTULO — pode ter sido alterado à mão; é ele que a correção preserva. */
     transaction_date?: string | null;
+    /** Desconto da linha: reescrever a parcela pelo cronograma o perderia (recusa). */
+    discount_type?: string | null;
+    discount_amount?: number | null;
 }
 
 export interface AditivoConferido {
@@ -63,12 +68,21 @@ const SOURCES_COM_TOTAL = ['CONTRACT_PARCELADO', 'CONTRACT_AVISTA'];
 const bruto = (p: ParcelaConferida) => Number(p.original_amount ?? p.amount ?? 0);
 const ativa = (p: ParcelaConferida) => p.status !== 'CANCELLED' && p.business_status !== 'CANCELADO';
 
+/**
+ * `podeLancar: false` = o contrato ainda não lança no financeiro (comercial sem
+ * assinatura/minuta — `podeFaturarContratoComercial`): sem títulos, a conferência
+ * diria "faltam" o valor cheio, e "Lançar a diferença" dobraria o cronograma.
+ */
 export function conferirParcelas(
     contrato: ContratoConferido,
     parcelas: ParcelaConferida[],
     aditivos: AditivoConferido[],
+    opcoes: { podeLancar?: boolean } = {},
 ): Conferencia {
-    const aplica = !contrato.is_recurring && !parcelas.some(p => p.source_system === 'CONTRACT_MEASUREMENT');
+    const aplica = !contrato.is_recurring
+        && contrato.billing_mode !== 'MEDICAO'
+        && opcoes.podeLancar !== false
+        && !parcelas.some(p => p.source_system === 'CONTRACT_MEASUREMENT');
     const valorContrato = dois(Number(contrato.current_value ?? contrato.original_value ?? 0));
     const somaParcelas = dois(parcelas
         .filter(p => SOURCES_COM_TOTAL.includes(p.source_system) && ativa(p))
@@ -105,13 +119,57 @@ export function baseParaCorrecao(
     cronograma: ContractInstallment[],
     parcelas: ParcelaConferida[],
 ): { cronograma: ContractInstallment[]; parcelas: ParcelaConferida[] } {
-    if (ehParcelado(contrato)) return { cronograma, parcelas };
+    if (ehParcelado(contrato)) return { cronograma: cronogramaDosTitulos(cronograma, parcelas), parcelas };
     const abertas = parcelas.filter(p => p.source_system === 'CONTRACT_AVISTA' && ativa(p) && !parcelaBaixada(p));
     const refBase = (abertas[0]?.reference_id ?? '').replace(/:p\d+$/, '');
     return {
         cronograma: abertas.map(p => ({ date: (p.transaction_date ?? '').slice(0, 10), value: dois(bruto(p)) })),
         parcelas: abertas.map((p, i) => ({ ...p, source_system: 'CONTRACT_PARCELADO', reference_id: `${refBase}:p${i + 1}` })),
     };
+}
+
+/**
+ * O cronograma como os TÍTULOS estão: valor e vencimento de cada posição `:pN` vêm
+ * da parcela (que pode ter sido alterada à mão). Revisão de 26/10: partir do
+ * cronograma salvo desfazia em silêncio o vencimento/valor manual ao reescrever.
+ */
+function cronogramaDosTitulos(cronograma: ContractInstallment[], parcelas: ParcelaConferida[]): ContractInstallment[] {
+    const novo = cronograma.map(l => ({ ...l }));
+    for (const p of parcelas) {
+        if (p.source_system !== 'CONTRACT_PARCELADO' || !ativa(p)) continue;
+        const n = posicao(p);
+        if (n == null || n > novo.length) continue;
+        novo[n - 1] = { ...novo[n - 1], value: dois(bruto(p)), ...(p.transaction_date ? { date: p.transaction_date.slice(0, 10) } : {}) };
+    }
+    return novo;
+}
+
+const temDesconto = (p: ParcelaConferida) => !!p.discount_type && Number(p.discount_amount || 0) > 0;
+const MOTIVO_DESCONTO = 'Há parcela em aberto com desconto — reescrevê-la perderia o desconto. Ajuste-a pelo "Alterar valor".';
+const MOTIVO_ASAAS = 'Uma parcela em aberto tem pagamento Asaas em andamento — aguarde ou cancele o pagamento.';
+const MOTIVO_DESATUALIZADO = 'O cronograma do contrato está desatualizado em relação às parcelas — salve os Dados Gerais.';
+
+/** Abertas do contrato (parcelas e à vista) — a sincronização recria TODAS ao gravar. */
+const abertasDoContrato = (parcelas: ParcelaConferida[]) =>
+    parcelas.filter(p => SOURCES_COM_TOTAL.includes(p.source_system) && ativa(p) && !parcelaBaixada(p));
+
+/** Recusas de "Lançar a diferença" — null quando dá. */
+export function motivoParaComplementar(
+    contrato: ContratoConferido,
+    cronograma: ContractInstallment[],
+    parcelas: ParcelaConferida[],
+    asaasEmCurso: Set<string>,
+): string | null {
+    if (abertasDoContrato(parcelas).some(p => asaasEmCurso.has(p.id))) return MOTIVO_ASAAS;
+    // À vista aberta vira :p1 — com desconto, ele se perderia na conversão.
+    if (!ehParcelado(contrato) && abertasDoContrato(parcelas).some(p => p.source_system === 'CONTRACT_AVISTA' && temDesconto(p))) {
+        return MOTIVO_DESCONTO;
+    }
+    // Paga numa posição além do cronograma: o complemento cairia nela e a sync o descartaria.
+    if (ehParcelado(contrato) && parcelas.some(p => p.source_system === 'CONTRACT_PARCELADO' && ativa(p) && (posicao(p) ?? 0) > cronograma.length)) {
+        return MOTIVO_DESATUALIZADO;
+    }
+    return null;
 }
 
 /** "Ajustar o valor do contrato": o Original que faz o Atual (original + aditivos) bater com as parcelas. */
@@ -124,8 +182,12 @@ export function motivoNaoAjustaContrato(
     contrato: ContratoConferido,
     conf: Conferencia,
     aditivos: AditivoConferido[],
+    parcelas: ParcelaConferida[] = [],
+    asaasEmCurso: Set<string> = new Set(),
 ): string | null {
     if (!conf.aplica || conf.saldo === 0) return 'As parcelas já batem com o valor do contrato.';
+    // Gravar o Original sincroniza o contrato, e a sync recria as abertas (id novo).
+    if (abertasDoContrato(parcelas).some(p => asaasEmCurso.has(p.id))) return MOTIVO_ASAAS;
     if (!ehParcelado(contrato) && somaAditivos(aditivos) !== 0) {
         return 'Contrato à vista com aditivo: a cobrança à vista é regravada pelo Valor Original e a diferença voltaria — use "Lançar a diferença" ou "Distribuir".';
     }
@@ -163,9 +225,8 @@ function separar(parcelas: ParcelaConferida[], asaasEmCurso: Set<string>):
     if (abertas.some(p => posicao(p)! < ultimaPaga)) {
         return { motivo: 'Há parcela em aberto antes de uma paga — corrija pelo "Alterar valor" de cada parcela.' };
     }
-    if (abertas.some(p => asaasEmCurso.has(p.id))) {
-        return { motivo: 'Uma parcela em aberto tem pagamento Asaas em andamento — aguarde ou cancele o pagamento.' };
-    }
+    if (abertas.some(p => asaasEmCurso.has(p.id))) return { motivo: MOTIVO_ASAAS };
+    if (abertas.some(temDesconto)) return { motivo: MOTIVO_DESCONTO };
     return { pagas, abertas };
 }
 
@@ -190,6 +251,8 @@ export function planoDeDistribuicao(
     s.abertas.forEach((p, i) => {
         const idx = posicao(p)! - 1;
         novo[idx].value = dois(bruto(p) + parte + (i === n - 1 ? sobra : 0));
+        // O vencimento é o do TÍTULO (pode ter sido alterado à mão — a marca é limpa ao gravar).
+        if (p.transaction_date) novo[idx].date = p.transaction_date.slice(0, 10);
     });
     if (s.abertas.some(p => !(novo[posicao(p)! - 1].value > 0))) {
         return { motivo: 'A redução deixaria parcela zerada ou negativa — ajuste o valor do contrato ou cancele uma parcela.' };
@@ -222,11 +285,22 @@ export function planoDoGerador(
     const pago = dois(s.pagas.reduce((t, p) => t + bruto(p), 0) + pagoAvista);
     const base = dois(valorAtual - pago);
     if (!(base > 0)) return { motivo: 'O que já foi pago já cobre o valor do contrato — não há parcela a gerar.' };
+    if (Number(gerador.entrada) > 0 && Number(gerador.entrada) >= base) {
+        return { motivo: 'A entrada cobre todo o saldo a parcelar — as parcelas sairiam zeradas. Diminua a entrada.' };
+    }
+    if (parcelas.some(p => p.source_system === 'CONTRACT_AVISTA' && ativa(p) && !parcelaBaixada(p) && temDesconto(p))) {
+        return { motivo: MOTIVO_DESCONTO };
+    }
     if (s.pagas.some(p => posicao(p)! > cronograma.length)) {
         return { motivo: 'O cronograma do contrato está desatualizado em relação às parcelas — salve os Dados Gerais.' };
     }
 
-    const mantidas = s.pagas.map(p => cronograma[posicao(p)! - 1]);
+    // A paga fica no cronograma como o TÍTULO está (valor e data), para o cronograma somar o contrato.
+    const mantidas = s.pagas.map(p => ({
+        ...cronograma[posicao(p)! - 1],
+        value: dois(bruto(p)),
+        ...(p.transaction_date ? { date: p.transaction_date.slice(0, 10) } : {}),
+    }));
     const novas = gerarCronogramaContrato({ ...gerador, total: base });
     return {
         cronograma: [...mantidas, ...novas],

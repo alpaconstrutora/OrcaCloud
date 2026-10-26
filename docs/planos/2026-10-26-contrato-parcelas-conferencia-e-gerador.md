@@ -56,7 +56,7 @@ Decorrências registradas no desenho aprovado:
 
 ### Regra pura
 
-- [ ] **U1. `utils/conferenciaParcelasContrato.ts`** — `conferirParcelas(contrato, parcelas,
+- [x] **U1. `utils/conferenciaParcelasContrato.ts`** — `conferirParcelas(contrato, parcelas,
   aditivos)` → `{ aplica, valorContrato, somaParcelas, saldo, situacao: 'confere'|'faltam'|'excedem',
   aditivosSemParcela: [{numero, valor}] }`; `planoDeDistribuicao(parcelas, saldo)` →
   novos valores das abertas (iguais, centavos na última) ou `{ motivo }` (zera/negativa,
@@ -71,7 +71,7 @@ Decorrências registradas no desenho aprovado:
 
 ### Serviço
 
-- [ ] **S1. `services/contractService.ts`** — `corrigirParcelas(contrato, acao)` com
+- [x] **S1. `services/contractService.ts`** — `corrigirParcelas(contrato, acao)` com
   `acao = { tipo: 'complementar', vencimento, descricao } | { tipo: 'distribuir' } |
   { tipo: 'gerar', gerador }`: monta o cronograma pela U1, limpa `valor_manual`/
   `vencimento_manual` das abertas reescritas, grava `payment_schedule`
@@ -84,17 +84,17 @@ Decorrências registradas no desenho aprovado:
 
 ### Telas (REGRA #1: guia lido; `check-ui-standard.sh` em cada arquivo; REGRA #4: painel lateral)
 
-- [ ] **T1. `components/ContractDetailView.tsx`** — sub-aba Parcelas: 4º card "Saldo vs.
+- [x] **T1. `components/ContractDetailView.tsx`** — sub-aba Parcelas: 4º card "Saldo vs.
   contrato" (Confere verde / Faltam ou Excedem vermelho, `sub` "Contrato R$ X · Parcelas R$ Y");
   faixa de aviso abaixo dos cards com a causa provável (aditivo sem parcela) e o botão
   "Corrigir divergência"; linha de total no rodapé da tabela (Soma · Contrato · Saldo);
   botão "Gerar parcelas". Não aparece em recorrente/medição.
   **Pronto quando:** no navegador, o CTS-042-0001 mostra "Faltam R$ 150,00" e a causa AD-001.
-- [ ] **T2. `components/contracts/CorrigirDivergenciaSheet.tsx`** (novo) — `Sheet` com as 3
+- [x] **T2. `components/contracts/CorrigirDivergenciaSheet.tsx`** (novo) — `Sheet` com as 3
   opções (complementar, distribuir, ajustar o contrato), prévia antes/depois, botão
   desligado com o motivo.
   **Pronto quando:** cada opção mostra a prévia certa e grava; recusas dizem o motivo.
-- [ ] **T3. `components/contracts/GerarParcelasSheet.tsx`** (novo) — `Sheet` com nº de
+- [x] **T3. `components/contracts/GerarParcelasSheet.tsx`** (novo) — `Sheet` com nº de
   parcelas, periodicidade, 1º vencimento, entrada; base = Atual − pago; prévia; recusa com motivo.
   **Pronto quando:** gerar 3 parcelas num contrato de teste deixa a soma = Valor Atual.
 
@@ -107,11 +107,30 @@ Decorrências registradas no desenho aprovado:
 5. Histórico de ajustes (quem, quando, antes/depois).
 6. Contrato por medição: "saldo a medir" (Atual − medido).
 
+## Achados da revisão final (26/10/2026) e o que foi feito
+
+| Achado | Grau | Feito |
+|---|---|---|
+| Distribuir desfazia o vencimento alterado à mão (partia do cronograma salvo) | Importante | ✅ a base das correções é o cronograma como os TÍTULOS estão (`cronogramaDosTitulos`) |
+| Distribuir/converter à vista descartava o desconto da parcela | Importante | ✅ recusa com o motivo quando a aberta tem desconto |
+| Dados Gerais comparava com o Valor Original e o "Redistribuir igualmente" desfazia a correção | Importante | ✅ Dados Gerais compara/regera pelo Valor Atual; no embutido o aviso aponta para Parcelas (sem o botão) |
+| Contrato por medição sem título de medição recebia o gerador | Importante | ✅ `billing_mode === 'MEDICAO'` fora da conferência |
+| Comercial que ainda não lança (sem assinatura/minuta) dizia "faltam" o valor cheio | Importante | ✅ `podeLancar` (`podeFaturarContratoComercial`) fora da conferência |
+| Asaas em andamento só era checado em Distribuir/Gerar | Importante | ✅ as 4 ações recusam; botão desligado até a checagem voltar |
+| Falha no meio deixava o valor manual sem a marca | Importante | ✅ o serviço lê as marcas antes e as devolve se a gravação falhar |
+| Mensagem "Contas a Pagar" em contrato a receber | Menor → Importante (informa errado) | ✅ `destinoDasParcelas` pela direção |
+| Complemento com cronograma desatualizado dizia "lançada" sem lançar | Menor → Importante | ✅ recusa com o motivo |
+| Entrada ≥ saldo gerava parcelas de R$ 0 | Menor → Importante | ✅ recusa com o motivo |
+| Paga mantida pelo valor do cronograma, não do título | Menor | ✅ junto da base pelos títulos |
+| Contrato Encerrado/Cancelado com aviso e gerador; complemento sem tipo; sem teste de tela do gerador | Menor | adiados |
+
 ## Estado
 
 - [x] Desenho aprovado (Partes 1 e 2)
-- [ ] Plano aprovado pelo usuário
-- Implementação: 0 de 5 itens
+- [x] Plano aprovado pelo usuário (26/10, "ok")
+- Implementação: 5 de 5 itens + correções da revisão
+- [ ] Conferência no navegador (usuário)
+- [ ] Publicar (PR + CI verde + merge)
 
 ## Verificação
 

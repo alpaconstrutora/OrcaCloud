@@ -6,7 +6,7 @@ import { contractService, type ParcelaDoContrato } from '../../services/contract
 import { supplierPaymentService } from '../../services/supplierPaymentService';
 import type { Contract, ContractAddendum, ContractInstallment } from '../../types/contracts';
 import {
-    baseParaCorrecao, motivoNaoAjustaContrato, novoValorOriginal, parcelaComplementar,
+    baseParaCorrecao, motivoNaoAjustaContrato, motivoParaComplementar, novoValorOriginal, parcelaComplementar,
     planoDeDistribuicao, vencimentoSugerido, type Conferencia, type PlanoDeCronograma,
 } from '../../utils/conferenciaParcelasContrato';
 import { hojeLocal } from '../../utils/baixaRecebivel';
@@ -31,6 +31,10 @@ const dataBR = (iso: string | null | undefined) =>
 const ASAAS_EM_CURSO = ['APPROVED', 'PENDING', 'SCHEDULED'];
 
 type Opcao = 'complementar' | 'distribuir' | 'contrato';
+
+/** Onde a parcela aparece: a alçada (aguardando aprovação) só vale para título a PAGAR. */
+export const destinoDasParcelas = (parcelas: { direction?: string | null }[]) =>
+    parcelas.some(p => p.direction === 'CREDIT') ? 'Contas a Receber' : 'Contas a Pagar, aguardando aprovação';
 
 interface Props {
     open: boolean;
@@ -86,6 +90,8 @@ const CorrigirDivergenciaSheet: React.FC<Props> = ({ open, contrato, conferencia
     const [opcao, setOpcao] = React.useState<Opcao>('complementar');
     const [vencimento, setVencimento] = React.useState('');
     const [asaasEmCurso, setAsaasEmCurso] = React.useState<Set<string>>(new Set());
+    // Até a leitura do Asaas voltar, nada grava (a recusa por pagamento em andamento depende dela).
+    const [verificando, setVerificando] = React.useState(false);
     const [saving, setSaving] = React.useState(false);
     const [error, setError] = React.useState<string | null>(null);
 
@@ -99,8 +105,9 @@ const CorrigirDivergenciaSheet: React.FC<Props> = ({ open, contrato, conferencia
         setError(null);
         setSaving(false);
         const abertas = parcelas.filter(p => p.status === 'PENDING').map(p => p.id);
-        if (!abertas.length) { setAsaasEmCurso(new Set()); return; }
+        if (!abertas.length) { setAsaasEmCurso(new Set()); setVerificando(false); return; }
         let vivo = true;
+        setVerificando(true);
         supplierPaymentService.byTransactions(abertas)
             .then(mapa => {
                 if (!vivo) return;
@@ -108,23 +115,26 @@ const CorrigirDivergenciaSheet: React.FC<Props> = ({ open, contrato, conferencia
                     .filter(sp => ASAAS_EM_CURSO.includes(sp.status) && sp.transaction_id)
                     .map(sp => sp.transaction_id as string)));
             })
-            .catch(() => { if (vivo) setAsaasEmCurso(new Set()); });
+            .catch(() => { if (vivo) setError('Não foi possível conferir os pagamentos Asaas das parcelas — feche e abra de novo.'); })
+            .finally(() => { if (vivo) setVerificando(false); });
         return () => { vivo = false; };
     }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
 
     const aditivosConf = aditivos.map(a => ({ number: a.number, value_impact: Number(a.value_impact || 0), status: a.status }));
 
     // Plano de cada opção — o mesmo cálculo da prévia é o que grava.
-    const planoComplementar: PlanoDeCronograma = conferencia.saldo > 0
+    const motivoComplemento = motivoParaComplementar(contrato, cronograma, parcelas, asaasEmCurso);
+    const planoComplementar: PlanoDeCronograma = motivoComplemento ? { motivo: motivoComplemento } : conferencia.saldo > 0
         ? (vencimento
             ? { cronograma: parcelaComplementar(base.cronograma, conferencia.saldo, vencimento), reescritas: [] }
             : { motivo: 'Informe o vencimento da parcela.' })
         : { motivo: 'As parcelas excedem o contrato — não há diferença a lançar. Use "Distribuir" ou "Ajustar o valor do contrato".' };
     const planoDistribuir = planoDeDistribuicao(base.cronograma, base.parcelas, conferencia.saldo, asaasEmCurso);
-    const motivoContrato = motivoNaoAjustaContrato(contrato, conferencia, aditivosConf);
+    const motivoContrato = motivoNaoAjustaContrato(contrato, conferencia, aditivosConf, parcelas, asaasEmCurso);
     const novoOriginal = novoValorOriginal(conferencia, aditivosConf);
 
     const motivo = saving ? 'Gravando…'
+        : verificando ? 'Verificando os pagamentos Asaas das parcelas…'
         : opcao === 'complementar' ? ('motivo' in planoComplementar ? planoComplementar.motivo : undefined)
         : opcao === 'distribuir' ? ('motivo' in planoDistribuir ? planoDistribuir.motivo : undefined)
         : motivoContrato ?? undefined;
@@ -141,8 +151,8 @@ const CorrigirDivergenciaSheet: React.FC<Props> = ({ open, contrato, conferencia
                 const plano = (opcao === 'complementar' ? planoComplementar : planoDistribuir) as { cronograma: ContractInstallment[]; reescritas: string[] };
                 const atualizado = await contractService.aplicarCronogramaCorrigido(contrato, plano.cronograma, plano.reescritas);
                 await onAplicado(atualizado, opcao === 'complementar'
-                    ? `Parcela de ${fmtBRL(conferencia.saldo)} lançada. Ela entra em Contas a Pagar aguardando aprovação.`
-                    : 'Diferença distribuída entre as parcelas em aberto. As alteradas voltam a aguardar aprovação.');
+                    ? `Parcela de ${fmtBRL(conferencia.saldo)} lançada — ela entra em ${destinoDasParcelas(parcelas)}.`
+                    : `Diferença distribuída entre as parcelas em aberto — as alteradas entram de novo em ${destinoDasParcelas(parcelas)}.`);
             }
             onClose();
         } catch (e) {
@@ -183,7 +193,7 @@ const CorrigirDivergenciaSheet: React.FC<Props> = ({ open, contrato, conferencia
                             ? `Caminho natural aqui: ${conferencia.aditivosSemParcela.map(a => `${a.numero} (${fmtBRL(a.valor)})`).join(', ')} mudou o valor do contrato e não virou parcela.`
                             : 'Uma parcela nova com o valor que falta, no vencimento escolhido.')}
                     {radio('distribuir', 'Distribuir a diferença entre as parcelas em aberto',
-                        'Partes iguais (centavos na última). Pagas não mudam; as alteradas voltam a aguardar aprovação.')}
+                        'Partes iguais (centavos na última). Pagas não mudam; o vencimento de cada uma fica como está.')}
                     {radio('contrato', 'Ajustar o valor do contrato à soma das parcelas',
                         'Muda o Valor Original; os aditivos ficam como estão.')}
                 </div>

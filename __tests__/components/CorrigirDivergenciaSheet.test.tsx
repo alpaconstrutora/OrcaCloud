@@ -11,7 +11,8 @@ const m = vi.hoisted(() => ({ aplicar: vi.fn(), ajustar: vi.fn() }));
 vi.mock('../../services/contractService', () => ({
     contractService: { aplicarCronogramaCorrigido: m.aplicar, ajustarValorDoContrato: m.ajustar },
 }));
-vi.mock('../../services/supplierPaymentService', () => ({ supplierPaymentService: { byTransactions: vi.fn(async () => ({})) } }));
+const asaas = vi.hoisted(() => ({ byTransactions: vi.fn(async () => ({})) }));
+vi.mock('../../services/supplierPaymentService', () => ({ supplierPaymentService: asaas }));
 
 import CorrigirDivergenciaSheet from '../../components/contracts/CorrigirDivergenciaSheet';
 import { ConfirmProvider } from '../../components/ui/confirm';
@@ -32,13 +33,13 @@ const parcelas = [parcela(1, 1000), parcela(2, 1700)];
 const aditivos = [{ id: 'a1', contract_id: 'c1', number: 'AD-001', type: 'Ambos', description: 'Pintura Interna', value_impact: 150, status: 'Aprovado' }] as unknown as ContractAddendum[];
 const conferencia = conferirParcelas(contrato, parcelas, aditivos.map(a => ({ number: a.number, value_impact: a.value_impact, status: a.status })));
 
-const abrir = (onAplicado = vi.fn(async () => {})) => {
-    render(<ConfirmProvider><CorrigirDivergenciaSheet open contrato={contrato} conferencia={conferencia} parcelas={parcelas} aditivos={aditivos} onClose={() => {}} onAplicado={onAplicado} /></ConfirmProvider>);
+const abrir = (onAplicado = vi.fn(async () => {}), lista = parcelas) => {
+    render(<ConfirmProvider><CorrigirDivergenciaSheet open contrato={contrato} conferencia={conferencia} parcelas={lista} aditivos={aditivos} onClose={() => {}} onAplicado={onAplicado} /></ConfirmProvider>);
     return onAplicado;
 };
 
 describe('CorrigirDivergenciaSheet', () => {
-    beforeEach(() => { m.aplicar.mockReset(); m.ajustar.mockReset(); });
+    beforeEach(() => { m.aplicar.mockReset(); m.ajustar.mockReset(); asaas.byTransactions.mockImplementation(async () => ({})); });
 
     it('abre no "lançar a diferença", aponta o AD-001 e mostra a parcela nova de R$ 150', () => {
         abrir();
@@ -51,6 +52,7 @@ describe('CorrigirDivergenciaSheet', () => {
     it('grava o complemento pelo serviço com o cronograma de 3 linhas', async () => {
         m.aplicar.mockResolvedValue({ ...contrato });
         const onAplicado = abrir();
+        await waitFor(() => expect((screen.getByRole('button', { name: /Aplicar correção/ }) as HTMLButtonElement).disabled).toBe(false));
         fireEvent.click(screen.getByRole('button', { name: /Aplicar correção/ }));
         await waitFor(() => expect(onAplicado).toHaveBeenCalled());
         const [, cronograma, reescritas] = m.aplicar.mock.calls[0];
@@ -63,5 +65,26 @@ describe('CorrigirDivergenciaSheet', () => {
         fireEvent.click(screen.getByLabelText(/Ajustar o valor do contrato/));
         expect(screen.getByText('R$ 2.550,00')).toBeTruthy();
         expect(screen.getByText('R$ 2.700,00')).toBeTruthy();
+    });
+
+    it('o botão espera a checagem dos pagamentos Asaas antes de gravar', async () => {
+        let soltar: (v: Record<string, unknown>) => void = () => {};
+        asaas.byTransactions.mockImplementation(() => new Promise(r => { soltar = r; }));
+        abrir();
+        const botao = screen.getByRole('button', { name: /Aplicar correção/ }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(true);
+        expect(screen.getByTitle(/Verificando os pagamentos Asaas/)).toBeTruthy();
+        soltar({});
+        await waitFor(() => expect((screen.getByRole('button', { name: /Aplicar correção/ }) as HTMLButtonElement).disabled).toBe(false));
+    });
+
+    it('contrato a receber diz Contas a Receber (a alçada é só do que se paga)', async () => {
+        m.aplicar.mockResolvedValue({ ...contrato });
+        const aReceber = parcelas.map(p => ({ ...p, direction: 'CREDIT' })) as unknown as ParcelaDoContrato[];
+        const onAplicado = abrir(vi.fn(async () => {}), aReceber);
+        await waitFor(() => expect((screen.getByRole('button', { name: /Aplicar correção/ }) as HTMLButtonElement).disabled).toBe(false));
+        fireEvent.click(screen.getByRole('button', { name: /Aplicar correção/ }));
+        await waitFor(() => expect(onAplicado).toHaveBeenCalled());
+        expect(onAplicado.mock.calls[0][1]).toMatch(/Contas a Receber/);
     });
 });

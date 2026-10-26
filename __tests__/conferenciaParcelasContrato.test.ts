@@ -8,6 +8,7 @@ import {
     novoValorOriginal,
     motivoNaoAjustaContrato,
     vencimentoSugerido,
+    motivoParaComplementar,
     type ParcelaConferida,
 } from '../utils/conferenciaParcelasContrato';
 
@@ -196,5 +197,62 @@ describe('vencimentoSugerido', () => {
     });
     it('sem cronograma, um mês depois de hoje', () => {
         expect(vencimentoSugerido([], '2026-10-26')).toBe('2026-11-26');
+    });
+});
+
+// ── Revisão final (26/10/2026) ──────────────────────────────────────────────
+describe('revisão: o que a correção não pode desfazer em silêncio', () => {
+    it('distribuir mantém o VENCIMENTO do título (alterado à mão), não a data antiga do cronograma', () => {
+        const p2 = parcela(2, 1700, { transaction_date: '2026-08-11', vencimento_manual: true });
+        const b = baseParaCorrecao(cts042, cronograma042, [parcela(1, 1000, { transaction_date: '2026-05-11' }), p2]);
+        const r = planoDeDistribuicao(b.cronograma, b.parcelas, 150, new Set());
+        if ('motivo' in r) throw new Error(r.motivo);
+        expect(r.cronograma[1]).toMatchObject({ date: '2026-08-11' });
+    });
+
+    it('a base usa o VALOR do título (alterado à mão), não o do cronograma', () => {
+        const b = baseParaCorrecao(cts042, cronograma042, [parcela(1, 1000), parcela(2, 1800, { valor_manual: true })]);
+        expect(b.cronograma.map(l => l.value)).toEqual([1000, 1800]);
+    });
+
+    it('distribuir recusa parcela em aberto com desconto (o desconto se perderia)', () => {
+        const r = planoDeDistribuicao(cronograma042, [parcela(1, 1000), parcela(2, 1600, { original_amount: 1700, discount_type: 'VALUE', discount_amount: 100 })], 150, new Set());
+        expect(r).toEqual({ motivo: expect.stringMatching(/desconto/) });
+    });
+
+    it('complemento recusa Asaas em andamento, à vista com desconto e cronograma desatualizado', () => {
+        const ok = [parcela(1, 1000), parcela(2, 1700)];
+        expect(motivoParaComplementar(cts042, cronograma042, ok, new Set())).toBeNull();
+        expect(motivoParaComplementar(cts042, cronograma042, ok, new Set(['t2']))).toMatch(/Asaas/);
+        expect(motivoParaComplementar(cts042, [cronograma042[0]], [parcela(1, 1000), parcela(2, 1700, pago)], new Set())).toMatch(/desatualizado/);
+        const avistaDesc = { ...parcela(0, 2600, { original_amount: 2700, discount_type: 'VALUE', discount_amount: 100 }), source_system: 'CONTRACT_AVISTA', reference_id: ID };
+        expect(motivoParaComplementar({ ...cts042, payment_term_type: 'Vista' }, [], [avistaDesc], new Set())).toMatch(/desconto/);
+    });
+
+    it('ajustar o contrato também recusa Asaas em andamento (a sync recria as abertas)', () => {
+        const c = conferirParcelas(cts042, [parcela(1, 1000), parcela(2, 1700)], aditivoAD001);
+        expect(motivoNaoAjustaContrato(cts042, c, aditivoAD001, [parcela(1, 1000), parcela(2, 1700)], new Set(['t1']))).toMatch(/Asaas/);
+    });
+
+    it('contrato por MEDIÇÃO não se confere nem sem título de medição', () => {
+        expect(conferirParcelas({ ...cts042, billing_mode: 'MEDICAO' }, [parcela(1, 10)], []).aplica).toBe(false);
+    });
+
+    it('contrato que ainda não lança no financeiro não se confere (sem títulos, diria "faltam" o valor cheio)', () => {
+        expect(conferirParcelas(cts042, [], [], { podeLancar: false }).aplica).toBe(false);
+    });
+
+    it('gerador recusa entrada que cobre o saldo (geraria parcelas de R$ 0)', () => {
+        const g = { parcelas: 2, periodicidade: 'Mensal' as const, primeiroVencimento: '2026-11-10', entrada: 2850, vencimentoEntrada: '2026-11-01' };
+        expect(planoDoGerador(2850, [], [], g, new Set())).toEqual({ motivo: expect.stringMatching(/entrada/i) });
+    });
+
+    it('gerador guarda a paga pelo valor e data do TÍTULO', () => {
+        const paga = parcela(1, 1100, { ...pago, transaction_date: '2026-05-15' });
+        const g = { parcelas: 1, periodicidade: 'Mensal' as const, primeiroVencimento: '2026-11-10', entrada: 0, vencimentoEntrada: '2026-11-10' };
+        const r = planoDoGerador(2850, cronograma042, [paga, parcela(2, 1700)], g, new Set());
+        if ('motivo' in r) throw new Error(r.motivo);
+        expect(r.cronograma[0]).toMatchObject({ date: '2026-05-15', value: 1100 });
+        expect(r.cronograma[1].value).toBe(1750);
     });
 });

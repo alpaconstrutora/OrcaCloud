@@ -328,6 +328,8 @@ AS $function$
 DECLARE
     s record;
     v_niveis integer;
+    v_aprov text;
+    v_cadeia jsonb;
 BEGIN
     PERFORM 1 FROM public.darfs WHERE id = p_darf_id FOR UPDATE;
     IF NOT FOUND THEN
@@ -338,14 +340,24 @@ BEGIN
     IF s.n_pagos > 0 THEN
         RAISE EXCEPTION 'DARF pago não vai para aprovação.' USING ERRCODE = 'P0001';
     END IF;
-    IF public.fn_darf_aprovacao(p_darf_id) = 'PENDENTE' THEN
+    v_aprov := public.fn_darf_aprovacao(p_darf_id);
+    IF v_aprov = 'PENDENTE' THEN
         RAISE EXCEPTION 'Este DARF já está em Financeiro › Aprovações.' USING ERRCODE = 'P0001';
     END IF;
     SELECT n.niveis INTO v_niveis FROM public.fn_darf_niveis(p_darf_id) n;
+    -- Reenvio de rejeitado preserva a cadeia (histórico da rejeição); fn_darf_aprovar
+    -- só conta o que vem depois da última rejeição. Qualquer outro envio recomeça vazio.
+    IF v_aprov = 'REJEITADO' THEN
+        SELECT COALESCE((array_agg(COALESCE(it.approval_chain, '[]'::jsonb)
+                         ORDER BY jsonb_array_length(COALESCE(it.approval_chain, '[]'::jsonb)) DESC))[1], '[]'::jsonb)
+          INTO v_cadeia FROM public.internal_transactions it WHERE it.darf_id = p_darf_id;
+    ELSE
+        v_cadeia := '[]'::jsonb;
+    END IF;
 
     UPDATE public.internal_transactions
        SET approval_status = 'PENDENTE',
-           approval_chain = '[]'::jsonb,
+           approval_chain = v_cadeia,
            approval_required_levels = COALESCE(v_niveis, 1),
            updated_at = now()
      WHERE darf_id = p_darf_id;
@@ -393,8 +405,13 @@ BEGIN
         'approved_at', to_jsonb(now()),
         'notes', NULLIF(btrim(p_obs), ''))));
 
-    SELECT array_agg(DISTINCT (e ->> 'level')::int) INTO v_niveis_aprovados
-      FROM jsonb_array_elements(v_cadeia) e WHERE e ->> 'action' = 'APROVADO';
+    -- Só a rodada atual (depois da última rejeição) — mesma regra de
+    -- utils/situacaoAprovacaoTitulo.niveisAprovadosNaRodada.
+    SELECT array_agg(DISTINCT (x.e ->> 'level')::int) INTO v_niveis_aprovados
+      FROM jsonb_array_elements(v_cadeia) WITH ORDINALITY AS x(e, i)
+     WHERE x.e ->> 'action' = 'APROVADO'
+       AND x.i > COALESCE((SELECT max(y.j) FROM jsonb_array_elements(v_cadeia) WITH ORDINALITY AS y(f, j)
+                            WHERE y.f ->> 'action' = 'REJEITADO'), 0);
     v_completo := CASE WHEN n.niveis = 1 THEN 1 = ANY(v_niveis_aprovados)
                        ELSE 1 = ANY(v_niveis_aprovados) AND 2 = ANY(v_niveis_aprovados) END;
     v_status := CASE WHEN v_completo THEN 'APROVADO' ELSE 'PENDENTE' END;

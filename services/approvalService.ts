@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { ApprovalStep, ApprovalStatus } from '../types/financial';
+import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
 
 /** Item acionável da fila unificada (transação, contrato ou compra). */
 export interface ActionQueueItem {
@@ -289,7 +290,9 @@ export const approvalService = {
         });
 
         const required = (row as any).approval_required_levels ?? 1;
-        const approvedLevels = chain.filter(s => s.action === 'APROVADO').map(s => s.level);
+        // Só a rodada atual: um reenvio depois de rejeição preserva a cadeia, e a
+        // aprovação anterior à rejeição não vale para o reenvio (26/10/2026).
+        const approvedLevels = niveisAprovadosNaRodada(chain);
         const fullyApproved = required === 1
             ? approvedLevels.includes(1)
             : approvedLevels.includes(1) && approvedLevels.includes(2);

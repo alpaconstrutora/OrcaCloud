@@ -1,4 +1,6 @@
 import { supabase } from '../lib/supabase';
+import type { PayrollEvent, PayrollItem, PayrollResultWithEmployee, PayrollRubric, PayrollRun } from './payrollService';
+import type { OrganizacaoParaHolerite } from '../utils/empregadorDoHolerite';
 
 // ── TYPES ─────────────────────────────────────────────────────────────────────
 
@@ -106,6 +108,16 @@ export interface PortalEmployeeSummary {
     pontos_pendentes: number;
     treinamentos_vencendo: number;
     ausencias_mes: number;
+}
+
+/** Retorno de `fn_colab_portal_paystub` — só os campos que o recibo usa. */
+export interface PortalPaystub {
+    run: PayrollRun;
+    result: PayrollResultWithEmployee;
+    items: PayrollItem[];
+    rubrics: Pick<PayrollRubric, 'code' | 'name' | 'type'>[];
+    events: PayrollEvent[];
+    organization: OrganizacaoParaHolerite;
 }
 
 // ── SERVICE ───────────────────────────────────────────────────────────────────
@@ -286,5 +298,18 @@ export const atsService = {
             : await supabase.rpc('portal_employee_summary', { p_employee_id: employeeId });
         if (error) throw error;
         return data as PortalEmployeeSummary;
+    },
+
+    /**
+     * Recibo (holerite) de uma folha, pelo token do link. Uma chamada devolve
+     * tudo o que o `PaystubModal` mostra — o caminho interno dele lia seis
+     * tabelas direto, e pelo link (sessão `anon`) a RLS devolvia vazio.
+     * A RPC só entrega a folha se ela for DESTE colaborador
+     * (migration 20271026900000).
+     */
+    async getPortalPaystub(portalToken: string, runId: string): Promise<PortalPaystub> {
+        const { data, error } = await supabase.rpc('fn_colab_portal_paystub', { p_token: portalToken, p_run_id: runId });
+        if (error) throw error;
+        return data as PortalPaystub;
     },
 };

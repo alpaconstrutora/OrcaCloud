@@ -754,6 +754,19 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   if (restricoes.respeitarLei && z.gabaritoAlturaMaxM != null) tetos.push({ n: Math.floor((z.gabaritoAlturaMaxM * 1000 + 1) / hip.peDireitoMm), por: 'pelo gabarito em altura' });
   if (restricoes.pavimentosMax != null) tetos.push({ n: restricoes.pavimentosMax, por: 'pelo máximo pedido' });
   const doEmp = restricoes.doEmpreendimento ?? null;
+  // Torres do Empreendimento mais altas que o teto (lei, varredura, pedido): a grade ficaria vazia e a tela dizia só
+  // "0 combinações medidas" (relato de 26/10/2026, Garden Cambuhy: torre de 6 pav × gabarito de 11,6 m = 3 pav).
+  const tetoSemEmpreendimento = tetos.reduce((a, b) => (b.n < a.n ? b : a));
+  if (doEmp?.pavimentosMin != null && doEmp.pavimentosMin > tetoSemEmpreendimento.n) {
+    const pedido = doEmp.pavimentosMax != null && doEmp.pavimentosMax !== doEmp.pavimentosMin ? `de ${doEmp.pavimentosMin} a ${doEmp.pavimentosMax}` : `${doEmp.pavimentosMin}`;
+    const conta =
+      tetoSemEmpreendimento.por === 'pelo gabarito em altura' && z.gabaritoAlturaMaxM != null
+        ? ` (${f1(z.gabaritoAlturaMaxM)} m ÷ ${f1(hip.peDireitoMm / 1000)} m de pé-direito)`
+        : '';
+    return vazio(
+      `As torres do Empreendimento têm ${pedido} pavimentos, mas aqui cabem até ${tetoSemEmpreendimento.n} ${tetoSemEmpreendimento.por}${conta}. Desligue "Seguir o Empreendimento" para o gerador procurar dentro da lei, ou revise os pavimentos em Torres & Unidades.`,
+    );
+  }
   if (doEmp?.pavimentosMax != null) tetos.push({ n: doEmp.pavimentosMax, por: 'pelas torres do Empreendimento' });
   const pisoDoEmpreendimento = doEmp?.pavimentosMin ?? null;
   const teto = tetos.reduce((a, b) => (b.n < a.n ? b : a));
@@ -982,6 +995,13 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
         : objetivo === 'INSOLACAO' && !regua.insolacao
           ? 'O sol não foi informado ao gerador (latitude e norte do estudo): a insolação não se mede.'
         : 'O objetivo escolhido não se mede nestes cenários (falta custo ou unidades). Confira o produto ou escolha outro objetivo.',
+    );
+  }
+  // Seguindo o Empreendimento, nenhuma forma com aquele número de blocos coube no envelope: sem isto a tela dizia só
+  // "0 combinações medidas" (26/10/2026).
+  if (doEmp && avaliados === 0) {
+    avisos.push(
+      `Nenhuma implantação com ${doEmp.torres} ${doEmp.torres === 1 ? 'torre' : 'torres'} (${tipos.map((t) => ROTULO_DA_IMPLANTACAO[t].toLowerCase()).join(', ')}) cabe no envelope de ${f1(W / 1000)} × ${f1(D / 1000)} m com as profundidades e o afastamento entre blocos testados. Desligue "Seguir o Empreendimento" ou revise as torres em Torres & Unidades.`,
     );
   }
   if (viaveis.length === 0 && avaliados > 0) {

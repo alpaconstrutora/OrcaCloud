@@ -23,6 +23,7 @@ import { createPortalChannel } from './academy/academyChannel';
 import { academyPortalService } from '../services/academyPortalService';
 import { academyKeys } from '../lib/queryKeys';
 import type { AcademyPortalEnrollment } from '../types/academy';
+import { mensagemDoPortalColaborador } from '../utils/portalColaboradorErro';
 
 /**
  * Leitura do portal. Duas variantes da MESMA consulta, escolhidas pela presença
@@ -52,6 +53,64 @@ async function portalRpc<T>(
     return (data as T[]) ?? [];
 }
 
+/**
+ * Carregando / falhou / vazio de uma leitura do portal — o trio que a Academia
+ * já fazia, agora em toda aba. Antes cada aba lia só `data` (default `[]`), e
+ * carregando ou falhando a tela dizia "Nenhum holerite disponível": mentira
+ * justamente na aba de dinheiro, sem como o colaborador saber que era erro.
+ */
+interface LeituraDoPortalProps {
+    carregando: boolean;
+    erro: unknown;
+    vazio: boolean;
+    onTentarDeNovo: () => void;
+    /** "seus registros de ponto" — completa "Carregando …" e "Não foi possível carregar …". */
+    oQue: string;
+    vazioIcone: React.ElementType;
+    vazioTitulo: string;
+    vazioDica?: string;
+    children: React.ReactNode;
+}
+
+const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
+    carregando, erro, vazio, onTentarDeNovo, oQue, vazioIcone: VazioIcone, vazioTitulo, vazioDica, children,
+}) => {
+    if (carregando) {
+        return (
+            <div role="status" className="flex items-center justify-center gap-2 py-10">
+                <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
+                <span className="text-sm text-slate-600">Carregando {oQue}...</span>
+            </div>
+        );
+    }
+    if (erro) {
+        return (
+            <div role="alert" className="p-4 rounded-xl border border-rose-200 bg-rose-50 space-y-3">
+                <div className="flex items-start gap-2">
+                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <div>
+                        <p className="text-sm font-semibold text-rose-900">Não foi possível carregar {oQue}</p>
+                        <p className="text-sm text-rose-800 mt-0.5">{mensagemDoPortalColaborador(erro)}</p>
+                    </div>
+                </div>
+                <Button variant="secondary" size="lg" onClick={onTentarDeNovo} className="w-full">
+                    <RefreshCw className="w-4 h-4" /> Tentar de novo
+                </Button>
+            </div>
+        );
+    }
+    if (vazio) {
+        return (
+            <div className="text-center py-10 px-4">
+                <VazioIcone className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                <p className="text-sm font-medium text-slate-700">{vazioTitulo}</p>
+                {vazioDica && <p className="text-sm text-slate-600 mt-1">{vazioDica}</p>}
+            </div>
+        );
+    }
+    return <>{children}</>;
+};
+
 // ── View: Portal do Colaborador (tela que o funcionário vê no celular) ────────
 
 interface PortalViewProps {
@@ -78,7 +137,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     );
 
     const {
-        data: academia = [], isLoading: academiaCarregando, error: academiaErro,
+        data: academia = [], isLoading: academiaCarregando, error: academiaErro, refetch: recarregarAcademia,
     // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
     // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     } = useQuery({
@@ -89,27 +148,27 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     });
 
     const summaryKey = ['portal', 'summary', portalToken ?? employeeId];
-    const { data: summary, isLoading } = useQuery<PortalEmployeeSummary>({
+    const { data: summary, isLoading, error: summaryErro, refetch: recarregarSummary, isFetching: summaryRecarregando } = useQuery<PortalEmployeeSummary>({
         queryKey: summaryKey,
         queryFn: () => atsService.getPortalSummary(employeeId, portalToken),
         staleTime: STALE.fast,
     });
 
-    const { data: recentEntries = [] } = useQuery({
+    const { data: recentEntries = [], isLoading: pontoCarregando, error: pontoErro, refetch: recarregarPonto } = useQuery({
         queryKey: ['portal', 'timeEntries', portalToken ?? employeeId],
         queryFn: () => portalRpc<any>('time_entries', employeeId, portalToken),
         staleTime: STALE.fast,
         enabled: activeSection === 'ponto',
     });
 
-    const { data: absences = [] } = useQuery({
+    const { data: absences = [], isLoading: feriasCarregando, error: feriasErro, refetch: recarregarFerias } = useQuery({
         queryKey: ['portal', 'absences', portalToken ?? employeeId],
         queryFn: () => portalRpc<any>('absences', employeeId, portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'ferias',
     });
 
-    const { data: trainings = [] } = useQuery({
+    const { data: trainings = [], isLoading: treinosCarregando, error: treinosErro, refetch: recarregarTreinos } = useQuery({
         queryKey: ['portal', 'trainings', portalToken ?? employeeId],
         queryFn: () => portalRpc<any>('trainings', employeeId, portalToken),
         staleTime: STALE.normal,
@@ -119,29 +178,43 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     // GED (opura_documents) é a fonte única da aba Documentos — substitui o antigo
     // employee_documents; só aparece aqui o que foi compartilhado via botão
     // "Compartilhar" do módulo Gestão de Documentos (ver migration 20270821000010).
-    const { data: documents = [] } = useQuery({
+    const { data: documents = [], isLoading: docsCarregando, error: docsErro, refetch: recarregarDocs } = useQuery({
         queryKey: ['portal', 'docs', portalToken ?? employeeId],
         queryFn: () => portalRpc<any>('ged_documents', employeeId, portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'docs',
     });
 
-    const handleDownloadDoc = async (storagePath?: string) => {
-        if (!storagePath) return;
+    // Download: erro aparece na própria aba (era `alert()`), o botão trava
+    // enquanto o link é gerado (evita toque duplo) e a janela abre ANTES do
+    // `await` — o Safari do iPhone bloqueia `window.open` que não vem direto do
+    // toque, e o "baixar" simplesmente não fazia nada.
+    const [baixando, setBaixando] = useState<string | null>(null);
+    const [erroDownload, setErroDownload] = useState<{ nome: string; mensagem: string } | null>(null);
+
+    const handleDownloadDoc = async (storagePath: string, nome: string) => {
+        if (baixando) return;
+        setBaixando(storagePath);
+        setErroDownload(null);
+        const janela = window.open('', '_blank');
         try {
             const { data, error } = await supabase.functions.invoke('labor-portal-ged-download', {
                 body: portalToken ? { token: portalToken, storagePath } : { employeeId, storagePath },
             });
             if (error) throw error;
             if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link de download.');
-            window.open(data.signedUrl, '_blank');
-        } catch (err: any) {
+            if (janela) janela.location.href = data.signedUrl;
+            else window.location.assign(data.signedUrl);
+        } catch (err: unknown) {
             console.error('[LaborPortal] Erro ao baixar documento:', err);
-            alert(err.message || 'Erro ao baixar o documento.');
+            janela?.close();
+            setErroDownload({ nome, mensagem: mensagemDoPortalColaborador(err) });
+        } finally {
+            setBaixando(null);
         }
     };
 
-    const { data: folhaRuns = [] } = useQuery<Array<PayrollRun & { net: number }>>({
+    const { data: folhaRuns = [], isLoading: folhaCarregando, error: folhaErro, refetch: recarregarFolha } = useQuery<Array<PayrollRun & { net: number }>>({
         queryKey: ['portal', 'folha', portalToken ?? employeeId],
         queryFn: () => portalRpc<PayrollRun & { net: number }>('payroll_runs', employeeId, portalToken),
         staleTime: STALE.normal,
@@ -153,6 +226,22 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
             <div className="flex flex-col items-center justify-center h-full gap-3 py-16">
                 <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
                 <p className="text-sm text-slate-400 font-medium">Carregando...</p>
+            </div>
+        );
+    }
+
+    // Resumo que falha não pode virar "—", "?" e quatro zeros com o alerta de
+    // férias aceso: a pessoa lê "a empresa não sabe quem eu sou".
+    if (summaryErro && !summary) {
+        return (
+            <div className="max-w-md mx-auto h-full flex flex-col items-center justify-center bg-white p-6 text-center gap-3">
+                <AlertTriangle className="w-8 h-8 text-rose-500" />
+                <p className="text-base font-semibold text-slate-900">Não foi possível abrir o seu portal</p>
+                <p role="alert" className="text-sm text-slate-600">{mensagemDoPortalColaborador(summaryErro)}</p>
+                <Button variant="secondary" size="lg" onClick={() => recarregarSummary()} disabled={summaryRecarregando} className="w-full mt-2">
+                    {summaryRecarregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Tentar de novo
+                </Button>
             </div>
         );
     }
@@ -190,7 +279,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             <p className="text-indigo-200 text-xs">{emp?.role}</p>
                         </div>
                     </div>
-                    <button onClick={onLogout} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors">
+                    <button onClick={onLogout} aria-label="Sair do portal" title="Sair do portal" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors">
                         <LogOut className="w-4 h-4" />
                     </button>
                 </div>
@@ -238,6 +327,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                     orgId={orgId}
                     runId={paystubOpen.runId}
                     employeeId={employeeId}
+                    portalToken={portalToken}
                     onClose={() => setPaystubOpen(null)}
                 />
             )}
@@ -273,13 +363,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'ponto' && (
                     <div className="space-y-3">
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Últimos Registros</p>
-                        {recentEntries.length === 0 ? (
-                            <div className="text-center py-10">
-                                <Clock className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                                <p className="text-sm text-slate-400">Nenhum registro de ponto</p>
-                            </div>
-                        ) : (
-                            recentEntries.slice(0, 10).map(e => (
+                        <LeituraDoPortal
+                            carregando={pontoCarregando} erro={pontoErro} vazio={recentEntries.length === 0}
+                            onTentarDeNovo={() => recarregarPonto()} oQue="seus registros de ponto"
+                            vazioIcone={Clock} vazioTitulo="Nenhum registro de ponto"
+                        >
+                            {recentEntries.slice(0, 10).map(e => (
                                 <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
                                     <div>
                                         <p className="text-sm font-bold text-slate-800">{e.date}</p>
@@ -292,8 +381,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         </span>
                                     </div>
                                 </div>
-                            ))
-                        )}
+                            ))}
+                        </LeituraDoPortal>
                     </div>
                 )}
 
@@ -308,10 +397,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             </div>
                         </div>
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Histórico</p>
-                        {absences.length === 0 ? (
-                            <p className="text-sm text-slate-400 text-center py-6">Nenhuma ausência registrada</p>
-                        ) : (
-                            absences.slice(0, 8).map(a => (
+                        <LeituraDoPortal
+                            carregando={feriasCarregando} erro={feriasErro} vazio={absences.length === 0}
+                            onTentarDeNovo={() => recarregarFerias()} oQue="seu histórico de férias e ausências"
+                            vazioIcone={Calendar} vazioTitulo="Nenhuma ausência registrada"
+                        >
+                            {absences.slice(0, 8).map(a => (
                                 <div key={a.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100">
                                     <div>
                                         <p className="text-sm font-bold text-slate-800">{a.tipo.replace('_', ' ')}</p>
@@ -324,8 +415,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         </span>
                                     </div>
                                 </div>
-                            ))
-                        )}
+                            ))}
+                        </LeituraDoPortal>
                     </div>
                 )}
 
@@ -333,13 +424,26 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'docs' && (
                     <div className="space-y-3">
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Documentos</p>
-                        {documents.length === 0 ? (
-                            <div className="text-center py-10">
-                                <FileText className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                                <p className="text-sm text-slate-400">Nenhum documento disponível</p>
+                        {erroDownload && (
+                            <div role="alert" className="flex items-start gap-2 p-3 rounded-xl border border-rose-200 bg-rose-50">
+                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                                <div className="flex-1 min-w-0">
+                                    <p className="text-sm font-semibold text-rose-900 truncate">Não foi possível baixar "{erroDownload.nome}"</p>
+                                    <p className="text-sm text-rose-800 mt-0.5">{erroDownload.mensagem}</p>
+                                </div>
+                                <button type="button" aria-label="Fechar aviso" onClick={() => setErroDownload(null)}
+                                    className="w-11 h-11 -m-2 flex items-center justify-center rounded-lg text-rose-700 hover:bg-rose-100 shrink-0">
+                                    <X className="w-4 h-4" />
+                                </button>
                             </div>
-                        ) : (
-                            documents.map(d => {
+                        )}
+                        <LeituraDoPortal
+                            carregando={docsCarregando} erro={docsErro} vazio={documents.length === 0}
+                            onTentarDeNovo={() => recarregarDocs()} oQue="seus documentos"
+                            vazioIcone={FileText} vazioTitulo="Nenhum documento disponível"
+                            vazioDica="Os documentos aparecem aqui quando o RH os compartilha com você."
+                        >
+                            {documents.map(d => {
                                 const today = new Date().toISOString().split('T')[0];
                                 const expired = d.data_validade && d.data_validade < today;
                                 return (
@@ -351,12 +455,16 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         </div>
                                         {expired && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
                                         {d.storage_path && (
-                                            <ActionIconButton kind="download" size="sm" className="shrink-0" onClick={() => handleDownloadDoc(d.storage_path)} />
+                                            <ActionIconButton kind="download" size="sm" className="shrink-0"
+                                                title={`Baixar ${d.nome}`} aria-label={`Baixar ${d.nome}`}
+                                                icon={baixando === d.storage_path ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                                                disabled={!!baixando}
+                                                onClick={() => handleDownloadDoc(d.storage_path, d.nome)} />
                                         )}
                                     </div>
                                 );
-                            })
-                        )}
+                            })}
+                        </LeituraDoPortal>
                     </div>
                 )}
 
@@ -364,13 +472,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'folha' && (
                     <div className="space-y-3">
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Holerites Disponíveis</p>
-                        {folhaRuns.length === 0 ? (
-                            <div className="text-center py-10">
-                                <DollarSign className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                                <p className="text-sm text-slate-400">Nenhum holerite disponível</p>
-                            </div>
-                        ) : (
-                            folhaRuns.map(run => {
+                        <LeituraDoPortal
+                            carregando={folhaCarregando} erro={folhaErro} vazio={folhaRuns.length === 0}
+                            onTentarDeNovo={() => recarregarFolha()} oQue="seus holerites"
+                            vazioIcone={DollarSign} vazioTitulo="Nenhum holerite disponível"
+                            vazioDica="Os holerites aparecem aqui quando a folha do mês é calculada."
+                        >
+                            {folhaRuns.map(run => {
                                 const typeLabel =
                                     run.type === 'mensal' ? 'Folha Mensal' :
                                     run.type === 'ferias' ? 'Férias' :
@@ -403,8 +511,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         </div>
                                     </Button>
                                 );
-                            })
-                        )}
+                            })}
+                        </LeituraDoPortal>
                     </div>
                 )}
 
@@ -429,14 +537,11 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 )}
 
                                 {!academiaCarregando && academiaErro && (
-                                    <div className="p-3 rounded-xl border border-rose-200 bg-rose-50">
-                                        <p className="text-sm font-bold text-rose-800">
-                                            Não foi possível carregar seus treinamentos
-                                        </p>
-                                        <p className="text-xs text-rose-600 mt-1">
-                                            {(academiaErro as Error)?.message || 'Tente abrir o link novamente.'}
-                                        </p>
-                                    </div>
+                                    <LeituraDoPortal
+                                        carregando={false} erro={academiaErro} vazio={false}
+                                        onTentarDeNovo={() => recarregarAcademia()} oQue="seus cursos da Academia"
+                                        vazioIcone={BookOpen} vazioTitulo=""
+                                    >{null}</LeituraDoPortal>
                                 )}
 
                                 {!academiaCarregando && !academiaErro && academia.length === 0 && (
@@ -492,13 +597,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                         )}
 
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Treinamentos</p>
-                        {trainings.length === 0 ? (
-                            <div className="text-center py-10">
-                                <BookOpen className="w-8 h-8 text-slate-200 mx-auto mb-2" />
-                                <p className="text-sm text-slate-400">Nenhum treinamento registrado</p>
-                            </div>
-                        ) : (
-                            trainings.map(t => {
+                        <LeituraDoPortal
+                            carregando={treinosCarregando} erro={treinosErro} vazio={trainings.length === 0}
+                            onTentarDeNovo={() => recarregarTreinos()} oQue="seus treinamentos"
+                            vazioIcone={BookOpen} vazioTitulo="Nenhum treinamento registrado"
+                        >
+                            {trainings.map(t => {
                                 const today = new Date().toISOString().split('T')[0];
                                 const expired = t.data_validade && t.data_validade < today;
                                 const expiring = t.data_validade && !expired && t.data_validade <= new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
@@ -516,8 +620,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         </div>
                                     </div>
                                 );
-                            })
-                        )}
+                            })}
+                        </LeituraDoPortal>
                     </div>
                 )}
             </div>

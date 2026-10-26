@@ -8,12 +8,21 @@ import { salarioBaseDoResultado } from '../lib/payrollSalarioCompetencia';
 import { jsPDF } from 'jspdf';
 import { payrollService, PayrollItem, PayrollRun, PayrollRubric, PayrollEvent, PayrollResultWithEmployee } from '../services/payrollService';
 import { empregadorDoHolerite, type EmpregadorDoHolerite } from '../utils/empregadorDoHolerite';
+import { atsService } from '../services/atsService';
+import { mensagemDoPortalColaborador } from '../utils/portalColaboradorErro';
 
 interface PaystubModalProps {
     orgId: string | null;
     runId: string;
     employeeId: string;
     onClose: () => void;
+    /**
+     * Token do link do Portal do Colaborador. Com ele, o recibo vem inteiro de
+     * `fn_colab_portal_paystub` — pelo link a sessão é `anon` e a leitura direta
+     * das tabelas da folha volta vazia (RLS `is_org_member`). Sem ele, o
+     * caminho é o do app (admin autenticado).
+     */
+    portalToken?: string;
 }
 
 const formatDate = (dateStr: string) => {
@@ -38,7 +47,7 @@ const formatMonthYear = (dateStr: string) => {
     return `${months[parseInt(month) - 1]} de ${year}`;
 };
 
-const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose }) => {
+const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, onClose, portalToken }) => {
     const [result, setResult] = useState<PayrollResultWithEmployee | null>(null);
     const [items, setItems] = useState<PayrollItem[]>([]);
     const [events, setEvents] = useState<PayrollEvent[]>([]);
@@ -52,12 +61,23 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
 
     useEffect(() => {
         loadData();
-    }, [runId, employeeId]);
+    }, [runId, employeeId, portalToken]);
 
     const loadData = async () => {
         try {
             setLoading(true);
             setError(null);
+
+            if (portalToken) {
+                const recibo = await atsService.getPortalPaystub(portalToken, runId);
+                setRun(recibo.run);
+                setEmpregador(empregadorDoHolerite(recibo.organization));
+                setResult(recibo.result);
+                setRubrics(recibo.rubrics as PayrollRubric[]);
+                setEvents(recibo.events);
+                setItems(recibo.items);
+                return;
+            }
 
             const runData    = await payrollService.getRun(runId)
                 .catch(e => { throw Object.assign(new Error(`getRun: ${e?.message ?? e}`), { cause: e }); });
@@ -87,7 +107,9 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : JSON.stringify(err);
             console.error('[PaystubModal] Falha:', msg, err);
-            setError(msg || 'Falha ao carregar dados do holerite.');
+            // Pelo link quem lê é o colaborador: frase dele, não o texto técnico.
+            // No app o admin precisa do detalhe ("getRun: …") para diagnosticar.
+            setError(portalToken ? mensagemDoPortalColaborador(err) : (msg || 'Falha ao carregar dados do holerite.'));
         } finally {
             setLoading(false);
         }
@@ -151,14 +173,22 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                 <div className="w-16 h-16 bg-rose-50 text-rose-500 rounded-2xl flex items-center justify-center mx-auto">
                     <AlertCircle className="w-8 h-8" />
                 </div>
-                <h3 className="text-xl font-black text-slate-900 uppercase">Ops! Algo deu errado</h3>
-                <p className="text-sm font-bold text-slate-400 uppercase leading-relaxed">{error || 'Não foi possível gerar o documento.'}</p>
-                <button
-                    onClick={onClose}
-                    className="w-full py-4 bg-slate-900 text-white rounded-2xl font-black text-button uppercase tracking-widest hover:bg-slate-800 transition-colors"
-                >
-                    Fechar
-                </button>
+                <h3 className="text-lg font-semibold text-slate-900">Não foi possível abrir o holerite</h3>
+                <p role="alert" className="text-sm text-slate-600 leading-relaxed">{error || 'Não foi possível gerar o documento.'}</p>
+                <div className="flex gap-2">
+                    <button
+                        onClick={onClose}
+                        className="flex-1 h-11 bg-white text-slate-700 border border-slate-200 rounded-[6px] text-sm font-medium hover:bg-slate-50 transition-colors"
+                    >
+                        Fechar
+                    </button>
+                    <button
+                        onClick={loadData}
+                        className="flex-1 h-11 bg-slate-900 text-white rounded-[6px] text-sm font-medium hover:bg-slate-800 transition-colors"
+                    >
+                        Tentar de novo
+                    </button>
+                </div>
             </div>
         </div>
     );

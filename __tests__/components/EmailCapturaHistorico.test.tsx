@@ -85,7 +85,7 @@ describe('Histórico da captura', () => {
     it('filtro Resultado recorta as linhas', async () => {
         montar();
         await screen.findByText('Assunto m1');
-        fireEvent.click(screen.getByRole('button', { name: /Resultado/ }));
+        fireEvent.click(screen.getByRole('button', { name: /^Resultado/ }));
         fireEvent.click(within(screen.getByRole('menu')).getByRole('menuitemradio', { name: /Ignorado/ }));
         await waitFor(() => expect(screen.queryByText('Assunto m2')).toBeNull());
         expect(screen.getByText('Assunto m1')).toBeTruthy();

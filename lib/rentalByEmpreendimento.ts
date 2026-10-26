@@ -141,23 +141,34 @@ export interface RentalAnalysisScope {
     activeAssets: number;
     /** Soma das parcelas mensais contratadas. Soma = total. */
     monthlyRevenue: number;
-    /** Soma do Valor base (Inteligência de Aluguéis, `rentalValueOf`) de TODAS
-     *  as unidades locáveis do balde — alugadas E vagas. É o teto de
-     *  potencial ao preço sugerido, não a receita já contratada (essa é
-     *  `monthlyRevenue`) — mesma distinção de
-     *  `feedback_locacoes_valor_base_vs_aluguel_contratado`. Soma = total. */
-    referenceMonthlyRevenue: number;
     /** Patrimônio por rollup das raízes do balde. Soma = total. */
     portfolioValue: number;
     /** receita mensal ÷ patrimônio. `null` sem patrimônio. */
     monthlyYield: number | null;
+    /** `financial.potential` é a ÚNICA receita potencial da aba: Valor base
+     *  (`rentalValueOf`) de toda unidade locável, alugada ou vaga — ou o
+     *  contratado, quando ele passa do Valor base. Soma = total.
+     *
+     *  Existia ao lado um `referenceMonthlyRevenue` (só o Valor base, sem o
+     *  `max`): o KPI dizia "de R$ 61.613" e o rodapé da tabela R$ 61.152 para a
+     *  mesma pergunta (crítica de 26/10/2026). Uma conta, um nome. */
     financial: FinancialOccupancy & { leafCount: number; withoutPrice: number };
     /** `null` = log de status indisponível (migration não aplicada). */
     vacancy: (VacancyStats & { netAbsorption30d: { rented: number; vacated: number; net: number } }) | null;
     /** `null` = despesa por imóvel indisponível.
      *  `capRate` = NOI anualizado ÷ patrimônio; `null` sem patrimônio ou sem
-     *  saber quantos meses a janela do NOI cobre (`noiMonthsInWindow`). */
-    noi: { revenue: number; expense: number; noi: number; margin: number | null; capRate: number | null } | null;
+     *  saber quantos meses a janela do NOI cobre (`noiMonthsInWindow`).
+     *  `expenseRecorded` = há despesa apropriada aos imóveis do balde na
+     *  janela. Sem ela o NOI é a receita com outro nome e a margem sai 100% —
+     *  uma boa notícia falsa; quem exibe mostra "—" (ver `noiMeasured`). */
+    noi: {
+        revenue: number;
+        expense: number;
+        noi: number;
+        margin: number | null;
+        capRate: number | null;
+        expenseRecorded: boolean;
+    } | null;
     /** `null` = contratos indisponíveis (RLS/tabela). */
     executive: {
         wale: WaleResult;
@@ -169,8 +180,10 @@ export interface RentalAnalysisScope {
     } | null;
     /** máx/mín/médio de (parcela contratada ÷ área privativa) entre os
      *  contratos FECHADOS do balde (mesma população de `monthlyRevenue`).
-     *  `null` = nenhum contrato do balde tinha área válida — não é 0. */
-    valuePerSqm: { max: number | null; min: number | null; avg: number | null };
+     *  `null` = nenhum contrato do balde tinha área válida — não é 0.
+     *  `count` = tamanho da amostra (contratos com área). Soma = total; é o
+     *  peso do valor médio no rodapé (`summarizeAnalysisRows`). */
+    valuePerSqm: { max: number | null; min: number | null; avg: number | null; count: number };
     /** Composição das unidades locáveis por status. Cada contagem soma = total. */
     unitStatus: UnitStatusBreakdown;
     /** Negócios de locação FECHADOS do balde — a população de `monthlyRevenue`;
@@ -387,16 +400,18 @@ export const groupRentalAnalysis = (
     }
 
     // ── Eventos de status (vacância) ─────────────────────────────────────────
+    // Vacância é medida de UNIDADE LOCÁVEL — a mesma população de
+    // `unitsCount`. O log de status também registra edifícios e imóveis fora da
+    // carteira (`visible_in_sales = false`, vendidos, excluídos); contá-los
+    // fazia o topo dizer "42 unidades vagas" numa carteira de 35 (produção,
+    // 26/10/2026: 32 unidades + 6 edifícios + 4 fora da carteira). Evento que
+    // não é de folha carregada fica fora — e por isso também não cria balde
+    // "Sem empreendimento" com dias de vacância e zero unidades.
     if (vacancyEvents) {
         for (const e of vacancyEvents) {
             const imovel = byId.get(key(e.property_id));
-            // Evento de imóvel que não está na carteira carregada (vendido,
-            // excluído) não pertence a balde nenhum: entra no "Sem
-            // empreendimento", nunca some — o total tem que continuar fechando.
-            const ref = imovel
-                ? refOf(imovel)
-                : { id: SEM_EMPREENDIMENTO, name: SEM_EMPREENDIMENTO_LABEL };
-            balde(ref).events.push(e);
+            if (!imovel || !folhas.has(key(imovel.id))) continue;
+            balde(refOf(imovel)).events.push(e);
         }
     }
 
@@ -415,9 +430,6 @@ export const groupRentalAnalysis = (
         );
 
         const receita = b.deals.reduce((acc, d) => acc + getDealInstallmentValue(d), 0);
-        // Teto de potencial: Valor base de TODA folha do balde, alugada ou
-        // vaga — não só das que já têm negócio fechado (isso é `receita`).
-        const receitaReferencia = b.leaves.reduce((acc, p) => acc + rentalValueOf(p), 0);
         const patrimonio = sumPortfolioValue(b.subtree, p => Number(p.price) || 0);
 
         // Valor/m²: mesma população de `receita` (contratos RENTAL fechados).
@@ -432,8 +444,9 @@ export const groupRentalAnalysis = (
                 max: Math.max(...valoresM2),
                 min: Math.min(...valoresM2),
                 avg: valoresM2.reduce((a, b2) => a + b2, 0) / valoresM2.length,
+                count: valoresM2.length,
             }
-            : { max: null, min: null, avg: null };
+            : { max: null, min: null, avg: null, count: 0 };
 
         // `null` (não medido) só quando o insumo INTEIRO está ausente. Balde sem
         // evento, com o log disponível, é medição legítima de zero vaga.
@@ -456,6 +469,7 @@ export const groupRentalAnalysis = (
                 capRate: noiMonthsInWindow && noiMonthsInWindow > 0
                     ? capRate((noiBase.noi / noiMonthsInWindow) * 12, patrimonio)
                     : null,
+                expenseRecorded: noiBase.expense > 0,
             }
             : null;
 
@@ -497,7 +511,6 @@ export const groupRentalAnalysis = (
             occupancyRate: b.leaves.length > 0 ? alugadas / b.leaves.length : null,
             activeAssets: b.subtree.filter(p => p.type === 'BUILDING' || !p.parent_id).length,
             monthlyRevenue: receita,
-            referenceMonthlyRevenue: receitaReferencia,
             portfolioValue: patrimonio,
             monthlyYield: patrimonio > 0 ? receita / patrimonio : null,
             financial: {
@@ -549,5 +562,62 @@ export const groupRentalAnalysis = (
         rows,
         byId: new Map(rows.map(r => [r.empreendimentoId, r])),
         total: escopoDe(totalBucket),
+    };
+};
+
+/** NOI só é medida com despesa apropriada aos imóveis na janela. Sem ela o
+ *  número é a receita com outro nome e a margem sai 100% — quem exibe mostra
+ *  "—" e diz por quê. Um lugar só para essa regra (KPI, detalhamento, tabela). */
+export const noiMeasured = (noi: RentalAnalysisScope['noi']): boolean =>
+    noi != null && noi.expenseRecorded;
+
+/** Rodapé da tabela "Por empreendimento". */
+export interface AnalysisRowsSummary {
+    monthlyRevenue: number;
+    potentialMonthlyRevenue: number;
+    annualRevenue: number;
+    /** Médias PONDERADAS — `null` sem base, nunca 0. */
+    occupancyRate: number | null;
+    financialRate: number | null;
+    valuePerSqmAvg: number | null;
+}
+
+/**
+ * Rodapé da tabela "Por empreendimento", sobre as linhas que estão na tela
+ * (já filtradas pela busca).
+ *
+ * Taxas e médias são PONDERADAS pela própria base de cada linha (unidades,
+ * receita potencial, tamanho da amostra de valor/m²) — e não a média simples
+ * das linhas, que dava a um prédio de 1 unidade o mesmo peso de um de 12 e
+ * fazia o rodapé contradizer o KPI do topo (31,9% × 34,3% em produção,
+ * 26/10/2026). Com todas as linhas visíveis, o rodapé é igual ao topo por
+ * construção — é o que o teste trava.
+ */
+export const summarizeAnalysisRows = (rows: RentalAnalysisScope[]): AnalysisRowsSummary => {
+    let receita = 0;
+    let potencial = 0;
+    let contratado = 0;
+    let unidades = 0;
+    let alugadas = 0;
+    let somaM2 = 0;
+    let amostraM2 = 0;
+    for (const r of rows) {
+        receita += r.monthlyRevenue;
+        potencial += r.financial.potential;
+        contratado += r.financial.contracted;
+        unidades += r.unitsCount;
+        alugadas += r.rentedCount;
+        if (r.valuePerSqm.avg != null) {
+            somaM2 += r.valuePerSqm.avg * r.valuePerSqm.count;
+            amostraM2 += r.valuePerSqm.count;
+        }
+    }
+    return {
+        monthlyRevenue: receita,
+        potentialMonthlyRevenue: potencial,
+        annualRevenue: receita * 12,
+        occupancyRate: unidades > 0 ? alugadas / unidades : null,
+        financialRate: potencial > 0 ? contratado / potencial : null,
+        valuePerSqmAvg: amostraM2 > 0 ? somaM2 / amostraM2 : null,
     };
 };

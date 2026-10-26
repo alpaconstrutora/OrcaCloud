@@ -106,7 +106,7 @@ describe('Alocação', () => {
     const onPeriodo = vi.fn();
     render(<TabelaAlocacao assignments={assignments} itemSchedules={tarefas} roles={roles} workerConflicts={{}} periodo="all" onPeriodo={onPeriodo} onConfirmar={vi.fn()} />);
     const u = userEvent.setup();
-    await u.click(screen.getByRole('button', { name: /Período/ }));
+    await u.click(screen.getByRole('button', { name: /^Período/ }));
     await u.click(screen.getByRole('menuitemradio', { name: 'Este mês' }));
     expect(onPeriodo).toHaveBeenCalledWith('thisMonth');
   });

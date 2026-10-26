@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders } from 'lucide-react';
+import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, RefreshCw, Home as HomeIcon, MapPin, DollarSign, Tag, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, AlertCircle, Mail, Phone, MoveHorizontal, BarChart3, Check, Sliders, Download, Link2 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService, dealBuyersOf } from '../services/commercialService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -40,7 +40,9 @@ import { pricingRuleApplicationService, buildApplicationRows } from '../services
 import { rentalPriceTableService } from '../services/rentalPriceTableService';
 import { RentalPricingConfig } from '../types';
 import RentalRenewals from './rentals/RentalRenewals';
-import RentalAnalysisOverview from './rentals/RentalAnalysisOverview';
+import RentalAnalysisOverview, { type AnalysisSources, type AnalysisSourceState, type AnalysisLeitura, type AnalysisDestino } from './rentals/RentalAnalysisOverview';
+import { useStore } from '../store/useStore';
+import { parseHashView } from '../lib/tabRouter';
 import { contractRenewalService } from '../services/contractRenewalService';
 import { getStepByStatus, getStepIndex, WORKFLOW_STEPS, DealWorkflowStatus, getWorkflowStep, getDealStatusDisplay as statusDaNegociacao } from '../lib/dealWorkflow';
 // Conta de carteira compartilhada com services/rentalsDashboardService.ts — as
@@ -59,8 +61,11 @@ import type { StatusEvent } from '../lib/rentalVacancy';
 // docs/planos/2026-08-12-locacoes-analise-por-empreendimento.md.
 import {
     groupRentalAnalysis,
+    summarizeAnalysisRows,
+    noiMeasured,
     SEM_EMPREENDIMENTO,
     type RentalAnalysisScope,
+    type AnalysisRowsSummary,
 } from '../lib/rentalByEmpreendimento';
 // Segundo eixo de partição da aba Análise — por categoria do cliente
 // (`clients.category`), não por empreendimento. Ver lib/rentalByClientType.ts.
@@ -241,24 +246,60 @@ const BROKER_DEFAULT_COL_WIDTHS: Record<string, number> = {
 // única ação é filtrar, e ela mora no clique da linha (§9.1).
 const ANALYSIS_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Empreendimento', sortable: true },
-    { key: 'unitsCount', label: 'Unidades', sortable: true },
+    { key: 'unitsCount', label: 'Alugadas / unidades', sortable: true },
     { key: 'occupancyRate', label: 'Ocupação física', sortable: true },
     { key: 'financialRate', label: 'Ocupação financeira', sortable: true },
     { key: 'monthlyRevenue', label: 'Receita mensal', sortable: true },
-    { key: 'referenceMonthlyRevenue', label: 'Receita mensal de referência', sortable: true },
+    // A chave segue `referenceMonthlyRevenue` só para não perder a largura e a
+    // visibilidade que o usuário já gravou; o valor é `financial.potential`,
+    // a mesma receita potencial do KPI do topo.
+    { key: 'referenceMonthlyRevenue', label: 'Receita potencial', sortable: true },
     { key: 'annualRevenue', label: 'Receita anual', sortable: true },
     { key: 'vacancyDays', label: 'Vacância média', sortable: true },
-    { key: 'noi', label: 'NOI', sortable: true },
+    { key: 'noi', label: 'NOI no ano', sortable: true },
     { key: 'waleYears', label: 'WALE', sortable: true },
     { key: 'overdue90Rate', label: 'Vencido > 90 dias', sortable: true },
     { key: 'valuePerSqmMax', label: 'Valor máx. locação /m²', sortable: true },
     { key: 'valuePerSqmMin', label: 'Valor mín. locação /m²', sortable: true },
     { key: 'valuePerSqmAvg', label: 'Valor médio locação /m²', sortable: true },
 ];
+/** Colunas que cada leitura mostra de saída (as outras ficam na engrenagem).
+ *  Cada leitura guarda as próprias escolhas — trocar de leitura não desfaz o
+ *  que o usuário ligou ou desligou na outra. */
+const ANALYSIS_VISIVEIS: Record<AnalysisLeitura, string[]> = {
+    operacao: ['name', 'unitsCount', 'occupancyRate', 'vacancyDays', 'overdue90Rate', 'monthlyRevenue'],
+    investimento: ['name', 'monthlyRevenue', 'referenceMonthlyRevenue', 'financialRate', 'noi', 'waleYears', 'valuePerSqmAvg'],
+};
+const analysisColumnsDa = (leitura: AnalysisLeitura): ColumnConfig[] =>
+    ANALYSIS_COLUMNS.map(c => ({ ...c, defaultHidden: !ANALYSIS_VISIVEIS[leitura].includes(c.key) }));
+const ANALYSIS_COLUMNS_OPERACAO = analysisColumnsDa('operacao');
+const ANALYSIS_COLUMNS_INVESTIMENTO = analysisColumnsDa('investimento');
+
+const LEITURAS: { id: AnalysisLeitura; label: string; dica: string }[] = [
+    { id: 'operacao', label: 'Operação', dica: 'Ocupação, cobrança, vencimentos e vacância — o dia a dia da locação' },
+    { id: 'investimento', label: 'Investimento', dica: 'Receita contra o potencial, NOI, WALE e yield — a leitura da diretoria' },
+];
+
+/**
+ * Recorte da aba Análise lido do link (`#/rentals?aba=analise&emp=…&leitura=…`).
+ * Até 26/10/2026 o recorte vivia só no localStorage: não dava para mandar
+ * "olha a Galeria Altavista" para alguém.
+ */
+const linkDaAnalise = (): { emp?: string; leitura?: AnalysisLeitura } | null => {
+    if (typeof window === 'undefined') return null;
+    const q = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+    if (q.get('aba') !== 'analise') return null;
+    const leitura = q.get('leitura');
+    return {
+        emp: q.get('emp') ?? undefined,
+        leitura: leitura === 'operacao' || leitura === 'investimento' ? leitura : undefined,
+    };
+};
+
 const ANALYSIS_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 230, unitsCount: 100, occupancyRate: 130, financialRate: 155,
-    monthlyRevenue: 140, referenceMonthlyRevenue: 165, annualRevenue: 140,
-    vacancyDays: 130, noi: 130, waleYears: 90, overdue90Rate: 145,
+    name: 230, unitsCount: 150, occupancyRate: 130, financialRate: 155,
+    monthlyRevenue: 140, referenceMonthlyRevenue: 150, annualRevenue: 140,
+    vacancyDays: 130, noi: 130, waleYears: 110, overdue90Rate: 145,
     valuePerSqmMax: 155, valuePerSqmMin: 155, valuePerSqmAvg: 160,
 };
 
@@ -270,7 +311,17 @@ const moneyBRL = (v: number) =>
 const orDash = (v: number | null | undefined, formata: (n: number) => string) =>
     v == null ? '—' : formata(v);
 
-const percent1 = (v: number) => `${(v * 100).toFixed(1)}%`;
+/** "34,3%" — vírgula decimal, como a moeda ao lado. `toFixed` dava "34.3%". */
+const percent1 = (v: number) =>
+    `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+const anos1 = (v: number) =>
+    `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} anos`;
+
+/** Dias médios de vacância só quando há unidade vaga medida — sem vaga, a
+ *  média não existe ("0 dias" afirmaria uma medição que não aconteceu). */
+const vacancyDaysOf = (row: RentalAnalysisScope): number | null =>
+    row.vacancy && row.vacancy.vacantCount > 0 ? row.vacancy.averageDays : null;
 
 /**
  * Célula da tabela "Por empreendimento".
@@ -284,7 +335,7 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
             return row.empreendimentoId === SEM_EMPREENDIMENTO
                 // O balde dos não vinculados existe para as colunas fecharem com
                 // o topo — mas ele é resíduo de cadastro, não um empreendimento.
-                ? <span className="text-gray-400">{row.name}</span>
+                ? <span className="text-gray-500">{row.name}</span>
                 : row.name;
         case 'unitsCount':
             return `${row.rentedCount}/${row.unitsCount}`;
@@ -295,15 +346,15 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
         case 'monthlyRevenue':
             return moneyBRL(row.monthlyRevenue);
         case 'referenceMonthlyRevenue':
-            return moneyBRL(row.referenceMonthlyRevenue);
+            return moneyBRL(row.financial.potential);
         case 'annualRevenue':
             return moneyBRL(row.monthlyRevenue * 12);
         case 'vacancyDays':
-            return row.vacancy ? `${row.vacancy.averageDays} dias` : '—';
+            return orDash(vacancyDaysOf(row), d => `${d} dias`);
         case 'noi':
-            return row.noi ? moneyBRL(row.noi.noi) : '—';
+            return noiMeasured(row.noi) ? moneyBRL(row.noi!.noi) : '—';
         case 'waleYears':
-            return orDash(row.executive?.wale.years, anos => `${anos.toFixed(1)} anos`);
+            return orDash(row.executive?.wale.years, anos1);
         case 'overdue90Rate':
             return orDash(row.executive?.collection.overdue90Rate, percent1);
         case 'valuePerSqmMax':
@@ -317,25 +368,15 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
     }
 };
 
-/** Forma do rodapé da tabela "Por empreendimento" — ver `analysisFooter`
- *  (useMemo, no componente) para como cada campo é calculado. */
-interface AnalysisFooterTotals {
-    monthlyRevenue: number;
-    referenceMonthlyRevenue: number;
-    annualRevenue: number;
-    valuePerSqmAvg: number | null;
-    occupancyRate: number | null;
-    financialRate: number | null;
-}
-
-/** Célula do rodapé — só as 6 colunas pedidas têm soma/média; as demais ficam
- *  em branco (não "0", que afirmaria uma medição que não foi feita). */
-const renderAnalysisFooterCell = (key: string, footer: AnalysisFooterTotals): React.ReactNode => {
+/** Célula do rodapé — só as 6 colunas pedidas têm soma/média (ponderada, ver
+ *  `summarizeAnalysisRows`); as demais ficam em branco (não "0", que
+ *  afirmaria uma medição que não foi feita). */
+const renderAnalysisFooterCell = (key: string, footer: AnalysisRowsSummary): React.ReactNode => {
     switch (key) {
         case 'monthlyRevenue':
             return moneyBRL(footer.monthlyRevenue);
         case 'referenceMonthlyRevenue':
-            return moneyBRL(footer.referenceMonthlyRevenue);
+            return moneyBRL(footer.potentialMonthlyRevenue);
         case 'annualRevenue':
             return moneyBRL(footer.annualRevenue);
         case 'valuePerSqmAvg':
@@ -368,7 +409,7 @@ const renderClientTypeCell = (key: string, row: RentalClientTypeScope): React.Re
     switch (key) {
         case 'label':
             return row.categoryId === SEM_CATEGORIA
-                ? <span className="text-gray-400">{row.label}</span>
+                ? <span className="text-gray-500">{row.label}</span>
                 : row.label;
         case 'clientCount':
             return row.clientCount;
@@ -718,7 +759,7 @@ function renderBrokerCell(key: string, broker: BrokerProfile, ctx: BrokerRowCtx)
 
 const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     const [activeTab, setActiveTab] = useState<RentalsTab>(
-        (localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory'
+        linkDaAnalise() ? 'analysis' : ((localStorage.getItem('rentals_active_tab') as RentalsTab) || 'inventory')
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
@@ -734,11 +775,25 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // `null` = não medido (log de status / contratos indisponíveis), nunca zero.
     const [vacancyEvents, setVacancyEvents] = useState<StatusEvent[] | null>(null);
     const [executiveRaw, setExecutiveRaw] = useState<RentalExecutiveRaw | null>(null);
+    // Estado de cada insumo da aba Análise. `null` nos dados acima significa
+    // "não medido"; sem este estado, "ainda carregando" e "a consulta falhou"
+    // chegavam à tela iguais a ele ("—", "Contratos indisponíveis") — com rede
+    // lenta o gestor lia que não havia contratos. `analysisReload` é o
+    // "Tentar de novo": muda a chave e os três efeitos rodam outra vez.
+    const [analysisSources, setAnalysisSources] = useState<AnalysisSources>({
+        vacancy: 'loading', noi: 'loading', executive: 'loading',
+    });
+    const [analysisReload, setAnalysisReload] = useState(0);
+    const marcarFonte = (fonte: keyof AnalysisSources, estado: AnalysisSourceState) =>
+        setAnalysisSources(prev => (prev[fonte] === estado ? prev : { ...prev, [fonte]: estado }));
     // Recorte da aba Análise. 'ALL' = a carteira inteira (o comportamento
     // original da aba). Persistido pelo mesmo motivo do `showDetail`: o usuário
     // volta para a tela querendo o recorte em que estava.
     const [analysisEmpId, setAnalysisEmpId] = usePersistedState('rentals:analysisEmpreendimento', 'ALL');
     const [analysisSearch, setAnalysisSearch] = usePersistedState('rentals:analysisSearch', '');
+    // Operação | Investimento — ver `AnalysisLeitura`. Persistido como o recorte.
+    const [analysisLeitura, setAnalysisLeitura] = usePersistedState<AnalysisLeitura>('rentals:analysisLeitura', 'operacao');
+    const [linkCopiado, setLinkCopiado] = useState(false);
     // O painel executivo são 8 indicadores; o resto fica recolhido. "20 não é
     // dashboard, é relatório" — decisão registrada no plano da Fase 3.
     const [showDetail, setShowDetail] = usePersistedState('rentals:analysisDetail', false);
@@ -811,7 +866,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         .reduce((sum, c) => sum + brokerCols.getWidth(c.key), 0);
 
     // Colunas + ordenação + redimensionamento da tabela "Por empreendimento".
-    const analysisTableColumns = useTableColumns(ANALYSIS_COLUMNS, 'rentalsAnalysisColumns');
+    const analysisColumnsOperacao = useTableColumns(ANALYSIS_COLUMNS_OPERACAO, 'rentalsAnalysisColumns:operacao');
+    const analysisColumnsInvestimento = useTableColumns(ANALYSIS_COLUMNS_INVESTIMENTO, 'rentalsAnalysisColumns:investimento');
+    const analysisTableColumns = analysisLeitura === 'investimento' ? analysisColumnsInvestimento : analysisColumnsOperacao;
     const analysisCols = useResizableColumns(ANALYSIS_DEFAULT_COL_WIDTHS, 'rentalsAnalysisColWidths');
     const analysisTableTotalWidth = ANALYSIS_COLUMNS
         .filter(c => analysisTableColumns.visibleColumns.includes(c.key))
@@ -1386,6 +1443,116 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
             .catch(err => console.error('[Commercial] Error loading brokers:', err));
     }, [effectiveOrganizationId]);
 
+    // Link do recorte. O primeiro efeito LÊ (precisa vir antes do segundo, que
+    // reescreve o endereço); o segundo mantém `?aba=analise&emp=…&leitura=…`
+    // em dia com a tela, por `replaceState` — não cria entrada no histórico
+    // nem dispara `hashchange` (o roteador do app só olha a vista, não a query).
+    // Lido UMA vez, no primeiro render, e guardado em estado: reler o endereço
+    // no efeito pegava o que o efeito de baixo já tinha reescrito com o valor
+    // antigo (o StrictMode roda os efeitos duas vezes — o link abria na leitura
+    // salva, não na pedida).
+    const [linkInicial] = useState(linkDaAnalise);
+    useEffect(() => {
+        if (linkInicial?.emp) setAnalysisEmpId(linkInicial.emp);
+        if (linkInicial?.leitura) setAnalysisLeitura(linkInicial.leitura);
+        // Link colado numa aba que JÁ está nesta tela: o navegador só troca o
+        // `#…` (sem recarregar), e o recorte tem de seguir o endereço novo.
+        const aoMudarEndereco = () => {
+            const link = linkDaAnalise();
+            if (!link) return;
+            setActiveTab('analysis');
+            setAnalysisEmpId(link.emp ?? 'ALL');
+            if (link.leitura) setAnalysisLeitura(link.leitura);
+        };
+        window.addEventListener('hashchange', aoMudarEndereco);
+        return () => window.removeEventListener('hashchange', aoMudarEndereco);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const vista = parseHashView(window.location.hash);
+        if (!vista) return;
+        const alvo = activeTab === 'analysis'
+            ? `#/${vista}?${new URLSearchParams({
+                aba: 'analise',
+                ...(analysisEmpId !== 'ALL' ? { emp: analysisEmpId } : {}),
+                leitura: analysisLeitura,
+            }).toString()}`
+            : `#/${vista}`;
+        if (window.location.hash !== alvo) window.history.replaceState(null, '', alvo);
+    }, [activeTab, analysisEmpId, analysisLeitura]);
+
+    // Ação de um indicador principal da Análise: leva aonde o número se resolve.
+    const irParaDaAnalise = (destino: AnalysisDestino) => {
+        if (destino === 'renovacoes') setActiveTab('renewals');
+        else if (destino === 'imoveis') setActiveTab('inventory');
+        else useStore.getState().setActiveView(destino);
+    };
+
+    const copiarLinkDaAnalise = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            setLinkCopiado(true);
+            window.setTimeout(() => setLinkCopiado(false), 2000);
+        } catch {
+            notify('Não foi possível copiar o link — copie da barra de endereço.', 'error');
+        }
+    };
+
+    // Exporta a tabela "Por empreendimento" como está na tela: colunas visíveis
+    // na ordem, linhas filtradas e ordenadas, e a linha de total. Números vão
+    // como NÚMERO (com formato de célula), não como texto — é para continuar a
+    // conta no Excel.
+    const exportarAnalise = async () => {
+        const XLSX = await import('xlsx');
+        const colunas = ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key));
+        const MOEDA = '"R$" #,##0';
+        const PCT = '0.0%';
+        const celula = (key: string, r: RentalAnalysisScope): { v: string | number | null; z?: string } => {
+            switch (key) {
+                case 'name': return { v: r.name };
+                case 'unitsCount': return { v: `${r.rentedCount}/${r.unitsCount}` };
+                case 'occupancyRate': return { v: r.occupancyRate, z: PCT };
+                case 'financialRate': return { v: r.financial.rate, z: PCT };
+                case 'monthlyRevenue': return { v: r.monthlyRevenue, z: MOEDA };
+                case 'referenceMonthlyRevenue': return { v: r.financial.potential, z: MOEDA };
+                case 'annualRevenue': return { v: r.monthlyRevenue * 12, z: MOEDA };
+                case 'vacancyDays': return { v: vacancyDaysOf(r) };
+                case 'noi': return { v: noiMeasured(r.noi) ? r.noi!.noi : null, z: MOEDA };
+                case 'waleYears': return { v: r.executive?.wale.years ?? null, z: '0.0' };
+                case 'overdue90Rate': return { v: r.executive?.collection.overdue90Rate ?? null, z: PCT };
+                case 'valuePerSqmMax': return { v: r.valuePerSqm.max, z: MOEDA };
+                case 'valuePerSqmMin': return { v: r.valuePerSqm.min, z: MOEDA };
+                case 'valuePerSqmAvg': return { v: r.valuePerSqm.avg, z: MOEDA };
+                default: return { v: null };
+            }
+        };
+        const rodape = (key: string): { v: string | number | null; z?: string } => {
+            switch (key) {
+                case 'name': return { v: analysisSearch.trim() ? 'Total das linhas filtradas' : 'Total da carteira' };
+                case 'monthlyRevenue': return { v: analysisFooter.monthlyRevenue, z: MOEDA };
+                case 'referenceMonthlyRevenue': return { v: analysisFooter.potentialMonthlyRevenue, z: MOEDA };
+                case 'annualRevenue': return { v: analysisFooter.annualRevenue, z: MOEDA };
+                case 'occupancyRate': return { v: analysisFooter.occupancyRate, z: PCT };
+                case 'financialRate': return { v: analysisFooter.financialRate, z: PCT };
+                case 'valuePerSqmAvg': return { v: analysisFooter.valuePerSqmAvg, z: MOEDA };
+                default: return { v: null };
+            }
+        };
+        const linhas = [...analysisRows.map(r => colunas.map(c => celula(c.key, r))), colunas.map(c => rodape(c.key))];
+        const ws = XLSX.utils.aoa_to_sheet([colunas.map(c => c.label), ...linhas.map(l => l.map(x => x.v))]);
+        // "Não medido" sai como célula vazia, nunca 0 — mesma regra da tela.
+        linhas.forEach((l, i) => l.forEach((x, j) => {
+            const ref = XLSX.utils.encode_cell({ r: i + 1, c: j });
+            if (x.v != null && x.z && ws[ref]) ws[ref].z = x.z;
+        }));
+        ws['!cols'] = colunas.map(c => ({ wch: c.key === 'name' ? 34 : 18 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Por empreendimento');
+        const leituraNome = analysisLeitura === 'investimento' ? 'investimento' : 'operacao';
+        XLSX.writeFile(wb, `locacoes-analise-${leituraNome}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
     // Vacância (Fase 1). Só busca na aba Análise — o log pode ter muitos eventos
     // e não faz sentido pagar essa consulta em quem está mexendo no inventário.
     // `selectedBuildingId` entra na chave porque dentro de um edifício a métrica
@@ -1398,11 +1565,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
+        marcarFonte('vacancy', 'loading');
         rentalVacancyService
-            .getVacancyEvents(effectiveOrganizationId, selectedBuildingId)
-            .then(eventos => { if (alive) setVacancyEvents(eventos); });
+            .getVacancyEvents(effectiveOrganizationId, selectedBuildingId, { throwOnError: true })
+            .then(eventos => { if (alive) { setVacancyEvents(eventos); marcarFonte('vacancy', 'ready'); } })
+            .catch(() => { if (alive) marcarFonte('vacancy', 'error'); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId, selectedBuildingId]);
+    }, [activeTab, effectiveOrganizationId, selectedBuildingId, analysisReload]);
 
     // NOI (Fase 2). Janela: ano corrente até o mês atual — a despesa é somada no
     // período, e o cap rate é anualizado a partir dela.
@@ -1416,11 +1585,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         const now = new Date();
         const year = now.getFullYear();
         const month = String(now.getMonth() + 1).padStart(2, '0');
+        marcarFonte('noi', 'loading');
         rentalNoiService
-            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`, properties)
-            .then(data => { if (alive) setNoi(data); });
+            .getNoiMetrics(effectiveOrganizationId, `${year}-01-01`, `${year}-${month}-28`, properties, { throwOnError: true })
+            .then(data => { if (alive) { setNoi(data); marcarFonte('noi', 'ready'); } })
+            .catch(() => { if (alive) marcarFonte('noi', 'error'); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId, properties]);
+    }, [activeTab, effectiveOrganizationId, properties, analysisReload]);
 
     // WALE, taxa de renovação e cobrança (Fase 3). Vem de `contracts` +
     // `vw_receivables`, não de `deals` — por isso não cabe no `stats`.
@@ -1429,11 +1600,13 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     useEffect(() => {
         if (activeTab !== 'analysis') return;
         let alive = true;
+        marcarFonte('executive', 'loading');
         rentalExecutiveService
-            .loadRaw(effectiveOrganizationId)
-            .then(data => { if (alive) setExecutiveRaw(data); });
+            .loadRaw(effectiveOrganizationId, null, { throwOnError: true })
+            .then(data => { if (alive) { setExecutiveRaw(data); marcarFonte('executive', 'ready'); } })
+            .catch(() => { if (alive) marcarFonte('executive', 'error'); });
         return () => { alive = false; };
-    }, [activeTab, effectiveOrganizationId]);
+    }, [activeTab, effectiveOrganizationId, analysisReload]);
 
     // Texto simples colorido — sem pílula/fundo/uppercase (ui_ux_guia_unificado.md §8).
     const getStatusColor = (status: PropertyStatus) => {
@@ -1578,8 +1751,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         const valorDe = (r: RentalAnalysisScope): string | number | null => {
             switch (analysisTableColumns.sortColumn) {
                 case 'financialRate': return r.financial.rate;
-                case 'vacancyDays': return r.vacancy?.averageDays ?? null;
-                case 'noi': return r.noi?.noi ?? null;
+                case 'referenceMonthlyRevenue': return r.financial.potential;
+                case 'vacancyDays': return vacancyDaysOf(r);
+                case 'noi': return noiMeasured(r.noi) ? r.noi!.noi : null;
                 case 'waleYears': return r.executive?.wale.years ?? null;
                 case 'overdue90Rate': return r.executive?.collection.overdue90Rate ?? null;
                 case 'annualRevenue': return r.monthlyRevenue * 12;
@@ -1614,28 +1788,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
      * tela" — usar `analysis.total` (que ignora a busca) mostraria um número
      * maior que a soma das linhas visíveis sempre que houvesse filtro ativo.
      *
-     * Soma: Receita mensal, Receita mensal de referência, Receita anual —
-     * grandezas que se somam por construção (ver `RentalAnalysisScope`).
-     * Média simples (não ponderada): Valor médio de locação /m², Ocupação
-     * física, Ocupação financeira — `null` ("não medido") sai do denominador,
-     * não vira 0.
+     * Soma: Receita mensal, Receita potencial, Receita anual. Ocupação física,
+     * Ocupação financeira e Valor médio /m² são médias PONDERADAS pela base de
+     * cada linha — sem busca, o rodapé é igual ao KPI do topo por construção.
+     * A conta e o porquê moram em `summarizeAnalysisRows`.
      */
-    const analysisFooter = useMemo(() => {
-        const soma = (valorDe: (r: RentalAnalysisScope) => number) =>
-            analysisRows.reduce((acc, r) => acc + valorDe(r), 0);
-        const media = (valorDe: (r: RentalAnalysisScope) => number | null) => {
-            const valores = analysisRows.map(valorDe).filter((v): v is number => v != null);
-            return valores.length > 0 ? valores.reduce((a, v) => a + v, 0) / valores.length : null;
-        };
-        return {
-            monthlyRevenue: soma(r => r.monthlyRevenue),
-            referenceMonthlyRevenue: soma(r => r.referenceMonthlyRevenue),
-            annualRevenue: soma(r => r.monthlyRevenue * 12),
-            valuePerSqmAvg: media(r => r.valuePerSqm.avg),
-            occupancyRate: media(r => r.occupancyRate),
-            financialRate: media(r => r.financial.rate),
-        };
-    }, [analysisRows]);
+    const analysisFooter = useMemo(() => summarizeAnalysisRows(analysisRows), [analysisRows]);
 
     /**
      * A aba Análise, agrupada por TIPO DE CLIENTE (`clients.category`) — segundo
@@ -2000,7 +2158,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                 abaixo descrevem. Fica acima dos KPIs de propósito: o dado não
                 pode aparecer antes do controle que decide de quem ele fala. */}
             {!currentBuilding && activeTab === 'analysis' && (
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                     <div className="flex flex-wrap items-center gap-2">
                         <label htmlFor="analysis-emp" className="text-xs font-semibold text-slate-500">Empreendimento</label>
                         <select
@@ -2010,22 +2168,55 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                         >
                             <option value="ALL">Todos os empreendimentos ({analysis.total.unitsCount} unidades)</option>
-                            {analysis.rows.map(r => (
+                            {/* Balde sem unidade e sem locação fechada (só contrato
+                                órfão) não é recorte que se escolha: "Sem
+                                empreendimento (0 unidades)" levava a uma tela vazia.
+                                Ele continua na tabela, para a soma fechar. */}
+                            {analysis.rows.filter(r => r.unitsCount > 0 || r.dealsCount > 0).map(r => (
                                 <option key={r.empreendimentoId} value={r.empreendimentoId}>
                                     {r.name} ({r.unitsCount} unidade{r.unitsCount === 1 ? '' : 's'})
                                 </option>
                             ))}
                         </select>
+                    {/* Leitura: quais indicadores sobem para a primeira dobra.
+                        Mesmo trilho das abas (§19.1), em escala de escopo; colado
+                        ao seletor de empreendimento — os dois decidem o recorte. */}
+                    <div role="radiogroup" aria-label="Leitura da análise" className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 sm:ml-2">
+                        {LEITURAS.map(l => (
+                            <button
+                                key={l.id}
+                                type="button"
+                                role="radio"
+                                aria-checked={analysisLeitura === l.id}
+                                onClick={() => setAnalysisLeitura(l.id)}
+                                title={l.dica}
+                                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${analysisLeitura === l.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            >
+                                {l.label}
+                            </button>
+                        ))}
                     </div>
-                    {!isAllEmpreendimentos && (
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                        {!isAllEmpreendimentos && (
+                            <button
+                                onClick={() => setAnalysisEmpId('ALL')}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
+                            >
+                                <X className="w-4 h-4" />
+                                Ver todos os empreendimentos
+                            </button>
+                        )}
                         <button
-                            onClick={() => setAnalysisEmpId('ALL')}
-                            className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
+                            type="button"
+                            onClick={copiarLinkDaAnalise}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all whitespace-nowrap"
+                            title="Copia o endereço desta análise — abre no mesmo empreendimento e na mesma leitura"
                         >
-                            <X className="w-4 h-4" />
-                            Ver a carteira inteira
+                            {linkCopiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Link2 className="w-4 h-4" />}
+                            {linkCopiado ? 'Link copiado' : 'Copiar link'}
                         </button>
-                    )}
+                    </div>
                 </div>
             )}
 
@@ -2043,6 +2234,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     onSelectEmpreendimento={setAnalysisEmpId}
                     showDetail={showDetail}
                     onToggleDetail={() => setShowDetail(!showDetail)}
+                    sources={analysisSources}
+                    onRetry={() => setAnalysisReload(n => n + 1)}
+                    leitura={analysisLeitura}
+                    onNavigate={irParaDaAnalise}
                 />
             )}
 
@@ -2056,6 +2251,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 <input
                                     type="text"
                                     placeholder="Buscar empreendimento..."
+                                    aria-label="Buscar empreendimento"
                                     value={analysisSearch}
                                     onChange={e => setAnalysisSearch(e.target.value)}
                                     className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -2074,8 +2270,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     onClick={() => analysisCols.autoFit()}
                                     className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
                                     title="Ajustar largura das colunas ao conteúdo"
+                                    aria-label="Ajustar largura das colunas ao conteúdo"
                                 >
                                     <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={exportarAnalise}
+                                    disabled={analysisRows.length === 0}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title={analysisRows.length === 0 ? 'Nada para exportar: nenhuma linha na tabela' : 'Exportar a tabela para Excel (colunas visíveis, na ordem da tela)'}
+                                    aria-label="Exportar a tabela para Excel"
+                                >
+                                    <Download className="w-4 h-4" />
                                 </button>
                             </div>
                         </div>
@@ -2094,6 +2300,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
                             <table ref={analysisCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: analysisTableTotalWidth, minWidth: '100%' }}>
+                                <caption className="sr-only">Análise por empreendimento — escolha um empreendimento para recortar a aba</caption>
                                 <colgroup>
                                     {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map(c => (
                                         <col key={c.key} data-col-key={c.key} style={{ width: `${analysisCols.getWidth(c.key)}px` }} />
@@ -2114,7 +2321,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 sortColumn={analysisTableColumns.sortColumn}
                                                 sortDirection={analysisTableColumns.sortDirection}
                                                 onSort={analysisTableColumns.handleColumnSort}
-                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                                className={`px-6 py-2 border-r border-gray-100 overflow-hidden ${c.key === 'name' ? 'sticky left-0 z-20 bg-white' : ''}`}
                                             >
                                                 <analysisCols.ResizeHandle colKey={c.key} />
                                             </SortableHeader>
@@ -2136,6 +2343,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                 <td
                                                     key={c.key}
                                                     className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                        // Fixa à esquerda: a partir de "Vencido > 90 dias" o
+                                                        // nome sumia e não se sabia de qual linha era o número.
+                                                        c.key === 'name' ? 'sticky left-0 z-[1] bg-white group-hover:bg-[#f7fbff] ' : ''
+                                                    }${
                                                         c.key === 'monthlyRevenue' || c.key === 'noi'
                                                             || c.key === 'referenceMonthlyRevenue' || c.key === 'annualRevenue'
                                                             || c.key === 'valuePerSqmMax' || c.key === 'valuePerSqmMin' || c.key === 'valuePerSqmAvg'
@@ -2145,7 +2356,18 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                                 : 'font-normal text-gray-600'
                                                     }`}
                                                 >
-                                                    {renderAnalysisCell(c.key, row)}
+                                                    {c.key === 'name' ? (
+                                                        // O clique na linha é do mouse; o teclado e o
+                                                        // leitor de tela chegam pelo nome, que é botão.
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => { e.stopPropagation(); setAnalysisEmpId(row.empreendimentoId); }}
+                                                            className="max-w-full truncate text-left rounded-[4px] hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                                                            aria-label={`Ver a análise de ${row.name}`}
+                                                        >
+                                                            {renderAnalysisCell(c.key, row)}
+                                                        </button>
+                                                    ) : renderAnalysisCell(c.key, row)}
                                                 </td>
                                             ))}
                                             <td aria-hidden="true"></td>
@@ -2153,7 +2375,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     ))}
                                 </tbody>
                                 {/* Rodapé (§6.7-adjacente, mesmo padrão do modo Unidades
-                                    acima): soma nas 3 colunas de receita, média simples nas
+                                    acima): soma nas 3 colunas de receita, média PONDERADA nas
                                     3 de ocupação/valor-m² pedidas pelo usuário — as demais
                                     colunas ficam em branco, não "0". */}
                                 <tfoot>
@@ -2161,13 +2383,15 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                         {ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key)).map((c, idx) => (
                                             <td
                                                 key={c.key}
-                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${c.key === 'name' ? 'sticky left-0 z-[1] bg-gray-50 ' : ''}${
                                                     ['monthlyRevenue', 'referenceMonthlyRevenue', 'annualRevenue', 'valuePerSqmAvg'].includes(c.key)
                                                         ? 'font-medium text-gray-800'
                                                         : 'font-normal text-gray-500'
                                                 }`}
                                             >
-                                                {idx === 0 ? 'Totais / médias' : renderAnalysisFooterCell(c.key, analysisFooter)}
+                                                {idx === 0
+                                                    ? (analysisSearch.trim() ? 'Total das linhas filtradas' : 'Total da carteira')
+                                                    : renderAnalysisFooterCell(c.key, analysisFooter)}
                                             </td>
                                         ))}
                                         <td aria-hidden="true"></td>
@@ -2193,6 +2417,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 <input
                                     type="text"
                                     placeholder="Buscar tipo de cliente..."
+                                    aria-label="Buscar tipo de cliente"
                                     value={clientTypeSearch}
                                     onChange={e => setClientTypeSearch(e.target.value)}
                                     className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -2231,6 +2456,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                     ) : (
                         <div className="overflow-auto max-h-[70vh]">
                             <table ref={clientTypeCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: clientTypeTableTotalWidth, minWidth: '100%' }}>
+                                <caption className="sr-only">Análise por tipo de cliente</caption>
                                 <colgroup>
                                     {CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key)).map(c => (
                                         <col key={c.key} data-col-key={c.key} style={{ width: `${clientTypeCols.getWidth(c.key)}px` }} />

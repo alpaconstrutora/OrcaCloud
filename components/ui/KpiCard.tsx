@@ -1,4 +1,5 @@
 import React from 'react';
+import { AlertTriangle, ArrowRight } from 'lucide-react';
 
 /**
  * KpiCard — Padrão Global OrçaCloud
@@ -79,7 +80,27 @@ interface KpiCardProps {
     size?: 'sm' | 'md' | 'lg';
     /** Pulsa a bolha do ícone — para chamar atenção a um estado pendente/aguardando ação. Default false. */
     pulse?: boolean;
+    /**
+     * Indicador PRINCIPAL de painel analítico (guia §4.5) — valor grande, cor
+     * neutra, e a cor só aparece por `tom` (limiar). Não use em tela de
+     * listagem: lá vale a §4 (cor semântica por KPI).
+     */
+    destaque?: boolean;
+    /** Só com `destaque`: estado pelo limiar. `neutro` (padrão) não pinta nada. */
+    tom?: KpiTom;
+    /** Só com `destaque`: a ação que o número pede ("Cobrar", "Ver renovações"). */
+    acao?: { label: string; onClick: () => void };
 }
+
+export type KpiTom = 'neutro' | 'atencao' | 'alerta';
+
+/** Valor do indicador de destaque por estado. O ícone de alerta ao lado do
+ *  valor é o sinal que não depende de cor (quem não distingue o vermelho). */
+const TOM_VALOR: Record<KpiTom, string> = {
+    neutro: 'text-gray-900',
+    atencao: 'text-amber-700',
+    alerta: 'text-red-700',
+};
 
 /** Normaliza o ícone recebido para 16px: as chamadas antigas passam `w-5 h-5`. */
 function iconeNormalizado(icon: React.ReactNode): React.ReactNode {
@@ -103,9 +124,42 @@ export function KpiCard({
     title,
     size = 'md',
     pulse = false,
+    destaque = false,
+    tom = 'neutro',
+    acao,
 }: KpiCardProps) {
     const c = COLOR_MAP[color] ?? COLOR_MAP.blue;
     const isClickable = !!onClick;
+
+    if (destaque) {
+        return (
+            <div
+                title={title}
+                className={`bg-white rounded-xl border border-gray-200 px-4 py-3.5 flex flex-col min-w-0 ${className}`}
+            >
+                <div className="flex items-center gap-2 min-w-0">
+                    {icon && <span className="text-gray-400 shrink-0">{iconeNormalizado(icon)}</span>}
+                    <p className="text-sm font-medium text-gray-600 truncate">{label}</p>
+                </div>
+                <p className={`mt-1.5 flex items-center gap-1.5 text-2xl font-semibold leading-tight tabular-nums ${TOM_VALOR[tom]}`}>
+                    {tom !== 'neutro' && <AlertTriangle className="w-5 h-5 shrink-0" aria-hidden="true" />}
+                    <span className="truncate">{value}</span>
+                    {tom !== 'neutro' && <span className="sr-only">{tom === 'alerta' ? '(alerta)' : '(atenção)'}</span>}
+                </p>
+                {sub && <p className="mt-1 text-xs text-gray-500 truncate">{sub}</p>}
+                {acao && (
+                    <button
+                        type="button"
+                        onClick={acao.onClick}
+                        className="mt-2 self-start inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                    >
+                        {acao.label}
+                        <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </button>
+                )}
+            </div>
+        );
+    }
 
     return (
         <div
@@ -125,7 +179,9 @@ export function KpiCard({
             <div className="min-w-0">
                 <p className="text-xs text-gray-500 uppercase tracking-wide font-medium">{label}</p>
                 <p className={`${size === 'lg' ? 'text-base' : 'text-sm'} font-bold ${c.value} truncate`}>{value}</p>
-                {sub && <p className="text-[11px] text-gray-400 truncate">{sub}</p>}
+                {/* gray-500 em 12px: o gray-400 em 11px dava 2,6:1 sobre branco
+                    (abaixo dos 4,5:1), medido na aba Análise de Locações (26/10/2026). */}
+                {sub && <p className="text-xs text-gray-500 truncate">{sub}</p>}
             </div>
         </div>
     );

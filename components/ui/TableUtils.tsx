@@ -476,13 +476,22 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
     );
   }
 
+  const ativa = sortColumn === colKey;
   return (
     <th
       onClick={() => onSort?.(colKey)}
+      aria-sort={ativa ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
       className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-gray-900 transition-colors select-none group ${dragOverClasses} ${draggingClasses}`}
       {...dragProps}
     >
-      <div className="flex items-center gap-1.5">
+      {/* Botão sem onClick próprio: o clique (ou Enter/Espaço) sobe até o <th>.
+          Até 26/10/2026 era <div>: ordenar só funcionava com mouse, e o leitor
+          de tela não sabia que a coluna era ordenável nem em que sentido. */}
+      <button
+        type="button"
+        className="flex items-center gap-1.5 w-full text-left [text-transform:inherit] rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+        aria-label={`Ordenar por ${label}`}
+      >
         {label}
         {/* Ícone de ordenação sempre visível, não só na coluna ativa — sinaliza que TODA
             coluna aqui é clicável para ordenar (ui_ux_guia_unificado.md §6.8). Cinza
@@ -494,7 +503,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
             ? (sortDirection === 'asc' ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />)
             : <ChevronsUpDown className="w-3.5 h-3.5" />}
         </span>
-      </div>
+      </button>
       {children}
     </th>
   );

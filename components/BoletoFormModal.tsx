@@ -10,7 +10,6 @@ import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS, transicoesDoBoleto, motivoSemTransicao, type TransicaoDeStatus } from '../utils/boletoStatus';
 import { boletoService, MOTIVO_SEM_VENCIMENTO } from '../services/boletoService';
-import { MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -153,16 +152,17 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     const orgsGravaveis = useWritableOrganizations();
     const [trocandoOrg, setTrocandoOrg] = useState(false);
     const [boleto, setBoleto] = useState<Boleto | undefined>(initial);
-    // Título deste boleto pendente na alçada? Desliga "Marcar como Pago" com o motivo (17/10/2026, item H.1).
-    const [alcadaPendente, setAlcadaPendente] = useState(false);
+    // Título deste boleto pendente ou rejeitado na alçada? Desliga "Marcar como Pago" com o motivo
+    // (17/10/2026, item H.1; rejeitado desde 26/10/2026). null = liberado.
+    const [motivoAlcada, setMotivoAlcada] = useState<string | null>(null);
     useEffect(() => {
-        if (!boleto?.id || boleto.status !== 'aprovado') { setAlcadaPendente(false); return; }
+        if (!boleto?.id || boleto.status !== 'aprovado') { setMotivoAlcada(null); return; }
         let vivo = true;
-        // Dentro da promise: qualquer falha (até serviço sem a função) vira "não pendente" sem quebrar o modal;
+        // Dentro da promise: qualquer falha (até serviço sem a função) vira "liberado" sem quebrar o modal;
         // o `marcarPago` confere de novo no serviço antes de gravar.
-        Promise.resolve().then(() => boletoService.alcadaPendente(boleto.id))
-            .then(p => { if (vivo) setAlcadaPendente(p); })
-            .catch(() => { if (vivo) setAlcadaPendente(false); });
+        Promise.resolve().then(() => boletoService.motivoDaAlcada(boleto.id))
+            .then(mot => { if (vivo) setMotivoAlcada(mot); })
+            .catch(() => { if (vivo) setMotivoAlcada(null); });
         return () => { vivo = false; };
     }, [boleto?.id, boleto?.status]);
     /* Campo Status (23/10/2026): a mudança escolhida que mexe no financeiro espera
@@ -691,7 +691,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     /** Por que a mudança está desligada agora — o painel mostra (botão mudo é defeito). */
     function motivoDaTransicao(t: TransicaoDeStatus): string | null {
         if (t.efeito === 'aprovar') return motivoParaNaoAprovar;
-        if (t.efeito === 'pagar' && alcadaPendente) return MOTIVO_ALCADA_PENDENTE;
+        if (t.efeito === 'pagar' && motivoAlcada) return motivoAlcada;
         return null;
     }
 
@@ -965,8 +965,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         {boleto.status === 'aprovado' && (
                             <button
                                 onClick={handleMarcarPago}
-                                disabled={busy || alcadaPendente}
-                                title={alcadaPendente ? MOTIVO_ALCADA_PENDENTE : undefined}
+                                disabled={busy || !!motivoAlcada}
+                                title={motivoAlcada ?? undefined}
                                 className="px-5 py-2 bg-emerald-600 text-white rounded-[6px] text-sm font-medium hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                             >
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Marcar como Pago

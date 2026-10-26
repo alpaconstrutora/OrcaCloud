@@ -80,8 +80,10 @@ export interface LinhaPagamentoAvulso {
     payment_type: FormaPagamentoAvulso | null;
     payment_account_id: string | null;
     installment_type: string;
-    status: 'PENDING';
+    /** CONCILIATED só no "Já pago" (nasce pago — ver `montarTitulosAvulsos`). */
+    status: 'PENDING' | 'CONCILIATED';
     business_status: PayableBusinessStatus;
+    payment_date: string | null;
 }
 
 const DATA_ISO = /^\d{4}-\d{2}-\d{2}$/;
@@ -168,6 +170,7 @@ export function montarTitulosAvulsos(f: FormPagamentoAvulso, grupoId: string): L
     const descricao = f.descricao.trim();
     const credor = f.credorNome.trim() || null;
     const projectId = obraDoLancamento(f.projeto);
+    const pago = f.jaPago && n === 1;
 
     return previa.map((p, i) => ({
         source_system: 'MANUAL',
@@ -194,8 +197,13 @@ export function montarTitulosAvulsos(f: FormPagamentoAvulso, grupoId: string): L
         payment_type: f.formaPagamento,
         payment_account_id: f.paymentAccountId || null,
         installment_type: tipo,
-        status: 'PENDING',
-        business_status: 'PREVISTO',
+        // "Já pago" (uma parcela só — a validação recusa N > 1) nasce PAGO: o pagamento
+        // já aconteceu, e todo título em aberto nasce pendente na alçada desde
+        // 26/10/2026 — baixar depois do INSERT seria recusado (plano
+        // 2026-10-26-todo-titulo-a-pagar-passa-pela-aprovacao, S5).
+        status: pago ? 'CONCILIATED' : 'PENDING',
+        business_status: pago ? 'PAGO' : 'PREVISTO',
+        payment_date: pago ? f.dataPagamento : null,
     }));
 }
 

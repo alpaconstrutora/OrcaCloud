@@ -1,9 +1,17 @@
 import { supabase } from '../lib/supabase';
 import type { ApprovalStep, ApprovalStatus } from '../types/financial';
+import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
 
-/** Item acionável da fila unificada (transação, contrato ou compra). */
+/**
+ * Entidade de um item da fila. `darf` não passa por `submit/approve/reject`
+ * daqui: a aprovação do DARF grava todos os membros de uma vez e é RPC própria
+ * (`darfService.aprovar`/`rejeitar`, 26/10/2026).
+ */
+export type QueueEntity = ApprovalEntity | 'darf';
+
+/** Item acionável da fila unificada (transação, DARF, contrato, compra…). */
 export interface ActionQueueItem {
-    entity: ApprovalEntity;
+    entity: QueueEntity;
     id: string;
     title: string;
     party_name?: string;
@@ -19,6 +27,12 @@ export interface ActionQueueItem {
      * não pela RPC (`fn_approval_action_queue` alimenta também a Central).
      */
     pago_sem_alcada?: boolean;
+    /**
+     * Origem do item (26/10/2026): `source_system` do título (BOLETO, LABOR,
+     * CONTRACT_*…), TRIBUTO para tributo, DARF, ou o tipo da entidade (CONTRATO,
+     * PEDIDO, PLANTA, SOLICITACAO_COMPRA, OFICIO). Coluna e filtro "Origem" da fila.
+     */
+    origem?: string | null;
 }
 
 // ============================================================
@@ -96,7 +110,8 @@ export interface RoleLabels {
 
 /** Pendências de aprovação por entidade (enforcement soft). */
 export interface ApprovalPendingSummary {
-    entity: ApprovalEntity;
+    /** Lê a fila (`fn_approval_action_queue`), então inclui `darf`. */
+    entity: QueueEntity;
     qtd: number;
     soma: number;
 }
@@ -289,7 +304,9 @@ export const approvalService = {
         });
 
         const required = (row as any).approval_required_levels ?? 1;
-        const approvedLevels = chain.filter(s => s.action === 'APROVADO').map(s => s.level);
+        // Só a rodada atual: um reenvio depois de rejeição preserva a cadeia, e a
+        // aprovação anterior à rejeição não vale para o reenvio (26/10/2026).
+        const approvedLevels = niveisAprovadosNaRodada(chain);
         const fullyApproved = required === 1
             ? approvedLevels.includes(1)
             : approvedLevels.includes(1) && approvedLevels.includes(2);

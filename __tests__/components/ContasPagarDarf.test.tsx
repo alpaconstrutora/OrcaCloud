@@ -35,7 +35,7 @@ vi.mock('../../services/payableService', () => ({
 vi.mock('../../services/darfService', () => ({ darfService: { darBaixa: m.darBaixa, estornar: m.estornar } }));
 vi.mock('../../services/asaasContaService', () => ({ asaasContaService: { contaDaOrg: vi.fn(async () => 'conta-1') } }));
 vi.mock('../../services/supplierPaymentService', () => ({ supplierPaymentService: { byTransactions: vi.fn(async () => ({})), cancel: vi.fn() } }));
-vi.mock('../../services/alcadaDaBaixa', () => ({ idsComAlcadaPendente: vi.fn(async () => new Set()), MOTIVO_ALCADA_PENDENTE: 'alçada' }));
+vi.mock('../../services/alcadaDaBaixa', () => ({ MOTIVO_ALCADA_PENDENTE: 'alçada' }));
 vi.mock('../../store/useStore', () => ({ useStore: (sel: (s: unknown) => unknown) => sel({ navigateToFocus: m.navigate }) }));
 vi.mock('../../components/financeiro/ApropriarImovelSheet', () => ({ default: () => null }));
 vi.mock('../../services/financialReceiptService', () => ({

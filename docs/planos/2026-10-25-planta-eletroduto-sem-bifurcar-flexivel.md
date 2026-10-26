@@ -95,5 +95,7 @@ de teto redondas/octogonais com aba — e a foto de uma laje com os conduítes l
 - [x] item 4 + print — harness: a luz (4150, 8900) da Garden refeita, octógono com a aba, os eletrodutos entrando
   pelas laterais
 - [x] item 5 + testes — `blueprintCasaAutomatica -t "eletroduto sem anel"` 2/2 (local, filtrado); testes de furos 4/4
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #172, `ci` verde na 3ª rodada (18min57s): a 1ª pegou a casa automática (conta de anel e furos — itens
+  4 e 5), a 2ª passou e o merge bateu em conflito de docs com o #173 (rebase)
+- [x] publicação — squash `8b69470f` em 25/10/2026; `conferir-producao.sh` provou o domínio servindo 8b69470 (sem texto
+  novo de tela; sem deploy de função)

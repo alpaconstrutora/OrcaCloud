@@ -3,7 +3,7 @@ import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
     LogOut, Loader2, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, ChevronDown
+    Smartphone, Key, ChevronDown, Eye
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -12,6 +12,7 @@ import { laborService, Employee } from '../services/laborService';
 import { PayrollRun } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 import PaystubModal from './PaystubModal';
+import MobilePreviewFrame from './MobilePreviewFrame';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
@@ -26,29 +27,21 @@ import type { AcademyPortalEnrollment } from '../types/academy';
 import { mensagemDoPortalColaborador } from '../utils/portalColaboradorErro';
 
 /**
- * Leitura do portal. Duas variantes da MESMA consulta, escolhidas pela presença
- * do token:
+ * Leitura do portal — SEMPRE pelo token (`fn_colab_portal_*(p_token)`), também
+ * na prévia do RH.
  *
- *   com token  → `fn_colab_portal_*(p_token)`  — acesso externo, sessão anon.
- *                O recorte vem do token, que é secreto, expira e é revogável.
- *   sem token  → `portal_get_*(p_employee_id)` — só o caminho interno, onde há
- *                sessão autenticada (admin simulando o portal pelo módulo RH).
- *
- * Por que isso existe: até 2026-09-02 TODAS as chamadas iam por `p_employee_id`,
- * e as RPCs eram executáveis por `anon` — bastava o UUID do colaborador para ler
- * folha de pagamento de qualquer um. Achado C3-02 da auditoria; um UUID não é
- * credencial: não expira, não se revoga e é enumerável.
+ * Até 26/10/2026 havia um segundo caminho, por `portal_get_*(p_employee_id)`,
+ * usado pela aba "Prévia do Portal". A prévia rodava com a sessão do admin e
+ * por isso escondia os defeitos do link real: o holerite que não abria pelo
+ * link, a Academia que sumia sem token. Prévia que não percorre o caminho do
+ * colaborador não prova nada. (Antes de 02/09/2026 o caminho por employee_id
+ * era também o do link, e bastava o UUID para ler a folha de qualquer um —
+ * achado C3-02 da auditoria.)
  */
 type PortalLeitura = 'time_entries' | 'absences' | 'trainings' | 'ged_documents' | 'payroll_runs';
 
-async function portalRpc<T>(
-    leitura: PortalLeitura,
-    employeeId: string,
-    portalToken?: string,
-): Promise<T[]> {
-    const { data, error } = portalToken
-        ? await supabase.rpc(`fn_colab_portal_${leitura}`, { p_token: portalToken })
-        : await supabase.rpc(`portal_get_${leitura}`, { p_employee_id: employeeId });
+async function portalRpc<T>(leitura: PortalLeitura, portalToken: string): Promise<T[]> {
+    const { data, error } = await supabase.rpc(`fn_colab_portal_${leitura}`, { p_token: portalToken });
     if (error) throw error;
     return (data as T[]) ?? [];
 }
@@ -116,61 +109,81 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
 interface PortalViewProps {
     employeeId: string;
     orgId: string | null;
-    onLogout: () => void;
+    /** Só no acesso real. Na prévia não há "sair": quem fecha é a moldura. */
+    onLogout?: () => void;
     /**
-     * Token do link do portal. Presente só no acesso externo (`/portal?token=`).
-     * É o que habilita a Academia: todos os RPCs de treinamento recortam pelo
-     * token, nunca por employee_id cru.
+     * Token do link do portal. Obrigatório também na prévia do RH: é o mesmo
+     * caminho do colaborador, então a prévia mostra o que ele vê de verdade.
      */
-    portalToken?: string;
+    portalToken: string;
+    /**
+     * Prévia aberta pelo RH. Mostra a faixa "vendo como", esconde o "sair" e
+     * trava o que GRAVARIA em nome do colaborador (abrir curso da Academia
+     * registra tentativa e progresso).
+     */
+    previa?: { nome: string };
 }
 
-export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout, portalToken }) => {
+/**
+ * Faixa fixa no topo da prévia: quem está vendo sabe, a todo momento, que não é
+ * o próprio portal. `pt-8`: a prévia só existe dentro do MobilePreviewFrame, cujo
+ * notch cobre os 24px de cima da tela.
+ */
+const FaixaDePrevia: React.FC<{ nome: string }> = ({ nome }) => (
+    <div role="note" className="sticky top-0 z-30 flex items-center gap-2 px-4 pt-8 pb-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-900">
+        <Eye className="w-4 h-4 shrink-0 text-amber-700" />
+        <p className="min-w-0 truncate">Prévia · vendo como <strong className="font-semibold">{nome}</strong></p>
+    </div>
+);
+
+export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout, portalToken, previa }) => {
     const [activeSection, setActiveSection] = useState<'home' | 'ponto' | 'ferias' | 'docs' | 'treino' | 'folha'>('home');
     const [paystubOpen, setPaystubOpen] = useState<{ runId: string } | null>(null);
     // Matrícula aberta na Academia — troca o conteúdo do portal pela sala de aula.
     const [academiaAberta, setAcademiaAberta] = useState<AcademyPortalEnrollment | null>(null);
 
-    const portalChannel = React.useMemo(
-        () => portalToken ? createPortalChannel(portalToken) : null,
-        [portalToken]
-    );
+    const portalChannel = React.useMemo(() => createPortalChannel(portalToken), [portalToken]);
 
     const {
         data: academia = [], isLoading: academiaCarregando, error: academiaErro, refetch: recarregarAcademia,
     // Sem `enabled: !!orgId` nas queries desta tela — com "Todas as organizações"
     // a RLS recorta sozinha e a tela não pode ficar vazia (REGRA #5).
     } = useQuery({
-        queryKey: portalToken ? academyKeys.portalEnrollments(portalToken) : ['portal', 'academy', 'none'],
-        queryFn: () => academyPortalService.listEnrollments(portalToken!),
+        queryKey: academyKeys.portalEnrollments(portalToken),
+        queryFn: () => academyPortalService.listEnrollments(portalToken),
         staleTime: STALE.fast,
-        enabled: !!portalToken && activeSection === 'treino',
+        enabled: activeSection === 'treino',
     });
 
-    const summaryKey = ['portal', 'summary', portalToken ?? employeeId];
+    const summaryKey = ['portal', 'summary', portalToken];
     const { data: summary, isLoading, error: summaryErro, refetch: recarregarSummary, isFetching: summaryRecarregando } = useQuery<PortalEmployeeSummary>({
         queryKey: summaryKey,
         queryFn: () => atsService.getPortalSummary(employeeId, portalToken),
         staleTime: STALE.fast,
     });
 
+    // Na prévia, todo estado (carregando, erro, sala de aula, portal) leva a faixa.
+    const comFaixa = (tela: React.ReactElement) => previa
+        ? <div className="min-h-full flex flex-col"><FaixaDePrevia nome={previa.nome} />{tela}</div>
+        : tela;
+
     const { data: recentEntries = [], isLoading: pontoCarregando, error: pontoErro, refetch: recarregarPonto } = useQuery({
-        queryKey: ['portal', 'timeEntries', portalToken ?? employeeId],
-        queryFn: () => portalRpc<any>('time_entries', employeeId, portalToken),
+        queryKey: ['portal', 'timeEntries', portalToken],
+        queryFn: () => portalRpc<any>('time_entries', portalToken),
         staleTime: STALE.fast,
         enabled: activeSection === 'ponto',
     });
 
     const { data: absences = [], isLoading: feriasCarregando, error: feriasErro, refetch: recarregarFerias } = useQuery({
-        queryKey: ['portal', 'absences', portalToken ?? employeeId],
-        queryFn: () => portalRpc<any>('absences', employeeId, portalToken),
+        queryKey: ['portal', 'absences', portalToken],
+        queryFn: () => portalRpc<any>('absences', portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'ferias',
     });
 
     const { data: trainings = [], isLoading: treinosCarregando, error: treinosErro, refetch: recarregarTreinos } = useQuery({
-        queryKey: ['portal', 'trainings', portalToken ?? employeeId],
-        queryFn: () => portalRpc<any>('trainings', employeeId, portalToken),
+        queryKey: ['portal', 'trainings', portalToken],
+        queryFn: () => portalRpc<any>('trainings', portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'treino',
     });
@@ -179,8 +192,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     // employee_documents; só aparece aqui o que foi compartilhado via botão
     // "Compartilhar" do módulo Gestão de Documentos (ver migration 20270821000010).
     const { data: documents = [], isLoading: docsCarregando, error: docsErro, refetch: recarregarDocs } = useQuery({
-        queryKey: ['portal', 'docs', portalToken ?? employeeId],
-        queryFn: () => portalRpc<any>('ged_documents', employeeId, portalToken),
+        queryKey: ['portal', 'docs', portalToken],
+        queryFn: () => portalRpc<any>('ged_documents', portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'docs',
     });
@@ -199,7 +212,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         const janela = window.open('', '_blank');
         try {
             const { data, error } = await supabase.functions.invoke('labor-portal-ged-download', {
-                body: portalToken ? { token: portalToken, storagePath } : { employeeId, storagePath },
+                body: { token: portalToken, storagePath },
             });
             if (error) throw error;
             if (!data?.signedUrl) throw new Error(data?.error || 'Erro ao gerar link de download.');
@@ -215,14 +228,14 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     };
 
     const { data: folhaRuns = [], isLoading: folhaCarregando, error: folhaErro, refetch: recarregarFolha } = useQuery<Array<PayrollRun & { net: number }>>({
-        queryKey: ['portal', 'folha', portalToken ?? employeeId],
-        queryFn: () => portalRpc<PayrollRun & { net: number }>('payroll_runs', employeeId, portalToken),
+        queryKey: ['portal', 'folha', portalToken],
+        queryFn: () => portalRpc<PayrollRun & { net: number }>('payroll_runs', portalToken),
         staleTime: STALE.normal,
         enabled: activeSection === 'folha',
     });
 
     if (isLoading) {
-        return (
+        return comFaixa(
             <div className="flex flex-col items-center justify-center h-full gap-3 py-16">
                 <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
                 <p className="text-sm text-slate-400 font-medium">Carregando...</p>
@@ -233,7 +246,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     // Resumo que falha não pode virar "—", "?" e quatro zeros com o alerta de
     // férias aceso: a pessoa lê "a empresa não sabe quem eu sou".
     if (summaryErro && !summary) {
-        return (
+        return comFaixa(
             <div className="max-w-md mx-auto h-full flex flex-col items-center justify-center bg-white p-6 text-center gap-3">
                 <AlertTriangle className="w-8 h-8 text-rose-500" />
                 <p className="text-base font-semibold text-slate-900">Não foi possível abrir o seu portal</p>
@@ -250,8 +263,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
     // Sala de aula da Academia — troca o conteúdo do portal (não é overlay).
     // Mesmo componente do app logado; só o canal muda.
-    if (academiaAberta && portalChannel) {
-        return (
+    if (academiaAberta) {
+        return comFaixa(
             <div className="max-w-md mx-auto h-full overflow-y-auto bg-white p-4">
                 <AcademyPlayerView
                     enrollmentId={academiaAberta.id}
@@ -265,7 +278,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         );
     }
 
-    return (
+    return comFaixa(
         <div className="max-w-md mx-auto h-full flex flex-col bg-white">
             {/* Header */}
             <div className="px-5 pt-8 pb-5 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white">
@@ -279,9 +292,11 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             <p className="text-indigo-200 text-xs">{emp?.role}</p>
                         </div>
                     </div>
-                    <button onClick={onLogout} aria-label="Sair do portal" title="Sair do portal" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors">
-                        <LogOut className="w-4 h-4" />
-                    </button>
+                    {onLogout && !previa && (
+                        <button onClick={onLogout} aria-label="Sair do portal" title="Sair do portal" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors">
+                            <LogOut className="w-4 h-4" />
+                        </button>
+                    )}
                 </div>
 
                 {/* Cards resumo */}
@@ -521,7 +536,6 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                     <div className="space-y-3">
                         {/* Academia — treinamentos A FAZER (conteúdo EAD). Fica antes
                             da evidência porque é o que exige ação do colaborador. */}
-                        {portalChannel && (
                             <div className="space-y-3 pb-2">
                                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Academia ÒPURA</p>
 
@@ -556,14 +570,24 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     </div>
                                 )}
 
+                                {/* Abrir curso registra tentativa e progresso pelo token —
+                                    na prévia isso seria gravado em nome do colaborador. */}
+                                {previa && academia.length > 0 && (
+                                    <p className="text-sm text-amber-900 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2">
+                                        Na prévia os cursos não abrem: abrir um curso registraria progresso em nome de {previa.nome}.
+                                    </p>
+                                )}
+
                                 {academia.map(m => {
                                     const concluido = m.status === 'CONCLUIDO';
                                     return (
                                         <button
                                             key={m.id}
                                             onClick={() => setAcademiaAberta(m)}
-                                            className={`w-full text-left p-3 rounded-xl border transition-colors ${
-                                                concluido ? 'border-emerald-200 bg-emerald-50' : 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100'
+                                            disabled={!!previa}
+                                            title={previa ? 'Na prévia os cursos não abrem' : undefined}
+                                            className={`w-full text-left p-3 rounded-xl border transition-colors disabled:cursor-not-allowed ${
+                                                concluido ? 'border-emerald-200 bg-emerald-50' : 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100 disabled:hover:bg-indigo-50'
                                             }`}
                                         >
                                             <div className="flex items-start justify-between gap-2">
@@ -587,14 +611,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                                     style={{ width: `${Math.min(100, m.percentual)}%` }}
                                                 />
                                             </div>
-                                            <p className="text-xs font-bold text-indigo-700 mt-2">
-                                                {concluido ? 'Ver certificado' : m.status === 'NAO_INICIADO' ? 'Começar' : 'Continuar'}
+                                            <p className={`text-xs font-bold mt-2 ${previa ? 'text-slate-600' : 'text-indigo-700'}`}>
+                                                {previa ? 'Não abre na prévia' : concluido ? 'Ver certificado' : m.status === 'NAO_INICIADO' ? 'Começar' : 'Continuar'}
                                             </p>
                                         </button>
                                     );
                                 })}
                             </div>
-                        )}
 
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Treinamentos</p>
                         <LeituraDoPortal
@@ -670,20 +693,47 @@ const AGRUPAR_ACESSOS = {
 const fmtDataHora = (iso?: string | null) =>
     iso ? new Date(iso).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' }) : null;
 
+/**
+ * Uma linha por colaborador ativo, com a situação do link. Mesma fonte para a
+ * tabela de acessos e para o seletor da aba "Prévia do Portal" — os dois dizem
+ * a mesma coisa sobre quem tem link.
+ */
+const useAcessosDoPortal = (orgId: string | null, employees: Employee[]) => {
+    const tokensKey = ['portal', 'tokens', orgId];
+    const { data: tokens = [], isLoading } = useQuery<PortalToken[]>({
+        queryKey: tokensKey,
+        queryFn: () => atsService.listPortalTokens(orgId),
+        staleTime: STALE.normal,
+    });
+    // `useMemo`: o StandardTable zera a página/agrupamento pela identidade de `rows`.
+    // Um token por colaborador (`portal_tokens.employee_id` é único; regenerar substitui).
+    const linhas = useMemo<LinhaAcesso[]>(() => {
+        const tokenByEmployee = new Map(tokens.map(t => [t.employee_id, t]));
+        const agora = new Date().toISOString();
+        return employees.filter(e => e.status === 'ATIVO').map(emp => {
+            const tok = tokenByEmployee.get(emp.id);
+            const expirado = !!tok && tok.expires_at < agora;
+            const situacao: SituacaoAcesso = tok && tok.is_active && !expirado ? 'ativo' : expirado ? 'expirado' : 'sem_acesso';
+            return { emp, tok, situacao };
+        });
+    }, [employees, tokens]);
+    return { linhas, isLoading, tokensKey };
+};
+
+/** Quem a prévia mostra. Sempre com o token: a prévia percorre o caminho do link real. */
+interface AlvoDaPrevia { employeeId: string; token: string; nome: string }
+
 interface PortalManagementProps {
     orgId: string | null;
     employees: Employee[];
+    onPrevia: (alvo: AlvoDaPrevia) => void;
 }
 
-const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees }) => {
+const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees, onPrevia }) => {
     const qc = useQueryClient();
     const confirm = useConfirm();
     const [copiedToken, setCopiedToken] = useState<string | null>(null);
     const [generatingId, setGeneratingId] = useState<string | null>(null);
-    // Guarda o token junto: sem ele as queries da Academia ficam desabilitadas
-    // (`enabled: !!portalToken`) e a prévia mostraria a seção vazia, dando a
-    // impressão de que o colaborador não tem treinamento nenhum.
-    const [previewEmployee, setPreviewEmployee] = useState<{ id: string; token: string } | null>(null);
     // Toast §13
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -691,13 +741,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
         setTimeout(() => setNotification(null), 4500);
     };
 
-    const tokensKey = ['portal', 'tokens', orgId];
-
-    const { data: tokens = [], isLoading } = useQuery<PortalToken[]>({
-        queryKey: tokensKey,
-        queryFn: () => atsService.listPortalTokens(orgId),
-        staleTime: STALE.normal,
-    });
+    const { linhas, isLoading, tokensKey } = useAcessosDoPortal(orgId, employees);
 
     const invalidate = () => qc.invalidateQueries({ queryKey: tokensKey });
 
@@ -731,36 +775,10 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
         setTimeout(() => setCopiedToken(null), 3000);
     };
 
-    // `useMemo`: o StandardTable zera a página/agrupamento pela identidade de `rows`.
-    const linhas = useMemo<LinhaAcesso[]>(() => {
-        const tokenByEmployee = new Map(tokens.map(t => [t.employee_id, t]));
-        const agora = new Date().toISOString();
-        return employees.filter(e => e.status === 'ATIVO').map(emp => {
-            const tok = tokenByEmployee.get(emp.id);
-            const expirado = !!tok && tok.expires_at < agora;
-            const situacao: SituacaoAcesso = tok && tok.is_active && !expirado ? 'ativo' : expirado ? 'expirado' : 'sem_acesso';
-            return { emp, tok, situacao };
-        });
-    }, [employees, tokens]);
-
     const semOrg = !orgId;
 
     return (
         <>
-            {/* Preview do Portal */}
-            {previewEmployee && (
-                <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm">
-                    <div className="bg-slate-100 rounded-3xl shadow-2xl w-full max-w-sm h-[700px] overflow-hidden relative">
-                        <button onClick={() => setPreviewEmployee(null)} className="absolute top-3 right-3 z-10 p-2 bg-white/80 hover:bg-white rounded-xl shadow">
-                            <X className="w-4 h-4 text-slate-600" />
-                        </button>
-                        <div className="h-full overflow-y-auto">
-                            <PortalView employeeId={previewEmployee.id} orgId={orgId} portalToken={previewEmployee.token} onLogout={() => setPreviewEmployee(null)} />
-                        </div>
-                    </div>
-                </div>
-            )}
-
             <StandardTable<LinhaAcesso>
                 storageKey="rh:portal-colaborador:acessos"
                 columns={ACESSOS_COLUMNS}
@@ -799,7 +817,7 @@ const PortalManagement: React.FC<PortalManagementProps> = ({ orgId, employees })
                             return (
                                 <div className="flex items-center justify-end gap-1.5">
                                     <ActionIconButton kind="view" icon={<Smartphone className="w-4 h-4" />} title="Prévia do portal — ver como este colaborador"
-                                        onClick={() => setPreviewEmployee({ id: emp.id, token: tok.token })} />
+                                        onClick={() => onPrevia({ employeeId: emp.id, token: tok.token, nome: emp.name })} />
                                     <button
                                         type="button"
                                         onClick={() => handleCopy(tok)}
@@ -872,63 +890,115 @@ const VIEW_HEADERS: Record<LaborPortalView, { title: string; subtitle: string }>
     },
     portal: {
         title: 'Prévia do portal',
-        subtitle: 'Veja o portal como um colaborador o vê no celular.',
+        subtitle: 'Abre o portal pelo link do colaborador, no tamanho do celular: o que aparece aqui é o que ele vê.',
     },
 };
 
-const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees, organizations = [], onRefresh }) => {
-    const initialTokenParam = new URLSearchParams(window.location.search).get('portal_token');
-    const [tokenParam] = useState(initialTokenParam);
-    const [portalSession, setPortalSession] = useState<{ employeeId: string; orgId: string | null } | null>(null);
+/**
+ * Aba "Prévia do Portal": escolhe quem ver. Só quem tem link ativo pode ser
+ * escolhido — a prévia usa o link; sem link não há o que o colaborador veja.
+ */
+const SeletorDaPrevia: React.FC<{
+    orgId: string | null;
+    employees: Employee[];
+    onPrevia: (alvo: AlvoDaPrevia) => void;
+    onIrParaAcessos: () => void;
+}> = ({ orgId, employees, onPrevia, onIrParaAcessos }) => {
+    const { linhas, isLoading } = useAcessosDoPortal(orgId, employees);
+    const porNome = (a: LinhaAcesso, b: LinhaAcesso) => a.emp.name.localeCompare(b.emp.name, 'pt-BR');
+    const comLink = linhas.filter(l => l.situacao === 'ativo' && l.tok).sort(porNome);
+    const semLink = linhas.filter(l => l.situacao !== 'ativo').sort(porNome);
+
+    return (
+        <div className="flex flex-col items-center py-12">
+            <div className="p-4 bg-white rounded-[10px] border border-gray-100 shadow-sm w-full max-w-sm space-y-1.5">
+                <label htmlFor="previa-colaborador" className="text-xs font-semibold text-gray-500">Ver o portal como</label>
+                <select
+                    id="previa-colaborador"
+                    value=""
+                    disabled={isLoading || comLink.length === 0}
+                    onChange={e => {
+                        const l = comLink.find(x => x.emp.id === e.target.value);
+                        if (l?.tok) onPrevia({ employeeId: l.emp.id, token: l.tok.token, nome: l.emp.name });
+                    }}
+                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:cursor-not-allowed transition-all"
+                >
+                    <option value="">{isLoading ? 'Carregando colaboradores...' : 'Selecione um colaborador...'}</option>
+                    {comLink.length > 0 && (
+                        <optgroup label="Com link ativo">
+                            {comLink.map(l => (
+                                <option key={l.emp.id} value={l.emp.id}>{l.emp.name}{l.emp.role ? ` — ${l.emp.role}` : ''}</option>
+                            ))}
+                        </optgroup>
+                    )}
+                    {semLink.length > 0 && (
+                        <optgroup label="Sem link ativo — gere em Gestão de Acessos">
+                            {semLink.map(l => (
+                                <option key={l.emp.id} value={l.emp.id} disabled>
+                                    {l.emp.name} — {l.situacao === 'expirado' ? 'link expirado' : 'sem link'}
+                                </option>
+                            ))}
+                        </optgroup>
+                    )}
+                </select>
+                {!isLoading && comLink.length === 0 && (
+                    <div className="pt-2 space-y-2">
+                        <p className="text-sm text-gray-600">
+                            {linhas.length === 0
+                                ? 'Nenhum colaborador ativo nesta organização.'
+                                : 'Nenhum colaborador tem link ativo. A prévia abre pelo link, então gere um primeiro.'}
+                        </p>
+                        {linhas.length > 0 && (
+                            <Button variant="secondary" size="sm" onClick={onIrParaAcessos}>
+                                <Key className="w-4 h-4" /> Ir para Gestão de Acessos
+                            </Button>
+                        )}
+                    </div>
+                )}
+            </div>
+        </div>
+    );
+};
+
+const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees }) => {
     const [view, setView] = useState<LaborPortalView>('management');
+    // Uma prévia só, para o ícone da tabela e para o seletor da aba: mesma
+    // moldura, mesmo token, mesma faixa. Antes eram duas — uma sem token, que
+    // mostrava um portal que o colaborador nunca vê.
+    const [previa, setPrevia] = useState<AlvoDaPrevia | null>(null);
 
     return (
         <div className="h-full">
-            {portalSession ? (
-                <PortalView
-                    employeeId={portalSession.employeeId}
-                    orgId={portalSession.orgId}
-                    onLogout={() => setPortalSession(null)}
-                />
-            ) : (
-                <div className="space-y-6">
-                    {/* 1. Título */}
-                    <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[view].title}</h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[view].subtitle}</p>
-                    </div>
-
-                    {/* Toolbar de abas (§19.1) */}
-                    <TabsBar
-                        tabs={[
-                            { id: 'management', label: 'Gestão de Acessos', icon: <Key className="w-4 h-4" /> },
-                            { id: 'portal', label: 'Prévia do Portal', icon: <Smartphone className="w-4 h-4" /> },
-                        ]}
-                        value={view}
-                        onChange={setView}
-                    />
-
-                    {view === 'management' && (
-                        <PortalManagement orgId={orgId} employees={employees} />
-                    )}
-
-                    {view === 'portal' && (
-                        <div className="flex flex-col items-center justify-center py-12 gap-4">
-                            <div className="p-4 bg-white rounded-[10px] border border-gray-100 shadow-sm w-full max-w-sm space-y-1.5">
-                                <label className="text-xs font-semibold text-gray-500">Simular portal como colaborador</label>
-                                <select
-                                    onChange={e => e.target.value && setPortalSession({ employeeId: e.target.value, orgId })}
-                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
-                                >
-                                    <option value="">Selecione um colaborador...</option>
-                                    {employees.filter(e => e.status === 'ATIVO').map(e => (
-                                        <option key={e.id} value={e.id}>{e.name} — {e.role}</option>
-                                    ))}
-                                </select>
-                            </div>
-                        </div>
-                    )}
+            <div className="space-y-6">
+                {/* 1. Título */}
+                <div>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[view].title}</h1>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[view].subtitle}</p>
                 </div>
+
+                {/* Toolbar de abas (§19.1) */}
+                <TabsBar
+                    tabs={[
+                        { id: 'management', label: 'Gestão de Acessos', icon: <Key className="w-4 h-4" /> },
+                        { id: 'portal', label: 'Prévia do Portal', icon: <Smartphone className="w-4 h-4" /> },
+                    ]}
+                    value={view}
+                    onChange={setView}
+                />
+
+                {view === 'management' && (
+                    <PortalManagement orgId={orgId} employees={employees} onPrevia={setPrevia} />
+                )}
+
+                {view === 'portal' && (
+                    <SeletorDaPrevia orgId={orgId} employees={employees} onPrevia={setPrevia} onIrParaAcessos={() => setView('management')} />
+                )}
+            </div>
+
+            {previa && (
+                <MobilePreviewFrame onClose={() => setPrevia(null)} title={`Prévia do Portal do Colaborador — ${previa.nome}`}>
+                    <PortalView employeeId={previa.employeeId} orgId={orgId} portalToken={previa.token} previa={{ nome: previa.nome }} />
+                </MobilePreviewFrame>
             )}
         </div>
     );

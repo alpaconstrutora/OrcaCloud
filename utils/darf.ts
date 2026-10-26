@@ -197,6 +197,9 @@ export function colapsarDarfs(payables: Payable[], darfs: Darf[], hoje: string =
             documento_nome: d.documento_nome,
             payment_date: membros.map(m => m.payment_date).filter(Boolean).sort().pop() ?? null,
             payment_type: comum(membros.map(m => m.payment_type ?? null)) ?? null,
+            approval_status: d.aprovacao,
+            approval_required_levels: d.aprovacao_niveis,
+            approval_chain: d.aprovacao_cadeia ?? [],
             darf: {
                 id: d.id,
                 competencia: d.competencia,
@@ -226,4 +229,24 @@ export function colapsarDarfs(payables: Payable[], darfs: Darf[], hoje: string =
 /** A linha (ou um componente dela) corresponde a este id? Base do deep-link. */
 export function linhaContemId(linha: Payable, id: string): boolean {
     return linha.id === id || !!linha.darf?.componentes.some(c => c.id === id);
+}
+
+// ── Aprovação do DARF inteiro (plano 2026-10-26-todo-titulo-a-pagar-passa-pela-aprovacao, T3) ──
+
+type DarfNaAprovacao = Pick<Darf, 'n_pagos' | 'aprovacao'>;
+
+/** Por que o "Enviar para aprovação" fica desligado — `null` quando liga. Mesmas recusas de `fn_darf_enviar_aprovacao`. */
+export function motivoNaoEnviaDarfParaAprovacao(d: DarfNaAprovacao): string | null {
+    if (d.n_pagos > 0) return 'DARF pago — não há pagamento a aprovar';
+    if (d.aprovacao === 'PENDENTE') return 'Já está em Financeiro › Aprovações';
+    return null;
+}
+
+/** Segunda linha do Status na aba DARFs — o mesmo vocabulário de Contas a Pagar. Pago/rascunho: sem linha. */
+export function aprovacaoDoDarfNaTela(d: DarfNaAprovacao): { rotulo: string; cor: string } | null {
+    if (d.n_pagos > 0) return null;
+    if (d.aprovacao === 'PENDENTE') return { rotulo: 'Aguardando aprovação', cor: 'text-orange-700' };
+    if (d.aprovacao === 'APROVADO') return { rotulo: 'Liberado para pagamento', cor: 'text-blue-700' };
+    if (d.aprovacao === 'REJEITADO') return { rotulo: 'Bloqueado', cor: 'text-red-700' };
+    return null;
 }

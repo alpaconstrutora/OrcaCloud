@@ -6,7 +6,7 @@ import type { Payable, PayableBusinessStatus, ReceivablePaymentType } from '../t
 export type PayablePaymentType = ReceivablePaymentType;
 import { propertyExpenseService } from './propertyExpenseService';
 import { processService } from './processService';
-import { exigirAlcadaLiberada, MOTIVO_ALCADA_PENDENTE } from './alcadaDaBaixa';
+import { exigirAlcadaLiberada } from './alcadaDaBaixa';
 import { financialApprovalService } from './financialApprovalService';
 import { resolverCategoriaPorId } from './financialCategoryResolver';
 import { storageService } from './storageService';
@@ -144,7 +144,7 @@ export const payableService = {
         const { data: todas, error } = await fetchAllPagesParallel<Payable>(
             () => comFiltros(supabase
                 .from('vw_payables')
-                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,documento_path,documento_nome,darf_id,payment_date,payment_type,created_at,updated_at')
+                .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_id,party_name,party_type,entity_name,supplier_id,project_id,project_name,obra_id,obra_name,cost_center_id,plano_de_contas_id,documento_path,documento_nome,darf_id,payment_date,payment_type,approval_status,approval_required_levels,approval_chain,created_at,updated_at')
                 .order('due_date', { ascending: true, nullsFirst: false })
                 .order('id', { ascending: true }) as unknown as FiltravelPorColuna) as unknown as RangeableQuery<Payable>,
             () => comFiltros(supabase
@@ -334,10 +334,13 @@ export const payableService = {
      *
      * 1. sobe o anexo (se houver) — antes das linhas, para todas nascerem com ele;
      * 2. insere as N parcelas num INSERT só (tudo ou nada);
-     * 3. submete cada título à alçada, como o boleto (abaixo do piso nasce liberado);
-     * 4. "Já pago": dá baixa pelo MESMO caminho da baixa manual (`darBaixa`), que
-     *    recusa título pendente na alçada. O título fica criado e a recusa volta
-     *    em `avisoBaixa` — relançar por cima duplicaria o título.
+     * 3. submete cada título em aberto à alçada (desde 26/10/2026 o gatilho
+     *    `fn_titulo_nasce_na_alcada` já o grava PENDENTE; o submit não repete);
+     * 4. "Já pago" (26/10/2026, S5 do plano 2026-10-26-todo-titulo-a-pagar-passa-
+     *    pela-aprovacao): o título NASCE pago (`montarTitulosAvulsos`) — baixar
+     *    depois do INSERT seria recusado pela alçada. Fica só a costura de
+     *    Processos que o `darBaixa` faria. Até 26/10 a baixa vinha depois, e a
+     *    recusa voltava em `avisoBaixa` (que segue no retorno, sempre null aqui).
      */
     async createAvulso(organizationId: string, form: FormPagamentoAvulso, arquivo?: File | null): Promise<ResultadoAvulso> {
         const grupoId = crypto.randomUUID();
@@ -375,8 +378,10 @@ export const payableService = {
             throw new Error(error.message);
         }
         const ids = ((data ?? []) as { id: string }[]).map(r => r.id);
+        const nasceuPago = linhas.length === 1 && linhas[0].status === 'CONCILIATED';
 
-        for (const id of ids) {
+        // Título pago não vai à alçada: não há pagamento a aprovar.
+        for (const id of nasceuPago ? [] : ids) {
             try {
                 await financialApprovalService.submitForApproval(id, organizationId);
             } catch (e) {
@@ -386,18 +391,18 @@ export const payableService = {
             }
         }
 
-        let avisoBaixa: string | null = null;
-        if (form.jaPago && ids.length === 1) {
+        const avisoBaixa: string | null = null;
+        if (nasceuPago) {
+            // Mesma costura P2P do `darBaixa`, que o título pago na criação não passa.
             try {
-                await this.darBaixa(ids[0], {
-                    paymentDate: form.dataPagamento,
-                    paymentType: form.formaPagamento,
-                });
+                await processService.triggerForTransaction(ids[0], 'internal_transaction.paid');
             } catch (e) {
-                const msg = e instanceof Error ? e.message : String(e);
-                avisoBaixa = msg === MOTIVO_ALCADA_PENDENTE
-                    ? 'O título foi criado, mas caiu na alçada de aprovação: a baixa fica para depois de aprovado em Financeiro › Aprovações.'
-                    : `O título foi criado, mas a baixa não foi gravada: ${msg}`;
+                console.error('[payableService] process trigger (paid, avulso já pago) failed:', e);
+            }
+            try {
+                await processService.triggerForFinancialTitle(ids[0], 'payable.settled');
+            } catch (e) {
+                console.error('[payableService] process trigger (settled, avulso já pago) failed:', e);
             }
         }
         return { ids, avisoBaixa };

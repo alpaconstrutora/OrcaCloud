@@ -530,7 +530,7 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
                                     <span className="block text-xs text-gray-500 mt-0.5">
                                         {multiParcela
                                             ? 'Com mais de uma parcela, lance em aberto e dê baixa em cada uma na tabela.'
-                                            : 'O pagamento já aconteceu: o título entra como Pago. Se cair na alçada de aprovação, fica aguardando aprovação antes da baixa.'}
+                                            : 'O pagamento já aconteceu: o título entra como Pago e não passa pela fila de Aprovações.'}
                                     </span>
                                 </span>
                             </label>

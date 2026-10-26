@@ -22,7 +22,10 @@ import Button from './ui/Button';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import { idsPagosSemAlcada } from '../services/alcadaDaBaixa';
+import { darfService } from '../services/darfService';
 import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
+import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
+import { ORIGEM_PT, origemLabel } from '../utils/origemLabel';
 
 // ─── dispatch por entidade ───────────────────────────────────
 // A fila é unificada; cada ação vai ao serviço de domínio correto.
@@ -35,13 +38,37 @@ export const ENTITY_TAG: Record<ActionQueueItem['entity'], string> = {
     blueprint_snapshot: 'Planta',
     purchase_request: 'Solicitação',
     doc_gen_documento: 'Ofício',
+    // DARF (26/10/2026): a guia inteira é UM item; aprovar/rejeitar vale para todos os tributos dela.
+    darf:           'DARF',
 };
+
+/**
+ * Rótulo da coluna/filtro "Origem" (26/10/2026 — todo título a pagar passa pela
+ * fila, ~460 por mês; a origem é o que permite aprovar por blocos, ex.: a folha
+ * do mês). Título usa o vocabulário de Contas a Pagar; os demais, o tipo.
+ */
+const ORIGEM_FILA: Record<string, string> = {
+    ...ORIGEM_PT,
+    TRIBUTO: 'Tributo',
+    COMMERCIAL: 'Comercial',
+    CONTRATO: 'Contrato',
+    PEDIDO: 'Pedido de compra',
+    PLANTA: 'Planta',
+    SOLICITACAO_COMPRA: 'Solicitação de compra',
+    OFICIO: 'Ofício',
+};
+const origemDaFila = (i: ActionQueueItem): string | null =>
+    i.origem ? (ORIGEM_FILA[i.origem] ?? origemLabel(i.origem)) : null;
+
+/** Próximo nível a aprovar — só a rodada atual conta (reenvio depois de rejeição recomeça). */
+const proximoNivel = (i: ActionQueueItem): 1 | 2 => (niveisAprovadosNaRodada(i.approval_chain).includes(1) ? 2 : 1);
 
 // ⚠️ Toda entidade nova PRECISA aparecer nos três dispatches abaixo. O `return`
 // final cai no serviço FINANCEIRO, que escreve em `internal_transactions` — uma
 // entidade esquecida aqui seria aprovada contra a tabela errada, e a fila
 // mostraria a ação como concluída.
 function dispatchSubmit(item: ActionQueueItem, organizationId: string): Promise<unknown> {
+    if (item.entity === 'darf') return darfService.enviarParaAprovacao(item.id);
     if (item.entity === 'blueprint_snapshot')
         return blueprintApprovalService.enviarParaAprovacao(item.id, organizationId);
     if (item.entity === 'contract')       return contractService.submitForApproval(item.id);
@@ -59,6 +86,7 @@ function dispatchApprove(
     item: ActionQueueItem, level: 1 | 2, userEmail: string,
     labels: { level1_label: string; level2_label?: string }, notes?: string,
 ): Promise<unknown> {
+    if (item.entity === 'darf') return darfService.aprovar(item.id, level, userEmail, notes);
     if (item.entity === 'blueprint_snapshot')
         return blueprintApprovalService.aprovar(item.id, level, userEmail, labels, notes);
     if (item.entity === 'contract')       return contractService.approveContract(item.id, level, userEmail, notes);
@@ -71,6 +99,7 @@ function dispatchApprove(
 }
 
 function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string): Promise<unknown> {
+    if (item.entity === 'darf') return darfService.rejeitar(item.id, userEmail, reason);
     if (item.entity === 'blueprint_snapshot')
         return blueprintApprovalService.rejeitar(item.id, userEmail, reason);
     if (item.entity === 'contract')       return contractService.rejectContract(item.id, userEmail, reason);
@@ -84,7 +113,8 @@ function dispatchReject(item: ActionQueueItem, userEmail: string, reason: string
 // Linha de detalhe (renderExpanded) abaixo do item da fila.
 
 function ApprovalTrail({ chain, required }: { chain: ApprovalStep[]; required: number }) {
-    const approvedCount = chain.filter(s => s.action === 'APROVADO').length;
+    // Só a rodada atual: a cadeia de um reenviado guarda a rejeição e o que veio antes dela.
+    const approvedCount = niveisAprovadosNaRodada(chain).length;
     if (!chain.length) {
         return <p className="text-sm text-gray-400 italic">Aguardando aprovação…</p>;
     }
@@ -109,6 +139,17 @@ function ApprovalTrail({ chain, required }: { chain: ApprovalStep[]; required: n
     );
 }
 
+/** Rótulos dos níveis pela faixa do valor — abaixo do piso, os padrões (o título vale 1 nível). */
+function rotulosDosNiveis(item: ActionQueueItem, config: FinancialApprovalConfig[]) {
+    const faixa = config.find(c =>
+        item.amount >= c.faixa_min && (c.faixa_max == null || item.amount < c.faixa_max)
+    );
+    return {
+        level1_label: faixa?.level1_label ?? 'Gestor',
+        level2_label: faixa?.level2_label ?? 'Financeiro / Diretoria',
+    };
+}
+
 // ─── ApproveRejectModal ──────────────────────────────────────
 // Exportado: `CentralControle.tsx` reaproveita o mesmo modal.
 
@@ -128,12 +169,8 @@ export function ApproveRejectModal({ item, mode, userEmail, config, onDone, onCl
     const [saving, setSaving] = useState(false);
     const [err, setErr] = useState<string | null>(null);
 
-    const approvedLevels = item.approval_chain.filter(s => s.action === 'APROVADO').map(s => s.level);
-    const nextLevel = (approvedLevels.includes(1) ? 2 : 1) as 1 | 2;
-
-    const matchingConfig = config.find(c =>
-        item.amount >= c.faixa_min && (c.faixa_max == null || item.amount < c.faixa_max)
-    );
+    const nextLevel = proximoNivel(item);
+    const labels = rotulosDosNiveis(item, config);
 
     async function handle() {
         if (mode === 'reject' && !notes.trim()) { setErr('Informe o motivo da rejeição.'); return; }
@@ -141,10 +178,7 @@ export function ApproveRejectModal({ item, mode, userEmail, config, onDone, onCl
         setErr(null);
         try {
             if (mode === 'approve') {
-                await dispatchApprove(item, nextLevel, userEmail, {
-                    level1_label: matchingConfig?.level1_label ?? 'Gestor',
-                    level2_label: matchingConfig?.level2_label ?? 'Financeiro / Diretoria',
-                }, notes || undefined);
+                await dispatchApprove(item, nextLevel, userEmail, labels, notes || undefined);
             } else {
                 await dispatchReject(item, userEmail, notes);
             }
@@ -210,6 +244,7 @@ export function ApproveRejectModal({ item, mode, userEmail, config, onDone, onCl
 // Colunas de DADO da fila — "Ações" entra por `actions` (§6.10).
 const QUEUE_COLUMNS: StandardTableColumn[] = [
     { key: 'entity',       label: 'Tipo',       sortable: true, width: 100 },
+    { key: 'origem',       label: 'Origem',     sortable: true, width: 150 },
     { key: 'title',        label: 'Título',     sortable: true, width: 230 },
     { key: 'party_name',   label: 'Parte',      sortable: true, width: 170 },
     { key: 'project_name', label: 'Obra',       sortable: true, width: 140 },
@@ -224,7 +259,7 @@ function queueStatusLabel(item: ActionQueueItem): string {
     // Antes do nível: o dinheiro já saiu — aprovar agora é regularizar (17/10/2026, item H.1).
     if (item.pago_sem_alcada) return 'Pago sem aprovação';
     if (item.approval_status === 'RASCUNHO') return 'Rascunho';
-    const approved = item.approval_chain.filter(s => s.action === 'APROVADO').length;
+    const approved = niveisAprovadosNaRodada(item.approval_chain).length;
     return `Nível ${approved + 1}/${item.approval_required_levels}`;
 }
 
@@ -232,10 +267,11 @@ const ACTION_LINK = 'text-sm font-medium p-1.5 rounded-[6px] transition-all whit
 
 // "Agrupar" da fila — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
 // Constante de módulo: o StandardTable memoiza os grupos pela identidade deste objeto.
-const SEM_GRUPO_FILA: Record<string, string> = { tipo: 'Sem tipo', parte: 'Sem parte', obra: 'Sem obra', vencimento: 'Sem vencimento', status: 'Sem status' };
+const SEM_GRUPO_FILA: Record<string, string> = { tipo: 'Sem tipo', origem: 'Sem origem', parte: 'Sem parte', obra: 'Sem obra', vencimento: 'Sem vencimento', status: 'Sem status' };
 const AGRUPAR_FILA = {
     opcoes: [
         { value: 'tipo', label: 'Tipo' },
+        { value: 'origem', label: 'Origem' },
         { value: 'parte', label: 'Parte' },
         { value: 'obra', label: 'Obra' },
         { value: 'vencimento', label: 'Vencimento (mês)' },
@@ -244,6 +280,7 @@ const AGRUPAR_FILA = {
     chave: (campo: string, i: ActionQueueItem) => {
         switch (campo) {
             case 'tipo': return chavePorRotulo(i.entity, ENTITY_TAG);
+            case 'origem': return chavePorNome(origemDaFila(i));
             case 'parte': return chavePorNome(i.party_name);
             case 'obra': return chavePorNome(i.project_name);
             case 'vencimento': return chavePorMes(i.due_date);
@@ -271,6 +308,17 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
     const [expanded, setExpanded] = useState<string | null>(null);
     const [modal, setModal] = useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
     const [entityFilter, setEntityFilter] = usePersistedState<EntityFilter>('financeiro:aprovacao:fila:tipo', 'all');
+    // Origem (26/10/2026): '' = todas. É o recorte que permite aprovar por blocos (toda a folha, todos os tributos).
+    const [origemFilter, setOrigemFilter] = usePersistedState('financeiro:aprovacao:fila:origem', '');
+    // Seleção para "Aprovar selecionados" (§10) — só itens PENDENTES (rascunho se envia, não se aprova).
+    const [selected, setSelected] = useState<Set<string>>(new Set());
+    const [aprovandoLote, setAprovandoLote] = useState(false);
+    const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    const confirm = useConfirm();
+    const notify = (message: string, type: 'success' | 'error' = 'success') => {
+        setNotification({ message, type });
+        setTimeout(() => setNotification(null), 4500);
+    };
     // Ano e Mês do vencimento — independentes ENTRE SI (15/10/2026, mesmo recurso de
     // Boletos a Pagar): só o ano = o ano inteiro; só o mês = aquele mês em todos os anos;
     // os dois = aquele mês daquele ano.
@@ -319,10 +367,54 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
     const rows = useMemo(
         () => items
             .filter(i => entityFilter === 'all' || i.entity === entityFilter)
+            .filter(i => !origemFilter || origemDaFila(i) === origemFilter)
             .filter(i => !vencAno || (i.due_date ?? '').slice(0, 4) === vencAno)
             .filter(i => !vencMes || (i.due_date ?? '').slice(5, 7) === vencMes),
-        [items, entityFilter, vencAno, vencMes],
+        [items, entityFilter, origemFilter, vencAno, vencMes],
     );
+    // Origens presentes na fila (o filtro só oferece o que existe), em ordem alfabética.
+    const origensPresentes = useMemo(
+        () => [...new Set(items.map(origemDaFila).filter((o): o is string => !!o))].sort((a, b) => a.localeCompare(b, 'pt-BR')),
+        [items],
+    );
+    // Lote: só o que está selecionado e ainda pendente na fila carregada.
+    const selecionados = useMemo(() => items.filter(i => selected.has(i.id) && i.approval_status === 'PENDENTE'), [items, selected]);
+    const totalSelecionado = selecionados.reduce((soma, i) => soma + (Number(i.amount) || 0), 0);
+
+    /**
+     * "Aprovar selecionados": cada item aprova o nível que estiver aguardando
+     * (o de 2 níveis com o 1º feito aprova o 2º). Sequencial, para o resumo
+     * dizer quais falharam e por quê. Rejeitar continua um a um (pede motivo).
+     */
+    async function aprovarSelecionados() {
+        if (!selecionados.length) return;
+        const ok = await confirm({
+            title: `Aprovar ${selecionados.length} ${selecionados.length === 1 ? 'item' : 'itens'}?`,
+            message: `Total ${fmt(totalSelecionado)}. Cada item aprova o nível que está aguardando; os de 2 níveis com o 1º pendente continuam na fila para o 2º.`,
+            variant: 'default',
+            confirmLabel: 'Aprovar',
+        });
+        if (!ok) return;
+        setAprovandoLote(true);
+        const falhas: string[] = [];
+        let aprovados = 0;
+        for (const item of selecionados) {
+            try {
+                await dispatchApprove(item, proximoNivel(item), userEmail, rotulosDosNiveis(item, config));
+                aprovados++;
+            } catch (e) {
+                falhas.push(`${item.title}: ${e instanceof Error ? e.message : 'erro'}`);
+            }
+        }
+        setAprovandoLote(false);
+        setSelected(new Set());
+        await load();
+        if (falhas.length) {
+            setError(`${aprovados} aprovado(s); ${falhas.length} não: ${falhas.slice(0, 3).join(' · ')}${falhas.length > 3 ? ' …' : ''}`);
+        } else {
+            notify(`${aprovados} ${aprovados === 1 ? 'item aprovado' : 'itens aprovados'}.`);
+        }
+    }
     // Anos com vencimento nos itens da fila, mais recente primeiro.
     const anosVencimento = useMemo(
         () => [...new Set(items.map(i => (i.due_date ?? '').slice(0, 4)).filter(a => /^\d{4}$/.test(a)))].sort().reverse(),
@@ -333,6 +425,12 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
         switch (key) {
             case 'entity':
                 return <span className="text-sm font-normal text-gray-600">{ENTITY_TAG[item.entity]}</span>;
+            case 'origem': {
+                const o = origemDaFila(item);
+                return o
+                    ? <span className="block truncate text-sm font-normal text-gray-700" title={o}>{o}</span>
+                    : <span className="text-sm font-normal text-gray-400">—</span>;
+            }
             case 'title':
                 return <span className="block truncate text-sm font-normal text-gray-700" title={item.title}>{item.title}</span>;
             case 'party_name':
@@ -375,7 +473,12 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 loading={loading}
                 pagination={{ defaultPageSize: 100 }}
                 agrupamento={AGRUPAR_FILA}
-                searchText={i => `${ENTITY_TAG[i.entity]} ${i.title} ${i.party_name ?? ''} ${i.project_name ?? ''}`}
+                searchText={i => `${ENTITY_TAG[i.entity]} ${origemDaFila(i) ?? ''} ${i.title} ${i.party_name ?? ''} ${i.project_name ?? ''}`}
+                selection={{
+                    selected,
+                    onChange: setSelected,
+                    canSelect: i => i.approval_status === 'PENDENTE',
+                }}
                 searchPlaceholder="Buscar por título, parte ou obra..."
                 filters={
                     <>
@@ -388,6 +491,15 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                             {(Object.keys(ENTITY_TAG) as ActionQueueItem['entity'][]).map(k => (
                                 <option key={k} value={k}>{ENTITY_TAG[k]}</option>
                             ))}
+                        </select>
+                        <select
+                            value={origemFilter}
+                            onChange={e => setOrigemFilter(e.target.value)}
+                            title="Origem do item"
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="">Todas as origens</option>
+                            {origensPresentes.map(o => <option key={o} value={o}>{o}</option>)}
                         </select>
                         {/* Ano/Mês do vencimento — independentes entre si (15/10/2026). */}
                         <select
@@ -424,6 +536,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 }
                 sortValue={(key, i) => {
                     if (key === 'entity') return ENTITY_TAG[i.entity];
+                    if (key === 'origem') return origemDaFila(i);
                     if (key === 'status') return queueStatusLabel(i);
                     if (key === 'amount') return i.amount;
                     return (i as unknown as Record<string, string | undefined>)[key] ?? null;
@@ -481,7 +594,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 empty={{
                     icon: <CheckCircle2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
                     title: 'Nenhum item pendente de ação',
-                    subtitle: 'Nada acima da alçada aguardando envio, aprovação ou rejeição.',
+                    subtitle: 'Nenhum título, DARF, contrato ou compra aguardando envio, aprovação ou rejeição.',
                 }}
             />
 
@@ -494,6 +607,34 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                     onDone={() => { setModal(null); load(); }}
                     onClose={() => setModal(null)}
                 />
+            )}
+
+            {/* Barra de lote (§10) — fixa no rodapé, azul. */}
+            {selecionados.length > 0 && (
+                <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 flex items-center gap-3 p-4 bg-blue-600 text-white rounded-[10px] shadow-lg shadow-blue-900/20">
+                    <span className="flex-1 text-sm font-bold whitespace-nowrap">
+                        {selecionados.length} selecionado{selecionados.length !== 1 ? 's' : ''}
+                        <span className="ml-2 font-normal opacity-75">· {fmt(totalSelecionado)}</span>
+                    </span>
+                    <Button variant="secondary" size="sm" onClick={aprovarSelecionados} disabled={aprovandoLote} className="text-blue-700 border-none hover:bg-blue-50">
+                        {aprovandoLote ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
+                        Aprovar selecionados
+                    </Button>
+                    <button onClick={() => setSelected(new Set())} disabled={aprovandoLote} className="flex items-center gap-2 h-9 px-3 bg-blue-500 rounded-[6px] text-sm font-medium hover:bg-blue-400 transition-colors disabled:opacity-50">
+                        <X className="w-3.5 h-3.5" />
+                        Desmarcar
+                    </button>
+                </div>
+            )}
+
+            {/* Toast §13 */}
+            {notification && (
+                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-[10px] shadow-xl text-sm font-medium ${
+                    notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
+                }`}>
+                    <AlertCircle className="w-4 h-4 shrink-0" />
+                    {notification.message}
+                </div>
             )}
         </>
     );

@@ -27,7 +27,7 @@ export interface FormDarf {
     observacao: string;
 }
 
-const COLUNAS_DARF = 'id,organization_id,competencia,due_date,codigo_barras,numero_documento,observacao,documento_path,documento_nome,created_at,updated_at,principal,multa,juros,total,qtd_tributos,tributos_nomes,n_membros,n_pagos,payment_date,payment_type,conciliado_no_extrato,alcada_pendente,asaas_em_curso,status_efetivo';
+const COLUNAS_DARF = 'id,organization_id,competencia,due_date,codigo_barras,numero_documento,observacao,documento_path,documento_nome,created_at,updated_at,principal,multa,juros,total,qtd_tributos,tributos_nomes,n_membros,n_pagos,payment_date,payment_type,conciliado_no_extrato,alcada_pendente,asaas_em_curso,status_efetivo,aprovacao,aprovacao_cadeia,aprovacao_niveis';
 
 /** Erro do PostgREST com a frase do banco — é ela que diz ao usuário o que fazer. */
 function erro(e: { message?: string } | null | undefined, padrao: string): Error {
@@ -74,7 +74,7 @@ export const darfService = {
     async membros(darfId: string): Promise<Payable[]> {
         const { data, error } = await supabase
             .from('vw_payables')
-            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_name,party_type,cost_center_id,plano_de_contas_id,payment_date,payment_type,darf_id')
+            .select('id,organization_id,source_system,reference_id,transaction_date,due_date,amount,direction,description,category,status,business_status,effective_status,party_name,party_type,cost_center_id,plano_de_contas_id,payment_date,payment_type,darf_id,approval_status,approval_required_levels,approval_chain')
             .eq('darf_id', darfId)
             .order('party_type', { ascending: false });
         if (error) throw erro(error, 'Não foi possível carregar a composição do DARF.');
@@ -186,6 +186,41 @@ export const darfService = {
         const { data, error } = await supabase.rpc('fn_darf_desfazer_conciliacao', { p_darf_id: darfId });
         if (error) throw erro(error, 'Não foi possível desfazer a conciliação do DARF.');
         return (data as number | null) ?? 0;
+    },
+
+    /**
+     * Aprovação do DARF inteiro (plano 2026-10-26-todo-titulo-a-pagar-passa-pela-
+     * aprovacao, M5/S4): a fila mostra o DARF como UM item, e aprovar/rejeitar
+     * grava a mesma cadeia em todos os membros (tributos + multa/juros).
+     */
+    async enviarParaAprovacao(darfId: string): Promise<void> {
+        const { error } = await supabase.rpc('fn_darf_enviar_aprovacao', { p_darf_id: darfId });
+        if (error) throw erro(error, 'Não foi possível enviar o DARF para aprovação.');
+    },
+
+    /** Aprova um nível; devolve 'APROVADO' quando a alçada fecha ou 'PENDENTE' se falta o nível 2. */
+    async aprovar(darfId: string, nivel: 1 | 2, por: string, obs?: string): Promise<'APROVADO' | 'PENDENTE'> {
+        const { data, error } = await supabase.rpc('fn_darf_aprovar', {
+            p_darf_id: darfId, p_nivel: nivel, p_por: por, p_obs: obs ?? null,
+        });
+        if (error) throw erro(error, 'Não foi possível aprovar o DARF.');
+        const status = data as 'APROVADO' | 'PENDENTE';
+        if (status === 'APROVADO') {
+            const membros = await this.membros(darfId).catch(() => [] as Payable[]);
+            for (const m of membros) {
+                try {
+                    await processService.triggerForFinancialTitle(m.id, 'payable.approved');
+                } catch (e) {
+                    console.error('[darfService] process trigger (approved) failed:', e);
+                }
+            }
+        }
+        return status;
+    },
+
+    async rejeitar(darfId: string, por: string, motivo: string): Promise<void> {
+        const { error } = await supabase.rpc('fn_darf_rejeitar', { p_darf_id: darfId, p_por: por, p_motivo: motivo });
+        if (error) throw erro(error, 'Não foi possível rejeitar o DARF.');
     },
 
     urlDoAnexo(path: string): Promise<string> {

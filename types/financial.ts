@@ -895,6 +895,11 @@ export interface Payable {
     documento_nome?: string | null;
     /** DARF que agrupa este lançamento (tributo, ou multa/juros do DARF) — aplicar_20271021300000. */
     darf_id?: string | null;
+    /** Alçada (vw_payables desde 26/10/2026): todo título a pagar nasce PENDENTE.
+     *  Situação na tela: `utils/situacaoAprovacaoTitulo.situacaoDoTitulo`. */
+    approval_status?: ApprovalStatus;
+    approval_required_levels?: number;
+    approval_chain?: ApprovalStep[];
     payment_date?: string | null;
     payment_type?: string | null;
     /** Só na linha SINTÉTICA do DARF em Contas a Pagar (`colapsarDarfs`): os membros recolhidos. */
@@ -939,6 +944,11 @@ export interface Darf {
     alcada_pendente: boolean;
     asaas_em_curso: boolean;
     status_efetivo: DarfStatus;
+    /** Aprovação do DARF inteiro (vw_darfs, 26/10/2026): PENDENTE se algum membro pende,
+     *  REJEITADO se algum foi rejeitado, APROVADO se todos os tributos estão aprovados. */
+    aprovacao: ApprovalStatus;
+    aprovacao_cadeia: ApprovalStep[] | null;
+    aprovacao_niveis: number;
 }
 
 /** O que a linha sintética do DARF carrega em Contas a Pagar. */

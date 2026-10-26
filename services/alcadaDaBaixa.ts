@@ -30,25 +30,6 @@ export async function exigirAlcadaLiberada(internalTransactionId: string): Promi
     if (motivo) throw new Error(motivo);
 }
 
-/**
- * Ids dos títulos a pagar ABERTOS e pendentes na alçada — para a tela desligar o
- * botão de baixa com o motivo. São poucos (fila de aprovação), por isso uma
- * consulta à parte em vez de pôr `approval_status` na `vw_payables`.
- * Org nula = "Todas" (a RLS recorta) — REGRA #5.
- */
-export async function idsComAlcadaPendente(organizationId: string | null): Promise<Set<string>> {
-    let q = supabase
-        .from('internal_transactions')
-        .select('id')
-        .eq('direction', 'DEBIT')
-        .eq('status', 'PENDING')
-        .eq('approval_status', 'PENDENTE');
-    if (organizationId) q = q.eq('organization_id', organizationId);
-    const { data, error } = await q;
-    if (error) { console.warn('[alcadaDaBaixa] pendentes:', error.message); return new Set(); }
-    return new Set(((data ?? []) as { id: string }[]).map(r => r.id));
-}
-
 /** Ids dos títulos pagos com a alçada ainda pendente (carimbo do banco) — para a fila marcar "Pago sem aprovação". */
 export async function idsPagosSemAlcada(organizationId: string | null): Promise<Set<string>> {
     let q = supabase

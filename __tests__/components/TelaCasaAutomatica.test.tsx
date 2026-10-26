@@ -370,3 +370,53 @@ describe('TelaCasaAutomatica (F10)', () => {
     expect(screen.queryByLabelText('Talude até (m de altura; acima, muro)')).toBeNull();
   });
 });
+
+describe('TelaCasaAutomatica › Construir pelo Empreendimento (25/10/2026)', () => {
+  const passos = (motivoDoBotao: string | null, parada: 'LOTE' | 'ZONA' | 'UNIDADE' | null = null) => ({
+    passos: [
+      { passo: 'LOTE' as const, rotulo: 'Lote', estado: 'FAZER' as const, texto: 'Lança o lote da ficha (12,00 × 30,00 m).' },
+      { passo: 'ZONA' as const, rotulo: 'Zona', estado: (parada === 'ZONA' ? 'PERGUNTAR' : 'FEITO') as 'PERGUNTAR' | 'FEITO', texto: 'Zona em vigor: ZR-2.' },
+      { passo: 'UNIDADE' as const, rotulo: 'Unidade', estado: 'AVISO' as const, texto: 'Sem unidades.' },
+      { passo: 'GERAR' as const, rotulo: 'Gerar', estado: (motivoDoBotao ? 'FALTA' : 'FAZER') as 'FALTA' | 'FAZER', texto: motivoDoBotao ?? 'Gera a prévia.' },
+    ],
+    motivoDoBotao,
+    parada,
+  });
+
+  it('sem empreendimento ligado, o bloco não aparece', () => {
+    tela();
+    expect(screen.queryByTestId('casa-pelo-empreendimento')).toBeNull();
+    cleanup();
+  });
+
+  it('mostra cada passo com o estado em texto e constrói no clique', () => {
+    const onConstruir = vi.fn();
+    tela({ peloEmpreendimento: { nome: 'Garden', passos: passos(null), construindo: false, onConstruir, onResolver: vi.fn() } });
+    const bloco = screen.getByTestId('casa-pelo-empreendimento');
+    expect(bloco.textContent).toMatch(/Dados do Empreendimento "Garden"/);
+    expect(within(screen.getByTestId('passo-LOTE')).getByText('o botão faz')).toBeTruthy();
+    expect(within(screen.getByTestId('passo-ZONA')).getByText('feito')).toBeTruthy();
+    fireEvent.click(screen.getByTestId('construir-pelo-empreendimento'));
+    expect(onConstruir).toHaveBeenCalledTimes(1);
+    cleanup();
+  });
+
+  it('com o que falta, o botão desliga e diz o motivo', () => {
+    tela({ peloEmpreendimento: { nome: 'Garden', passos: passos('O pavimento já tem paredes'), construindo: false, onConstruir: vi.fn(), onResolver: vi.fn() } });
+    const botao = screen.getByTestId('construir-pelo-empreendimento') as HTMLButtonElement;
+    expect(botao.disabled).toBe(true);
+    expect(botao.title).toMatch(/paredes/);
+    cleanup();
+  });
+
+  it('passo que pergunta leva ao lugar de responder; a mensagem do último construir aparece', () => {
+    const onResolver = vi.fn();
+    tela({
+      peloEmpreendimento: { nome: 'Garden', passos: passos(null, 'ZONA'), construindo: false, onConstruir: vi.fn(), onResolver, mensagem: { texto: 'Feito: lote lançado.', erro: false } },
+    });
+    fireEvent.click(within(screen.getByTestId('passo-ZONA')).getByRole('button', { name: 'Abrir Dados do lote' }));
+    expect(onResolver).toHaveBeenCalledWith('ZONA');
+    expect(screen.getByTestId('mensagem-do-construir').textContent).toBe('Feito: lote lançado.');
+    cleanup();
+  });
+});

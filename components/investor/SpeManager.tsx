@@ -6,6 +6,9 @@ import { investorService, Investor } from '../../services/investorService';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { useConfirm } from '../ui/confirm';
+import { useToast } from '../../hooks/useToast';
+import { errorMessage } from '../../hooks/useOrgContext';
 import CapitalCallPanel from './CapitalCallPanel';
 
 interface Props {
@@ -21,10 +24,23 @@ const emptyEntity = (orgId: string): Omit<SpeEntity, 'id' | 'created_at'> => ({
     capital_social: 0,
 });
 
+// A RLS de `spe_entities`/`spe_partners` (e as RPCs de capital, que rodam como
+// quem chama) só deixa owner/admin gravar: 42501 é "você não pode", não "deu pau".
+const motivoDaFalha = (err: unknown, fallback: string): string => {
+    const code = (err as { code?: unknown } | null)?.code;
+    if (code === '42501') return 'Sem permissão: só proprietário ou administrador da organização altera SPEs e sócios.';
+    return errorMessage(err, fallback);
+};
+
 const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => {
+    const confirm = useConfirm();
+    const { showToast } = useToast();
     const [entities, setEntities] = React.useState<SpeEntity[]>([]);
     const [investors, setInvestors] = React.useState<Investor[]>([]);
     const [loading, setLoading] = React.useState(true);
+    // Carga que falhou NÃO pode cair no "Nenhuma SPE cadastrada" — afirmaria que
+    // não há dado quando só não se conseguiu ler.
+    const [loadError, setLoadError] = React.useState<string | null>(null);
     const [expanded, setExpanded] = React.useState<string | null>(null);
     const [partners, setPartners] = React.useState<Record<string, SpePartner[]>>({});
     const [showNewEntity, setShowNewEntity] = React.useState(false);
@@ -34,21 +50,32 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
     const [partnerForm, setPartnerForm] = React.useState<Record<string, { investor_id: string; ownership_pct: number; capital_calls_total: number }>>({});
     const [capitalInput, setCapitalInput] = React.useState<Record<string, { amount: number; type: 'call' | 'payment' }>>({});
 
-    React.useEffect(() => {
+    const load = React.useCallback(() => {
+        setLoading(true);
+        setLoadError(null);
         Promise.all([
             speService.list(organizationId),
             investorService.listInvestors(organizationId),
         ]).then(([spes, invs]) => {
             setEntities(spes);
             setInvestors(invs);
-        }).catch(err => console.error('Error loading SPE data', err))
-          .finally(() => setLoading(false));
+        }).catch(err => {
+            console.error('Error loading SPE data', err);
+            setLoadError(motivoDaFalha(err, 'Erro desconhecido.'));
+        }).finally(() => setLoading(false));
     }, [organizationId]);
+
+    React.useEffect(() => { load(); }, [load]);
 
     const loadPartners = async (speId: string) => {
         if (partners[speId]) return;
-        const data = await speService.listPartners(speId);
-        setPartners(p => ({ ...p, [speId]: data }));
+        try {
+            const data = await speService.listPartners(speId);
+            setPartners(p => ({ ...p, [speId]: data }));
+        } catch (err) {
+            console.error('Error loading SPE partners', err);
+            showToast(`Não foi possível carregar os sócios da SPE. ${motivoDaFalha(err, '')}`.trim(), 'error');
+        }
     };
 
     const handleExpand = async (id: string) => {
@@ -58,7 +85,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
     };
 
     const handleSaveEntity = async () => {
-        if (!entityForm.name.trim()) { alert('Informe o nome da SPE.'); return; }
+        if (!entityForm.name.trim()) { showToast('Informe o nome da SPE.', 'error'); return; }
         setSavingEntity(true);
         try {
             const saved = await speService.save(entityForm as SpeEntity);
@@ -67,24 +94,34 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
             setShowNewEntity(false);
         } catch (err) {
             console.error('Error saving SPE', err);
-            alert('Erro ao salvar SPE.');
+            showToast(`Erro ao salvar a SPE. ${motivoDaFalha(err, '')}`.trim(), 'error');
         } finally {
             setSavingEntity(false);
         }
     };
 
-    const handleRemoveEntity = async (id: string) => {
+    const handleRemoveEntity = async (entity: SpeEntity) => {
+        const ok = await confirm({
+            title: 'Excluir SPE?',
+            // FKs de spe_partners e capital_calls são ON DELETE CASCADE.
+            message: `"${entity.name}", os sócios e as chamadas de capital dela serão excluídos. Essa ação não pode ser desfeita.`,
+            variant: 'danger',
+            confirmLabel: 'Excluir',
+        });
+        if (!ok) return;
         try {
-            await speService.remove(id);
-            setEntities(prev => prev.filter(e => e.id !== id));
+            await speService.remove(entity.id!);
+            setEntities(prev => prev.filter(e => e.id !== entity.id));
+            showToast('SPE excluída.');
         } catch (err) {
             console.error('Error removing SPE', err);
+            showToast(`Erro ao excluir a SPE. ${motivoDaFalha(err, '')}`.trim(), 'error');
         }
     };
 
     const handleAddPartner = async (speId: string) => {
         const f = partnerForm[speId];
-        if (!f?.investor_id) { alert('Selecione um investidor.'); return; }
+        if (!f?.investor_id) { showToast('Selecione um investidor.', 'error'); return; }
         try {
             const saved = await speService.savePartner({
                 spe_entity_id: speId,
@@ -102,13 +139,14 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
             setPartnerForm(prev => ({ ...prev, [speId]: { investor_id: '', ownership_pct: 0, capital_calls_total: 0 } }));
         } catch (err) {
             console.error('Error adding partner', err);
-            alert('Erro ao adicionar sócio.');
+            showToast(`Erro ao adicionar sócio. ${motivoDaFalha(err, '')}`.trim(), 'error');
         }
     };
 
     const handleCapitalAction = async (partnerId: string, speId: string) => {
         const c = capitalInput[partnerId];
-        if (!c?.amount || c.amount <= 0) { alert('Informe um valor.'); return; }
+        if (!c?.amount || c.amount <= 0) { showToast('Informe um valor.', 'error'); return; }
+        const rotulo = c.type === 'call' ? 'Chamada de capital' : 'Pagamento de capital';
         try {
             if (c.type === 'call') {
                 await speService.addCapitalCall(partnerId, c.amount);
@@ -119,8 +157,10 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
             const updated = await speService.listPartners(speId);
             setPartners(prev => ({ ...prev, [speId]: updated }));
             setCapitalInput(prev => ({ ...prev, [partnerId]: { amount: 0, type: 'call' } }));
+            showToast(`${rotulo} registrada.`);
         } catch (err) {
             console.error('Error capital action', err);
+            showToast(`${rotulo} não registrada. ${motivoDaFalha(err, '')}`.trim(), 'error');
         }
     };
 
@@ -179,7 +219,16 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                 </div>
             )}
 
-            {entities.length === 0 ? (
+            {loadError ? (
+                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
+                    <AlertCircle className="w-10 h-10 text-red-300 mx-auto mb-4" />
+                    <p className="text-sm font-bold text-gray-700">Não foi possível carregar as SPEs.</p>
+                    <p className="text-sm text-gray-500 mt-1">{loadError}</p>
+                    <button onClick={load} className="mt-4 text-sm font-medium text-blue-600 hover:text-blue-800">
+                        Tentar de novo
+                    </button>
+                </div>
+            ) : entities.length === 0 ? (
                 <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-12 text-center">
                     <Building2 className="w-10 h-10 text-gray-200 mx-auto mb-4" />
                     <p className="text-sm font-bold text-gray-400">Nenhuma SPE cadastrada.</p>
@@ -207,7 +256,7 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                             <Users className="w-3.5 h-3.5" /> {pts.length || '—'} sócios
                                         </span>
                                         {isAdmin && (
-                                            <ActionIconButton kind="delete" onClick={e => { e.stopPropagation(); handleRemoveEntity(entity.id!); }} />
+                                            <ActionIconButton kind="delete" onClick={e => { e.stopPropagation(); handleRemoveEntity(entity); }} />
                                         )}
                                         {isOpen ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
                                     </div>
@@ -244,9 +293,9 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                                     <p className="font-medium text-gray-900">{p.investor_name || '—'}</p>
                                                                     <p className="text-xs text-gray-400">{p.investor_email}</p>
                                                                 </td>
-                                                                <td className="py-2 text-right font-bold text-blue-600">{Number(p.ownership_pct).toFixed(2)}%</td>
-                                                                <td className="py-2 text-right text-gray-700">{formatCurrency(Number(p.capital_calls_total))}</td>
-                                                                <td className="py-2 text-right text-emerald-700 font-bold">{formatCurrency(Number(p.capital_paid))}</td>
+                                                                <td className="py-2 text-right text-sm font-normal text-gray-600">{Number(p.ownership_pct).toFixed(2)}%</td>
+                                                                <td className="py-2 text-right text-sm font-medium text-gray-800">{formatCurrency(Number(p.capital_calls_total))}</td>
+                                                                <td className="py-2 text-right text-sm font-medium text-gray-800">{formatCurrency(Number(p.capital_paid))}</td>
                                                                 {isAdmin && (
                                                                     <td className="py-2 text-right">
                                                                         <div className="flex items-center justify-end gap-1">
@@ -267,6 +316,8 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                                                                             <Button
                                                                                 size="icon"
                                                                                 onClick={() => handleCapitalAction(p.id!, entity.id!)}
+                                                                                title={ci.type === 'call' ? 'Registrar chamada de capital' : 'Registrar pagamento de capital'}
+                                                                                aria-label={ci.type === 'call' ? 'Registrar chamada de capital' : 'Registrar pagamento de capital'}
                                                                                 className="rounded text-button"
                                                                             >
                                                                                 <DollarSign className="w-3 h-3" />

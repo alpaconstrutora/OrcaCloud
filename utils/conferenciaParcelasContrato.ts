@@ -30,6 +30,8 @@ export interface ParcelaConferida {
     business_status?: string | null;
     amount: number;
     original_amount?: number | null;
+    /** Vencimento — só a cobrança à vista o usa (vira a data da 1ª linha do cronograma). */
+    transaction_date?: string | null;
 }
 
 export interface AditivoConferido {
@@ -82,6 +84,52 @@ export function conferirParcelas(
         : [];
 
     return { aplica, valorContrato, somaParcelas, saldo, situacao, aditivosSemParcela };
+}
+
+const somaAditivos = (aditivos: AditivoConferido[]) => dois(aditivos
+    .filter(a => a.status === 'Aprovado')
+    .reduce((t, a) => t + Number(a.value_impact || 0), 0));
+
+const ehParcelado = (c: ContratoConferido) => c.payment_term_type === 'Parcelado';
+
+/**
+ * Base das correções. Contrato À VISTA (qualquer `payment_term_type` que não seja
+ * Parcelado — é o ramo que `updateContract` usa) não tem cronograma: corrigir o
+ * transforma em Parcelado, e a sincronização do parcelado APAGA a cobrança à vista
+ * prevista. Por isso a aberta entra como a 1ª linha (`:p1`) — o valor dela não se
+ * perde. A paga fica de fora: cobrança baixada nunca é apagada pela sincronização.
+ */
+export function baseParaCorrecao(
+    contrato: ContratoConferido,
+    cronograma: ContractInstallment[],
+    parcelas: ParcelaConferida[],
+): { cronograma: ContractInstallment[]; parcelas: ParcelaConferida[] } {
+    if (ehParcelado(contrato)) return { cronograma, parcelas };
+    const abertas = parcelas.filter(p => p.source_system === 'CONTRACT_AVISTA' && ativa(p) && !parcelaBaixada(p));
+    const refBase = (abertas[0]?.reference_id ?? '').replace(/:p\d+$/, '');
+    return {
+        cronograma: abertas.map(p => ({ date: (p.transaction_date ?? '').slice(0, 10), value: dois(bruto(p)) })),
+        parcelas: abertas.map((p, i) => ({ ...p, source_system: 'CONTRACT_PARCELADO', reference_id: `${refBase}:p${i + 1}` })),
+    };
+}
+
+/** "Ajustar o valor do contrato": o Original que faz o Atual (original + aditivos) bater com as parcelas. */
+export function novoValorOriginal(conf: Conferencia, aditivos: AditivoConferido[]): number {
+    return dois(conf.somaParcelas - somaAditivos(aditivos));
+}
+
+/** Por que "Ajustar o valor do contrato" fica desligado — null quando dá. */
+export function motivoNaoAjustaContrato(
+    contrato: ContratoConferido,
+    conf: Conferencia,
+    aditivos: AditivoConferido[],
+): string | null {
+    if (!conf.aplica || conf.saldo === 0) return 'As parcelas já batem com o valor do contrato.';
+    if (!ehParcelado(contrato) && somaAditivos(aditivos) !== 0) {
+        return 'Contrato à vista com aditivo: a cobrança à vista é regravada pelo Valor Original e a diferença voltaria — use "Lançar a diferença" ou "Distribuir".';
+    }
+    if (!(novoValorOriginal(conf, aditivos) > 0)) return 'O Valor Original ficaria zerado ou negativo.';
+    return null;
 }
 
 /** "Lançar uma parcela com a diferença": o complemento vai no fim do cronograma. */

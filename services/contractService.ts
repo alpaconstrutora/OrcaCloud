@@ -16,6 +16,7 @@ import {
     Contract,
     ContractItem,
     ContractAddendum,
+    ContractInstallment,
     ContractMeasurement,
     ContractMeasurementItem,
     ContractUtilityBill,
@@ -3073,6 +3074,45 @@ export const contractService = {
         });
         if (fnError) throw new Error(fnError.message);
         return fnData;
+    },
+
+    // ─── Financeiro › Parcelas: correção da divergência e gerador ─────────────
+    // Plano docs/planos/2026-10-26-contrato-parcelas-conferencia-e-gerador.md.
+    // O cronograma novo vem de utils/conferenciaParcelasContrato (regra pura, testada);
+    // aqui só se grava, pelo MESMO caminho de sempre: `updateContract` com o cronograma
+    // sincroniza as parcelas (pagas intocadas, abertas recriadas — e a aberta cujo
+    // valor mudou nasce de novo "Aguardando aprovação", pelo gatilho da alçada).
+
+    /**
+     * Grava o cronograma corrigido (complemento, distribuição ou gerador). Antes,
+     * limpa a marca de valor/vencimento MANUAL das abertas que ele reescreve: com
+     * ela, `planejarSyncParcelas` manteria o valor antigo — e a correção não
+     * mudaria nada, em silêncio. O contrato passa a Parcelado (à vista corrigido
+     * vira cronograma; a cobrança à vista aberta já entrou como 1ª linha).
+     */
+    aplicarCronogramaCorrigido: async (
+        contract: Contract,
+        cronograma: ContractInstallment[],
+        reescritas: string[],
+    ): Promise<Contract> => {
+        if (reescritas.length) {
+            const { error } = await supabase
+                .from('internal_transactions')
+                .update({ valor_manual: false, vencimento_manual: false })
+                .in('id', reescritas)
+                .eq('status', 'PENDING');
+            if (error) throw new Error(`Não foi possível preparar as parcelas: ${error.message}`);
+        }
+        return await contractService.updateContract(contract.id, {
+            payment_schedule: cronograma,
+            payment_term_type: 'Parcelado',
+            payment_installments: cronograma.length,
+        });
+    },
+
+    /** "Ajustar o valor do contrato": grava o Original; `updateContract` recalcula o Atual (+ aditivos). */
+    ajustarValorDoContrato: async (contract: Contract, novoOriginal: number): Promise<Contract> => {
+        return await contractService.updateContract(contract.id, { original_value: novoOriginal });
     },
 
     // ─── Aprovação Multinível ─────────────────────────────────────────────────

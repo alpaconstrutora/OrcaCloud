@@ -4,6 +4,9 @@ import {
     planoDeDistribuicao,
     planoDoGerador,
     parcelaComplementar,
+    baseParaCorrecao,
+    novoValorOriginal,
+    motivoNaoAjustaContrato,
     type ParcelaConferida,
 } from '../utils/conferenciaParcelasContrato';
 
@@ -140,5 +143,48 @@ describe('planoDoGerador', () => {
         const r = planoDoGerador(2850, [], [avista], { ...gerador, parcelas: 1 }, new Set());
         if ('motivo' in r) throw new Error(r.motivo);
         expect(r.cronograma).toEqual([{ date: '2026-11-10', value: 1850, installment_type: expect.anything() }]);
+    });
+});
+
+describe('baseParaCorrecao', () => {
+    it('parcelado: cronograma e parcelas como estão', () => {
+        const parcelas = [parcela(1, 1000), parcela(2, 1700)];
+        expect(baseParaCorrecao(cts042, cronograma042, parcelas)).toEqual({ cronograma: cronograma042, parcelas });
+    });
+
+    it('à vista ABERTA vira a 1ª linha do cronograma (o contrato passa a parcelado)', () => {
+        const avista = { ...parcela(0, 2700), source_system: 'CONTRACT_AVISTA', reference_id: ID, transaction_date: '2026-11-01' };
+        const b = baseParaCorrecao({ ...cts042, payment_term_type: 'Vista' }, [], [avista]);
+        expect(b.cronograma).toEqual([{ date: '2026-11-01', value: 2700 }]);
+        expect(b.parcelas).toEqual([{ ...avista, source_system: 'CONTRACT_PARCELADO', reference_id: `${ID}:p1` }]);
+        const r = planoDeDistribuicao(b.cronograma, b.parcelas, 150, new Set());
+        if ('motivo' in r) throw new Error(r.motivo);
+        expect(r.cronograma).toEqual([{ date: '2026-11-01', value: 2850 }]);
+        expect(r.reescritas).toEqual([avista.id]);
+    });
+
+    it('à vista PAGA fica fora do cronograma (a sync nunca apaga cobrança baixada)', () => {
+        const avista = { ...parcela(0, 2700, pago), source_system: 'CONTRACT_AVISTA', reference_id: ID, transaction_date: '2026-05-01' };
+        const b = baseParaCorrecao({ ...cts042, payment_term_type: 'Vista' }, [], [avista]);
+        expect(b.cronograma).toEqual([]);
+        expect(parcelaComplementar(b.cronograma, 150, '2026-11-10')).toEqual([{ date: '2026-11-10', value: 150 }]);
+    });
+});
+
+describe('ajustar o valor do contrato', () => {
+    it('novo Original = soma das parcelas − aditivos aprovados (o Atual passa a bater)', () => {
+        const c = conferirParcelas(cts042, [parcela(1, 1000), parcela(2, 1700)], aditivoAD001);
+        expect(novoValorOriginal(c, aditivoAD001)).toBe(2550);
+    });
+
+    it('à vista com aditivo não se ajusta pelo contrato (a cobrança é regravada pelo Original)', () => {
+        const c = conferirParcelas({ ...cts042, payment_term_type: 'Vista' }, [parcela(1, 2700)], aditivoAD001);
+        expect(motivoNaoAjustaContrato({ ...cts042, payment_term_type: 'Vista' }, c, aditivoAD001)).toMatch(/à vista/);
+        expect(motivoNaoAjustaContrato(cts042, c, aditivoAD001)).toBeNull();
+    });
+
+    it('recusa Original zerado ou negativo', () => {
+        const c = conferirParcelas({ ...cts042, original_value: 300, current_value: 450 }, [parcela(1, 100)], aditivoAD001);
+        expect(motivoNaoAjustaContrato(cts042, c, aditivoAD001)).toMatch(/zerado ou negativo/);
     });
 });

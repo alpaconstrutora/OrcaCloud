@@ -66,7 +66,9 @@ ficaria sem caminho. Conexões e conferência de pontas abertas não cobrem a el
   escolhas gravadas no registro (viewer novo). Na luz (4150, 8900): antes 9 trechos (8 na rede + a descida 2553→2755) e
   os eletrodutos se encontrando acima da caixa; depois 8 trechos a 2755 entrando na caixa, sem descida
 - [x] item 4: bundle regerado (só acrescenta `ligacaoDaPeca` e a chamada na fiação)
-- [ ] item 4: deploy da planta-api (aguarda autorização)
+- [x] item 4: deploy da planta-api — autorizado pelo usuário ("Publicar", 25/10/2026, noite); publicada de uma frente em
+  `8b69470f` (bundle regerado sem diferença; `plantaApi.test` 3/3): versão 80, ACTIVE, 26/10/2026 01:25 UTC;
+  `/planta-api/docs` 200
 - [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.492 ok + 2 testes de
   tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes` 39/39) = 11.494 ok, 0 falhas, 34 pulados, total 11.528
 - [x] PR + CI — PR #171, ci 29min50s verde

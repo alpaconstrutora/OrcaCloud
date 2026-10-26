@@ -6,7 +6,7 @@ import { financialIntelligenceService } from '../services/financialIntelligenceS
 import type { FinancialAlert, ProjectScorecard, CashflowProjectionPoint } from '../services/financialIntelligenceService';
 import { divergenceService } from '../services/divergenceService';
 import { approvalService } from '../services/approvalService';
-import type { ActionQueueItem, ApprovalEntity, ApprovalPendingSummary, QueueEntity } from '../services/approvalService';
+import type { ActionQueueItem, ApprovalPendingSummary, QueueEntity } from '../services/approvalService';
 import { financialApprovalService } from '../services/financialApprovalService';
 import type { FinancialApprovalConfig } from '../types/financial';
 import { processService } from '../services/processService';
@@ -51,8 +51,10 @@ const SEVERITY_DOT: Record<Severity, string> = {
     LOW:    'bg-gray-400',
 };
 
-const ENTITY_LABEL_PLURAL: Record<ApprovalEntity, string> = {
+// QueueEntity: o resumo de pendências (fn_approval_pending_summary) lê a fila, que tem DARF.
+const ENTITY_LABEL_PLURAL: Record<QueueEntity, string> = {
     transaction:     'transações financeiras',
+    darf:            'DARFs',
     contract:        'contratos',
     purchase_order:  'pedidos de compra',
     process_step:    'etapas de processo',

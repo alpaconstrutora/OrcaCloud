@@ -332,7 +332,7 @@ const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSo
                     {mesesComVencimento.length <= POUCOS_MESES ? (
                         // Com um ou dois meses com vencimento, doze colunas são
                         // dez vazias: a lista diz o mesmo sem a régua.
-                        <ul className="min-h-[160px] flex flex-col justify-center divide-y divide-gray-100">
+                        <ul className="flex flex-col divide-y divide-gray-100">
                             {mesesComVencimento.length === 0 ? (
                                 <li className="py-2 text-sm text-gray-500 text-center">Nenhum contrato vence nos próximos 12 meses.</li>
                             ) : mesesComVencimento.map(m => (
@@ -371,9 +371,9 @@ const LeaseExpiryChart: React.FC<{ scope: RentalAnalysisScope; state: AnalysisSo
                     {/* A leitura sem passar o mouse: os acumulados por prazo. */}
                     <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
                         {[
-                            { rotulo: 'Vencem em 30 dias', b: exp.within30 },
-                            { rotulo: 'Vencem em 90 dias', b: exp.within90 },
-                            { rotulo: 'Vencem em 12 meses', b: exp.within365 },
+                            { rotulo: 'Em 30 dias', b: exp.within30 },
+                            { rotulo: 'Em 90 dias', b: exp.within90 },
+                            { rotulo: 'Em 12 meses', b: exp.within365 },
                         ].map(({ rotulo, b }) => (
                             <div key={rotulo} className="min-w-0">
                                 <p className="text-xs text-gray-500 truncate">{rotulo}</p>
@@ -619,7 +619,7 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                     <KpiCard destaque label="Receita mensal contratada" icon={<Wallet />}
                         value={moneyBRL(scope.monthlyRevenue)}
                         sub={`${orDash(scope.financial.rate, percent1)} de ${moneyBRL(scope.financial.potential)} potencial`}
-                        acao={receitaPerdida > 0 ? { label: 'Ver imóveis disponíveis', onClick: () => onNavigate('imoveis') } : undefined} />
+                        acao={scope.unitStatus.available > 0 ? { label: 'Ver imóveis disponíveis', onClick: () => onNavigate('imoveis') } : undefined} />
                     {/* NOI acumulado no ano — o rótulo diz o período, porque o
                         vizinho é a receita MENSAL. Sem despesa apropriada aos
                         imóveis, o NOI é a receita com outro nome: "—" e o motivo. */}

@@ -1447,10 +1447,25 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // reescreve o endereço); o segundo mantém `?aba=analise&emp=…&leitura=…`
     // em dia com a tela, por `replaceState` — não cria entrada no histórico
     // nem dispara `hashchange` (o roteador do app só olha a vista, não a query).
+    // Lido UMA vez, no primeiro render, e guardado em estado: reler o endereço
+    // no efeito pegava o que o efeito de baixo já tinha reescrito com o valor
+    // antigo (o StrictMode roda os efeitos duas vezes — o link abria na leitura
+    // salva, não na pedida).
+    const [linkInicial] = useState(linkDaAnalise);
     useEffect(() => {
-        const link = linkDaAnalise();
-        if (link?.emp) setAnalysisEmpId(link.emp);
-        if (link?.leitura) setAnalysisLeitura(link.leitura);
+        if (linkInicial?.emp) setAnalysisEmpId(linkInicial.emp);
+        if (linkInicial?.leitura) setAnalysisLeitura(linkInicial.leitura);
+        // Link colado numa aba que JÁ está nesta tela: o navegador só troca o
+        // `#…` (sem recarregar), e o recorte tem de seguir o endereço novo.
+        const aoMudarEndereco = () => {
+            const link = linkDaAnalise();
+            if (!link) return;
+            setActiveTab('analysis');
+            setAnalysisEmpId(link.emp ?? 'ALL');
+            if (link.leitura) setAnalysisLeitura(link.leitura);
+        };
+        window.addEventListener('hashchange', aoMudarEndereco);
+        return () => window.removeEventListener('hashchange', aoMudarEndereco);
     // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
     useEffect(() => {
@@ -2163,10 +2178,10 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 </option>
                             ))}
                         </select>
-                    </div>
                     {/* Leitura: quais indicadores sobem para a primeira dobra.
-                        Mesmo trilho das abas (§19.1), em escala de escopo. */}
-                    <div role="radiogroup" aria-label="Leitura da análise" className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
+                        Mesmo trilho das abas (§19.1), em escala de escopo; colado
+                        ao seletor de empreendimento — os dois decidem o recorte. */}
+                    <div role="radiogroup" aria-label="Leitura da análise" className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 sm:ml-2">
                         {LEITURAS.map(l => (
                             <button
                                 key={l.id}
@@ -2181,6 +2196,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             </button>
                         ))}
                     </div>
+                    </div>
                     <div className="flex items-center gap-1 shrink-0">
                         {!isAllEmpreendimentos && (
                             <button
@@ -2194,7 +2210,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                         <button
                             type="button"
                             onClick={copiarLinkDaAnalise}
-                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all"
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all whitespace-nowrap"
                             title="Copia o endereço desta análise — abre no mesmo empreendimento e na mesma leitura"
                         >
                             {linkCopiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Link2 className="w-4 h-4" />}

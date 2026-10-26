@@ -37,7 +37,7 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 rodam com a sessão do admin e escondem o defeito.
 
 **O que muda:**
-- migration `aplicar_20271026900000_portal_colaborador_holerite_por_token.sql`:
+- migration `aplicar_20271026950000_portal_colaborador_holerite_por_token.sql (nasceu 20271026900000; renomeada pela colisão com a SPE)`:
   `fn_colab_portal_paystub(p_token text, p_run_id uuid) RETURNS json`, SECURITY
   DEFINER, resolve o token por `fn_colab_portal_employee` e só devolve a folha se
   existir `payroll_results` daquele colaborador nela (mesmo critério de

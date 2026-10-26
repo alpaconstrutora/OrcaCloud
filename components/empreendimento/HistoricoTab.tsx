@@ -130,6 +130,9 @@ const FIELD_LABELS: Record<string, string> = {
   terreno_profundidade: 'Profundidade do terreno',
   terreno_lateral_direita: 'Lateral direita do terreno',
   terreno_lateral_esquerda: 'Lateral esquerda do terreno',
+  terreno_frente_azimute: 'Frente do terreno voltada para (°)',
+  terreno_latitude: 'Latitude do terreno',
+  terreno_longitude: 'Longitude do terreno',
 };
 
 const auditEntityLabel = (e: EmpreendimentoAuditEntity): string => ENTITY_LABELS[e] ?? e;

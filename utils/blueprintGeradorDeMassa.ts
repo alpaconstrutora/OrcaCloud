@@ -117,6 +117,22 @@ export interface RestricoesDaMassa {
   unidadesMin: number | null;
   /** Teto de pavimentos acima do solo do usuário, além do da lei. */
   pavimentosMax: number | null;
+  /**
+   * 26/10/2026: SEGUIR O EMPREENDIMENTO — as torres cadastradas em Torres & Unidades. O número de torres filtra as
+   * implantações (1: torre, lâmina, L, U, H, embasamento + torre; 2: duas torres ou 2 blocos paralelos; 3+: N blocos
+   * paralelos) e os pavimentos ficam na faixa [mín, máx] (acima do solo, embasamento incluído). `null` = livre.
+   * Plano: docs/planos/2026-10-26-planta-empreendimento-tres-etapas.md, etapa 1.
+   */
+  doEmpreendimento?: { torres: number; pavimentosMin: number | null; pavimentosMax: number | null } | null;
+}
+
+const blocosParalelosTexto = (torres: number) => (torres >= 2 ? ` (blocos paralelos com ${torres} blocos)` : '');
+
+/** As implantações que têm `torres` blocos de unidades. */
+export function implantacoesComTorres(torres: number): TipoDeImplantacao[] {
+  if (torres <= 1) return ['TORRE', 'LAMINA', 'EM_L', 'EM_U', 'EM_H', 'EMBASAMENTO_E_TORRE'];
+  if (torres === 2) return ['DUAS_TORRES', 'BLOCOS_PARALELOS'];
+  return ['BLOCOS_PARALELOS'];
 }
 
 export const RESTRICOES_PADRAO: RestricoesDaMassa = { respeitarLei: true, atenderVagas: true, unidadesMin: null, pavimentosMax: null };
@@ -337,6 +353,8 @@ interface Contexto {
   implantacaoMaxMm2: number | null;
   retanguloDoLote: Retangulo | null;
   cacheDeRetangulos: Map<string, Retangulo | null>;
+  /** Blocos paralelos com exatamente este número de blocos (as torres do Empreendimento); `null` = quantos couberem. */
+  blocosParalelos: number | null;
 }
 
 /** O retângulo do envelope no topo de um bloco de `ordinal` pavimentos com topo em `topoMm`. */
@@ -394,7 +412,7 @@ interface Medidas {
 }
 
 /** Os contornos (no quadro local) dos blocos de unidades de um tipo; null = a forma não cabe no retângulo. */
-function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandidato, g: number): { formas: { nome: string; anel: Point[] }[]; medidas: Medidas } | null {
+function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandidato, g: number, blocosParalelos: number | null = null): { formas: { nome: string; anel: Point[] }[]; medidas: Medidas } | null {
   const eixo = eixoDo(r);
   const { comprimento: len, largura: larg } = eixo;
   // Variante: bit 0 espelha ao longo do comprimento, bit 1 através — o L troca de canto, o U abre do outro lado.
@@ -427,8 +445,10 @@ function contornos(tipo: TipoDeImplantacao, r: Retangulo, p: ParametrosDoCandida
       return { formas: [{ nome: 'Lâmina', anel: retEmAB(pt, 0, b0, len, b0 + prof) }], medidas: { comprimentoMm: len, profundidadeMm: prof } };
     }
     case 'BLOCOS_PARALELOS': {
-      const k = Math.floor((larg + g) / (prof + g) + 1e-9);
-      if (k < 2) return null;
+      const cabem = Math.floor((larg + g) / (prof + g) + 1e-9);
+      // Com as torres do Empreendimento, exatamente N blocos — se não cabem, a forma não serve.
+      if (cabem < 2 || (blocosParalelos != null && cabem < blocosParalelos)) return null;
+      const k = blocosParalelos ?? cabem;
       const ini = (larg - (k * prof + (k - 1) * g)) / 2;
       return {
         formas: Array.from({ length: k }, (_, i) => ({ nome: `Bloco ${String.fromCharCode(65 + i)}`, anel: retEmAB(pt, 0, ini + i * (prof + g), len, ini + i * (prof + g) + prof) })),
@@ -510,7 +530,7 @@ function montar(ctx: Contexto, p: ParametrosDoCandidato): { blocos: BlocoPropost
     const extra = p.garagem === 'PILOTIS' ? 1 : 0;
     const r = retanguloNaAltura(ctx, (p.pavimentos + extra) * pd, p.pavimentos + extra);
     if (!r) return null;
-    const c = contornos(p.tipo, r, p, g);
+    const c = contornos(p.tipo, r, p, g, ctx.blocosParalelos);
     if (!c) return null;
     medidas = c.medidas;
     for (const f of c.formas) {
@@ -722,6 +742,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     usoDoEmbasamento: temUso('COMERCIAL') ? 'COMERCIAL' : 'GARAGEM',
     implantacaoMaxMm2: restricoes.respeitarLei && z.taxaOcupacaoMaxPct != null ? (loteMm2 * z.taxaOcupacaoMaxPct) / 100 : null,
     retanguloDoLote: retanguloDoAnel(q, terreno.anel, hip.margemDoEnvelopeMm),
+    blocosParalelos: restricoes.doEmpreendimento && restricoes.doEmpreendimento.torres >= 2 ? restricoes.doEmpreendimento.torres : null,
     cacheDeRetangulos: new Map(),
   };
   const rTerreo = retanguloNaAltura(ctx, hip.peDireitoMm, 1);
@@ -732,6 +753,9 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   if (restricoes.respeitarLei && z.gabaritoPavimentos != null) tetos.push({ n: z.gabaritoPavimentos, por: 'pelo gabarito em pavimentos' });
   if (restricoes.respeitarLei && z.gabaritoAlturaMaxM != null) tetos.push({ n: Math.floor((z.gabaritoAlturaMaxM * 1000 + 1) / hip.peDireitoMm), por: 'pelo gabarito em altura' });
   if (restricoes.pavimentosMax != null) tetos.push({ n: restricoes.pavimentosMax, por: 'pelo máximo pedido' });
+  const doEmp = restricoes.doEmpreendimento ?? null;
+  if (doEmp?.pavimentosMax != null) tetos.push({ n: doEmp.pavimentosMax, por: 'pelas torres do Empreendimento' });
+  const pisoDoEmpreendimento = doEmp?.pavimentosMin ?? null;
   const teto = tetos.reduce((a, b) => (b.n < a.n ? b : a));
   const metaDeUnidades = restricoes.unidadesMin ?? produto.metaUnidades ?? null;
 
@@ -770,6 +794,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
       if (massa.pisosForaDoEnvelope > 0) motivos.push('fora do envelope');
     }
     if (restricoes.pavimentosMax != null && c.pavimentosMax > restricoes.pavimentosMax) motivos.push('acima do máximo de pavimentos');
+    if (doEmp && ((doEmp.pavimentosMin != null && c.pavimentosMax < doEmp.pavimentosMin) || (doEmp.pavimentosMax != null && c.pavimentosMax > doEmp.pavimentosMax))) motivos.push('fora dos pavimentos do Empreendimento');
     if (produto.tipologias.length > 0 && c.unidades === 0) motivos.push('nenhuma unidade cabe');
     if (restricoes.atenderVagas && distribuicao && distribuicao.vagasFaltando > 0) motivos.push('faltam vagas');
     if (metaDeUnidades != null && c.unidades < metaDeUnidades) motivos.push('abaixo da meta de unidades');
@@ -786,14 +811,23 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   };
 
   // ── 1. Grade exaustiva ──
-  const tipos = hip.tipos.filter((t) => (TIPOS_DE_IMPLANTACAO as readonly string[]).includes(t));
+  const marcados = hip.tipos.filter((t) => (TIPOS_DE_IMPLANTACAO as readonly string[]).includes(t));
+  const tipos = doEmp ? marcados.filter((t) => implantacoesComTorres(doEmp.torres).includes(t)) : marcados;
+  if (doEmp && tipos.length === 0) {
+    return vazio(
+      `O Empreendimento tem ${doEmp.torres} ${doEmp.torres === 1 ? 'torre' : 'torres'} e nenhuma das implantações marcadas tem esse número de blocos — marque ${implantacoesComTorres(doEmp.torres).map((t) => ROTULO_DA_IMPLANTACAO[t].toLowerCase()).join(' ou ')}, ou desligue "Seguir o Empreendimento".`,
+    );
+  }
   const profundidades = [...new Set(hip.profundidadesM.map((m) => Math.round(m * 2) / 2))].filter((m) => m >= LADO_MIN_MM / 1000).map((m) => m * 1000);
   const comprimentos = [...new Set(hip.comprimentosDaTorreM.map((m) => Math.round(m * 2) / 2))].filter((m) => m >= LADO_MIN_MM / 1000).map((m) => m * 1000);
   for (const tipo of tipos) {
     const tetoDoTipo = tipo === 'EMBASAMENTO_E_TORRE' ? teto.n - hip.pavimentosDoEmbasamento : teto.n;
+    // Com os pavimentos do Empreendimento, a faixa inteira (é curta) — sem eles, a grade de sempre.
+    const pisoDoTipo = pisoDoEmpreendimento != null ? Math.max(1, pisoDoEmpreendimento - (tipo === 'EMBASAMENTO_E_TORRE' ? hip.pavimentosDoEmbasamento : 0)) : 1;
+    const grade = pisoDoEmpreendimento != null ? Array.from({ length: Math.max(0, tetoDoTipo - pisoDoTipo + 1) }, (_, i) => pisoDoTipo + i) : gradeDePavimentos(tetoDoTipo);
     for (const prof of profundidades) {
       for (const comp of USA_COMPRIMENTO.has(tipo) ? comprimentos : [0]) {
-        for (const n of gradeDePavimentos(tetoDoTipo)) {
+        for (const n of grade) {
           let estourouALei = false;
           for (const variante of precisaSol ? (VARIANTES[tipo] ?? [0]) : [0]) {
             for (const garagem of garagensDe(tipo)) {
@@ -862,7 +896,10 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     const tetoDoTipo = p.tipo === 'EMBASAMENTO_E_TORRE' ? teto.n - hip.pavimentosDoEmbasamento : teto.n;
     if (o === 'prof') v.profundidadeMm = Math.min(30000, Math.max(LADO_MIN_MM, passo500(p.profundidadeMm + sinal * (500 + Math.floor(rnd() * 3) * 500))));
     else if (o === 'comp') v.comprimentoMm = Math.min(80000, Math.max(LADO_MIN_MM, passo500(p.comprimentoMm + sinal * (1000 + Math.floor(rnd() * 3) * 1000))));
-    else if (o === 'pav') v.pavimentos = Math.min(Math.max(1, tetoDoTipo - (p.garagem === 'PILOTIS' ? 1 : 0)), Math.max(1, p.pavimentos + sinal));
+    else if (o === 'pav') {
+      const pisoDoTipo = pisoDoEmpreendimento != null ? Math.max(1, pisoDoEmpreendimento - (p.tipo === 'EMBASAMENTO_E_TORRE' ? hip.pavimentosDoEmbasamento : 0)) : 1;
+      v.pavimentos = Math.min(Math.max(1, tetoDoTipo - (p.garagem === 'PILOTIS' ? 1 : 0)), Math.max(pisoDoTipo, p.pavimentos + sinal));
+    }
     else if (o === 'du') v.du = Math.min(1, Math.max(-1, Math.round((p.du + sinal * 0.25) * 100) / 100));
     else if (o === 'dv') v.dv = Math.min(1, Math.max(-1, Math.round((p.dv + sinal * 0.25) * 100) / 100));
     else if (o === 'var') {
@@ -914,6 +951,17 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
     `Objetivo: ${ROTULO_DO_OBJETIVO[objetivo].toLowerCase()}${objetivo === 'MENOR_CUSTO' ? (metaDeUnidades != null ? ` com pelo menos ${metaDeUnidades} unidades` : ' por m² vendável (sem meta de unidades, o custo total levaria ao menor prédio)') : ''}${pisoDeUnidades != null ? ` mantendo pelo menos ${pisoDeUnidades} unidades (${pctDoPiso} % do máximo da varredura — sem meta, o sol sozinho levaria ao prédio de 1 pavimento)` : ''}.`,
     `Restrições: ${[restricoes.respeitarLei ? 'CA, TO, gabarito e envelope por pavimento' : 'lei DESLIGADA (só o envelope do térreo)', restricoes.atenderVagas ? 'vagas exigidas atendidas' : 'vagas não exigidas', metaDeUnidades != null ? `mínimo de ${metaDeUnidades} unidades` : null].filter(Boolean).join('; ')}.`,
     `Pavimentos testados até ${teto.n} (limitados ${teto.por}); estacionamento: ${ROTULO_DO_ESTACIONAMENTO[hip.estacionamento].toLowerCase()}.`,
+    ...(doEmp
+      ? [
+          `Empreendimento: ${doEmp.torres} ${doEmp.torres === 1 ? 'torre' : 'torres'}, ${
+            doEmp.pavimentosMin != null && doEmp.pavimentosMin === doEmp.pavimentosMax
+              ? `${doEmp.pavimentosMin} pavimentos`
+              : doEmp.pavimentosMin != null || doEmp.pavimentosMax != null
+                ? `de ${doEmp.pavimentosMin ?? 1} a ${doEmp.pavimentosMax ?? teto.n} pavimentos`
+                : 'pavimentos livres'
+          } — só ${tipos.map((t) => ROTULO_DA_IMPLANTACAO[t].toLowerCase()).join(', ')}${blocosParalelosTexto(doEmp.torres)}.`,
+        ]
+      : []),
     `${avaliados} combinações medidas com a régua do estudo (${tipos.length} implantações × ${profundidades.length} profundidades × comprimentos × pavimentos × garagem); ${viaveis.length} viáveis.`,
     ...(regua.insolacao
       ? [

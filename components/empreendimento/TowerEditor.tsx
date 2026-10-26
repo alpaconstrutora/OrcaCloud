@@ -14,6 +14,7 @@ import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MapPin } from 'l
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { terrenoDaPlantaVinculada, type TerrenoDaPlanta } from '../../services/blueprintTerrenoDaPlanta';
 import { compararComFicha, type SituacaoDoCampo } from '../../utils/blueprintTerrenoDaFicha';
+import { pontoCardeal, ROTULO_DO_PONTO_CARDEAL } from '../../utils/blueprintGrafoEspacial';
 import ActionIconButton from '../ui/ActionIconButton';
 import Button from '../ui/Button';
 import SecaoTitulo from '../ui/SecaoTitulo';
@@ -57,7 +58,32 @@ const terrenoDe = (e?: Empreendimento) => ({
   terreno_frente: e?.terreno_frente?.toString() ?? '',
   terreno_fundos: e?.terreno_fundos?.toString() ?? '',
   terreno_profundidade: e?.terreno_profundidade?.toString() ?? '',
+  // 26/10/2026: a orientação e as coordenadas, para a Planta criar o lote virado e georreferenciado.
+  terreno_frente_azimute: e?.terreno_frente_azimute?.toString() ?? '',
+  terreno_latitude: e?.terreno_latitude?.toString() ?? '',
+  terreno_longitude: e?.terreno_longitude?.toString() ?? '',
 });
+
+/** Faixa de cada campo de orientação/coordenada; fora dela o terreno não salva (e diz por quê). */
+const FAIXA_DA_LOCALIZACAO = {
+  terreno_frente_azimute: { min: 0, max: 360, rotulo: 'Frente voltada para (°)' },
+  terreno_latitude: { min: -90, max: 90, rotulo: 'Latitude' },
+  terreno_longitude: { min: -180, max: 180, rotulo: 'Longitude' },
+} as const;
+type CampoDaLocalizacao = keyof typeof FAIXA_DA_LOCALIZACAO;
+
+/** O que está errado na orientação/coordenadas digitadas; `null` = pode salvar. */
+export function problemaDaLocalizacao(f: Record<CampoDaLocalizacao, string>): string | null {
+  for (const k of Object.keys(FAIXA_DA_LOCALIZACAO) as CampoDaLocalizacao[]) {
+    const t = f[k].trim();
+    if (t === '') continue;
+    const v = Number(t.replace(',', '.'));
+    const { min, max, rotulo } = FAIXA_DA_LOCALIZACAO[k];
+    if (!Number.isFinite(v) || v < min || v > max) return `${rotulo}: informe um número entre ${min} e ${max}.`;
+  }
+  if ((f.terreno_latitude.trim() === '') !== (f.terreno_longitude.trim() === '')) return 'Informe latitude e longitude juntas (uma sem a outra não localiza o terreno).';
+  return null;
+}
 type TerrenoForm = ReturnType<typeof terrenoDe>;
 // Inclui o tipo desde 22/10/2026: a Planta deduz Regular/Irregular do desenho.
 type CampoDoTerreno = keyof TerrenoForm;
@@ -108,6 +134,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   const terrenoSalvo = React.useMemo(() => terrenoDe(empreendimento), [
     empreendimento?.terreno_tipo, empreendimento?.terreno_area, empreendimento?.terreno_frente,
     empreendimento?.terreno_fundos, empreendimento?.terreno_profundidade,
+    empreendimento?.terreno_frente_azimute, empreendimento?.terreno_latitude, empreendimento?.terreno_longitude,
   ]); // eslint-disable-line react-hooks/exhaustive-deps
   const [terrenoForm, setTerrenoForm] = React.useState<TerrenoForm>(terrenoSalvo);
   React.useEffect(() => { setTerrenoForm(terrenoSalvo); }, [terrenoSalvo]);
@@ -174,6 +201,11 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
 
   const handleSaveTerreno = async (e: React.FormEvent) => {
     e.preventDefault();
+    const problema = problemaDaLocalizacao(terrenoForm);
+    if (problema) {
+      notify(problema, 'error');
+      return;
+    }
     setSavingTerreno(true);
     // Campo apagado vira NULL (limpa a coluna). Com `undefined` o update ignorava o
     // campo e o valor antigo voltava depois de salvar. Os tipos do registro não
@@ -186,6 +218,9 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         terreno_frente: n(terrenoForm.terreno_frente),
         terreno_fundos: n(terrenoForm.terreno_fundos),
         terreno_profundidade: n(terrenoForm.terreno_profundidade),
+        terreno_frente_azimute: n(terrenoForm.terreno_frente_azimute.replace(',', '.')),
+        terreno_latitude: n(terrenoForm.terreno_latitude.replace(',', '.')),
+        terreno_longitude: n(terrenoForm.terreno_longitude.replace(',', '.')),
       });
       notify('Terreno salvo.');
       onTerrenoSaved?.();
@@ -300,7 +335,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   const editInputCls = 'h-9 px-2.5 border border-gray-200 rounded-[6px] text-sm font-medium outline-none focus:border-blue-500 bg-white';
   const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
 
-  const terrenoCampos: { key: Exclude<keyof TerrenoForm, 'terreno_tipo'>; label: string }[] = [
+  const terrenoCampos: { key: Exclude<keyof TerrenoForm, 'terreno_tipo' | CampoDaLocalizacao>; label: string }[] = [
     { key: 'terreno_area', label: 'Área total (m²)' },
     { key: 'terreno_frente', label: 'Testada / frente (m)' },
     { key: 'terreno_fundos', label: 'Fundos (m)' },
@@ -337,6 +372,24 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   </div>
                 );
               })}
+              {/* Orientação e coordenadas (26/10/2026): a Planta cria o lote da ficha virado para cá e georreferenciado. */}
+              <div className="space-y-1.5">
+                <label htmlFor="terreno-terreno_frente_azimute" className={rotuloCls}>Frente voltada para (°)</label>
+                <input id="terreno-terreno_frente_azimute" className={inputCls} type="number" step="1" min="0" max="360" placeholder="0 = norte, 90 = leste"
+                  value={terrenoForm.terreno_frente_azimute} onChange={e => setTerrenoForm(p => ({ ...p, terreno_frente_azimute: e.target.value }))} />
+                {terrenoForm.terreno_frente_azimute.trim() !== '' && Number.isFinite(Number(terrenoForm.terreno_frente_azimute)) && (
+                  <p className="text-xs text-gray-500" data-testid="terreno-ponto-cardeal">
+                    Frente voltada para o {ROTULO_DO_PONTO_CARDEAL[pontoCardeal(Number(terrenoForm.terreno_frente_azimute))]}
+                  </p>
+                )}
+              </div>
+              {(['terreno_latitude', 'terreno_longitude'] as const).map(key => (
+                <div key={key} className="space-y-1.5">
+                  <label htmlFor={`terreno-${key}`} className={rotuloCls}>{FAIXA_DA_LOCALIZACAO[key].rotulo} (graus decimais)</label>
+                  <input id={`terreno-${key}`} className={inputCls} type="number" step="any" placeholder={key === 'terreno_latitude' ? 'ex.: −19,9191 (sul é negativo)' : 'ex.: −43,9386 (oeste é negativo)'}
+                    value={terrenoForm[key]} onChange={e => setTerrenoForm(p => ({ ...p, [key]: e.target.value }))} />
+                </div>
+              ))}
               <span title={!terrenoDirty && !travado ? 'Altere algum campo do terreno para salvar.' : undefined} className="col-span-2 md:col-span-1 space-y-1.5">
                 {/* Ocupa a altura do rótulo dos campos, para o botão ficar na linha deles. */}
                 <span aria-hidden="true" className={`${rotuloCls} hidden md:block invisible`}>.</span>

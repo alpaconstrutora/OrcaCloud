@@ -362,3 +362,54 @@ describe('gerador de massa · lote estreito', () => {
     }
   });
 });
+
+// 26/10/2026 (etapa 1 de docs/planos/2026-10-26-planta-empreendimento-tres-etapas.md): o número de torres e os
+// pavimentos cadastrados no Empreendimento restringem a varredura.
+describe('gerador de massa · seguir o Empreendimento', () => {
+  const UM_BLOCO = ['TORRE', 'LAMINA', 'EM_L', 'EM_U', 'EM_H', 'EMBASAMENTO_E_TORRE'];
+  const deUnidades = (c: { blocos: { nome: string }[] }) => c.blocos.filter((b) => !/subsolo|pilotis|embasamento/i.test(b.nome)).length;
+  const com = (model: BlueprintModel, doEmpreendimento: NonNullable<typeof RESTRICOES_PADRAO['doEmpreendimento']>) =>
+    entrada(model, { restricoes: { ...RESTRICOES_PADRAO, atenderVagas: false, doEmpreendimento } });
+
+  it('1 torre de 8 pavimentos: só implantações de um bloco, todas com 8', () => {
+    const r = gerarMassa(com(lote(40, 60), { torres: 1, pavimentosMin: 8, pavimentosMax: 8 }), 1);
+    expect(r.melhores.length).toBeGreaterThan(0);
+    for (const c of r.melhores) {
+      expect(UM_BLOCO).toContain(c.parametros.tipo);
+      expect(c.cenario.pavimentosMax).toBe(8);
+    }
+    expect(r.decisoes.join(' ')).toMatch(/Empreendimento: 1 torre, 8 pavimentos/);
+  });
+
+  it('2 torres: duas torres ou blocos paralelos com 2 blocos', () => {
+    const r = gerarMassa(com(lote(40, 60), { torres: 2, pavimentosMin: null, pavimentosMax: null }), 1);
+    expect(r.melhores.length).toBeGreaterThan(0);
+    for (const c of r.melhores) {
+      expect(['DUAS_TORRES', 'BLOCOS_PARALELOS']).toContain(c.parametros.tipo);
+      expect(deUnidades(c)).toBe(2);
+    }
+  });
+
+  it('3 torres: só blocos paralelos, com exatamente 3 blocos', () => {
+    const r = gerarMassa(com(lote(70, 60), { torres: 3, pavimentosMin: 3, pavimentosMax: 5 }), 1);
+    expect(r.melhores.length).toBeGreaterThan(0);
+    for (const c of r.melhores) {
+      expect(c.parametros.tipo).toBe('BLOCOS_PARALELOS');
+      expect(deUnidades(c)).toBe(3);
+      expect(c.cenario.pavimentosMax).toBeGreaterThanOrEqual(3);
+      expect(c.cenario.pavimentosMax).toBeLessThanOrEqual(5);
+    }
+  });
+
+  it('nenhuma das implantações marcadas tem o número de torres: diz em vez de varrer', () => {
+    const r = gerarMassa(com(lote(40, 60), { torres: 3, pavimentosMin: null, pavimentosMax: null }), 1, { tipos: ['TORRE', 'DUAS_TORRES'] });
+    expect(r.melhores).toHaveLength(0);
+    expect(r.avisos.join(' ')).toMatch(/3 torres/);
+  });
+
+  it('sem a restrição, nada muda (o mesmo resultado de antes)', () => {
+    const a = gerarMassa(entrada(lote(40, 60)), 1, { tipos: ['TORRE', 'LAMINA'] });
+    const b = gerarMassa(entrada(lote(40, 60), { restricoes: { ...RESTRICOES_PADRAO, doEmpreendimento: null } }), 1, { tipos: ['TORRE', 'LAMINA'] });
+    expect(b.melhores.map((c) => c.chave)).toEqual(a.melhores.map((c) => c.chave));
+  });
+});

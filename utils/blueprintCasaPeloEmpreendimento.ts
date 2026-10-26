@@ -12,8 +12,9 @@
 
 import type { DadosDoEmpreendimentoParaPlanta } from './blueprintDadosDoEmpreendimento';
 import { fecharLote, loteRetangular, type LoteFechado } from './blueprintLoteDigitado';
+import { pontoCardeal, ROTULO_DO_PONTO_CARDEAL } from './blueprintGrafoEspacial';
 
-export type PassoDaCasa = 'LOTE' | 'ZONA' | 'UNIDADE' | 'GERAR';
+export type PassoDaCasa = 'LOTE' | 'LOCAL' | 'ZONA' | 'UNIDADE' | 'GERAR';
 export type EstadoDoPasso = 'FEITO' | 'FAZER' | 'PERGUNTAR' | 'FALTA' | 'AVISO';
 
 export interface SituacaoDoPasso {
@@ -32,6 +33,10 @@ export interface EntradaDosPassos {
   loteDaFicha: DadosDoEmpreendimentoParaPlanta['lote'];
   /** Por que a ficha não dá o lote (o mesmo texto de Dados do lote › Ficha do empreendimento). */
   motivoSemLoteNaFicha: string | null;
+  /** 26/10/2026: o desenho já tem georreferência (nunca é sobrescrita). */
+  temGeorreferencia?: boolean;
+  /** 26/10/2026: latitude/longitude da ficha. */
+  coordenadasDaFicha?: { latitude: number; longitude: number } | null;
   /** O rótulo da zona em vigor; `null` = nenhuma aplicada. */
   zonaAplicada: string | null;
   /** Quantas zonas o Empreendimento tem no Mapa Regulatório; `null` = ainda carregando. */
@@ -70,7 +75,11 @@ export function loteDaFichaParaLancar(l: NonNullable<DadosDoEmpreendimentoParaPl
   }
   const pelaArea = l.profundidadeMm === null;
   const profundidadeMm = l.profundidadeMm ?? l.profundidadePelaAreaMm ?? 0;
-  return fecharLote(loteRetangular({ frenteMm: l.frenteMm, fundosMm: l.fundosMm, profundidadeMm, lateraisCalculadas: pelaArea, rotacaoNorteDeg }), null);
+  // 26/10/2026: a ficha pode dizer para onde a frente está voltada (`terreno_frente_azimute`).
+  return fecharLote(
+    loteRetangular({ frenteMm: l.frenteMm, fundosMm: l.fundosMm, profundidadeMm, lateraisCalculadas: pelaArea, frenteVoltadaPara: l.frenteVoltadaPara ?? null, rotacaoNorteDeg }),
+    null,
+  );
 }
 
 export function passosDaCasaPeloEmpreendimento(e: EntradaDosPassos): PassosDaCasa {
@@ -95,9 +104,24 @@ export function passosDaCasaPeloEmpreendimento(e: EntradaDosPassos): PassosDaCas
       passo: 'LOTE',
       rotulo: 'Lote',
       estado: 'FAZER',
-      texto: `Lança o lote da ficha (${forma}${l.profundidadeMm === null ? ', profundidade pela área total' : ''}). A ficha não tem a orientação da frente — confira em Dados do lote.`,
+      texto: `Lança o lote da ficha (${forma}${l.profundidadeMm === null ? ', profundidade pela área total' : ''}). ${
+        l.frenteVoltadaPara != null
+          ? `Frente voltada para o ${ROTULO_DO_PONTO_CARDEAL[pontoCardeal(l.frenteVoltadaPara)]} (${l.frenteVoltadaPara}°), como na ficha.`
+          : 'A ficha não tem a orientação da frente — informe em Torres & Unidades › Terreno ou confira em Dados do lote.'
+      }`,
     });
   }
+
+  // ── Local (26/10/2026): as coordenadas da ficha viram a georreferência do desenho, se ele ainda não tem ──
+  if (e.temGeorreferencia) passos.push({ passo: 'LOCAL', rotulo: 'Local', estado: 'FEITO', texto: 'O desenho já está georreferenciado (a ficha não sobrescreve).' });
+  else if (e.coordenadasDaFicha)
+    passos.push({
+      passo: 'LOCAL',
+      rotulo: 'Local',
+      estado: 'FAZER',
+      texto: `Georreferencia o desenho pela ficha (${e.coordenadasDaFicha.latitude.toLocaleString('pt-BR', { maximumFractionDigits: 6 })}, ${e.coordenadasDaFicha.longitude.toLocaleString('pt-BR', { maximumFractionDigits: 6 })}) — latitude para o sol e o IFC.`,
+    });
+  else passos.push({ passo: 'LOCAL', rotulo: 'Local', estado: 'AVISO', texto: 'A ficha não tem latitude e longitude — o desenho fica sem georreferência (informe em Torres & Unidades › Terreno).' });
 
   // ── Zona ──
   if (e.zonaAplicada) passos.push({ passo: 'ZONA', rotulo: 'Zona', estado: 'FEITO', texto: `Zona em vigor: ${e.zonaAplicada}.` });

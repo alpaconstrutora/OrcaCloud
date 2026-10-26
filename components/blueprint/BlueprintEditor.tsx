@@ -618,6 +618,7 @@ import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, esgotoDaCasaNoModel
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { PROGRAMA_CURTO_PADRAO, programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendimento';
+import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
 import type { EmpreendimentoUnit } from '../../types/empreendimento';
@@ -9079,6 +9080,19 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       }
     return { opcoes, porId };
   }, [torresDoEmpreendimento]);
+  // GERAR MASSA seguindo as torres do Empreendimento (26/10/2026, etapa 1): enquanto carregam, o motivo diz.
+  const massaDoEmpreendimentoNaTela = useMemo(
+    () =>
+      empreendimentoDaCasa && nomeDoEmpreendimentoDaCasa
+        ? {
+            nome: nomeDoEmpreendimentoDaCasa,
+            massa: torresDoEmpreendimento
+              ? massaDoEmpreendimento(torresDoEmpreendimento)
+              : { restricao: null, motivo: 'Carregando as torres do Empreendimento…', avisos: [], resumo: null },
+          }
+        : null,
+    [empreendimentoDaCasa, nomeDoEmpreendimentoDaCasa, torresDoEmpreendimento],
+  );
   /** F15 + 25/10/2026: escolher a unidade preenche o programa por ela e a grava como A unidade desta casa. */
   const escolherUnidadeDaCasa = useCallback(
     (id: string | null) => {
@@ -9126,13 +9140,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       temLote: divisas.length > 0,
       loteDaFicha: dadosDaFicha.lote,
       motivoSemLoteNaFicha: fichaNoPainel?.criarLote?.motivo ?? null,
+      temGeorreferencia: !!editor.model.georreferencia,
+      coordenadasDaFicha: dadosDaFicha.coordenadas,
       zonaAplicada: zona.zonaAplicadaId ? (zona.zonaRotuloSalvo ?? zona.zonas.find((z) => z.id === zona.zonaAplicadaId)?.zona ?? 'aplicada') : null,
       zonasDoEmpreendimento: zona.origemDaZona === 'EMPREENDIMENTO' && zona.empreendimentoId ? (zona.carregandoZonas ? null : zona.zonas.length) : 0,
       unidades: torresDoEmpreendimento ? unidadesDaCasa.opcoes : [],
       unidadeId: casaDoEstudo.premissas.unidadeId ?? null,
       motivoParaNaoGerar: motivoParaNaoGerarCasa,
     });
-  }, [levelId, editor.model, dadosDaFicha.lote, fichaNoPainel, zona.zonaAplicadaId, zona.zonaRotuloSalvo, zona.zonas, zona.origemDaZona, zona.empreendimentoId, zona.carregandoZonas, torresDoEmpreendimento, unidadesDaCasa, casaDoEstudo.premissas.unidadeId, motivoParaNaoGerarCasa]);
+  }, [levelId, editor.model, dadosDaFicha.lote, dadosDaFicha.coordenadas, fichaNoPainel, zona.zonaAplicadaId, zona.zonaRotuloSalvo, zona.zonas, zona.origemDaZona, zona.empreendimentoId, zona.carregandoZonas, torresDoEmpreendimento, unidadesDaCasa, casaDoEstudo.premissas.unidadeId, motivoParaNaoGerarCasa]);
   const [construindoCasa, setConstruindoCasa] = useState(false);
   const [mensagemDoConstruir, setMensagemDoConstruir] = useState<{ texto: string; erro: boolean } | null>(null);
   const resolverPassoDaCasa = useCallback((passo: PassoDaCasa) => {
@@ -9158,6 +9174,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           return;
         }
         feitos.push(`lote de ${(lote.areaMm2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m² lançado (Ctrl+Z desfaz)`);
+      } else if (x.passo === 'LOCAL' && dadosDaFicha.coordenadas && !editor.model.georreferencia) {
+        // 26/10/2026: as coordenadas da ficha — só quando o desenho ainda não tem georreferência.
+        const { latitude, longitude } = dadosDaFicha.coordenadas;
+        editor.run({ type: 'SetGeorreferencia', georreferencia: { latitude, longitude } });
+        feitos.push('desenho georreferenciado pela ficha');
       } else if (x.passo === 'ZONA' && zona.zonas.length === 1) {
         zona.aplicarZona(zona.zonas[0].id);
         feitos.push(`zona ${zona.zonas[0].zona ?? ''} aplicada`.replace('  ', ' '));
@@ -12146,6 +12167,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               onAplicar={aplicarMassaGerada}
               onProduto={produtoDoEstudo.setProduto}
               onPedirIa={pedirMudancasDaMassaAIa}
+              empreendimento={massaDoEmpreendimentoNaTela}
             />
           </div>
         </div>

@@ -20,7 +20,7 @@ describe('dadosDoEmpreendimentoParaPlanta', () => {
       endereco_city: 'Pouso Alegre',
     });
     // Sem fundos nem área neste caso: retângulo, e nada a conferir pela área.
-    expect(d.lote).toEqual({ frenteMm: 18000, fundosMm: null, profundidadeMm: 71000, profundidadePelaAreaMm: null, areaM2: null, origem: '011 - Garden Cambuhy' });
+    expect(d.lote).toEqual({ frenteMm: 18000, fundosMm: null, profundidadeMm: 71000, profundidadePelaAreaMm: null, areaM2: null, origem: '011 - Garden Cambuhy', frenteVoltadaPara: null });
     expect(d.endereco).toEqual({ texto: 'Rua A, 10, Centro, Cambuí - MG', origem: '011 - Garden Cambuhy' });
     expect(d.uf).toBe('MG');
     expect(d.cidade).toEqual({ nome: 'Cambuí', uf: 'MG' });
@@ -47,7 +47,17 @@ describe('dadosDoEmpreendimentoParaPlanta', () => {
   });
 
   it('sem empreendimento: nada', () => {
-    expect(dadosDoEmpreendimentoParaPlanta(null)).toEqual({ lote: null, endereco: null, uf: null, cidade: null });
+    expect(dadosDoEmpreendimentoParaPlanta(null)).toEqual({ lote: null, endereco: null, uf: null, cidade: null, coordenadas: null });
+  });
+
+  it('26/10/2026: a orientação da frente vai com o lote; latitude e longitude só juntas e dentro da faixa', () => {
+    const d = dadosDoEmpreendimentoParaPlanta({ name: 'X', terreno_frente: 12, terreno_profundidade: 30, terreno_frente_azimute: 135, terreno_latitude: -19.92, terreno_longitude: -43.94 });
+    expect(d.lote?.frenteVoltadaPara).toBe(135);
+    expect(d.coordenadas).toEqual({ latitude: -19.92, longitude: -43.94, origem: 'X' });
+    // 360 é o próprio norte.
+    expect(dadosDoEmpreendimentoParaPlanta({ name: 'X', terreno_frente: 12, terreno_profundidade: 30, terreno_frente_azimute: 360 }).lote?.frenteVoltadaPara).toBe(0);
+    expect(dadosDoEmpreendimentoParaPlanta({ name: 'X', terreno_latitude: -19.92 }).coordenadas).toBeNull();
+    expect(dadosDoEmpreendimentoParaPlanta({ name: 'X', terreno_latitude: -120, terreno_longitude: 10 }).coordenadas).toBeNull();
   });
 });
 

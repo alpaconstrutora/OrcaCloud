@@ -46,6 +46,7 @@ import type { BlueprintModel, Point } from '../../utils/blueprintKernel';
 import type { EstadoDoGeradorDeMassa } from '../../hooks/useGeradorDeMassa';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 import { usePersistedState } from '../ui/TableUtils';
+import type { MassaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 
 interface Props {
   gerador: EstadoDoGeradorDeMassa;
@@ -61,6 +62,11 @@ interface Props {
   onProduto?: (p: Produto) => void;
   /** M5c: a IA no modo massa; `mudancas: null` + motivo quando indisponível. */
   onPedirIa?: (pedido: string, contexto: unknown) => Promise<{ mudancas: MudancasDaMassa | null; indisponivel: string | null }>;
+  /**
+   * 26/10/2026: o Empreendimento ligado e as torres dele como restrição ("Seguir o Empreendimento"). `null` = sem
+   * Empreendimento ligado; `massa.restricao` nula = nada a seguir (o motivo vai no `title` da caixa desligada).
+   */
+  empreendimento?: { nome: string; massa: MassaDoEmpreendimento } | null;
 }
 
 interface TurnoDaMassa {
@@ -165,9 +171,19 @@ function formatarObjetivo(v: number | null, objetivo: ObjetivoDaMassa): string {
   }
 }
 
-export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumero, onAbrirProduto, onCriarAlternativa, onAplicar, onProduto, onPedirIa }: Props) {
+export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumero, onAbrirProduto, onCriarAlternativa, onAplicar, onProduto, onPedirIa, empreendimento = null }: Props) {
   const [cfg, setCfg] = usePersistedState<Configuracao>('blueprint:gerador-de-massa', PADRAO);
   const c: Configuracao = { ...PADRAO, ...cfg, restricoes: { ...PADRAO.restricoes, ...cfg.restricoes }, hipoteses: { ...PADRAO.hipoteses, ...cfg.hipoteses }, pesos: { ...PADRAO.pesos, ...cfg.pesos } };
+  // SEGUIR O EMPREENDIMENTO (26/10/2026): ligado por padrão; a restrição sai das torres de agora, nunca da configuração guardada.
+  const [seguirEmpreendimento, setSeguirEmpreendimento] = usePersistedState<boolean>('blueprint:gerador-de-massa:seguir-empreendimento', true);
+  const restricaoDoEmpreendimento = empreendimento?.massa.restricao ?? null;
+  const seguindo = seguirEmpreendimento && !!restricaoDoEmpreendimento;
+  const comEmpreendimento = (r: RestricoesDaMassa): RestricoesDaMassa => ({ ...r, doEmpreendimento: seguindo ? restricaoDoEmpreendimento : null });
+  const motivoSemSeguir = !empreendimento
+    ? 'A planta não está ligada a um Empreendimento.'
+    : !restricaoDoEmpreendimento
+      ? (empreendimento.massa.motivo ?? 'O Empreendimento não tem torres para seguir.')
+      : null;
   const [profundidadesTexto, setProfundidadesTexto] = useState(listaParaTexto(c.hipoteses.profundidadesM));
   const [comprimentosTexto, setComprimentosTexto] = useState(listaParaTexto(c.hipoteses.comprimentosDaTorreM));
   const [escolhida, setEscolhida] = useState<string | null>(null);
@@ -190,7 +206,7 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
   const rodar = () => {
     setErro(null);
     setEscolhida(null);
-    gerador.gerar({ model, regua, objetivo: c.objetivo, pesos: c.pesos, restricoes: c.restricoes }, c.semente, c.hipoteses);
+    gerador.gerar({ model, regua, objetivo: c.objetivo, pesos: c.pesos, restricoes: comEmpreendimento(c.restricoes) }, c.semente, c.hipoteses);
   };
   const agir = async (nome: string, fn: () => Promise<void>) => {
     setOcupado(nome);
@@ -214,7 +230,7 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
   const gerarCom = (produto: Produto, k: ConfiguracaoDoGeradorDeMassa) => {
     setErro(null);
     setEscolhida(null);
-    gerador.gerar({ model, regua: { ...regua, produto }, objetivo: k.objetivo, pesos: k.pesos, restricoes: k.restricoes }, k.semente, k.hipoteses);
+    gerador.gerar({ model, regua: { ...regua, produto }, objetivo: k.objetivo, pesos: k.pesos, restricoes: comEmpreendimento(k.restricoes) }, k.semente, k.hipoteses);
   };
   // O turno pendente fecha com o delta quando a varredura nova termina.
   useEffect(() => {
@@ -499,6 +515,20 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
             <input type="checkbox" checked={c.restricoes.atenderVagas} onChange={(e) => setR({ atenderVagas: e.target.checked })} aria-label="Atender às vagas exigidas" className="h-3.5 w-3.5 rounded border-slate-300" />
             Atender às vagas exigidas (produto e zona)
           </label>
+          {empreendimento && (
+            <label className="inline-flex items-center gap-1" title={motivoSemSeguir ?? undefined}>
+              <input
+                type="checkbox"
+                checked={seguindo}
+                disabled={!!motivoSemSeguir}
+                onChange={(e) => setSeguirEmpreendimento(e.target.checked)}
+                aria-label="Seguir o Empreendimento"
+                data-testid="seguir-empreendimento"
+                className="h-3.5 w-3.5 rounded border-slate-300 disabled:opacity-50"
+              />
+              Seguir o Empreendimento "{empreendimento.nome}"{empreendimento.massa.resumo ? `: ${empreendimento.massa.resumo}` : ''}
+            </label>
+          )}
           <span className="ml-auto flex items-center gap-2">
             <button
               type="button"
@@ -523,6 +553,11 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
           </span>
         </div>
         {motivoDoGerar && <p className="text-xs text-amber-800">{motivoDoGerar}.</p>}
+        {empreendimento && (motivoSemSeguir || (seguindo && empreendimento.massa.avisos.length > 0)) && (
+          <p className="text-xs text-slate-600" data-testid="avisos-seguir-empreendimento">
+            {motivoSemSeguir ?? empreendimento.massa.avisos.join(' ')}
+          </p>
+        )}
         <p className="text-xs text-slate-500" data-testid="contexto-do-gerador-de-massa">
           {temProduto ? (
             <>

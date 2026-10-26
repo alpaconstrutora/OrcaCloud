@@ -14,8 +14,8 @@
  * Apresentacional: o produto vem de `useBlueprintProduto` (do ESTUDO, gravado
  * com respiro); a distribuição na massa aparece na tela "Estudo de massa".
  */
-import React, { useState } from 'react';
-import { Plus } from 'lucide-react';
+import React, { useMemo, useState } from 'react';
+import { Building2, Plus } from 'lucide-react';
 import StandardTable, { type StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
@@ -40,6 +40,7 @@ import {
   type UsoDaTipologia,
 } from '../../utils/blueprintProduto';
 import { ROTULO_DO_ARRANJO, type ArranjoDasVagas } from '../../utils/blueprintVagasAutomaticas';
+import { produtoDoEmpreendimento, type TorreParaOProduto } from '../../utils/blueprintProdutoDoEmpreendimento';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 interface Props {
@@ -49,6 +50,14 @@ interface Props {
   erroDeGravacao: string | null;
   /** M3: o CUB do padrão na UF (null = carregando ou sem consulta). */
   cub?: CubDoPadrao | null;
+  /**
+   * 25/10/2026 ("construir através dos dados de incorporação > empreendimento"): o Empreendimento ligado ao estudo,
+   * para "Importar do Empreendimento" — o mix sai das Torres & Unidades. `torres: null` = carregando; ausente = sem
+   * empreendimento ligado.
+   */
+  empreendimento?: { nome: string; torres: TorreParaOProduto[] | null } | null;
+  /** O que o editor preencheu sozinho (produto vazio + empreendimento vinculado), para a tela dizer. */
+  avisoDoEmpreendimento?: string | null;
 }
 
 const COLUNAS: StandardTableColumn[] = [
@@ -79,9 +88,16 @@ const ABAS_DO_PRODUTO: TabsBarItem<AbaDoProduto>[] = [
   { id: 'HIPOTESES', label: 'Hipóteses' },
 ];
 
-export default function TelaProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao, cub = null }: Props) {
+export default function TelaProduto({ produto: p, onProduto, persistenciaIndisponivel, erroDeGravacao, cub = null, empreendimento = null, avisoDoEmpreendimento = null }: Props) {
   const confirmar = useConfirm();
   const [semente, setSemente] = useState<SementeDoProduto>('RESIDENCIAL_MEDIO');
+  const [avisosDaImportacao, setAvisosDaImportacao] = useState<string[] | null>(null);
+  const importacao = useMemo(() => (empreendimento?.torres ? produtoDoEmpreendimento(empreendimento.torres, p) : null), [empreendimento, p]);
+  const motivoSemImportar = !empreendimento
+    ? 'A planta não está ligada a um Empreendimento — vincule pela lista da Planta (Editar) ou pelo formulário do Empreendimento.'
+    : !empreendimento.torres
+      ? 'Carregando as Torres & Unidades do Empreendimento…'
+      : (importacao?.motivo ?? null);
   const problemas = problemasDoProduto(p);
   // A aba escolhida fica guardada neste navegador; o valor guardado pode ser de uma versão com outras abas.
   const [aba, setAba] = usePersistedState<AbaDoProduto>('blueprint:produto:aba', 'PRODUTO');
@@ -100,6 +116,21 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
       if (!ok) return;
     }
     onProduto(produtoSemente(semente));
+  }
+
+  async function importarDoEmpreendimento() {
+    if (!empreendimento || !importacao?.produto) return;
+    if (p.tipologias.length > 0) {
+      const ok = await confirmar({
+        title: 'Substituir as tipologias?',
+        message: `As ${p.tipologias.length} tipologia(s) atuais e a meta dão lugar às do Empreendimento "${empreendimento.nome}". Padrão, hipóteses e financeiro ficam.`,
+        variant: 'warning',
+        confirmLabel: 'Substituir',
+      });
+      if (!ok) return;
+    }
+    onProduto(importacao.produto);
+    setAvisosDaImportacao(importacao.avisos);
   }
 
   function novaTipologia() {
@@ -162,6 +193,25 @@ export default function TelaProduto({ produto: p, onProduto, persistenciaIndispo
                 />
               </div>
             </div>
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-gray-100 pt-4">
+              <button
+                type="button"
+                onClick={() => void importarDoEmpreendimento()}
+                disabled={!!motivoSemImportar}
+                title={motivoSemImportar ?? `Tipologias, mix, área, vagas, preço/m² e meta pelas unidades de "${empreendimento?.nome}"`}
+                data-testid="importar-do-empreendimento"
+                className="flex h-9 shrink-0 items-center gap-1.5 rounded-[6px] border border-gray-200 bg-white px-3 text-[13px] font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                <Building2 className="h-[15px] w-[15px]" /> {empreendimento ? `Importar do Empreendimento "${empreendimento.nome}"` : 'Importar do Empreendimento'}
+              </button>
+              <p className="text-xs text-gray-500">{motivoSemImportar ?? 'As tipologias e o mix saem das Torres & Unidades; padrão, hipóteses e financeiro ficam como estão.'}</p>
+            </div>
+            {(avisoDoEmpreendimento || (avisosDaImportacao && avisosDaImportacao.length > 0)) && (
+              <ul className="space-y-0.5 text-xs text-gray-600" data-testid="avisos-da-importacao">
+                {avisoDoEmpreendimento && <li>{avisoDoEmpreendimento}</li>}
+                {(avisosDaImportacao ?? []).map((x) => <li key={x}>{x}</li>)}
+              </ul>
+            )}
             {problemas.length > 0 && (
               <ul className="space-y-0.5 text-xs text-amber-700" data-testid="problemas-do-produto">
                 {problemas.map((x) => <li key={x}>{x}</li>)}

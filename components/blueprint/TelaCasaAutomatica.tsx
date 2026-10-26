@@ -11,7 +11,7 @@
  * alternativa e Lançar na barra das abas (`docs/planos/2026-10-22-casa-automatica-abas.md`).
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { CircleDot, ClipboardList, Droplets, Home, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
+import { AlertCircle, Building2, Check, CircleDot, ClipboardList, Droplets, HelpCircle, Home, Info, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
@@ -21,6 +21,7 @@ import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from
 import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, type PadraoDaCasa } from '../../utils/blueprintPrograma';
 import { PREMISSAS_DA_CASA_PADRAO, type PremissasDaCasa } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import type { EstadoDoPasso, PassoDaCasa, PassosDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { AREA_DA_INTENSIDADE_PADRAO_M2, INTENSIDADE_ATE_100M2_MMH, INTENSIDADE_POR_CIDADE, PERIODOS_DE_RETORNO, type HipotesesPluviais, type PeriodoDeRetorno } from '../../utils/blueprintPluvial';
 
 const COR_DA_SITUACAO: Record<SituacaoDaEtapa, string> = {
@@ -83,7 +84,31 @@ interface Props {
    */
   chuva?: HipotesesPluviais;
   onChuva?: (h: HipotesesPluviais) => void;
+  /**
+   * 25/10/2026 ("construir através dos dados de incorporação > empreendimento"): o Empreendimento ligado ao estudo e
+   * os passos do "Construir pelo Empreendimento" — lote pela ficha, zona, unidade e gerar num clique. `onResolver`
+   * leva ao lugar de responder um passo que PERGUNTA (lote digitado, zona, unidade). Ausente = sem empreendimento.
+   */
+  peloEmpreendimento?: {
+    nome: string;
+    passos: PassosDaCasa;
+    construindo: boolean;
+    onConstruir: () => void;
+    onResolver: (passo: PassoDaCasa) => void;
+    /** O que o último "Construir" fez (ou por que parou). */
+    mensagem?: { texto: string; erro: boolean } | null;
+  } | null;
 }
+
+/** O estado de cada passo em texto colorido (§8), com ícone — nunca só a cor. */
+const DO_ESTADO: Record<EstadoDoPasso, { rotulo: string; cor: string; Icone: typeof Check }> = {
+  FEITO: { rotulo: 'feito', cor: 'text-emerald-700', Icone: Check },
+  FAZER: { rotulo: 'o botão faz', cor: 'text-blue-700', Icone: CircleDot },
+  PERGUNTAR: { rotulo: 'escolha sua', cor: 'text-amber-700', Icone: HelpCircle },
+  FALTA: { rotulo: 'falta', cor: 'text-red-700', Icone: AlertCircle },
+  AVISO: { rotulo: 'aviso', cor: 'text-slate-600', Icone: Info },
+};
+const ONDE_RESPONDER: Partial<Record<PassoDaCasa, string>> = { LOTE: 'Abrir o lote digitado', ZONA: 'Abrir Dados do lote', UNIDADE: 'Escolher a unidade' };
 
 const PERIODO_DA_CHUVA: Record<PeriodoDeRetorno, string> = { 1: '1 ano', 5: '5 anos (coberturas e terraços)', 25: '25 anos' };
 
@@ -283,6 +308,69 @@ export default function TelaCasaAutomatica(props: Props) {
           </div>
         )}
       </div>
+
+      {/* ── Construir pelo Empreendimento (25/10/2026): o que já está feito, o que o botão faz e onde ele pergunta ── */}
+      {props.peloEmpreendimento && (
+        <section className={`space-y-4 ${cardCls}`} data-testid="casa-pelo-empreendimento">
+          <SecaoTitulo
+            icon={Building2}
+            titulo={`Dados do Empreendimento "${props.peloEmpreendimento.nome}"`}
+            resumo="lote, zona e programa saem da ficha, do Mapa Regulatório e de Torres & Unidades"
+            acoes={
+              <Button
+                variant="secondary"
+                onClick={() => {
+                  const parada = props.peloEmpreendimento?.passos.parada;
+                  if (parada === 'UNIDADE') setAba('programa');
+                  props.peloEmpreendimento?.onConstruir();
+                }}
+                disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo || casa.rodando}
+                title={props.peloEmpreendimento.passos.motivoDoBotao ?? (casa.rodando ? 'Aguarde: a casa está sendo gerada' : undefined)}
+                data-testid="construir-pelo-empreendimento"
+              >
+                <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir pelo Empreendimento'}
+              </Button>
+            }
+          />
+          <ul className="space-y-2">
+            {props.peloEmpreendimento.passos.passos.map((x) => {
+              const { rotulo, cor, Icone } = DO_ESTADO[x.estado];
+              const onde = x.estado === 'PERGUNTAR' ? ONDE_RESPONDER[x.passo] : undefined;
+              return (
+                <li key={x.passo} className="flex items-start gap-2 text-sm text-gray-700" data-testid={`passo-${x.passo}`}>
+                  <Icone className={`mt-0.5 h-4 w-4 shrink-0 ${cor}`} aria-hidden />
+                  <span className="w-20 shrink-0 font-medium text-gray-900">{x.rotulo}</span>
+                  <span className={`w-28 shrink-0 ${cor}`}>{rotulo}</span>
+                  <span className="min-w-0 flex-1">
+                    {x.texto}
+                    {onde && (
+                      <button
+                        type="button"
+                        className="ml-2 font-medium text-blue-600 hover:text-blue-800"
+                        onClick={() => {
+                          if (x.passo === 'UNIDADE') setAba('programa');
+                          props.peloEmpreendimento?.onResolver(x.passo);
+                        }}
+                      >
+                        {onde}
+                      </button>
+                    )}
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+          {props.peloEmpreendimento.mensagem && (
+            <p
+              role={props.peloEmpreendimento.mensagem.erro ? 'alert' : 'status'}
+              className={props.peloEmpreendimento.mensagem.erro ? 'text-sm text-red-700' : 'text-sm text-gray-700'}
+              data-testid="mensagem-do-construir"
+            >
+              {props.peloEmpreendimento.mensagem.texto}
+            </p>
+          )}
+        </section>
+      )}
 
       {/* ── Programa: o que a casa tem e o que ela leva (um formulário, um card, §30) ── */}
       {abaEfetiva === 'programa' && (

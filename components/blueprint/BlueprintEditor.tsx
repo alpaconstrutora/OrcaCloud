@@ -616,8 +616,11 @@ import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { useCasaAutomatica } from '../../hooks/useCasaAutomatica';
 import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, esgotoDaCasaNoModelo, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
-import { programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
-import type { EmpreendimentoUnit, EmpreendimentoWithChildren } from '../../types/empreendimento';
+import { PROGRAMA_CURTO_PADRAO, programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
+import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendimento';
+import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
+import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
+import type { EmpreendimentoUnit } from '../../types/empreendimento';
 import type { Empreendimento } from '../../types/empreendimento';
 import {
   areaEmM2,
@@ -9060,31 +9063,128 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       vivo = false;
     };
   }, [telaAberta, ufDaCasa, casaDoEstudo.premissas.curto.padrao]);
-  // As unidades do Empreendimento ligado ao estudo — para preencher o programa pela unidade.
-  const [unidadesDaCasa, setUnidadesDaCasa] = useState<{ opcoes: UnidadeParaOPrograma[]; porId: Map<string, EmpreendimentoUnit> }>({ opcoes: [], porId: new Map() });
-  const empreendimentoDaCasa = empreendimentoVinculado?.id ?? zona.empreendimentoId ?? empreendimentoSugerido;
+  // As Torres & Unidades do Empreendimento ligado ao estudo — a Casa preenche o programa pela unidade e o Produto
+  // da massa monta o mix por elas (25/10/2026: um hook para as duas telas; era um efeito só da Casa).
+  const empreendimentoDaCasa = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido || null;
+  const nomeDoEmpreendimentoDaCasa = empreendimentos.find((e) => e.id === empreendimentoDaCasa)?.name ?? null;
+  const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(empreendimentoDaCasa, telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa');
+  const torresDoEmpreendimento = unidadesDoEmpreendimento.carregadoDe === empreendimentoDaCasa ? unidadesDoEmpreendimento.torres : null;
+  const unidadesDaCasa = useMemo(() => {
+    const porId = new Map<string, EmpreendimentoUnit>();
+    const opcoes: UnidadeParaOPrograma[] = [];
+    for (const t of torresDoEmpreendimento ?? [])
+      for (const u of t.units ?? []) {
+        porId.set(u.id, u);
+        opcoes.push({ id: u.id, rotulo: `${t.name} · ${u.name}${u.typology ? ` (${u.typology})` : ''}` });
+      }
+    return { opcoes, porId };
+  }, [torresDoEmpreendimento]);
+  /** F15 + 25/10/2026: escolher a unidade preenche o programa por ela e a grava como A unidade desta casa. */
+  const escolherUnidadeDaCasa = useCallback(
+    (id: string | null) => {
+      const u = id ? unidadesDaCasa.porId.get(id) : undefined;
+      casaDoEstudo.setPremissas({ ...casaDoEstudo.premissas, ...(u ? { curto: programaCurtoDaUnidade(u).curto } : {}), unidadeId: id });
+    },
+    [unidadesDaCasa, casaDoEstudo],
+  );
+  // A unidade ÚNICA do Empreendimento entra sozinha ao abrir a Casa — só sem unidade escolhida e com o programa no
+  // padrão (programa mexido à mão não é sobrescrito). Uma vez por abertura da planta.
+  const [avisoDaUnidadeAutomatica, setAvisoDaUnidadeAutomatica] = useState<string | null>(null);
+  const unidadeAvaliada = useRef(false);
   useEffect(() => {
-    if (telaAberta !== 'casa' || !empreendimentoDaCasa) return;
-    let vivo = true;
-    empreendimentoService
-      .getById(empreendimentoDaCasa, { includeChildren: true })
-      .then((e) => {
-        if (!vivo || !e) return;
-        const torres = (e as EmpreendimentoWithChildren).towers ?? [];
-        const porId = new Map<string, EmpreendimentoUnit>();
-        const opcoes: UnidadeParaOPrograma[] = [];
-        for (const t of torres)
-          for (const u of t.units ?? []) {
-            porId.set(u.id, u);
-            opcoes.push({ id: u.id, rotulo: `${t.name} · ${u.name}${u.typology ? ` (${u.typology})` : ''}` });
-          }
-        setUnidadesDaCasa({ opcoes, porId });
-      })
-      .catch((err) => console.warn('[casa] unidades do empreendimento indisponíveis:', err));
-    return () => {
-      vivo = false;
-    };
-  }, [telaAberta, empreendimentoDaCasa]);
+    if (telaAberta !== 'casa' || unidadeAvaliada.current || casaDoEstudo.carregando || !torresDoEmpreendimento) return;
+    unidadeAvaliada.current = true;
+    const p = casaDoEstudo.premissas;
+    if (p.unidadeId || unidadesDaCasa.opcoes.length !== 1 || JSON.stringify(p.curto) !== JSON.stringify(PROGRAMA_CURTO_PADRAO)) return;
+    const unica = unidadesDaCasa.opcoes[0];
+    escolherUnidadeDaCasa(unica.id);
+    setAvisoDaUnidadeAutomatica(`Programa preenchido pela unidade ${unica.rotulo}, a única do Empreendimento.`);
+  }, [telaAberta, casaDoEstudo.carregando, casaDoEstudo.premissas, torresDoEmpreendimento, unidadesDaCasa, escolherUnidadeDaCasa]);
+  // PRODUTO pelo Empreendimento (25/10/2026): com a planta VINCULADA e o produto vazio, o mix vem das unidades sozinho,
+  // uma vez por abertura. Produto com tipologias nunca é sobrescrito sem pedir (o botão da tela confirma).
+  const [avisoDoProdutoAutomatico, setAvisoDoProdutoAutomatico] = useState<string | null>(null);
+  const produtoAvaliado = useRef(false);
+  useEffect(() => {
+    if (produtoAvaliado.current || !empreendimentoVinculado || produtoDoEstudo.carregando || empreendimentoDaCasa !== empreendimentoVinculado.id || !torresDoEmpreendimento) return;
+    produtoAvaliado.current = true;
+    if (produtoDoEstudo.produto.tipologias.length > 0) return;
+    const r = produtoDoEmpreendimento(torresDoEmpreendimento, produtoDoEstudo.produto);
+    if (!r.produto || r.produto.tipologias.length === 0) return;
+    produtoDoEstudo.setProduto(r.produto);
+    setAvisoDoProdutoAutomatico(
+      `Preenchido pelo Empreendimento "${empreendimentoVinculado.name}" (o produto estava vazio): ${r.produto.tipologias.length} tipologia(s), meta de ${r.produto.metaUnidades ?? 0} unidade(s).`,
+    );
+  }, [empreendimentoVinculado, empreendimentoDaCasa, produtoDoEstudo, torresDoEmpreendimento]);
+  // CONSTRUIR PELO EMPREENDIMENTO (25/10/2026): lote pela ficha → zona → unidade → gerar, num clique; para no primeiro
+  // passo que PERGUNTA e leva até ele. Lançar continua sendo o clique da pessoa. Plano:
+  // docs/planos/2026-10-25-planta-construir-pelo-empreendimento.md.
+  const passosDaCasa = useMemo(() => {
+    const divisas = levelId ? (editor.model.boundaries ?? []).filter((b) => b.levelId === levelId && b.kind === 'TERRENO') : [];
+    return passosDaCasaPeloEmpreendimento({
+      temPavimento: !!levelId,
+      pavimentoComParedes: !!levelId && editor.model.walls.some((w) => w.levelId === levelId),
+      temLote: divisas.length > 0,
+      loteDaFicha: dadosDaFicha.lote,
+      motivoSemLoteNaFicha: fichaNoPainel?.criarLote?.motivo ?? null,
+      zonaAplicada: zona.zonaAplicadaId ? (zona.zonaRotuloSalvo ?? zona.zonas.find((z) => z.id === zona.zonaAplicadaId)?.zona ?? 'aplicada') : null,
+      zonasDoEmpreendimento: zona.origemDaZona === 'EMPREENDIMENTO' && zona.empreendimentoId ? (zona.carregandoZonas ? null : zona.zonas.length) : 0,
+      unidades: torresDoEmpreendimento ? unidadesDaCasa.opcoes : [],
+      unidadeId: casaDoEstudo.premissas.unidadeId ?? null,
+      motivoParaNaoGerar: motivoParaNaoGerarCasa,
+    });
+  }, [levelId, editor.model, dadosDaFicha.lote, fichaNoPainel, zona.zonaAplicadaId, zona.zonaRotuloSalvo, zona.zonas, zona.origemDaZona, zona.empreendimentoId, zona.carregandoZonas, torresDoEmpreendimento, unidadesDaCasa, casaDoEstudo.premissas.unidadeId, motivoParaNaoGerarCasa]);
+  const [construindoCasa, setConstruindoCasa] = useState(false);
+  const [mensagemDoConstruir, setMensagemDoConstruir] = useState<{ texto: string; erro: boolean } | null>(null);
+  const resolverPassoDaCasa = useCallback((passo: PassoDaCasa) => {
+    if (passo === 'LOTE') abrirLoteDigitado('RETANGULO');
+    else if (passo === 'ZONA') {
+      setDrawerRecolhido(false);
+      setTarefa('terreno');
+    } else if (passo === 'UNIDADE') window.setTimeout(() => document.querySelector<HTMLSelectElement>('[data-testid="unidade-da-casa"]')?.focus(), 0);
+  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  const construirCasaPeloEmpreendimento = () => {
+    setMensagemDoConstruir(null);
+    const feitos: string[] = [];
+    for (const x of passosDaCasa.passos) {
+      if (x.passo === passosDaCasa.parada || x.passo === 'GERAR') break;
+      if (x.estado !== 'FAZER') continue;
+      if (x.passo === 'LOTE' && levelId && dadosDaFicha.lote) {
+        const lote = loteDaFichaParaLancar(dadosDaFicha.lote, rotacaoDoNorte(editor.model));
+        try {
+          if (lote.problema) throw new Error(lote.problema);
+          editor.runBatch(comandosDoLote(editor.model, levelId, lote, { medidasDaEscritura: true }));
+        } catch (e) {
+          setMensagemDoConstruir({ texto: `O lote da ficha não entrou: ${e instanceof Error ? e.message : String(e)}`, erro: true });
+          return;
+        }
+        feitos.push(`lote de ${(lote.areaMm2 / 1e6).toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m² lançado (Ctrl+Z desfaz)`);
+      } else if (x.passo === 'ZONA' && zona.zonas.length === 1) {
+        zona.aplicarZona(zona.zonas[0].id);
+        feitos.push(`zona ${zona.zonas[0].zona ?? ''} aplicada`.replace('  ', ' '));
+      } else if (x.passo === 'UNIDADE' && unidadesDaCasa.opcoes.length === 1) {
+        escolherUnidadeDaCasa(unidadesDaCasa.opcoes[0].id);
+        feitos.push(`programa pela unidade ${unidadesDaCasa.opcoes[0].rotulo}`);
+      }
+    }
+    if (passosDaCasa.parada) {
+      const passo = passosDaCasa.passos.find((x) => x.passo === passosDaCasa.parada);
+      setMensagemDoConstruir({ texto: `${feitos.length > 0 ? `Feito: ${feitos.join('; ')}. ` : ''}Falta a sua escolha — ${passo?.texto ?? ''}`, erro: false });
+      resolverPassoDaCasa(passosDaCasa.parada);
+      return;
+    }
+    if (feitos.length > 0) setMensagemDoConstruir({ texto: `Feito: ${feitos.join('; ')}. Gerando a prévia…`, erro: false });
+    // Gera DEPOIS do novo desenho (o lote acabou de entrar): o efeito abaixo roda no render seguinte.
+    setConstruindoCasa(true);
+  };
+  useEffect(() => {
+    if (!construindoCasa) return;
+    setConstruindoCasa(false);
+    if (motivoParaNaoGerarCasa) {
+      setMensagemDoConstruir({ texto: motivoParaNaoGerarCasa, erro: true });
+      return;
+    }
+    gerarCasa();
+  }, [construindoCasa, motivoParaNaoGerarCasa, gerarCasa]);
   /** INCÊNDIO (30/09/2026, E0): premissas do estudo; classificação e exigências derivadas, só com a tarefa aberta. */
   const incendioDoEstudo = useBlueprintIncendio(study.id, study.organization_id);
   /** Incêndio E1.4: a numeração derivada (H-1, SPK-3), para o painel do ponto. */
@@ -12002,11 +12102,23 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             }}
             cub={cubDaCasa ? { valorM2: cubDaCasa.valorM2, estimado: cubDaCasa.fonte === 'ESTIMADO', referencia: cubDaCasa.referencia ?? null } : null}
             unidades={unidadesDaCasa.opcoes}
+            // F15: a unidade escolhida preenche o programa e fica como A unidade desta casa; "nenhuma" só desfaz o vínculo.
             onUnidade={(id) => {
-              // F15: a unidade escolhida preenche o programa e fica como A unidade desta casa; "nenhuma" só desfaz o vínculo.
-              const u = id ? unidadesDaCasa.porId.get(id) : undefined;
-              casaDoEstudo.setPremissas({ ...casaDoEstudo.premissas, ...(u ? { curto: programaCurtoDaUnidade(u).curto } : {}), unidadeId: id });
+              setAvisoDaUnidadeAutomatica(null);
+              escolherUnidadeDaCasa(id);
             }}
+            peloEmpreendimento={
+              empreendimentoDaCasa && nomeDoEmpreendimentoDaCasa
+                ? {
+                    nome: nomeDoEmpreendimentoDaCasa,
+                    passos: passosDaCasa,
+                    construindo: construindoCasa,
+                    onConstruir: construirCasaPeloEmpreendimento,
+                    onResolver: resolverPassoDaCasa,
+                    mensagem: mensagemDoConstruir ?? (avisoDaUnidadeAutomatica ? { texto: avisoDaUnidadeAutomatica, erro: false } : null),
+                  }
+                : null
+            }
           />
         </div>
       )}
@@ -12100,6 +12212,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             persistenciaIndisponivel={produtoDoEstudo.persistenciaIndisponivel}
             erroDeGravacao={produtoDoEstudo.erroDeGravacao}
             cub={produtoDoEstudo.produto.financeiro.custoM2Manual ? null : cubDoEstudo}
+            empreendimento={empreendimentoDaCasa && nomeDoEmpreendimentoDaCasa ? { nome: nomeDoEmpreendimentoDaCasa, torres: torresDoEmpreendimento } : null}
+            avisoDoEmpreendimento={avisoDoProdutoAutomatico}
           />
         </div>
       )}

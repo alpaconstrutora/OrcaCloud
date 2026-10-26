@@ -40,6 +40,15 @@ export const regulatoryMapService = {
         }));
     },
 
+    /** Mapas de UMA cidade, de todas as organizações que o usuário enxerga (a RLS limita).
+     *  Sem filtro de organização de propósito (26/10/2026): o mapa é a lei da cidade,
+     *  cadastrado uma vez — o de Cambuí-MG na Alpa — e o empreendimento que importa vive na
+     *  SPE dele; filtrar pela org do empreendimento devolvia "nenhum mapa". Importar é cópia
+     *  gravada na org do empreendimento, então nenhum registro fica ligado entre organizações. */
+    async listByCity(cityId: string): Promise<RegulatoryMapWithCity[]> {
+        return this.list(undefined, cityId);
+    },
+
     async getById(id: string): Promise<RegulatoryMapWithCity | null> {
         const { data, error } = await supabase
             .from('regulatory_maps')

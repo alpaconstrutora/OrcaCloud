@@ -16,7 +16,7 @@ vi.mock('../services/blueprintUrbanContextService', () => ({
   blueprintUrbanContextService: { get: vi.fn(async () => ctxSalvo.current), upsert: vi.fn() },
 }));
 vi.mock('../services/regulatoryMapService', () => ({
-  regulatoryMapService: { list: vi.fn(async () => []), listZones: vi.fn(async () => []) },
+  regulatoryMapService: { listByCity: vi.fn(async () => []), listZones: vi.fn(async () => []) },
 }));
 vi.mock('../services/empreendimentoService', () => ({
   empreendimentoService: { listRegulatoryZones: vi.fn(async () => []) },
@@ -25,7 +25,7 @@ vi.mock('../services/empreendimentoService', () => ({
 import { useBlueprintZonaUrbanistica } from '../hooks/useBlueprintZonaUrbanistica';
 import { blueprintUrbanContextService } from '../services/blueprintUrbanContextService';
 
-const montar = (studyId: string) => renderHook(() => useBlueprintZonaUrbanistica(studyId, 'o1', null, 'o1'));
+const montar = (studyId: string) => renderHook(() => useBlueprintZonaUrbanistica(studyId, 'o1', null));
 const carregou = async () => waitFor(() => expect(blueprintUrbanContextService.get).toHaveBeenCalled());
 
 describe('escolha em andamento da zona', () => {

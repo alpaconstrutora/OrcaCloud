@@ -4,6 +4,8 @@ import { AlertTriangle, ArrowUpRight, Map, RefreshCw, Scale } from 'lucide-react
 import CitySearchSelect, { type CitySearchValue } from '../regulatoryMap/CitySearchSelect';
 import type { RegulatoryMapWithCity } from '../../types/regulatoryMap';
 import type { OrigemDaZona } from '../../hooks/useBlueprintZonaUrbanistica';
+import { useStore } from '../../store/useStore';
+import { rotuloMapaRegulatorio } from '../../utils/rotuloMapaRegulatorio';
 import {
   ROTULO_DO_CAMPO,
   lerZona,
@@ -121,6 +123,7 @@ export default function PainelZonaUrbanistica({
   onAbrirMapaRegulatorio,
 }: Props) {
   const [escolhida, setEscolhida] = React.useState<string>('');
+  const organizacoes = useStore((state) => state.organizations);
   const zonaSelecionada = escolhida || zonaAplicadaId || '';
   const zona = zonas.find((z) => z.id === zonaSelecionada) ?? null;
 
@@ -251,7 +254,7 @@ export default function PainelZonaUrbanistica({
                 </option>
                 {mapas.map((m) => (
                   <option key={m.id} value={m.id}>
-                    {m.name}
+                    {rotuloMapaRegulatorio(m, mapas, organizacoes)}
                   </option>
                 ))}
               </select>

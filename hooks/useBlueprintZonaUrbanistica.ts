@@ -235,8 +235,6 @@ export function useBlueprintZonaUrbanistica(
    * sem ele, o da obra do estudo. Só vale enquanto ninguém escolheu nem salvou nada.
    */
   empreendimentoSugerido: string | null,
-  /** Contexto do topo. `null` = "Todas" — o catálogo então não filtra por org. */
-  orgId: string | null,
   /**
    * Cidade da ficha do empreendimento (vínculo, ou obra) para "Buscar por cidade" — 22/10/2026.
    * Só entra com o catálogo aberto, sem cidade nem mapa, e se casar com UMA cidade do cadastro.
@@ -376,6 +374,8 @@ export function useBlueprintZonaUrbanistica(
   const escolherMapa = useCallback((id: string) => { mexeuNaEscolha.current = true; setMapaId(id); }, []);
 
   // ── Mapas da cidade (só no caminho do catálogo) ───────────────────────────
+  // De todas as organizações do usuário, não só a do topo (26/10/2026): a lei da cidade é
+  // cadastrada uma vez (Cambuí-MG na Alpa) e a planta pode viver numa SPE.
   useEffect(() => {
     if (origemDaZona !== 'CATALOGO' || !cidade) {
       setMapas([]);
@@ -384,7 +384,7 @@ export function useBlueprintZonaUrbanistica(
     let vivo = true;
     setCarregandoMapas(true);
     regulatoryMapService
-      .list(orgId ?? undefined, cidade.id)
+      .listByCity(cidade.id)
       .then((m) => vivo && setMapas(m))
       .catch((e) => {
         if (vivo) setMapas([]);
@@ -394,7 +394,7 @@ export function useBlueprintZonaUrbanistica(
     return () => {
       vivo = false;
     };
-  }, [origemDaZona, cidade, orgId]);
+  }, [origemDaZona, cidade]);
 
   // ── Zonas da origem ativa ─────────────────────────────────────────────────
   useEffect(() => {

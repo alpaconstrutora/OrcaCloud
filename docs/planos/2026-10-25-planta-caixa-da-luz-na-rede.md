@@ -69,5 +69,5 @@ ficaria sem caminho. Conexões e conferência de pontas abertas não cobrem a el
 - [ ] item 4: deploy da planta-api (aguarda autorização)
 - [x] tsc + suíte — tsc 0 erros; suíte local (sem `blueprintCasaAutomatica`, que roda na CI): 11.492 ok + 2 testes de
   tela que caíram por tempo sob carga e passaram sozinhos (`PainelVersoes` 39/39) = 11.494 ok, 0 falhas, 34 pulados, total 11.528
-- [ ] PR + CI
-- [ ] publicação
+- [x] PR + CI — PR #171, ci 29min50s verde
+- [x] publicação — mesclado por squash (d0c1f41f) em 25/10/2026; `conferir-producao.sh` provou o domínio servindo 1eceed0 (contém d0c1f41f)

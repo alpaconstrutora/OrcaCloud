@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     montarLinhasDaFolha, fatiasDoColaborador, distribuirCentavos, vencimentoDia20, diaDoMesSeguinte,
-    encargosPadrao, formaDoTitulo, tituloDaFolhaPreservado, custoPorDestino, tributosDoProlabore,
+    encargosPadrao, formaDoTitulo, tituloDaFolhaPreservado, custoPorDestino, tributosDoProlabore, TERCEIROS_FPAS_507,
     type ColaboradorDaFolha, type EncargosConfig, type OpcoesDaFolha,
 } from '../utils/folhaFinanceiro';
 
@@ -46,7 +46,19 @@ describe('montarLinhasDaFolha — cada encargo e retenção é um título própr
         expect(t['rep-CONTRIBUIÇÃO ASSISTENCIAL']).toBe(60.69);
         expect(t.cpp).toBe(1133.40);        // 5.667 × 20%
         expect(t.rat).toBe(170.01);         // 5.667 × 3% × FAP 1
-        expect(t.terceiros).toBe(328.69);   // 5.667 × 5,8%
+        expect(t['ter-0079']).toBe(328.69); // 5.667 × 5,8% — a única entidade deste CFG
+        expect(t.terceiros).toBeUndefined(); // não existe mais o agregado
+    });
+
+    it('terceiros: um título POR ENTIDADE (FPAS 507), cada um com a sua alíquota (pedido 25/10/2026)', () => {
+        const t = porTipo(montarLinhasDaFolha([colabJunho()], { ...CFG, terceiros: TERCEIROS_FPAS_507 }, OP));
+        expect(t['ter-0001']).toBe(141.68);  // Salário-Educação 2,5%
+        expect(t['ter-0002']).toBe(11.33);   // INCRA 0,2%
+        expect(t['ter-0004']).toBe(56.67);   // SENAI 1,0%
+        expect(t['ter-0008']).toBe(85.01);   // SESI 1,5%
+        expect(t['ter-0064']).toBe(34);      // SEBRAE 0,6%
+        // a soma das entidades é o que o agregado dava (5.667 × 5,8% = 328,69)
+        expect(Object.entries(t).filter(([k]) => k.startsWith('ter-')).reduce((s, [, v]) => s + v, 0)).toBeCloseTo(328.69, 2);
     });
 
     it('adiantamento NÃO é abatido de novo do salário (o líquido já o desconta) nem vira encargo', () => {
@@ -86,7 +98,7 @@ describe('montarLinhasDaFolha — cada encargo e retenção é um título própr
         const tipos = montarLinhasDaFolha([colabJunho()], encargosPadrao({ regime_tributario: 'simples' }), OP).map(l => l.tipo);
         expect(tipos).not.toContain('cpp');
         expect(tipos).not.toContain('rat');
-        expect(tipos).not.toContain('terceiros');
+        expect(tipos.filter(t => t.startsWith('ter-'))).toEqual([]);
     });
 
     it('rateio entre duas obras: a soma de cada tributo bate ao centavo com o total da folha', () => {
@@ -166,8 +178,15 @@ describe('encargosPadrao — derivado do regime da matriz', () => {
 });
 
 describe('formaDoTitulo', () => {
+    it('terceiros: o credor é a ENTIDADE, em Contribuições de Terceiros, vencendo no dia 20', () => {
+        expect(formaDoTitulo('ter-0004', { 'ter-0004': 'SENAI' })).toEqual({
+            party_name: 'SENAI', party_type: 'TAX', category: 'Contribuições de Terceiros',
+            rotulo: 'Contribuição de terceiros: SENAI', vencimento: 'dia20',
+        });
+        expect(formaDoTitulo('ter-0004').party_name).toBe('Terceiros (0004)'); // sem nome: diz o código
+    });
     it('tributos vão para Tributos a Pagar (party_type TAX); salário e repasse não', () => {
-        for (const t of ['inss', 'irrf', 'fgts', 'cpp', 'rat', 'terceiros']) expect(formaDoTitulo(t).party_type, t).toBe('TAX');
+        for (const t of ['inss', 'irrf', 'fgts', 'cpp', 'rat', 'ter-0004']) expect(formaDoTitulo(t).party_type, t).toBe('TAX');
         expect(formaDoTitulo('salario').party_type).toBe('EMPLOYEE');
         expect(formaDoTitulo('rep-X', { X: 'Sindicato' }).party_type).toBe('GOVERNMENT');
         expect(formaDoTitulo('rep-X', { X: 'Sindicato' }).party_name).toBe('Sindicato');

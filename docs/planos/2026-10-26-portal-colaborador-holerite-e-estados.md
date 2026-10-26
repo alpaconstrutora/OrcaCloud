@@ -48,10 +48,17 @@ rodam com a sessão do admin e escondem o defeito.
 - `PortalView` passa o token ao modal.
 
 **Pronto quando:**
-- [ ] a RPC chamada com a chave anon e um token válido devolve o JSON do holerite (curl);
-- [ ] com token inválido devolve `PORTAL_TOKEN_INVALIDO`; com run de outro colaborador devolve erro;
-- [ ] `has_function_privilege('anon', …)` = true só para a nova; teste `segurancaMigrations` verde;
-- [ ] abrindo `/portal?token=` numa janela anônima, o holerite abre.
+- [x] com token válido devolve o holerite completo (result do próprio colaborador, run, itens, organização) —
+      provado dentro do banco (bloco DO), sem tirar o token real do banco; a sonda que levava o token
+      para um curl foi barrada pelo modo automático, com razão (o token é a credencial);
+- [x] com a chave anon e token inválido devolve `PORTAL_TOKEN_INVALIDO` (HTTP 400, curl em 26/10);
+      com run de outro colaborador devolve `PORTAL_HOLERITE_INDISPONIVEL` (bloco DO);
+- [x] `has_function_privilege('anon', …)` = true só para a nova (`fn_colab_portal_employee` = false; curl anon
+      nela = 401 `permission denied`); `segurancaMigrations` verde;
+- [ ] abrindo `/portal?token=` numa janela anônima, o holerite abre — **não feito**: exige um link real de
+      colaborador; fica para o usuário conferir depois do deploy.
+
+Migration aplicada no banco remoto em 26/10 (`db query --linked -f`), ANTES do deploy do frontend.
 
 ### 1.2 Carregando / falhou / vazio em todas as abas (P1)
 

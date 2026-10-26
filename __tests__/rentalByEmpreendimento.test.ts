@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
     groupRentalAnalysis,
+    summarizeAnalysisRows,
     empreendimentoOfProperty,
     empreendimentoOfContract,
     SEM_EMPREENDIMENTO,
@@ -273,5 +274,76 @@ describe('groupRentalAnalysis — "não medido" nunca vira zero', () => {
         expect(vitoria.executive?.renewal.rate).toBeNull();
 
         expect(byId.get('emp-aurora')!.executive?.wale.years).not.toBeNull();
+    });
+});
+
+/**
+ * Contradições vistas na tela em 26/10/2026 (crítica da aba Análise): o KPI e o
+ * rodapé da tabela davam números diferentes para a mesma pergunta. Cada teste
+ * abaixo trava uma delas.
+ */
+describe('groupRentalAnalysis — o topo e o rodapé contam a mesma coisa', () => {
+    it('vacância conta só unidades locáveis: edifício e imóvel fora da carteira não viram "unidade vaga"', () => {
+        // Produção: 42 "unidades vagas" numa carteira de 35 — 6 edifícios e 4
+        // imóveis com visible_in_sales=false entravam pelo log de status.
+        const vacancyEvents: StatusEvent[] = [
+            { property_id: 'u-a2', from_status: 'RENTED', to_status: 'AVAILABLE', changed_at: '2026-06-12T00:00:00Z', source: 'APP' },
+            { property_id: 'b-aurora', from_status: null, to_status: 'AVAILABLE', changed_at: '2026-01-01T00:00:00Z', source: 'BACKFILL' },
+            { property_id: 'fora-da-carteira', from_status: null, to_status: 'AVAILABLE', changed_at: '2026-01-01T00:00:00Z', source: 'BACKFILL' },
+        ];
+        const { rows, total } = groupRentalAnalysis({ ...baseInput, vacancyEvents });
+        expect(total.vacancy!.vacantCount).toBe(1);
+        expect(total.vacancy!.vacantCount).toBeLessThanOrEqual(total.unitStatus.available);
+        expect(rows.reduce((acc, r) => acc + (r.vacancy?.vacantCount ?? 0), 0)).toBe(1);
+        // O "Sem empreendimento" (só o galpão, alugado) não herda os dias do imóvel fantasma.
+        const sem = rows.find(r => r.empreendimentoId === SEM_EMPREENDIMENTO)!;
+        expect(sem.vacancy!.vacantCount).toBe(0);
+    });
+
+    it('receita potencial é UMA conta só e soma o total', () => {
+        const { rows, total } = groupRentalAnalysis(baseInput);
+        const soma = rows.reduce((acc, r) => acc + r.financial.potential, 0);
+        expect(soma).toBeCloseTo(total.financial.potential, 6);
+        expect(total).not.toHaveProperty('referenceMonthlyRevenue');
+    });
+
+    it('valor/m² informa o tamanho da amostra, e as amostras somam o total', () => {
+        const { rows, total } = groupRentalAnalysis(baseInput);
+        expect(rows.reduce((acc, r) => acc + r.valuePerSqm.count, 0)).toBe(total.valuePerSqm.count);
+    });
+
+    it('NOI sem despesa apropriada é marcado como não medido', () => {
+        const noiByProperty = new Map([
+            ['galpao', { propertyId: 'galpao', ownRevenue: 7500, ownExpense: 0, revenue: 7500, expense: 0, noi: 7500, margin: 1 }],
+        ]);
+        const { byId, total } = groupRentalAnalysis({ ...baseInput, noiByProperty });
+        expect(byId.get(SEM_EMPREENDIMENTO)!.noi!.expenseRecorded).toBe(false);
+        expect(total.noi!.expenseRecorded).toBe(false);
+    });
+});
+
+describe('summarizeAnalysisRows — rodapé da tabela "Por empreendimento"', () => {
+    const contracts: AnalysisContract[] = [
+        { id: 'c-a1', deal_id: 'd-a1', status: 'Ativo', end_date: '2028-01-31', current_value: 1900 },
+    ];
+    const { rows, total } = groupRentalAnalysis({ ...baseInput, contracts });
+
+    it('com todas as linhas, as taxas do rodapé são as do topo (média ponderada, não simples)', () => {
+        // Produção: 31,9% no rodapé × 34,3% no KPI — a média simples dava a um
+        // prédio de 1 unidade o peso de um de 12.
+        const f = summarizeAnalysisRows(rows);
+        expect(f.occupancyRate).toBeCloseTo(total.occupancyRate!, 9);
+        expect(f.financialRate).toBeCloseTo(total.financial.rate!, 9);
+        expect(f.potentialMonthlyRevenue).toBeCloseTo(total.financial.potential, 6);
+        expect(f.monthlyRevenue).toBeCloseTo(total.monthlyRevenue, 6);
+        expect(f.valuePerSqmAvg).toBeCloseTo(total.valuePerSqm.avg!, 9);
+    });
+
+    it('sem linha nenhuma, as taxas ficam null — não 0%', () => {
+        const f = summarizeAnalysisRows([]);
+        expect(f.occupancyRate).toBeNull();
+        expect(f.financialRate).toBeNull();
+        expect(f.valuePerSqmAvg).toBeNull();
+        expect(f.monthlyRevenue).toBe(0);
     });
 });

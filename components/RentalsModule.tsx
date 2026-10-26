@@ -59,8 +59,11 @@ import type { StatusEvent } from '../lib/rentalVacancy';
 // docs/planos/2026-08-12-locacoes-analise-por-empreendimento.md.
 import {
     groupRentalAnalysis,
+    summarizeAnalysisRows,
+    noiMeasured,
     SEM_EMPREENDIMENTO,
     type RentalAnalysisScope,
+    type AnalysisRowsSummary,
 } from '../lib/rentalByEmpreendimento';
 // Segundo eixo de partição da aba Análise — por categoria do cliente
 // (`clients.category`), não por empreendimento. Ver lib/rentalByClientType.ts.
@@ -241,14 +244,17 @@ const BROKER_DEFAULT_COL_WIDTHS: Record<string, number> = {
 // única ação é filtrar, e ela mora no clique da linha (§9.1).
 const ANALYSIS_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Empreendimento', sortable: true },
-    { key: 'unitsCount', label: 'Unidades', sortable: true },
+    { key: 'unitsCount', label: 'Alugadas / unidades', sortable: true },
     { key: 'occupancyRate', label: 'Ocupação física', sortable: true },
     { key: 'financialRate', label: 'Ocupação financeira', sortable: true },
     { key: 'monthlyRevenue', label: 'Receita mensal', sortable: true },
-    { key: 'referenceMonthlyRevenue', label: 'Receita mensal de referência', sortable: true },
+    // A chave segue `referenceMonthlyRevenue` só para não perder a largura e a
+    // visibilidade que o usuário já gravou; o valor é `financial.potential`,
+    // a mesma receita potencial do KPI do topo.
+    { key: 'referenceMonthlyRevenue', label: 'Receita potencial', sortable: true },
     { key: 'annualRevenue', label: 'Receita anual', sortable: true },
     { key: 'vacancyDays', label: 'Vacância média', sortable: true },
-    { key: 'noi', label: 'NOI', sortable: true },
+    { key: 'noi', label: 'NOI no ano', sortable: true },
     { key: 'waleYears', label: 'WALE', sortable: true },
     { key: 'overdue90Rate', label: 'Vencido > 90 dias', sortable: true },
     { key: 'valuePerSqmMax', label: 'Valor máx. locação /m²', sortable: true },
@@ -256,9 +262,9 @@ const ANALYSIS_COLUMNS: ColumnConfig[] = [
     { key: 'valuePerSqmAvg', label: 'Valor médio locação /m²', sortable: true },
 ];
 const ANALYSIS_DEFAULT_COL_WIDTHS: Record<string, number> = {
-    name: 230, unitsCount: 100, occupancyRate: 130, financialRate: 155,
-    monthlyRevenue: 140, referenceMonthlyRevenue: 165, annualRevenue: 140,
-    vacancyDays: 130, noi: 130, waleYears: 90, overdue90Rate: 145,
+    name: 230, unitsCount: 150, occupancyRate: 130, financialRate: 155,
+    monthlyRevenue: 140, referenceMonthlyRevenue: 150, annualRevenue: 140,
+    vacancyDays: 130, noi: 130, waleYears: 110, overdue90Rate: 145,
     valuePerSqmMax: 155, valuePerSqmMin: 155, valuePerSqmAvg: 160,
 };
 
@@ -270,7 +276,17 @@ const moneyBRL = (v: number) =>
 const orDash = (v: number | null | undefined, formata: (n: number) => string) =>
     v == null ? '—' : formata(v);
 
-const percent1 = (v: number) => `${(v * 100).toFixed(1)}%`;
+/** "34,3%" — vírgula decimal, como a moeda ao lado. `toFixed` dava "34.3%". */
+const percent1 = (v: number) =>
+    `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+const anos1 = (v: number) =>
+    `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })} anos`;
+
+/** Dias médios de vacância só quando há unidade vaga medida — sem vaga, a
+ *  média não existe ("0 dias" afirmaria uma medição que não aconteceu). */
+const vacancyDaysOf = (row: RentalAnalysisScope): number | null =>
+    row.vacancy && row.vacancy.vacantCount > 0 ? row.vacancy.averageDays : null;
 
 /**
  * Célula da tabela "Por empreendimento".
@@ -295,15 +311,15 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
         case 'monthlyRevenue':
             return moneyBRL(row.monthlyRevenue);
         case 'referenceMonthlyRevenue':
-            return moneyBRL(row.referenceMonthlyRevenue);
+            return moneyBRL(row.financial.potential);
         case 'annualRevenue':
             return moneyBRL(row.monthlyRevenue * 12);
         case 'vacancyDays':
-            return row.vacancy ? `${row.vacancy.averageDays} dias` : '—';
+            return orDash(vacancyDaysOf(row), d => `${d} dias`);
         case 'noi':
-            return row.noi ? moneyBRL(row.noi.noi) : '—';
+            return noiMeasured(row.noi) ? moneyBRL(row.noi!.noi) : '—';
         case 'waleYears':
-            return orDash(row.executive?.wale.years, anos => `${anos.toFixed(1)} anos`);
+            return orDash(row.executive?.wale.years, anos1);
         case 'overdue90Rate':
             return orDash(row.executive?.collection.overdue90Rate, percent1);
         case 'valuePerSqmMax':
@@ -317,25 +333,15 @@ const renderAnalysisCell = (key: string, row: RentalAnalysisScope): React.ReactN
     }
 };
 
-/** Forma do rodapé da tabela "Por empreendimento" — ver `analysisFooter`
- *  (useMemo, no componente) para como cada campo é calculado. */
-interface AnalysisFooterTotals {
-    monthlyRevenue: number;
-    referenceMonthlyRevenue: number;
-    annualRevenue: number;
-    valuePerSqmAvg: number | null;
-    occupancyRate: number | null;
-    financialRate: number | null;
-}
-
-/** Célula do rodapé — só as 6 colunas pedidas têm soma/média; as demais ficam
- *  em branco (não "0", que afirmaria uma medição que não foi feita). */
-const renderAnalysisFooterCell = (key: string, footer: AnalysisFooterTotals): React.ReactNode => {
+/** Célula do rodapé — só as 6 colunas pedidas têm soma/média (ponderada, ver
+ *  `summarizeAnalysisRows`); as demais ficam em branco (não "0", que
+ *  afirmaria uma medição que não foi feita). */
+const renderAnalysisFooterCell = (key: string, footer: AnalysisRowsSummary): React.ReactNode => {
     switch (key) {
         case 'monthlyRevenue':
             return moneyBRL(footer.monthlyRevenue);
         case 'referenceMonthlyRevenue':
-            return moneyBRL(footer.referenceMonthlyRevenue);
+            return moneyBRL(footer.potentialMonthlyRevenue);
         case 'annualRevenue':
             return moneyBRL(footer.annualRevenue);
         case 'valuePerSqmAvg':
@@ -1578,8 +1584,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
         const valorDe = (r: RentalAnalysisScope): string | number | null => {
             switch (analysisTableColumns.sortColumn) {
                 case 'financialRate': return r.financial.rate;
-                case 'vacancyDays': return r.vacancy?.averageDays ?? null;
-                case 'noi': return r.noi?.noi ?? null;
+                case 'referenceMonthlyRevenue': return r.financial.potential;
+                case 'vacancyDays': return vacancyDaysOf(r);
+                case 'noi': return noiMeasured(r.noi) ? r.noi!.noi : null;
                 case 'waleYears': return r.executive?.wale.years ?? null;
                 case 'overdue90Rate': return r.executive?.collection.overdue90Rate ?? null;
                 case 'annualRevenue': return r.monthlyRevenue * 12;
@@ -1614,28 +1621,12 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
      * tela" — usar `analysis.total` (que ignora a busca) mostraria um número
      * maior que a soma das linhas visíveis sempre que houvesse filtro ativo.
      *
-     * Soma: Receita mensal, Receita mensal de referência, Receita anual —
-     * grandezas que se somam por construção (ver `RentalAnalysisScope`).
-     * Média simples (não ponderada): Valor médio de locação /m², Ocupação
-     * física, Ocupação financeira — `null` ("não medido") sai do denominador,
-     * não vira 0.
+     * Soma: Receita mensal, Receita potencial, Receita anual. Ocupação física,
+     * Ocupação financeira e Valor médio /m² são médias PONDERADAS pela base de
+     * cada linha — sem busca, o rodapé é igual ao KPI do topo por construção.
+     * A conta e o porquê moram em `summarizeAnalysisRows`.
      */
-    const analysisFooter = useMemo(() => {
-        const soma = (valorDe: (r: RentalAnalysisScope) => number) =>
-            analysisRows.reduce((acc, r) => acc + valorDe(r), 0);
-        const media = (valorDe: (r: RentalAnalysisScope) => number | null) => {
-            const valores = analysisRows.map(valorDe).filter((v): v is number => v != null);
-            return valores.length > 0 ? valores.reduce((a, v) => a + v, 0) / valores.length : null;
-        };
-        return {
-            monthlyRevenue: soma(r => r.monthlyRevenue),
-            referenceMonthlyRevenue: soma(r => r.referenceMonthlyRevenue),
-            annualRevenue: soma(r => r.monthlyRevenue * 12),
-            valuePerSqmAvg: media(r => r.valuePerSqm.avg),
-            occupancyRate: media(r => r.occupancyRate),
-            financialRate: media(r => r.financial.rate),
-        };
-    }, [analysisRows]);
+    const analysisFooter = useMemo(() => summarizeAnalysisRows(analysisRows), [analysisRows]);
 
     /**
      * A aba Análise, agrupada por TIPO DE CLIENTE (`clients.category`) — segundo
@@ -2010,7 +2001,11 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                         >
                             <option value="ALL">Todos os empreendimentos ({analysis.total.unitsCount} unidades)</option>
-                            {analysis.rows.map(r => (
+                            {/* Balde sem unidade e sem locação fechada (só contrato
+                                órfão) não é recorte que se escolha: "Sem
+                                empreendimento (0 unidades)" levava a uma tela vazia.
+                                Ele continua na tabela, para a soma fechar. */}
+                            {analysis.rows.filter(r => r.unitsCount > 0 || r.dealsCount > 0).map(r => (
                                 <option key={r.empreendimentoId} value={r.empreendimentoId}>
                                     {r.name} ({r.unitsCount} unidade{r.unitsCount === 1 ? '' : 's'})
                                 </option>
@@ -2023,7 +2018,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
                         >
                             <X className="w-4 h-4" />
-                            Ver a carteira inteira
+                            Ver todos os empreendimentos
                         </button>
                     )}
                 </div>
@@ -2153,7 +2148,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                     ))}
                                 </tbody>
                                 {/* Rodapé (§6.7-adjacente, mesmo padrão do modo Unidades
-                                    acima): soma nas 3 colunas de receita, média simples nas
+                                    acima): soma nas 3 colunas de receita, média PONDERADA nas
                                     3 de ocupação/valor-m² pedidas pelo usuário — as demais
                                     colunas ficam em branco, não "0". */}
                                 <tfoot>
@@ -2167,7 +2162,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                                         : 'font-normal text-gray-500'
                                                 }`}
                                             >
-                                                {idx === 0 ? 'Totais / médias' : renderAnalysisFooterCell(c.key, analysisFooter)}
+                                                {idx === 0
+                                                    ? (analysisSearch.trim() ? 'Total das linhas filtradas' : 'Total da carteira')
+                                                    : renderAnalysisFooterCell(c.key, analysisFooter)}
                                             </td>
                                         ))}
                                         <td aria-hidden="true"></td>

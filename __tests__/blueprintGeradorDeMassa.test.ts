@@ -420,6 +420,24 @@ describe('gerador de massa · seguir o Empreendimento', () => {
     expect(r.avisos.join(' ')).toMatch(/3 torres/);
   });
 
+  it('torres do Empreendimento mais altas que a lei deixa: diz o porquê em vez de "0 combinações" calado', () => {
+    // O caso do relato (26/10/2026): Garden Cambuhy com uma torre de 6 pavimentos; a zona limita a 11,6 m → 3 pav de 3 m.
+    const regua = { ...REGUA, zona: { ...REGUA.zona, gabaritoPavimentos: 6, gabaritoAlturaMaxM: 11.6 } };
+    const r = gerarMassa({ model: lote(40, 60), regua, objetivo: 'UNIDADES', restricoes: { ...RESTRICOES_PADRAO, atenderVagas: false, doEmpreendimento: { torres: 2, pavimentosMin: 6, pavimentosMax: 6 } } }, 1);
+    expect(r.melhores).toHaveLength(0);
+    const texto = r.avisos.join(' ');
+    expect(texto).toMatch(/6 pavimentos/);
+    expect(texto).toMatch(/até 3/);
+    expect(texto).toMatch(/gabarito em altura/);
+    expect(texto).toMatch(/Seguir o Empreendimento/);
+  });
+
+  it('torres do Empreendimento que não cabem lado a lado no envelope: diz em vez de "0 combinações" calado', () => {
+    const r = gerarMassa(com(lote(40, 60), { torres: 5, pavimentosMin: null, pavimentosMax: null }), 1);
+    expect(r.melhores).toHaveLength(0);
+    expect(r.avisos.join(' ')).toMatch(/Nenhuma implantação com 5 torres.*cabe no envelope.*Seguir o Empreendimento/);
+  });
+
   it('sem a restrição, nada muda (o mesmo resultado de antes)', () => {
     const a = gerarMassa(entrada(lote(40, 60)), 1, { tipos: ['TORRE', 'LAMINA'] });
     const b = gerarMassa(entrada(lote(40, 60), { restricoes: { ...RESTRICOES_PADRAO, doEmpreendimento: null } }), 1, { tipos: ['TORRE', 'LAMINA'] });

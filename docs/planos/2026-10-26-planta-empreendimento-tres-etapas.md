@@ -176,3 +176,18 @@ Por etapa:
 4. Conferência no app real, com Empreendimento e planta descartáveis apagados no fim (autorização de 25/10:
    "Sim, crie e apague").
 5. PR de rascunho → CI verde → merge → `conferir-producao.sh` + CI de `main`.
+
+## Correções depois de publicar (26/10/2026)
+
+- **Relato:** *"fui gerar massa e recebi essa mensagem de erro: x deve ser milímetro inteiro dentro de ±1000000; recebido 255.5"*.
+  - **Causa:** anterior a este plano. Em lote irregular, a busca do retângulo inscrito com passo ímpar põe o centro da
+    célula em meio milímetro.
+  - **Correção:** PR #179 (f9b3c2a), em `maiorRetanguloInscrito`.
+- **Relato seguinte:** *"0 combinações medidas, 0 viáveis · envelope no térreo 14,80 m × 54,50 m · objetivo: maximizar o
+  número de unidades"*.
+  - **Defeito da etapa 1 (item 6):** com "Seguir o Empreendimento", torres mais altas que o teto da lei esvaziavam a
+    grade em silêncio. No caso, o Garden Cambuhy tem uma torre de 6 pav e o gabarito de 11,6 m ÷ 3 m dá 3 pav.
+  - **Correção:** o gerador para e diz quantos pavimentos as torres pedem, quantos cabem e por quê. Também avisa
+    quando nenhuma forma com N torres cabe no envelope. São 2 testes novos no gerador.
+  - **Achado de caminho:** a planta não estava VINCULADA. A caixa apareceu porque o Empreendimento chega também pela
+    zona aplicada (`zona.empreendimentoId`), que é a mesma regra de "empreendimento da Casa".

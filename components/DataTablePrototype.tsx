@@ -119,13 +119,15 @@ export default function DataTablePrototype({ onBack }: { onBack: () => void }) {
       {/* Cabeçalho */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <button onClick={onBack} className="text-gray-700 hover:text-gray-900 mb-2 flex items-center gap-1 text-sm font-medium transition-colors">
-             <ArrowLeft className="w-4 h-4" /> Voltar
-          </button>
-          <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
-            Protótipo <span className="text-blue-600 bg-blue-50 px-2 py-1 rounded-lg text-lg">Opção A</span>
-          </h1>
-          <p className="text-gray-500 text-sm mt-1 font-medium">Demonstração da estrutura `@tanstack/react-table` rodando de forma pura e nativa.</p>
+          <div className="flex items-center gap-3">
+            <button onClick={onBack} title="Voltar" className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0">
+              <ArrowLeft className="w-5 h-5" />
+            </button>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+              Protótipo <span className="text-blue-600 bg-blue-50 px-2 py-1 rounded-lg text-lg">Opção A</span>
+            </h1>
+          </div>
+          <p className="text-gray-500 text-sm mt-1 font-medium ml-12">Demonstração da estrutura `@tanstack/react-table` rodando de forma pura e nativa.</p>
         </div>
         
         <div className="flex items-center gap-3 bg-gray-50 p-3 rounded-xl border border-gray-100 shadow-sm">

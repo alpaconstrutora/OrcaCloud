@@ -334,13 +334,15 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
     return (
         <div className="space-y-6 pb-20">
             <div>
-                <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-blue-600 transition-all mb-2">
-                    <ArrowLeft className="w-4 h-4" /> Voltar
-                </button>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                    {contract.contractNumber || DEBT_MODALITY_PT[contract.modality]}
-                </h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                <div className="flex items-center gap-3">
+                    <button onClick={onBack} title="Voltar" className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                        {contract.contractNumber || DEBT_MODALITY_PT[contract.modality]}
+                    </h1>
+                </div>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">
                     {contract.institutionName ?? 'Parte relacionada'} · {DEBT_MODALITY_PT[contract.modality]} · {DEBT_STATUS_PT[contract.status]}
                 </p>
             </div>

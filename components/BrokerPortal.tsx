@@ -378,24 +378,28 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             )}
 
             {/* Header — só no app autenticado; no portal público a casca acima já tem header próprio.
-                "Voltar" acima do h1 (guia §23): só 1 salto (Meus Corretores → Portal do Corretor),
-                abaixo do mínimo de 2 saltos que a migalha de pão exige — convenção de ~43 arquivos. */}
+                Seta de voltar na mesma linha do h1 (guia §23): só 1 salto (Meus Corretores → Portal
+                do Corretor), abaixo do mínimo de 2 saltos que a migalha de pão exige — padrão de
+                cabeçalho de 1 salto desde 2026-10-25 (antes era "Voltar" numa linha própria). */}
             {!isStandalone && (
             <div>
-                {onBack && (
-                    <button
-                        onClick={onBack}
-                        className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                    >
-                        <ArrowLeft className="w-4 h-4" /> Voltar
-                    </button>
-                )}
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">
-                            Portal do Corretor
-                        </h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        <div className="flex items-center gap-3">
+                            {onBack && (
+                                <button
+                                    onClick={onBack}
+                                    title="Voltar"
+                                    className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                                >
+                                    <ArrowLeft className="w-5 h-5" />
+                                </button>
+                            )}
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                                Portal do Corretor
+                            </h1>
+                        </div>
+                        <p className={`text-gray-400 text-sm mt-1.5 font-medium ${onBack ? 'ml-12' : ''}`}>
                             {effectiveBrokerEmail ? `Olá, ${effectiveBrokerEmail.split('@')[0]}` : 'Bem-vindo'} • Estoque, propostas, leads e comissões em tempo real.
                         </p>
                     </div>

@@ -407,15 +407,18 @@ const AcessosDoCondominio: React.FC<{
         return (
             <div className="space-y-6 pb-20">
                 <div>
-                    <button
-                        type="button"
-                        onClick={() => setPreviaSindico(null)}
-                        className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                    >
-                        <ArrowLeft className="w-4 h-4" /> Voltar
-                    </button>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Síndico</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    <div className="flex items-center gap-3">
+                        <button
+                            type="button"
+                            onClick={() => setPreviaSindico(null)}
+                            title="Voltar"
+                            className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Portal do Síndico</h1>
+                    </div>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">
                         {condominio.name} · o mesmo portal do síndico, operado pela administradora
                     </p>
                 </div>
@@ -433,15 +436,18 @@ const AcessosDoCondominio: React.FC<{
                 CondominioDetail: saber "acessos" sem saber "de qual prédio" é
                 pior que o problema original. */}
             <div>
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                >
-                    <ArrowLeft className="w-4 h-4" /> Voltar
-                </button>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Acessos ao portal</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={onBack}
+                        title="Voltar"
+                        className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Acessos ao portal</h1>
+                </div>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">
                     {condominio.name} · o síndico e os moradores, e como cada um vê o portal
                 </p>
             </div>
@@ -644,22 +650,25 @@ const PreviaDoPortal: React.FC<{
     return (
         <div ref={raiz} className="space-y-6 pb-20">
             <div>
-                {/* Mesmo "Voltar" da tela de acessos, um nível acima. */}
-                <button
-                    type="button"
-                    onClick={onVoltar}
-                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                >
-                    <ArrowLeft className="w-4 h-4" /> Voltar
-                </button>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        {/* 2xl: 3xl é o topo de uma lista-raiz (§20); esta é o segundo
-                            salto (condomínio → acessos → prévia). */}
-                        <h1 className="text-2xl font-black text-gray-900 tracking-tight">
-                            Como {previa.pessoa} vê o portal
-                        </h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        {/* Mesmo "Voltar" da tela de acessos, um nível acima. 2xl: 3xl é o
+                            topo de uma lista-raiz (§20); esta é o segundo salto (condomínio →
+                            acessos → prévia). */}
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={onVoltar}
+                                title="Voltar"
+                                className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                            <h1 className="text-2xl font-black text-gray-900 tracking-tight">
+                                Como {previa.pessoa} vê o portal
+                            </h1>
+                        </div>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">
                             {condominio.name} · {previa.unidade}
                         </p>
                     </div>

@@ -121,16 +121,21 @@ const PayrollRunDetail: React.FC<PayrollRunDetailProps> = ({
 
     return (
         <div className="space-y-6">
-            {/* 1. Título */}
+            {/* 1. Título — seta de voltar na mesma linha do h1 (guia §23, decisão do
+                usuário em 2026-10-25: substitui o "Voltar" numa linha própria acima
+                do título, que gastava uma linha inteira de altura). */}
             <div>
-                <button
-                    onClick={onBack}
-                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-2"
-                >
-                    <ArrowLeft className="w-4 h-4" /> Voltar à lista
-                </button>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Detalhes da Folha</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                <div className="flex items-center gap-3">
+                    <button
+                        onClick={onBack}
+                        title="Voltar à lista"
+                        className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                    >
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Detalhes da Folha</h1>
+                </div>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">
                     Período: {formatDate(run.start_date)} a {formatDate(run.end_date)}
                 </p>
             </div>

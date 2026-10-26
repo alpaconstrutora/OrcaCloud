@@ -242,15 +242,16 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     <div className="space-y-6">
       {/* Header */}
       <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-        <button
-          type="button"
-          onClick={onBack}
-          className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-        >
-          <ArrowLeft className="w-4 h-4" /> Voltar
-        </button>
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
           <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={onBack}
+              title="Voltar"
+              className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+            >
+              <ArrowLeft className="w-5 h-5" />
+            </button>
             <div className="p-3 bg-blue-50 text-blue-600 rounded-[10px]">
               <Building2 className="w-6 h-6" />
             </div>

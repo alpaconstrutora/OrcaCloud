@@ -86,17 +86,20 @@ export const RegulatoryMapDetail: React.FC<Props> = ({ map, onBack, onEdit, back
     return (
         <div className="space-y-6">
             <div>
-                <button
-                    type="button"
-                    onClick={onBack}
-                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                >
-                    <ArrowLeft className="w-4 h-4" /> {backLabel}
-                </button>
                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                     <div>
-                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">{map.name}</h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                        <div className="flex items-center gap-3">
+                            <button
+                                type="button"
+                                onClick={onBack}
+                                title={backLabel}
+                                className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                            <h1 className="text-3xl font-black text-gray-900 tracking-tight">{map.name}</h1>
+                        </div>
+                        <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">
                             {map.city_name}{map.state_code ? ` - ${map.state_code}` : ''}
                             {map.lei_referencia ? ` · ${map.lei_referencia}` : ''}
                         </p>

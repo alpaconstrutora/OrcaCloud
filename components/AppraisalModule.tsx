@@ -157,14 +157,19 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
     if (selected) {
         return (
             <div className="space-y-6">
-                <Button variant="ghost" size="sm" onClick={() => setSelected(null)} className="gap-2">
-                    <ArrowLeft className="w-4 h-4" /> Voltar
-                </Button>
-
                 <div className="flex items-center justify-between">
-                    <div>
-                        <h2 className="text-xl font-black text-gray-900">{selected.title}</h2>
-                        <p className="text-sm text-gray-500 mt-1">{APPRAISAL_STATUS_LABELS[selected.status]} — {APPRAISAL_METODOLOGIA_LABELS[selected.metodologia]}</p>
+                    <div className="flex items-center gap-3">
+                        <button
+                            onClick={() => setSelected(null)}
+                            title="Voltar"
+                            className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                        <div>
+                            <h2 className="text-xl font-black text-gray-900">{selected.title}</h2>
+                            <p className="text-sm text-gray-500 mt-1">{APPRAISAL_STATUS_LABELS[selected.status]} — {APPRAISAL_METODOLOGIA_LABELS[selected.metodologia]}</p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
                         <Button variant="ghost" size="sm" onClick={() => setEditingReport(selected)} className="gap-2">

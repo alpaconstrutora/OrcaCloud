@@ -217,19 +217,22 @@ export const RegulatoryMapModule: React.FC<Props> = ({ activeOrganizationId, tab
                 mostra Incorporação › Planta Inteligente ativo. */}
             {/* Veio do editor de uma planta: 1 salto de volta (§23, exceção do "Voltar"). */}
             <div>
-            {onVoltarParaPlanta && (
-                <button
-                    type="button"
-                    onClick={onVoltarParaPlanta}
-                    className="flex items-center gap-1.5 h-8 px-2.5 -ml-2.5 rounded-[6px] text-sm font-medium text-gray-500 hover:bg-gray-100 transition-all mb-3"
-                >
-                    <ArrowLeft className="w-4 h-4" /> Voltar para a planta
-                </button>
-            )}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
                 <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Mapa Regulatório</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">
+                    <div className="flex items-center gap-3">
+                        {onVoltarParaPlanta && (
+                            <button
+                                type="button"
+                                onClick={onVoltarParaPlanta}
+                                title="Voltar para a planta"
+                                className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                            >
+                                <ArrowLeft className="w-5 h-5" />
+                            </button>
+                        )}
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Mapa Regulatório</h1>
+                    </div>
+                    <p className={`text-gray-400 text-sm mt-1.5 font-medium ${onVoltarParaPlanta ? 'ml-12' : ''}`}>
                         Cadastre o mapa regulatório de cada cidade uma vez; os empreendimentos importam as zonas aplicáveis.
                     </p>
                 </div>

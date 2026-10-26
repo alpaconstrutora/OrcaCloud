@@ -213,11 +213,13 @@ export default function CreditRoomDetail({ room, onBack, onEdit, onChanged }: Pr
     return (
         <div className="space-y-6 pb-20">
             <div>
-                <button onClick={onBack} className="flex items-center gap-1.5 text-sm font-medium text-gray-500 hover:text-gray-800 mb-2 transition-colors">
-                    <ArrowLeft className="w-4 h-4" /> Voltar
-                </button>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{room.code} · {room.name}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{ABA_SUBTITULO[aba]}</p>
+                <div className="flex items-center gap-3">
+                    <button onClick={onBack} title="Voltar" className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0">
+                        <ArrowLeft className="w-5 h-5" />
+                    </button>
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{room.code} · {room.name}</h1>
+                </div>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">{ABA_SUBTITULO[aba]}</p>
             </div>
 
             {/* §19.1 — abas antes dos KPIs */}

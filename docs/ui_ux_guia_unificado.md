@@ -2658,10 +2658,77 @@ import Breadcrumb from './ui/Breadcrumb';
 1. **A profundidade é interna à tela** — lista → item → sub-item, tudo no mesmo
    `view` do `AppRouter`. A trilha começa no nível da própria tela.
 2. **Há pelo menos 2 saltos de profundidade** (3 crumbs). Com 1 salto, o padrão
-   é o **botão "Voltar"** (`<ArrowLeft /> Voltar`, ~43 arquivos hoje, referência
-   `empreendimento/EmpreendimentoDetail.tsx:144`) — não a trilha.
+   é o **botão "Voltar"** — não a trilha.
 3. **Todo ancestral é clicável e pula direto para aquele nível.** Se os
    ancestrais são texto morto, a trilha vira legenda: use título + "Voltar".
+
+### 23.1 Botão "Voltar" de 1 salto — seta ao lado do `<h1>`, não numa linha própria
+
+**Mudança de padrão em 2026-10-25, a pedido do usuário** (RH › Folha ›
+`PayrollRunDetail.tsx`, Detalhes da Folha): *"o que foi que eu te pedi? para
+que o botao voltar nao ficasse em cima do titulo"*. O padrão antigo — botão
+`<ArrowLeft /> Voltar` numa linha própria, `mb-2`/`mb-3` acima do `<h1>` —
+gastava uma linha inteira (~32–40px) só para a navegação, o mesmo problema que
+motivou a exceção de migalha do `CondominioDetail.tsx` (§23, "Exceção
+autorizada" abaixo). Apresentadas as três opções já catalogadas ali (seta à
+esquerda do h1 · "Voltar" à direita na linha do título · migalha), desta vez a
+escolha foi a seta — e, por ser a segunda vez que o mesmo incômodo aparecia, o
+usuário decidiu que ela vira o **padrão geral** para telas de 1 salto, não uma
+exceção local.
+
+```tsx
+<div>
+  <div className="flex items-center gap-3">
+    <button
+      onClick={onBack}
+      title="Voltar"                                 {/* ou o rótulo específico: "Voltar à lista" etc. */}
+      className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+    >
+      <ArrowLeft className="w-5 h-5" />
+    </button>
+    <h1 className="text-3xl font-black text-gray-900 tracking-tight">{titulo}</h1>
+  </div>
+  <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">{subtitulo}</p>
+</div>
+```
+
+> ✅ **Ícone só, sem o texto "Voltar".** `title` (tooltip nativo) cobre a
+> descoberta; o alvo de clique é `h-9 w-9` (36px), maior que o antigo `h-8`
+> porque agora é só ícone — texto ao lado ajudava a mirar, ícone sozinho
+> precisa de alvo maior.
+> ✅ `-ml-2` alinha opticamente a borda esquerda da seta com a borda esquerda
+> do texto do título (compensa o padding interno do botão) — mesma lógica que
+> o botão antigo já usava com `-ml-2.5`/`-ml-3`.
+> ✅ **Subtítulo ganha `ml-12`** (36px do botão + 12px do `gap-3`) para alinhar
+> com o título, não com a seta — só quando o botão é condicional
+> (`onVoltarParaPlanta`, `onBack` opcional de portal) o `ml-12` também fica
+> condicional, senão o subtítulo desalinha nas renderizações sem botão.
+> ✅ **Cabeçalho em card com elemento à esquerda do título** (ícone-bolha como
+> `empreendimento/EmpreendimentoDetail.tsx`, badge de status) — a seta entra
+> ANTES desse elemento, na mesma linha `flex items-center gap-3`, sem alterar
+> o resto do desenho do card. Não é a mesma coisa que migrar um cabeçalho hero/
+> card para o padrão plano do §20 (isso continua exigindo decisão explícita) —
+> é só reposicionar a navegação dentro do cabeçalho que já existe.
+> ❌ Não é mudança retroativa automática: cada arquivo migra quando tocado.
+> Estado das ocorrências migradas em 2026-10-25:
+> `PayrollRunDetail.tsx`, `debt/DebtDetail.tsx`, `credit/CreditRoomDetail.tsx`,
+> `empreendimento/EmpreendimentoDetail.tsx`, `AppraisalModule.tsx`,
+> `BrokerPortal.tsx`, `DataTablePrototype.tsx`,
+> `condominio/PortalCondominoAdmin.tsx` (3 ocorrências),
+> `regulatoryMap/RegulatoryMapModule.tsx`, `regulatoryMap/RegulatoryMapDetail.tsx`.
+> Deliberadamente fora desta migração: `condominio/CondominioDetail.tsx`
+> (exceção nomeada de migalha, abaixo — não tem botão "Voltar" para migrar),
+> `TasksMobileApp.tsx` (chrome mobile, fora do escopo do guia),
+> `OpuraAssetsModule.tsx` (pendência diferente: remover trilha estática, não
+> adicionar seta), `fiscal/FiscalDocuments.tsx` (o botão já vive na mesma
+> linha do `<h1>` desde antes — não tinha o problema desta seção),
+> `public/PublicOpportunityDetail.tsx` (os dois "Voltar" do arquivo são passo
+> de formulário multi-etapa e link de breadcrumb com o nome da organização,
+> não cabeçalho de tela) e
+> `regulatoryMap/RegulatoryMapExcelImportModal.tsx` (rodapé de passo de modal
+> wizard, não cabeçalho de página). Telas novas de 1 salto nascem já com este
+> padrão; as demais telas do histórico anterior a 2026-10-25 migram ao serem
+> tocadas, não em varredura.
 
 O componente **renderiza `null` com menos de 2 itens** de propósito — é a trava
 mecânica do critério 2.

@@ -72,6 +72,34 @@ describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
     expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
   });
 
+  // Plano docs/planos/2026-10-26-zona-aplicavel-do-empreendimento.md, item 8: o empreendimento
+  // MARCA a zona que vale (175 zonas de Cambuí no Garden, uma aplicável) — a Planta não chuta,
+  // usa a marcada, pela mesma regra da zona única.
+  it('várias zonas e UMA marcada como aplicável no empreendimento: aplica a marcada sozinha', async () => {
+    zonasDo.current['emp-3'] = [
+      { ...ZONA_UNICA, id: 'za', zona: 'ZM 4' },
+      { ...ZONA_UNICA, id: 'zb', zona: 'ZEPEC 2', recuo_frente: '7', aplicavel: true },
+      { ...ZONA_UNICA, id: 'zc', zona: 'ZC' },
+    ];
+    const h = montar('estudo-8', 'emp-3');
+    await waitFor(() => expect(h.result.current.zonaAplicadaId).toBe('zb'));
+    expect(h.result.current.zonaAplicadaAutomaticamente).toBe(true);
+    expect(h.result.current.recuos.FRENTE).toBe(7000);
+  });
+
+  it('zona marcada no empreendimento NÃO passa por cima de zona já salva na planta', async () => {
+    zonasDo.current['emp-3'] = [
+      { ...ZONA_UNICA, id: 'za', zona: 'ZM 4' },
+      { ...ZONA_UNICA, id: 'zb', zona: 'ZEPEC 2', aplicavel: true },
+    ];
+    ctxSalvo.current = { zona_origem: 'EMPREENDIMENTO', empreendimento_id: 'emp-3', regulatory_zone_id: 'za', origem_valores: {} };
+    const h = montar('estudo-9', 'emp-3');
+    await waitFor(() => expect(h.result.current.zonas).toHaveLength(2));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(h.result.current.zonaAplicadaId).toBe('za');
+    expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
+  });
+
   it('contexto já salvo: nem o empreendimento nem a zona mudam', async () => {
     ctxSalvo.current = { zona_origem: 'EMPREENDIMENTO', empreendimento_id: 'emp-2', regulatory_zone_id: null, origem_valores: {} };
     const h = montar('estudo-4', 'emp-1');

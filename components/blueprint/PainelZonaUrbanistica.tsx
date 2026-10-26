@@ -276,7 +276,7 @@ export default function PainelZonaUrbanistica({
               <option value="">{carregandoZonas ? 'Carregando…' : 'Escolha a zona…'}</option>
               {zonas.map((z) => (
                 <option key={z.id} value={z.id}>
-                  {rotuloDaZona(z)}
+                  {`${rotuloDaZona(z)}${z.aplicavel ? ' · aplicável no empreendimento' : ''}`}
                 </option>
               ))}
             </select>

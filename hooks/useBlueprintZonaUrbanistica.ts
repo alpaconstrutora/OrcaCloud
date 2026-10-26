@@ -520,17 +520,21 @@ export function useBlueprintZonaUrbanistica(
     [zonas, empreendimentoId, mapaId, origemDaZona, persistir],
   );
 
-  // ── A zona única do empreendimento entra sozinha ─────────────────────────
+  // ── A zona do empreendimento entra sozinha ───────────────────────────────
   // Pedido de 21/10/2026: o app já sabe — não obrigar a pessoa a escolher. Só quando é
   // inequívoco e não apaga nada: caminho do empreendimento, NENHUM contexto salvo para o
-  // estudo (nem zona aplicada, nem ajuste à mão), uma única zona, e a lista na tela é a
-  // DESTE empreendimento. Duas ou mais zonas: não chuta. Uma vez por abertura.
+  // estudo (nem zona aplicada, nem ajuste à mão), e a lista na tela é a DESTE empreendimento.
+  // Inequívoco = a zona marcada como aplicável no empreendimento (26/10/2026 — o Garden tem
+  // 175 zonas e uma vale) ou, sem marca, a única zona. Duas ou mais sem marca: não chuta.
+  // Uma vez por abertura.
   useEffect(() => {
     if (jaAplicouSozinho.current || !contextoLido || contexto || persistenciaIndisponivel) return;
     if (origemDaZona !== 'EMPREENDIMENTO' || !empreendimentoId) return;
-    if (zonasDe !== `EMPREENDIMENTO:${empreendimentoId}` || zonas.length !== 1) return;
+    if (zonasDe !== `EMPREENDIMENTO:${empreendimentoId}`) return;
+    const daVez = zonas.find((z) => z.aplicavel) ?? (zonas.length === 1 ? zonas[0] : null);
+    if (!daVez) return;
     jaAplicouSozinho.current = true;
-    aplicarZona(zonas[0].id);
+    aplicarZona(daVez.id);
     setZonaAplicadaAutomaticamente(true);
   }, [contextoLido, contexto, persistenciaIndisponivel, origemDaZona, empreendimentoId, zonasDe, zonas, aplicarZona]);
 

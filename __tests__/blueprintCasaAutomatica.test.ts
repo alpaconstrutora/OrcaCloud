@@ -1339,8 +1339,14 @@ describe('planejarCasa — F14b: o forro e as redes nas faixas do plenum ("forro
       return x;
     };
     let aneis = 0;
+    // 25/10/2026 ("eletrodutos conduite nao bifurca"): os eletrodutos repetidos (correm juntos, as mesmas pontas) são um
+    // caminho só para esta conta — um anel é um caminho FECHADO, não dois tubos lado a lado.
+    const vistos = new Set<string>();
     for (const t of el) {
       const [ka, kb] = [no(t, t.a, t.cotaAMm), no(t, t.b, t.cotaBMm)];
+      const par = [ka, kb].sort().join('~');
+      if (vistos.has(par)) continue;
+      vistos.add(par);
       for (const k of [ka, kb]) if (!pai.has(k)) pai.set(k, k);
       if (raiz(ka) === raiz(kb)) aneis++;
       else pai.set(raiz(ka), raiz(kb));

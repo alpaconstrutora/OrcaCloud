@@ -54,7 +54,15 @@ export interface FuroPrevisto {
   /** `true` = dispensa a verificação pelos critérios (hipóteses); `false` = verificar com o calculista; `null` = laje. */
   dispensa: boolean | null;
   motivos: string[];
+  /**
+   * 25/10/2026 ("eletrodutos conduite nao bifurca"): os trechos que passam JUNTOS por este furo — os eletrodutos que
+   * correm lado a lado atravessam a peça no mesmo lugar, por um furo só, do tamanho do feixe. Ausente = só `trechoId`.
+   */
+  trechoIds?: ObjectId[];
 }
+
+/** O vão entre dois eletrodutos lado a lado no feixe, mm — o mesmo do 3D (`VAO_ENTRE_ELETRODUTOS_MM`). */
+const VAO_NO_FEIXE_MM = 10;
 
 const projecao = (p: { x: number; y: number }, a: Point, b: Point) => {
   const L = Math.hypot(b.x - a.x, b.y - a.y) || 1;
@@ -108,15 +116,29 @@ export function furosPrevistos(model: BlueprintModel, hip: HipotesesDosFuros = H
   const pecas = new Map((model.structures ?? []).map((s) => [s.id, s]));
   const pilares = (model.structures ?? []).filter((s) => s.kind === 'PILAR');
   const saida: FuroPrevisto[] = [];
+  // Os que atravessam a MESMA peça no MESMO lugar (os eletrodutos repetidos que correm juntos) passam por um furo só:
+  // o diâmetro é o do feixe — os tubos lado a lado, com o vão entre eles, mais a folga. Contados um a um, cada furo
+  // tinha o outro "a menos de 2h" e todos saíam "verificar".
+  const grupos = new Map<string, { peca: Structural; t: Trecho; ids: ObjectId[]; tubosMm: number[]; ponto: Point; cotaMm: number; direcao: 'HORIZONTAL' | 'VERTICAL' }>();
   for (const c of conflitosDoModelo(model)) {
     if (c.classe !== 'ESTRUTURA') continue;
     const peca = pecas.get(c.outroId);
     const t = porId.get(c.trechoId);
     if (!peca || !t || !['VIGA', 'VIGA_FUNDACAO', 'LAJE'].includes(peca.kind)) continue;
     const env = envelopeDoTrecho(t);
-    const diametroMm = Math.round(2 * Math.max(env.raioPlantaMm, env.raioVerticalMm) + 2 * hip.folgaDoFuroMm);
+    const tuboMm = 2 * Math.max(env.raioPlantaMm, env.raioVerticalMm);
     const { ponto, cotaMm } = travessia(t, peca);
     const direcao = t.a.x === t.b.x && t.a.y === t.b.y ? 'VERTICAL' : 'HORIZONTAL';
+    const k = `${peca.id}|${t.disciplina}|${direcao}|${ponto.x},${ponto.y},${cotaMm}`;
+    const g = grupos.get(k);
+    if (g) {
+      g.ids.push(t.id);
+      g.tubosMm.push(tuboMm);
+    } else grupos.set(k, { peca, t, ids: [t.id], tubosMm: [tuboMm], ponto, cotaMm, direcao });
+  }
+  for (const { peca, t, ids, tubosMm, ponto, cotaMm, direcao } of grupos.values()) {
+    const feixeMm = tubosMm.reduce((s, d) => s + d, 0) + (tubosMm.length - 1) * VAO_NO_FEIXE_MM;
+    const diametroMm = Math.round(feixeMm + 2 * hip.folgaDoFuroMm);
     let aoLongoMm: number | null = null;
     let distanciaAoApoioMm: number | null = null;
     if (peca.kind !== 'LAJE' && peca.pontos.length >= 2) {
@@ -142,6 +164,7 @@ export function furosPrevistos(model: BlueprintModel, hip: HipotesesDosFuros = H
       distanciaAoApoioMm,
       dispensa: null,
       motivos: [],
+      ...(ids.length > 1 ? { trechoIds: ids } : {}),
     });
   }
   saida.sort((x, y) => x.peca.localeCompare(y.peca) || (x.aoLongoMm ?? 0) - (y.aoLongoMm ?? 0) || x.cotaMm - y.cotaMm);

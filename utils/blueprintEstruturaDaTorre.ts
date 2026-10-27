@@ -8,11 +8,14 @@
 // A fonte, nesta ordem: o cadastro de pavimentos (`empreendimento_floors`, repetição expandida — o mesmo critério
 // do estudo declarado, `blueprintEstudoDoEmpreendimento`); senão os andares das unidades; senão `floors_count`.
 // O Garden Cambuhy (27/10/2026) não tinha cadastro de pavimentos: tudo saía das unidades. Puro.
+//
+// Pé-direito (27/10/2026, "crie pé-direito por pavimento em empreendimento"): o do pavimento cadastrado, senão o
+// padrão da torre, senão `null` — e aí quem monta a massa usa o do bloco.
 
 import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, FloorTipo } from '../types/empreendimento';
 
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
-  Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order'>> & {
+  Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m'>> & {
     units?: Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'>[];
   };
 
@@ -21,6 +24,8 @@ export interface PisoDaTorre {
   numero: number;
   nome: string;
   tipo: FloorTipo | null;
+  /** Piso a piso em mm; null = nem o pavimento nem a torre dizem. */
+  peDireitoMm: number | null;
 }
 
 export type FonteDaEstrutura = 'CADASTRO' | 'UNIDADES' | 'FLOORS_COUNT' | 'NENHUMA';
@@ -48,7 +53,9 @@ export function nomeDaGaragem(torre: string): string {
   return `${torre} · Garagem`;
 }
 
-function doCadastro(pavimentos: EmpreendimentoFloor[]): PisoDaTorre[] {
+const emMm = (m: number | null | undefined) => (m == null || !Number.isFinite(Number(m)) ? null : Math.round(Number(m) * 1000));
+
+function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null): PisoDaTorre[] {
   const out: PisoDaTorre[] = [];
   const visto = new Set<number>();
   for (const fl of [...pavimentos].sort((a, b) => a.sort_order - b.sort_order || a.floor_number - b.floor_number)) {
@@ -58,13 +65,13 @@ function doCadastro(pavimentos: EmpreendimentoFloor[]): PisoDaTorre[] {
       if (visto.has(n)) continue;
       visto.add(n);
       const base = fl.name?.trim();
-      out.push({ numero: n, nome: base ? (reps > 1 ? `${base} ${r + 1}` : base) : nomeDoAndar(n, fl.tipo), tipo: fl.tipo });
+      out.push({ numero: n, nome: base ? (reps > 1 ? `${base} ${r + 1}` : base) : nomeDoAndar(n, fl.tipo), tipo: fl.tipo, peDireitoMm: emMm(fl.pe_direito_m) ?? padraoMm });
     }
   }
   return out;
 }
 
-function dasUnidades(t: TorreParaEstrutura, avisos: string[]): PisoDaTorre[] {
+function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number | null): PisoDaTorre[] {
   const tipos = new Map<number, Map<FloorTipo, number>>();
   for (const u of t.units ?? []) {
     if (typeof u.floor !== 'number' || !Number.isFinite(u.floor)) continue;
@@ -81,7 +88,7 @@ function dasUnidades(t: TorreParaEstrutura, avisos: string[]): PisoDaTorre[] {
     const m = tipos.get(n);
     if (!m) avisos.push(`Torre "${t.name}": andar ${n} sem unidade — entra na torre mesmo assim.`);
     const tipo = m && m.size > 0 ? [...m.entries()].sort((a, b) => b[1] - a[1])[0][0] : null;
-    out.push({ numero: n, nome: nomeDoAndar(n, tipo), tipo });
+    out.push({ numero: n, nome: nomeDoAndar(n, tipo), tipo, peDireitoMm: padraoMm });
   }
   return out;
 }
@@ -90,15 +97,16 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
   const avisos: string[] = [];
   let fonte: FonteDaEstrutura = 'NENHUMA';
   let pisos: PisoDaTorre[] = [];
+  const padraoMm = emMm(t.pe_direito_padrao_m);
   if (pavimentos.length > 0) {
     fonte = 'CADASTRO';
-    pisos = doCadastro(pavimentos);
+    pisos = doCadastro(pavimentos, padraoMm);
   } else {
-    pisos = dasUnidades(t, avisos);
+    pisos = dasUnidades(t, avisos, padraoMm);
     if (pisos.length > 0) fonte = 'UNIDADES';
     else if (typeof t.floors_count === 'number' && t.floors_count >= 1) {
       fonte = 'FLOORS_COUNT';
-      pisos = Array.from({ length: Math.round(t.floors_count) }, (_, n) => ({ numero: n, nome: nomeDoAndar(n, null), tipo: null }));
+      pisos = Array.from({ length: Math.round(t.floors_count) }, (_, n) => ({ numero: n, nome: nomeDoAndar(n, null), tipo: null, peDireitoMm: padraoMm }));
     }
   }
   pisos.sort((a, b) => a.numero - b.numero);

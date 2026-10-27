@@ -7,13 +7,15 @@
 // Bloco ↔ torre pelo NOME (a regra de adoção da sincronização inversa, `services/sync/planner.ts`); as torres que
 // sobram casam com os blocos que sobram, na ordem do nome. Cada torre casada recebe o nome e os pavimentos acima do
 // solo (menos os que já estão embaixo dela na pilha: pilotis, embasamento); a que tem garagem ganha um subsolo
-// próprio, "<torre> · Garagem", com o contorno dela (decisão de 27/10/2026: subsolo sob cada torre). Nada é
+// próprio, "<torre> · Garagem", com o contorno dela (decisão de 27/10/2026: subsolo sob cada torre). Com
+// pé-direito por pavimento (27/10/2026), a torre vira uma PILHA de blocos, um por trecho de mesma altura
+// ("<torre> · Térreo" 4,50 m embaixo, "<torre>" com os tipos em cima) — decisão do usuário. Nada é
 // apagado no desenho: o que não é do Empreendimento fica, com aviso. Duas saídas do mesmo plano: comandos para os
 // blocos desenhados (o botão "Ajustar ao Empreendimento") e os blocos propostos vestidos (o Aplicar do Gerar
 // massa). Puro.
 
 import type { BlueprintModel, Command, ObjectId, Point, UsoDoBloco } from './blueprintKernel';
-import { nomeDaGaragem, type EstruturaDaTorre } from './blueprintEstruturaDaTorre';
+import { nomeDaGaragem, type EstruturaDaTorre, type PisoDaTorre } from './blueprintEstruturaDaTorre';
 import type { BlocoProposto } from './blueprintGeradorDeMassa';
 
 interface BlocoParaAjuste {
@@ -33,6 +35,8 @@ export interface LinhaDoAjuste {
   fonte: EstruturaDaTorre['fonte'];
   acima: number;
   garagens: number;
+  /** Altura dos pavimentos acima do solo pelo Empreendimento (m) — o piso sem pé-direito conta com o do bloco. */
+  alturaAcimaM: number;
   /** O bloco casado (nome de agora) e o que ele tem na planta; null = sem bloco. */
   blocoNome: string | null;
   pavimentosNaPlanta: number | null;
@@ -49,7 +53,7 @@ export interface PapelDoBloco {
 
 interface Mudanca {
   indice: number;
-  campos: Partial<Pick<BlocoParaAjuste, 'nome' | 'pavimentos' | 'cotaBaseMm' | 'pontos'>>;
+  campos: Partial<Pick<BlocoParaAjuste, 'nome' | 'pavimentos' | 'cotaBaseMm' | 'peDireitoMm' | 'pontos'>>;
 }
 
 interface PlanoDoAjuste {
@@ -71,6 +75,18 @@ const sobrepoe = (a: Point[], b: Point[]) => {
 };
 const mesmosPontos = (a: Point[], b: Point[]) => a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
 
+/** Trechos de pisos consecutivos com o mesmo pé-direito (o piso sem pé-direito usa o do bloco). */
+function trechos(pisos: readonly PisoDaTorre[], pdDoBloco: number): { pisos: PisoDaTorre[]; pd: number }[] {
+  const out: { pisos: PisoDaTorre[]; pd: number }[] = [];
+  for (const p of pisos) {
+    const pd = p.peDireitoMm ?? pdDoBloco;
+    const ultimo = out[out.length - 1];
+    if (ultimo && ultimo.pd === pd) ultimo.pisos.push(p);
+    else out.push({ pisos: [p], pd });
+  }
+  return out;
+}
+
 function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly EstruturaDaTorre[]): PlanoDoAjuste {
   const linhas: LinhaDoAjuste[] = [];
   const mudancas: Mudanca[] = [];
@@ -78,14 +94,20 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
   const papeis = new Map<number, PapelDoBloco>();
   const avisos: string[] = [];
 
-  // Um bloco com outro apoiado em cima (embasamento) não é torre; garagem e subsolo também não.
+  // Um bloco com outro apoiado em cima (embasamento, o térreo empilhado) não é torre; garagem e subsolo também não.
   const temOutroEmCima = (i: number) => {
     const b = blocos[i];
     const topo = b.cotaBaseMm + b.pavimentos * b.peDireitoMm;
     return blocos.some((o, j) => j !== i && Math.abs(o.cotaBaseMm - topo) < 1 && sobrepoe(o.pontos, b.pontos));
   };
   const candidatos = blocos.map((_, i) => i).filter((i) => blocos[i].uso !== 'GARAGEM' && blocos[i].cotaBaseMm >= 0 && !temOutroEmCima(i));
-  const nomesDeGaragem = new Set(estruturas.map((e) => norm(nomeDaGaragem(e.nome))));
+  // Os blocos que o ajuste cria levam "<torre> · <pavimento>": o térreo empilhado, as garagens.
+  const nomesDaPilha = (torre: string, e: EstruturaDaTorre) => new Set([...e.acima, ...e.garagens].map((p) => norm(`${torre} · ${p.nome}`)));
+  const daPilha = new Set<string>();
+  for (const e of estruturas) {
+    for (const n of nomesDaPilha(e.nome, e)) daPilha.add(n);
+    daPilha.add(norm(nomeDaGaragem(e.nome)));
+  }
 
   const comPisos = estruturas.filter((e) => e.acima.length > 0);
   const par = new Map<EstruturaDaTorre, number>();
@@ -108,59 +130,100 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
   for (const e of estruturas) {
     const base = { torre: e.nome, fonte: e.fonte, acima: e.acima.length, garagens: e.garagens.length };
     if (e.acima.length === 0) {
-      linhas.push({ ...base, blocoNome: null, pavimentosNaPlanta: null, garagensNaPlanta: null, estado: 'SEM_PAVIMENTOS' });
+      linhas.push({ ...base, alturaAcimaM: 0, blocoNome: null, pavimentosNaPlanta: null, garagensNaPlanta: null, estado: 'SEM_PAVIMENTOS' });
       continue;
     }
     const i = par.get(e);
     if (i === undefined) {
-      linhas.push({ ...base, blocoNome: null, pavimentosNaPlanta: null, garagensNaPlanta: null, estado: 'SEM_BLOCO' });
+      linhas.push({ ...base, alturaAcimaM: 0, blocoNome: null, pavimentosNaPlanta: null, garagensNaPlanta: null, estado: 'SEM_BLOCO' });
       avisos.push(`Torre "${e.nome}" não tem bloco na planta — desenhe o bloco ou gere a massa.`);
       continue;
     }
     const b = blocos[i];
     let mudou = false;
-    // Os pisos que já estão embaixo dela na pilha (pilotis, embasamento) são os primeiros da torre.
-    const embaixo = Math.max(0, Math.round(b.cotaBaseMm / b.peDireitoMm));
-    const alvo = Math.max(1, e.acima.length - embaixo);
-    if (e.acima.length - embaixo < 1) avisos.push(`Torre "${e.nome}": o Empreendimento tem ${e.acima.length} pavimento(s) e o bloco começa no ${embaixo + 1}º — ficou com 1.`);
-    const campos: Mudanca['campos'] = {};
-    if (b.nome !== e.nome) campos.nome = e.nome;
-    if (b.pavimentos !== alvo) campos.pavimentos = alvo;
-    if (Object.keys(campos).length > 0) {
-      mudancas.push({ indice: i, campos });
-      mudou = true;
-    }
-    papeis.set(i, { torre: e.nome, tipo: 'TORRE', nomesDosPisos: e.acima.slice(embaixo).map((p) => p.nome) });
-
-    const nomeG = nomeDaGaragem(e.nome);
-    const iG = blocos.findIndex((o) => norm(o.nome) === norm(nomeG) || norm(o.nome) === norm(nomeDaGaragem(b.nome)));
-    const g = e.garagens.length;
-    if (g > 0) {
-      const alvoG: BlocoParaAjuste = { nome: nomeG, pontos: b.pontos, cotaBaseMm: -g * b.peDireitoMm, pavimentos: g, peDireitoMm: b.peDireitoMm, uso: 'GARAGEM', levelId: b.levelId };
-      if (iG >= 0) {
-        const o = blocos[iG];
-        const cg: Mudanca['campos'] = {};
-        if (o.nome !== alvoG.nome) cg.nome = alvoG.nome;
-        if (o.pavimentos !== g) cg.pavimentos = g;
-        if (o.cotaBaseMm !== alvoG.cotaBaseMm) cg.cotaBaseMm = alvoG.cotaBaseMm;
-        if (!mesmosPontos(o.pontos, b.pontos)) cg.pontos = b.pontos;
-        if (Object.keys(cg).length > 0) {
-          mudancas.push({ indice: iG, campos: cg });
-          mudou = true;
-        }
-        papeis.set(iG, { torre: e.nome, tipo: 'GARAGEM', nomesDosPisos: e.garagens.map((p) => p.nome) });
-      } else {
-        novos.push(alvoG);
-        mudou = true;
+    // Os nomes que a pilha desta torre pode ter: com o nome do Empreendimento e com o nome de agora do bloco.
+    const nossos = new Set([...nomesDaPilha(e.nome, e), ...nomesDaPilha(b.nome, e)]);
+    const acharNosso = (nome: string, outroNome: string) => blocos.findIndex((o, j) => j !== i && (norm(o.nome) === norm(nome) || norm(o.nome) === norm(outroNome)));
+    const usadosDaPilha = new Set<number>([i]);
+    /** Põe o bloco `j` (ou um novo) no lugar `alvo`; devolve se mudou algo. */
+    const colocar = (j: number, alvo: BlocoParaAjuste): boolean => {
+      if (j < 0) {
+        novos.push(alvo);
+        return true;
       }
-    } else if (iG >= 0) {
-      avisos.push(`O bloco "${blocos[iG].nome}" existe na planta, mas a torre "${e.nome}" não tem garagem no Empreendimento — fica como está.`);
+      usadosDaPilha.add(j);
+      const o = blocos[j];
+      const c: Mudanca['campos'] = {};
+      if (o.nome !== alvo.nome) c.nome = alvo.nome;
+      if (o.pavimentos !== alvo.pavimentos) c.pavimentos = alvo.pavimentos;
+      if (o.cotaBaseMm !== alvo.cotaBaseMm) c.cotaBaseMm = alvo.cotaBaseMm;
+      if (o.peDireitoMm !== alvo.peDireitoMm) c.peDireitoMm = alvo.peDireitoMm;
+      if (!mesmosPontos(o.pontos, alvo.pontos)) c.pontos = alvo.pontos;
+      if (Object.keys(c).length === 0) return false;
+      mudancas.push({ indice: j, campos: c });
+      return true;
+    };
+
+    // Embaixo da torre, o que NÃO é da pilha dela (pilotis, embasamento do gerador): são os primeiros pisos.
+    const alheiosEmbaixo = blocos.filter(
+      (o, j) =>
+        j !== i && o.cotaBaseMm >= 0 && !nossos.has(norm(o.nome)) && o.cotaBaseMm + o.pavimentos * o.peDireitoMm <= b.cotaBaseMm + 1 && sobrepoe(o.pontos, b.pontos),
+    );
+    const embaixo = alheiosEmbaixo.reduce((n, o) => n + o.pavimentos, 0);
+    const baseDaPilha = alheiosEmbaixo.reduce((m, o) => Math.max(m, o.cotaBaseMm + o.pavimentos * o.peDireitoMm), 0);
+    let pisosDaPilha = e.acima.slice(embaixo);
+    if (pisosDaPilha.length === 0) {
+      avisos.push(`Torre "${e.nome}": o Empreendimento tem ${e.acima.length} pavimento(s) e o bloco começa no ${embaixo + 1}º — ficou com 1.`);
+      pisosDaPilha = [e.acima[e.acima.length - 1]];
     }
+    // A torre (o bloco casado) é o trecho de CIMA; os de baixo viram "<torre> · <1º pavimento do trecho>".
+    const ts = trechos(pisosDaPilha, b.peDireitoMm);
+    let cota = baseDaPilha;
+    ts.forEach((t, k) => {
+      const ehTopo = k === ts.length - 1;
+      const nome = ehTopo ? e.nome : `${e.nome} · ${t.pisos[0].nome}`;
+      const alvo: BlocoParaAjuste = { nome, pontos: b.pontos, cotaBaseMm: cota, pavimentos: t.pisos.length, peDireitoMm: t.pd, uso: b.uso, levelId: b.levelId };
+      const j = ehTopo ? i : acharNosso(nome, `${b.nome} · ${t.pisos[0].nome}`);
+      if (colocar(j, alvo)) mudou = true;
+      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'TORRE', nomesDosPisos: t.pisos.map((p) => p.nome) });
+      cota += t.pisos.length * t.pd;
+    });
+    const alturaAcimaM = Math.round(cota / 10) / 100;
+
+    // As garagens, da mais funda para a mais rasa: o trecho de cima é "<torre> · Garagem"; os de baixo,
+    // "<torre> · <1º pavimento do trecho>". O subsolo desce a partir do 0.
+    const tg = trechos(e.garagens, b.peDireitoMm);
+    let cotaG = -tg.reduce((soma, t) => soma + t.pisos.length * t.pd, 0);
+    tg.forEach((t, k) => {
+      const ehTopo = k === tg.length - 1;
+      const nome = ehTopo ? nomeDaGaragem(e.nome) : `${e.nome} · ${t.pisos[0].nome}`;
+      const alvo: BlocoParaAjuste = { nome, pontos: b.pontos, cotaBaseMm: cotaG, pavimentos: t.pisos.length, peDireitoMm: t.pd, uso: 'GARAGEM', levelId: b.levelId };
+      const j = acharNosso(nome, ehTopo ? nomeDaGaragem(b.nome) : `${b.nome} · ${t.pisos[0].nome}`);
+      if (colocar(j, alvo)) mudou = true;
+      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'GARAGEM', nomesDosPisos: t.pisos.map((p) => p.nome) });
+      cotaG += t.pisos.length * t.pd;
+    });
+    if (e.garagens.length === 0) {
+      const iG = acharNosso(nomeDaGaragem(e.nome), nomeDaGaragem(b.nome));
+      if (iG >= 0) {
+        usadosDaPilha.add(iG);
+        avisos.push(`O bloco "${blocos[iG].nome}" existe na planta, mas a torre "${e.nome}" não tem garagem no Empreendimento — fica como está.`);
+      }
+    }
+    // O que já foi desta pilha e não é mais (as alturas mudaram): fica, com aviso — nunca apagado aqui.
+    blocos.forEach((o, j) => {
+      if (!usadosDaPilha.has(j) && (nossos.has(norm(o.nome)) || norm(o.nome) === norm(nomeDaGaragem(e.nome)))) {
+        avisos.push(`O bloco "${o.nome}" não é mais usado pela torre "${e.nome}" (as alturas do Empreendimento mudaram) — fica como está; apague se não for usar.`);
+      }
+    });
+
+    const naPilha = [...usadosDaPilha].map((j) => blocos[j]);
     linhas.push({
       ...base,
+      alturaAcimaM,
       blocoNome: b.nome,
-      pavimentosNaPlanta: b.pavimentos + embaixo,
-      garagensNaPlanta: iG >= 0 ? blocos[iG].pavimentos : 0,
+      pavimentosNaPlanta: embaixo + naPilha.filter((o) => o.cotaBaseMm >= 0).reduce((n, o) => n + o.pavimentos, 0),
+      garagensNaPlanta: naPilha.filter((o) => o.cotaBaseMm < 0).reduce((n, o) => n + o.pavimentos, 0),
       estado: mudou ? 'AJUSTAR' : 'OK',
     });
   }
@@ -168,7 +231,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
   for (const c of candidatos) if (!usados.has(c)) avisos.push(`O bloco "${blocos[c].nome}" não corresponde a nenhuma torre do Empreendimento — fica como está.`);
   const subsolosAvulsos = blocos
     .map((b, i) => ({ b, i }))
-    .filter(({ b }) => b.uso === 'GARAGEM' && b.cotaBaseMm < 0 && !nomesDeGaragem.has(norm(b.nome)))
+    .filter(({ b }) => b.uso === 'GARAGEM' && b.cotaBaseMm < 0 && !daPilha.has(norm(b.nome)))
     .map(({ i }) => i);
   return { linhas, mudancas, novos, subsolosAvulsos, papeis, avisos };
 }

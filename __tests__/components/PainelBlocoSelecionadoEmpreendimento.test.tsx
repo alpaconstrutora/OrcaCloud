@@ -19,7 +19,7 @@ const MEDIDA: MedidaDoBloco = {
   blocoId: 'b1', nome: 'Torre A', uso: 'RESIDENCIAL', projecaoM2: 176, pavimentos: 6, pavimentosNoSubsolo: 0, areaConstruidaM2: 1056, areaComputavelM2: 1056, areaNaoComputavelM2: 0,
   baseMm: 0, topoMm: 18000, alturaM: 18, pisos: [1, 2, 3, 4, 5, 6].map(piso), pisosAcimaDoGabarito: 0, pisosForaDoEnvelope: 0, apoiadoEm: null,
 };
-const LINHA: LinhaDoAjuste = { torre: 'Torre A', fonte: 'UNIDADES', acima: 4, garagens: 2, blocoNome: 'Torre A', pavimentosNaPlanta: 6, garagensNaPlanta: 0, estado: 'AJUSTAR' };
+const LINHA: LinhaDoAjuste = { torre: 'Torre A', fonte: 'UNIDADES', acima: 4, garagens: 2, alturaAcimaM: 13.5, blocoNome: 'Torre A', pavimentosNaPlanta: 6, garagensNaPlanta: 0, estado: 'AJUSTAR' };
 const PAPEL = { torre: 'Torre A', tipo: 'TORRE' as const, nomesDosPisos: ['Térreo', 'Pavimento 1', 'Pavimento 2', 'Pavimento 3'] };
 
 const montar = (extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null } = {}) =>
@@ -47,7 +47,7 @@ describe('painel do bloco › Empreendimento', () => {
   it('diz de qual torre o bloco é e compara os pavimentos', () => {
     montar();
     const t = screen.getByTestId('torre-do-bloco');
-    expect(t).toHaveTextContent('Torre A: 4 pavimento(s) + 2 garagem(ns) pelos andares das unidades');
+    expect(t).toHaveTextContent('Torre A: 4 pavimento(s) (13,50 m) + 2 garagem(ns) pelos andares das unidades');
     expect(t).toHaveTextContent('na planta 6');
     expect(t).toHaveTextContent('a ajustar');
     expect(screen.getByTestId('avisos-do-empreendimento')).toHaveTextContent('sem número de pavimentos');

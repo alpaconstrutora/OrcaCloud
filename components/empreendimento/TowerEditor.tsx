@@ -27,7 +27,7 @@ import {
   Empreendimento, EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit, EmpreendimentoFloor,
 } from '../../types';
 import UnitEditor from './UnitEditor';
-import FloorEditor from './FloorEditor';
+import FloorEditor, { lerPeDireito } from './FloorEditor';
 import { TorreCard, TorreEmpty, TorreTotais, TorreTotalMetric } from '../torres/TorreCard';
 import { isObra } from '../../utils/projectClassification';
 
@@ -97,7 +97,10 @@ const COR_DA_SITUACAO: Record<SituacaoDoCampo, string> = {
   NENHUM: 'text-gray-500',
 };
 const metros = (v: number | string) => (typeof v === 'string' ? v : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
-const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '' });
+// Pé-direito padrão (27/10/2026): metros, opcional — vale para os pavimentos sem pé-direito próprio e para a torre
+// sem cadastro de pavimentos (a massa da Planta lê os dois).
+const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '', pe_direito_padrao_m: '' });
+const MSG_PE_DIREITO_TORRE = 'Pé-direito padrão entre 2,00 e 15,00 m (ou vazio).';
 
 export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved, somenteLeitura }) => {
   const travado = !!somenteLeitura;
@@ -263,6 +266,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) { setErroNomeTorre('Informe o nome da torre ou bloco.'); return; }
+    const peDireito = lerPeDireito(form.pe_direito_padrao_m);
+    if (peDireito === false) { notify(MSG_PE_DIREITO_TORRE, 'error'); return; }
     setSaving(true);
     try {
       const payload: EmpreendimentoTowerInsert = {
@@ -270,6 +275,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         name: form.name.trim(),
         floors_count: form.floors_count ? Number(form.floors_count) : undefined,
         units_per_floor: form.units_per_floor ? Number(form.units_per_floor) : undefined,
+        pe_direito_padrao_m: peDireito,
         sort_order: towers.length,
       };
       const created = await empreendimentoService.createTower(payload);
@@ -291,22 +297,27 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       name: tower.name,
       floors_count: tower.floors_count?.toString() ?? '',
       units_per_floor: tower.units_per_floor?.toString() ?? '',
+      pe_direito_padrao_m: tower.pe_direito_padrao_m != null ? Number(tower.pe_direito_padrao_m).toFixed(2).replace('.', ',') : '',
     });
   };
 
   const handleSaveEdit = async (tower: EmpreendimentoTower) => {
     if (!editForm.name.trim()) { notify('Informe o nome da torre.', 'error'); return; }
+    const peDireito = lerPeDireito(editForm.pe_direito_padrao_m);
+    if (peDireito === false) { notify(MSG_PE_DIREITO_TORRE, 'error'); return; }
     try {
       await empreendimentoService.updateTower(tower.id, {
         name: editForm.name.trim(),
         floors_count: editForm.floors_count ? Number(editForm.floors_count) : undefined,
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
+        pe_direito_padrao_m: peDireito,
       });
       setTowers(prev => prev.map(t => t.id === tower.id ? {
         ...t,
         name: editForm.name.trim(),
         floors_count: editForm.floors_count ? Number(editForm.floors_count) : undefined,
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
+        pe_direito_padrao_m: peDireito,
       } : t));
       setEditingId(null);
     } catch (err: any) {
@@ -452,6 +463,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
               <>
                 {tower.floors_count ? `${tower.floors_count} pav.` : 'sem pavimentos'}
                 {tower.units_per_floor ? ` · ${tower.units_per_floor} un/pav` : ''}
+                {tower.pe_direito_padrao_m != null ? ` · pé-direito ${Number(tower.pe_direito_padrao_m).toFixed(2).replace('.', ',')} m` : ''}
                 {towerUnits.length > 0 && (
                   <>
                     {' · '}<span className="text-gray-500">{towerUnits.length} unid.</span>
@@ -470,6 +482,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   onChange={e => setEditForm(p => ({ ...p, floors_count: e.target.value }))} />
                 <input className={`${editInputCls} w-32`} placeholder="Un./pav." type="number" value={editForm.units_per_floor}
                   onChange={e => setEditForm(p => ({ ...p, units_per_floor: e.target.value }))} />
+                <input className={`${editInputCls} w-36`} placeholder="Pé-direito (m)" inputMode="decimal" aria-label="Pé-direito padrão (m)"
+                  value={editForm.pe_direito_padrao_m} onChange={e => setEditForm(p => ({ ...p, pe_direito_padrao_m: e.target.value }))} />
                 <button onClick={() => handleSaveEdit(tower)} className="h-9 w-9 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]">
                   <Check className="w-4 h-4" />
                 </button>
@@ -575,6 +589,11 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                 <label htmlFor="nova-torre-upf" className={rotuloCls}>Unidades por pavimento</label>
                 <input id="nova-torre-upf" className={inputCls} type="number" min="0" value={form.units_per_floor}
                   onChange={e => patchTorre({ units_per_floor: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="nova-torre-pd" className={rotuloCls}>Pé-direito padrão (m)</label>
+                <input id="nova-torre-pd" className={inputCls} inputMode="decimal" placeholder="ex: 3,00" value={form.pe_direito_padrao_m}
+                  onChange={e => patchTorre({ pe_direito_padrao_m: e.target.value })} />
               </div>
               <p className="col-span-2 text-xs text-gray-500">
                 Depois de criar, cadastre os pavimentos e as unidades dentro do card da torre.

@@ -142,6 +142,8 @@ export interface EmpreendimentoTower {
     name: string;
     floors_count?: number;
     units_per_floor?: number;
+    /** Pé-direito padrão dos pavimentos, em metros (27/10/2026); vale para o pavimento sem `pe_direito_m`. */
+    pe_direito_padrao_m?: number | null;
     construction_cost_sqm?: number;
     sales_price_sqm?: number;
     sort_order?: number;
@@ -162,6 +164,8 @@ export interface EmpreendimentoFloor {
     repeat_count: number;
     units_per_floor?: number | null;
     prefix?: string | null;
+    /** Pé-direito (piso a piso) em metros (27/10/2026); null = o padrão da torre. */
+    pe_direito_m?: number | null;
     sort_order: number;
     created_at: string;
     updated_at: string;

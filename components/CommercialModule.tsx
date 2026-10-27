@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Building2, Home, Key, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, Maximize2, DollarSign, Tag, Calendar, User, MoreVertical, Edit, Trash2, LayoutGrid, List, ChevronRight, ChevronDown, X, RotateCw, Layers } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { commercialService } from '../services/commercialService';
+import { saleDealStage } from '../lib/salesAnalysis';
 import { Property, PropertyStatus, PropertyDeal, Client } from '../types';
 import { clientService } from '../services/clientService';
 import { projectService, ProjectData } from '../services/projectService';
@@ -400,7 +401,10 @@ const CommercialModule: React.FC<CommercialModuleProps> = ({ organizationId, tar
 
     const stats = {
         totalValue: filteredProperties.reduce((acc, p) => acc + (Number(p.price || p.initial_price) || 0), 0),
-        soldValue: deals.filter(d => d.type === 'SALE' && d.status === 'COMPLETED').reduce((acc, d) => acc + (Number(d.value) || 0), 0),
+        // "Volume em Vendas" = vendas com contrato (Contrato, Assinatura ou
+        // Concluído) — a mesma regra de Venda de Ativos e do BI
+        // (`saleDealStage`, decisão do usuário 27/10/2026). Só Concluído dava R$ 0.
+        soldValue: deals.filter(d => d.type === 'SALE' && saleDealStage(d.status) === 'sold').reduce((acc, d) => acc + (Number(d.value) || 0), 0),
         rentValue: deals.filter(d => d.type === 'RENTAL' && d.status === 'COMPLETED').reduce((acc, d) => acc + (Number(d.value) || 0), 0),
         activeDeals: deals.filter(d => (d.status === 'PENDING' || d.status === 'IN_NEGOTIATION') && (!dealTypeFilter || d.type === dealTypeFilter)).length,
         occupancyRate: filteredProperties.length > 0 ? ((filteredProperties.filter(p => p.status === PropertyStatus.SOLD || p.status === PropertyStatus.RENTED).length / filteredProperties.length) * 100).toFixed(1) : '0.0'

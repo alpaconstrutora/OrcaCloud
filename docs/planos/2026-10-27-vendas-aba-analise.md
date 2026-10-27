@@ -97,5 +97,5 @@ concluídas (a view não filtrava tipo); `vw_fact_deal` com `is_vgv` = 0 vendas.
 
 ### Pendente de decisão do usuário
 
-- **Card "Volume em Vendas" de `CommercialModule.tsx:403`** ainda conta só Concluído (não lê as views).
+- ~~Card "Volume em Vendas" de `CommercialModule.tsx`~~ — usuário: **"sim"**; passou a `saleDealStage`. ⚠️ Mas o `CommercialModule.tsx` **não é importado por nenhum arquivo** (nem pelo `AppRouter`): a tela não aparece no app, é código morto. Candidato a remoção — perguntar.
 - ~~BI ainda conta só Concluído~~ — item 11 acima. Registro original: `vw_fact_deal.is_vgv`, as views executivas (`20260708000002`) e as RPCs de convergência (`20260710000003`) — além do card "Volume em Vendas" de `CommercialModule.tsx:403`. Com a regra nova nas telas de Venda de Ativos, esses números divergem (BI R$ 0 × telas R$ 3,26 mi). Mudar view SQL = migration — perguntar antes.

@@ -113,7 +113,7 @@ export const CabecalhoDoPortal: React.FC<{
                     </button>
                 )}
             </div>
-            <p className={`mt-4 text-xl font-bold leading-tight ${MARCA.texto}`}>{nome || '—'}</p>
+            <p className={`mt-4 text-lg font-bold leading-snug ${MARCA.texto}`}>{nome || '—'}</p>
             {linhaCargo && <p className={`mt-0.5 text-sm ${MARCA.secundario}`}>{linhaCargo}</p>}
         </header>
     );
@@ -132,7 +132,9 @@ export const CartaoUltimoHolerite: React.FC<{
     <section aria-labelledby="ultimo-holerite" className="bg-white rounded-3xl overflow-hidden shadow-[0_1px_2px_rgba(75,75,77,0.08),0_12px_32px_-16px_rgba(75,75,77,0.35)]">
         <div className={`h-2 ${MARCA.laranjaFundo}`} aria-hidden="true" />
         <div className="p-5">
-            <h2 id="ultimo-holerite" className={`text-xl font-bold leading-snug ${MARCA.texto}`}>Último holerite · <span className="whitespace-nowrap">{competencia}</span></h2>
+            <h2 id="ultimo-holerite" className={`text-xl font-bold leading-snug [text-wrap:balance] ${MARCA.texto}`}>{/* "·" preso a "Último holerite" (espaço inquebrável): se quebrar, quebra depois dele. */}
+                Último holerite{' '}· <span className="whitespace-nowrap">{competencia}</span>
+            </h2>
             <p className={`mt-0.5 text-sm ${MARCA.secundario}`}>{tipo}</p>
 
             <div className="mt-5 flex items-end justify-between gap-3">
@@ -209,7 +211,7 @@ export const RodapeDoPortal: React.FC<{
                             </span>
                             {/* Mesmo peso ativo e inativo: em 360px o negrito alargava
                                 "Treinamentos" até cortar. Quem marca o ativo é a pílula. */}
-                            <span className={`text-[11px] leading-tight font-medium tracking-[-0.01em] whitespace-nowrap ${ativo ? MARCA.texto : MARCA.secundario}`}>
+                            <span className={`text-xs leading-tight font-medium whitespace-nowrap ${ativo ? MARCA.texto : MARCA.secundario}`}>
                                 {rotulo}
                             </span>
                             {aviso && <span className="sr-only">({aviso})</span>}

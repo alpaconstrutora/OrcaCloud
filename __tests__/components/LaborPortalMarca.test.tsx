@@ -67,7 +67,7 @@ describe('Holerites é a tela inicial', () => {
     it('abre no último holerite, com o valor escondido e fora da tela', async () => {
         montar();
         // Um título só ("Último holerite · {mês}"), sem rótulo-kicker acima.
-        const titulo = await screen.findByRole('heading', { name: 'Último holerite · Setembro de 2026' });
+        const titulo = await screen.findByRole('heading', { name: /^Último holerite\s·\sSetembro de 2026$/ });
         const cartao = titulo.closest('section') as HTMLElement;
         expect(within(cartao).getByText('Valor escondido')).toBeTruthy();
         // Escondido não é desfocado: o valor nem chega ao DOM.

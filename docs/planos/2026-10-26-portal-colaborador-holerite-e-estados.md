@@ -21,8 +21,8 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 | 1 | `/impeccable harden` | P0 holerite pelo link + P1 estados de tela | no ar (#186) |
 | 2 | `/impeccable clarify` | P1 prévia honesta (caminho único com token, faixa "vendo como") | no ar (#189) |
 | 3 | `/impeccable clarify` | P2 datas, status, termos | no ar (#191) |
-| 4 | `/impeccable init` + `shape` | marca da Alpa, Início = último holerite, navegação no rodapé | **item 4 abaixo** |
-| 5 | `/impeccable typeset` | pesos e tamanhos | pendente |
+| 4 | `/impeccable init` + `shape` | marca da Alpa, Início = último holerite, navegação no rodapé | no ar (#193) |
+| 5 | `/impeccable typeset` | pesos e tamanhos | **item 5 abaixo** |
 | 6 | `/impeccable audit` | contraste, alvos de toque, ARIA | pendente |
 | 7 | `/impeccable polish` | passada final | pendente |
 
@@ -170,7 +170,8 @@ Documentos · Treinamentos (Holerites é o início). Brief confirmado: "confirma
 - `PRODUCT.md` criado (init). Contrato de direção em `.impeccable/surfaces/components-laborportal-tsx.md`.
 - Migration `aplicar_20271026990000_portal_colaborador_resumo_com_empresa.sql`:
   `fn_colab_portal_summary` devolve `organization { name, logo_url }` (só isso — nada de CNPJ num link anônimo).
-  - [ ] aplicada no banco (o usuário aplica);
+  - [x] aplicada no banco em 26/10 (a pedido do usuário); conferido: resumo pelo link traz nome e logo
+        da empresa do colaborador, sem CNPJ/endereço/settings; primitivas seguem fechadas;
 - `components/portalColaborador/PortalMarca.tsx`: cabeçalho com o logo (altura fixa, largura livre;
   sem logo ou logo quebrado → nome), cartão do último holerite, valor escondido que NÃO vai ao DOM,
   olho lembrado no aparelho (localStorage com try/catch), rodapé de 5 com aviso.
@@ -191,3 +192,25 @@ Documentos · Treinamentos (Holerites é o início). Brief confirmado: "confirma
 cinzas do Tailwind no estado vazio da Academia e no percentual do curso; indicador de carregamento em
 #FF884C (laranja só-preenchimento como ícone); `Button`/`ActionIconButton` do app dentro do portal;
 botão de fechar o aviso de download sem anel de foco; `font-black` em números de ponto/férias e no código de NR.
+
+## Item 5 — typeset: tipografia do portal
+
+Pedido: "seguir para o item 5".
+
+Avaliação: Inter (a do app) mantida — tela de tarefa, já carregada; DM Sans (usada no Portal do
+Cliente) não teria papel próprio. Cinco pesos em uso (400/500/600/700/900); título de linha diferente
+por aba (16/600 em Holerites, 14/700 em Ponto/Férias); legendas em 12px e rodapé em 11px; nome do
+cabeçalho do mesmo tamanho do título do cartão. Detector `--scope type`: sem achados (antes e depois).
+
+Sistema: uma família, quatro pesos (400 lê · 500 só rodapé · 600 nomeia · 700 só cartão/nome/valor),
+papéis em `DESIGN.md` (hero-value, card-title, identity, row-title, row-value, notice, row-meta,
+section-title, label, nav-label, button-label); algarismos tabulares em todo número comparável.
+
+- [x] sem `font-black`, sem 11px, sem `slate-500` no portal; legendas 14px; rodapé 12px;
+- [x] visto no harness em 390/360/1440: a 1ª versão quebrou "· Setembro" no início da linha (quebra
+      equilibrada) e "8h + 2h extras" em duas linhas a 360 — corrigidos (espaço inquebrável no "·";
+      valor de linha sem quebra);
+- [x] `DESIGN.md` e `.impeccable/design.json`: tipografia deixa de ser "provisória".
+
+Fica para o item 6 (audit): `Button`/`ActionIconButton` do app dentro do portal; botão de fechar o
+aviso de download sem anel de foco; indicador de carregamento em #FF884C.

@@ -382,7 +382,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'ponto' && (
                     <div className="space-y-3">
                         {pontosEmAnalise > 0 && (
-                            <p className="text-sm text-[#4B4B4D] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                            <p className="text-base text-[#4B4B4D] [text-wrap:pretty] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                 <strong className="font-semibold">{pontosEmAnalise === 1 ? '1 registro' : `${pontosEmAnalise} registros`} em análise</strong> — o RH ainda vai aprovar.
                             </p>
                         )}
@@ -393,13 +393,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             vazioIcone={Clock} vazioTitulo="Nenhum registro de ponto"
                         >
                             {recentEntries.slice(0, 10).map(e => (
-                                <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <div key={e.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                     <div>
-                                        <p className="text-sm font-bold text-[#4B4B4D]">{dataBR(e.date)}</p>
-                                        <p className="text-xs text-[#566375]">{e.project_name || 'Sem obra'}</p>
+                                        <p className="text-base font-semibold tabular-nums text-[#4B4B4D]">{dataBR(e.date)}</p>
+                                        <p className="text-sm text-[#566375]">{e.project_name || 'Sem obra'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-black text-[#4B4B4D]">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
+                                        <p className="text-base font-semibold tabular-nums whitespace-nowrap text-[#4B4B4D]">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
                                         <SeloDeStatus {...statusDoPonto(e.status)} />
                                     </div>
                                 </div>
@@ -412,7 +412,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'ferias' && (
                     <div className="space-y-3">
                         <div className="px-4 py-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                            <p className="text-base text-[#4B4B4D]">
+                            <p className="text-base text-[#4B4B4D] [text-wrap:pretty]">
                                 {(summary?.ferias_saldo ?? 0) > 0
                                     ? <>Você tem <strong className="font-semibold">{diasTexto(summary?.ferias_saldo)}</strong> de férias para tirar.</>
                                     : 'Você não tem dias de férias disponíveis agora.'}
@@ -430,13 +430,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             vazioIcone={Calendar} vazioTitulo="Nenhuma ausência registrada"
                         >
                             {absences.slice(0, 8).map(a => (
-                                <div key={a.id} className="flex items-center justify-between p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                     <div>
-                                        <p className="text-sm font-bold text-[#4B4B4D]">{tipoDaAusencia(a.tipo)}</p>
-                                        <p className="text-xs text-[#566375]">{periodoTexto(a.data_inicio, a.data_fim)}</p>
+                                        <p className="text-base font-semibold text-[#4B4B4D]">{tipoDaAusencia(a.tipo)}</p>
+                                        <p className="text-sm text-[#566375]">{periodoTexto(a.data_inicio, a.data_fim)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-black text-[#4B4B4D]">{diasTexto(a.dias)}</p>
+                                        <p className="text-base font-semibold tabular-nums whitespace-nowrap text-[#4B4B4D]">{diasTexto(a.dias)}</p>
                                         <SeloDeStatus {...statusDaAusencia(a.status)} />
                                     </div>
                                 </div>
@@ -474,8 +474,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     <div key={d.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                         <FileText className="w-4 h-4 shrink-0 text-[#566375]" />
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-[#4B4B4D] truncate">{d.nome}</p>
-                                            <p className="text-xs text-[#566375]">
+                                            <p className="text-base font-semibold text-[#4B4B4D] truncate">{d.nome}</p>
+                                            <p className="text-sm text-[#566375]">
                                                 {d.categoria}{d.data_validade ? ' · ' : ''}
                                                 {d.data_validade && <span className={expired ? 'font-semibold text-[#A84A1C]' : ''}>{validadeTexto(d.data_validade)}</span>}
                                             </p>
@@ -499,7 +499,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'treino' && (
                     <div className="space-y-3">
                         {treinamentosVencendo > 0 && (
-                            <p className="text-sm text-[#4B4B4D] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                            <p className="text-base text-[#4B4B4D] [text-wrap:pretty] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                 <strong className="font-semibold">{treinamentosVencendo === 1 ? '1 treinamento vence' : `${treinamentosVencendo} treinamentos vencem`} em até 30 dias.</strong> Fale com o RH para renovar.
                             </p>
                         )}
@@ -528,11 +528,11 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 )}
 
                                 {!academiaCarregando && !academiaErro && academia.length === 0 && (
-                                    <div className="p-3 rounded-xl border border-slate-100 bg-slate-50">
-                                        <p className="text-sm text-slate-500">
+                                    <div className="p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                        <p className="text-sm text-[#4B4B4D]">
                                             Nenhum treinamento atribuído a você no momento.
                                         </p>
-                                        <p className="text-xs text-[#566375] mt-1">
+                                        <p className="text-sm text-[#566375] mt-1">
                                             Se você esperava algum, confirme com o RH se a atribuição
                                             foi feita para o seu cadastro.
                                         </p>
@@ -561,17 +561,17 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         >
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-bold text-[#4B4B4D] truncate">{m.curso}</p>
+                                                    <p className="text-base font-semibold text-[#4B4B4D] truncate">{m.curso}</p>
                                                     {/* "NR-35 Trabalho em Altura" já diz a NR; não repetir embaixo. */}
                                                     {m.nr_referencia && !m.curso.startsWith(m.nr_referencia) && (
-                                                        <p className="text-xs font-black text-[#A84A1C]">{m.nr_referencia}</p>
+                                                        <p className="text-xs font-semibold tracking-wide text-[#A84A1C]">{m.nr_referencia}</p>
                                                     )}
                                                     {/* "v1" era jargão do RH (versão do curso); o colaborador precisa do prazo. */}
                                                     {m.data_limite && (
-                                                        <p className="text-xs text-[#566375] mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
+                                                        <p className="text-sm text-[#566375] mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
                                                     )}
                                                 </div>
-                                                <span className="text-xs font-black text-slate-500 shrink-0">
+                                                <span className="text-xs font-semibold tabular-nums text-[#566375] shrink-0">
                                                     {Math.round(m.percentual)}%
                                                 </span>
                                             </div>
@@ -581,7 +581,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                                     style={{ width: `${Math.min(100, m.percentual)}%` }}
                                                 />
                                             </div>
-                                            <p className={`text-xs font-bold mt-2 ${previa ? 'text-[#566375]' : 'text-[#A84A1C]'}`}>
+                                            <p className={`text-sm font-semibold mt-2 ${previa ? 'text-[#566375]' : 'text-[#A84A1C]'}`}>
                                                 {previa ? 'Não abre na prévia' : concluido ? 'Ver certificado' : m.status === 'NAO_INICIADO' ? 'Começar' : 'Continuar'}
                                             </p>
                                         </button>
@@ -604,9 +604,9 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     <div key={t.id} className="p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                                <p className="text-sm font-bold text-[#4B4B4D]">{t.course_nome}</p>
-                                                {t.nr_referencia && <p className="text-xs font-black text-[#A84A1C]">{t.nr_referencia}</p>}
-                                                <p className="text-xs text-[#566375] mt-0.5">
+                                                <p className="text-base font-semibold text-[#4B4B4D]">{t.course_nome}</p>
+                                                {t.nr_referencia && <p className="text-xs font-semibold tracking-wide text-[#A84A1C]">{t.nr_referencia}</p>}
+                                                <p className="text-sm text-[#566375] mt-0.5">
                                                     {t.data_realizacao ? `Realizado em ${dataBR(t.data_realizacao)}` : ''}
                                                     {t.data_realizacao && t.data_validade ? ' · ' : ''}
                                                     {t.data_validade ? validadeTexto(t.data_validade) : ''}

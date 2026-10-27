@@ -27,7 +27,7 @@ import {
   Empreendimento, EmpreendimentoTower, EmpreendimentoTowerInsert, EmpreendimentoUnit, EmpreendimentoFloor,
 } from '../../types';
 import UnitEditor from './UnitEditor';
-import FloorEditor, { lerPeDireito } from './FloorEditor';
+import FloorEditor, { fmtElevacao, lerElevacao, lerPeDireito } from './FloorEditor';
 import { TorreCard, TorreEmpty, TorreTotais, TorreTotalMetric } from '../torres/TorreCard';
 import { isObra } from '../../utils/projectClassification';
 
@@ -99,8 +99,10 @@ const COR_DA_SITUACAO: Record<SituacaoDoCampo, string> = {
 const metros = (v: number | string) => (typeof v === 'string' ? v : v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 }));
 // Pé-direito padrão (27/10/2026): metros, opcional — vale para os pavimentos sem pé-direito próprio e para a torre
 // sem cadastro de pavimentos (a massa da Planta lê os dois).
-const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '', pe_direito_padrao_m: '' });
+// Elevação do térreo (27/10/2026): a referência das elevações dos pavimentos (+0,00 ou a cota altimétrica); vazio = 0.
+const emptyTorreForm = () => ({ name: '', floors_count: '', units_per_floor: '', pe_direito_padrao_m: '', elevacao_terreo_m: '' });
 const MSG_PE_DIREITO_TORRE = 'Pé-direito padrão entre 2,00 e 15,00 m (ou vazio).';
+const MSG_ELEVACAO_TORRE = 'Elevação do térreo em metros, ex.: +0,00 ou 745,30 (ou vazio, para 0).';
 
 export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId, empreendimento, onTerrenoSaved, somenteLeitura }) => {
   const travado = !!somenteLeitura;
@@ -268,6 +270,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     if (!form.name.trim()) { setErroNomeTorre('Informe o nome da torre ou bloco.'); return; }
     const peDireito = lerPeDireito(form.pe_direito_padrao_m);
     if (peDireito === false) { notify(MSG_PE_DIREITO_TORRE, 'error'); return; }
+    const elevacao = lerElevacao(form.elevacao_terreo_m);
+    if (elevacao === false) { notify(MSG_ELEVACAO_TORRE, 'error'); return; }
     setSaving(true);
     try {
       const payload: EmpreendimentoTowerInsert = {
@@ -276,6 +280,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         floors_count: form.floors_count ? Number(form.floors_count) : undefined,
         units_per_floor: form.units_per_floor ? Number(form.units_per_floor) : undefined,
         pe_direito_padrao_m: peDireito,
+        elevacao_terreo_m: elevacao,
         sort_order: towers.length,
       };
       const created = await empreendimentoService.createTower(payload);
@@ -298,6 +303,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       floors_count: tower.floors_count?.toString() ?? '',
       units_per_floor: tower.units_per_floor?.toString() ?? '',
       pe_direito_padrao_m: tower.pe_direito_padrao_m != null ? Number(tower.pe_direito_padrao_m).toFixed(2).replace('.', ',') : '',
+      elevacao_terreo_m: tower.elevacao_terreo_m != null ? fmtElevacao(Number(tower.elevacao_terreo_m)) : '',
     });
   };
 
@@ -305,12 +311,15 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     if (!editForm.name.trim()) { notify('Informe o nome da torre.', 'error'); return; }
     const peDireito = lerPeDireito(editForm.pe_direito_padrao_m);
     if (peDireito === false) { notify(MSG_PE_DIREITO_TORRE, 'error'); return; }
+    const elevacao = lerElevacao(editForm.elevacao_terreo_m);
+    if (elevacao === false) { notify(MSG_ELEVACAO_TORRE, 'error'); return; }
     try {
       await empreendimentoService.updateTower(tower.id, {
         name: editForm.name.trim(),
         floors_count: editForm.floors_count ? Number(editForm.floors_count) : undefined,
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
         pe_direito_padrao_m: peDireito,
+        elevacao_terreo_m: elevacao,
       });
       setTowers(prev => prev.map(t => t.id === tower.id ? {
         ...t,
@@ -318,6 +327,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         floors_count: editForm.floors_count ? Number(editForm.floors_count) : undefined,
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
         pe_direito_padrao_m: peDireito,
+        elevacao_terreo_m: elevacao,
       } : t));
       setEditingId(null);
     } catch (err: any) {
@@ -464,6 +474,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                 {tower.floors_count ? `${tower.floors_count} pav.` : 'sem pavimentos'}
                 {tower.units_per_floor ? ` · ${tower.units_per_floor} un/pav` : ''}
                 {tower.pe_direito_padrao_m != null ? ` · pé-direito ${Number(tower.pe_direito_padrao_m).toFixed(2).replace('.', ',')} m` : ''}
+                {tower.elevacao_terreo_m != null ? ` · térreo em ${fmtElevacao(Number(tower.elevacao_terreo_m))} m` : ''}
                 {towerUnits.length > 0 && (
                   <>
                     {' · '}<span className="text-gray-500">{towerUnits.length} unid.</span>
@@ -484,6 +495,8 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   onChange={e => setEditForm(p => ({ ...p, units_per_floor: e.target.value }))} />
                 <input className={`${editInputCls} w-36`} placeholder="Pé-direito (m)" inputMode="decimal" aria-label="Pé-direito padrão (m)"
                   value={editForm.pe_direito_padrao_m} onChange={e => setEditForm(p => ({ ...p, pe_direito_padrao_m: e.target.value }))} />
+                <input className={`${editInputCls} w-40`} placeholder="Elevação térreo (m)" inputMode="decimal" aria-label="Elevação do térreo (m)"
+                  value={editForm.elevacao_terreo_m} onChange={e => setEditForm(p => ({ ...p, elevacao_terreo_m: e.target.value }))} />
                 <button onClick={() => handleSaveEdit(tower)} className="h-9 w-9 flex items-center justify-center bg-emerald-50 hover:bg-emerald-100 text-emerald-600 rounded-[6px]">
                   <Check className="w-4 h-4" />
                 </button>
@@ -594,6 +607,11 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                 <label htmlFor="nova-torre-pd" className={rotuloCls}>Pé-direito padrão (m)</label>
                 <input id="nova-torre-pd" className={inputCls} inputMode="decimal" placeholder="ex: 3,00" value={form.pe_direito_padrao_m}
                   onChange={e => patchTorre({ pe_direito_padrao_m: e.target.value })} />
+              </div>
+              <div className="space-y-1.5">
+                <label htmlFor="nova-torre-elev" className={rotuloCls}>Elevação do térreo (m)</label>
+                <input id="nova-torre-elev" className={inputCls} inputMode="decimal" placeholder="+0,00" value={form.elevacao_terreo_m}
+                  onChange={e => patchTorre({ elevacao_terreo_m: e.target.value })} />
               </div>
               <p className="col-span-2 text-xs text-gray-500">
                 Depois de criar, cadastre os pavimentos e as unidades dentro do card da torre.

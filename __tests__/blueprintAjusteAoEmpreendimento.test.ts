@@ -5,11 +5,11 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, emptyModel, type Command } from '../utils/blueprintKernel';
 import { comandosDoAjuste, vestirBlocosPropostos } from '../utils/blueprintAjusteAoEmpreendimento';
-import type { EstruturaDaTorre } from '../utils/blueprintEstruturaDaTorre';
+import { estruturaDaTorre, type EstruturaDaTorre } from '../utils/blueprintEstruturaDaTorre';
 import type { BlocoProposto } from '../utils/blueprintGeradorDeMassa';
 
 const pisos = (de: number, ate: number, nome: (n: number) => string, pd: (n: number) => number | null = () => null) =>
-  Array.from({ length: ate - de + 1 }, (_, i) => ({ numero: de + i, nome: nome(de + i), tipo: null, peDireitoMm: pd(de + i), unidades: [] }));
+  Array.from({ length: ate - de + 1 }, (_, i) => ({ numero: de + i, nome: nome(de + i), tipo: null, peDireitoMm: pd(de + i), elevacaoMm: 0, elevacaoDigitada: false, alturaMm: pd(de + i), unidades: [] }));
 /** O Garden Cambuhy de 27/10/2026, como `estruturaDaTorre` o lê. */
 const TORRE_A: EstruturaDaTorre = { torreId: 'tA', nome: 'Torre A', acima: pisos(0, 3, (n) => (n === 0 ? 'Térreo' : `Pavimento ${n}`)), garagens: pisos(-2, -1, (n) => `Garagem ${-n}`), fonte: 'UNIDADES', avisos: [] };
 const TORRE_B: EstruturaDaTorre = { torreId: 'tB', nome: 'Torre B', acima: pisos(0, 5, (n) => (n === 0 ? 'Térreo' : `Pavimento ${n}`)), garagens: [], fonte: 'UNIDADES', avisos: [] };
@@ -168,6 +168,18 @@ describe('pé-direito por pavimento (27/10/2026): a torre vira blocos empilhados
     expect([torre.cotaBaseMm, torre.pavimentos]).toEqual([0, 4]);
     expect((depois.blocos ?? []).some((b) => b.nome === 'Torre A · Térreo')).toBe(true);
     expect(r.avisos.join(' ')).toMatch(/"Torre A · Térreo" não é mais usado/);
+  });
+
+  it('elevação digitada (27/10/2026): o Pavimento 1 em +4,50 m faz o térreo de 4,50 m, mesmo com pé-direito 3,00 m', () => {
+    const pav = (extra: Record<string, unknown>) => ({ id: 'f', tower_id: 'tA', tipo: 'TIPO', repeat_count: 1, sort_order: 0, created_at: '', updated_at: '', ...extra }) as never;
+    const e = estruturaDaTorre({ id: 'tA', name: 'Torre A', pe_direito_padrao_m: 3, units: [] }, [
+      pav({ name: 'Térreo', tipo: 'TERREO', floor_number: 0 }),
+      pav({ name: 'Pavimento', floor_number: 1, repeat_count: 3, elevacao_m: 4.5, sort_order: 1 }),
+    ]);
+    const model = plantaDoDia();
+    const depois = applyBatch(model, comandosDoAjuste(model, [e, TORRE_B]).comandos).model;
+    const porNome = new Map((depois.blocos ?? []).map((b) => [b.nome, b]));
+    expect([porNome.get('Torre A · Térreo')!.peDireitoMm, porNome.get('Torre A')!.cotaBaseMm]).toEqual([4500, 4500]);
   });
 
   it('Gerar massa: os blocos propostos saem empilhados', () => {

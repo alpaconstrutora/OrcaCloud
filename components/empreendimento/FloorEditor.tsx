@@ -11,6 +11,10 @@
 // Pé-direito (27/10/2026, "crie pé-direito por pavimento em empreendimento"): metros, opcional; vazio = o padrão
 // da torre. A massa da Planta empilha os blocos da torre por trecho de mesma altura
 // (utils/blueprintAjusteAoEmpreendimento).
+//
+// Elevação (27/10/2026, "sugiro incluir elevação, assim não teremos dúvida da posição do pavimento"; decisão: as duas
+// formas): a coluna mostra a CALCULADA (a do térreo da torre + os pés-direitos de baixo) e o campo aceita a DIGITADA,
+// que vale no lugar do cálculo. O cálculo e os avisos são os mesmos da massa da Planta (`estruturaDaTorre`).
 import React from 'react';
 import { Plus, Loader2, Layers, Check, X } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -20,6 +24,7 @@ import SecaoTitulo from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
 import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, FloorTipo } from '../../types';
+import { estruturaDaTorre } from '../../utils/blueprintEstruturaDaTorre';
 
 interface Props {
   tower: EmpreendimentoTower;
@@ -52,7 +57,7 @@ const TIPO_STYLE: Record<FloorTipo, string> = {
 
 const emptyForm = () => ({
   name: '', tipo: 'TIPO' as FloorTipo,
-  floor_number: '', repeat_count: '1', units_per_floor: '', prefix: '', pe_direito_m: '',
+  floor_number: '', repeat_count: '1', units_per_floor: '', prefix: '', pe_direito_m: '', elevacao_m: '',
 });
 
 /** "3,05" ou "3.05" → 3.05; vazio → null; fora de 2–15 m → `false` (a mesma faixa do banco e da massa da Planta). */
@@ -64,6 +69,18 @@ export function lerPeDireito(texto: string): number | null | false {
 }
 const fmtPeDireito = (v: number | null | undefined) => (v == null ? '' : Number(v).toFixed(2).replace('.', ','));
 const MSG_PE_DIREITO = 'Pé-direito entre 2,00 e 15,00 m (ou vazio, para usar o padrão da torre).';
+
+/** "+3,50", "-6" ou "745,30" → metros; vazio → null (calculada); fora de -1000 a 10000 m → `false` (a faixa do banco). */
+export function lerElevacao(texto: string): number | null | false {
+  const t = texto.trim().replace(',', '.').replace(/^\+/, '');
+  if (!t) return null;
+  const v = Math.round(Number(t) * 100) / 100;
+  return Number.isFinite(v) && v >= -1000 && v <= 10000 ? v : false;
+}
+/** Metros com sinal: +0,00, -6,00. */
+export const fmtElevacao = (m: number) => `${m < 0 ? '-' : '+'}${Math.abs(m).toFixed(2).replace('.', ',')}`;
+const fmtElevacaoDigitavel = (v: number | null | undefined) => (v == null ? '' : fmtElevacao(Number(v)));
+const MSG_ELEVACAO = 'Elevação em metros, ex.: +3,00 ou -6,00 (ou vazio, para calcular pelos pés-direitos).';
 
 export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
   const [floors, setFloors] = React.useState<EmpreendimentoFloor[]>([]);
@@ -90,12 +107,26 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
   const totalUnidades = floors.reduce((s, f) =>
     s + f.repeat_count * (f.units_per_floor ?? tower.units_per_floor ?? 1), 0);
 
+  // A elevação de cada andar (calculada ou digitada) e os avisos — o mesmo cálculo da massa da Planta.
+  const estrutura = React.useMemo(
+    () => estruturaDaTorre({ id: tower.id, name: tower.name, pe_direito_padrao_m: tower.pe_direito_padrao_m, elevacao_terreo_m: tower.elevacao_terreo_m, units: [] }, floors),
+    [tower.id, tower.name, tower.pe_direito_padrao_m, tower.elevacao_terreo_m, floors],
+  );
+  const elevacaoDoAndar = React.useMemo(() => {
+    const m = new Map<number, number>();
+    for (const p of [...estrutura.garagens, ...estrutura.acima]) m.set(p.numero, p.elevacaoMm / 1000);
+    return m;
+  }, [estrutura]);
+  const avisosDeElevacao = estrutura.avisos.filter(a => a.includes('(digitada)'));
+
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
     if (!form.floor_number) { notify('Informe o número inicial do pavimento.', 'error'); return; }
     const peDireito = lerPeDireito(form.pe_direito_m);
     if (peDireito === false) { notify(MSG_PE_DIREITO, 'error'); return; }
+    const elevacao = lerElevacao(form.elevacao_m);
+    if (elevacao === false) { notify(MSG_ELEVACAO, 'error'); return; }
     setSaving(true);
     try {
       const payload: EmpreendimentoFloorInsert = {
@@ -107,6 +138,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
         units_per_floor: form.units_per_floor ? Number(form.units_per_floor) : undefined,
         prefix: form.prefix || undefined,
         pe_direito_m: peDireito,
+        elevacao_m: elevacao,
         sort_order: floors.length,
       };
       // §22: entra na lista local — sem recarregar tudo (sort_order = fim da lista).
@@ -128,6 +160,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
       units_per_floor: f.units_per_floor != null ? String(f.units_per_floor) : '',
       prefix: f.prefix ?? '',
       pe_direito_m: fmtPeDireito(f.pe_direito_m),
+      elevacao_m: fmtElevacaoDigitavel(f.elevacao_m),
     });
   };
 
@@ -135,6 +168,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
     if (!editForm.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
     const peDireito = lerPeDireito(editForm.pe_direito_m);
     if (peDireito === false) { notify(MSG_PE_DIREITO, 'error'); return; }
+    const elevacao = lerElevacao(editForm.elevacao_m);
+    if (elevacao === false) { notify(MSG_ELEVACAO, 'error'); return; }
     try {
       const updated = await empreendimentoService.updateFloor(f.id, {
         name: editForm.name.trim(),
@@ -144,6 +179,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
         prefix: editForm.prefix || undefined,
         pe_direito_m: peDireito,
+        elevacao_m: elevacao,
       });
       setFloors(prev => prev.map(x => x.id === f.id ? updated : x));
       setEditingId(null);
@@ -193,7 +229,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
 
       {/* Formulário de adição — inline de propósito: pavimentos se digitam em sequência
           (subsolo, térreo, tipo ×N, cobertura), é um formulário só (§30). */}
-      <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-8 gap-x-6 gap-y-4 items-end">
+      <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-9 gap-x-6 gap-y-4 items-end">
         <div className="space-y-1.5 col-span-2">
           <label htmlFor={`pav-nome-${tower.id}`} className={rotuloCls}>Nome *</label>
           <input id={`pav-nome-${tower.id}`} className={inputCls} placeholder="ex: Pavimento Tipo" value={form.name}
@@ -228,6 +264,12 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
             placeholder={tower.pe_direito_padrao_m != null ? fmtPeDireito(tower.pe_direito_padrao_m) : 'ex: 3,00'} value={form.pe_direito_m}
             onChange={e => setForm(p => ({ ...p, pe_direito_m: e.target.value }))} />
         </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`pav-elev-${tower.id}`} className={rotuloCls}>Elevação (m)</label>
+          <input id={`pav-elev-${tower.id}`} className={inputCls} inputMode="decimal" placeholder="calculada" value={form.elevacao_m}
+            title="Vazio = calculada (a elevação do térreo da torre + os pés-direitos de baixo)"
+            onChange={e => setForm(p => ({ ...p, elevacao_m: e.target.value }))} />
+        </div>
         <Button type="submit" disabled={saving} className="col-span-2 md:col-span-1">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
           Adicionar pavimento
@@ -253,6 +295,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                 <th className="py-2.5 px-4">Repete</th>
                 <th className="py-2.5 px-4">Un./pav.</th>
                 <th className="py-2.5 px-4">Pé-direito</th>
+                <th className="py-2.5 px-4">Elevação</th>
                 <th className="py-2.5 px-4">Andares</th>
                 <th className="py-2.5 px-4 text-center">Ações</th>
               </tr>
@@ -262,6 +305,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                 const isEd = editingId === f.id;
                 const upf = f.units_per_floor ?? tower.units_per_floor;
                 const pd = f.pe_direito_m ?? tower.pe_direito_padrao_m;
+                const elevDe = elevacaoDoAndar.get(f.floor_number);
+                const elevAte = elevacaoDoAndar.get(f.floor_number + f.repeat_count - 1);
                 const rangeStr = f.repeat_count === 1
                   ? labelFloor(f.floor_number, f.tipo)
                   : `${labelFloor(f.floor_number, f.tipo)} → ${labelFloor(f.floor_number + f.repeat_count - 1, f.tipo)}`;
@@ -286,6 +331,9 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                         <td className="py-2 px-3"><input className={editCls + ' w-16'} inputMode="decimal" aria-label="Pé-direito (m)"
                           placeholder={tower.pe_direito_padrao_m != null ? fmtPeDireito(tower.pe_direito_padrao_m) : '—'} value={editForm.pe_direito_m}
                           onChange={e => setEditForm(p => ({ ...p, pe_direito_m: e.target.value }))} /></td>
+                        <td className="py-2 px-3"><input className={editCls + ' w-20'} inputMode="decimal" aria-label="Elevação (m)"
+                          placeholder={elevDe != null ? fmtElevacao(elevDe) : 'calculada'} value={editForm.elevacao_m}
+                          onChange={e => setEditForm(p => ({ ...p, elevacao_m: e.target.value }))} /></td>
                         <td className="py-2 px-3 text-gray-400 italic text-xs">
                           {previewRange(editForm.floor_number, editForm.repeat_count, editForm.tipo)}
                         </td>
@@ -312,6 +360,16 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                         <td className="py-2.5 px-4 text-gray-500 font-normal" title={f.pe_direito_m == null && pd != null ? 'Padrão da torre' : undefined}>
                           {pd != null ? `${fmtPeDireito(pd)} m${f.pe_direito_m == null ? ' (torre)' : ''}` : <span className="text-gray-300">—</span>}
                         </td>
+                        <td className="py-2.5 px-4 text-gray-500 font-normal whitespace-nowrap"
+                          title={f.elevacao_m != null ? 'Digitada' : 'Calculada: a elevação do térreo da torre + os pés-direitos de baixo (3,00 m onde não há)'}>
+                          {elevDe != null
+                            ? <>
+                                <span className={f.elevacao_m != null ? 'text-gray-800' : undefined}>{fmtElevacao(elevDe)}</span>
+                                {elevAte != null && f.repeat_count > 1 ? ` → ${fmtElevacao(elevAte)}` : ''} m
+                                {f.elevacao_m == null ? ' (calc.)' : ''}
+                              </>
+                            : <span className="text-gray-300">—</span>}
+                        </td>
                         <td className="py-2.5 px-4 text-gray-500 text-xs font-normal">{rangeStr}</td>
                         <td className="py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -332,11 +390,16 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                     <span className="text-xs font-semibold text-gray-400">Total</span>
                   </td>
                   <td className="py-2.5 px-4 text-blue-600">{totalAndares} andares</td>
-                  <td className="py-2.5 px-4" colSpan={4}>{totalUnidades} unidades</td>
+                  <td className="py-2.5 px-4" colSpan={5}>{totalUnidades} unidades</td>
                 </tr>
               </tfoot>
             )}
           </table>
+          {avisosDeElevacao.length > 0 && (
+            <ul className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 space-y-0.5" data-testid="avisos-de-elevacao">
+              {avisosDeElevacao.map(a => <li key={a}>{a}</li>)}
+            </ul>
+          )}
         </div>
       )}
 

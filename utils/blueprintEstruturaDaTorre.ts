@@ -11,12 +11,18 @@
 //
 // Pé-direito (27/10/2026, "crie pé-direito por pavimento em empreendimento"): o do pavimento cadastrado, senão o
 // padrão da torre, senão `null` — e aí quem monta a massa usa o do bloco.
+//
+// Elevação (27/10/2026, *"sugiro incluir elevação, assim não teremos dúvida da posição do pavimento"*; decisão: as
+// duas formas): CALCULADA — a do térreo da torre (`elevacao_terreo_m`, 0 sem ela) mais os pés-direitos de baixo, e os
+// subsolos para baixo — ou DIGITADA no pavimento (`elevacao_m`), que vale no lugar do cálculo e manda nos de cima. A
+// digitada que não bate com o pé-direito do vizinho vira aviso, e a ALTURA do piso na massa passa a ser a distância
+// entre as elevações. Plano: docs/planos/2026-10-27-elevacao-do-pavimento.md.
 
 import { compararNaOrdemDoEmpreendimento } from './empreendimentoOrdemDasUnidades';
 import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, FloorTipo } from '../types/empreendimento';
 
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
-  Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m'>> & {
+  Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m' | 'elevacao_terreo_m'>> & {
     units?: (Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'> &
       Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order'>>)[];
   };
@@ -28,6 +34,15 @@ export interface PisoDaTorre {
   tipo: FloorTipo | null;
   /** Piso a piso em mm; null = nem o pavimento nem a torre dizem. */
   peDireitoMm: number | null;
+  /** A elevação do piso em mm, na referência da torre (o térreo em `elevacao_terreo_m`, 0 sem ela). */
+  elevacaoMm: number;
+  /** A elevação foi digitada no pavimento; senão, calculada pelos pés-direitos (3,00 m onde não há). */
+  elevacaoDigitada: boolean;
+  /**
+   * A altura do piso na massa, em mm: a distância até o vizinho quando uma elevação digitada a define (o de cima,
+   * ou o próprio subsolo); senão o pé-direito. null = nada diz — a massa usa o do bloco.
+   */
+  alturaMm: number | null;
   /** As unidades do Empreendimento neste andar (27/10/2026), na ordem da aba — a massa divide o andar nelas. */
   unidades: UnidadeDoPiso[];
 }
@@ -45,7 +60,7 @@ export interface UnidadeDoPiso {
   status: string | null;
 }
 
-type PisoSemUnidades = Omit<PisoDaTorre, 'unidades'>;
+type PisoSemUnidades = Omit<PisoDaTorre, 'unidades' | 'elevacaoMm' | 'elevacaoDigitada' | 'alturaMm'> & { elevacaoDigitadaMm: number | null };
 
 /** A chave de uma unidade na Planta (o 3D e o painel combinam por ela): o id, ou o nome quando não há id. */
 export function chaveDaUnidade(u: Pick<UnidadeDoPiso, 'id' | 'nome'>): string {
@@ -89,7 +104,14 @@ function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null):
       if (visto.has(n)) continue;
       visto.add(n);
       const base = fl.name?.trim();
-      out.push({ numero: n, nome: base ? (reps > 1 ? `${base} ${r + 1}` : base) : nomeDoAndar(n, fl.tipo), tipo: fl.tipo, peDireitoMm: emMm(fl.pe_direito_m) ?? padraoMm });
+      out.push({
+        numero: n,
+        nome: base ? (reps > 1 ? `${base} ${r + 1}` : base) : nomeDoAndar(n, fl.tipo),
+        tipo: fl.tipo,
+        peDireitoMm: emMm(fl.pe_direito_m) ?? padraoMm,
+        // A digitada é a do 1º andar da linha; os repetidos seguem pelo pé-direito.
+        elevacaoDigitadaMm: r === 0 ? emMm(fl.elevacao_m) : null,
+      });
     }
   }
   return out;
@@ -112,7 +134,7 @@ function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number |
     const m = tipos.get(n);
     if (!m) avisos.push(`Torre "${t.name}": andar ${n} sem unidade — entra na torre mesmo assim.`);
     const tipo = m && m.size > 0 ? [...m.entries()].sort((a, b) => b[1] - a[1])[0][0] : null;
-    out.push({ numero: n, nome: nomeDoAndar(n, tipo), tipo, peDireitoMm: padraoMm });
+    out.push({ numero: n, nome: nomeDoAndar(n, tipo), tipo, peDireitoMm: padraoMm, elevacaoDigitadaMm: null });
   }
   return out;
 }
@@ -135,6 +157,66 @@ function unidadesDoAndar(t: TorreParaEstrutura, andar: number): UnidadeDoPiso[] 
     }));
 }
 
+const ALTURA_MIN_MM = 2000;
+const ALTURA_MAX_MM = 15000;
+/** Para CALCULAR a elevação onde nada diz o pé-direito: o padrão do bloco de massa. */
+const PE_DIREITO_DO_CALCULO_MM = 3000;
+const fmtElev = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toFixed(2).replace('.', ',')}`;
+const fmtM = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
+
+/**
+ * Elevação e altura de cada piso (de baixo para cima). A referência é o térreo (andar 0; sem ele, o mais baixo acima
+ * do solo; sem nenhum, o mais alto): a digitada dele, senão `terreoMm`. Para cima, cada piso = o de baixo + o
+ * pé-direito do de baixo; para baixo, o de cima − o próprio pé-direito. A digitada vale no lugar do cálculo.
+ */
+function comElevacoes(torre: string, pisos: PisoSemUnidades[], terreoMm: number, avisos: string[]): Omit<PisoDaTorre, 'unidades'>[] {
+  if (pisos.length === 0) return [];
+  let ref = pisos.findIndex((p) => p.numero === 0);
+  if (ref < 0) ref = pisos.findIndex((p) => p.numero > 0);
+  if (ref < 0) ref = pisos.length - 1;
+  const elev: number[] = new Array(pisos.length);
+  const altura: (number | null)[] = pisos.map((p) => p.peDireitoMm);
+  elev[ref] = pisos[ref].elevacaoDigitadaMm ?? terreoMm;
+
+  /** A digitada em `i` dá ao piso `afetado` a altura `h`: dentro da faixa, vale; fora, aviso e fica o pé-direito. */
+  const alturaPelaElevacao = (i: number, afetado: number, h: number) => {
+    if (h >= ALTURA_MIN_MM && h <= ALTURA_MAX_MM) {
+      altura[afetado] = h;
+      return true;
+    }
+    avisos.push(
+      `Torre "${torre}": ${pisos[i].nome} está em ${fmtElev(elev[i])} m (digitada) — o ${pisos[afetado].nome} ficaria com ${fmtM(h)} m de altura, fora de 2 a 15 m; a massa usa o pé-direito.`,
+    );
+    return false;
+  };
+
+  for (let i = ref + 1; i < pisos.length; i++) {
+    const abaixo = pisos[i - 1];
+    const calc = elev[i - 1] + (abaixo.peDireitoMm ?? PE_DIREITO_DO_CALCULO_MM);
+    const dig = pisos[i].elevacaoDigitadaMm;
+    elev[i] = dig ?? calc;
+    if (dig == null || dig === calc) continue;
+    if (!alturaPelaElevacao(i, i - 1, dig - elev[i - 1])) continue;
+    if (abaixo.peDireitoMm != null) {
+      avisos.push(
+        `Torre "${torre}": ${pisos[i].nome} está em ${fmtElev(dig)} m (digitada), mas o ${abaixo.nome} (${fmtElev(elev[i - 1])} m, pé-direito ${fmtM(abaixo.peDireitoMm)} m) termina em ${fmtElev(calc)} m — vale a elevação digitada.`,
+      );
+    }
+  }
+  for (let i = ref - 1; i >= 0; i--) {
+    const p = pisos[i];
+    const calc = elev[i + 1] - (p.peDireitoMm ?? PE_DIREITO_DO_CALCULO_MM);
+    const dig = p.elevacaoDigitadaMm;
+    elev[i] = dig ?? calc;
+    if (dig == null || dig === calc) continue;
+    if (!alturaPelaElevacao(i, i, elev[i + 1] - dig)) continue;
+    if (p.peDireitoMm != null) {
+      avisos.push(`Torre "${torre}": ${p.nome} está em ${fmtElev(dig)} m (digitada), mas com o pé-direito de ${fmtM(p.peDireitoMm)} m ficaria em ${fmtElev(calc)} m — vale a elevação digitada.`);
+    }
+  }
+  return pisos.map(({ elevacaoDigitadaMm, ...p }, i) => ({ ...p, elevacaoMm: elev[i], elevacaoDigitada: elevacaoDigitadaMm != null, alturaMm: altura[i] }));
+}
+
 export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: EmpreendimentoFloor[]): EstruturaDaTorre {
   const avisos: string[] = [];
   let fonte: FonteDaEstrutura = 'NENHUMA';
@@ -148,10 +230,13 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
     if (semUnidades.length > 0) fonte = 'UNIDADES';
     else if (typeof t.floors_count === 'number' && t.floors_count >= 1) {
       fonte = 'FLOORS_COUNT';
-      semUnidades = Array.from({ length: Math.round(t.floors_count) }, (_, n) => ({ numero: n, nome: nomeDoAndar(n, null), tipo: null, peDireitoMm: padraoMm }));
+      semUnidades = Array.from({ length: Math.round(t.floors_count) }, (_, n) => ({ numero: n, nome: nomeDoAndar(n, null), tipo: null, peDireitoMm: padraoMm, elevacaoDigitadaMm: null }));
     }
   }
-  const pisos: PisoDaTorre[] = semUnidades.sort((a, b) => a.numero - b.numero).map((p) => ({ ...p, unidades: unidadesDoAndar(t, p.numero) }));
+  const pisos: PisoDaTorre[] = comElevacoes(t.name, semUnidades.sort((a, b) => a.numero - b.numero), emMm(t.elevacao_terreo_m) ?? 0, avisos).map((p) => ({
+    ...p,
+    unidades: unidadesDoAndar(t, p.numero),
+  }));
   const acima = pisos.filter((p) => p.numero >= 0);
   const garagens = pisos.filter((p) => p.numero < 0);
 

@@ -83,6 +83,7 @@ const ARRUMACOES: { modo: ArrumacaoDasUnidades; rotulo: string; dica: string }[]
   { modo: 'EMPREENDIMENTO', rotulo: 'Ordem do Empreendimento', dica: 'Na ordem da aba Torres e Unidades (setas ↑↓): a 1ª metade numa fileira, a 2ª na outra.' },
 ];
 
+const fmtElevacao = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
 export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, unidadesDoPiso = [], unidadeSelecionada = null, onUnidade, arrumacaoDasUnidades, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
@@ -109,6 +110,8 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
   const acimaDoGabarito = medida?.pisos.filter((p) => p.acimaDoGabarito) ?? [];
   const nomesDosPisos = empreendimento?.papel?.nomesDosPisos;
   const resumo = medida && pisoSelecionado !== null ? resumoDoPiso(medida, pisoSelecionado, nomesDosPisos) : null;
+  // A elevação do pavimento no Empreendimento (27/10/2026): não deixa dúvida de que andar é este.
+  const pisoDoEmpreendimento = pisoSelecionado !== null ? (empreendimento?.papel?.pisos[pisoSelecionado - 1] ?? null) : null;
   const linha = empreendimento?.linha ?? null;
   const unidade = unidadesDoPiso.find((u) => chaveDaUnidade(u) === unidadeSelecionada) ?? null;
   const ORIENTACAO: Record<string, string> = { NORTE: 'Norte', SUL: 'Sul', LESTE: 'Leste', OESTE: 'Oeste' };
@@ -258,6 +261,12 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
           {resumo ? (
             <div data-testid="resumo-do-pavimento">
               <p className="font-semibold text-slate-700">{resumo.titulo}</p>
+              {pisoDoEmpreendimento && (
+                <p className="text-slate-700" data-testid="elevacao-do-pavimento">
+                  Elevação {fmtElevacao(pisoDoEmpreendimento.elevacaoMm)} m{' '}
+                  <span className="text-slate-500">({pisoDoEmpreendimento.elevacaoDigitada ? 'digitada' : 'calculada'} no Empreendimento)</span>
+                </p>
+              )}
               <ul className="space-y-0.5">
                 {resumo.linhas.map((l) => (
                   <li key={l} className={/^(Fora|Acima)/.test(l) ? 'text-red-700' : 'text-slate-600'}>{l}</li>

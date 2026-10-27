@@ -196,6 +196,19 @@ const CentralCliente: React.FC = () => {
     // muda — e só recarrega — quando a data fica completa.
     const [dateFromInput, setDateFromInput] = React.useState(dateFrom);
     const [dateToInput, setDateToInput]     = React.useState(dateTo);
+    // Completa não basta: editando dia/mês, cada tecla já forma uma data válida
+    // ("02/01", "20/01", "20/02"…) — medido: 3 cargas ao digitar um dia e um
+    // mês. Aplica só depois de 400 ms sem digitar.
+    React.useEffect(() => {
+        if (!dataCompleta(dateFromInput)) return;
+        const t = setTimeout(() => setDateFrom(dateFromInput), 400);
+        return () => clearTimeout(t);
+    }, [dateFromInput]);
+    React.useEffect(() => {
+        if (!dataCompleta(dateToInput)) return;
+        const t = setTimeout(() => setDateTo(dateToInput), 400);
+        return () => clearTimeout(t);
+    }, [dateToInput]);
 
     const [kpis, setKpis]       = React.useState<OpuraClienteKpis | null>(null);
     const [byProject, setByProject] = React.useState<OpuraPivotRow[]>([]);
@@ -410,11 +423,11 @@ const CentralCliente: React.FC = () => {
                         />
                     </div>
                     <input type="date" value={dateFromInput} aria-label="Data inicial do período"
-                        onChange={e => { const v = e.target.value; setDateFromInput(v); if (dataCompleta(v)) setDateFrom(v); }}
+                        onChange={e => setDateFromInput(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     <span className="text-gray-400 text-sm">até</span>
                     <input type="date" value={dateToInput} aria-label="Data final do período"
-                        onChange={e => { const v = e.target.value; setDateToInput(v); if (dataCompleta(v)) setDateTo(v); }}
+                        onChange={e => setDateToInput(e.target.value)}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     <Button onClick={load} disabled={loading}
                         className="text-sm gap-2">

@@ -27,7 +27,8 @@ import BoletoEdicaoEmLoteModal from './BoletoEdicaoEmLoteModal';
 import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
-import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
+import { useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
+import { buildAdvancedFilterFields, getAdvancedFilterValue, rotuloOrigem, nomeCapturador } from '../utils/boletoFiltroAvancado';
 import { formatDateBR, formatDateTimeBR } from './ui/Format';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
@@ -101,50 +102,9 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, origem: 100, actions: 100,
 };
 
-// F6.3 (rollout do Filtro Avançado — ver PLANO_MODULO_TABELAS.md). Complementa os
-// filtros rápidos/campos de período já existentes, não os substitui.
-// Guia §5.5: Beneficiário é LISTA COM BUSCA — valores distintos das linhas BASE
-// (`boletos`, antes de busca/período/valor) pelo MESMO getValue da célula.
-function buildAdvancedFilterFields(boletos: Boleto[], supplierMap: Record<string, string>): FilterFieldConfig[] {
-    return [
-        { key: 'beneficiario', label: 'Beneficiário', type: 'text', options: distinctOptions(boletos, b => getAdvancedFilterValue(b, 'beneficiario', supplierMap)) },
-        { key: 'descricao', label: 'Descrição', type: 'text' },
-        { key: 'status', label: 'Status', type: 'select', options: Object.entries(STATUS_LABELS).map(([value, label]) => ({ value, label })) },
-        { key: 'valor', label: 'Valor', type: 'number' },
-        { key: 'vencimento', label: 'Vencimento', type: 'date' },
-        { key: 'banco', label: 'Banco', type: 'text' },
-        { key: 'origem', label: 'Origem', type: 'select', options: [{ value: 'Upload', label: 'Upload' }, { value: 'E-mail', label: 'E-mail' }] },
-    ];
-}
-
-function getAdvancedFilterValue(b: Boleto, key: string, supplierMap: Record<string, string>): unknown {
-    switch (key) {
-        // O MESMO nome que a célula mostra (utils/boletoBeneficiario) — nunca o arquivo.
-        case 'beneficiario': return beneficiarioDoBoleto(b, supplierMap).nome ?? '';
-        case 'descricao': return b.descricao ?? '';
-        case 'status': return b.status;
-        case 'valor': return b.valor ?? null;
-        case 'vencimento': return b.vencimento ?? null;
-        case 'banco': return b.banco_nome ?? '';
-        case 'origem': return rotuloOrigem(b);
-        default: return null;
-    }
-}
-
 // Conteúdo de cada célula (td) por coluna — extraído para função pura para que
 // o tbody possa mapear `orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna (padrão renderClientCell em ClientList.tsx).
-/** O texto que a coluna Origem mostra (o filtro avançado compara com ele — §5.5). */
-function rotuloOrigem(b: Boleto): string {
-    return b.origem === 'email' ? 'E-mail' : 'Upload';
-}
-
-/** Quem capturou: o nome do cadastro; sem nome, o próprio e-mail. */
-function nomeCapturador(b: Boleto, userNameMap: Record<string, string>): string {
-    const email = b.created_by_email ?? '';
-    return userNameMap[email.trim().toLowerCase()] ?? (email || '—');
-}
-
 function renderBoletoCell(
     key: string,
     b: Boleto,
@@ -529,8 +489,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [projectMap, setProjectMap] = useState<Record<string, string>>({});
     const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
     const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
-    // Campos do filtro avançado dependem das linhas e do supplierMap carregados (§5.5).
-    const advancedFields = useMemo(() => buildAdvancedFilterFields(boletos, supplierMap), [boletos, supplierMap]);
+    // Campos do filtro avançado dependem das linhas e dos mapas carregados (§5.5).
+    const mapasDoBoleto = useMemo(() => ({ supplierMap, projectMap, ccMap, userNameMap }), [supplierMap, projectMap, ccMap, userNameMap]);
+    const advancedFields = useMemo(() => buildAdvancedFilterFields(boletos, mapasDoBoleto), [boletos, mapasDoBoleto]);
     const advancedFilters = useAdvancedFilters(advancedFields, 'boletoManagerFilters:advanced');
 
 
@@ -835,7 +796,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         if (min !== null) list = list.filter(b => (b.valor ?? 0) >= min);
         if (max !== null) list = list.filter(b => (b.valor ?? 0) <= max);
 
-        list = applyFilterRules(list, advancedFilters.rules, advancedFields, (b, key) => getAdvancedFilterValue(b, key, supplierMap));
+        list = applyFilterRules(list, advancedFilters.rules, advancedFields, (b, key) => getAdvancedFilterValue(b, key, mapasDoBoleto));
 
         // Ordenação — cada coluna já ordena pelo próprio <thead> (SortableHeader,
         // guia §6.3/§6.4). Sem coluna selecionada, cai no default abaixo
@@ -866,7 +827,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, vencAno, vencMes, valorMin, valorMax, advancedFilters.rules, advancedFields, supplierMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, vencAno, vencMes, valorMin, valorMax, advancedFilters.rules, advancedFields, mapasDoBoleto, supplierMap, projectMap, ccMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Agrupamento só no modo lista (a grade não tem linha de grupo).
     const agrupando = viewMode === 'list' && groupBy !== 'none';

@@ -169,3 +169,70 @@ describe('Zona urbanística — avisos de preenchimento automático', () => {
     expect(screen.queryByTestId('aviso-zona-automatica')).toBeNull();
   });
 });
+
+// Plano docs/planos/2026-10-26-zona-aplicavel-chega-na-planta.md: a zona que o empreendimento marca como aplicável
+// precisa chegar à planta — e a zona em vigor que SUMIU da origem (reimportação) não pode seguir calada.
+describe('Zona urbanística — zona aplicável do empreendimento', () => {
+  const APLICAVEL = { id: 'zb', zona: 'ZEPEC 2', macroarea: 'Urbanização Consolidada', aplicavel: true };
+  const base: React.ComponentProps<typeof PainelZonaUrbanistica> = {
+    origemDaZona: 'EMPREENDIMENTO',
+    onOrigemDaZona: vi.fn(),
+    empreendimentos: [{ id: 'e1', nome: '011 - Garden Cambuhy' }],
+    empreendimentoId: 'e1',
+    onEmpreendimento: vi.fn(),
+    cidade: null,
+    onCidade: vi.fn(),
+    mapas: [],
+    mapaId: '',
+    onMapa: vi.fn(),
+    zonas: [{ id: 'za', zona: 'ZM 4' }, APLICAVEL],
+    zonaAplicadaId: null,
+    zonaRotuloSalvo: null,
+    ajustadoAMao: false,
+    derivou: false,
+    onAplicar: vi.fn(),
+    onDesligar: vi.fn(),
+  };
+
+  it('zona em vigor que sumiu da origem: avisa e oferece a aplicável', async () => {
+    const onAplicar = vi.fn();
+    render(<PainelZonaUrbanistica {...base} zonaAplicadaId="apagada" zonaRotuloSalvo="ZEPEC 2 · Urbanização Consolidada" zonaAplicadaSumiu zonaAplicavel={APLICAVEL} onAplicar={onAplicar} />);
+    const aviso = screen.getByTestId('aviso-zona-sumiu');
+    expect(aviso).toHaveTextContent('não existe mais');
+    expect(aviso).toHaveTextContent('valores de quando foi aplicada');
+    await userEvent.click(screen.getByRole('button', { name: /aplicar a zona aplicável/i }));
+    expect(onAplicar).toHaveBeenCalledWith('zb');
+    expect(screen.queryByTestId('aviso-zona-aplicavel')).toBeNull();
+  });
+
+  it('zona sumida e nenhuma aplicável marcada: avisa e manda escolher', () => {
+    render(<PainelZonaUrbanistica {...base} zonaAplicadaId="apagada" zonaRotuloSalvo="ZR-2" zonaAplicadaSumiu zonaAplicavel={null} />);
+    expect(screen.getByTestId('aviso-zona-sumiu')).toHaveTextContent('Escolha a zona');
+    expect(screen.queryByRole('button', { name: /aplicar a zona aplicável/i })).toBeNull();
+  });
+
+  it('nada em vigor e o empreendimento marca uma zona: oferece aplicá-la', async () => {
+    const onAplicar = vi.fn();
+    render(<PainelZonaUrbanistica {...base} zonaAplicavel={APLICAVEL} onAplicar={onAplicar} />);
+    expect(screen.getByTestId('aviso-zona-aplicavel')).toHaveTextContent('ZEPEC 2 · Urbanização Consolidada');
+    await userEvent.click(screen.getByRole('button', { name: /aplicar a zona aplicável/i }));
+    expect(onAplicar).toHaveBeenCalledWith('zb');
+  });
+
+  it('em vigor outra zona: diz qual vale no empreendimento', () => {
+    render(<PainelZonaUrbanistica {...base} zonaAplicadaId="za" zonaRotuloSalvo="ZM 4" zonaAplicavel={APLICAVEL} />);
+    expect(screen.getByTestId('aviso-zona-aplicavel')).toHaveTextContent('esta planta usa ZM 4');
+  });
+
+  it('em vigor a própria aplicável: sem aviso', () => {
+    render(<PainelZonaUrbanistica {...base} zonaAplicadaId="zb" zonaRotuloSalvo="ZEPEC 2 · Urbanização Consolidada" zonaAplicavel={APLICAVEL} />);
+    expect(screen.queryByTestId('aviso-zona-aplicavel')).toBeNull();
+    expect(screen.queryByTestId('aviso-zona-sumiu')).toBeNull();
+  });
+
+  it('aplicada sozinha por ser a aplicável: o aviso diz isso, não "a única"', () => {
+    render(<PainelZonaUrbanistica {...base} zonaAplicadaId="zb" zonaRotuloSalvo="ZEPEC 2" zonaAplicavel={APLICAVEL} zonaAplicadaAutomaticamente motivoDaZonaAutomatica="APLICAVEL" />);
+    expect(screen.getByTestId('aviso-zona-automatica')).toHaveTextContent('marcada como aplicável no empreendimento');
+    expect(screen.getByTestId('aviso-zona-automatica')).not.toHaveTextContent('única');
+  });
+});

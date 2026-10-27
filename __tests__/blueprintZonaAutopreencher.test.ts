@@ -57,6 +57,7 @@ describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
     await waitFor(() => expect(h.result.current.zonaAplicadaId).toBe('z1'));
     expect(h.result.current.zonaAplicadaAutomaticamente).toBe(true);
     expect(h.result.current.recuos.FRENTE).toBe(5000);
+    expect(h.result.current.motivoDaZonaAutomatica).toBe('UNICA');
     expect(blueprintUrbanContextService.save).toHaveBeenCalledTimes(1);
     expect(vi.mocked(blueprintUrbanContextService.save).mock.calls[0][2]).toMatchObject({
       empreendimento_id: 'emp-1',
@@ -85,6 +86,7 @@ describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
     await waitFor(() => expect(h.result.current.zonaAplicadaId).toBe('zb'));
     expect(h.result.current.zonaAplicadaAutomaticamente).toBe(true);
     expect(h.result.current.recuos.FRENTE).toBe(7000);
+    expect(h.result.current.motivoDaZonaAutomatica).toBe('APLICAVEL');
   });
 
   it('zona marcada no empreendimento NÃO passa por cima de zona já salva na planta', async () => {
@@ -98,6 +100,59 @@ describe('zona urbanística preenchida pelo empreendimento vinculado', () => {
     await new Promise((r) => setTimeout(r, 30));
     expect(h.result.current.zonaAplicadaId).toBe('za');
     expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
+  });
+
+  // Plano docs/planos/2026-10-26-zona-aplicavel-chega-na-planta.md.
+  it('ESCOLHER o empreendimento aplica a zona marcada nele, mesmo com contexto salvo (desligado)', async () => {
+    zonasDo.current['emp-3'] = [
+      { ...ZONA_UNICA, id: 'za', zona: 'ZM 4' },
+      { ...ZONA_UNICA, id: 'zb', zona: 'ZEPEC 2', taxa_ocupacao_maxima: '0,9', aplicavel: true },
+    ];
+    ctxSalvo.current = { zona_origem: 'EMPREENDIMENTO', empreendimento_id: 'emp-2', regulatory_zone_id: null, origem_valores: {}, zona_desligada_em: '2026-10-26T23:37:00Z' };
+    const h = montar('estudo-10', null);
+    await waitFor(() => expect(h.result.current.empreendimentoId).toBe('emp-2'));
+    act(() => h.result.current.setEmpreendimentoId('emp-3'));
+    await waitFor(() => expect(h.result.current.zonaAplicadaId).toBe('zb'));
+    expect(h.result.current.taxaOcupacaoMax).toBe(90);
+    expect(h.result.current.motivoDaZonaAutomatica).toBe('APLICAVEL');
+    expect(vi.mocked(blueprintUrbanContextService.save).mock.calls.at(-1)?.[2]).toMatchObject({ empreendimento_id: 'emp-3', regulatory_zone_id: 'zb' });
+  });
+
+  it('ESCOLHER o empreendimento com valor ajustado à mão NÃO passa por cima — a aplicável fica oferecida', async () => {
+    zonasDo.current['emp-3'] = [
+      { ...ZONA_UNICA, id: 'za', zona: 'ZM 4' },
+      { ...ZONA_UNICA, id: 'zb', zona: 'ZEPEC 2', aplicavel: true },
+    ];
+    ctxSalvo.current = { zona_origem: 'EMPREENDIMENTO', empreendimento_id: 'emp-2', regulatory_zone_id: 'z2', recuo_frente_mm: 4000, origem_valores: { recuo_frente: 'MANUAL' } };
+    const h = montar('estudo-11', null);
+    await waitFor(() => expect(h.result.current.ajustadoAMao).toBe(true));
+    act(() => h.result.current.setEmpreendimentoId('emp-3'));
+    await waitFor(() => expect(h.result.current.zonaAplicavel?.id).toBe('zb'));
+    await new Promise((r) => setTimeout(r, 30));
+    expect(h.result.current.zonaAplicadaId).toBe('z2');
+    expect(h.result.current.recuos.FRENTE).toBe(4000);
+    expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
+  });
+
+  it('zona em vigor apagada da origem (reimportação): zonaAplicadaSumiu, sem aplicar nada sozinho', async () => {
+    zonasDo.current['emp-3'] = [
+      { ...ZONA_UNICA, id: 'za', zona: 'ZM 4' },
+      { ...ZONA_UNICA, id: 'zb', zona: 'ZEPEC 2', aplicavel: true },
+    ];
+    ctxSalvo.current = { zona_origem: 'EMPREENDIMENTO', empreendimento_id: 'emp-3', regulatory_zone_id: 'apagada', zona_rotulo: 'ZEPEC 2 · Urbanização Consolidada', gabarito_altura_max_m: 11.6, origem_valores: {} };
+    const h = montar('estudo-12', 'emp-3');
+    await waitFor(() => expect(h.result.current.zonaAplicadaSumiu).toBe(true));
+    expect(h.result.current.zonaAplicavel?.id).toBe('zb');
+    expect(h.result.current.gabaritoAlturaMaxM).toBe(11.6);
+    expect(blueprintUrbanContextService.save).not.toHaveBeenCalled();
+  });
+
+  it('zona em vigor ainda na lista: não sumiu', async () => {
+    ctxSalvo.current = { zona_origem: 'EMPREENDIMENTO', empreendimento_id: 'emp-2', regulatory_zone_id: 'z2', origem_valores: {} };
+    const h = montar('estudo-13', null);
+    await waitFor(() => expect(h.result.current.zonas).toHaveLength(2));
+    expect(h.result.current.zonaAplicadaSumiu).toBe(false);
+    expect(h.result.current.zonaAplicavel).toBeNull();
   });
 
   it('contexto já salvo: nem o empreendimento nem a zona mudam', async () => {

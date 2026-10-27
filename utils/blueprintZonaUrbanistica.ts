@@ -37,6 +37,8 @@ export interface ZonaRegulatoria {
   id: string;
   zona?: string;
   macroarea?: string;
+  /** Só nas zonas do empreendimento: a que vale para o terreno (26/10/2026). */
+  aplicavel?: boolean;
   recuo_frente?: string;
   recuo_fundos?: string;
   recuo_lateral_direita?: string;

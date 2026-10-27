@@ -123,7 +123,7 @@ const UNIT_COLS = 'id, tower_id, floor_id, floor_tipo, imovib_unit_id, imovib_in
 
 const COMMON_AREA_COLS = 'id, empreendimento_id, tower_id, name, category, area, floor, description, is_vendavel, sort_order, created_at, updated_at';
 
-const REGULATORY_ZONE_COLS = 'id, empreendimento_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, testada_minima, area_minima_lote, insolacao_minima, afastamento_progressivo, recuo_frente_escalonado, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, created_at, updated_at';
+const REGULATORY_ZONE_COLS = 'id, empreendimento_id, organization_id, macroarea, zona, ca_minimo, ca_basico, ca_maximo, taxa_ocupacao_maxima, taxa_permeabilidade_minima, gabarito_altura_maxima, uso_permitido, recuo_frente, recuo_fundos, recuo_lateral_direita, recuo_lateral_esquerda, gabarito_pavimentos, regra_vagas, vagas_por_unidade, area_minima_unidade, testada_minima, area_minima_lote, insolacao_minima, afastamento_progressivo, recuo_frente_escalonado, lei_referencia, documento_fonte, nivel_confianca, observacoes, sort_order, aplicavel, created_at, updated_at';
 
 // ── Contexto para a trilha de auditoria ──────────────────────────────────────
 // Torre/pavimento/unidade não carregam `empreendimento_id`: o histórico precisa
@@ -1854,6 +1854,57 @@ export const empreendimentoService = {
                 action: 'delete',
             });
         }
+    },
+
+    /** Zonas apagadas de uma vez — "Substituir as zonas atuais" do Importar de mapa cadastrado
+     *  (26/10/2026), onde o Garden Cambuhy tinha 175. Pedaços de 100 ids (o `in` vai na URL) e
+     *  um único insert no Histórico. */
+    async deleteRegulatoryZones(ids: string[], dono: { empreendimentoId: string; organizationId: string }): Promise<void> {
+        if (ids.length === 0) return;
+        for (let i = 0; i < ids.length; i += 100) {
+            const { error } = await supabase.from('empreendimento_regulatory_zones').delete().in('id', ids.slice(i, i + 100));
+            if (error) throw new Error(`Falha ao excluir zonas regulatórias: ${error.message}`);
+        }
+        await empreendimentoAuditService.recordMany(ids.map(id => ({
+            empreendimentoId: dono.empreendimentoId,
+            organizationId: dono.organizationId,
+            entityType: 'regulatory_zone' as const,
+            entityId: id,
+            entityLabel: null,
+            action: 'delete' as const,
+        })));
+    },
+
+    /** Marca a zona que vale para o terreno (`null` = nenhuma). Plano
+     *  docs/planos/2026-10-26-zona-aplicavel-do-empreendimento.md. O índice único parcial
+     *  aceita UMA marcada por empreendimento, então desmarca a atual ANTES de marcar a nova;
+     *  se a segunda gravação falhar, fica nenhuma marcada — e o erro sobe para a tela desfazer. */
+    async marcarZonaAplicavel(empreendimentoId: string, zonaId: string | null, organizationId: string): Promise<void> {
+        let desmarca = supabase.from('empreendimento_regulatory_zones')
+            .update({ aplicavel: false })
+            .eq('empreendimento_id', empreendimentoId)
+            .eq('aplicavel', true);
+        if (zonaId) desmarca = desmarca.neq('id', zonaId);
+        const { error: erroDesmarca } = await desmarca;
+        if (erroDesmarca) throw new Error(`Falha ao desmarcar a zona aplicável: ${erroDesmarca.message}`);
+
+        if (zonaId) {
+            const { error } = await supabase.from('empreendimento_regulatory_zones')
+                .update({ aplicavel: true })
+                .eq('id', zonaId);
+            if (error) throw new Error(`Falha ao marcar a zona aplicável: ${error.message}`);
+        }
+
+        await empreendimentoAuditService.record({
+            empreendimentoId,
+            organizationId,
+            entityType: 'regulatory_zone',
+            entityId: zonaId ?? empreendimentoId,
+            entityLabel: null,
+            action: 'update',
+            fieldName: 'aplicavel',
+            newValue: zonaId !== null,
+        });
     },
 
     // ── Viabilidade (Imovib) ─────────────────────────────────────────────────

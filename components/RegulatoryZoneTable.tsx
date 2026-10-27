@@ -99,14 +99,26 @@ function compareZoneValues<T extends ZoneLike>(a: T, b: T, key: ZoneField, direc
     return direction === 'asc' ? cmp : -cmp;
 }
 
+// O valor gravado entra como opção quando não está na lista (26/10/2026): as opções são as do
+// PDE de São Paulo, e o mapa de Cambuí traz "ZM1", "ZV - Eixo Vert.", "Industrialização e
+// Desenvolvimento Econômico"… — sem isso o <select> caía em "—" com o dado gravado.
 const SelectCell: React.FC<{ value?: string; options: readonly string[]; onChange: (v: string) => void; saving: boolean }> =
     ({ value, options, onChange, saving }) => (
     <select value={value || ''} onChange={(e) => onChange(e.target.value)} disabled={saving}
         className="w-full bg-transparent border-none focus:ring-0 text-sm font-normal text-gray-700 cursor-pointer py-0.5 disabled:opacity-50">
         <option value="">—</option>
+        {value && !options.includes(value) && <option value={value}>{value}</option>}
         {options.map(o => <option key={o} value={o}>{o}</option>)}
     </select>
 );
+
+/** "ZEPEC 2 · Urbanização Consolidada" — o mesmo rótulo que a Planta grava (`zona_rotulo`). */
+function rotuloDaLinha(z: ZoneLike): string {
+    return [z.zona, z.macroarea].filter(Boolean).join(' · ') || 'Zona sem nome';
+}
+
+/** Coluna estrutural "Aplicável" (fora da engrenagem, como o checkbox de lote do §10). */
+const LARGURA_APLICAVEL = 96;
 
 const TextCell: React.FC<{ value?: string; onCommit: (v: string) => void; saving: boolean; placeholder?: string }> =
     ({ value, onCommit, saving, placeholder }) => (
@@ -136,12 +148,19 @@ interface Props<T extends ZoneLike> {
      * busca, colunas e ordenação continuam livres. Ausente: tudo editável, como antes.
      */
     somenteLeitura?: string;
+    /**
+     * Zona que vale para o terreno (só no empreendimento — o cadastro da cidade não passa).
+     * Presente: 1ª coluna "Aplicável" com rádio e a zona marcada dita no cabeçalho.
+     * Plano docs/planos/2026-10-26-zona-aplicavel-do-empreendimento.md.
+     */
+    aplicavel?: { zonaId: string | null; onMarcar: (zonaId: string | null) => void };
 }
 
 export function RegulatoryZoneTable<T extends ZoneLike>({
-    tableId, title, subtitle, zones, loading, adding, savingId, onAdd, onUpdate, onDelete, headerActions, emptyLabel, somenteLeitura,
+    tableId, title, subtitle, zones, loading, adding, savingId, onAdd, onUpdate, onDelete, headerActions, emptyLabel, somenteLeitura, aplicavel,
 }: Props<T>) {
     const travado = !!somenteLeitura;
+    const zonaAplicavel = aplicavel?.zonaId ? zones.find(z => z.id === aplicavel.zonaId) ?? null : null;
     const confirm = useConfirm();
     const [search, setSearch] = usePersistedState<string>(`${tableId}:search`, '');
     const tableColumns = useTableColumns(COLUMNS_FOR_CONFIG, `${tableId}Columns`);
@@ -200,6 +219,26 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         <Map className="w-4 h-4 text-indigo-500" /> {title}
                     </h2>
                     <p className="text-gray-500 text-xs mt-1 font-medium">{subtitle}</p>
+                    {aplicavel && (
+                        zonaAplicavel ? (
+                            <p className="text-xs mt-1 text-gray-600 flex items-center gap-2">
+                                <span>Zona aplicável: <span className="font-semibold text-gray-900">{rotuloDaLinha(zonaAplicavel)}</span></span>
+                                <button
+                                    type="button"
+                                    onClick={() => aplicavel.onMarcar(null)}
+                                    disabled={travado}
+                                    title={somenteLeitura ?? 'Nenhuma zona fica marcada; a Planta volta a pedir a escolha'}
+                                    className="text-blue-600 hover:text-blue-800 font-medium disabled:opacity-40 disabled:cursor-not-allowed"
+                                >
+                                    Desmarcar
+                                </button>
+                            </p>
+                        ) : (
+                            <p className="text-xs mt-1 text-gray-600">
+                                Nenhuma zona marcada como aplicável. Marque na coluna "Aplicável" a que vale para o terreno — a Planta já vem com ela.
+                            </p>
+                        )
+                    )}
                 </div>
                 <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-2 shrink-0">
                     {headerActions}
@@ -265,11 +304,13 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         className="text-left border-collapse"
                         style={{
                             tableLayout: 'fixed',
-                            width: visibleColumnDefs.reduce((soma, c) => soma + cols.getWidth(c.key), 0) + cols.getWidth('actions'),
+                            width: (aplicavel ? LARGURA_APLICAVEL : 0)
+                                + visibleColumnDefs.reduce((soma, c) => soma + cols.getWidth(c.key), 0) + cols.getWidth('actions'),
                             minWidth: '100%',
                         }}
                     >
                         <colgroup>
+                            {aplicavel && <col style={{ width: `${LARGURA_APLICAVEL}px` }} />}
                             {visibleColumnDefs.map(col => (
                                 <col key={col.key} data-col-key={col.key} style={{ width: `${cols.getWidth(col.key)}px` }} />
                             ))}
@@ -279,6 +320,9 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         </colgroup>
                         <thead>
                             <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                {aplicavel && (
+                                    <th className="px-4 py-2 border-r border-gray-100 text-center text-table-header font-semibold text-gray-700">Aplicável</th>
+                                )}
                                 {visibleColumnDefs.map(col => (
                                     <SortableHeader
                                         key={col.key}
@@ -300,7 +344,21 @@ export function RegulatoryZoneTable<T extends ZoneLike>({
                         </thead>
                         <tbody className="divide-y divide-gray-200">
                             {visibleZones.map(zone => (
-                                <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${savingId === zone.id ? 'opacity-60' : ''}`}>
+                                <tr key={zone.id} className={`hover:bg-blue-50/50 transition-colors ${aplicavel?.zonaId === zone.id ? 'bg-blue-50/60' : ''} ${savingId === zone.id ? 'opacity-60' : ''}`}>
+                                    {aplicavel && (
+                                        <td className="px-4 py-2.5 border-r border-gray-100 text-center">
+                                            <input
+                                                type="radio"
+                                                name={`${tableId}-aplicavel`}
+                                                checked={aplicavel.zonaId === zone.id}
+                                                onChange={() => aplicavel.onMarcar(zone.id)}
+                                                disabled={travado}
+                                                title={somenteLeitura ?? `Marcar ${rotuloDaLinha(zone)} como a zona que vale para o terreno`}
+                                                aria-label={`Zona aplicável: ${rotuloDaLinha(zone)}`}
+                                                className="w-4 h-4 text-blue-600 border-gray-300 focus:ring-blue-500 cursor-pointer disabled:cursor-not-allowed disabled:opacity-40"
+                                            />
+                                        </td>
+                                    )}
                                     {visibleColumnDefs.map(col => (
                                         <td key={col.key} title={somenteLeitura} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             {col.type === 'select' ? (

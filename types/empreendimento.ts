@@ -391,6 +391,8 @@ export interface EmpreendimentoRegulatoryZone {
     nivel_confianca?: string;
     observacoes?: string;
     sort_order?: number;
+    /** A zona que vale para o terreno (no máximo uma por empreendimento — índice único). 26/10/2026. */
+    aplicavel?: boolean;
     created_at: string;
     updated_at: string;
 }

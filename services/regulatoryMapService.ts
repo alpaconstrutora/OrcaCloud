@@ -6,6 +6,7 @@
 // SINAPI versionado). Editar depois de importado não altera o cadastro da cidade.
 import { supabase } from '../lib/supabase';
 import {
+    EmpreendimentoRegulatoryZone,
     RegulatoryMap,
     RegulatoryMapInsert,
     RegulatoryMapUpdate,
@@ -169,11 +170,14 @@ export const regulatoryMapService = {
         empreendimentoId: string;
         organizationId: string;
         sortOrderOffset: number;
-    }) {
+    }): Promise<EmpreendimentoRegulatoryZone[]> {
         const { zones, empreendimentoId, organizationId, sortOrderOffset } = params;
+        // As criadas voltam para quem chamou: "Substituir as zonas atuais" apaga as antigas só
+        // DEPOIS que a importação terminou.
+        const criadas: EmpreendimentoRegulatoryZone[] = [];
         for (let i = 0; i < zones.length; i++) {
             const z = zones[i];
-            await empreendimentoService.createRegulatoryZone({
+            criadas.push(await empreendimentoService.createRegulatoryZone({
                 empreendimento_id: empreendimentoId,
                 organization_id: organizationId,
                 macroarea: z.macroarea,
@@ -203,7 +207,8 @@ export const regulatoryMapService = {
                 nivel_confianca: z.nivel_confianca,
                 observacoes: z.observacoes,
                 sort_order: sortOrderOffset + i,
-            });
+            }));
         }
+        return criadas;
     },
 };

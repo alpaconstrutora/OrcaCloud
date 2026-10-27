@@ -77,6 +77,25 @@ Pergunta: *"Quer que eu passe a regra 'com contrato' para esses cards [da aba Im
 
 - [x] 7 · [x] 8 · [x] 9 · [x] 10 — tsc 0 erros; 41 testes da lib + convergência verdes; `check-ui-standard` limpo em `SalesModule`/`SalesDashboard`.
 
+## Pedido seguinte (27/10/2026) — BI
+
+Pergunta: *"Quer que eu alinhe o BI à mesma regra?"* — resposta do usuário: **"sim"**.
+
+Levantamento no BANCO (não no repositório): só `vw_fact_deal` e `vw_bi_commercial` contam venda por
+COMPLETED; `fn_bi_executive`/`fn_bi_trend` leem `is_vgv`/`in_conversao_base` da view e seguem sem
+mudança. `fn_comissao_corretor_sincronizar` e `warranty_unit_directory` também citam COMPLETED, mas
+não são VGV (comissão e garantia) — fora.
+
+Medido ANTES (27/10): `vw_bi_commercial.vgv_fechado` = R$ 17.739 com 9 "fechados" — eram **locações**
+concluídas (a view não filtrava tipo); `vw_fact_deal` com `is_vgv` = 0 vendas.
+
+| # | O que muda | Arquivos | Como sei que terminou |
+|---|---|---|---|
+| 11 | Views com a regra "com contrato" (locação segue fechando em Concluído; conversão só de venda; `security_invoker` repetido) | `supabase/migrations/aplicar_20271027500000_bi_vgv_vendida_com_contrato.sql` | Depois de aplicada: `is_vgv` = 7 vendas / R$ 3.255.000; `vgv_fechado` sem locação; `reloptions` ainda `security_invoker=on` |
+
+- [ ] 11 — arquivo pronto, `migrationsPrefixo` + `segurancaMigrations` verdes; **aplicação no banco bloqueada pelo modo automático** — aguardando o usuário aplicar ou liberar.
+
 ### Pendente de decisão do usuário
 
-- **BI ainda conta só Concluído:** `vw_fact_deal.is_vgv`, as views executivas (`20260708000002`) e as RPCs de convergência (`20260710000003`) — além do card "Volume em Vendas" de `CommercialModule.tsx:403`. Com a regra nova nas telas de Venda de Ativos, esses números divergem (BI R$ 0 × telas R$ 3,26 mi). Mudar view SQL = migration — perguntar antes.
+- **Card "Volume em Vendas" de `CommercialModule.tsx:403`** ainda conta só Concluído (não lê as views).
+- ~~BI ainda conta só Concluído~~ — item 11 acima. Registro original: `vw_fact_deal.is_vgv`, as views executivas (`20260708000002`) e as RPCs de convergência (`20260710000003`) — além do card "Volume em Vendas" de `CommercialModule.tsx:403`. Com a regra nova nas telas de Venda de Ativos, esses números divergem (BI R$ 0 × telas R$ 3,26 mi). Mudar view SQL = migration — perguntar antes.

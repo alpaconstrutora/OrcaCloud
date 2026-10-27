@@ -71,6 +71,13 @@ describe('resumoDoPiso', () => {
     expect(r.linhas).toContain('4º no gabarito (conta os pavimentos do bloco de baixo)');
   });
 
+  it('com a torre do Empreendimento casada, o título leva o nome do pavimento (27/10/2026)', () => {
+    const r = resumoDoPiso(medida([piso(1), piso(2), piso(3)]), 2, ['Térreo', 'Pavimento 1', 'Pavimento 2'])!;
+    expect(r.titulo).toBe('Torre A · 2º pavimento de 3 — Pavimento 1');
+    // Mais pisos no bloco que no Empreendimento: o que sobra fica sem nome.
+    expect(resumoDoPiso(medida([piso(1), piso(2), piso(3)]), 3, ['Térreo', 'Pavimento 1'])!.titulo).toBe('Torre A · 3º pavimento de 3');
+  });
+
   it('índice que não existe no bloco', () => {
     expect(resumoDoPiso(medida([piso(1)]), 7)).toBeNull();
   });

@@ -56,8 +56,12 @@ interface Props {
   /** Número da próxima alternativa (para o nome "EM-00N"). */
   proximoNumero: number;
   onAbrirProduto: () => void;
-  onCriarAlternativa: (c: CandidatoDeMassa, nome: string) => Promise<void>;
-  onAplicar: (c: CandidatoDeMassa) => Promise<void>;
+  /**
+   * 27/10/2026: `seguirEmpreendimento` diz se a caixa "Seguir o Empreendimento" estava ligada — quem aplica veste os
+   * blocos com as torres (nome, pavimentos, garagem sob cada torre: `vestirBlocosPropostos`).
+   */
+  onCriarAlternativa: (c: CandidatoDeMassa, nome: string, opcoes?: { seguirEmpreendimento: boolean }) => Promise<void>;
+  onAplicar: (c: CandidatoDeMassa, opcoes?: { seguirEmpreendimento: boolean }) => Promise<void>;
   /** M5c: grava o produto mudado por um pedido (o mesmo `setProduto` da tela Produto). */
   onProduto?: (p: Produto) => void;
   /** M5c: a IA no modo massa; `mudancas: null` + motivo quando indisponível. */
@@ -683,7 +687,7 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
               <button
                 type="button"
                 disabled={!!ocupado}
-                onClick={() => void agir('criar', () => onCriarAlternativa(atual, nomeSugeridoDoCenario(proximoNumero, atual.cenario)))}
+                onClick={() => void agir('criar', () => onCriarAlternativa(atual, nomeSugeridoDoCenario(proximoNumero, atual.cenario), { seguirEmpreendimento: seguindo }))}
                 className="h-9 rounded-[6px] border border-slate-300 bg-white px-3 text-sm font-medium text-gray-700 hover:bg-slate-50 disabled:opacity-50"
                 data-testid="criar-alternativa-de-massa"
               >
@@ -692,7 +696,7 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
               <button
                 type="button"
                 disabled={!!ocupado}
-                onClick={() => void agir('aplicar', () => onAplicar(atual))}
+                onClick={() => void agir('aplicar', () => onAplicar(atual, { seguirEmpreendimento: seguindo }))}
                 className="h-9 rounded-[6px] bg-blue-600 px-3 text-sm font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
                 data-testid="aplicar-massa"
                 title={blocosAtuais > 0 ? `Os ${blocosAtuais} bloco(s) do desenho são trocados por estes (Ctrl+Z desfaz)` : 'Os blocos entram no desenho aberto (Ctrl+Z desfaz)'}

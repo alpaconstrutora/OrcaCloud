@@ -39,3 +39,20 @@ describe('massaDoEmpreendimento', () => {
     expect(massaDoEmpreendimento([{ name: 'Bloco 1', blueprint_bloco_uid: 'b1' }])).toMatchObject({ restricao: null, motivo: expect.stringMatching(/Estudo de massa/) });
   });
 });
+
+describe('massaDoEmpreendimento com a estrutura das torres (27/10/2026)', () => {
+  const est = (nome: string, acima: number, garagens: number) => ({
+    torreId: nome,
+    nome,
+    acima: Array.from({ length: acima }, (_, i) => ({ numero: i, nome: `P${i}`, tipo: null })),
+    garagens: Array.from({ length: garagens }, (_, i) => ({ numero: -garagens + i, nome: `G${i}`, tipo: null })),
+    fonte: 'UNIDADES' as const,
+    avisos: [],
+  });
+  it('Garden: Torre A sem floors_count conta pelas unidades; o resumo diz cada torre', () => {
+    const r = massaDoEmpreendimento([{ name: 'Torre A', floors_count: null }, { name: 'Torre B', floors_count: 6 }], [est('Torre A', 4, 2), est('Torre B', 6, 0)]);
+    expect(r.restricao).toEqual({ torres: 2, pavimentosMin: 4, pavimentosMax: 6 });
+    expect(r.resumo).toBe('Torre A: 4 + 2 garagens · Torre B: 6');
+  });
+});
+

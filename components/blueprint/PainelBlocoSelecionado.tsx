@@ -12,6 +12,9 @@
  *
  * Pavimento (27/10/2026): *"permitir clicar em cada pavimento e identificar em propriedades"* — o piso clicado no
  * 3D (ou escolhido nos botões daqui) com as cotas, a área e a conferência dele (`resumoDoPiso`).
+ *
+ * Empreendimento (27/10/2026): *"trazer tudo conforme está no empreendimento da aba torres e unidades"* — de qual
+ * torre o bloco é, os pavimentos dela × os da planta, o nome de cada pavimento e o "Ajustar ao Empreendimento".
  */
 import React, { useState } from 'react';
 import { ROTULO_DO_ESQUEMA, type DivisaoDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
@@ -19,6 +22,7 @@ import { ROTULO_DO_PONTO_CARDEAL } from '../../utils/blueprintGrafoEspacial';
 import type { Bloco, UsoDoBloco } from '../../utils/blueprintKernel';
 import { MAX_PAVIMENTOS_DO_BLOCO, ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO } from '../../utils/blueprintKernel';
 import { resumoDoPiso, type MedidaDoBloco } from '../../utils/blueprintMassa';
+import type { LinhaDoAjuste, PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
@@ -31,6 +35,16 @@ interface Props {
   /** O pavimento em destaque (1 = o de baixo); null = nenhum. Clicar no 3D ou nos botões escolhe. */
   pisoSelecionado?: number | null;
   onPiso?: (indice: number | null) => void;
+  /** A torre do Empreendimento casada com o bloco (pelo nome), a comparação e o ajuste de todos os blocos. */
+  empreendimento?: {
+    nome: string;
+    papel: PapelDoBloco | null;
+    linha: LinhaDoAjuste | null;
+    avisos: string[];
+    /** Quantas mudanças o "Ajustar" faria; 0 = já segue. */
+    pendentes: number;
+    onAjustar: () => Promise<string | void>;
+  } | null;
   /** M6a: a divisão do pavimento tipo deste bloco (ou o motivo de não haver) e as saídas. */
   pavimentoTipo?: {
     divisao: DivisaoDoPavimento | null;
@@ -54,12 +68,15 @@ interface Props {
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, pavimentoTipo, plantas, garagem }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
+  /** De qual ação é o `resultado` — cada seção mostra só o seu. */
+  const [deQuem, setDeQuem] = useState<string | null>(null);
   if (!bloco) return null;
   const agir = async (nome: string, fn: () => Promise<string | void>) => {
     setOcupado(nome);
+    setDeQuem(nome);
     setResultado(null);
     try {
       setResultado((await fn()) || null);
@@ -73,7 +90,11 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
   const foraDoEnvelope = medida?.pisos.filter((p) => p.cabe === false) ?? [];
   const acimaDoGabarito = medida?.pisos.filter((p) => p.acimaDoGabarito) ?? [];
-  const resumo = medida && pisoSelecionado !== null ? resumoDoPiso(medida, pisoSelecionado) : null;
+  const nomesDosPisos = empreendimento?.papel?.nomesDosPisos;
+  const resumo = medida && pisoSelecionado !== null ? resumoDoPiso(medida, pisoSelecionado, nomesDosPisos) : null;
+  const linha = empreendimento?.linha ?? null;
+  const ESTADO_DA_LINHA: Record<LinhaDoAjuste['estado'], string> = { OK: 'confere', AJUSTAR: 'a ajustar', SEM_BLOCO: 'sem bloco', SEM_PAVIMENTOS: 'sem pavimentos' };
+  const FONTE: Record<LinhaDoAjuste['fonte'], string> = { CADASTRO: 'pelo cadastro de pavimentos', UNIDADES: 'pelos andares das unidades', FLOORS_COUNT: 'pelo número de pavimentos da torre', NENHUMA: 'sem dados' };
   return (
     <div className="border-b border-slate-200 px-4 py-3" data-testid="painel-bloco">
       <div className="flex items-start justify-between gap-2">
@@ -200,7 +221,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
                   type="button"
                   aria-pressed={ativo}
                   onClick={() => onPiso(ativo ? null : p.indice)}
-                  title={`${p.indice}º pavimento${p.subsolo ? ' (subsolo)' : ''}${problema ? ' — com problema' : ''}`}
+                  title={`${p.indice}º pavimento${nomesDosPisos?.[p.indice - 1] ? ` — ${nomesDosPisos[p.indice - 1]}` : ''}${p.subsolo ? ' (subsolo)' : ''}${problema ? ' — com problema' : ''}`}
                   className={`min-w-[2rem] rounded-md border px-1.5 py-0.5 font-medium transition-colors ${
                     ativo
                       ? 'border-blue-700 bg-blue-700 text-white'
@@ -228,6 +249,43 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
           )}
         </div>
       )}
+      {empreendimento && (
+        <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-2 text-[11px]" data-testid="empreendimento-do-bloco">
+          <p className="text-xs font-semibold text-slate-700">Empreendimento "{empreendimento.nome}"</p>
+          {empreendimento.papel && linha ? (
+            <p className="text-slate-600" data-testid="torre-do-bloco">
+              {empreendimento.papel.tipo === 'GARAGEM' ? `Garagem da ${linha.torre}` : linha.torre}: {linha.acima} pavimento(s)
+              {linha.garagens ? ` + ${linha.garagens} garagem(ns)` : ''} {FONTE[linha.fonte]} · na planta {linha.pavimentosNaPlanta ?? '—'}
+              {linha.garagensNaPlanta ? ` + ${linha.garagensNaPlanta}` : ''} ·{' '}
+              <span className={linha.estado === 'OK' ? 'text-emerald-700' : 'text-amber-800'}>{ESTADO_DA_LINHA[linha.estado]}</span>
+            </p>
+          ) : (
+            <p className="text-slate-500">Este bloco não corresponde a nenhuma torre do Empreendimento.</p>
+          )}
+          {empreendimento.avisos.length > 0 && (
+            <ul className="space-y-0.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800" data-testid="avisos-do-empreendimento">
+              {empreendimento.avisos.map((a) => (
+                <li key={a}>{a}</li>
+              ))}
+            </ul>
+          )}
+          <button
+            type="button"
+            disabled={!!ocupado || empreendimento.pendentes === 0}
+            onClick={() => void agir('ajustar', empreendimento.onAjustar)}
+            title={
+              empreendimento.pendentes === 0
+                ? 'Os blocos já seguem as torres do Empreendimento — nada a ajustar'
+                : 'Nome, pavimentos e garagem de cada torre como na aba Torres e Unidades (todos os blocos; Ctrl+Z desfaz)'
+            }
+            className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+            data-testid="ajustar-ao-empreendimento"
+          >
+            {ocupado === 'ajustar' ? 'Ajustando…' : 'Ajustar ao Empreendimento'}
+          </button>
+          {resultado && deQuem === 'ajustar' && <p className="text-slate-700" data-testid="ajuste-resultado">{resultado}</p>}
+        </div>
+      )}
       <button type="button" onClick={onAbrirEstudo} className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800">
         Ver o estudo de massa
       </button>
@@ -250,7 +308,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
           >
             {ocupado === 'garagem' ? 'Lançando…' : 'Lançar as vagas'}
           </button>
-          {resultado && !pavimentoTipo && <p className="text-slate-700" data-testid="garagem-resultado">{resultado}</p>}
+          {resultado && deQuem !== 'ajustar' && !pavimentoTipo && <p className="text-slate-700" data-testid="garagem-resultado">{resultado}</p>}
         </div>
       )}
 
@@ -319,7 +377,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
               </button>
             </div>
           )}
-          {resultado && <p className="text-slate-700" data-testid="pavimento-tipo-resultado">{resultado}</p>}
+          {resultado && deQuem !== 'ajustar' && <p className="text-slate-700" data-testid="pavimento-tipo-resultado">{resultado}</p>}
         </div>
       )}
     </div>

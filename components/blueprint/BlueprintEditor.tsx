@@ -4650,6 +4650,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const subRegiaoSel = (editor.model.subRegioes ?? []).find((s) => s.id === editor.selectedId) ?? null;
   const vagaSel = (editor.model.vagas ?? []).find((v) => v.id === editor.selectedId) ?? null;
   const blocoSel = (editor.model.blocos ?? []).find((b) => b.id === editor.selectedId) ?? null;
+  /**
+   * PAVIMENTO DA MASSA (27/10/2026): *"permitir clicar em cada pavimento e identificar em propriedades"*. O piso
+   * clicado no 3D (ou escolhido no painel) vale só enquanto o bloco dele é a seleção — trocar a seleção o esquece
+   * sem efeito nenhum. Estado de sessão: é ponteiro de leitura, não dado do estudo.
+   */
+  const [pisoDaMassa, setPisoDaMassa] = useState<{ blocoId: string; indice: number } | null>(null);
+  const pisoDoBlocoSel = blocoSel && pisoDaMassa?.blocoId === blocoSel.id ? pisoDaMassa.indice : null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
   const muroSel = (editor.model.muros ?? []).find((m) => m.id === editor.selectedId) ?? null;
@@ -5499,6 +5506,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           topoMm: p.topoMm,
           cor: COR_DO_USO_DO_BLOCO[b.uso],
           problema: p.cabe === false || p.acimaDoGabarito,
+          indice: p.indice,
         }));
       }),
     [massa, editor.model.blocos],
@@ -11282,6 +11290,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       <PainelBlocoSelecionado
         bloco={blocoSel}
         medida={blocoSel ? massa.blocos.find((m) => m.blocoId === blocoSel.id) ?? null : null}
+        pisoSelecionado={pisoDoBlocoSel}
+        onPiso={(indice) => setPisoDaMassa(blocoSel && indice !== null ? { blocoId: blocoSel.id, indice } : null)}
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
         onExcluir={removerSelecionada}
         onAbrirEstudo={() => setTelaAberta('massa')}
@@ -11953,6 +11963,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       mostrarTerreno={mostrarTerreno3d && temTerreno && terrenoAVista}
       envelope={mostrarEnvelope3d && temTerreno && terrenoAVista ? envelope3d?.prismas : undefined}
       massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3d : undefined}
+      pisoDaMassa={blocoSel && pisoDoBlocoSel !== null ? `${blocoSel.id}-${pisoDoBlocoSel}` : null}
+      onPisoDaMassa={(blocoId, indice) => setPisoDaMassa({ blocoId, indice })}
       sol={solNo3d}
       entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
       relevo={mostrarTerreno3d && terrenoAVista ? relevo3d : null}

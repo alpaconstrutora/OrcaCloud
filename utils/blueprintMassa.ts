@@ -626,6 +626,33 @@ export const COR_DO_USO_DO_BLOCO: Record<UsoDoBloco, string> = {
 };
 
 /** "Torre A · 10 pav · 30,00 m" — o rótulo do bloco na planta. */
+/**
+ * O RESUMO DE UM PAVIMENTO do bloco (27/10/2026): *"permitir clicar em cada pavimento e identificar em
+ * propriedades"*. O que o painel do bloco mostra para o piso clicado no 3D (ou escolhido nele): qual é, as cotas,
+ * a área, se cabe no envelope e se passa do gabarito. `null` quando o índice não existe no bloco.
+ */
+export interface ResumoDoPiso {
+  titulo: string;
+  linhas: string[];
+  problema: boolean;
+}
+
+export function resumoDoPiso(medida: MedidaDoBloco, indice: number): ResumoDoPiso | null {
+  const p = medida.pisos.find((x) => x.indice === indice);
+  if (!p) return null;
+  const linhas = [`Cota ${fmt(p.baseMm / 1000)} m a ${fmt(p.topoMm / 1000)} m · ${fmt(medida.projecaoM2)} m²`];
+  if (p.ordinal !== null && p.ordinal !== p.indice) linhas.push(`${p.ordinal}º no gabarito (conta os pavimentos do bloco de baixo)`);
+  if (p.cabe === null) linhas.push('Sem lote fechado: o envelope não pôde ser conferido.');
+  else if (p.cabe) linhas.push('Cabe no envelope.');
+  else linhas.push(`Fora do envelope: ${fmt(m2(p.areaForaMm2 ?? 0))} m²`);
+  if (p.acimaDoGabarito) linhas.push(`Acima do gabarito: ${p.motivoDoGabarito ?? 'sem o motivo'}`);
+  return {
+    titulo: `${medida.nome} · ${p.indice}º pavimento de ${medida.pavimentos}${p.subsolo ? ' (subsolo)' : ''}`,
+    linhas,
+    problema: p.cabe === false || p.acimaDoGabarito,
+  };
+}
+
 export function rotuloDoBloco(b: Pick<Bloco, 'nome' | 'pavimentos' | 'peDireitoMm' | 'cotaBaseMm'>): string {
   const altura = (b.pavimentos * b.peDireitoMm) / 1000;
   const sub = b.cotaBaseMm < 0 ? ` · base ${fmt(b.cotaBaseMm / 1000)} m` : b.cotaBaseMm > 0 ? ` · sobre ${fmt(b.cotaBaseMm / 1000)} m` : '';

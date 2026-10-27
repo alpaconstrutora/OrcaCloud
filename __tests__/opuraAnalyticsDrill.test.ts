@@ -35,7 +35,32 @@ describe('entries() — parâmetros da RPC', () => {
         expect(fn).toBe('fn_opura_entries');
         expect(args).toMatchObject({ p_contract_client_id: 'cli1', p_contract_domain: 'LOCACAO', p_plano_de_contas_id: null });
         // 26 desde 2026-09-14: +p_client_ids (Central de Clientes em "Todos os clientes")
-        expect(Object.keys(args)).toHaveLength(26);
+        // 27 desde 2026-10-27: +p_sem_dimensao (linha "— Sem …")
+        expect(Object.keys(args)).toHaveLength(27);
+        expect(args).toMatchObject({ p_sem_dimensao: null });
+    });
+});
+
+describe('linha "— Sem …" (chave NULL) — 2026-10-27', () => {
+    // Antes: { projectId: undefined } → a RPC lia "sem filtro" e a gaveta
+    // "— Sem obra" listava os lançamentos de todas as obras.
+    it('dimensões de coluna simples pedem semDimensao, nunca o filtro vazio', () => {
+        for (const d of ['project', 'supplier', 'client', 'cost_center', 'category', 'account', 'plano_de_contas'] as const) {
+            expect(opuraAnalyticsService.drillFilter(d, null)).toEqual({ semDimensao: d });
+        }
+    });
+    it('com chave, continua o filtro por id', () => {
+        expect(opuraAnalyticsService.drillFilter('project', 'p1')).toEqual({ projectId: 'p1' });
+    });
+    it('dimensões de domínio e meses ficam como estavam (o pivô delas recorta diferente)', () => {
+        expect(opuraAnalyticsService.drillFilter('locacoes', null)).toEqual({ contractId: undefined });
+        expect(opuraAnalyticsService.drillFilter('tx_month', null)).toBeNull();
+    });
+    it('entries() manda p_sem_dimensao', async () => {
+        rpc.mockClear();
+        await opuraAnalyticsService.entries('org1', { clientIds: ['a'], semDimensao: 'project' }, 200, 0);
+        const [, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+        expect(args).toMatchObject({ p_sem_dimensao: 'project', p_project_id: null, p_client_ids: ['a'] });
     });
 });
 

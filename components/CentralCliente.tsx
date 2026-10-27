@@ -16,6 +16,7 @@ import {
 import { supabase } from '../lib/supabase';
 import { clientCategoryService } from '../services/clientCategoryService';
 import { useToast } from '../hooks/useToast';
+import { useOrgContext } from '../hooks/useOrgContext';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import ClientSelect from './ClientSelect';
 import Button from './ui/Button';
@@ -32,6 +33,16 @@ function fPct(v: number | null): string {
     if (v === null || v === undefined) return '—';
     return `${v.toFixed(1)}%`;
 }
+
+/** Data pronta para virar período: ano de 4 dígitos ≥ 1900. Enquanto se digita
+ *  o ano, o Chrome emite "0002-01-01", "0020-01-01"… e cada um disparava 3 RPCs
+ *  (e uma série de milhares de meses). */
+function dataCompleta(v: string): boolean {
+    return /^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 1900;
+}
+
+/** Página do extrato — mesma de Relatórios ÒPURA. */
+const ENTRIES_PAGE = 200;
 
 /** Tick de eixo: "12 mil" / "1,2 mi" — o eixo é régua, não valor; a moeda
  *  está no subtítulo e no tooltip, e "R$ 10 mil" quebrava em duas linhas. */
@@ -164,12 +175,12 @@ function KPICard({ label, value, sub, icon: Icon, color }: {
 }
 
 // ── Componente ──────────────────────────────────────────────────────────────────
-interface CentralClienteProps {
-    organizationId: string | null;
-}
-
-const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
+const CentralCliente: React.FC = () => {
     const { showToast } = useToast();
+    // REGRA #5: a organização vem do seletor do topo (empresa/obra herdam a
+    // org dona). A prop que o AppRouter passava era o valor cru do store — com
+    // uma EMPRESA escolhida ficava vazia e a tela somava todas as organizações.
+    const { orgId: organizationId } = useOrgContext();
     const now = new Date();
     const [clients, setClients] = React.useState<ClientLite[]>([]);
     // "Todos os clientes" é o padrão: a tela abria no 1º cliente em ordem
@@ -181,6 +192,10 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     const [tiposCatalogo, setTiposCatalogo] = React.useState<string[]>([]);
     const [dateFrom, setDateFrom] = React.useState(`${now.getFullYear()}-01-01`);
     const [dateTo, setDateTo]     = React.useState(`${now.getFullYear()}-12-31`);
+    // O que está no campo (pode estar no meio da digitação); o período acima só
+    // muda — e só recarrega — quando a data fica completa.
+    const [dateFromInput, setDateFromInput] = React.useState(dateFrom);
+    const [dateToInput, setDateToInput]     = React.useState(dateTo);
 
     const [kpis, setKpis]       = React.useState<OpuraClienteKpis | null>(null);
     const [byProject, setByProject] = React.useState<OpuraPivotRow[]>([]);
@@ -191,10 +206,13 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     const [loading, setLoading] = React.useState(false);
     const [error, setError]     = React.useState<string | null>(null);
 
-    // Drill-down extrato
-    const [drill, setDrill] = React.useState<{ label: string } | null>(null);
+    // Drill-down extrato. `filters` fica guardado para o "Carregar mais".
+    const [drill, setDrill] = React.useState<{ label: string; filters: OpuraEntryFilters } | null>(null);
     const [entries, setEntries] = React.useState<OpuraEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = React.useState(false);
+    const [entriesLoadingMore, setEntriesLoadingMore] = React.useState(false);
+    // Abrir a obra A e logo a B: a resposta de A não pode encher a gaveta de B.
+    const drillReq = React.useRef(0);
 
     React.useEffect(() => {
         (async () => {
@@ -281,19 +299,47 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
     React.useEffect(() => { load(); }, [load]);
 
     const openDrill = React.useCallback(async (row: OpuraPivotRow) => {
-        setDrill({ label: row.dimension_label });
+        // "— Sem obra" tem chave NULL: pede as linhas SEM obra. Mandar
+        // projectId vazio era "sem filtro" e listava todas as obras.
+        const obra: OpuraEntryFilters = row.dimension_key ? { projectId: row.dimension_key } : { semDimensao: 'project' };
+        const f: OpuraEntryFilters = clientIds
+            ? { clientIds, dateFrom, dateTo, ...obra }
+            : { clientId, dateFrom, dateTo, ...obra };
+        const req = ++drillReq.current;
+        setDrill({ label: row.dimension_label, filters: f });
         setEntries([]); setEntriesLoading(true);
         try {
-            const f: OpuraEntryFilters = clientIds
-                ? { clientIds, dateFrom, dateTo, projectId: row.dimension_key ?? undefined }
-                : { clientId, dateFrom, dateTo, projectId: row.dimension_key ?? undefined };
-            setEntries(await opuraAnalyticsService.entries(organizationId, f, 200, 0));
+            const data = await opuraAnalyticsService.entries(organizationId, f, ENTRIES_PAGE, 0);
+            if (req === drillReq.current) setEntries(data);
         } catch (e: unknown) {
-            showToast(`Erro ao carregar extrato: ${e instanceof Error ? e.message : String(e)}`, 'error');
+            if (req === drillReq.current) showToast(`Erro ao carregar extrato: ${e instanceof Error ? e.message : String(e)}`, 'error');
         } finally {
-            setEntriesLoading(false);
+            if (req === drillReq.current) setEntriesLoading(false);
         }
     }, [organizationId, clientId, clientIds, dateFrom, dateTo, showToast]);
+
+    const loadMoreEntries = React.useCallback(async () => {
+        if (!drill) return;
+        const req = drillReq.current;
+        setEntriesLoadingMore(true);
+        try {
+            const data = await opuraAnalyticsService.entries(organizationId, drill.filters, ENTRIES_PAGE, entries.length);
+            if (req === drillReq.current) setEntries(prev => [...prev, ...data]);
+        } catch (e: unknown) {
+            if (req === drillReq.current) showToast(`Erro ao carregar extrato: ${e instanceof Error ? e.message : String(e)}`, 'error');
+        } finally {
+            if (req === drillReq.current) setEntriesLoadingMore(false);
+        }
+    }, [drill, entries.length, organizationId, showToast]);
+
+    const closeDrill = React.useCallback(() => {
+        drillReq.current++;
+        setDrill(null);
+        setEntriesLoading(false);
+        setEntriesLoadingMore(false);
+    }, []);
+    const totalEntries = entries[0]?.total_count ?? entries.length;
+    const hasMoreEntries = entries.length < totalEntries;
 
     // Derivados
     const contratado = kpis?.contratado ?? 0;
@@ -363,10 +409,12 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                             triggerClassName="w-full h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:border-blue-400"
                         />
                     </div>
-                    <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
+                    <input type="date" value={dateFromInput} aria-label="Data inicial do período"
+                        onChange={e => { const v = e.target.value; setDateFromInput(v); if (dataCompleta(v)) setDateFrom(v); }}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     <span className="text-gray-400 text-sm">até</span>
-                    <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
+                    <input type="date" value={dateToInput} aria-label="Data final do período"
+                        onChange={e => { const v = e.target.value; setDateToInput(v); if (dataCompleta(v)) setDateTo(v); }}
                         className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
                     <Button onClick={load} disabled={loading}
                         className="text-sm gap-2">
@@ -503,7 +551,10 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                 <tbody>
                                     {byProject.map((c, i) => (
                                         <tr key={c.dimension_key ?? `p-${i}`} onClick={() => openDrill(c)}
-                                            className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer group">
+                                            tabIndex={0}
+                                            aria-label={`${c.dimension_label}: ${fBRL(c.net_realizado)}. Abrir o extrato`}
+                                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrill(c); } }}
+                                            className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer group focus:outline-none focus-visible:bg-blue-50/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40">
                                             <td className="px-5 py-2.5">
                                                 <div className="flex items-center gap-3">
                                                     <span className="text-sm font-normal text-gray-700 truncate group-hover:text-blue-700">{c.dimension_label}</span>
@@ -527,10 +578,12 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
             )}
 
             {/* Drawer extrato */}
-            <Sheet open={drill !== null} onClose={() => setDrill(null)} size="2xl">
-                <SheetHeader onClose={() => setDrill(null)}>
+            <Sheet open={drill !== null} onClose={closeDrill} size="2xl">
+                <SheetHeader onClose={closeDrill}>
                     <SheetTitle>{drill?.label ?? 'Extrato'}</SheetTitle>
-                    <SheetDescription>{escopoLabel} · {entries[0]?.total_count ?? entries.length} lançamento(s)</SheetDescription>
+                    <SheetDescription>
+                        {escopoLabel} · {entriesLoading ? 'carregando…' : `${totalEntries} ${totalEntries === 1 ? 'lançamento' : 'lançamentos'}`}
+                    </SheetDescription>
                 </SheetHeader>
                 <SheetPanel>
                     {entriesLoading ? (
@@ -557,6 +610,17 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ organizationId }) => {
                                 ))}
                             </tbody>
                         </table>
+                    )}
+                    {/* O extrato vem em páginas de 200 — o cabeçalho diz o total,
+                        então a lista diz quantos mostra e busca o resto. */}
+                    {!entriesLoading && hasMoreEntries && (
+                        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
+                            <span>Exibindo {entries.length} de {totalEntries}</span>
+                            <Button variant="secondary" onClick={loadMoreEntries} disabled={entriesLoadingMore}>
+                                <RefreshCw className={`w-[15px] h-[15px] ${entriesLoadingMore ? 'animate-spin' : ''}`} />
+                                {entriesLoadingMore ? 'Carregando…' : `Carregar mais ${Math.min(ENTRIES_PAGE, totalEntries - entries.length)}`}
+                            </Button>
+                        </div>
                     )}
                 </SheetPanel>
             </Sheet>

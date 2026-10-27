@@ -108,7 +108,18 @@ export interface OpuraEntryFilters extends OpuraFilters {
   planoDeContasId?: string;
   contractDomain?: 'VENDAS' | 'LOCACAO' | 'SERVICOS' | 'SUPRIMENTOS';
   contractClientId?: string;
+  /** Linha "— Sem <dimensão>" do pivô: só lançamentos cuja chave desta dimensão é NULL. */
+  semDimensao?: OpuraDimension;
 }
+
+/** Dimensões em que o extrato sabe filtrar "— Sem …" (p_sem_dimensao, mesma
+ *  chave do fn_opura_pivot). As de domínio ficam fora: o pivô delas recorta
+ *  pelo domínio do contrato, e o extrato não. */
+export const SEM_DIMENSOES: ReadonlySet<OpuraDimension> = new Set<OpuraDimension>([
+  'supplier', 'project', 'cost_center', 'category', 'category_parent', 'client',
+  'contract', 'purchase_order', 'account', 'empresa', 'user', 'contraparte',
+  'plano_de_contas',
+]);
 
 /** Linha de comparação entre dois períodos (A = atual, B = base/anterior). */
 export interface OpuraCompareRow {
@@ -242,6 +253,9 @@ export const opuraAnalyticsService = {
    * Retorna o patch de filtros a mesclar (ou null se não é drilável).
    */
   drillFilter(dimension: OpuraDimension, key: string | null): Partial<OpuraEntryFilters> | null {
+    // Linha "— Sem <dimensão>" (chave NULL): pede ao extrato as linhas cuja chave
+    // do pivô é NULL. Mandar o filtro com undefined = "sem filtro" = todas.
+    if (key === null && SEM_DIMENSOES.has(dimension)) return { semDimensao: dimension };
     // Fornecedor: a chave pode ser o FK (uuid) ou o nome-texto (party_label, nas saídas)
     if (dimension === 'supplier') {
       if (!key) return { supplierId: undefined };
@@ -286,7 +300,7 @@ export const opuraAnalyticsService = {
     };
     const f = map[dimension];
     if (!f) return null;
-    // dre_group/contraparte usam a própria chave (texto); demais usam o uuid (ou null → '— Sem')
+    // dre_group/contraparte usam a própria chave (texto); demais usam o uuid
     return { [f]: key ?? undefined } as Partial<OpuraEntryFilters>;
   },
 
@@ -305,6 +319,7 @@ export const opuraAnalyticsService = {
       p_supplier_id:        filters.supplierId ?? null,
       p_client_id:          filters.clientId ?? null,
       p_client_ids:         filters.clientIds ?? null,
+      p_sem_dimensao:       filters.semDimensao ?? null,
       p_contract_id:        filters.contractId ?? null,
       p_purchase_order_id:  filters.purchaseOrderId ?? null,
       p_cost_center_id:     filters.costCenterId ?? null,

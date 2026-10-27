@@ -1394,9 +1394,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'opura-central-cliente':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
-          <CentralCliente
-            organizationId={activeOrganizationId || ''}
-          />
+          {/* A organização vem do useOrgContext dentro da tela (REGRA #5). */}
+          <CentralCliente />
         </React.Suspense>
       );
 

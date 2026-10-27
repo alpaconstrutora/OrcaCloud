@@ -215,6 +215,14 @@ function comElevacoes(torre: string, pisos: PisoSemUnidades[], terreoMm: number,
     const dig = pisos[i].elevacaoDigitadaMm;
     elev[i] = dig ?? calc;
     if (dig == null || dig === calc) continue;
+    // Digitada ABAIXO do de baixo: não é altura negativa, é o andar trocado (o Garden de 27/10/2026 tinha as
+    // garagens nos andares 1 e 2, e o Estacionamento 1 caía logo acima do térreo).
+    if (dig <= elev[i - 1]) {
+      avisos.push(
+        `Torre "${torre}": ${pisos[i].nome} está em ${fmtElev(dig)} m (digitada), abaixo do ${abaixo.nome} (${fmtElev(elev[i - 1])} m), mas o andar dele (${pisos[i].numero}) o põe acima — confira o Nº inicial.`,
+      );
+      continue;
+    }
     if (!alturaPelaElevacao(i, i - 1, dig - elev[i - 1])) continue;
     if (abaixo.peDireitoMm != null) {
       avisos.push(
@@ -228,6 +236,12 @@ function comElevacoes(torre: string, pisos: PisoSemUnidades[], terreoMm: number,
     const dig = p.elevacaoDigitadaMm;
     elev[i] = dig ?? calc;
     if (dig == null || dig === calc) continue;
+    if (dig >= elev[i + 1]) {
+      avisos.push(
+        `Torre "${torre}": ${p.nome} está em ${fmtElev(dig)} m (digitada), acima do ${pisos[i + 1].nome} (${fmtElev(elev[i + 1])} m), mas o andar dele (${p.numero}) o põe abaixo — confira o Nº inicial.`,
+      );
+      continue;
+    }
     if (!alturaPelaElevacao(i, i, elev[i + 1] - dig)) continue;
     if (p.peDireitoMm != null) {
       avisos.push(`Torre "${torre}": ${p.nome} está em ${fmtElev(dig)} m (digitada), mas com o pé-direito de ${fmtM(p.peDireitoMm)} m ficaria em ${fmtElev(calc)} m — vale a elevação digitada.`);
@@ -267,6 +281,29 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
     if (t.floors_count == null) avisos.push(`Torre "${t.name}": sem número de pavimentos no cadastro da torre — contados ${pelo} (${resumo}).`);
     else if (t.floors_count !== acima.length && t.floors_count !== pisos.length) {
       avisos.push(`Torre "${t.name}": o cadastro da torre diz ${t.floors_count} pavimentos e ${dizem} ${resumo} — vale o que ${dizem}.`);
+    }
+  }
+  if (fonte === 'CADASTRO') {
+    // O andar do cadastro (27/10/2026): garagem com andar positivo e andares que não casam com os das unidades (o
+    // Garden tinha 100/200/300 — o número da unidade, não o do andar) desalinham tudo o que é por andar.
+    for (const p of pisos) {
+      if ((p.tipo === 'GARAGEM' || p.tipo === 'SUBSOLO') && p.numero >= 0) {
+        avisos.push(
+          `Torre "${t.name}": ${p.nome} é ${p.tipo === 'GARAGEM' ? 'garagem' : 'subsolo'}, mas está no andar ${p.numero} — garagem e subsolo ficam abaixo do térreo, com andar negativo (-1, -2…).`,
+        );
+      }
+    }
+    const dasUnidades = [...new Set((t.units ?? []).map((u) => u.floor).filter((n): n is number => typeof n === 'number' && Number.isFinite(n)))].sort((a, b) => a - b);
+    if (dasUnidades.length > 0) {
+      const doCadastro = new Set(pisos.map((p) => p.numero));
+      const faltam = dasUnidades.filter((n) => !doCadastro.has(n));
+      const sobram = pisos.map((p) => p.numero).filter((n) => !dasUnidades.includes(n));
+      // Só quando há andar de unidade sem pavimento: andar sem unidade (cobertura, técnico) é normal.
+      if (faltam.length > 0 && sobram.length > 0) {
+        avisos.push(
+          `Torre "${t.name}": as unidades estão nos andares ${dasUnidades.join(', ')}, mas o cadastro de pavimentos não tem ${faltam.join(', ')} e tem ${sobram.join(', ')} — o andar é o número do pavimento (1, 2, 3…), não o da unidade (101).`,
+        );
+      }
     }
   }
   for (const u of t.units ?? []) {

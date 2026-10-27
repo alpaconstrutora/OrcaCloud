@@ -101,3 +101,23 @@ describe('Pavimentos › Elevação (27/10/2026)', () => {
     await waitFor(() => expect(svc.createFloor).toHaveBeenCalledWith(expect.objectContaining({ name: 'Cobertura', elevacao_m: 31.2 })));
   });
 });
+
+describe('Pavimentos › conferência do andar (27/10/2026)', () => {
+  beforeEach(() => {
+    svc.listFloors.mockReset();
+  });
+
+  it('o cadastro do Garden (garagens em 1 e 2): avisa o andar trocado, não uma altura negativa', async () => {
+    svc.listFloors.mockResolvedValue([
+      pav({ id: 't', name: 'Pavimento Térreo', tipo: 'TERREO', floor_number: 0, elevacao_m: -0.3 }),
+      pav({ id: 'e1', name: 'Estacionamento 1', tipo: 'GARAGEM', floor_number: 1, elevacao_m: -3.3, sort_order: 1 }),
+    ]);
+    const unidades = [{ id: 'u', floor: -1 }, { id: 'v', floor: 0 }] as never;
+    render(<FloorEditor tower={TORRE as never} unidades={unidades} />);
+    const avisos = await screen.findByTestId('avisos-de-elevacao');
+    expect(avisos).toHaveTextContent('Estacionamento 1 está em -3,30 m (digitada), abaixo do Pavimento Térreo (-0,30 m), mas o andar dele (1) o põe acima — confira o Nº inicial.');
+    expect(avisos).toHaveTextContent('Estacionamento 1 é garagem, mas está no andar 1');
+    expect(avisos).not.toHaveTextContent('ficaria com -');
+    expect(avisos).not.toHaveTextContent('Torre "Torre A":');
+  });
+});

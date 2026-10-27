@@ -23,14 +23,18 @@ import Button from '../ui/Button';
 import SecaoTitulo from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
 import { useToast } from '../../hooks/useToast';
-import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, FloorTipo } from '../../types';
+import { EmpreendimentoTower, EmpreendimentoFloor, EmpreendimentoFloorInsert, EmpreendimentoUnit, FloorTipo } from '../../types';
 import { estruturaDaTorre } from '../../utils/blueprintEstruturaDaTorre';
 
 interface Props {
   tower: EmpreendimentoTower;
   /** Lista atual de pavimentos da torre — o UnitEditor usa para "Gerar a partir dos pavimentos". */
   onFloorsChange?: (towerId: string, floors: EmpreendimentoFloor[]) => void;
+  /** As unidades da torre (seção Unidades): a conferência do cadastro compara os andares com os delas. */
+  unidades?: EmpreendimentoUnit[];
 }
+
+const SEM_UNIDADES: EmpreendimentoUnit[] = [];
 
 const TIPO_OPTIONS: { value: FloorTipo; label: string }[] = [
   { value: 'SUBSOLO',   label: 'Subsolo' },
@@ -82,7 +86,7 @@ export const fmtElevacao = (m: number) => `${m < 0 ? '-' : '+'}${Math.abs(m).toF
 const fmtElevacaoDigitavel = (v: number | null | undefined) => (v == null ? '' : fmtElevacao(Number(v)));
 const MSG_ELEVACAO = 'Elevação em metros, ex.: +3,00 ou -6,00 (ou vazio, para calcular pelos pés-direitos).';
 
-export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
+export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange, unidades = SEM_UNIDADES }) => {
   const [floors, setFloors] = React.useState<EmpreendimentoFloor[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [saving, setSaving] = React.useState(false);
@@ -107,17 +111,19 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
   const totalUnidades = floors.reduce((s, f) =>
     s + f.repeat_count * (f.units_per_floor ?? tower.units_per_floor ?? 1), 0);
 
-  // A elevação de cada andar (calculada ou digitada) e os avisos — o mesmo cálculo da massa da Planta.
+  // A elevação de cada andar (calculada ou digitada) e os avisos — o mesmo cálculo da massa da Planta. Com as
+  // unidades, a conferência também pega andar trocado (27/10/2026: o Garden tinha garagens em 1 e 2, tipos em 100…).
   const estrutura = React.useMemo(
-    () => estruturaDaTorre({ id: tower.id, name: tower.name, pe_direito_padrao_m: tower.pe_direito_padrao_m, elevacao_terreo_m: tower.elevacao_terreo_m, units: [] }, floors),
-    [tower.id, tower.name, tower.pe_direito_padrao_m, tower.elevacao_terreo_m, floors],
+    () => estruturaDaTorre({ id: tower.id, name: tower.name, floors_count: tower.floors_count, pe_direito_padrao_m: tower.pe_direito_padrao_m, elevacao_terreo_m: tower.elevacao_terreo_m, units: unidades }, floors),
+    [tower.id, tower.name, tower.floors_count, tower.pe_direito_padrao_m, tower.elevacao_terreo_m, unidades, floors],
   );
   const elevacaoDoAndar = React.useMemo(() => {
     const m = new Map<number, number>();
     for (const p of [...estrutura.garagens, ...estrutura.acima]) m.set(p.numero, p.elevacaoMm / 1000);
     return m;
   }, [estrutura]);
-  const avisosDeElevacao = estrutura.avisos.filter(a => a.includes('(digitada)'));
+  // Todos os avisos do cadastro (andar, elevação, número de pavimentos), sem o prefixo da torre — já estamos nela.
+  const avisosDoCadastro = estrutura.avisos.map(a => a.replace(/^Torre "[^"]*": /, ''));
 
   const handleAdd = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -274,9 +280,10 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
           Adicionar pavimento
         </Button>
-        {previaNovo && (
-          <p className="col-span-full -mt-2 text-xs text-gray-500">Andares: <span className="text-gray-700">{previaNovo}</span></p>
-        )}
+        <p className="col-span-full -mt-2 text-xs text-gray-500">
+          Nº inicial é o andar: 0 = térreo; garagens e subsolos negativos (-1, -2); o 1º pavimento é 1 (as unidades 101, 102… saem dele).
+          {previaNovo && <> Andares: <span className="text-gray-700">{previaNovo}</span></>}
+        </p>
       </form>
 
       {/* Lista de pavimentos */}
@@ -395,9 +402,9 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
               </tfoot>
             )}
           </table>
-          {avisosDeElevacao.length > 0 && (
+          {avisosDoCadastro.length > 0 && (
             <ul className="border-t border-amber-200 bg-amber-50 px-4 py-2 text-xs text-amber-800 space-y-0.5" data-testid="avisos-de-elevacao">
-              {avisosDeElevacao.map(a => <li key={a}>{a}</li>)}
+              {avisosDoCadastro.map(a => <li key={a}>{a}</li>)}
             </ul>
           )}
         </div>

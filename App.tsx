@@ -12,7 +12,20 @@ const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
 import { supabase } from './lib/supabase';
 import { atsService } from './services/atsService';
-import { PortalView } from './components/LaborPortal';
+import { Loader2, Lock, Shield, WifiOff } from 'lucide-react';
+
+// Portal do Colaborador sob demanda, como os outros portais: antes vinha no pacote
+// principal, que todo usuário do app baixa. O portão dispara o download junto com a
+// validação do token (sem cascata), e os dois carregamentos são a mesma tela.
+const importarPortalColaborador = () => import('./components/LaborPortal');
+const PortalView = React.lazy(() => importarPortalColaborador().then(m => ({ default: m.PortalView })));
+
+const CarregandoPortalColaborador: React.FC = () => (
+  <div className="h-[100dvh] flex items-center justify-center bg-portal-chao" role="status">
+    <Loader2 className="w-6 h-6 animate-spin motion-reduce:animate-none text-portal-grafite" aria-hidden="true" />
+    <span className="sr-only">Carregando o portal</span>
+  </div>
+);
 
 // Acesso público via token — sem login
 const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
@@ -21,6 +34,7 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
   const [orgId, setOrgId] = React.useState('');
 
   React.useEffect(() => {
+    importarPortalColaborador().catch(() => { /* o React.lazy tenta de novo e mostra o erro */ });
     atsService.validatePortalToken(token)
       .then(res => {
         if (res.valid && res.employee_id && res.org_id) {
@@ -34,21 +48,14 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
       .catch(() => setState('error'));
   }, [token]);
 
-  if (state === 'loading') return (
-    <div className="h-screen flex items-center justify-center bg-indigo-50">
-      <div className="flex flex-col items-center gap-3">
-        <div className="w-8 h-8 border-4 border-indigo-600 border-t-transparent rounded-full animate-spin" />
-        <p className="text-sm font-black text-indigo-700 uppercase tracking-widest">Carregando portal...</p>
-      </div>
-    </div>
-  );
+  if (state === 'loading') return <CarregandoPortalColaborador />;
 
   if (state === 'error') return (
-    <div className="h-screen flex items-center justify-center bg-slate-50">
-      <div className="text-center space-y-3 p-8">
-        <p className="text-4xl">🔒</p>
-        <p className="text-lg font-black text-slate-800">Link inválido ou expirado</p>
-        <p className="text-sm text-slate-500">Solicite um novo link ao seu gestor.</p>
+    <div className="h-[100dvh] flex items-center justify-center bg-portal-chao px-5">
+      <div className="max-w-xs text-center space-y-2">
+        <Lock className="w-8 h-8 mx-auto mb-3 text-portal-grafite" aria-hidden="true" />
+        <h1 className="text-lg font-bold text-portal-grafite">Link inválido ou expirado</h1>
+        <p className="text-sm text-portal-secundario">Peça um novo link ao seu gestor.</p>
       </div>
     </div>
   );
@@ -57,7 +64,9 @@ const PortalTokenGate: React.FC<{ token: string }> = ({ token }) => {
     <div className="h-screen bg-white overflow-hidden">
       {/* O token é repassado porque os RPCs da Academia recortam por ele
           (nunca por employee_id cru, que seria enumerável). */}
-      <PortalView employeeId={empId} orgId={orgId} portalToken={token} onLogout={() => { window.location.href = '/'; }} />
+      <React.Suspense fallback={<CarregandoPortalColaborador />}>
+        <PortalView employeeId={empId} orgId={orgId} portalToken={token} onLogout={() => { window.location.href = '/'; }} />
+      </React.Suspense>
     </div>
   );
 };
@@ -377,7 +386,6 @@ import { ContractModal } from './components/ContractModal';
 import SupplyChainOrderForm from './components/SupplyChainOrderForm';
 import { INITIAL_PROJECT_SETTINGS } from './constants';
 import { BudgetEntry, ProjectSettings, Organization, Contract, Client, ProfileGroup } from './types';
-import { Loader2, Shield, WifiOff } from 'lucide-react';
 import { useStore } from './store/useStore';
 import { destinoDoLinkDeNotificacao } from './utils/linkNotificacao';
 import { useToast } from './hooks/useToast';

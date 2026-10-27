@@ -12,8 +12,13 @@ const rpc = vi.fn();
 vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: (...a: unknown[]) => rpc(...a), functions: { invoke: vi.fn() } } }));
 
 const getPortalSummary = vi.fn();
+const getPortalLogo = vi.fn();
 vi.mock('../../services/atsService', () => ({
-    atsService: { getPortalSummary: (...a: unknown[]) => getPortalSummary(...a), getPortalPaystub: vi.fn() },
+    atsService: {
+        getPortalSummary: (...a: unknown[]) => getPortalSummary(...a),
+        getPortalLogo: (...a: unknown[]) => getPortalLogo(...a),
+        getPortalPaystub: vi.fn(),
+    },
 }));
 vi.mock('../../services/academyPortalService', () => ({ academyPortalService: { listEnrollments: vi.fn().mockResolvedValue([]) } }));
 
@@ -38,7 +43,8 @@ const montar = (props: Partial<React.ComponentProps<typeof PortalView>> = {}) =>
 beforeEach(() => {
     try { window.localStorage.clear(); } catch { /* jsdom */ }
     rpc.mockReset().mockImplementation(async (fn: string) => ({ data: fn === 'fn_colab_portal_payroll_runs' ? HOLERITES : [], error: null }));
-    getPortalSummary.mockReset().mockResolvedValue(resumo({ name: 'Alpa Construtora e Incorporadora', logo_url: LOGO }));
+    getPortalSummary.mockReset().mockResolvedValue(resumo({ name: 'Alpa Construtora e Incorporadora', logo_versao: 'v1' }));
+    getPortalLogo.mockReset().mockResolvedValue(LOGO);
 });
 
 describe('Marca da empresa no cabeçalho', () => {
@@ -54,6 +60,52 @@ describe('Marca da empresa no cabeçalho', () => {
         montar();
         expect(await screen.findByText('Construção do Edifício Garden Cambuhy SPE')).toBeTruthy();
         expect(screen.queryByRole('img')).toBeNull();
+    });
+
+    it('o resumo traz só a versão; o logo vem à parte, pelo token', async () => {
+        montar();
+        await screen.findByRole('img', { name: 'Alpa Construtora e Incorporadora' });
+        expect(getPortalLogo).toHaveBeenCalledWith('tok');
+    });
+
+    it('logo já guardado no aparelho na mesma versão não é baixado de novo', async () => {
+        window.localStorage.setItem('portal-colaborador:logo', JSON.stringify({ versao: 'v1', dados: LOGO }));
+        montar();
+        const logo = await screen.findByRole('img', { name: 'Alpa Construtora e Incorporadora' });
+        expect(logo.getAttribute('src')).toBe(LOGO);
+        expect(getPortalLogo).not.toHaveBeenCalled();
+    });
+
+    it('a empresa trocou o logo (versão nova): baixa e guarda o novo', async () => {
+        window.localStorage.setItem('portal-colaborador:logo', JSON.stringify({ versao: 'v0', dados: 'data:image/png;base64,velho' }));
+        montar();
+        const logo = await screen.findByRole('img', { name: 'Alpa Construtora e Incorporadora' });
+        expect(logo.getAttribute('src')).toBe(LOGO);
+        expect(JSON.parse(window.localStorage.getItem('portal-colaborador:logo')!)).toEqual({ versao: 'v1', dados: LOGO });
+    });
+
+    it('enquanto o logo chega, o nome não aparece no lugar dele', async () => {
+        getPortalLogo.mockReturnValue(new Promise(() => {}));
+        montar();
+        expect(await screen.findByText('Claudinei da Costa Vieira')).toBeTruthy();
+        expect(screen.queryByText('Alpa Construtora e Incorporadora')).toBeNull();
+        expect(screen.queryByRole('img')).toBeNull();
+    });
+
+    it('logo que falha ao baixar cai para o nome', async () => {
+        getPortalLogo.mockRejectedValue(new TypeError('Failed to fetch'));
+        montar();
+        // Uma nova tentativa (1 s) antes de desistir do logo.
+        expect(await screen.findByText('Alpa Construtora e Incorporadora', {}, { timeout: 4000 })).toBeTruthy();
+        expect(getPortalLogo).toHaveBeenCalledTimes(2);
+    });
+
+    it('formato anterior (logo dentro do resumo) segue funcionando na transição', async () => {
+        getPortalSummary.mockResolvedValue(resumo({ name: 'Alpa Construtora e Incorporadora', logo_url: LOGO }));
+        montar();
+        const logo = await screen.findByRole('img', { name: 'Alpa Construtora e Incorporadora' });
+        expect(logo.getAttribute('src')).toBe(LOGO);
+        expect(getPortalLogo).not.toHaveBeenCalled();
     });
 
     it('logo que não carrega cai para o nome', async () => {

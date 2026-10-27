@@ -250,3 +250,23 @@ Pedido: "de acordo" (publicar os PRs, rodar o polish, nova auditoria; desempenho
 - [x] medido no harness: vazamento 0, alvos ≥ 44px, contraste e foco ok nas 5 abas a 390 e a 360/200%.
 
 Fica para `/impeccable optimize`: logo em data URI no resumo; `PortalView` no pacote principal.
+
+## Item 8 — optimize (desempenho)
+
+Pedido: "Sim" ao `/impeccable optimize` oferecido depois da nova auditoria (19/20, desempenho 3/4).
+
+Medido antes de mexer (27/10/2026):
+- `organizations.logo_url` é a imagem EMBUTIDA (data URI): as 2 organizações com colaborador têm
+  80 KB e 134 KB. Ia dentro de `fn_colab_portal_summary`, pedido ao abrir, a cada volta para a aba
+  (staleTime 30 s) e depois de cada ação.
+- `PortalView` era import estático no `App.tsx`: o portal ia no pacote principal (2.168 KB, 598 KB
+  gzip), que todo usuário do app baixa; os outros portais já eram `React.lazy`.
+
+Feito:
+- migration `20271027200000`: o resumo traz `organization { name, logo_versao }` (md5); o logo vem por
+  `fn_colab_portal_logo(p_token)` (mesma autorização pelo token, REGRA #7). O front guarda o logo no
+  aparelho pela versão (`utils/portalColaboradorLogo.ts`, uma entrada só) e só baixa quando a empresa
+  troca o logo; enquanto chega, a altura do logo fica reservada (o nome não pisca no lugar). O front
+  ainda aceita `logo_url` no resumo — **ordem: front no ar ANTES da migration**.
+- `PortalView` sob demanda (`React.lazy`), com o download disparado junto da validação do token (sem
+  cascata); carregando e link inválido na marca do portal (eram índigo, caixa-alta e um emoji 🔒).

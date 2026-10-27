@@ -19,12 +19,16 @@
       "alerta-fill": { "role": "primary", "displayName": "Laranja claro (selo alerta)", "contrast": "orange-ink sobre ele 4.84:1" }
     },
     "typographyMeta": {
-      "hero-value": { "displayName": "Valor herói", "purpose": "Líquido a receber no cartão do último holerite. PROVISÓRIO (item 5)." },
-      "title": { "displayName": "Título", "purpose": "Nome do colaborador; título do cartão do holerite. PROVISÓRIO (item 5)." },
-      "body-strong": { "displayName": "Corpo forte", "purpose": "Competência nas linhas; rótulo do botão primário. PROVISÓRIO (item 5)." },
-      "body": { "displayName": "Corpo", "purpose": "Textos, legendas, rótulos de seção. PROVISÓRIO (item 5)." },
-      "label": { "displayName": "Rótulo", "purpose": "Selos de status. PROVISÓRIO (item 5)." },
-      "nav-label": { "displayName": "Rótulo do rodapé", "purpose": "Mesmo peso ativo e inativo para caber em 360px. PROVISÓRIO (item 5)." }
+      "hero-value": { "displayName": "Valor herói", "purpose": "Líquido do último holerite; algarismos tabulares." },
+      "card-title": { "displayName": "Título do cartão", "purpose": "\"Último holerite · {Mês de AAAA}\"; quebra equilibrada, competência inteira." },
+      "identity": { "displayName": "Identidade", "purpose": "Nome do colaborador no cabeçalho; um passo abaixo do cartão." },
+      "row-title": { "displayName": "Título de linha", "purpose": "Primeiro texto de toda linha de lista, igual em todas as abas." },
+      "row-value": { "displayName": "Valor de linha", "purpose": "Horas, dias, valores; tabular e sem quebra." },
+      "notice": { "displayName": "Aviso", "purpose": "Avisos das abas e saldo de férias; quebra 'pretty'." },
+      "row-meta": { "displayName": "Legenda de linha", "purpose": "Obra, período, validade, prazo; 14px (12px era pequeno ao sol)." },
+      "section-title": { "displayName": "Título de seção", "purpose": "Rótulo de grupo em caixa normal." },
+      "label": { "displayName": "Rótulo", "purpose": "Selos, código da NR, percentual." },
+      "nav-label": { "displayName": "Rótulo do rodapé", "purpose": "12px, mesmo peso ativo e inativo." }
     },
     "shadows": [
       { "name": "card-hairline", "value": "0 1px 2px rgba(75,75,77,0.08)", "purpose": "Todo cartão, linha, aviso e erro." },
@@ -90,7 +94,7 @@
       "refersTo": "nav-pill-active",
       "description": "Cinco itens fixos; pílula laranja no ativo, ponto laranja-tinta onde há aviso.",
       "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item is-active\"><span class=\"ds-nav-pill\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\"/></svg></span><span class=\"ds-nav-label\">Holerites</span></button><button class=\"ds-nav-item\"><span class=\"ds-nav-pill\"><span class=\"ds-nav-icon\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg><span class=\"ds-nav-dot\"></span></span></span><span class=\"ds-nav-label\">Ponto</span></button><button class=\"ds-nav-item\"><span class=\"ds-nav-pill\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/></svg></span><span class=\"ds-nav-label\">Documentos</span></button></nav>",
-      "css": ".ds-nav { display: flex; justify-content: space-between; gap: 4px; padding: 0 8px; max-width: 448px; background: #FFFFFF; border-top: 1px solid rgba(75,75,77,0.1); font-family: Inter, system-ui, sans-serif; } .ds-nav-item { min-width: 44px; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; border: none; background: transparent; color: #566375; cursor: pointer; } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; } .ds-nav-pill { width: 48px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 150ms; } .ds-nav-item.is-active { color: #4B4B4D; } .ds-nav-item.is-active .ds-nav-pill { background: #FF884C; } .ds-nav-icon { position: relative; display: inline-flex; } .ds-nav-dot { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 9999px; background: #A84A1C; box-shadow: 0 0 0 2px #FFFFFF; } .ds-nav-label { font-size: 11px; font-weight: 500; line-height: 1.25; letter-spacing: -0.01em; white-space: nowrap; }"
+      "css": ".ds-nav { display: flex; justify-content: space-between; gap: 4px; padding: 0 8px; max-width: 448px; background: #FFFFFF; border-top: 1px solid rgba(75,75,77,0.1); font-family: Inter, system-ui, sans-serif; } .ds-nav-item { min-width: 44px; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; border: none; background: transparent; color: #566375; cursor: pointer; } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; } .ds-nav-pill { width: 48px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 150ms; } .ds-nav-item.is-active { color: #4B4B4D; } .ds-nav-item.is-active .ds-nav-pill { background: #FF884C; } .ds-nav-icon { position: relative; display: inline-flex; } .ds-nav-dot { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 9999px; background: #A84A1C; box-shadow: 0 0 0 2px #FFFFFF; } .ds-nav-label { font-size: 12px; font-weight: 500; line-height: 1.25; white-space: nowrap; }"
     }
   ],
   "narrative": {

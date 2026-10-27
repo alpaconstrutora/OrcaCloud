@@ -20,32 +20,56 @@ typography:
     fontSize: "1.875rem"
     fontWeight: 700
     lineHeight: 1.2
-  title:
+  card-title:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
     fontSize: "1.25rem"
     fontWeight: 700
-    lineHeight: 1.25
-  body-strong:
+    lineHeight: 1.375
+  identity:
+    fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+    fontSize: "1.125rem"
+    fontWeight: 700
+    lineHeight: 1.375
+  row-title:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
     fontSize: "1rem"
     fontWeight: 600
     lineHeight: 1.5
-  body:
+  row-value:
+    fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 600
+    lineHeight: 1.5
+  notice:
+    fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 400
+    lineHeight: 1.5
+  row-meta:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
+    lineHeight: 1.43
+  section-title:
+    fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+    fontSize: "0.875rem"
+    fontWeight: 600
     lineHeight: 1.43
   label:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 600
     lineHeight: 1.33
+  button-label:
+    fontFamily: "Inter, system-ui, -apple-system, sans-serif"
+    fontSize: "1rem"
+    fontWeight: 600
+    lineHeight: 1.5
   nav-label:
     fontFamily: "Inter, system-ui, -apple-system, sans-serif"
-    fontSize: "11px"
+    fontSize: "0.75rem"
     fontWeight: 500
     lineHeight: 1.25
-    letterSpacing: "-0.01em"
 rounded:
   md: "12px"
   lg: "16px"
@@ -62,7 +86,7 @@ components:
     textColor: "{colors.card-white}"
     rounded: "{rounded.lg}"
     height: "48px"
-    typography: "{typography.body-strong}"
+    typography: "{typography.button-label}"
   button-primary-hover:
     backgroundColor: "{colors.graphite-hover}"
   button-primary-active:
@@ -184,19 +208,26 @@ A faixa "Prévia · vendo como {nome}" e o aviso "Na prévia os cursos não abre
 
 ## Typography
 
-**Provisório.** Faces e pesos serão definidos no item 5 do plano; o que segue é o que o código usa hoje, não uma decisão.
+Decidida no item 5 do plano (26/10/2026). Uma família, quatro pesos; nenhum 900.
 
-**Body Font:** Inter (herdada do app; fallback system-ui, -apple-system, sans-serif)
+**Body Font:** Inter — a mesma do app, já carregada; para uma tela de tarefa uma sem-serifa de trabalho basta, e uma segunda família não teria papel próprio (fallback system-ui, -apple-system, sans-serif).
 
-**Character:** sem-serifa neutra, números tabulares no valor em reais.
+**Character:** neutra e legível ao sol; algarismos tabulares em todo número que se compara (valores, horas, dias, datas de linha, percentuais).
 
 ### Hierarchy
-- **Hero value** (700, 30px): o líquido a receber no cartão do último holerite.
-- **Title** (700, 20px, leading justo): nome do colaborador no cabeçalho e "Último holerite · {Mês de AAAA}".
-- **Body strong** (600, 16px): competência nas linhas de holerite, rótulo do botão primário.
-- **Body** (400–600, 14px): textos, legendas, rótulos de seção em 600 `slate-secondary`.
-- **Label** (600, 12px): selos de status; legendas de linha em 400.
-- **Nav label** (500, 11px, -0.01em, sem quebra): rótulo do rodapé; mesmo peso ativo e inativo para "Treinamentos" não cortar em 360px.
+- **Hero value** (700, 30px, tabular): o líquido do último holerite.
+- **Card title** (700, 20px, `text-wrap: balance`): "Último holerite · {Mês de AAAA}"; o "·" é preso por espaço inquebrável a "Último holerite" e a competência não quebra.
+- **Identity** (700, 18px): nome do colaborador no cabeçalho — um passo abaixo do cartão, que é o foco.
+- **Row title** (600, 16px): o primeiro texto de toda linha de lista (competência, data do ponto, tipo da ausência, documento, curso, treinamento) — igual em todas as abas.
+- **Row value** (600, 16px, tabular, sem quebra): horas, dias, valores; quem quebra é o texto da esquerda.
+- **Notice** (400, 16px, `text-wrap: pretty`, destaque em 600): avisos das abas e o saldo de férias.
+- **Row meta** (400, 14px, `slate-secondary`): obra, período, categoria/validade, prazo — era 12px, pequeno demais ao sol.
+- **Section title** (600, 14px, `slate-secondary`, caixa normal): "Anteriores", "Últimos registros"…
+- **Label** (600, 12px): selos de status, código da NR (`tracking-wide`), percentual.
+- **Nav label** (500, 12px, sem quebra): rótulo do rodapé; mesmo peso ativo e inativo.
+
+### Named Rules
+**The Four Weights Rule.** 400 lê, 500 só no rodapé, 600 nomeia, 700 só no que a tela quer que se veja primeiro (cartão, nome, valor).
 
 ## Layout
 
@@ -231,7 +262,7 @@ Cantos largos e macios, eco dos retângulos arredondados do símbolo Alpa. 24px 
 
 ### Cards / Containers
 - **Cartão herói (último holerite):** branco, canto 24px, faixa laranja de 8px no topo, 20px de respiro, sombra herói. Título, tipo da folha, "Líquido a receber", valor + olho, botão primário.
-- **Cartão de lista:** branco, canto 16px, 12px de respiro, traço de sombra. Esquerda: título 14px/700 grafite + legenda 12px `slate-secondary`; direita: número + selo.
+- **Cartão de lista:** branco, canto 16px, 12px de respiro, traço de sombra. Esquerda: título 16px/600 grafite + legenda 14px `slate-secondary`; direita: número 16px/600 tabular + selo.
 - **Linha de holerite:** como o cartão de lista, mas é botão inteiro, mínimo 64px, chevron `slate-secondary`, `row-hover` ao passar.
 
 ### Chips (selos de status)

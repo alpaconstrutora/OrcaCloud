@@ -96,6 +96,12 @@ const OPCOES_MODO_DE_COR: readonly OpcaoDeExibicao[] = [
   { valor: 'DEPARTAMENTO', rotulo: 'Departamento (setor)' },
 ];
 
+/** Valores = `ArrumacaoDasUnidades` (utils/blueprintUnidadesNoPavimento). */
+export const OPCOES_UNIDADES_NO_PAVIMENTO: readonly OpcaoDeExibicao[] = [
+  { valor: 'AUTOMATICA', rotulo: 'Automática (pelo número)' },
+  { valor: 'EMPREENDIMENTO', rotulo: 'Ordem do Empreendimento' },
+];
+
 /** A ORDEM do array é a ordem das linhas na tela (a do menu Exibir, grupo a grupo). */
 export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
   // ── Planta baixa (menu Exibir da planta) ──────────────────────────────────────────────
@@ -144,6 +150,16 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
   },
   bool('vista3dEnvelope', 'Envelope edificável', '3D', true),
   bool('vista3dMassa', 'Blocos de massa', '3D', true),
+  // A arrumação das unidades do Empreendimento em cada pavimento da massa (27/10/2026).
+  {
+    item: 'vista3dUnidadesNoPavimento',
+    chaveAntiga: 'blueprint:vista3dUnidadesNoPavimento',
+    rotulo: 'Unidades no pavimento da massa',
+    grupo: '3D',
+    tipo: 'opcao',
+    opcoes: OPCOES_UNIDADES_NO_PAVIMENTO,
+    padrao: 'AUTOMATICA',
+  },
 
   // ── Estilos ───────────────────────────────────────────────────────────────────────────
   {

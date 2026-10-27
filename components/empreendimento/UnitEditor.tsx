@@ -34,6 +34,7 @@ import {
   RENTAL_STATUS_LABEL,
 } from '../../utils/empreendimentoComercial';
 import { useConfirm } from '../ui/confirm';
+import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 
 // ── Constantes de exibição ───────────────────────────────────────────────────
@@ -179,7 +180,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange 
       .map(([key, grpUnits]) => ({
         key,
         label: key === '__null__' ? 'Sem Pavimento' : `Pavimento ${key}`,
-        units: [...grpUnits].sort(sortFn),
+        // No empate (a coluna Pavimento, a padrão), a ordem do pavimento — a que a massa da Planta segue.
+        units: [...grpUnits].sort((a, b) => sortFn(a, b) || compararNaOrdemDoEmpreendimento(a, b)),
         totalPriv: grpUnits.reduce((s, u) => s + (u.private_area ?? 0), 0),
         totalComum: grpUnits.reduce((s, u) => s + (u.common_area ?? 0), 0),
       }));
@@ -304,6 +306,34 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange 
       setUnits(prev => prev.filter(u => u.id !== unit.id));
       setSelected(prev => { const n = new Set(prev); n.delete(unit.id); return n; });
     } catch (err: any) { notify(`Erro ao excluir: ${err.message}`, 'error'); }
+  };
+
+  // ── Ordem das unidades no pavimento ─────────────────────────────────────────
+  // A ordem MANUAL da massa da Planta (27/10/2026, "Ordem do Empreendimento"): as setas trocam a unidade com a
+  // vizinha; "Ordenar por número" grava a ordem automática. Só pela coluna Pavimento: com a tabela ordenada por
+  // outra coluna, a posição na tela não é a do pavimento.
+  const [ordenando, setOrdenando] = React.useState(false);
+  const ordemDoPavimentoNaTela = sortCol === 'floor';
+  const gravarOrdem = async (mudancas: NovaOrdem[]) => {
+    if (mudancas.length === 0) return;
+    setOrdenando(true);
+    try {
+      await Promise.all(mudancas.map(m => empreendimentoService.updateUnit(m.id, { sort_order: m.sort_order })));
+      const porId = new Map(mudancas.map(m => [m.id, m.sort_order]));
+      setUnits(prev => prev.map(u => (porId.has(u.id) ? { ...u, sort_order: porId.get(u.id)! } : u)));
+    } catch (err: any) {
+      notify(`Erro ao gravar a ordem: ${err.message}`, 'error');
+      await load();
+    } finally {
+      setOrdenando(false);
+    }
+  };
+  const motivoSemSetas = (grpUnits: EmpreendimentoUnit[], i: number, passo: -1 | 1): string | null => {
+    if (!ordemDoPavimentoNaTela) return 'Ordene a tabela pela coluna Pavimento para mudar a ordem';
+    if (ordenando) return 'Gravando a ordem…';
+    if (passo === -1 && i === 0) return 'Já é a primeira do pavimento';
+    if (passo === 1 && i === grpUnits.length - 1) return 'Já é a última do pavimento';
+    return null;
   };
 
   // ── Bulk save ───────────────────────────────────────────────────────────────
@@ -560,7 +590,30 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange 
                       <td className="py-2.5 px-4 text-sm font-medium text-teal-600">
                         {group.totalComum > 0 ? `${fmtArea(group.totalComum)} m²` : '—'}
                       </td>
-                      <td colSpan={8} />
+                      <td colSpan={7} />
+                      <td className="py-2 px-4 text-center">
+                        {(() => {
+                          const mudancas = group.key === '__null__' ? [] : ordemPorNumero(group.units);
+                          const motivo = group.key === '__null__'
+                            ? 'Unidade sem pavimento não tem ordem no pavimento'
+                            : !ordemDoPavimentoNaTela ? 'Ordene a tabela pela coluna Pavimento para mudar a ordem'
+                            : ordenando ? 'Gravando a ordem…'
+                            : mudancas.length === 0 ? 'O pavimento já está na ordem pelo número'
+                            : null;
+                          return (
+                            <span title={motivo ?? 'Grava a ordem pelo número (101, 102…) — a que a massa da Planta segue em "Ordem do Empreendimento"'}>
+                              <button
+                                type="button"
+                                disabled={motivo !== null}
+                                onClick={() => gravarOrdem(mudancas)}
+                                className="inline-flex items-center gap-1 whitespace-nowrap rounded-[6px] border border-gray-200 bg-white px-2 py-1 text-[11px] font-medium text-gray-600 shadow-sm hover:border-blue-200 hover:text-blue-600 disabled:pointer-events-none disabled:opacity-50"
+                              >
+                                <ArrowUpDown className="w-3 h-3" /> Ordenar por número
+                              </button>
+                            </span>
+                          );
+                        })()}
+                      </td>
                     </tr>
 
                     {/* Unidades do grupo */}
@@ -654,6 +707,25 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange 
                               </td>
                               <td className="py-2.5 px-4 text-center">
                                 <div className="flex items-center justify-center gap-1">
+                                  {([-1, 1] as const).map(passo => {
+                                    const i = group.units.indexOf(u);
+                                    const motivo = motivoSemSetas(group.units, i, passo);
+                                    const rotulo = passo === -1 ? 'Subir na ordem do pavimento' : 'Descer na ordem do pavimento';
+                                    // O title fica no span: o botão desligado não recebe o mouse e esconderia o motivo.
+                                    return (
+                                      <span key={passo} title={motivo ?? rotulo}>
+                                        <ActionIconButton
+                                          kind="move"
+                                          size="sm"
+                                          title={motivo ?? rotulo}
+                                          aria-label={rotulo}
+                                          icon={passo === -1 ? <ArrowUp className="w-3.5 h-3.5" /> : <ArrowDown className="w-3.5 h-3.5" />}
+                                          disabled={motivo !== null}
+                                          onClick={() => gravarOrdem(moverNaOrdem(group.units, i, passo))}
+                                        />
+                                      </span>
+                                    );
+                                  })}
                                   <ActionIconButton kind="edit" size="sm" onClick={() => startEdit(u)} />
                                   <ActionIconButton kind="duplicate" size="sm" onClick={() => handleDuplicate(u)} />
                                   <ActionIconButton kind="delete" size="sm" onClick={() => handleDelete(u)} />

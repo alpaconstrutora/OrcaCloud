@@ -28,6 +28,7 @@ import { resumoDoPiso, type MedidaDoBloco } from '../../utils/blueprintMassa';
 import type { LinhaDoAjuste, PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
 import { chaveDaUnidade, type UnidadeDoPiso } from '../../utils/blueprintEstruturaDaTorre';
 import { UNIT_STATUS_LABEL } from '../../utils/empreendimentoComercial';
+import type { ArrumacaoDasUnidades } from '../../utils/blueprintUnidadesNoPavimento';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
@@ -44,6 +45,8 @@ interface Props {
   unidadesDoPiso?: UnidadeDoPiso[];
   unidadeSelecionada?: string | null;
   onUnidade?: (chave: string | null) => void;
+  /** Como as unidades se arrumam no andar (27/10/2026): pelo número ou na ordem do Empreendimento. */
+  arrumacaoDasUnidades?: { modo: ArrumacaoDasUnidades; onModo: (modo: ArrumacaoDasUnidades) => void };
   /** A torre do Empreendimento casada com o bloco (pelo nome), a comparação e o ajuste de todos os blocos. */
   empreendimento?: {
     nome: string;
@@ -75,9 +78,14 @@ interface Props {
   };
 }
 
+const ARRUMACOES: { modo: ArrumacaoDasUnidades; rotulo: string; dica: string }[] = [
+  { modo: 'AUTOMATICA', rotulo: 'Automática', dica: 'Pelo número (101 sobre 201 sobre 301), com as fileiras de áreas parecidas.' },
+  { modo: 'EMPREENDIMENTO', rotulo: 'Ordem do Empreendimento', dica: 'Na ordem da aba Torres e Unidades (setas ↑↓): a 1ª metade numa fileira, a 2ª na outra.' },
+];
+
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, unidadesDoPiso = [], unidadeSelecionada = null, onUnidade, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, unidadesDoPiso = [], unidadeSelecionada = null, onUnidade, arrumacaoDasUnidades, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   /** De qual ação é o `resultado` — cada seção mostra só o seu. */
@@ -262,6 +270,27 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
           {resumo && unidadesDoPiso.length > 0 && onUnidade && (
             <div className="space-y-1" data-testid="unidades-do-pavimento">
               <p className="font-semibold text-slate-700">Unidades deste pavimento ({unidadesDoPiso.length})</p>
+              {arrumacaoDasUnidades && (
+                <div className="space-y-0.5" data-testid="arrumacao-das-unidades">
+                  <div className="flex gap-1" role="group" aria-label="Arrumação das unidades no pavimento">
+                    {ARRUMACOES.map((a) => (
+                      <button
+                        key={a.modo}
+                        type="button"
+                        aria-pressed={arrumacaoDasUnidades.modo === a.modo}
+                        onClick={() => arrumacaoDasUnidades.onModo(a.modo)}
+                        title={a.dica}
+                        className={`rounded-md border px-1.5 py-0.5 font-medium transition-colors ${
+                          arrumacaoDasUnidades.modo === a.modo ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                        }`}
+                      >
+                        {a.rotulo}
+                      </button>
+                    ))}
+                  </div>
+                  <p className="text-slate-500">{ARRUMACOES.find((a) => a.modo === arrumacaoDasUnidades.modo)?.dica}</p>
+                </div>
+              )}
               <div className="flex flex-wrap gap-1" role="group" aria-label="Unidades do pavimento">
                 {unidadesDoPiso.map((u) => {
                   const chave = chaveDaUnidade(u);

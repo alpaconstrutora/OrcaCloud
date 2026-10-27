@@ -10,6 +10,20 @@
 // central). Quem projeta o pavimento de verdade é o "Pavimento tipo" (`blueprintPavimentoTipoDaMassa`). Puro.
 
 import type { Point } from './blueprintKernel';
+import { compararNomesPorNumero } from './empreendimentoOrdemDasUnidades';
+
+/**
+ * Como as unidades se arrumam no andar (27/10/2026, *"ordenação de duas maneiras, automática … e manual"*):
+ *  - AUTOMATICA: pelo número (101 sobre 201 sobre 301) e as duas fileiras com áreas parecidas;
+ *  - EMPREENDIMENTO: a ordem da aba Torres e Unidades, a 1ª metade numa fileira e a 2ª na outra.
+ */
+export type ArrumacaoDasUnidades = 'AUTOMATICA' | 'EMPREENDIMENTO';
+
+/** As unidades do andar na ordem em que a massa as fatia, e como escolher as fileiras (`fatiasPorArea`). */
+export function arrumarUnidades<T extends { nome: string }>(unidades: readonly T[], modo: ArrumacaoDasUnidades): { unidades: T[]; fileiras: 'ORDEM' | 'EQUILIBRADAS' } {
+  if (modo === 'EMPREENDIMENTO') return { unidades: [...unidades], fileiras: 'ORDEM' };
+  return { unidades: [...unidades].sort((a, b) => compararNomesPorNumero(a.nome, b.nome)), fileiras: 'EQUILIBRADAS' };
+}
 
 const LADO_MIN_PARA_DUAS_FILEIRAS_MM = 10_000;
 
@@ -80,7 +94,17 @@ const arredondar = (anel: Point[]) => anel.map((p) => ({ x: Math.round(p.x), y: 
  * O contorno `anel` (mm) fatiado em uma fatia por peso, na ordem dos pesos. Peso nulo, zero ou inválido vale a
  * média dos outros (a "Área Comum" sem área privativa, o estacionamento). Sem pesos, nada.
  */
-export function fatiasPorArea(anel: readonly Point[], pesos: readonly (number | null | undefined)[]): Point[][] {
+export function fatiasPorArea(
+  anel: readonly Point[],
+  pesos: readonly (number | null | undefined)[],
+  /**
+   * Com duas fileiras, quem vai em cada uma (27/10/2026). 'ORDEM' (o padrão): a 1ª metade numa e a 2ª na outra — a
+   * ordem que a pessoa arrumou no Empreendimento. 'EQUILIBRADAS' (a ordem automática): cada unidade, na ordem, vai
+   * para a fileira com menos área até agora (e com vaga), e as fileiras saem com áreas parecidas — a Torre A do Garden
+   * (127, 127, 81, 81) ficava com 61 % do andar de um lado. A fatia k continua sendo a unidade k.
+   */
+  fileiras: 'ORDEM' | 'EQUILIBRADAS' = 'ORDEM',
+): Point[][] {
   if (pesos.length === 0 || anel.length < 3) return [];
   const validos = pesos.filter((p): p is number => typeof p === 'number' && Number.isFinite(p) && p > 0);
   const media = validos.length > 0 ? validos.reduce((s, p) => s + p, 0) / validos.length : 1;
@@ -102,8 +126,19 @@ export function fatiasPorArea(anel: readonly Point[], pesos: readonly (number | 
 
   if (ps.length >= 4 && larguraEmV >= LADO_MIN_PARA_DUAS_FILEIRAS_MM) {
     const n1 = Math.ceil(ps.length / 2);
-    const [fileiraA, fileiraB] = fatiar(anel, v, [ps.slice(0, n1).reduce((s, p) => s + p, 0), ps.slice(n1).reduce((s, p) => s + p, 0)]);
-    return [...fatiar(fileiraA, u, ps.slice(0, n1)), ...fatiar(fileiraB, u, ps.slice(n1))].map(arredondar);
+    const vagas = [n1, ps.length - n1];
+    const quem: [number[], number[]] = [[], []];
+    const somas = [0, 0];
+    ps.forEach((p, i) => {
+      const lado = fileiras === 'ORDEM' ? (i < n1 ? 0 : 1) : quem[0].length >= vagas[0] ? 1 : quem[1].length >= vagas[1] ? 0 : somas[1] < somas[0] ? 1 : 0;
+      quem[lado].push(i);
+      somas[lado] += p;
+    });
+    const [fileiraA, fileiraB] = fatiar(anel, v, somas);
+    const out: Point[][] = new Array(ps.length);
+    fatiar(fileiraA, u, quem[0].map((i) => ps[i])).forEach((f, k) => (out[quem[0][k]] = f));
+    fatiar(fileiraB, u, quem[1].map((i) => ps[i])).forEach((f, k) => (out[quem[1][k]] = f));
+    return out.map(arredondar);
   }
   return fatiar(anel, u, ps).map(arredondar);
 }

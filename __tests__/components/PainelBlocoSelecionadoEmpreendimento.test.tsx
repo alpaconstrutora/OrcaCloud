@@ -28,7 +28,7 @@ const un = (id: string, nome: string, tipologia: string, area: number, extra: Pa
 const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
 const montar = (
-  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void } = {},
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void } } = {},
 ) =>
   render(
     <PainelBlocoSelecionado
@@ -42,6 +42,7 @@ const montar = (
       unidadesDoPiso={extra.unidades ?? []}
       unidadeSelecionada={extra.unidade ?? null}
       onUnidade={extra.onUnidade ?? vi.fn()}
+      arrumacaoDasUnidades={extra.arrumacao}
       empreendimento={{
         nome: '011 - Garden Cambuhy',
         papel: PAPEL,
@@ -100,5 +101,15 @@ describe('painel do bloco › Empreendimento', () => {
     expect(d).toHaveTextContent('127,00 m² privativos · 3 dorm. · 2 vaga(s)');
     expect(d).toHaveTextContent('Sol: Norte · Posição: frente');
     expect(d).toHaveTextContent('Situação: Disponível');
+  });
+
+  it('a arrumação das unidades: automática ou a ordem do Empreendimento, com o que cada uma faz (27/10/2026)', async () => {
+    const onModo = vi.fn();
+    montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'AUTOMATICA', onModo } });
+    const a = screen.getByTestId('arrumacao-das-unidades');
+    expect(screen.getByRole('button', { name: 'Automática' })).toHaveAttribute('aria-pressed', 'true');
+    expect(a).toHaveTextContent('Pelo número (101 sobre 201 sobre 301)');
+    await userEvent.click(screen.getByRole('button', { name: 'Ordem do Empreendimento' }));
+    expect(onModo).toHaveBeenLastCalledWith('EMPREENDIMENTO');
   });
 });

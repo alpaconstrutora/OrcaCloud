@@ -70,6 +70,16 @@ SELECT COALESCE(cp.organization_id, d.organization_id) AS organization_id,
      LEFT JOIN commercial_properties cp ON cp.id = d.property_id
   GROUP BY (COALESCE(cp.organization_id, d.organization_id));
 
+-- Fechadas para anon (trava __tests__/viewSecurityGuard.test.ts). No banco já
+-- estavam assim antes desta migration (anon sem SELECT, conferido 27/10) — o
+-- `CREATE OR REPLACE` preserva os grants; aqui o arquivo declara o estado.
+REVOKE ALL ON public.vw_fact_deal FROM anon;
+REVOKE ALL ON public.vw_fact_deal FROM PUBLIC;
+GRANT SELECT ON public.vw_fact_deal TO authenticated;
+REVOKE ALL ON public.vw_bi_commercial FROM anon;
+REVOKE ALL ON public.vw_bi_commercial FROM PUBLIC;
+GRANT SELECT ON public.vw_bi_commercial TO authenticated;
+
 -- ─── ANTES (lido do banco em 27/10/2026, pg_get_viewdef) ─────────────────────
 -- vw_fact_deal:
 --   d.status = 'COMPLETED' AS is_fechado,

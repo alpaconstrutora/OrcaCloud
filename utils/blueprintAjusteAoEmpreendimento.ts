@@ -77,11 +77,11 @@ const sobrepoe = (a: Point[], b: Point[]) => {
 };
 const mesmosPontos = (a: Point[], b: Point[]) => a.length === b.length && a.every((p, i) => p.x === b[i].x && p.y === b[i].y);
 
-/** Trechos de pisos consecutivos com o mesmo pé-direito (o piso sem pé-direito usa o do bloco). */
+/** Trechos de pisos consecutivos com a mesma altura — a da elevação digitada, senão o pé-direito, senão o do bloco. */
 function trechos(pisos: readonly PisoDaTorre[], pdDoBloco: number): { pisos: PisoDaTorre[]; pd: number }[] {
   const out: { pisos: PisoDaTorre[]; pd: number }[] = [];
   for (const p of pisos) {
-    const pd = p.peDireitoMm ?? pdDoBloco;
+    const pd = p.alturaMm ?? p.peDireitoMm ?? pdDoBloco;
     const ultimo = out[out.length - 1];
     if (ultimo && ultimo.pd === pd) ultimo.pisos.push(p);
     else out.push({ pisos: [p], pd });

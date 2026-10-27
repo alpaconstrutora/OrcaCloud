@@ -28,7 +28,7 @@ const un = (id: string, nome: string, tipologia: string, area: number, extra: Pa
 const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
 const montar = (
-  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void } } = {},
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void }; papel?: typeof PAPEL } = {},
 ) =>
   render(
     <PainelBlocoSelecionado
@@ -45,7 +45,7 @@ const montar = (
       arrumacaoDasUnidades={extra.arrumacao}
       empreendimento={{
         nome: '011 - Garden Cambuhy',
-        papel: PAPEL,
+        papel: extra.papel ?? PAPEL,
         linha: LINHA,
         avisos: ['Torre "Torre A": sem número de pavimentos no cadastro da torre — contados pelas unidades (4 acima do solo + 2 abaixo).'],
         pendentes: extra.pendentes ?? 2,
@@ -101,6 +101,13 @@ describe('painel do bloco › Empreendimento', () => {
     expect(d).toHaveTextContent('127,00 m² privativos · 3 dorm. · 2 vaga(s)');
     expect(d).toHaveTextContent('Sol: Norte · Posição: frente');
     expect(d).toHaveTextContent('Situação: Disponível');
+  });
+
+  it('o pavimento mostra a elevação do Empreendimento, digitada ou calculada (27/10/2026)', () => {
+    const piso = (numero: number, elevacaoMm: number, elevacaoDigitada: boolean) => ({ numero, nome: `P${numero}`, tipo: null, peDireitoMm: 3000, elevacaoMm, elevacaoDigitada, alturaMm: 3000, unidades: [] });
+    const papel = { ...PAPEL, pisos: [piso(0, 0, false), piso(1, 4500, true), piso(2, 7500, false), piso(3, 10500, false)] } as unknown as typeof PAPEL;
+    montar({ piso: 2, papel });
+    expect(screen.getByTestId('elevacao-do-pavimento')).toHaveTextContent('Elevação +4,50 m (digitada no Empreendimento)');
   });
 
   it('a arrumação das unidades: automática ou a ordem do Empreendimento, com o que cada uma faz (27/10/2026)', async () => {

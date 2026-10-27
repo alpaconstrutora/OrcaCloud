@@ -144,6 +144,8 @@ export interface EmpreendimentoTower {
     units_per_floor?: number;
     /** Pé-direito padrão dos pavimentos, em metros (27/10/2026); vale para o pavimento sem `pe_direito_m`. */
     pe_direito_padrao_m?: number | null;
+    /** Elevação do térreo, em metros (27/10/2026): a referência dos pavimentos sem elevação digitada; null = 0. */
+    elevacao_terreo_m?: number | null;
     construction_cost_sqm?: number;
     sales_price_sqm?: number;
     sort_order?: number;
@@ -166,6 +168,8 @@ export interface EmpreendimentoFloor {
     prefix?: string | null;
     /** Pé-direito (piso a piso) em metros (27/10/2026); null = o padrão da torre. */
     pe_direito_m?: number | null;
+    /** Elevação digitada do pavimento (do 1º, quando se repete), em metros (27/10/2026); null = calculada. */
+    elevacao_m?: number | null;
     sort_order: number;
     created_at: string;
     updated_at: string;

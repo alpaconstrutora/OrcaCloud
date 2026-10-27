@@ -137,3 +137,60 @@ describe('as unidades de cada andar (27/10/2026)', () => {
   });
 });
 
+
+describe('elevação do pavimento (27/10/2026)', () => {
+  /** Torre com cadastro: 2 garagens de 3 m, térreo de 4,5 m, tipo ×3 de 3 m. */
+  const CADASTRO = [
+    pav({ name: 'Garagem', tipo: 'GARAGEM', floor_number: -2, repeat_count: 2, pe_direito_m: 3 }),
+    pav({ name: 'Térreo', tipo: 'TERREO', floor_number: 0, pe_direito_m: 4.5, sort_order: 1 }),
+    pav({ name: 'Tipo', tipo: 'TIPO', floor_number: 1, repeat_count: 3, pe_direito_m: 3, sort_order: 2 }),
+  ];
+  const TORRE = { id: 't', name: 'T', units: [] };
+
+  it('calculada: térreo em 0 (ou na elevação da torre), os de cima somando os pés-direitos, os subsolos negativos', () => {
+    const e = estruturaDaTorre(TORRE, CADASTRO);
+    expect(e.acima.map((p) => p.elevacaoMm)).toEqual([0, 4500, 7500, 10500]);
+    expect(e.garagens.map((p) => p.elevacaoMm)).toEqual([-6000, -3000]);
+    expect([...e.acima, ...e.garagens].every((p) => !p.elevacaoDigitada)).toBe(true);
+    const ref = estruturaDaTorre({ ...TORRE, elevacao_terreo_m: 745.3 }, CADASTRO);
+    expect(ref.acima.map((p) => p.elevacaoMm)).toEqual([745300, 749800, 752800, 755800]);
+    expect(ref.garagens[0].elevacaoMm).toBe(739300);
+  });
+
+  it('digitada vale no lugar do cálculo, os de cima seguem dela, e a altura do de baixo passa a ser a diferença', () => {
+    const e = estruturaDaTorre(TORRE, [
+      CADASTRO[0],
+      CADASTRO[1],
+      pav({ name: 'Tipo', tipo: 'TIPO', floor_number: 1, repeat_count: 3, pe_direito_m: 3, sort_order: 2, elevacao_m: 5 }),
+    ]);
+    expect(e.acima.map((p) => p.elevacaoMm)).toEqual([0, 5000, 8000, 11000]);
+    expect(e.acima[1].elevacaoDigitada).toBe(true);
+    expect(e.acima[2].elevacaoDigitada).toBe(false);
+    // O térreo tem pé-direito 4,50 m cadastrado, mas o de cima foi digitado em +5,00: a massa usa 5 m.
+    expect(e.acima[0].alturaMm).toBe(5000);
+    expect(e.acima[1].alturaMm).toBe(3000);
+    expect(e.avisos.join(' ')).toContain('Torre "T": Tipo 1 está em +5,00 m (digitada), mas o Térreo (+0,00 m, pé-direito 4,50 m) termina em +4,50 m — vale a elevação digitada.');
+  });
+
+  it('subsolo digitado: a altura dele é a distância até o de cima', () => {
+    const e = estruturaDaTorre(TORRE, [
+      pav({ name: 'Garagem', tipo: 'GARAGEM', floor_number: -1, pe_direito_m: null, elevacao_m: -3.5 }),
+      CADASTRO[1],
+    ]);
+    expect(e.garagens.map((p) => [p.elevacaoMm, p.alturaMm])).toEqual([[-3500, 3500]]);
+    // Sem pé-direito no subsolo, a digitada não discorda de nada.
+    expect(e.avisos.filter((a) => a.includes('digitada'))).toEqual([]);
+  });
+
+  it('sem pé-direito cadastrado, a altura continua null (a massa usa a do bloco) e a elevação é calculada com 3,00 m', () => {
+    const e = estruturaDaTorre(TORRE_A, []);
+    expect(e.acima.map((p) => p.elevacaoMm)).toEqual([0, 3000, 6000, 9000]);
+    expect(e.acima.map((p) => p.alturaMm)).toEqual([null, null, null, null]);
+  });
+
+  it('digitada que daria altura fora de 2–15 m: avisa e a massa fica com o pé-direito', () => {
+    const e = estruturaDaTorre(TORRE, [CADASTRO[1], pav({ name: 'Tipo', floor_number: 1, pe_direito_m: 3, elevacao_m: 1 })]);
+    expect(e.acima[0].alturaMm).toBe(4500);
+    expect(e.avisos.join(' ')).toContain('Tipo está em +1,00 m (digitada) — o Térreo ficaria com 1,00 m de altura, fora de 2 a 15 m; a massa usa o pé-direito.');
+  });
+});

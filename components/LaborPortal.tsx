@@ -3,7 +3,7 @@ import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
     LogOut, Loader2, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, ChevronDown, Eye, Receipt
+    Smartphone, Key, ChevronDown, Eye, Receipt, Download
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,7 @@ import PaystubModal from './PaystubModal';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import {
     MARCA, CabecalhoDoPortal, CartaoUltimoHolerite, LinhaDeHolerite, RodapeDoPortal,
-    useValorVisivel, type SecaoDoPortal,
+    useValorVisivel, rotuloDaSecao, type SecaoDoPortal,
 } from './portalColaborador/PortalMarca';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
@@ -340,6 +340,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
             {/* Content */}
             <main className="flex-1 p-4">
+                <h1 className="sr-only">{rotuloDaSecao(activeSection)}</h1>
 
                 {/* Holerites — a tela inicial: o último é o cartão grande, os anteriores abaixo */}
                 {activeSection === 'folha' && (
@@ -393,12 +394,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             vazioIcone={Clock} vazioTitulo="Nenhum registro de ponto"
                         >
                             {recentEntries.slice(0, 10).map(e => (
-                                <div key={e.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <div key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                     <div>
                                         <p className="text-base font-semibold tabular-nums text-[#4B4B4D]">{dataBR(e.date)}</p>
                                         <p className="text-sm text-[#566375]">{e.project_name || 'Sem obra'}</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="ml-auto text-right">
                                         <p className="text-base font-semibold tabular-nums whitespace-nowrap text-[#4B4B4D]">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
                                         <SeloDeStatus {...statusDoPonto(e.status)} />
                                     </div>
@@ -430,12 +431,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             vazioIcone={Calendar} vazioTitulo="Nenhuma ausência registrada"
                         >
                             {absences.slice(0, 8).map(a => (
-                                <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <div key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                     <div>
                                         <p className="text-base font-semibold text-[#4B4B4D]">{tipoDaAusencia(a.tipo)}</p>
                                         <p className="text-sm text-[#566375]">{periodoTexto(a.data_inicio, a.data_fim)}</p>
                                     </div>
-                                    <div className="text-right">
+                                    <div className="ml-auto text-right">
                                         <p className="text-base font-semibold tabular-nums whitespace-nowrap text-[#4B4B4D]">{diasTexto(a.dias)}</p>
                                         <SeloDeStatus {...statusDaAusencia(a.status)} />
                                     </div>
@@ -482,11 +483,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         </div>
                                         {expired && <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0" aria-hidden="true" />}
                                         {d.storage_path && (
-                                            <ActionIconButton kind="download" size="sm" className="shrink-0"
-                                                title={`Baixar ${d.nome}`} aria-label={`Baixar ${d.nome}`}
-                                                icon={baixando === d.storage_path ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                                            // 44px: o botão do app tinha 24×24, pequeno para dedo de obra.
+                                            <button type="button" title={`Baixar ${d.nome}`} aria-label={`Baixar ${d.nome}`}
                                                 disabled={!!baixando}
-                                                onClick={() => handleDownloadDoc(d.storage_path, d.nome)} />
+                                                onClick={() => handleDownloadDoc(d.storage_path, d.nome)}
+                                                className={`w-11 h-11 -my-1 shrink-0 flex items-center justify-center rounded-xl ${MARCA.texto} hover:bg-[#EDEDE8] disabled:opacity-50 disabled:cursor-not-allowed ${MARCA.foco}`}>
+                                                {baixando === d.storage_path ? <Loader2 className="w-5 h-5 animate-spin" /> : <Download className="w-5 h-5" />}
+                                            </button>
                                         )}
                                     </div>
                                 );
@@ -559,7 +562,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                                 'bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)] hover:bg-[#F7F7F4] disabled:hover:bg-white'
                                             }`}
                                         >
-                                            <div className="flex items-start justify-between gap-2">
+                                            <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
                                                 <div className="min-w-0">
                                                     <p className="text-base font-semibold text-[#4B4B4D] truncate">{m.curso}</p>
                                                     {/* "NR-35 Trabalho em Altura" já diz a NR; não repetir embaixo. */}
@@ -602,7 +605,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 const expiring = situacao === 'vencendo';
                                 return (
                                     <div key={t.id} className="p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                                        <div className="flex items-start justify-between gap-2">
+                                        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
                                             <div className="min-w-0">
                                                 <p className="text-base font-semibold text-[#4B4B4D]">{t.course_nome}</p>
                                                 {t.nr_referencia && <p className="text-xs font-semibold tracking-wide text-[#A84A1C]">{t.nr_referencia}</p>}

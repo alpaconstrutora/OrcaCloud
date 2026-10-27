@@ -12,6 +12,7 @@
 // Pé-direito (27/10/2026, "crie pé-direito por pavimento em empreendimento"): o do pavimento cadastrado, senão o
 // padrão da torre, senão `null` — e aí quem monta a massa usa o do bloco.
 
+import { compararNaOrdemDoEmpreendimento } from './empreendimentoOrdemDasUnidades';
 import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, FloorTipo } from '../types/empreendimento';
 
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
@@ -120,7 +121,7 @@ function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number |
 function unidadesDoAndar(t: TorreParaEstrutura, andar: number): UnidadeDoPiso[] {
   return (t.units ?? [])
     .filter((u) => u.floor === andar)
-    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR', { numeric: true }))
+    .sort(compararNaOrdemDoEmpreendimento)
     .map((u, k) => ({
       id: u.id ?? null,
       nome: u.name?.trim() || `Unidade ${k + 1}`,

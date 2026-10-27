@@ -9,13 +9,16 @@
  * o pavimento tipo montado, ou montar neste estudo (um lote; Ctrl+Z desfaz).
  *
  * Garagem (pendências de 03/10/2026): o bloco de GARAGEM lança os pavimentos dele com as vagas reais.
+ *
+ * Pavimento (27/10/2026): *"permitir clicar em cada pavimento e identificar em propriedades"* — o piso clicado no
+ * 3D (ou escolhido nos botões daqui) com as cotas, a área e a conferência dele (`resumoDoPiso`).
  */
 import React, { useState } from 'react';
 import { ROTULO_DO_ESQUEMA, type DivisaoDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
 import { ROTULO_DO_PONTO_CARDEAL } from '../../utils/blueprintGrafoEspacial';
 import type { Bloco, UsoDoBloco } from '../../utils/blueprintKernel';
 import { MAX_PAVIMENTOS_DO_BLOCO, ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO } from '../../utils/blueprintKernel';
-import type { MedidaDoBloco } from '../../utils/blueprintMassa';
+import { resumoDoPiso, type MedidaDoBloco } from '../../utils/blueprintMassa';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
@@ -25,6 +28,9 @@ interface Props {
   onProps: (campos: { nome?: string; uso?: UsoDoBloco; pavimentos?: number; peDireitoMm?: number; cotaBaseMm?: number }) => void;
   onExcluir: () => void;
   onAbrirEstudo: () => void;
+  /** O pavimento em destaque (1 = o de baixo); null = nenhum. Clicar no 3D ou nos botões escolhe. */
+  pisoSelecionado?: number | null;
+  onPiso?: (indice: number | null) => void;
   /** M6a: a divisão do pavimento tipo deste bloco (ou o motivo de não haver) e as saídas. */
   pavimentoTipo?: {
     divisao: DivisaoDoPavimento | null;
@@ -48,7 +54,7 @@ interface Props {
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pavimentoTipo, plantas, garagem }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, pavimentoTipo, plantas, garagem }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   if (!bloco) return null;
@@ -67,6 +73,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
   const campo = 'rounded-md border border-slate-300 px-2 py-1 text-xs font-normal text-slate-800';
   const foraDoEnvelope = medida?.pisos.filter((p) => p.cabe === false) ?? [];
   const acimaDoGabarito = medida?.pisos.filter((p) => p.acimaDoGabarito) ?? [];
+  const resumo = medida && pisoSelecionado !== null ? resumoDoPiso(medida, pisoSelecionado) : null;
   return (
     <div className="border-b border-slate-200 px-4 py-3" data-testid="painel-bloco">
       <div className="flex items-start justify-between gap-2">
@@ -179,6 +186,47 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
           )}
           {acimaDoGabarito.length > 0 && <li className="text-red-700">Acima do gabarito: {acimaDoGabarito.map((p) => p.motivoDoGabarito).filter(Boolean)[0]} ({acimaDoGabarito.length} pav.)</li>}
         </ul>
+      )}
+      {medida && onPiso && (
+        <div className="mt-3 space-y-1.5 border-t border-slate-200 pt-2 text-[11px]" data-testid="pavimento-do-bloco">
+          <p className="text-xs font-semibold text-slate-700">Pavimento</p>
+          <div className="flex flex-wrap gap-1" role="group" aria-label="Pavimentos do bloco">
+            {medida.pisos.map((p) => {
+              const ativo = p.indice === pisoSelecionado;
+              const problema = p.cabe === false || p.acimaDoGabarito;
+              return (
+                <button
+                  key={p.indice}
+                  type="button"
+                  aria-pressed={ativo}
+                  onClick={() => onPiso(ativo ? null : p.indice)}
+                  title={`${p.indice}º pavimento${p.subsolo ? ' (subsolo)' : ''}${problema ? ' — com problema' : ''}`}
+                  className={`min-w-[2rem] rounded-md border px-1.5 py-0.5 font-medium transition-colors ${
+                    ativo
+                      ? 'border-blue-700 bg-blue-700 text-white'
+                      : problema
+                        ? 'border-red-300 text-red-700 hover:bg-red-50'
+                        : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                  }`}
+                >
+                  {p.indice}º
+                </button>
+              );
+            })}
+          </div>
+          {resumo ? (
+            <div data-testid="resumo-do-pavimento">
+              <p className="font-semibold text-slate-700">{resumo.titulo}</p>
+              <ul className="space-y-0.5">
+                {resumo.linhas.map((l) => (
+                  <li key={l} className={/^(Fora|Acima)/.test(l) ? 'text-red-700' : 'text-slate-600'}>{l}</li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <p className="text-slate-500">Clique num pavimento no 3D, ou escolha acima, para ver os dados dele.</p>
+          )}
+        </div>
       )}
       <button type="button" onClick={onAbrirEstudo} className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800">
         Ver o estudo de massa

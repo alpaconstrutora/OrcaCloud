@@ -47,7 +47,10 @@ interface Props {
   /** ENVELOPE 3D (E3.3): prismas edificáveis por pavimento. Ver `Blueprint3DViewer`. */
   envelope?: { levelId: string; nome: string; anel: { x: number; y: number }[]; pecas?: { x: number; y: number }[][]; baseMm: number; topoMm: number; acimaDoGabarito: boolean }[];
   /** ESTUDO DE MASSA (M1): um prisma sólido por pavimento de cada bloco. Ver `Blueprint3DViewer`. */
-  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean }[];
+  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number }[];
+  /** O pavimento da massa clicado (27/10/2026) — ver `Blueprint3DViewer`. */
+  pisoDaMassa?: string | null;
+  onPisoDaMassa?: (blocoId: string, indice: number) => void;
   sol?: { x: number; y: number; z: number } | null;
   entorno?: { id: string; rotulo: string; anel: { x: number; y: number }[]; alturaMm: number }[];
   /**

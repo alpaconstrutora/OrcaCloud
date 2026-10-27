@@ -136,7 +136,13 @@ interface Props {
    * Sólido (não translúcido como o envelope): é a massa, não a referência.
    * Clicar seleciona o bloco (`id`), como as demais peças.
    */
-  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean }[];
+  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number }[];
+  /**
+   * PAVIMENTO DA MASSA CLICADO (27/10/2026): *"permitir clicar em cada pavimento e identificar em propriedades"*.
+   * A `chave` do piso em destaque, e o aviso de qual piso o clique acertou (além de selecionar o bloco).
+   */
+  pisoDaMassa?: string | null;
+  onPisoDaMassa?: (blocoId: string, indice: number) => void;
   /**
    * SOL (E5.1): direção unitária PARA o sol no espaço do desenho (x, y em
    * planta, z para cima) — a luz principal aponta de lá e as sombras seguem a
@@ -1037,7 +1043,7 @@ function ehDaAlca(o: THREE.Object3D | null): boolean {
 function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?: Set<string>, onAgarrar?: (p: [number, number, number]) => void) {
   const inicio = useRef<{ x: number; y: number } | null>(null);
   const podeAgarrar = (id: string, peca: boolean) => !!onAgarrar && (peca || !!selecionados?.has(id));
-  return (id: string, peca = false) =>
+  return (id: string, peca = false, aoClicar?: () => void) =>
     onSelecionar
       ? {
           onPointerDown: (e: {
@@ -1074,6 +1080,7 @@ function usarCliqueDePeca(onSelecionar?: (ids: string[]) => void, selecionados?:
             e.stopPropagation();
             // E10.3: Shift, Ctrl ou ⌘ ACUMULAM (a mesma regra do 2D) — `selecaoDoClique`.
             onSelecionar(selecaoDoClique(selecionados ?? [], id, e));
+            aoClicar?.();
           },
           onPointerOver: (e: { stopPropagation: () => void }) => {
             e.stopPropagation();
@@ -1211,7 +1218,7 @@ function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; pos
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, pisoDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1880,12 +1887,20 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       ))}
       {prismasDaMassa.map((p) => {
         const sel = selecionados?.has(p.id) ?? false;
+        const pisoSel = sel && !!pisoDaMassa && pisoDaMassa === p.chave;
         return (
-          <mesh key={`massa-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} castShadow receiveShadow {...cliqueDe(p.id)}>
+          <mesh
+            key={`massa-${p.chave}`}
+            geometry={p.geom}
+            position={[0, p.y, 0]}
+            castShadow
+            receiveShadow
+            {...cliqueDe(p.id, false, p.indice !== undefined && onPisoDaMassa ? () => onPisoDaMassa(p.id, p.indice!) : undefined)}
+          >
             {/* A face recua um pouco na profundidade para a linha do piso, no mesmo plano, ganhar. */}
-            <meshStandardMaterial color={sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+            <meshStandardMaterial color={pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
             <lineSegments geometry={p.arestas} raycast={() => null}>
-              <lineBasicMaterial color={sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#1e293b'} />
+              <lineBasicMaterial color={pisoSel ? '#172554' : sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#1e293b'} />
             </lineSegments>
           </mesh>
         );

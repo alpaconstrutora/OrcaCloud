@@ -136,13 +136,16 @@ interface Props {
    * Sólido (não translúcido como o envelope): é a massa, não a referência.
    * Clicar seleciona o bloco (`id`), como as demais peças.
    */
-  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number }[];
+  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number; piso?: string; unidade?: string }[];
   /**
    * PAVIMENTO DA MASSA CLICADO (27/10/2026): *"permitir clicar em cada pavimento e identificar em propriedades"*.
    * A `chave` do piso em destaque, e o aviso de qual piso o clique acertou (além de selecionar o bloco).
+   * UNIDADE (27/10/2026, *"… também de cada unidade em cada pavimento"*): com a massa dividida nas unidades do
+   * Empreendimento, cada fatia traz `piso` (a chave do pavimento) e `unidade`; o clique diz qual foi.
    */
   pisoDaMassa?: string | null;
-  onPisoDaMassa?: (blocoId: string, indice: number) => void;
+  unidadeDaMassa?: string | null;
+  onPisoDaMassa?: (blocoId: string, indice: number, unidade?: string) => void;
   /**
    * SOL (E5.1): direção unitária PARA o sol no espaço do desenho (x, y em
    * planta, z para cima) — a luz principal aponta de lá e as sombras seguem a
@@ -1218,7 +1221,7 @@ function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; pos
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, pisoDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1887,7 +1890,8 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       ))}
       {prismasDaMassa.map((p) => {
         const sel = selecionados?.has(p.id) ?? false;
-        const pisoSel = sel && !!pisoDaMassa && pisoDaMassa === p.chave;
+        const pisoSel = sel && !!pisoDaMassa && pisoDaMassa === (p.piso ?? p.chave);
+        const unidadeSel = pisoSel && !!unidadeDaMassa && unidadeDaMassa === p.unidade;
         return (
           <mesh
             key={`massa-${p.chave}`}
@@ -1895,12 +1899,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             position={[0, p.y, 0]}
             castShadow
             receiveShadow
-            {...cliqueDe(p.id, false, p.indice !== undefined && onPisoDaMassa ? () => onPisoDaMassa(p.id, p.indice!) : undefined)}
+            {...cliqueDe(p.id, false, p.indice !== undefined && onPisoDaMassa ? () => onPisoDaMassa(p.id, p.indice!, p.unidade) : undefined)}
           >
             {/* A face recua um pouco na profundidade para a linha do piso, no mesmo plano, ganhar. */}
-            <meshStandardMaterial color={pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+            <meshStandardMaterial color={unidadeSel ? '#f59e0b' : pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
             <lineSegments geometry={p.arestas} raycast={() => null}>
-              <lineBasicMaterial color={pisoSel ? '#172554' : sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#1e293b'} />
+              <lineBasicMaterial color={unidadeSel ? '#78350f' : pisoSel ? '#172554' : sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#1e293b'} />
             </lineSegments>
           </mesh>
         );

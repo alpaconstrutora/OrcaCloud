@@ -49,6 +49,8 @@ export interface PapelDoBloco {
   torre: string;
   tipo: 'TORRE' | 'GARAGEM';
   nomesDosPisos: string[];
+  /** Os pisos do Empreendimento neste bloco, de baixo para cima, com as unidades de cada um (27/10/2026). */
+  pisos: PisoDaTorre[];
 }
 
 interface Mudanca {
@@ -185,7 +187,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
       const alvo: BlocoParaAjuste = { nome, pontos: b.pontos, cotaBaseMm: cota, pavimentos: t.pisos.length, peDireitoMm: t.pd, uso: b.uso, levelId: b.levelId };
       const j = ehTopo ? i : acharNosso(nome, `${b.nome} · ${t.pisos[0].nome}`);
       if (colocar(j, alvo)) mudou = true;
-      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'TORRE', nomesDosPisos: t.pisos.map((p) => p.nome) });
+      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'TORRE', nomesDosPisos: t.pisos.map((p) => p.nome), pisos: t.pisos });
       cota += t.pisos.length * t.pd;
     });
     const alturaAcimaM = Math.round(cota / 10) / 100;
@@ -200,7 +202,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
       const alvo: BlocoParaAjuste = { nome, pontos: b.pontos, cotaBaseMm: cotaG, pavimentos: t.pisos.length, peDireitoMm: t.pd, uso: 'GARAGEM', levelId: b.levelId };
       const j = acharNosso(nome, ehTopo ? nomeDaGaragem(b.nome) : `${b.nome} · ${t.pisos[0].nome}`);
       if (colocar(j, alvo)) mudou = true;
-      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'GARAGEM', nomesDosPisos: t.pisos.map((p) => p.nome) });
+      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'GARAGEM', nomesDosPisos: t.pisos.map((p) => p.nome), pisos: t.pisos });
       cotaG += t.pisos.length * t.pd;
     });
     if (e.garagens.length === 0) {

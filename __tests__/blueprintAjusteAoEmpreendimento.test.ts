@@ -9,7 +9,7 @@ import type { EstruturaDaTorre } from '../utils/blueprintEstruturaDaTorre';
 import type { BlocoProposto } from '../utils/blueprintGeradorDeMassa';
 
 const pisos = (de: number, ate: number, nome: (n: number) => string, pd: (n: number) => number | null = () => null) =>
-  Array.from({ length: ate - de + 1 }, (_, i) => ({ numero: de + i, nome: nome(de + i), tipo: null, peDireitoMm: pd(de + i) }));
+  Array.from({ length: ate - de + 1 }, (_, i) => ({ numero: de + i, nome: nome(de + i), tipo: null, peDireitoMm: pd(de + i), unidades: [] }));
 /** O Garden Cambuhy de 27/10/2026, como `estruturaDaTorre` o lê. */
 const TORRE_A: EstruturaDaTorre = { torreId: 'tA', nome: 'Torre A', acima: pisos(0, 3, (n) => (n === 0 ? 'Térreo' : `Pavimento ${n}`)), garagens: pisos(-2, -1, (n) => `Garagem ${-n}`), fonte: 'UNIDADES', avisos: [] };
 const TORRE_B: EstruturaDaTorre = { torreId: 'tB', nome: 'Torre B', acima: pisos(0, 5, (n) => (n === 0 ? 'Térreo' : `Pavimento ${n}`)), garagens: [], fonte: 'UNIDADES', avisos: [] };

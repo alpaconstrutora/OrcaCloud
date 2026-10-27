@@ -174,6 +174,8 @@ Rejeições confirmadas pela direção: cabeçalho-dashboard de indicadores colo
 
 Paleta Alpa quente e contida: grafite carrega o texto e a ação, o laranja marca presença em poucas áreas preenchidas, o cinza-azulado e o off-white fazem o resto.
 
+**No código:** use os tokens `portal-*` (definidos no `@theme` de `index.css`), nunca o hex: `text-portal-grafite`, `text-portal-secundario`, `text-portal-laranja-texto`, `bg-portal-laranja`, `bg-portal-chao`, `bg-portal-espera`, `bg-portal-alerta`, `hover:bg-portal-linha-hover`, `shadow-portal-traco`, `shadow-portal-heroi`. O mapa `MARCA` em `components/portalColaborador/PortalMarca.tsx` junta as combinações recorrentes (texto, cartão, botão primário, foco).
+
 ### Primary
 - **Laranja Alpa** (alpa-orange): só preenchimento — faixa de 8px no topo do cartão do último holerite, pílula do item ativo do rodapé, barra de progresso dos cursos da Academia. Dá 2,37:1 sobre branco: nunca é cor de texto nem de ícone que precise ser lido.
 - **Laranja-tinta** (orange-ink): o laranja que pode ser lido (5,74:1 sobre branco). Texto "Sair", código de NR, chamada "Começar/Continuar", validade vencida, ícone de alerta, ponto de aviso no rodapé, anel de foco e o selo `recusado`.

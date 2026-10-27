@@ -24,7 +24,7 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 | 4 | `/impeccable init` + `shape` | marca da Alpa, Início = último holerite, navegação no rodapé | no ar (#193) |
 | 5 | `/impeccable typeset` | pesos e tamanhos | **item 5 abaixo** |
 | 6 | `/impeccable audit` | contraste, alvos de toque, ARIA | auditoria feita; **P1 abaixo** |
-| 7 | `/impeccable polish` | passada final | pendente |
+| 7 | `/impeccable polish` | passada final | **item 7 abaixo** |
 
 ## Item 1 — harden
 
@@ -236,3 +236,17 @@ P2/P3 da auditoria, ainda abertos: barra de progresso da Academia sem `role="pro
 seção como parágrafo; cores escritas à mão (69 ocorrências); `Button` do app no "Tentar de novo";
 logo em data URI (~100 KB) a cada resumo; `PortalView` no pacote principal (import estático no App);
 spinner sem "reduzir movimento".
+
+## Item 7 — polish (P2/P3 da auditoria)
+
+Pedido: "de acordo" (publicar os PRs, rodar o polish, nova auditoria; desempenho depois).
+
+- cores do portal viram tokens `portal-*` no `@theme` (69 hex e 13 sombras à mão → 0); `MARCA` usa os tokens;
+- "Tentar de novo" na marca (era o `Button` do app, borda/foco azuis) — o portal não usa mais nenhum componente do app;
+- títulos de seção são `h2` (com o `h1` por aba do P1, a página tem estrutura de títulos);
+- barra de progresso da Academia com `role="progressbar"` e valor;
+- anel de foco da marca no cartão do curso e no fechar do aviso; spinners param com "reduzir movimento";
+- selo de treinamento volta para a direita quando cabe (o `flex-wrap` do P1 o empurrava para baixo).
+- [x] medido no harness: vazamento 0, alvos ≥ 44px, contraste e foco ok nas 5 abas a 390 e a 360/200%.
+
+Fica para `/impeccable optimize`: logo em data URI no resumo; `PortalView` no pacote principal.

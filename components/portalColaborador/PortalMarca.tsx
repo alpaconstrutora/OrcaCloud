@@ -13,14 +13,14 @@ import { BookOpen, Clock, Eye, EyeOff, FileText, LogOut, Receipt, Umbrella, Chev
 
 /** Classes por extenso — o JIT do Tailwind não enxerga classe montada em runtime. */
 export const MARCA = {
-    chao: 'bg-[#EDEDE8]',
-    texto: 'text-[#4B4B4D]',
-    secundario: 'text-[#566375]',
-    laranjaTexto: 'text-[#A84A1C]',
-    laranjaFundo: 'bg-[#FF884C]',
-    cartao: 'bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]',
-    primario: 'bg-[#4B4B4D] text-white hover:bg-[#3A3A3C] active:bg-[#2F2F31]',
-    foco: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#A84A1C] focus-visible:ring-offset-2',
+    chao: 'bg-portal-chao',
+    texto: 'text-portal-grafite',
+    secundario: 'text-portal-secundario',
+    laranjaTexto: 'text-portal-laranja-texto',
+    laranjaFundo: 'bg-portal-laranja',
+    cartao: 'bg-white rounded-2xl shadow-portal-traco',
+    primario: 'bg-portal-grafite text-white hover:bg-portal-grafite-hover active:bg-portal-grafite-active',
+    foco: 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-laranja-texto focus-visible:ring-offset-2',
 } as const;
 
 // ── Valor escondido por padrão ───────────────────────────────────────────────
@@ -74,7 +74,7 @@ export const ValorEmReais: React.FC<{ valor: number; visivel: boolean; className
 export const BotaoOlho: React.FC<{ visivel: boolean; onAlternar: () => void }> = ({ visivel, onAlternar }) => (
     <button type="button" onClick={onAlternar} aria-pressed={visivel}
         aria-label={visivel ? 'Esconder valores' : 'Mostrar valores'} title={visivel ? 'Esconder valores' : 'Mostrar valores'}
-        className={`w-11 h-11 shrink-0 flex items-center justify-center rounded-full ${MARCA.texto} hover:bg-[#EDEDE8] ${MARCA.foco}`}>
+        className={`w-11 h-11 shrink-0 flex items-center justify-center rounded-full ${MARCA.texto} hover:bg-portal-chao ${MARCA.foco}`}>
         {visivel ? <EyeOff className="w-5 h-5" /> : <Eye className="w-5 h-5" />}
     </button>
 );
@@ -99,7 +99,7 @@ export const CabecalhoDoPortal: React.FC<{
     const mostrarLogo = !!empresa?.logo_url && !logoFalhou;
     const linhaCargo = [cargo, desde ? `desde ${desde}` : null].filter(Boolean).join(' · ');
     return (
-        <header className="bg-white px-5 pt-4 pb-5 border-b border-[#4B4B4D]/10">
+        <header className="bg-white px-5 pt-4 pb-5 border-b border-portal-grafite/10">
             <div className="flex items-center justify-between gap-3 min-h-11">
                 {mostrarLogo ? (
                     <img src={empresa!.logo_url!} alt={empresa!.name} onError={() => setLogoFalhou(true)}
@@ -110,7 +110,7 @@ export const CabecalhoDoPortal: React.FC<{
                 )}
                 {onSair && (
                     <button type="button" onClick={onSair} aria-label="Sair do portal"
-                        className={`h-11 -mr-2 px-3 inline-flex items-center gap-1.5 rounded-xl text-sm font-semibold ${MARCA.laranjaTexto} hover:bg-[#EDEDE8] ${MARCA.foco}`}>
+                        className={`h-11 -mr-2 px-3 inline-flex items-center gap-1.5 rounded-xl text-sm font-semibold ${MARCA.laranjaTexto} hover:bg-portal-chao ${MARCA.foco}`}>
                         <LogOut className="w-4 h-4" /> Sair
                     </button>
                 )}
@@ -131,7 +131,7 @@ export const CartaoUltimoHolerite: React.FC<{
     onAlternarValor: () => void;
     onAbrir: () => void;
 }> = ({ competencia, tipo, liquido, visivel, onAlternarValor, onAbrir }) => (
-    <section aria-labelledby="ultimo-holerite" className="bg-white rounded-3xl overflow-hidden shadow-[0_1px_2px_rgba(75,75,77,0.08),0_12px_32px_-16px_rgba(75,75,77,0.35)]">
+    <section aria-labelledby="ultimo-holerite" className="bg-white rounded-3xl overflow-hidden shadow-portal-heroi">
         <div className={`h-2 ${MARCA.laranjaFundo}`} aria-hidden="true" />
         <div className="p-5">
             {/* Espaços inquebráveis: "·" preso a "Último holerite" e "de AAAA" preso junto
@@ -162,7 +162,7 @@ export const LinhaDeHolerite: React.FC<{
     competencia: string; tipo: string; liquido: number; visivel: boolean; onAbrir: () => void;
 }> = ({ competencia, tipo, liquido, visivel, onAbrir }) => (
     <button type="button" onClick={onAbrir}
-        className={`w-full min-h-16 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left ${MARCA.cartao} hover:bg-[#F7F7F4] ${MARCA.foco}`}>
+        className={`w-full min-h-16 flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 text-left ${MARCA.cartao} hover:bg-portal-linha-hover ${MARCA.foco}`}>
         <div className="flex-1 min-w-[min(100%,10rem)]">
             <p className={`text-base font-semibold ${MARCA.texto}`}>{competencia}</p>
             <p className={`text-sm ${MARCA.secundario}`}>{tipo}</p>
@@ -203,7 +203,7 @@ export const RodapeDoPortal: React.FC<{
     // 360px eles se sobrepunham e a página rolava de lado); aí o rodapé fica só com
     // os ícones, maiores, e o rótulo vira o nome acessível do botão.
     <nav aria-label="Seções do portal"
-        className="@container sticky bottom-0 z-20 bg-white border-t border-[#4B4B4D]/10 pb-[env(safe-area-inset-bottom)]">
+        className="@container sticky bottom-0 z-20 bg-white border-t border-portal-grafite/10 pb-[env(safe-area-inset-bottom)]">
         {/* Colunas do tamanho do rótulo (não 5 iguais): em 360px, "Documentos" e
             "Treinamentos" iguais a 72px se encostavam e tocavam a borda. */}
         <ul className="flex justify-between gap-1 px-2 @max-[19.5em]:grid @max-[19.5em]:grid-cols-5 @max-[19.5em]:px-0">
@@ -218,7 +218,7 @@ export const RodapeDoPortal: React.FC<{
                                 <span className="relative">
                                     <Icone className={`w-5 h-5 @max-[19.5em]:w-6 @max-[19.5em]:h-6 ${ativo ? MARCA.texto : MARCA.secundario}`} />
                                     {aviso && (
-                                        <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-[#A84A1C] ring-2 ${ativo ? 'ring-[#FF884C]' : 'ring-white'}`} aria-hidden="true" />
+                                        <span className={`absolute -top-1 -right-1 w-2.5 h-2.5 rounded-full bg-portal-laranja-texto ring-2 ${ativo ? 'ring-portal-laranja' : 'ring-white'}`} aria-hidden="true" />
                                     )}
                                 </span>
                             </span>

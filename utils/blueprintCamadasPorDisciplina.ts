@@ -222,6 +222,16 @@ export function estadoDoOverlay(id: GrupoDeCamadas, estados: EstadosDasCamadas):
   return definicaoDoGrupo(id).camadas.map((c) => estados[c]).reduce(maisVisivel);
 }
 
+/**
+ * A MASSA MORA NA CAMADA TERRENO (27/10/2026): *"cliquei em aplicar neste estudo porém não aparece na planta e nem
+ * no 3d"* — o navegador guardava a Terreno OCULTA (resto de um Isolar) e os blocos, certos no banco, não
+ * apareciam em lugar nenhum. Aplicar a massa e abrir um estudo só de massa ligam a camada por esta função:
+ * o estado com a Terreno à vista, ou `null` quando ela já aparece (meio-tom conta como à vista).
+ */
+export function comTerrenoAVista(estados: EstadosDasCamadas): EstadosDasCamadas | null {
+  return estados.TERRENO === 'OCULTA' ? { ...estados, TERRENO: 'VISIVEL' } : null;
+}
+
 export interface IdsPorEstado {
   ocultos: Set<ObjectId>;
   atenuados: Set<ObjectId>;

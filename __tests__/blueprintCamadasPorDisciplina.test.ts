@@ -12,6 +12,7 @@ import {
   alternarVisibilidade,
   alvoIsolado,
   classificarPecas,
+  comTerrenoAVista,
   conflitoVisivel,
   contagemDoGrupo,
   contagemPorCamada,
@@ -303,5 +304,18 @@ describe('conflitos à vista', () => {
   });
   it('lado não classificado conta como visível', () => {
     expect(conflitoVisivel(['tuboESG', 'inexistente'], c, ESTADOS_PADRAO)).toBe(true);
+  });
+});
+
+describe('massa com a camada Terreno oculta (27/10/2026)', () => {
+  // "cliquei em aplicar neste estudo porém não aparece na planta e nem no 3d": o navegador guardava a Terreno
+  // OCULTA (resto de um Isolar) e os blocos de massa moram nela — o dado estava certo e a tela, vazia.
+  it('liga a Terreno quando está oculta, sem mexer nas outras', () => {
+    const isolado = { ...ESTADOS_PADRAO, TERRENO: 'OCULTA' as const, ESTRUTURA: 'OCULTA' as const };
+    expect(comTerrenoAVista(isolado)).toEqual({ ...isolado, TERRENO: 'VISIVEL' });
+  });
+  it('nada a fazer quando a Terreno já aparece (visível ou em meio-tom)', () => {
+    expect(comTerrenoAVista(ESTADOS_PADRAO)).toBeNull();
+    expect(comTerrenoAVista({ ...ESTADOS_PADRAO, TERRENO: 'ATENUADA' })).toBeNull();
   });
 });

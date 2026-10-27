@@ -602,7 +602,7 @@ import { bloqueioDasTravas, idsTravados, type TravaExplicita } from '../../utils
 import TelaAntesDepois from './TelaAntesDepois';
 import { contagemPorFase, faseDaSelecao, fasePorId, idsOcultosPelaFase, type FiltroDeFase } from '../../utils/blueprintFases';
 import { FONTES_DO_MAPA, MAPA_OCULTO, OPACIDADE_DO_MAPA, planoDaTexturaDoMapa, sanearEstadosDoMapa, type EstadosDoMapa } from '../../utils/blueprintMapaDeFundo';
-import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, conflitoVisivel, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
+import { ESTADOS_PADRAO as CAMADAS_TODAS_VISIVEIS, classificarPecas, comTerrenoAVista, conflitoVisivel, contagemPorCamada, estadoDoOverlay, estadosDasChavesAntigas, estadosIguais, idsPorEstado, isolar, sanearEstados, type AlvoDeCamada, type EstadosDasCamadas } from '../../utils/blueprintCamadasPorDisciplina';
 import { useBlueprintColaboracao, type UsoDaColaboracao } from '../../hooks/useBlueprintColaboracao';
 import { blueprintStudyPermissionService, type PermissaoGravada } from '../../services/blueprintStudyPermissionService';
 import { iniciais, papelNoEstudo, travaDoComando } from '../../utils/blueprintColaboracao';
@@ -6099,6 +6099,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     // 27/10/2026: "gerou massa mas não fica visível na planta" — a vista ficava onde estava (a faixa da frente
     // de um lote de 63 m) e as torres, a 13 m da frente, nasciam fora da tela.
     navegar('ENQUADRAR');
+    // E com a camada Terreno oculta neste navegador, nem enquadrada: os blocos moram nela (ver `comTerrenoAVista`).
+    const terrenoLigado = comTerrenoAVista(camadas);
+    if (terrenoLigado) {
+      mudarCamadasDaDisciplina(terrenoLigado);
+      setAvisoColar('A camada Terreno estava oculta neste navegador — liguei para mostrar a massa (é nela que ficam o lote e os blocos).');
+    }
   };
   const [hipotesesDoGerador, setHipotesesDoGerador] = usePersistedState<HipotesesDoGerador>('blueprint:gerador', HIPOTESES_DO_GERADOR_PADRAO);
   /**
@@ -7054,6 +7060,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const [areaDeTransferencia, setAreaDeTransferencia] = useState<AreaDeTransferencia | null>(null);
   const [avisoColar, setAvisoColar] = useState<string | null>(null);
+  /**
+   * ESTUDO SÓ DE MASSA abre com a camada Terreno à vista (27/10/2026): blocos sem nenhuma parede, com a Terreno
+   * oculta, é a tela vazia do "não aparece na planta e nem no 3d". Uma vez por abertura do ramo, dizendo o que fez;
+   * depois manda o olho da pessoa. Fica aqui, abaixo de `camadas` e do aviso, e não junto do enquadrar da abertura:
+   * ler `camadas` na lista de dependências antes da declaração é a TDZ que já derrubou o editor.
+   */
+  const terrenoDaMassaDecidido = useRef<string | null>(null);
+  useEffect(() => {
+    if (editor.loading || terrenoDaMassaDecidido.current === branchId) return;
+    terrenoDaMassaDecidido.current = branchId;
+    if ((editor.model.blocos ?? []).length === 0 || editor.model.walls.length > 0) return;
+    const terrenoLigado = comTerrenoAVista(camadas);
+    if (!terrenoLigado) return;
+    mudarCamadasDaDisciplina(terrenoLigado);
+    setAvisoColar('Este estudo é de massa e a camada Terreno estava oculta neste navegador — liguei para mostrar o lote e os blocos.');
+  }, [editor.loading, editor.model, branchId, camadas, mudarCamadasDaDisciplina]);
 
   /**
    * Trocar de ferramenta esquece a ponta escolhida.

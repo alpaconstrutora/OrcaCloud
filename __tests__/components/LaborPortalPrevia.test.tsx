@@ -81,18 +81,26 @@ beforeEach(() => {
 });
 
 describe('PortalView em prévia', () => {
+    const onSair = vi.fn();
     const montar = () => render(
         <QueryClientProvider client={novoClient()}>
-            <PortalView employeeId="emp-1" orgId="org-alpa" portalToken="tok-claudinei" previa={{ nome: 'Claudinei da Costa Vieira' }} />
+            <PortalView employeeId="emp-1" orgId="org-alpa" portalToken="tok-claudinei" previa={{ nome: 'Claudinei da Costa Vieira', onSair }} />
         </QueryClientProvider>,
     );
 
     it('diz que é prévia e de quem, e não oferece "sair do portal"', async () => {
         montar();
         const faixa = await screen.findByRole('note');
-        expect(faixa.textContent).toBe('Prévia · vendo como Claudinei da Costa Vieira');
-        await screen.findByText('Dias de Férias');
+        expect(within(faixa).getByText(/^Prévia · vendo como/).textContent).toBe('Prévia · vendo como Claudinei da Costa Vieira');
+        await screen.findByText('Saldo de férias');
         expect(screen.queryByRole('button', { name: 'Sair do portal' })).toBeNull();
+    });
+
+    it('a faixa tem a saída: "Sair da prévia"', async () => {
+        onSair.mockClear();
+        montar();
+        fireEvent.click(within(await screen.findByRole('note')).getByRole('button', { name: 'Sair da prévia' }));
+        expect(onSair).toHaveBeenCalledTimes(1);
     });
 
     it('a faixa aparece já enquanto carrega', () => {
@@ -104,8 +112,8 @@ describe('PortalView em prévia', () => {
     it('cursos da Academia não abrem na prévia (gravariam progresso em nome do colaborador)', async () => {
         listEnrollments.mockResolvedValue([{ id: 'm1', curso: 'NR-35 Trabalho em Altura', nr_referencia: 'NR-35', versao: 1, status: 'NAO_INICIADO', percentual: 0, data_limite: null }]);
         montar();
-        await screen.findByText('Dias de Férias');
-        fireEvent.click(screen.getByRole('button', { name: /trein/i }));
+        await screen.findByText('Saldo de férias');
+        fireEvent.click(screen.getByRole('button', { name: 'Treinamentos' }));
 
         const curso = (await screen.findByText('NR-35 Trabalho em Altura')).closest('button') as HTMLButtonElement;
         expect(curso.disabled).toBe(true);
@@ -120,7 +128,7 @@ describe('PortalView em prévia', () => {
                 <PortalView employeeId="emp-1" orgId="org-alpa" portalToken="tok-claudinei" onLogout={() => {}} />
             </QueryClientProvider>,
         );
-        await screen.findByText('Dias de Férias');
+        await screen.findByText('Saldo de férias');
         expect(screen.queryByRole('note')).toBeNull();
         expect(screen.getByRole('button', { name: 'Sair do portal' })).toBeTruthy();
     });
@@ -155,7 +163,8 @@ describe('Aba "Prévia do Portal"', () => {
         // A aba continua no lugar: a prévia não troca mais a página inteira.
         expect(screen.getByRole('heading', { name: 'Prévia do portal' })).toBeTruthy();
 
-        fireEvent.click(screen.getByRole('button', { name: /fechar prévia/i }));
+        // "Sair da prévia" na faixa (dentro do celular) fecha a moldura inteira.
+        fireEvent.click(within(await previa.findByRole('note')).getByRole('button', { name: 'Sair da prévia' }));
         await waitFor(() => expect(screen.queryByTitle(/Prévia do Portal do Colaborador/)).toBeNull());
     });
 

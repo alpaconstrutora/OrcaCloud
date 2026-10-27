@@ -19,8 +19,8 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 | # | Comando | Escopo | Estado |
 |---|---|---|---|
 | 1 | `/impeccable harden` | P0 holerite pelo link + P1 estados de tela | no ar (#186) |
-| 2 | `/impeccable clarify` | P1 prévia honesta (caminho único com token, faixa "vendo como") | **item 2 abaixo** |
-| 3 | `/impeccable clarify` | P2 datas, status, termos | pendente |
+| 2 | `/impeccable clarify` | P1 prévia honesta (caminho único com token, faixa "vendo como") | no ar (#189) |
+| 3 | `/impeccable clarify` | P2 datas, status, termos | **item 3 abaixo** |
 | 4 | `/impeccable init` + `shape` | marca da Alpa, Início = último holerite, navegação no rodapé | pendente — precisa de logo e cores da Alpa |
 | 5 | `/impeccable typeset` | pesos e tamanhos | pendente |
 | 6 | `/impeccable audit` | contraste, alvos de toque, ARIA | pendente |
@@ -122,3 +122,39 @@ colaborador sem link (portal que ninguém vê).
       fictícia): faixa abaixo do notch (o notch cobria a faixa na 1ª versão — corrigido
       com `pt-8`), curso "Não abre na prévia";
 - [x] `check-ui-standard.sh` sem violação; `tsc` limpo.
+
+## Retorno do usuário sobre o item 2 + item 3
+
+Pedido (literal): "1. Implementar sair da prévia 2. Lista de holerites somente fechadas
+3. Seguir com o item 3".
+
+### 2a — "Sair da prévia" na faixa
+- [x] botão "Sair da prévia" na própria faixa (fecha a moldura); o nome não é mais
+      cortado — quebra linha (`LaborPortalPrevia.test.tsx`: clique fecha a moldura).
+
+### 2b — holerite só de folha FECHADA
+Migration `aplicar_20271026980000_portal_colaborador_holerite_so_fechada.sql`:
+- `portal_get_payroll_runs` (a lista) filtra `status = 'FECHADO'` — mesmo critério do app;
+- `fn_colab_portal_paystub` (o recibo) recusa folha não fechada (tirar da lista não basta);
+- **vazamento fechado de quebra:** a família `portal_get_*(p_employee_id)` +
+  `portal_employee_summary` era executável por `authenticated` — qualquer conta logada,
+  de qualquer org, lia ponto/férias/documentos/líquidos de qualquer colaborador pelo
+  UUID. Último chamador no front saiu no #189; os wrappers `fn_colab_portal_*` são
+  SECURITY DEFINER (dono postgres) e não dependem do grant. Revogado.
+- [ ] aplicada no banco — **aplicar foi barrado pelo modo automático; aguarda o usuário**;
+- [ ] conferir depois: `has_function_privilege('authenticated', 'portal_get_payroll_runs(uuid)')` = false;
+      lista do portal sem PROCESSANDO.
+
+### 3 — linguagem: datas, status, termos, "hoje" local
+`utils/portalColaboradorTextos.ts` (puro, testado) + `LaborPortal.tsx`:
+- datas dd/mm/aaaa (admissão, ponto, períodos, validades, prazo) — reaproveita `dataBR`/`hojeLocal`;
+- status: Em análise / Aprovado / Recusado / Solicitado / Cancelado (cancelado caía no
+  amarelo de pendente); tipos de ausência por extenso (o `replace('_',' ')` trocava só o 1º);
+- "30d" → "30 dias", "+2HE" → "+ 2h extras", "Out/2026" → "Outubro de 2026", "v1" removido;
+- abas por extenso (Holerites, Documentos, Treinamentos) em grade 3×2 — por extenso não
+  cabem numa linha; rolagem horizontal esconde aba;
+- "hoje" das validades pelo fuso do aparelho (`toISOString()` era UTC: depois das 21h já
+  era amanhã e um documento que vence hoje aparecia vencido).
+- [x] `__tests__/portalColaboradorTextos.test.ts` (8), testes de componente atualizados;
+- [x] visto no harness (`passeio-textos.mjs`): 1ª versão cortava "Document…/Treiname…" e o
+      nome na faixa — corrigido (ícone sobre o rótulo; faixa quebra linha).

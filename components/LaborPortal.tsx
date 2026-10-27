@@ -25,6 +25,10 @@ import { academyPortalService } from '../services/academyPortalService';
 import { academyKeys } from '../lib/queryKeys';
 import type { AcademyPortalEnrollment } from '../types/academy';
 import { mensagemDoPortalColaborador } from '../utils/portalColaboradorErro';
+import {
+    dataBR, diasTexto, jornadaTexto, periodoTexto, competenciaPorExtenso, situacaoDaValidade,
+    validadeTexto, statusDoPonto, statusDaAusencia, tipoDaAusencia, tipoDaFolha, type TomDoStatus,
+} from '../utils/portalColaboradorTextos';
 
 /**
  * Leitura do portal — SEMPRE pelo token (`fn_colab_portal_*(p_token)`), também
@@ -104,6 +108,17 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
     return <>{children}</>;
 };
 
+/** Status de ponto/ausência: o texto diz tudo, a cor só reforça. */
+const COR_DO_TOM: Record<TomDoStatus, string> = {
+    ok: 'bg-emerald-100 text-emerald-800',
+    espera: 'bg-amber-100 text-amber-800',
+    recusado: 'bg-rose-100 text-rose-800',
+    neutro: 'bg-slate-100 text-slate-700',
+};
+const SeloDeStatus: React.FC<{ rotulo: string; tom: TomDoStatus }> = ({ rotulo, tom }) => (
+    <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${COR_DO_TOM[tom]}`}>{rotulo}</span>
+);
+
 // ── View: Portal do Colaborador (tela que o funcionário vê no celular) ────────
 
 interface PortalViewProps {
@@ -121,18 +136,23 @@ interface PortalViewProps {
      * trava o que GRAVARIA em nome do colaborador (abrir curso da Academia
      * registra tentativa e progresso).
      */
-    previa?: { nome: string };
+    previa?: { nome: string; onSair: () => void };
 }
 
 /**
  * Faixa fixa no topo da prévia: quem está vendo sabe, a todo momento, que não é
- * o próprio portal. `pt-8`: a prévia só existe dentro do MobilePreviewFrame, cujo
- * notch cobre os 24px de cima da tela.
+ * o próprio portal, e tem a saída ali mesmo. `pt-8`: a prévia só existe dentro do
+ * MobilePreviewFrame, cujo notch cobre os 24px de cima da tela.
  */
-const FaixaDePrevia: React.FC<{ nome: string }> = ({ nome }) => (
-    <div role="note" className="sticky top-0 z-30 flex items-center gap-2 px-4 pt-8 pb-2.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-900">
+const FaixaDePrevia: React.FC<{ nome: string; onSair: () => void }> = ({ nome, onSair }) => (
+    <div role="note" aria-label="Prévia" className="sticky top-0 z-30 flex items-center gap-2 pl-4 pr-2 pt-8 pb-1.5 bg-amber-50 border-b border-amber-200 text-sm text-amber-900">
         <Eye className="w-4 h-4 shrink-0 text-amber-700" />
-        <p className="min-w-0 truncate">Prévia · vendo como <strong className="font-semibold">{nome}</strong></p>
+        {/* Sem truncate: o nome é a informação da faixa; nome longo quebra linha. */}
+        <p className="flex-1 min-w-0 leading-snug">Prévia · vendo como <strong className="font-semibold">{nome}</strong></p>
+        <button type="button" onClick={onSair}
+            className="shrink-0 h-9 px-3 rounded-lg text-sm font-semibold text-amber-900 hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500">
+            Sair da prévia
+        </button>
     </div>
 );
 
@@ -164,7 +184,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
     // Na prévia, todo estado (carregando, erro, sala de aula, portal) leva a faixa.
     const comFaixa = (tela: React.ReactElement) => previa
-        ? <div className="min-h-full flex flex-col"><FaixaDePrevia nome={previa.nome} />{tela}</div>
+        ? <div className="min-h-full flex flex-col"><FaixaDePrevia nome={previa.nome} onSair={previa.onSair} />{tela}</div>
         : tela;
 
     const { data: recentEntries = [], isLoading: pontoCarregando, error: pontoErro, refetch: recarregarPonto } = useQuery({
@@ -302,10 +322,10 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Cards resumo */}
                 <div className="grid grid-cols-2 gap-3">
                     {[
-                        { label: 'Dias de Férias',    value: `${summary?.ferias_saldo ?? 0}d`,   icon: Umbrella, alert: (summary?.ferias_saldo ?? 0) === 0 },
-                        { label: 'Pontos Pendentes',  value: summary?.pontos_pendentes ?? 0,      icon: Clock,    alert: (summary?.pontos_pendentes ?? 0) > 0 },
-                        { label: 'Trein. Vencendo',   value: summary?.treinamentos_vencendo ?? 0, icon: BookOpen, alert: (summary?.treinamentos_vencendo ?? 0) > 0 },
-                        { label: 'Ausências no Mês',  value: summary?.ausencias_mes ?? 0,         icon: Calendar, alert: false },
+                        { label: 'Saldo de férias',          value: diasTexto(summary?.ferias_saldo),     icon: Umbrella, alert: (summary?.ferias_saldo ?? 0) === 0 },
+                        { label: 'Pontos em análise',        value: summary?.pontos_pendentes ?? 0,       icon: Clock,    alert: (summary?.pontos_pendentes ?? 0) > 0 },
+                        { label: 'Treinamentos vencendo',    value: summary?.treinamentos_vencendo ?? 0,  icon: BookOpen, alert: (summary?.treinamentos_vencendo ?? 0) > 0 },
+                        { label: 'Ausências no mês',         value: summary?.ausencias_mes ?? 0,          icon: Calendar, alert: false },
                     ].map(({ label, value, icon: Icon, alert }) => (
                         <div key={label} className={`p-3 rounded-2xl ${alert ? 'bg-amber-400/30 border border-amber-300/30' : 'bg-white/10'}`}>
                             <div className="flex items-center gap-2">
@@ -318,23 +338,25 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 </div>
             </div>
 
-            {/* Navigation */}
-            <div className="flex border-b border-slate-100 px-2 shrink-0">
+            {/* Navegação — nomes por extenso ("Docs", "Trein." eram abreviações).
+                Seis por extenso não cabem numa linha de 390px; em vez de rolagem
+                horizontal (esconde aba), duas linhas de três. */}
+            <nav aria-label="Seções do portal" className="grid grid-cols-3 gap-1 p-2 border-b border-slate-100 shrink-0">
                 {([
-                    ['home',   'Início',    User],
-                    ['ponto',  'Ponto',     Clock],
-                    ['ferias', 'Férias',    Umbrella],
-                    ['folha',  'Folha',     DollarSign],
-                    ['docs',   'Docs',      FileText],
-                    ['treino', 'Trein.',    BookOpen],
+                    ['home',   'Início',       User],
+                    ['ponto',  'Ponto',        Clock],
+                    ['ferias', 'Férias',       Umbrella],
+                    ['folha',  'Holerites',    DollarSign],
+                    ['docs',   'Documentos',   FileText],
+                    ['treino', 'Treinamentos', BookOpen],
                 ] as const).map(([id, label, Icon]) => (
-                    <button key={id} onClick={() => setActiveSection(id)}
-                        className={`flex-1 flex flex-col items-center gap-1 py-3 text-xs font-black uppercase tracking-widest transition-all border-b-2 ${activeSection === id ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-400'}`}>
-                        <Icon className="w-4 h-4" />
-                        {label}
+                    <button key={id} onClick={() => setActiveSection(id)} aria-current={activeSection === id ? 'page' : undefined}
+                        className={`flex flex-col items-center justify-center gap-1 min-h-14 px-1 py-2 rounded-lg text-xs font-semibold transition-colors ${activeSection === id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
+                        <Icon className="w-5 h-5 shrink-0" />
+                        <span>{label}</span>
                     </button>
                 ))}
-            </div>
+            </nav>
 
             {/* Holerite Modal */}
             {paystubOpen && (
@@ -358,13 +380,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             <p className="text-lg font-black text-indigo-900">{emp?.matricula || '—'}</p>
                         </div>
                         <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <p className="text-xs font-black text-slate-500 mb-1">Data de Admissão</p>
-                            <p className="text-sm font-bold text-slate-800">{emp?.hire_date || '—'}</p>
+                            <p className="text-xs font-black text-slate-500 mb-1">Data de admissão</p>
+                            <p className="text-sm font-bold text-slate-800">{dataBR(emp?.hire_date)}</p>
                         </div>
                         <div className="grid grid-cols-2 gap-3">
                             <Button variant="secondary" onClick={() => setActiveSection('ponto')} className="p-4 rounded-2xl flex flex-col items-center gap-2 h-auto normal-case tracking-normal">
                                 <Clock className="w-6 h-6 text-indigo-500" />
-                                <span className="text-xs font-black text-slate-700">Meu Ponto</span>
+                                <span className="text-xs font-black text-slate-700">Meu ponto</span>
                             </Button>
                             <Button variant="secondary" onClick={() => setActiveSection('ferias')} className="p-4 rounded-2xl flex flex-col items-center gap-2 h-auto normal-case tracking-normal">
                                 <Umbrella className="w-6 h-6 text-blue-500" />
@@ -386,14 +408,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             {recentEntries.slice(0, 10).map(e => (
                                 <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-800">{e.date}</p>
+                                        <p className="text-sm font-bold text-slate-800">{dataBR(e.date)}</p>
                                         <p className="text-xs text-slate-400">{e.project_name || 'Sem obra'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-black text-slate-900">{e.hours_worked}h{e.overtime_hours > 0 ? ` +${e.overtime_hours}HE` : ''}</p>
-                                        <span className={`text-xs font-black px-2 py-0.5 rounded-full ${e.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' : e.status === 'REJEITADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                                            {e.status}
-                                        </span>
+                                        <p className="text-sm font-black text-slate-900">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
+                                        <SeloDeStatus {...statusDoPonto(e.status)} />
                                     </div>
                                 </div>
                             ))}
@@ -408,7 +428,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             <Umbrella className="w-5 h-5 text-blue-600 shrink-0" />
                             <div>
                                 <p className="text-xs font-black text-blue-800">Saldo disponível</p>
-                                <p className="text-2xl font-black text-blue-900">{summary?.ferias_saldo ?? 0} dias</p>
+                                <p className="text-2xl font-black text-blue-900">{diasTexto(summary?.ferias_saldo)}</p>
                             </div>
                         </div>
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Histórico</p>
@@ -420,14 +440,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             {absences.slice(0, 8).map(a => (
                                 <div key={a.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-800">{a.tipo.replace('_', ' ')}</p>
-                                        <p className="text-xs text-slate-400">{a.data_inicio} → {a.data_fim}</p>
+                                        <p className="text-sm font-bold text-slate-800">{tipoDaAusencia(a.tipo)}</p>
+                                        <p className="text-xs text-slate-400">{periodoTexto(a.data_inicio, a.data_fim)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-black text-slate-900">{a.dias}d</p>
-                                        <span className={`text-xs font-black px-1.5 py-0.5 rounded-full ${a.status === 'APROVADO' ? 'bg-emerald-100 text-emerald-700' : a.status === 'REJEITADO' ? 'bg-rose-100 text-rose-700' : 'bg-amber-100 text-amber-700'}`}>
-                                            {a.status}
-                                        </span>
+                                        <p className="text-sm font-black text-slate-900">{diasTexto(a.dias)}</p>
+                                        <SeloDeStatus {...statusDaAusencia(a.status)} />
                                     </div>
                                 </div>
                             ))}
@@ -459,14 +477,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             vazioDica="Os documentos aparecem aqui quando o RH os compartilha com você."
                         >
                             {documents.map(d => {
-                                const today = new Date().toISOString().split('T')[0];
-                                const expired = d.data_validade && d.data_validade < today;
+                                const expired = situacaoDaValidade(d.data_validade) === 'vencido';
                                 return (
                                     <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border ${expired ? 'border-rose-200 bg-rose-50' : 'border-slate-100 bg-white'}`}>
                                         <FileText className={`w-4 h-4 shrink-0 ${expired ? 'text-rose-500' : 'text-indigo-500'}`} />
                                         <div className="flex-1 min-w-0">
                                             <p className="text-sm font-bold text-slate-800 truncate">{d.nome}</p>
-                                            <p className="text-xs text-slate-400">{d.categoria}{d.data_validade ? ` · vence ${d.data_validade}` : ''}</p>
+                                            <p className="text-xs text-slate-400">{d.categoria}{d.data_validade ? ` · ${validadeTexto(d.data_validade)}` : ''}</p>
                                         </div>
                                         {expired && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
                                         {d.storage_path && (
@@ -486,22 +503,16 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Folha de Pagamento */}
                 {activeSection === 'folha' && (
                     <div className="space-y-3">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Holerites Disponíveis</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus holerites</p>
                         <LeituraDoPortal
                             carregando={folhaCarregando} erro={folhaErro} vazio={folhaRuns.length === 0}
                             onTentarDeNovo={() => recarregarFolha()} oQue="seus holerites"
                             vazioIcone={DollarSign} vazioTitulo="Nenhum holerite disponível"
-                            vazioDica="Os holerites aparecem aqui quando a folha do mês é calculada."
+                            vazioDica="O holerite do mês aparece aqui quando o RH fecha a folha."
                         >
                             {folhaRuns.map(run => {
-                                const typeLabel =
-                                    run.type === 'mensal' ? 'Folha Mensal' :
-                                    run.type === 'ferias' ? 'Férias' :
-                                    run.type === 'decimo_terceiro' ? '13º Salário' :
-                                    run.type === 'rescisao' ? 'Rescisão' : run.type;
-                                const [y, m] = run.start_date.split('-');
-                                const months = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
-                                const periodLabel = `${months[parseInt(m) - 1]}/${y}`;
+                                const typeLabel = tipoDaFolha(run.type);
+                                const periodLabel = competenciaPorExtenso(run.start_date);
                                 return (
                                     <Button
                                         key={run.id}
@@ -596,10 +607,10 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                                     {m.nr_referencia && (
                                                         <p className="text-xs font-black text-rose-600">{m.nr_referencia}</p>
                                                     )}
-                                                    <p className="text-xs text-slate-400 mt-0.5">
-                                                        v{m.versao}
-                                                        {m.data_limite ? ` · prazo ${m.data_limite.split('-').reverse().join('/')}` : ''}
-                                                    </p>
+                                                    {/* "v1" era jargão do RH (versão do curso); o colaborador precisa do prazo. */}
+                                                    {m.data_limite && (
+                                                        <p className="text-xs text-slate-400 mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
+                                                    )}
                                                 </div>
                                                 <span className="text-xs font-black text-slate-500 shrink-0">
                                                     {Math.round(m.percentual)}%
@@ -619,23 +630,28 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 })}
                             </div>
 
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Treinamentos</p>
+                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus treinamentos</p>
                         <LeituraDoPortal
                             carregando={treinosCarregando} erro={treinosErro} vazio={trainings.length === 0}
                             onTentarDeNovo={() => recarregarTreinos()} oQue="seus treinamentos"
                             vazioIcone={BookOpen} vazioTitulo="Nenhum treinamento registrado"
                         >
                             {trainings.map(t => {
-                                const today = new Date().toISOString().split('T')[0];
-                                const expired = t.data_validade && t.data_validade < today;
-                                const expiring = t.data_validade && !expired && t.data_validade <= new Date(Date.now() + 30 * 86400000).toISOString().split('T')[0];
+                                // "Hoje" do aparelho: toISOString() é UTC e, depois das 21h, já era amanhã.
+                                const situacao = situacaoDaValidade(t.data_validade);
+                                const expired = situacao === 'vencido';
+                                const expiring = situacao === 'vencendo';
                                 return (
                                     <div key={t.id} className={`p-3 rounded-xl border ${expired ? 'border-rose-200 bg-rose-50' : expiring ? 'border-amber-200 bg-amber-50' : 'border-slate-100 bg-white'}`}>
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
                                                 <p className="text-sm font-bold text-slate-800">{t.course_nome}</p>
                                                 {t.nr_referencia && <p className="text-xs font-black text-rose-600">{t.nr_referencia}</p>}
-                                                <p className="text-xs text-slate-400 mt-0.5">{t.data_realizacao}{t.data_validade ? ` → ${t.data_validade}` : ''}</p>
+                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                    {t.data_realizacao ? `Realizado em ${dataBR(t.data_realizacao)}` : ''}
+                                                    {t.data_realizacao && t.data_validade ? ' · ' : ''}
+                                                    {t.data_validade ? validadeTexto(t.data_validade) : ''}
+                                                </p>
                                             </div>
                                             <span className={`text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${expired ? 'bg-rose-100 text-rose-700' : expiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
                                                 {expired ? 'Vencido' : expiring ? 'Vencendo' : 'Válido'}
@@ -997,7 +1013,7 @@ const LaborPortal: React.FC<LaborPortalProps> = ({ orgId, employees }) => {
 
             {previa && (
                 <MobilePreviewFrame onClose={() => setPrevia(null)} title={`Prévia do Portal do Colaborador — ${previa.nome}`}>
-                    <PortalView employeeId={previa.employeeId} orgId={orgId} portalToken={previa.token} previa={{ nome: previa.nome }} />
+                    <PortalView employeeId={previa.employeeId} orgId={orgId} portalToken={previa.token} previa={{ nome: previa.nome, onSair: () => setPrevia(null) }} />
                 </MobilePreviewFrame>
             )}
         </div>

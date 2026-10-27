@@ -69,7 +69,7 @@ describe('Portal do Colaborador — resumo', () => {
         montar();
         expect(await screen.findByText('Não foi possível abrir o seu portal')).toBeTruthy();
         expect(screen.getByText(/sem conexão/i)).toBeTruthy();
-        expect(screen.queryByText('Dias de Férias')).toBeNull();
+        expect(screen.queryByText('Saldo de férias')).toBeNull();
 
         fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
         expect(await screen.findByText('Claudinei da Costa Vieira')).toBeTruthy();
@@ -84,7 +84,7 @@ describe('Portal do Colaborador — aba Folha', () => {
             return falhar ? { data: null, error: { message: 'canceling statement due to statement timeout' } } : { data: [folhaOut], error: null };
         });
         montar();
-        await abrirAba(/folha/i);
+        await abrirAba(/holerites/i);
 
         expect(await screen.findByText('Não foi possível carregar seus holerites')).toBeTruthy();
         expect(screen.queryByText('Nenhum holerite disponível')).toBeNull();
@@ -92,7 +92,7 @@ describe('Portal do Colaborador — aba Folha', () => {
 
         falhar = false;
         fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
-        expect(await screen.findByText('Out/2026')).toBeTruthy();
+        expect(await screen.findByText('Outubro de 2026')).toBeTruthy();
     });
 
     it('enquanto carrega diz "Carregando", e vazio de verdade orienta', async () => {
@@ -101,14 +101,14 @@ describe('Portal do Colaborador — aba Folha', () => {
             ? new Promise(r => { soltar = r; })
             : Promise.resolve({ data: [], error: null }));
         montar();
-        await abrirAba(/folha/i);
+        await abrirAba(/holerites/i);
 
         expect(await screen.findByText('Carregando seus holerites...')).toBeTruthy();
         expect(screen.queryByText('Nenhum holerite disponível')).toBeNull();
 
         soltar({ data: [], error: null });
         expect(await screen.findByText('Nenhum holerite disponível')).toBeTruthy();
-        expect(screen.getByText(/quando a folha do mês é calculada/)).toBeTruthy();
+        expect(screen.getByText(/quando o RH fecha a folha/)).toBeTruthy();
     });
 
     it('holerite pelo link vem da RPC por token, nunca das tabelas da folha', async () => {
@@ -123,8 +123,8 @@ describe('Portal do Colaborador — aba Folha', () => {
             organization: { name: 'Alpa Construtora e Incorporadora', cnpj: '00.000.000/0001-00', address: null, settings: { tipo_pessoa: 'PJ' } },
         });
         montar();
-        await abrirAba(/folha/i);
-        fireEvent.click(await screen.findByText('Out/2026'));
+        await abrirAba(/holerites/i);
+        fireEvent.click(await screen.findByText('Outubro de 2026'));
 
         expect(await screen.findByText('Recibo de Pagamento')).toBeTruthy();
         expect(getPortalPaystub).toHaveBeenCalledWith(TOKEN, 'run-out');
@@ -135,8 +135,8 @@ describe('Portal do Colaborador — aba Folha', () => {
         rpc.mockResolvedValue({ data: [folhaOut], error: null });
         getPortalPaystub.mockRejectedValue({ code: 'P0001', message: 'PORTAL_TOKEN_INVALIDO' });
         montar();
-        await abrirAba(/folha/i);
-        fireEvent.click(await screen.findByText('Out/2026'));
+        await abrirAba(/holerites/i);
+        fireEvent.click(await screen.findByText('Outubro de 2026'));
 
         expect(await screen.findByText('Não foi possível abrir o holerite')).toBeTruthy();
         expect(screen.getByText(/link do portal expirou/i)).toBeTruthy();
@@ -155,7 +155,7 @@ describe('Portal do Colaborador — download de documento', () => {
         invoke.mockResolvedValue({ data: null, error: new Error('Edge Function returned a non-2xx status code') });
 
         montar();
-        await abrirAba(/docs/i);
+        await abrirAba(/documentos/i);
         const baixar = await screen.findByRole('button', { name: 'Baixar ASO admissional' });
         fireEvent.click(baixar);
 

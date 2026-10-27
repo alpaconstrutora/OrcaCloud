@@ -255,6 +255,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
           {empreendimento.papel && linha ? (
             <p className="text-slate-600" data-testid="torre-do-bloco">
               {empreendimento.papel.tipo === 'GARAGEM' ? `Garagem da ${linha.torre}` : linha.torre}: {linha.acima} pavimento(s)
+              {linha.alturaAcimaM > 0 ? ` (${n2(linha.alturaAcimaM)} m)` : ''}
               {linha.garagens ? ` + ${linha.garagens} garagem(ns)` : ''} {FONTE[linha.fonte]} · na planta {linha.pavimentosNaPlanta ?? '—'}
               {linha.garagensNaPlanta ? ` + ${linha.garagensNaPlanta}` : ''} ·{' '}
               <span className={linha.estado === 'OK' ? 'text-emerald-700' : 'text-amber-800'}>{ESTADO_DA_LINHA[linha.estado]}</span>

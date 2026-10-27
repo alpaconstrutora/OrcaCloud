@@ -101,3 +101,18 @@ describe('estruturasDoEmpreendimento', () => {
     expect(es.map((e) => e.nome)).toEqual(['Torre A', 'Torre B']);
   });
 });
+
+describe('pé-direito por pavimento (27/10/2026)', () => {
+  it('o do pavimento cadastrado; sem ele, o padrão da torre', () => {
+    const e = estruturaDaTorre({ id: 't', name: 'T', pe_direito_padrao_m: 3, units: [] }, [
+      pav({ name: 'Térreo', tipo: 'TERREO', floor_number: 0, pe_direito_m: 4.5 }),
+      pav({ name: 'Tipo', tipo: 'TIPO', floor_number: 1, repeat_count: 2, pe_direito_m: null }),
+    ]);
+    expect(e.acima.map((p) => p.peDireitoMm)).toEqual([4500, 3000, 3000]);
+  });
+  it('sem cadastro de pavimentos: o padrão da torre em todos os andares das unidades; sem padrão, null', () => {
+    expect(estruturaDaTorre({ ...TORRE_A, pe_direito_padrao_m: 2.9 }, []).garagens.map((p) => p.peDireitoMm)).toEqual([2900, 2900]);
+    expect(estruturaDaTorre(TORRE_A, []).acima[0].peDireitoMm).toBeNull();
+  });
+});
+

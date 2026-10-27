@@ -7,6 +7,10 @@
 // lado de "Gerar em série" — eram dois "gerar unidades" com efeitos opostos, um em
 // cada seção, e o usuário não sabia qual era qual. Este componente só publica a
 // lista de pavimentos (`onFloorsChange`) para o UnitEditor contar e habilitar.
+//
+// Pé-direito (27/10/2026, "crie pé-direito por pavimento em empreendimento"): metros, opcional; vazio = o padrão
+// da torre. A massa da Planta empilha os blocos da torre por trecho de mesma altura
+// (utils/blueprintAjusteAoEmpreendimento).
 import React from 'react';
 import { Plus, Loader2, Layers, Check, X } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
@@ -48,8 +52,18 @@ const TIPO_STYLE: Record<FloorTipo, string> = {
 
 const emptyForm = () => ({
   name: '', tipo: 'TIPO' as FloorTipo,
-  floor_number: '', repeat_count: '1', units_per_floor: '', prefix: '',
+  floor_number: '', repeat_count: '1', units_per_floor: '', prefix: '', pe_direito_m: '',
 });
+
+/** "3,05" ou "3.05" → 3.05; vazio → null; fora de 2–15 m → `false` (a mesma faixa do banco e da massa da Planta). */
+export function lerPeDireito(texto: string): number | null | false {
+  const t = texto.trim().replace(',', '.');
+  if (!t) return null;
+  const v = Math.round(Number(t) * 100) / 100;
+  return Number.isFinite(v) && v >= 2 && v <= 15 ? v : false;
+}
+const fmtPeDireito = (v: number | null | undefined) => (v == null ? '' : Number(v).toFixed(2).replace('.', ','));
+const MSG_PE_DIREITO = 'Pé-direito entre 2,00 e 15,00 m (ou vazio, para usar o padrão da torre).';
 
 export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
   const [floors, setFloors] = React.useState<EmpreendimentoFloor[]>([]);
@@ -80,6 +94,8 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
     e.preventDefault();
     if (!form.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
     if (!form.floor_number) { notify('Informe o número inicial do pavimento.', 'error'); return; }
+    const peDireito = lerPeDireito(form.pe_direito_m);
+    if (peDireito === false) { notify(MSG_PE_DIREITO, 'error'); return; }
     setSaving(true);
     try {
       const payload: EmpreendimentoFloorInsert = {
@@ -90,6 +106,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
         repeat_count: Number(form.repeat_count) || 1,
         units_per_floor: form.units_per_floor ? Number(form.units_per_floor) : undefined,
         prefix: form.prefix || undefined,
+        pe_direito_m: peDireito,
         sort_order: floors.length,
       };
       // §22: entra na lista local — sem recarregar tudo (sort_order = fim da lista).
@@ -110,11 +127,14 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
       repeat_count: String(f.repeat_count),
       units_per_floor: f.units_per_floor != null ? String(f.units_per_floor) : '',
       prefix: f.prefix ?? '',
+      pe_direito_m: fmtPeDireito(f.pe_direito_m),
     });
   };
 
   const handleSaveEdit = async (f: EmpreendimentoFloor) => {
     if (!editForm.name.trim()) { notify('Informe o nome do pavimento.', 'error'); return; }
+    const peDireito = lerPeDireito(editForm.pe_direito_m);
+    if (peDireito === false) { notify(MSG_PE_DIREITO, 'error'); return; }
     try {
       const updated = await empreendimentoService.updateFloor(f.id, {
         name: editForm.name.trim(),
@@ -123,6 +143,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
         repeat_count: Number(editForm.repeat_count) || 1,
         units_per_floor: editForm.units_per_floor ? Number(editForm.units_per_floor) : undefined,
         prefix: editForm.prefix || undefined,
+        pe_direito_m: peDireito,
       });
       setFloors(prev => prev.map(x => x.id === f.id ? updated : x));
       setEditingId(null);
@@ -172,7 +193,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
 
       {/* Formulário de adição — inline de propósito: pavimentos se digitam em sequência
           (subsolo, térreo, tipo ×N, cobertura), é um formulário só (§30). */}
-      <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-7 gap-x-6 gap-y-4 items-end">
+      <form onSubmit={handleAdd} className="grid grid-cols-2 md:grid-cols-8 gap-x-6 gap-y-4 items-end">
         <div className="space-y-1.5 col-span-2">
           <label htmlFor={`pav-nome-${tower.id}`} className={rotuloCls}>Nome *</label>
           <input id={`pav-nome-${tower.id}`} className={inputCls} placeholder="ex: Pavimento Tipo" value={form.name}
@@ -201,6 +222,12 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
             placeholder={tower.units_per_floor ? String(tower.units_per_floor) : '—'} value={form.units_per_floor}
             onChange={e => setForm(p => ({ ...p, units_per_floor: e.target.value }))} />
         </div>
+        <div className="space-y-1.5">
+          <label htmlFor={`pav-pd-${tower.id}`} className={rotuloCls}>Pé-direito (m)</label>
+          <input id={`pav-pd-${tower.id}`} className={inputCls} inputMode="decimal"
+            placeholder={tower.pe_direito_padrao_m != null ? fmtPeDireito(tower.pe_direito_padrao_m) : 'ex: 3,00'} value={form.pe_direito_m}
+            onChange={e => setForm(p => ({ ...p, pe_direito_m: e.target.value }))} />
+        </div>
         <Button type="submit" disabled={saving} className="col-span-2 md:col-span-1">
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
           Adicionar pavimento
@@ -225,6 +252,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                 <th className="py-2.5 px-4">Nº inicial</th>
                 <th className="py-2.5 px-4">Repete</th>
                 <th className="py-2.5 px-4">Un./pav.</th>
+                <th className="py-2.5 px-4">Pé-direito</th>
                 <th className="py-2.5 px-4">Andares</th>
                 <th className="py-2.5 px-4 text-center">Ações</th>
               </tr>
@@ -233,6 +261,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
               {floors.map(f => {
                 const isEd = editingId === f.id;
                 const upf = f.units_per_floor ?? tower.units_per_floor;
+                const pd = f.pe_direito_m ?? tower.pe_direito_padrao_m;
                 const rangeStr = f.repeat_count === 1
                   ? labelFloor(f.floor_number, f.tipo)
                   : `${labelFloor(f.floor_number, f.tipo)} → ${labelFloor(f.floor_number + f.repeat_count - 1, f.tipo)}`;
@@ -254,6 +283,9 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                           onChange={e => setEditForm(p => ({ ...p, repeat_count: e.target.value }))} /></td>
                         <td className="py-2 px-3"><input className={editCls + ' w-16'} type="number" min="1" value={editForm.units_per_floor}
                           onChange={e => setEditForm(p => ({ ...p, units_per_floor: e.target.value }))} /></td>
+                        <td className="py-2 px-3"><input className={editCls + ' w-16'} inputMode="decimal" aria-label="Pé-direito (m)"
+                          placeholder={tower.pe_direito_padrao_m != null ? fmtPeDireito(tower.pe_direito_padrao_m) : '—'} value={editForm.pe_direito_m}
+                          onChange={e => setEditForm(p => ({ ...p, pe_direito_m: e.target.value }))} /></td>
                         <td className="py-2 px-3 text-gray-400 italic text-xs">
                           {previewRange(editForm.floor_number, editForm.repeat_count, editForm.tipo)}
                         </td>
@@ -277,6 +309,9 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                           {f.repeat_count > 1 ? <span className="text-blue-600">{f.repeat_count}×</span> : '1×'}
                         </td>
                         <td className="py-2.5 px-4 text-gray-500 font-normal">{upf != null ? upf : <span className="text-gray-300">—</span>}</td>
+                        <td className="py-2.5 px-4 text-gray-500 font-normal" title={f.pe_direito_m == null && pd != null ? 'Padrão da torre' : undefined}>
+                          {pd != null ? `${fmtPeDireito(pd)} m${f.pe_direito_m == null ? ' (torre)' : ''}` : <span className="text-gray-300">—</span>}
+                        </td>
                         <td className="py-2.5 px-4 text-gray-500 text-xs font-normal">{rangeStr}</td>
                         <td className="py-2.5 px-4 text-center">
                           <div className="flex items-center justify-center gap-1">
@@ -297,7 +332,7 @@ export const FloorEditor: React.FC<Props> = ({ tower, onFloorsChange }) => {
                     <span className="text-xs font-semibold text-gray-400">Total</span>
                   </td>
                   <td className="py-2.5 px-4 text-blue-600">{totalAndares} andares</td>
-                  <td className="py-2.5 px-4" colSpan={3}>{totalUnidades} unidades</td>
+                  <td className="py-2.5 px-4" colSpan={4}>{totalUnidades} unidades</td>
                 </tr>
               </tfoot>
             )}

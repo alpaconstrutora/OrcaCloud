@@ -69,7 +69,8 @@ describe('Portal do Colaborador — resumo', () => {
         montar();
         expect(await screen.findByText('Não foi possível abrir o seu portal')).toBeTruthy();
         expect(screen.getByText(/sem conexão/i)).toBeTruthy();
-        expect(screen.queryByText('Saldo de férias')).toBeNull();
+        // Nada do portal por trás do erro: nem rodapé, nem números zerados.
+        expect(screen.queryByRole('navigation', { name: 'Seções do portal' })).toBeNull();
 
         fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
         expect(await screen.findByText('Claudinei da Costa Vieira')).toBeTruthy();
@@ -87,12 +88,12 @@ describe('Portal do Colaborador — aba Folha', () => {
         await abrirAba(/holerites/i);
 
         expect(await screen.findByText('Não foi possível carregar seus holerites')).toBeTruthy();
-        expect(screen.queryByText('Nenhum holerite disponível')).toBeNull();
+        expect(screen.queryByText('Nenhum holerite ainda')).toBeNull();
         expect(screen.queryByText(/statement timeout/)).toBeNull();
 
         falhar = false;
         fireEvent.click(screen.getByRole('button', { name: /tentar de novo/i }));
-        expect(await screen.findByText('Outubro de 2026')).toBeTruthy();
+        expect(await screen.findByText(/Outubro de 2026/)).toBeTruthy();
     });
 
     it('enquanto carrega diz "Carregando", e vazio de verdade orienta', async () => {
@@ -104,11 +105,11 @@ describe('Portal do Colaborador — aba Folha', () => {
         await abrirAba(/holerites/i);
 
         expect(await screen.findByText('Carregando seus holerites...')).toBeTruthy();
-        expect(screen.queryByText('Nenhum holerite disponível')).toBeNull();
+        expect(screen.queryByText('Nenhum holerite ainda')).toBeNull();
 
         soltar({ data: [], error: null });
-        expect(await screen.findByText('Nenhum holerite disponível')).toBeTruthy();
-        expect(screen.getByText(/quando o RH fecha a folha/)).toBeTruthy();
+        expect(await screen.findByText('Nenhum holerite ainda')).toBeTruthy();
+        expect(screen.getByText(/quando o RH fechar a folha/)).toBeTruthy();
     });
 
     it('holerite pelo link vem da RPC por token, nunca das tabelas da folha', async () => {
@@ -124,7 +125,8 @@ describe('Portal do Colaborador — aba Folha', () => {
         });
         montar();
         await abrirAba(/holerites/i);
-        fireEvent.click(await screen.findByText('Outubro de 2026'));
+        expect(await screen.findByText(/Outubro de 2026/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Abrir holerite' }));
 
         expect(await screen.findByText('Recibo de Pagamento')).toBeTruthy();
         expect(getPortalPaystub).toHaveBeenCalledWith(TOKEN, 'run-out');
@@ -136,7 +138,8 @@ describe('Portal do Colaborador — aba Folha', () => {
         getPortalPaystub.mockRejectedValue({ code: 'P0001', message: 'PORTAL_TOKEN_INVALIDO' });
         montar();
         await abrirAba(/holerites/i);
-        fireEvent.click(await screen.findByText('Outubro de 2026'));
+        expect(await screen.findByText(/Outubro de 2026/)).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Abrir holerite' }));
 
         expect(await screen.findByText('Não foi possível abrir o holerite')).toBeTruthy();
         expect(screen.getByText(/link do portal expirou/i)).toBeTruthy();

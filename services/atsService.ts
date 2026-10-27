@@ -108,6 +108,8 @@ export interface PortalEmployeeSummary {
     pontos_pendentes: number;
     treinamentos_vencendo: number;
     ausencias_mes: number;
+    /** Empresa do colaborador — marca do portal (migration 20271026990000). */
+    organization?: { name: string; logo_url: string | null } | null;
 }
 
 /** Retorno de `fn_colab_portal_paystub` — só os campos que o recibo usa. */

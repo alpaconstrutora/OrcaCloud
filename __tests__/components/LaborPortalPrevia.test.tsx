@@ -92,7 +92,7 @@ describe('PortalView em prévia', () => {
         montar();
         const faixa = await screen.findByRole('note');
         expect(within(faixa).getByText(/^Prévia · vendo como/).textContent).toBe('Prévia · vendo como Claudinei da Costa Vieira');
-        await screen.findByText('Saldo de férias');
+        await screen.findByRole('navigation', { name: 'Seções do portal' });
         expect(screen.queryByRole('button', { name: 'Sair do portal' })).toBeNull();
     });
 
@@ -112,7 +112,7 @@ describe('PortalView em prévia', () => {
     it('cursos da Academia não abrem na prévia (gravariam progresso em nome do colaborador)', async () => {
         listEnrollments.mockResolvedValue([{ id: 'm1', curso: 'NR-35 Trabalho em Altura', nr_referencia: 'NR-35', versao: 1, status: 'NAO_INICIADO', percentual: 0, data_limite: null }]);
         montar();
-        await screen.findByText('Saldo de férias');
+        await screen.findByRole('navigation', { name: 'Seções do portal' });
         fireEvent.click(screen.getByRole('button', { name: 'Treinamentos' }));
 
         const curso = (await screen.findByText('NR-35 Trabalho em Altura')).closest('button') as HTMLButtonElement;
@@ -128,7 +128,7 @@ describe('PortalView em prévia', () => {
                 <PortalView employeeId="emp-1" orgId="org-alpa" portalToken="tok-claudinei" onLogout={() => {}} />
             </QueryClientProvider>,
         );
-        await screen.findByText('Saldo de férias');
+        await screen.findByRole('navigation', { name: 'Seções do portal' });
         expect(screen.queryByRole('note')).toBeNull();
         expect(screen.getByRole('button', { name: 'Sair do portal' })).toBeTruthy();
     });

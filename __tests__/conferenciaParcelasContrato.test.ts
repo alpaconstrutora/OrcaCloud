@@ -3,7 +3,7 @@ import {
     conferirParcelas,
     planoDeDistribuicao,
     planoDoGerador,
-    parcelaComplementar,
+    parcelaComplementar, motivoContratoFechado,
     baseParaCorrecao,
     novoValorOriginal,
     motivoNaoAjustaContrato,
@@ -70,7 +70,8 @@ describe('conferirParcelas', () => {
 describe('parcelaComplementar', () => {
     it('acrescenta uma parcela com o saldo no vencimento escolhido', () => {
         const r = parcelaComplementar(cronograma042, 150, '2026-11-10');
-        expect(r).toEqual([...cronograma042, { date: '2026-11-10', value: 150 }]);
+        // Com Tipo: a sincronização leva o installment_type ao título (coluna "Tipo").
+        expect(r).toEqual([...cronograma042, { date: '2026-11-10', value: 150, installment_type: 'AVULSA' }]);
     });
 
     it('não lança complemento sem falta', () => {
@@ -169,7 +170,7 @@ describe('baseParaCorrecao', () => {
         const avista = { ...parcela(0, 2700, pago), source_system: 'CONTRACT_AVISTA', reference_id: ID, transaction_date: '2026-05-01' };
         const b = baseParaCorrecao({ ...cts042, payment_term_type: 'Vista' }, [], [avista]);
         expect(b.cronograma).toEqual([]);
-        expect(parcelaComplementar(b.cronograma, 150, '2026-11-10')).toEqual([{ date: '2026-11-10', value: 150 }]);
+        expect(parcelaComplementar(b.cronograma, 150, '2026-11-10')).toEqual([{ date: '2026-11-10', value: 150, installment_type: 'AVULSA' }]);
     });
 });
 
@@ -254,5 +255,24 @@ describe('revisão: o que a correção não pode desfazer em silêncio', () => {
         if ('motivo' in r) throw new Error(r.motivo);
         expect(r.cronograma[0]).toMatchObject({ date: '2026-05-15', value: 1100 });
         expect(r.cronograma[1].value).toBe(1750);
+    });
+});
+
+describe('contrato fechado (pontos adiados do PR #183)', () => {
+    it('Cancelado não se confere: as parcelas canceladas diriam "faltam" o valor cheio', () => {
+        expect(conferirParcelas({ ...cts042, status: 'Cancelado' }, [parcela(1, 1000), parcela(2, 1700)], aditivoAD001).aplica).toBe(false);
+    });
+
+    it('Concluído e Encerrado se conferem (a informação vale), mas as ações dizem por que não', () => {
+        for (const status of ['Concluído', 'Encerrado']) {
+            expect(conferirParcelas({ ...cts042, status }, [parcela(1, 1000), parcela(2, 1700)], aditivoAD001).aplica).toBe(true);
+            expect(motivoContratoFechado({ ...cts042, status })).toBe(`Contrato ${status} — reabra o contrato para mexer nas parcelas.`);
+        }
+    });
+
+    it('contrato em andamento não tem motivo de bloqueio', () => {
+        for (const status of ['Ativo', 'Assinado', 'Suspenso', undefined]) {
+            expect(motivoContratoFechado({ ...cts042, status })).toBeNull();
+        }
     });
 });

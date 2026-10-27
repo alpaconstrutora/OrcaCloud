@@ -26,7 +26,7 @@ import AlterarValorParcelaSheet, { descreverAlteracaoManual } from './contracts/
 import AlterarVencimentoParcelaSheet, { descreverVencimentoManual } from './contracts/AlterarVencimentoParcelaSheet';
 import CorrigirDivergenciaSheet from './contracts/CorrigirDivergenciaSheet';
 import GerarParcelasSheet from './contracts/GerarParcelasSheet';
-import { conferirParcelas } from '../utils/conferenciaParcelasContrato';
+import { conferirParcelas, motivoContratoFechado } from '../utils/conferenciaParcelasContrato';
 import { parcelaBaixada } from '../utils/contratoParcelaVariavel';
 import { contractIndexService, IndexName } from '../services/contractIndexService';
 import { contractGuaranteeService } from '../services/contractGuaranteeService';
@@ -1251,6 +1251,8 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
             { podeLancar: podeFaturarContratoComercial(contract) },
         )
         : null, [contract, financialEntries, addendums]);
+    // Concluído/Encerrado: a divergência aparece, mas corrigir/gerar fica desligado com o motivo.
+    const motivoFechado = contract ? motivoContratoFechado(contract) : null;
 
     /** Correção/gerador gravados: troca o contrato e relê as parcelas sem o spinner (§22). */
     const aposCorrecao = async (atualizado: Contract, mensagem: string) => {
@@ -3198,14 +3200,18 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                             {conferencia.aditivosSemParcela.length === 1 ? 'mudou o valor do contrato e não virou parcela.' : 'mudaram o valor do contrato e não viraram parcela.'}</>
                                     )}
                                 </p>
-                                <button
-                                    type="button"
-                                    onClick={() => setCorrigindoDivergencia(true)}
-                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-red-700 border border-red-200 rounded-[6px] text-[13px] font-medium hover:bg-red-100 transition-all active:scale-95 shrink-0"
-                                >
-                                    <Scale className="w-[15px] h-[15px]" />
-                                    Corrigir divergência
-                                </button>
+                                {/* span: botão desligado não mostra o title em todo navegador */}
+                                <span className="inline-flex shrink-0" title={motivoFechado ?? undefined}>
+                                    <button
+                                        type="button"
+                                        onClick={() => setCorrigindoDivergencia(true)}
+                                        disabled={!!motivoFechado}
+                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-red-700 border border-red-200 rounded-[6px] text-[13px] font-medium hover:bg-red-100 transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                                    >
+                                        <Scale className="w-[15px] h-[15px]" />
+                                        Corrigir divergência
+                                    </button>
+                                </span>
                             </div>
                         )}
 
@@ -3224,15 +3230,17 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                                 {/* Gerador (26/10/2026): pelo Valor Atual, mantendo as pagas. Recorrente/medição não. */}
                                 {conferencia?.aplica && (
-                                    <button
-                                        type="button"
-                                        onClick={() => setGerandoParcelas(true)}
-                                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 border border-gray-200 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 transition-all active:scale-95 shrink-0"
-                                        title="Gerar as parcelas a partir do valor do contrato (as pagas ficam)"
-                                    >
-                                        <ListPlus className="w-[15px] h-[15px]" />
-                                        Gerar parcelas
-                                    </button>
+                                    <span className="inline-flex shrink-0" title={motivoFechado ?? 'Gerar as parcelas a partir do valor do contrato (as pagas ficam)'}>
+                                        <button
+                                            type="button"
+                                            onClick={() => setGerandoParcelas(true)}
+                                            disabled={!!motivoFechado}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 border border-gray-200 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-white"
+                                        >
+                                            <ListPlus className="w-[15px] h-[15px]" />
+                                            Gerar parcelas
+                                        </button>
+                                    </span>
                                 )}
                                 <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                     <ColumnConfigButton

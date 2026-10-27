@@ -35,7 +35,7 @@ describe('unitFormToPayload', () => {
 
   it('ida e volta registro → form → payload não perde dado', () => {
     const cheio: UnitFormValues = {
-      name: '1502', floor: '15', floor_tipo: 'TIPO', typology: '3 quartos',
+      name: '1502', floor: '15', floor_tipo: 'TIPO', floor_id: 'f-15', typology: '3 quartos',
       private_area: '98.4', common_area: '31.2', bedrooms: '3', bathrooms: '2', suites: '1',
       parking_spaces: '2', position_type: 'FRENTE', view_type: 'PLENA', sun_orientation: 'NORTE',
     };

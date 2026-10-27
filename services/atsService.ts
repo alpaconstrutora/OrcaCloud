@@ -305,7 +305,7 @@ export const atsService = {
      * tudo o que o `PaystubModal` mostra — o caminho interno dele lia seis
      * tabelas direto, e pelo link (sessão `anon`) a RLS devolvia vazio.
      * A RPC só entrega a folha se ela for DESTE colaborador
-     * (migration 20271026900000).
+     * (migration 20271026950000).
      */
     async getPortalPaystub(portalToken: string, runId: string): Promise<PortalPaystub> {
         const { data, error } = await supabase.rpc('fn_colab_portal_paystub', { p_token: portalToken, p_run_id: runId });

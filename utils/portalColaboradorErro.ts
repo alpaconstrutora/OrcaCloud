@@ -6,7 +6,7 @@
  * detalhe técnico continua no console; aqui só sai o que a pessoa pode fazer.
  *
  * Os códigos vêm dos RAISE das RPCs `fn_colab_portal_*`
- * (migrations 20270918000005 e 20271026900000).
+ * (migrations 20270918000005 e 20271026950000).
  */
 export function mensagemDoPortalColaborador(erro: unknown): string {
     const texto = textoDoErro(erro);

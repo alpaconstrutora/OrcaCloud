@@ -1,5 +1,10 @@
 -- ============================================================
--- Migration: aplicar_20271026900000_portal_colaborador_holerite_por_token.sql
+-- Migration: aplicar_20271026950000_portal_colaborador_holerite_por_token.sql
+--
+-- ⚠️ RENOMEADA em 26/10/2026: nasceu como 20271026900000, que colidiu com
+-- 20271026900000_spe_capital_incremento_atomico.sql (#184, chegou antes).
+-- JÁ APLICADA no banco remoto em 26/10/2026 com o nome antigo. Reaplicar é
+-- inofensivo (CREATE OR REPLACE + REVOKE/GRANT), mas não é necessário.
 -- Plano: docs/planos/2026-10-26-portal-colaborador-holerite-e-estados.md § 1.1
 --
 -- PROBLEMA

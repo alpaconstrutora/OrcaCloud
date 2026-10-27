@@ -18,8 +18,8 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 
 | # | Comando | Escopo | Estado |
 |---|---|---|---|
-| 1 | `/impeccable harden` | P0 holerite pelo link + P1 estados de tela | **este arquivo** |
-| 2 | `/impeccable clarify` | P1 prévia honesta (caminho único com token, faixa "vendo como") | pendente |
+| 1 | `/impeccable harden` | P0 holerite pelo link + P1 estados de tela | no ar (#186) |
+| 2 | `/impeccable clarify` | P1 prévia honesta (caminho único com token, faixa "vendo como") | **item 2 abaixo** |
 | 3 | `/impeccable clarify` | P2 datas, status, termos | pendente |
 | 4 | `/impeccable init` + `shape` | marca da Alpa, Início = último holerite, navegação no rodapé | pendente — precisa de logo e cores da Alpa |
 | 5 | `/impeccable typeset` | pesos e tamanhos | pendente |
@@ -37,7 +37,7 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 rodam com a sessão do admin e escondem o defeito.
 
 **O que muda:**
-- migration `aplicar_20271026900000_portal_colaborador_holerite_por_token.sql`:
+- migration `aplicar_20271026950000_portal_colaborador_holerite_por_token.sql (nasceu 20271026900000; renomeada pela colisão com a SPE)`:
   `fn_colab_portal_paystub(p_token text, p_run_id uuid) RETURNS json`, SECURITY
   DEFINER, resolve o token por `fn_colab_portal_employee` e só devolve a folha se
   existir `payroll_results` daquele colaborador nela (mesmo critério de
@@ -83,3 +83,42 @@ o texto técnico do erro; botão de sair ganhou nome acessível.
 **Fica para depois (fora do escopo deste item):** `PaystubModal` ainda usa `alert()` no
 erro de PDF (o modal é compartilhado com o app); `portal_get_payroll_runs` lista folhas
 em RASCUNHO para o colaborador — decisão de produto, não alterada aqui.
+
+## Item 2 — clarify: prévia honesta
+
+Pedido: "seguir para o item 2" (mesma sessão, 26/10).
+
+**Problema:** duas prévias. A aba "Prévia do Portal" abria o `PortalView` SEM token
+(leitura por `portal_get_*(p_employee_id)` com a sessão do admin — Academia sumia,
+holerite lia tabelas direto) e trocava a página inteira, com o ícone de sair como
+única saída. O ícone de celular da tabela abria outro modal, com token, e o X
+ficava em cima do sair. Nenhuma dizia que era prévia; o seletor deixava escolher
+colaborador sem link (portal que ninguém vê).
+
+**O que muda:**
+- `PortalView.portalToken` passou a ser obrigatório; saiu o caminho por
+  `employee_id` (`portal_get_*`, corpo do download por `employeeId`). As funções
+  `portal_get_*` e `portal_employee_summary` ficam sem chamador no front — removê-las
+  do banco é outra frente.
+- Uma prévia só, no `MobilePreviewFrame` (o mesmo dos outros portais): o ícone da
+  tabela e o seletor da aba chamam o mesmo `setPrevia`. A aba não troca mais a página.
+- Faixa fixa "Prévia · vendo como {nome}" em todos os estados (carregando, erro,
+  portal); sem botão de sair dentro da prévia (quem fecha é o "Fechar prévia" da
+  moldura — um "Sair da prévia" na faixa repetiria o botão logo abaixo).
+- Cursos da Academia travados na prévia, com o motivo: abrir registra tentativa e
+  progresso pelo token, em nome do colaborador. Conferido no banco: nenhuma leitura
+  `fn_colab_portal_*` grava `last_used_at` (só `portal_validate_token` e
+  `fn_colab_portal_touch`, que a prévia não chama) — o "Último acesso" não é afetado.
+- Seletor "Ver o portal como": grupo "Com link ativo" e grupo desabilitado "Sem link
+  ativo — gere em Gestão de Acessos", cada um com "sem link" / "link expirado";
+  ninguém com link → aviso + botão "Ir para Gestão de Acessos".
+
+**Pronto quando:**
+- [x] teste: faixa com o nome, sem "Sair do portal", faixa já no carregando, curso
+      travado com motivo (`__tests__/components/LaborPortalPrevia.test.tsx`);
+- [x] teste: seletor só habilita quem tem link; escolher abre a moldura com
+      `getPortalSummary(emp, token)`; aba continua no lugar; ícone da tabela abre a MESMA prévia;
+- [x] visto no navegador (harness `docs/spikes/portal-colaborador-previa/`, rede
+      fictícia): faixa abaixo do notch (o notch cobria a faixa na 1ª versão — corrigido
+      com `pt-8`), curso "Não abre na prévia";
+- [x] `check-ui-standard.sh` sem violação; `tsc` limpo.

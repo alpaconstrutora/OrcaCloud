@@ -1453,7 +1453,9 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     // salva, não na pedida).
     const [linkInicial] = useState(linkDaAnalise);
     useEffect(() => {
-        if (linkInicial?.emp) setAnalysisEmpId(linkInicial.emp);
+        // Link sem `emp` é "Todos os empreendimentos" (o botão Copiar link só
+        // escreve `emp` fora de Todos) — não o recorte salvo neste navegador.
+        if (linkInicial) setAnalysisEmpId(linkInicial.emp ?? 'ALL');
         if (linkInicial?.leitura) setAnalysisLeitura(linkInicial.leitura);
         // Link colado numa aba que JÁ está nesta tela: o navegador só troca o
         // `#…` (sem recarregar), e o recorte tem de seguir o endereço novo.

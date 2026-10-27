@@ -23,6 +23,8 @@ export interface ContratoConferido {
     current_value?: number | null;
     /** MEDICAO não tem total a casar — fica fora mesmo antes da 1ª medição (revisão de 26/10). */
     billing_mode?: string | null;
+    /** `ContractStatus`: Cancelado não se confere; Concluído/Encerrado se conferem, mas sem ações. */
+    status?: string | null;
 }
 
 export interface ParcelaConferida {
@@ -81,6 +83,7 @@ export function conferirParcelas(
 ): Conferencia {
     const aplica = !contrato.is_recurring
         && contrato.billing_mode !== 'MEDICAO'
+        && contrato.status !== 'Cancelado'
         && opcoes.podeLancar !== false
         && !parcelas.some(p => p.source_system === 'CONTRACT_MEASUREMENT');
     const valorContrato = dois(Number(contrato.current_value ?? contrato.original_value ?? 0));
@@ -195,10 +198,25 @@ export function motivoNaoAjustaContrato(
     return null;
 }
 
+/**
+ * Contrato fechado (Concluído/Encerrado): a divergência continua à vista, mas
+ * corrigir ou gerar parcelas aqui lançaria título num contrato que já acabou.
+ */
+const STATUS_FECHADO = ['Concluído', 'Encerrado'];
+
+export function motivoContratoFechado(contrato: ContratoConferido): string | null {
+    return contrato.status && STATUS_FECHADO.includes(contrato.status)
+        ? `Contrato ${contrato.status} — reabra o contrato para mexer nas parcelas.`
+        : null;
+}
+
+/** Tipo da parcela complementar (`constants/paymentTypes.ts`): não é da série. */
+const TIPO_COMPLEMENTO = 'AVULSA';
+
 /** "Lançar uma parcela com a diferença": o complemento vai no fim do cronograma. */
 export function parcelaComplementar(cronograma: ContractInstallment[], saldo: number, vencimento: string): ContractInstallment[] {
     if (!(saldo > 0)) throw new Error('Só há complemento a lançar quando faltam parcelas.');
-    return [...cronograma, { date: vencimento, value: dois(saldo) }];
+    return [...cronograma, { date: vencimento, value: dois(saldo), installment_type: TIPO_COMPLEMENTO }];
 }
 
 export type PlanoDeCronograma = { cronograma: ContractInstallment[]; reescritas: string[] } | { motivo: string };

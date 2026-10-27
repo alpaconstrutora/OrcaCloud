@@ -58,3 +58,15 @@ Decisão do usuário sobre "digitada ou calculada": **as duas opções**.
 - **Banco:**
   - ensaio da migration dentro de bloco que desfaz: OK;
   - depois de aplicar, conferir as colunas via REST (HTTP 200).
+
+## Seguimento: a elevação na tabela de Unidades (27/10/2026)
+
+> "aonde está a coluna elevação?" (print de Torres e Unidades do Garden: Pavimentos vazio)
+
+A coluna fica na tabela de Pavimentos, que só existe com pavimentos cadastrados. O Garden não tem nenhum: os andares
+vêm só das unidades. Por isso o cabeçalho de cada pavimento da tabela de Unidades passa a mostrar a elevação:
+
+- exemplo: "Pavimento 1 · Elevação +3,00 m (calc.)";
+- o cálculo é o mesmo, `estruturaDaTorre` com as unidades e os pavimentos da torre;
+- vale também sem cadastro de pavimentos;
+- a digitada aparece sem "(calc.)".

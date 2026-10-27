@@ -34,6 +34,8 @@ import {
   RENTAL_STATUS_LABEL,
 } from '../../utils/empreendimentoComercial';
 import { useConfirm } from '../ui/confirm';
+import { estruturaDaTorre } from '../../utils/blueprintEstruturaDaTorre';
+import { fmtElevacao } from './FloorEditor';
 import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 
@@ -85,7 +87,10 @@ interface Props {
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
-export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange }) => {
+/** Estável: o padrão `[]` novo a cada render refaria o cálculo da elevação a cada render. */
+const SEM_PAVIMENTOS: EmpreendimentoFloor[] = [];
+
+export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, onUnitsChange }) => {
   const confirm = useConfirm();
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -186,6 +191,17 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange 
         totalComum: grpUnits.reduce((s, u) => s + (u.common_area ?? 0), 0),
       }));
   }, [units, sortFn]);
+
+  // A elevação de cada pavimento no cabeçalho do grupo (27/10/2026, "aonde está a coluna elevação?"): a torre sem
+  // pavimentos cadastrados (o Garden) só tem andares pelas unidades, e a tabela de Pavimentos fica vazia. O cálculo é
+  // o mesmo da tabela de Pavimentos e da massa da Planta (`estruturaDaTorre`).
+  const elevacaoDoAndar = React.useMemo(() => {
+    const e = estruturaDaTorre(
+      { id: tower.id, name: tower.name, floors_count: tower.floors_count, pe_direito_padrao_m: tower.pe_direito_padrao_m, elevacao_terreo_m: tower.elevacao_terreo_m, units },
+      floors,
+    );
+    return new Map([...e.garagens, ...e.acima].map(p => [p.numero, p]));
+  }, [tower.id, tower.name, tower.floors_count, tower.pe_direito_padrao_m, tower.elevacao_terreo_m, units, floors]);
 
   // ── Seleção ─────────────────────────────────────────────────────────────────
 
@@ -581,6 +597,21 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = [], onUnitsChange 
                           <span className="bg-gray-200 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                             {group.units.length}
                           </span>
+                          {(() => {
+                            const piso = group.key === '__null__' ? undefined : elevacaoDoAndar.get(Number(group.key));
+                            if (!piso) return null;
+                            return (
+                              <span
+                                className="text-xs font-normal text-gray-600"
+                                data-testid="elevacao-do-grupo"
+                                title={piso.elevacaoDigitada
+                                  ? 'Elevação digitada no cadastro de pavimentos'
+                                  : 'Calculada: a elevação do térreo da torre + os pés-direitos de baixo (3,00 m onde não há)'}
+                              >
+                                · Elevação {fmtElevacao(piso.elevacaoMm / 1000)} m{piso.elevacaoDigitada ? '' : ' (calc.)'}
+                              </span>
+                            );
+                          })()}
                         </button>
                       </td>
                       {/* Somatório de áreas por pavimento */}

@@ -220,15 +220,19 @@ export const buildUnitMirror = (input: BuildUnitMirrorInput): UnitMirrorCell[] =
     });
 };
 
-export interface MirrorFloor { floor: number | null; cells: UnitMirrorCell[] }
-export interface MirrorTower { block: string; floors: MirrorFloor[] }
+/** O mínimo que uma célula precisa para entrar no prédio — o espelho de
+ *  Venda de Ativos usa a mesma geometria com outra célula (27/10/2026). */
+export interface MirrorPlaceable { block: string; floor: number | null; label: string }
+
+export interface MirrorFloor<C extends MirrorPlaceable = UnitMirrorCell> { floor: number | null; cells: C[] }
+export interface MirrorTower<C extends MirrorPlaceable = UnitMirrorCell> { block: string; floors: MirrorFloor<C>[] }
 
 const natural = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
 
 /** Torres (alfabética, "sem torre" no fim) → andares (de cima para baixo, "sem
  *  andar" no fim) → unidades (ordem natural do rótulo: 2 antes de 10). */
-export const mirrorTowers = (cells: UnitMirrorCell[]): MirrorTower[] => {
-    const porTorre = new Map<string, UnitMirrorCell[]>();
+export const mirrorTowers = <C extends MirrorPlaceable = UnitMirrorCell>(cells: C[]): MirrorTower<C>[] => {
+    const porTorre = new Map<string, C[]>();
     for (const c of cells) {
         const lista = porTorre.get(c.block) ?? [];
         lista.push(c);
@@ -237,7 +241,7 @@ export const mirrorTowers = (cells: UnitMirrorCell[]): MirrorTower[] => {
     return [...porTorre.entries()]
         .sort(([a], [b]) => (a === '' ? 1 : b === '' ? -1 : natural.compare(a, b)))
         .map(([block, lista]) => {
-            const porAndar = new Map<number | null, UnitMirrorCell[]>();
+            const porAndar = new Map<number | null, C[]>();
             for (const c of lista) {
                 const l = porAndar.get(c.floor) ?? [];
                 l.push(c);

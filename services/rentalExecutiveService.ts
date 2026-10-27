@@ -94,13 +94,18 @@ export const rentalExecutiveService = {
     /** Falha de verdade (rede, erro inesperado) LANÇA em vez de virar `null`.
      *  Sem isto, "falhou" e "não medido" chegam iguais à tela. Só a aba Análise
      *  pede — os demais consumidores seguem com o contrato antigo. */
-        opts?: { throwOnError?: boolean },
+        opts?: {
+            throwOnError?: boolean;
+            /** Domínio do contrato. Padrão `LOCACAO`; Venda de Ativos › Análise
+             *  pede `VENDAS` — o caminho contrato → parcela é o mesmo. */
+            domain?: 'LOCACAO' | 'VENDAS';
+        },
     ): Promise<RentalExecutiveRaw | null> {
         try {
             let q = supabase
                 .from('contracts')
                 .select('id, deal_id, status, start_date, end_date, current_value, original_value, parent_contract_id, renewal_seq')
-                .eq('domain', 'LOCACAO');
+                .eq('domain', opts?.domain ?? 'LOCACAO');
             if (organizationId) q = q.eq('organization_id', organizationId);
             if (projectId) q = q.eq('project_id', projectId);
 

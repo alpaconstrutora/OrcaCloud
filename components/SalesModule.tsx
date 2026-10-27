@@ -1,6 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
-import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders, BarChart3, Link2, Check, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 // Vocabulário ÚNICO do status da negociação (Proposta → … → Concluído), o mesmo
 // do stepper "Etapa da Negociação" em Gerenciar Negociação › Contrato.
@@ -48,6 +48,27 @@ import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { useStore } from '../store/useStore';
+import { parseHashView } from '../lib/tabRouter';
+// Aba Análise (visão mestre) — espelho de Locações › Análise. Uma consulta,
+// muitos baldes: o agrupamento por empreendimento é `groupSalesAnalysis`.
+// Plano: docs/planos/2026-10-27-vendas-aba-analise.md.
+import { rentalExecutiveService, type RentalExecutiveRaw } from '../services/rentalExecutiveService';
+import {
+    groupSalesAnalysis,
+    summarizeSalesRows,
+    groupSalesByClientType,
+    SEM_EMPREENDIMENTO,
+    SEM_CATEGORIA,
+    type SalesAnalysisScope,
+    type SalesRowsSummary,
+    type SalesClientTypeScope,
+} from '../lib/salesAnalysis';
+import SalesAnalysisOverview, {
+    type SalesAnalysisLeitura,
+    type SalesAnalysisDestino,
+    type SalesAnalysisSources,
+} from './sales/SalesAnalysisOverview';
 
 interface SalesModuleProps {
     organizationId?: string;
@@ -417,12 +438,169 @@ const getSunWeight = (p?: { sun_orientation?: string | null }) =>
 // Garantia, Penalidades e Avaliação de Desempenho, e o topo mostrava "Total
 // Medido / Saldo a Faturar". O contrato de venda já tem tela própria em
 // Gerenciar Negociação › aba Contrato, que é por onde ele nasce.
-type SalesTab = 'inventory' | 'deals' | 'dashboard' | 'simulation' | 'price-tables'
+// 'analysis' só existe na visão mestre (sem edifício aberto), como em Locações.
+type SalesTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'simulation' | 'price-tables'
     | 'sales-plans' | 'brokers' | 'intelligence';
 
 /** Abas que existem hoje — a lista que valida o que veio do localStorage. */
-const SALES_TABS: SalesTab[] = ['inventory', 'deals', 'dashboard', 'simulation',
+const SALES_TABS: SalesTab[] = ['inventory', 'analysis', 'deals', 'dashboard', 'simulation',
     'price-tables', 'sales-plans', 'brokers', 'intelligence'];
+
+// ── Aba Análise: colunas, leituras e células ────────────────────────────────
+
+// Tabela "Por empreendimento". Sem coluna de ações: a única ação é recortar a
+// aba, e ela mora no clique da linha (§9.1) — mesmo desenho de Locações.
+const SALES_ANALYSIS_COLUMNS: ColumnConfig[] = [
+    { key: 'name', label: 'Empreendimento', sortable: true },
+    { key: 'soldUnits', label: 'Vendidas / vendáveis', sortable: true },
+    { key: 'soldRate', label: '% vendido', sortable: true },
+    { key: 'openDealsValue', label: 'Em negociação', sortable: true },
+    { key: 'openDealsCount', label: 'Negociações abertas', sortable: true },
+    { key: 'sales90', label: 'Vendas em 90 dias', sortable: true },
+    { key: 'discount', label: 'Desconto médio', sortable: true },
+    { key: 'ticket', label: 'Ticket médio', sortable: true },
+    { key: 'vgvSold', label: 'VGV vendido', sortable: true },
+    { key: 'vgvUnsold', label: 'VGV a vender', sortable: true },
+    { key: 'vgvTotal', label: 'VGV total', sortable: true },
+    { key: 'vgvSoldRate', label: '% do VGV vendido', sortable: true },
+    { key: 'receivableOpen', label: 'A receber', sortable: true },
+    { key: 'overdue90', label: 'Vencido > 90 dias', sortable: true },
+    { key: 'received', label: 'Recebido', sortable: true },
+    { key: 'valuePerSqmAvg', label: 'Valor médio vendido /m²', sortable: true },
+    { key: 'valuePerSqmMax', label: 'Valor máx. vendido /m²', sortable: true },
+    { key: 'valuePerSqmMin', label: 'Valor mín. vendido /m²', sortable: true },
+];
+/** Colunas que cada leitura mostra de saída (as outras ficam na engrenagem);
+ *  cada leitura guarda as próprias escolhas. */
+const SALES_ANALYSIS_VISIVEIS: Record<SalesAnalysisLeitura, string[]> = {
+    comercial: ['name', 'soldUnits', 'soldRate', 'openDealsValue', 'sales90', 'discount', 'vgvUnsold'],
+    financeiro: ['name', 'vgvSold', 'vgvTotal', 'vgvSoldRate', 'receivableOpen', 'overdue90', 'received'],
+};
+const salesAnalysisColumnsDa = (leitura: SalesAnalysisLeitura): ColumnConfig[] =>
+    SALES_ANALYSIS_COLUMNS.map(c => ({ ...c, defaultHidden: !SALES_ANALYSIS_VISIVEIS[leitura].includes(c.key) }));
+const SALES_ANALYSIS_COLUMNS_COMERCIAL = salesAnalysisColumnsDa('comercial');
+const SALES_ANALYSIS_COLUMNS_FINANCEIRO = salesAnalysisColumnsDa('financeiro');
+const SALES_ANALYSIS_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    name: 230, soldUnits: 170, soldRate: 120, openDealsValue: 150, openDealsCount: 175, sales90: 160,
+    discount: 145, ticket: 140, vgvSold: 150, vgvUnsold: 150, vgvTotal: 150, vgvSoldRate: 160,
+    receivableOpen: 140, overdue90: 160, received: 140, valuePerSqmAvg: 200, valuePerSqmMax: 190, valuePerSqmMin: 190,
+};
+/** Colunas que somam/ponderam no rodapé (as demais ficam em branco, não "0"). */
+const SALES_ANALYSIS_MONEY_KEYS = ['openDealsValue', 'ticket', 'vgvSold', 'vgvUnsold', 'vgvTotal', 'receivableOpen', 'overdue90', 'received', 'valuePerSqmAvg', 'valuePerSqmMax', 'valuePerSqmMin'];
+
+const SALES_LEITURAS: { id: SalesAnalysisLeitura; label: string; dica: string }[] = [
+    { id: 'comercial', label: 'Comercial', dica: 'Quanto vendeu, o que está em negociação, a velocidade e o desconto — o time de vendas' },
+    { id: 'financeiro', label: 'Financeiro', dica: 'VGV vendido, o que falta receber, o atraso e o VGV a vender — a leitura da diretoria' },
+];
+
+/** Recorte da aba Análise lido do link (`#/sales?aba=analise&emp=…&leitura=…`). */
+const linkDaAnaliseVenda = (): { emp?: string; leitura?: SalesAnalysisLeitura } | null => {
+    if (typeof window === 'undefined') return null;
+    const q = new URLSearchParams(window.location.hash.split('?')[1] ?? '');
+    if (q.get('aba') !== 'analise') return null;
+    const leitura = q.get('leitura');
+    return {
+        emp: q.get('emp') ?? undefined,
+        leitura: leitura === 'comercial' || leitura === 'financeiro' ? leitura : undefined,
+    };
+};
+
+const moedaAnalise = (v: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
+/** `—` para "não medido": zero é afirmação, `null` é ausência de base. */
+const orDashAnalise = (v: number | null | undefined, f: (n: number) => string) => (v == null ? '—' : f(v));
+const pct1Analise = (v: number) =>
+    `${(v * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+/** Desconto com sinal: "−4,1%" / "+2,0%". */
+const variacaoAnalise = (v: number) =>
+    `${v < 0 ? '−' : v > 0 ? '+' : ''}${(Math.abs(v) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+/** Valor de cada coluna (ordenar e exportar leem o MESMO número da célula). */
+const salesAnalysisValue = (key: string, r: SalesAnalysisScope): string | number | null => {
+    switch (key) {
+        case 'name': return r.name;
+        case 'soldUnits': return r.soldCount;
+        case 'soldRate': return r.soldRate;
+        case 'openDealsValue': return r.openDealsValue;
+        case 'openDealsCount': return r.openDealsCount;
+        case 'sales90': return r.sales90.count;
+        case 'discount': return r.discount.rate;
+        case 'ticket': return r.ticket;
+        case 'vgvSold': return r.vgvSold;
+        case 'vgvUnsold': return r.vgvUnsold;
+        case 'vgvTotal': return r.vgvTotal;
+        case 'vgvSoldRate': return r.vgvSoldRate;
+        case 'receivableOpen': return r.aging ? r.aging.totalOpen : null;
+        case 'overdue90': return r.aging ? r.aging.over90 : null;
+        case 'received': return r.aging ? r.aging.received : null;
+        case 'valuePerSqmAvg': return r.valuePerSqm.avg;
+        case 'valuePerSqmMax': return r.valuePerSqm.max;
+        case 'valuePerSqmMin': return r.valuePerSqm.min;
+        default: return null;
+    }
+};
+
+const renderSalesAnalysisCell = (key: string, r: SalesAnalysisScope): React.ReactNode => {
+    switch (key) {
+        case 'name':
+            return r.empreendimentoId === SEM_EMPREENDIMENTO ? <span className="text-gray-500">{r.name}</span> : r.name;
+        case 'soldUnits': return `${r.soldCount}/${r.sellableCount}`;
+        case 'soldRate': return orDashAnalise(r.soldRate, pct1Analise);
+        case 'vgvSoldRate': return orDashAnalise(r.vgvSoldRate, pct1Analise);
+        case 'openDealsCount': return r.openDealsCount;
+        case 'sales90': return r.sales90.count;
+        case 'discount': return orDashAnalise(r.discount.rate, variacaoAnalise);
+        default: {
+            const v = salesAnalysisValue(key, r);
+            return typeof v === 'number' ? moedaAnalise(v) : '—';
+        }
+    }
+};
+
+const renderSalesAnalysisFooterCell = (key: string, f: SalesRowsSummary): React.ReactNode => {
+    switch (key) {
+        case 'soldUnits': return `${f.soldCount}/${f.sellableCount}`;
+        case 'soldRate': return orDashAnalise(f.soldRate, pct1Analise);
+        case 'vgvSoldRate': return orDashAnalise(f.vgvSoldRate, pct1Analise);
+        case 'openDealsValue': return moedaAnalise(f.openDealsValue);
+        case 'openDealsCount': return f.openDealsCount;
+        case 'sales90': return f.sales90Count;
+        case 'discount': return orDashAnalise(f.discountRate, variacaoAnalise);
+        case 'ticket': return orDashAnalise(f.ticket, moedaAnalise);
+        case 'vgvSold': return moedaAnalise(f.vgvSold);
+        case 'vgvUnsold': return moedaAnalise(f.vgvUnsold);
+        case 'vgvTotal': return moedaAnalise(f.vgvTotal);
+        case 'receivableOpen': return orDashAnalise(f.receivableOpen, moedaAnalise);
+        case 'overdue90': return orDashAnalise(f.overdue90, moedaAnalise);
+        case 'received': return orDashAnalise(f.received, moedaAnalise);
+        case 'valuePerSqmAvg': return orDashAnalise(f.valuePerSqmAvg, moedaAnalise);
+        default: return '';
+    }
+};
+
+// Tabela "Por tipo de cliente" — segundo eixo, sobre as mesmas vendas.
+const SALES_CLIENT_TYPE_COLUMNS: ColumnConfig[] = [
+    { key: 'label', label: 'Tipo de cliente', sortable: true },
+    { key: 'clientCount', label: 'Nº de clientes', sortable: true },
+    { key: 'salesCount', label: 'Nº de vendas', sortable: true },
+    { key: 'vgv', label: 'VGV vendido', sortable: true },
+    { key: 'ticket', label: 'Ticket médio', sortable: true },
+    { key: 'avgValuePerSqm', label: 'Valor médio vendido /m²', sortable: true },
+];
+const SALES_CLIENT_TYPE_DEFAULT_COL_WIDTHS: Record<string, number> = {
+    label: 220, clientCount: 140, salesCount: 140, vgv: 160, ticket: 150, avgValuePerSqm: 210,
+};
+const renderSalesClientTypeCell = (key: string, r: SalesClientTypeScope): React.ReactNode => {
+    switch (key) {
+        case 'label': return r.categoryId === SEM_CATEGORIA ? <span className="text-gray-500">{r.label}</span> : r.label;
+        case 'clientCount': return r.clientCount;
+        case 'salesCount': return r.salesCount;
+        case 'vgv': return moedaAnalise(r.vgv);
+        case 'ticket': return orDashAnalise(r.ticket, moedaAnalise);
+        case 'avgValuePerSqm': return orDashAnalise(r.avgValuePerSqm, moedaAnalise);
+        default: return null;
+    }
+};
 
 const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // A aba fica salva no navegador. Quem estava em "Contratos" quando ela saiu
@@ -430,6 +608,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // bloco casaria e a área de conteúdo ficaria em branco, sem aba acesa. Aba
     // desconhecida cai na primeira — mesma regra do ribbon da Planta (guia §19.5).
     const [activeTab, setActiveTab] = useState<SalesTab>(() => {
+        // Link da Análise (`#/sales?aba=analise…`) manda sobre a aba salva.
+        if (linkDaAnaliseVenda()) return 'analysis';
         const salva = localStorage.getItem('sales_active_tab') as SalesTab | null;
         return salva && SALES_TABS.includes(salva) ? salva : 'inventory';
     });
@@ -453,6 +633,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const [selectedProperties, setSelectedProperties] = useState<string[]>([]);
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
     const [selectedBuildingId, setSelectedBuildingId] = useState<string | null>(() => {
+        // A Análise é da visão mestre: link para ela abre sem edifício.
+        if (linkDaAnaliseVenda()) return null;
         const saved = localStorage.getItem('sales_selected_building_id');
         return (saved && saved !== 'undefined') ? saved : null;
     });
@@ -522,8 +704,13 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
     useEffect(() => {
         if (!selectedBuildingId) {
-            if (activeTab !== 'inventory') setActiveTab('inventory');
+            // Na visão mestre existem duas abas: Imóveis e Análise.
+            if (activeTab !== 'inventory' && activeTab !== 'analysis') setActiveTab('inventory');
             if (viewMode === 'tower') setViewMode('list');
+        } else if (activeTab === 'analysis') {
+            // Dentro de um edifício não há aba Análise — o recorte dela é o
+            // seletor de empreendimento, não o edifício aberto.
+            setActiveTab('inventory');
         }
     }, [selectedBuildingId, activeTab, viewMode]);
 
@@ -1022,6 +1209,195 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // numa org e edifício em outra — origem da mistura entre as duas "Alpa".
     const effectiveOrganizationId = currentBuilding?.organization_id || organizationId;
 
+    // ── Aba Análise ─────────────────────────────────────────────────────────
+    // Recorte, leitura e detalhamento persistidos: o usuário volta querendo o
+    // recorte em que estava (mesma decisão de Locações).
+    const [analysisEmpId, setAnalysisEmpId] = usePersistedState('sales:analysisEmpreendimento', 'ALL');
+    const [analysisSearch, setAnalysisSearch] = usePersistedState('sales:analysisSearch', '');
+    const [analysisLeitura, setAnalysisLeitura] = usePersistedState<SalesAnalysisLeitura>('sales:analysisLeitura', 'comercial');
+    const [showAnalysisDetail, setShowAnalysisDetail] = usePersistedState('sales:analysisDetail', false);
+    const [clientTypeSearch, setClientTypeSearch] = usePersistedState('sales:clientTypeSearch', '');
+    const [linkCopiado, setLinkCopiado] = useState(false);
+    // Contratos de venda + parcelas, CRUS. `null` = não medido (tabela/RLS);
+    // o estado separa "carregando" e "falhou" de "não medido".
+    const [contractsRaw, setContractsRaw] = useState<RentalExecutiveRaw | null>(null);
+    const [analysisSources, setAnalysisSources] = useState<SalesAnalysisSources>({ contracts: 'loading' });
+    const [analysisReload, setAnalysisReload] = useState(0);
+
+    const analysisColumnsComercial = useTableColumns(SALES_ANALYSIS_COLUMNS_COMERCIAL, 'salesAnalysisColumns:comercial');
+    const analysisColumnsFinanceiro = useTableColumns(SALES_ANALYSIS_COLUMNS_FINANCEIRO, 'salesAnalysisColumns:financeiro');
+    const analysisTableColumns = analysisLeitura === 'financeiro' ? analysisColumnsFinanceiro : analysisColumnsComercial;
+    const analysisCols = useResizableColumns(SALES_ANALYSIS_DEFAULT_COL_WIDTHS, 'salesAnalysisColWidths');
+    const analysisVisibleColumns = SALES_ANALYSIS_COLUMNS.filter(c => analysisTableColumns.visibleColumns.includes(c.key));
+    const analysisTableTotalWidth = analysisVisibleColumns.reduce((sum, c) => sum + analysisCols.getWidth(c.key), 0);
+    const clientTypeTableColumns = useTableColumns(SALES_CLIENT_TYPE_COLUMNS, 'salesClientTypeColumns');
+    const clientTypeCols = useResizableColumns(SALES_CLIENT_TYPE_DEFAULT_COL_WIDTHS, 'salesClientTypeColWidths');
+    const clientTypeVisibleColumns = SALES_CLIENT_TYPE_COLUMNS.filter(c => clientTypeTableColumns.visibleColumns.includes(c.key));
+    const clientTypeTableTotalWidth = clientTypeVisibleColumns.reduce((sum, c) => sum + clientTypeCols.getWidth(c.key), 0);
+
+    // Link do recorte: o primeiro efeito LÊ (uma vez, guardado em estado — o
+    // StrictMode roda efeitos duas vezes e o de baixo já teria reescrito o
+    // endereço); o segundo mantém `?aba=analise&emp=…&leitura=…` em dia por
+    // `replaceState`, sem entrada no histórico. Mesmo desenho de Locações.
+    const [linkInicial] = useState(linkDaAnaliseVenda);
+    useEffect(() => {
+        // Link sem `emp` é "Todos os empreendimentos" (o botão Copiar link só
+        // escreve `emp` fora de Todos) — não o recorte salvo neste navegador.
+        if (linkInicial) setAnalysisEmpId(linkInicial.emp ?? 'ALL');
+        if (linkInicial?.leitura) setAnalysisLeitura(linkInicial.leitura);
+        // Link colado numa aba que JÁ está nesta tela: só o `#…` muda.
+        const aoMudarEndereco = () => {
+            const link = linkDaAnaliseVenda();
+            if (!link) return;
+            setSelectedBuildingId(null);
+            setActiveTab('analysis');
+            setAnalysisEmpId(link.emp ?? 'ALL');
+            if (link.leitura) setAnalysisLeitura(link.leitura);
+        };
+        window.addEventListener('hashchange', aoMudarEndereco);
+        return () => window.removeEventListener('hashchange', aoMudarEndereco);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
+    useEffect(() => {
+        if (typeof window === 'undefined') return;
+        const vista = parseHashView(window.location.hash);
+        if (!vista) return;
+        const alvo = activeTab === 'analysis' && !selectedBuildingId
+            ? `#/${vista}?${new URLSearchParams({
+                aba: 'analise',
+                ...(analysisEmpId !== 'ALL' ? { emp: analysisEmpId } : {}),
+                leitura: analysisLeitura,
+            }).toString()}`
+            : `#/${vista}`;
+        if (window.location.hash !== alvo) window.history.replaceState(null, '', alvo);
+    }, [activeTab, selectedBuildingId, analysisEmpId, analysisLeitura]);
+
+    // Contratos de venda e parcelas — só na aba Análise. Mesmo `loadRaw` de
+    // Locações, com o domínio VENDAS: o prefixo composto de `reference_id`
+    // (contrato-p<vencimento>) já é resolvido lá. Trocar o recorte não dispara rede.
+    useEffect(() => {
+        if (activeTab !== 'analysis' || selectedBuildingId) return;
+        let alive = true;
+        setAnalysisSources({ contracts: 'loading' });
+        rentalExecutiveService
+            .loadRaw(organizationId, null, { throwOnError: true, domain: 'VENDAS' })
+            .then(data => { if (alive) { setContractsRaw(data); setAnalysisSources({ contracts: 'ready' }); } })
+            .catch(() => { if (alive) setAnalysisSources({ contracts: 'error' }); });
+        return () => { alive = false; };
+    }, [activeTab, selectedBuildingId, organizationId, analysisReload]);
+
+    /** A aba inteira, por empreendimento — uma consulta, muitos baldes. KPIs,
+     *  gráficos, espelho e tabela saem daqui (ver lib/salesAnalysis.ts). */
+    const salesAnalysis = useMemo(() => groupSalesAnalysis({
+        properties,
+        deals,
+        empreendimentoByProperty,
+        contracts: contractsRaw?.contracts ?? null,
+        receivablesByContract: contractsRaw?.receivablesByContract ?? null,
+    }), [properties, deals, empreendimentoByProperty, contractsRaw]);
+
+    /** O recorte ativo; empreendimento que sumiu cai no total, não zera a tela. */
+    const analysisScope = (analysisEmpId !== 'ALL' && salesAnalysis.byId.get(analysisEmpId)) || salesAnalysis.total;
+    const isAllEmpreendimentos = analysisScope.empreendimentoId === 'ALL';
+
+    // Linhas "Por empreendimento": busca + ordenação pelo cabeçalho. "Não
+    // medido" vai para o fim nos dois sentidos — não é o menor valor.
+    const analysisRows = useMemo(() => {
+        const termo = analysisSearch.trim().toLowerCase();
+        const filtradas = termo ? salesAnalysis.rows.filter(r => r.name.toLowerCase().includes(termo)) : salesAnalysis.rows;
+        const col = analysisTableColumns.sortColumn;
+        if (!col) return filtradas;
+        const dir = analysisTableColumns.sortDirection;
+        return [...filtradas].sort((a, b) => {
+            const av = salesAnalysisValue(col, a);
+            const bv = salesAnalysisValue(col, b);
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            if (typeof av === 'string' || typeof bv === 'string') {
+                const cmp = String(av).localeCompare(String(bv), 'pt-BR');
+                return dir === 'asc' ? cmp : -cmp;
+            }
+            return dir === 'asc' ? av - bv : bv - av;
+        });
+    }, [salesAnalysis.rows, analysisSearch, analysisTableColumns.sortColumn, analysisTableColumns.sortDirection]);
+
+    /** Rodapé sobre as linhas VISÍVEIS; ponderado — sem busca, igual ao topo. */
+    const analysisFooter = useMemo(() => summarizeSalesRows(analysisRows), [analysisRows]);
+
+    const clientTypeAnalysis = useMemo(() => groupSalesByClientType({ deals, properties, clients }), [deals, properties, clients]);
+    const clientTypeRows = useMemo(() => {
+        const termo = clientTypeSearch.trim().toLowerCase();
+        const filtradas = termo ? clientTypeAnalysis.rows.filter(r => r.label.toLowerCase().includes(termo)) : clientTypeAnalysis.rows;
+        const col = clientTypeTableColumns.sortColumn as keyof SalesClientTypeScope | null;
+        if (!col) return filtradas;
+        const dir = clientTypeTableColumns.sortDirection;
+        return [...filtradas].sort((a, b) => {
+            const av = a[col] as string | number | null;
+            const bv = b[col] as string | number | null;
+            if (av == null && bv == null) return 0;
+            if (av == null) return 1;
+            if (bv == null) return -1;
+            if (typeof av === 'string' || typeof bv === 'string') {
+                const cmp = String(av).localeCompare(String(bv), 'pt-BR');
+                return dir === 'asc' ? cmp : -cmp;
+            }
+            return dir === 'asc' ? av - bv : bv - av;
+        });
+    }, [clientTypeAnalysis.rows, clientTypeSearch, clientTypeTableColumns.sortColumn, clientTypeTableColumns.sortDirection]);
+
+    // Ação de um indicador principal: leva aonde o número se resolve.
+    const irParaDaAnalise = (destino: SalesAnalysisDestino) => {
+        if (destino === 'imoveis') setActiveTab('inventory');
+        else useStore.getState().setActiveView(destino);
+    };
+
+    const copiarLinkDaAnalise = async () => {
+        try {
+            await navigator.clipboard.writeText(window.location.href);
+            setLinkCopiado(true);
+            window.setTimeout(() => setLinkCopiado(false), 2000);
+        } catch {
+            notify('Não foi possível copiar o link — copie da barra de endereço.', 'error');
+        }
+    };
+
+    // Exporta a tabela como está na tela: colunas visíveis na ordem, linhas
+    // filtradas e ordenadas, e a linha de total. Números como NÚMERO; "não
+    // medido" como célula vazia, nunca 0.
+    const exportarAnalise = async () => {
+        const XLSX = await import('xlsx');
+        const MOEDA = '"R$" #,##0';
+        const PCT = '0.0%';
+        const formatoDe = (key: string) =>
+            ['soldRate', 'vgvSoldRate', 'discount'].includes(key) ? PCT
+                : SALES_ANALYSIS_MONEY_KEYS.includes(key) ? MOEDA : undefined;
+        const celula = (key: string, r: SalesAnalysisScope): { v: string | number | null; z?: string } =>
+            key === 'soldUnits' ? { v: `${r.soldCount}/${r.sellableCount}` } : { v: salesAnalysisValue(key, r), z: formatoDe(key) };
+        const rodape = (key: string): { v: string | number | null; z?: string } => {
+            const f = analysisFooter;
+            const valores: Record<string, number | null> = {
+                soldRate: f.soldRate, vgvSoldRate: f.vgvSoldRate, discount: f.discountRate, openDealsValue: f.openDealsValue,
+                openDealsCount: f.openDealsCount, sales90: f.sales90Count, ticket: f.ticket, vgvSold: f.vgvSold,
+                vgvUnsold: f.vgvUnsold, vgvTotal: f.vgvTotal, receivableOpen: f.receivableOpen, overdue90: f.overdue90,
+                received: f.received, valuePerSqmAvg: f.valuePerSqmAvg,
+            };
+            if (key === 'name') return { v: analysisSearch.trim() ? 'Total das linhas filtradas' : 'Total da carteira' };
+            if (key === 'soldUnits') return { v: `${f.soldCount}/${f.sellableCount}` };
+            return { v: valores[key] ?? null, z: formatoDe(key) };
+        };
+        const linhas = [...analysisRows.map(r => analysisVisibleColumns.map(c => celula(c.key, r))), analysisVisibleColumns.map(c => rodape(c.key))];
+        const ws = XLSX.utils.aoa_to_sheet([analysisVisibleColumns.map(c => c.label), ...linhas.map(l => l.map(x => x.v))]);
+        linhas.forEach((l, i) => l.forEach((x, j) => {
+            const ref = XLSX.utils.encode_cell({ r: i + 1, c: j });
+            if (x.v != null && x.z && ws[ref]) ws[ref].z = x.z;
+        }));
+        ws['!cols'] = analysisVisibleColumns.map(c => ({ wch: c.key === 'name' ? 34 : 18 }));
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Por empreendimento');
+        XLSX.writeFile(wb, `venda-ativos-analise-${analysisLeitura}-${new Date().toISOString().slice(0, 10)}.xlsx`);
+    };
+
     // Corretores seguem a mesma cascata: um fornecedor "Todas as organizações" é
     // materializado em broker_profiles UMA VEZ POR ORGANIZAÇÃO (ver
     // supplierService.syncRealEstateBrokerProfile) — sem escopar pela org do
@@ -1365,6 +1741,382 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                     </button>
                 )}
             </div>
+
+            {/* Toolbar de abas da visão mestre (§19.1) — Imóveis | Análise, o
+                mesmo trilho de Gestão de Locações. Só sem edifício aberto: dentro
+                dele as abas são as do edifício, logo abaixo. */}
+            {!selectedBuildingId && (
+                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <button
+                            onClick={() => setActiveTab('inventory')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <HomeIcon className="w-3.5 h-3.5" />
+                            Imóveis
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('analysis')}
+                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        >
+                            <BarChart3 className="w-3.5 h-3.5" />
+                            Análise
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* Seletor de escopo (§5.3) — decide de QUAL carteira os números
+                abaixo falam; por isso vem antes deles. */}
+            {!selectedBuildingId && activeTab === 'analysis' && (
+                <div className="flex flex-col lg:flex-row gap-3 lg:items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="sales-analysis-emp" className="text-xs font-semibold text-slate-500">Empreendimento</label>
+                        <select
+                            id="sales-analysis-emp"
+                            value={analysisEmpId}
+                            onChange={e => setAnalysisEmpId(e.target.value)}
+                            className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
+                        >
+                            <option value="ALL">Todos os empreendimentos ({salesAnalysis.total.unitsCount} unidades)</option>
+                            {/* Balde sem unidade (só negociação órfã) não é recorte que
+                                se escolha — ele continua na tabela, para a soma fechar. */}
+                            {salesAnalysis.rows.filter(r => r.unitsCount > 0).map(r => (
+                                <option key={r.empreendimentoId} value={r.empreendimentoId}>
+                                    {r.name} ({r.unitsCount} unidade{r.unitsCount === 1 ? '' : 's'})
+                                </option>
+                            ))}
+                        </select>
+                        <div role="radiogroup" aria-label="Leitura da análise" className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 sm:ml-2">
+                            {SALES_LEITURAS.map(l => (
+                                <button
+                                    key={l.id}
+                                    type="button"
+                                    role="radio"
+                                    aria-checked={analysisLeitura === l.id}
+                                    onClick={() => setAnalysisLeitura(l.id)}
+                                    title={l.dica}
+                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${analysisLeitura === l.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                >
+                                    {l.label}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-1">
+                        {!isAllEmpreendimentos && (
+                            <button
+                                onClick={() => setAnalysisEmpId('ALL')}
+                                className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all shrink-0"
+                            >
+                                <X className="w-4 h-4" />
+                                Ver todos os empreendimentos
+                            </button>
+                        )}
+                        <button
+                            type="button"
+                            onClick={copiarLinkDaAnalise}
+                            className="flex items-center gap-1.5 h-9 px-3 rounded-[6px] text-sm font-medium text-gray-600 hover:text-gray-900 transition-all whitespace-nowrap"
+                            title="Copia o endereço desta análise — abre no mesmo empreendimento e na mesma leitura"
+                        >
+                            {linkCopiado ? <Check className="w-4 h-4 text-emerald-600" /> : <Link2 className="w-4 h-4" />}
+                            {linkCopiado ? 'Link copiado' : 'Copiar link'}
+                        </button>
+                    </div>
+                </div>
+            )}
+
+            {/* KPIs, espelho, gráficos e detalhamento do recorte — ver
+                components/sales/SalesAnalysisOverview.tsx. A tabela abaixo fecha
+                com eles por construção: os dois saem de `groupSalesAnalysis`. */}
+            {!selectedBuildingId && activeTab === 'analysis' && (
+                loading ? (
+                    <div className="text-center py-12">
+                        <div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto" />
+                    </div>
+                ) : (
+                    <SalesAnalysisOverview
+                        scope={analysisScope}
+                        rows={salesAnalysis.rows}
+                        isAll={isAllEmpreendimentos}
+                        onSelectEmpreendimento={setAnalysisEmpId}
+                        showDetail={showAnalysisDetail}
+                        onToggleDetail={() => setShowAnalysisDetail(!showAnalysisDetail)}
+                        sources={analysisSources}
+                        onRetry={() => setAnalysisReload(n => n + 1)}
+                        leitura={analysisLeitura}
+                        onNavigate={irParaDaAnalise}
+                        onOpenUnit={cell => {
+                            // A torre da unidade, no inventário — onde ela se edita.
+                            if (cell.parentId) setSelectedBuildingId(cell.parentId);
+                            setActiveTab('inventory');
+                        }}
+                    />
+                )
+            )}
+
+            {/* Tabela por empreendimento — toolbar acoplada (§5.2). */}
+            {!selectedBuildingId && activeTab === 'analysis' && !loading && isAllEmpreendimentos && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-2 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar empreendimento..."
+                                    aria-label="Buscar empreendimento"
+                                    value={analysisSearch}
+                                    onChange={e => setAnalysisSearch(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={SALES_ANALYSIS_COLUMNS}
+                                    visibleColumns={analysisTableColumns.visibleColumns}
+                                    showColumnConfig={analysisTableColumns.showColumnConfig}
+                                    onToggleShow={() => analysisTableColumns.setShowColumnConfig(!analysisTableColumns.showColumnConfig)}
+                                    onToggleColumn={analysisTableColumns.toggleColumn}
+                                    onReset={analysisTableColumns.resetColumns}
+                                />
+                                <button
+                                    onClick={() => analysisCols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                    aria-label="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                                <button
+                                    onClick={exportarAnalise}
+                                    disabled={analysisRows.length === 0}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                                    title={analysisRows.length === 0 ? 'Nada para exportar: nenhuma linha na tabela' : 'Exportar a tabela para Excel (colunas visíveis, na ordem da tela)'}
+                                    aria-label="Exportar a tabela para Excel"
+                                >
+                                    <Download className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {analysisRows.length === 0 ? (
+                        <div className="text-center py-12">
+                            <Building2 className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum empreendimento encontrado</h3>
+                            <p className="text-sm text-gray-500">
+                                {analysisSearch
+                                    ? 'Tente ajustar a busca.'
+                                    : 'Vincule os imóveis de venda a um empreendimento pelo Espelho de Vendas.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table ref={analysisCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: analysisTableTotalWidth, minWidth: '100%' }}>
+                                <caption className="sr-only">Análise de vendas por empreendimento — escolha um empreendimento para recortar a aba</caption>
+                                <colgroup>
+                                    {analysisVisibleColumns.map(c => (
+                                        <col key={c.key} data-col-key={c.key} style={{ width: `${analysisCols.getWidth(c.key)}px` }} />
+                                    ))}
+                                    {/* Espaçador (§6.1.1). */}
+                                    <col />
+                                </colgroup>
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                        {analysisVisibleColumns.map(c => (
+                                            <SortableHeader
+                                                key={c.key}
+                                                colKey={c.key}
+                                                label={c.label}
+                                                uppercase={false}
+                                                sortColumn={analysisTableColumns.sortColumn}
+                                                sortDirection={analysisTableColumns.sortDirection}
+                                                onSort={analysisTableColumns.handleColumnSort}
+                                                className={`px-6 py-2 border-r border-gray-100 overflow-hidden ${c.key === 'name' ? 'sticky left-0 z-20 bg-white' : ''}`}
+                                            >
+                                                <analysisCols.ResizeHandle colKey={c.key} />
+                                            </SortableHeader>
+                                        ))}
+                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {analysisRows.map(row => (
+                                        // Clique na linha = recortar a aba no empreendimento (§9.1).
+                                        <tr
+                                            key={row.empreendimentoId}
+                                            className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
+                                            onClick={() => setAnalysisEmpId(row.empreendimentoId)}
+                                            title={`Ver a análise de ${row.name}`}
+                                        >
+                                            {analysisVisibleColumns.map(c => (
+                                                <td
+                                                    key={c.key}
+                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                        c.key === 'name' ? 'sticky left-0 z-[1] bg-white group-hover:bg-[#f7fbff] ' : ''
+                                                    }${
+                                                        SALES_ANALYSIS_MONEY_KEYS.includes(c.key)
+                                                            ? 'font-medium text-gray-800'
+                                                            : c.key === 'name'
+                                                                ? 'font-normal text-gray-700 truncate'
+                                                                : 'font-normal text-gray-600'
+                                                    }`}
+                                                >
+                                                    {c.key === 'name' ? (
+                                                        // O teclado e o leitor de tela chegam pelo nome, que é botão.
+                                                        <button
+                                                            type="button"
+                                                            onClick={e => { e.stopPropagation(); setAnalysisEmpId(row.empreendimentoId); }}
+                                                            className="max-w-full truncate text-left rounded-[4px] hover:text-blue-700 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                                                            aria-label={`Ver a análise de ${row.name}`}
+                                                        >
+                                                            {renderSalesAnalysisCell(c.key, row)}
+                                                        </button>
+                                                    ) : renderSalesAnalysisCell(c.key, row)}
+                                                </td>
+                                            ))}
+                                            <td aria-hidden="true"></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                                {/* Rodapé: somas e médias PONDERADAS sobre as linhas
+                                    visíveis — sem busca, igual aos indicadores do topo. */}
+                                <tfoot>
+                                    <tr className="border-t border-gray-100 bg-gray-50/80">
+                                        {analysisVisibleColumns.map((c, idx) => (
+                                            <td
+                                                key={c.key}
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${c.key === 'name' ? 'sticky left-0 z-[1] bg-gray-50 ' : ''}${
+                                                    SALES_ANALYSIS_MONEY_KEYS.includes(c.key) ? 'font-medium text-gray-800' : 'font-normal text-gray-500'
+                                                }`}
+                                            >
+                                                {idx === 0
+                                                    ? (analysisSearch.trim() ? 'Total das linhas filtradas' : 'Total da carteira')
+                                                    : renderSalesAnalysisFooterCell(c.key, analysisFooter)}
+                                            </td>
+                                        ))}
+                                        <td aria-hidden="true"></td>
+                                    </tr>
+                                </tfoot>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Tabela por tipo de cliente — segundo eixo, mesmas vendas. Sem
+                clique-para-filtrar: não existe recorte por tipo de cliente. */}
+            {!selectedBuildingId && activeTab === 'analysis' && !loading && isAllEmpreendimentos && (
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden mt-3">
+                    <div className="p-2 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar tipo de cliente..."
+                                    aria-label="Buscar tipo de cliente"
+                                    value={clientTypeSearch}
+                                    onChange={e => setClientTypeSearch(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
+                            </div>
+                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                                <ColumnConfigButton
+                                    columns={SALES_CLIENT_TYPE_COLUMNS}
+                                    visibleColumns={clientTypeTableColumns.visibleColumns}
+                                    showColumnConfig={clientTypeTableColumns.showColumnConfig}
+                                    onToggleShow={() => clientTypeTableColumns.setShowColumnConfig(!clientTypeTableColumns.showColumnConfig)}
+                                    onToggleColumn={clientTypeTableColumns.toggleColumn}
+                                    onReset={clientTypeTableColumns.resetColumns}
+                                />
+                                <button
+                                    onClick={() => clientTypeCols.autoFit()}
+                                    className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
+                                    title="Ajustar largura das colunas ao conteúdo"
+                                    aria-label="Ajustar largura das colunas ao conteúdo"
+                                >
+                                    <MoveHorizontal className="w-4 h-4" />
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    {clientTypeRows.length === 0 ? (
+                        <div className="text-center py-12">
+                            <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhum tipo de cliente encontrado</h3>
+                            <p className="text-sm text-gray-500">
+                                {clientTypeSearch ? 'Tente ajustar a busca.' : 'Nenhuma venda com contrato tem comprador vinculado.'}
+                            </p>
+                        </div>
+                    ) : (
+                        <div className="overflow-auto max-h-[70vh]">
+                            <table ref={clientTypeCols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: clientTypeTableTotalWidth, minWidth: '100%' }}>
+                                <caption className="sr-only">Vendas por tipo de cliente</caption>
+                                <colgroup>
+                                    {clientTypeVisibleColumns.map(c => (
+                                        <col key={c.key} data-col-key={c.key} style={{ width: `${clientTypeCols.getWidth(c.key)}px` }} />
+                                    ))}
+                                    <col />
+                                </colgroup>
+                                <thead>
+                                    <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                        {clientTypeVisibleColumns.map(c => (
+                                            <SortableHeader
+                                                key={c.key}
+                                                colKey={c.key}
+                                                label={c.label}
+                                                uppercase={false}
+                                                sortColumn={clientTypeTableColumns.sortColumn}
+                                                sortDirection={clientTypeTableColumns.sortDirection}
+                                                onSort={clientTypeTableColumns.handleColumnSort}
+                                                className="px-6 py-2 border-r border-gray-100 overflow-hidden"
+                                            >
+                                                <clientTypeCols.ResizeHandle colKey={c.key} />
+                                            </SortableHeader>
+                                        ))}
+                                        <th aria-hidden="true" className="border-r border-gray-100"></th>
+                                    </tr>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {clientTypeRows.map(row => (
+                                        <tr key={row.categoryId} className="hover:bg-blue-50/50 transition-colors">
+                                            {clientTypeVisibleColumns.map(c => (
+                                                <td
+                                                    key={c.key}
+                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm ${
+                                                        c.key === 'vgv' || c.key === 'ticket' || c.key === 'avgValuePerSqm'
+                                                            ? 'font-medium text-gray-800'
+                                                            : c.key === 'label'
+                                                                ? 'font-normal text-gray-700 truncate'
+                                                                : 'font-normal text-gray-600'
+                                                    }`}
+                                                >
+                                                    {renderSalesClientTypeCell(c.key, row)}
+                                                </td>
+                                            ))}
+                                            <td aria-hidden="true"></td>
+                                        </tr>
+                                    ))}
+                                </tbody>
+                            </table>
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Com um empreendimento escolhido, o lugar da tabela vira o lembrete
+                do recorte — senão os KPIs são lidos como da carteira inteira. */}
+            {!selectedBuildingId && activeTab === 'analysis' && !loading && !isAllEmpreendimentos && (
+                <p className="text-sm text-gray-500">
+                    Mostrando apenas <strong className="font-medium text-gray-700">{analysisScope.name}</strong>.{' '}
+                    <button onClick={() => setAnalysisEmpId('ALL')} className="text-blue-600 hover:text-blue-800 font-medium">
+                        Ver todos os empreendimentos
+                    </button>
+                </p>
+            )}
 
             {/* 2. Toolbar de abas (§3) — navegação entre as vistas de UM empreendimento
                 selecionado. Trilho bg-gray-50 + aba ativa bg-white text-blue-600

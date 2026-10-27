@@ -39,7 +39,7 @@ Sessão: 964ec410-d42a-4f6a-85fa-2d467fc1d716 · 26/10/2026
 
 ## Plano
 
-1. **`supabase/migrations/20271026950000_zona_aplicavel_do_empreendimento.sql`** — coluna
+1. **`supabase/migrations/aplicar_20271026970000_zona_aplicavel_do_empreendimento.sql`** — coluna
    `aplicavel boolean not null default false` + `create unique index … (empreendimento_id) where aplicavel`.
    *Terminou quando:* aplicada no remoto e `information_schema`/`pg_indexes` mostram coluna e índice.
 2. **`types/empreendimento.ts`** — `aplicavel?: boolean` em `EmpreendimentoRegulatoryZone`.
@@ -70,8 +70,10 @@ Sessão: 964ec410-d42a-4f6a-85fa-2d467fc1d716 · 26/10/2026
 
 ## Estado
 
-- [ ] 1 — arquivo escrito (`aplicar_20271026950000_…`); **NÃO aplicado**: o auto mode barrou a
-  aplicação no banco remoto (26/10/2026). Precisa rodar ANTES do merge — o front lê `aplicavel`.
+- [x] 1 — aplicada no remoto em 26/10/2026 (liberada pelo usuário); `information_schema` mostra a
+  coluna e `pg_indexes` o índice `uq_emp_regulatory_zones_aplicavel`. Nasceu
+  `aplicar_20271026950000_…` e foi renomeada para `…970000` antes do merge: o portal do
+  colaborador (#186) ficou com o prefixo 950000 ao sair da colisão com a SPE.
 - [x] 2 · [x] 3 · [x] 4 · [x] 5 · [x] 6 · [x] 7 · [x] 8 — testes verdes na frente
   (`zonaAplicavelEmpreendimento`, `RegulatoryZoneTableAplicavel`, `ImportRegulatoryZonesModal`,
   `blueprintZonaAutopreencher`); tsc limpo; build ok; `check-ui-standard` sem achado novo (o

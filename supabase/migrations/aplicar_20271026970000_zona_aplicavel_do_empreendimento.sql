@@ -1,5 +1,7 @@
 -- Zona aplicável do empreendimento (26/10/2026).
 -- Plano: docs/planos/2026-10-26-zona-aplicavel-do-empreendimento.md
+-- Nasceu como aplicar_20271026950000_…; renomeada antes do merge porque o portal do
+-- colaborador (#186) passou a usar esse prefixo. Já aplicada no remoto em 26/10/2026.
 --
 -- Pedido: "como seleciono um item do mapa regulatorio?" → "a+b juntos". A aba Mapa
 -- Regulatório do empreendimento lista as zonas da lei (o Garden Cambuhy recebeu as 175

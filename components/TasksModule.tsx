@@ -528,7 +528,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
       {/* Prévia Mobile */}
       {showMobilePreview && (
         <MobilePreviewFrame onClose={() => setShowMobilePreview(false)} title="Prévia — Minhas Tarefas">
-          <TasksMobileApp orgId={orgKey} />
+          <TasksMobileApp orgId={orgKey} previa />
         </MobilePreviewFrame>
       )}
 

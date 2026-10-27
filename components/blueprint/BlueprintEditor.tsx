@@ -624,6 +624,8 @@ import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { PROGRAMA_CURTO_PADRAO, programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendimento';
 import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
+import { estruturasDoEmpreendimento } from '../../utils/blueprintEstruturaDaTorre';
+import { comandosDoAjuste, vestirBlocosPropostos } from '../../utils/blueprintAjusteAoEmpreendimento';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
 import type { EmpreendimentoUnit } from '../../types/empreendimento';
@@ -6100,10 +6102,22 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** O lote do ESTUDO (qualquer pavimento): é onde o gerador implanta. */
   const temLoteDoEstudo = useMemo(() => !!medirTerreno(divisasDoLote(editor.model.boundaries)), [editor.model.boundaries]);
   const levelIdDaMassa = geradorDeMassa.resultado?.levelId ?? null;
-  const aplicarMassaGerada = async (c: CandidatoDeMassa) => {
+  /**
+   * SEGUIR O EMPREENDIMENTO ao aplicar (27/10/2026): com a caixa ligada, os blocos do candidato saem com o nome das
+   * torres, os pavimentos de cada uma e a garagem sob a torre que tem (`vestirBlocosPropostos`). O resumo vai no aviso.
+   */
+  const vestirComOEmpreendimento = (c: CandidatoDeMassa, opcoes?: { seguirEmpreendimento: boolean }): { c: CandidatoDeMassa; recado: string | null } => {
+    if (!opcoes?.seguirEmpreendimento || !estruturasDaCasa || estruturasDaCasa.length === 0) return { c, recado: null };
+    const v = vestirBlocosPropostos(c.blocos, estruturasDaCasa);
+    const resumo = estruturasDaCasa.filter((e) => e.acima.length > 0).map((e) => `${e.nome} ${e.acima.length} pav${e.garagens.length ? ` + ${e.garagens.length} garagem(ns)` : ''}`).join(' · ');
+    return { c: { ...c, blocos: v.blocos }, recado: `Blocos seguindo as torres do Empreendimento: ${resumo}.${v.avisos.length ? ` ${v.avisos.join(' ')}` : ''}` };
+  };
+  const aplicarMassaGerada = async (gerado: CandidatoDeMassa, opcoes?: { seguirEmpreendimento: boolean }) => {
     if (!levelIdDaMassa) throw new Error('Gere de novo: o pavimento do lote não foi encontrado.');
+    const { c, recado } = vestirComOEmpreendimento(gerado, opcoes);
     editor.runBatch(comandosDoCandidato(c, editor.model, levelIdDaMassa));
     setTelaAberta(null);
+    if (recado) setAvisoColar(recado);
     // 27/10/2026: "gerou massa mas não fica visível na planta" — a vista ficava onde estava (a faixa da frente
     // de um lote de 63 m) e as torres, a 13 m da frente, nasciam fora da tela.
     navegar('ENQUADRAR');
@@ -6111,7 +6125,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     const terrenoLigado = comTerrenoAVista(camadas);
     if (terrenoLigado) {
       mudarCamadasDaDisciplina(terrenoLigado);
-      setAvisoColar('A camada Terreno estava oculta neste navegador — liguei para mostrar a massa (é nela que ficam o lote e os blocos).');
+      setAvisoColar(`${recado ? `${recado} ` : ''}A camada Terreno estava oculta neste navegador — liguei para mostrar a massa (é nela que ficam o lote e os blocos).`);
     }
   };
   const [hipotesesDoGerador, setHipotesesDoGerador] = usePersistedState<HipotesesDoGerador>('blueprint:gerador', HIPOTESES_DO_GERADOR_PADRAO);
@@ -9130,8 +9144,25 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // da massa monta o mix por elas (25/10/2026: um hook para as duas telas; era um efeito só da Casa).
   const empreendimentoDaCasa = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido || null;
   const nomeDoEmpreendimentoDaCasa = empreendimentos.find((e) => e.id === empreendimentoDaCasa)?.name ?? null;
-  const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(empreendimentoDaCasa, telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa' || telaAberta === 'casas-lotes');
+  // 27/10/2026: também com um bloco selecionado — o painel dele compara o bloco com a torre do Empreendimento.
+  const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(
+    empreendimentoDaCasa,
+    telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa' || telaAberta === 'casas-lotes' || !!blocoSel,
+  );
   const torresDoEmpreendimento = unidadesDoEmpreendimento.carregadoDe === empreendimentoDaCasa ? unidadesDoEmpreendimento.torres : null;
+  /**
+   * AS TORRES DO EMPREENDIMENTO NA MASSA (27/10/2026): *"os dados do empreendimento … aba torres e unidades deve-se
+   * ser vinculados. Torre A e Torre B, quantidade de pavimentos, nome dos pavimentos"*. A estrutura de cada torre
+   * (pavimentos com nome, garagens) e a comparação com os blocos desenhados — o painel do bloco mostra e ajusta.
+   */
+  const estruturasDaCasa = useMemo(
+    () => (torresDoEmpreendimento ? estruturasDoEmpreendimento(torresDoEmpreendimento, unidadesDoEmpreendimento.pavimentosPorTorre) : null),
+    [torresDoEmpreendimento, unidadesDoEmpreendimento.pavimentosPorTorre],
+  );
+  const ajusteAoEmpreendimento = useMemo(
+    () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa) : null),
+    [estruturasDaCasa, editor.model],
+  );
   const unidadesDaCasa = useMemo(() => {
     const porId = new Map<string, EmpreendimentoUnit>();
     const opcoes: UnidadeParaOPrograma[] = [];
@@ -9215,11 +9246,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         ? {
             nome: nomeDoEmpreendimentoDaCasa,
             massa: torresDoEmpreendimento
-              ? massaDoEmpreendimento(torresDoEmpreendimento)
+              ? massaDoEmpreendimento(torresDoEmpreendimento, estruturasDaCasa ?? [])
               : { restricao: null, motivo: 'Carregando as torres do Empreendimento…', avisos: [], resumo: null },
           }
         : null,
-    [empreendimentoDaCasa, nomeDoEmpreendimentoDaCasa, torresDoEmpreendimento],
+    [empreendimentoDaCasa, nomeDoEmpreendimentoDaCasa, torresDoEmpreendimento, estruturasDaCasa],
   );
   /** F15 + 25/10/2026: escolher a unidade preenche o programa por ela e a grava como A unidade desta casa. */
   const escolherUnidadeDaCasa = useCallback(
@@ -11291,6 +11322,26 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         bloco={blocoSel}
         medida={blocoSel ? massa.blocos.find((m) => m.blocoId === blocoSel.id) ?? null : null}
         pisoSelecionado={pisoDoBlocoSel}
+        empreendimento={
+          blocoSel && ajusteAoEmpreendimento && nomeDoEmpreendimentoDaCasa
+            ? (() => {
+                const papel = ajusteAoEmpreendimento.papeis.get(blocoSel.id) ?? null;
+                return {
+                  nome: nomeDoEmpreendimentoDaCasa,
+                  papel,
+                  linha: papel ? ajusteAoEmpreendimento.linhas.find((l) => l.torre === papel.torre) ?? null : null,
+                  avisos: [...(estruturasDaCasa ?? []).flatMap((e) => e.avisos), ...ajusteAoEmpreendimento.avisos],
+                  pendentes: ajusteAoEmpreendimento.comandos.length,
+                  onAjustar: async () => {
+                    const n = ajusteAoEmpreendimento.comandos.length;
+                    if (n === 0) return 'Os blocos já seguem as torres do Empreendimento.';
+                    editor.runBatch(ajusteAoEmpreendimento.comandos);
+                    return `Blocos ajustados às torres do Empreendimento (${n} mudança(s), Ctrl+Z desfaz).`;
+                  },
+                };
+              })()
+            : null
+        }
         onPiso={(indice) => setPisoDaMassa(blocoSel && indice !== null ? { blocoId: blocoSel.id, indice } : null)}
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
         onExcluir={removerSelecionada}
@@ -12319,8 +12370,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               regua={reguaDoEstudo}
               proximoNumero={ramos.length + 1}
               onAbrirProduto={() => setTelaAberta('produto')}
-              onCriarAlternativa={async (c, nome) => {
+              onCriarAlternativa={async (gerado, nome, opcoes) => {
                 if (!levelIdDaMassa) throw new Error('Gere de novo: o pavimento do lote não foi encontrado.');
+                const { c } = vestirComOEmpreendimento(gerado, opcoes);
                 await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome, descricao: `Gerada: ${c.rotulo}`, model: modeloDoCandidato(c, editor.model, levelIdDaMassa) });
                 await recarregarRamos();
                 setTelaAberta('alternativas');

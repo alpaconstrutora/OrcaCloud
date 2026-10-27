@@ -1402,6 +1402,19 @@ export const empreendimentoService = {
         return data || [];
     },
 
+    /** Os pavimentos de várias torres numa consulta só — a Planta lê as torres do empreendimento de uma vez (27/10/2026). */
+    async listFloorsDasTorres(towerIds: string[]): Promise<EmpreendimentoFloor[]> {
+        if (towerIds.length === 0) return [];
+        const { data, error } = await supabase
+            .from('empreendimento_floors')
+            .select(FLOOR_COLS)
+            .in('tower_id', towerIds)
+            .order('sort_order', { ascending: true })
+            .order('floor_number', { ascending: true });
+        if (error) throw new Error(`Failed to fetch floors: ${error.message}`);
+        return data || [];
+    },
+
     async createFloor(floor: EmpreendimentoFloorInsert): Promise<EmpreendimentoFloor> {
         const { data, error } = await supabase
             .from('empreendimento_floors')

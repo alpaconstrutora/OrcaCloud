@@ -637,7 +637,7 @@ export interface ResumoDoPiso {
   problema: boolean;
 }
 
-export function resumoDoPiso(medida: MedidaDoBloco, indice: number): ResumoDoPiso | null {
+export function resumoDoPiso(medida: MedidaDoBloco, indice: number, nomesDosPisos?: readonly string[]): ResumoDoPiso | null {
   const p = medida.pisos.find((x) => x.indice === indice);
   if (!p) return null;
   const linhas = [`Cota ${fmt(p.baseMm / 1000)} m a ${fmt(p.topoMm / 1000)} m · ${fmt(medida.projecaoM2)} m²`];
@@ -647,7 +647,8 @@ export function resumoDoPiso(medida: MedidaDoBloco, indice: number): ResumoDoPis
   else linhas.push(`Fora do envelope: ${fmt(m2(p.areaForaMm2 ?? 0))} m²`);
   if (p.acimaDoGabarito) linhas.push(`Acima do gabarito: ${p.motivoDoGabarito ?? 'sem o motivo'}`);
   return {
-    titulo: `${medida.nome} · ${p.indice}º pavimento de ${medida.pavimentos}${p.subsolo ? ' (subsolo)' : ''}`,
+    // Com a torre do Empreendimento casada (27/10/2026), o nome do pavimento dela: "— Pavimento 1", "— Garagem 2".
+    titulo: `${medida.nome} · ${p.indice}º pavimento de ${medida.pavimentos}${p.subsolo ? ' (subsolo)' : ''}${nomesDosPisos?.[p.indice - 1] ? ` — ${nomesDosPisos[p.indice - 1]}` : ''}`,
     linhas,
     problema: p.cabe === false || p.acimaDoGabarito,
   };

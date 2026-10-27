@@ -9,6 +9,7 @@
 // 26/10/2026, dita no aviso).
 
 import type { EmpreendimentoTower } from '../types/empreendimento';
+import type { EstruturaDaTorre } from './blueprintEstruturaDaTorre';
 
 export type TorreParaAMassa = Pick<EmpreendimentoTower, 'name'> & Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_bloco_uid' | 'blueprint_quadra_uid'>>;
 
@@ -21,7 +22,12 @@ export interface MassaDoEmpreendimento {
   resumo: string | null;
 }
 
-export function massaDoEmpreendimento(torres: TorreParaAMassa[]): MassaDoEmpreendimento {
+/**
+ * 27/10/2026: com as `estruturas` (pavimentos lidos do cadastro ou das unidades — `blueprintEstruturaDaTorre`), os
+ * pavimentos de cada torre são os acima do solo dela, e não só `floors_count`: o Garden Cambuhy tinha a Torre A sem
+ * `floors_count` e a faixa saía só da Torre B (a A nascia com 6 em vez de 4).
+ */
+export function massaDoEmpreendimento(torres: TorreParaAMassa[], estruturas: readonly EstruturaDaTorre[] = []): MassaDoEmpreendimento {
   const avisos: string[] = [];
   const daMassa = torres.filter((t) => t.blueprint_bloco_uid).length;
   const quadras = torres.filter((t) => !t.blueprint_bloco_uid && t.blueprint_quadra_uid).length;
@@ -36,13 +42,18 @@ export function massaDoEmpreendimento(torres: TorreParaAMassa[]): MassaDoEmpreen
       resumo: null,
     };
   }
-  const pav = proprias.map((t) => t.floors_count).filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 1).map((n) => Math.round(n));
+  const estruturaDe = (t: TorreParaAMassa) => estruturas.find((e) => e.nome === t.name && e.acima.length > 0);
+  const pav = proprias.map((t) => estruturaDe(t)?.acima.length ?? t.floors_count).filter((n): n is number => typeof n === 'number' && Number.isFinite(n) && n >= 1).map((n) => Math.round(n));
   const semPav = proprias.length - pav.length;
   if (semPav > 0) avisos.push(`${semPav} torre(s) sem pavimentos cadastrados — ${pav.length > 0 ? 'a faixa sai das outras' : 'os pavimentos ficam livres'}.`);
   const min = pav.length > 0 ? Math.min(...pav) : null;
   const max = pav.length > 0 ? Math.max(...pav) : null;
   if (min != null && max != null && min !== max) avisos.push(`As torres têm de ${min} a ${max} pavimentos — o gerador testa essa faixa para todas (ele dá a mesma altura aos blocos).`);
   const n = proprias.length;
-  const resumo = `${n} ${n === 1 ? 'torre' : 'torres'} × ${min == null ? 'pavimentos livres' : min === max ? `${min} pavimentos` : `${min} a ${max} pavimentos`}`;
+  const porTorre = proprias.map((t) => estruturaDe(t)).filter((e): e is EstruturaDaTorre => !!e);
+  const resumo =
+    porTorre.length === n
+      ? porTorre.map((e) => `${e.nome}: ${e.acima.length}${e.garagens.length ? ` + ${e.garagens.length} ${e.garagens.length === 1 ? 'garagem' : 'garagens'}` : ''}`).join(' · ')
+      : `${n} ${n === 1 ? 'torre' : 'torres'} × ${min == null ? 'pavimentos livres' : min === max ? `${min} pavimentos` : `${min} a ${max} pavimentos`}`;
   return { restricao: { torres: n, pavimentosMin: min, pavimentosMax: max }, motivo: null, avisos, resumo };
 }

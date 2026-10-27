@@ -2062,6 +2062,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   }, [editor.loading, editor.model, branchId, vista, setAbaSalva]);
 
   /**
+   * A PLANTA ABRE ENQUADRADA quando já há desenho (27/10/2026). A vista nasce fixa no canvas (escala de trabalho,
+   * origem no rodapé), o que é certo para começar do zero e errado para reabrir um lote de 63 m: só a faixa da
+   * frente aparecia e a massa ficava fora da tela ("gerou massa mas não fica visível na planta"). Uma vez por
+   * abertura do ramo; aberta no 3D, o pedido espera a planta montar.
+   */
+  const enquadradoNaAbertura = useRef<string | null>(null);
+  useEffect(() => {
+    if (editor.loading || enquadradoNaAbertura.current === branchId) return;
+    enquadradoNaAbertura.current = branchId;
+    const m = editor.model;
+    if (m.walls.length > 0 || m.boundaries.length > 0 || (m.blocos ?? []).length > 0) navegar('ENQUADRAR');
+  }, [editor.loading, editor.model, branchId, navegar]);
+
+  /**
    * A TAREFA aberta no painel e o RELATÓRIO aberto no dock. Estado de sessão,
    * não preferência: reabrir o editor com "Importar do IFC" aberto seria
    * estranho. Fora da planta não há tarefa; o relatório que a vista não admite
@@ -6082,6 +6096,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     if (!levelIdDaMassa) throw new Error('Gere de novo: o pavimento do lote não foi encontrado.');
     editor.runBatch(comandosDoCandidato(c, editor.model, levelIdDaMassa));
     setTelaAberta(null);
+    // 27/10/2026: "gerou massa mas não fica visível na planta" — a vista ficava onde estava (a faixa da frente
+    // de um lote de 63 m) e as torres, a 13 m da frente, nasciam fora da tela.
+    navegar('ENQUADRAR');
   };
   const [hipotesesDoGerador, setHipotesesDoGerador] = usePersistedState<HipotesesDoGerador>('blueprint:gerador', HIPOTESES_DO_GERADOR_PADRAO);
   /**

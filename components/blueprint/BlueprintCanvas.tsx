@@ -3785,6 +3785,8 @@ export default function BlueprintCanvas({
     for (const w of recorteDaVista ? [] : paredesReais) pontos.push(w.a, w.b);
     for (const b of limitesReais) pontos.push(b.a, b.b);
     for (const e of estruturasReais) pontos.push(...contornoEmPlanta(e));
+    // BLOCOS DE MASSA (27/10/2026): fora da conta, bloco sem lote (ou além dele) não entrava no quadro.
+    for (const b of recorteDaVista ? [] : model.blocos ?? []) if ((!levelId || b.levelId === levelId) && !ocultos.has(b.id)) pontos.push(...b.pontos);
     for (const r of aguasDoNivel) pontos.push(...r.pontos);
     for (const e of escadasDoNivel) pontos.push(...e.pontos);
     for (const t of trechosReais) pontos.push(t.a, t.b);

@@ -94,8 +94,23 @@ export function nomeDaGaragem(torre: string): string {
 
 const emMm = (m: number | null | undefined) => (m == null || !Number.isFinite(Number(m)) ? null : Math.round(Number(m) * 1000));
 
-function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null): PisoSemUnidades[] {
-  const out: PisoSemUnidades[] = [];
+/** Um andar do cadastro de pavimentos, com a linha (`floorId`) de onde veio. */
+export interface AndarDoCadastro {
+  numero: number;
+  nome: string;
+  tipo: FloorTipo;
+  floorId: string;
+  /** O 1º andar da linha (a elevação digitada vale para ele). */
+  primeiroDaLinha: boolean;
+  floor: EmpreendimentoFloor;
+}
+
+/**
+ * O cadastro de pavimentos expandido em andares (a repetição vira "Tipo 1", "Tipo 2"…), de baixo para cima e sem
+ * andar repetido. Fonte única da estrutura da massa e do campo "Pavimento" da Nova unidade (27/10/2026).
+ */
+export function andaresDoCadastro(pavimentos: readonly EmpreendimentoFloor[]): AndarDoCadastro[] {
+  const out: AndarDoCadastro[] = [];
   const visto = new Set<number>();
   for (const fl of [...pavimentos].sort((a, b) => a.sort_order - b.sort_order || a.floor_number - b.floor_number)) {
     const reps = Math.max(1, fl.repeat_count || 1);
@@ -104,17 +119,21 @@ function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null):
       if (visto.has(n)) continue;
       visto.add(n);
       const base = fl.name?.trim();
-      out.push({
-        numero: n,
-        nome: base ? (reps > 1 ? `${base} ${r + 1}` : base) : nomeDoAndar(n, fl.tipo),
-        tipo: fl.tipo,
-        peDireitoMm: emMm(fl.pe_direito_m) ?? padraoMm,
-        // A digitada é a do 1º andar da linha; os repetidos seguem pelo pé-direito.
-        elevacaoDigitadaMm: r === 0 ? emMm(fl.elevacao_m) : null,
-      });
+      out.push({ numero: n, nome: base ? (reps > 1 ? `${base} ${r + 1}` : base) : nomeDoAndar(n, fl.tipo), tipo: fl.tipo, floorId: fl.id, primeiroDaLinha: r === 0, floor: fl });
     }
   }
-  return out;
+  return out.sort((a, b) => a.numero - b.numero);
+}
+
+function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null): PisoSemUnidades[] {
+  return andaresDoCadastro(pavimentos).map((a) => ({
+    numero: a.numero,
+    nome: a.nome,
+    tipo: a.tipo,
+    peDireitoMm: emMm(a.floor.pe_direito_m) ?? padraoMm,
+    // A digitada é a do 1º andar da linha; os repetidos seguem pelo pé-direito.
+    elevacaoDigitadaMm: a.primeiroDaLinha ? emMm(a.floor.elevacao_m) : null,
+  }));
 }
 
 function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number | null): PisoSemUnidades[] {

@@ -537,13 +537,14 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                 isOpen={isOpen}
                 onToggle={() => setExpandedId(isOpen ? null : tower.id)}
               >
-                <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0 divide-y divide-gray-100">
-                  <div className="p-4">
+                {/* Cada seção no seu bloco (27/10/2026, "separar cada seção para melhorar a organização"). */}
+                <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 m-0 p-4 space-y-4">
+                  <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Pavimentos" data-testid="secao-pavimentos">
                     <FloorEditor tower={tower} onFloorsChange={handleFloorsChange} />
-                  </div>
-                  <div className="p-4">
+                  </section>
+                  <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Unidades" data-testid="secao-unidades">
                     <UnitEditor tower={tower} floors={floorsByTower[tower.id]} onUnitsChange={handleUnitsChange} />
-                  </div>
+                  </section>
                 </fieldset>
               </TorreCard>
             );

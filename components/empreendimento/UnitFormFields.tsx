@@ -11,6 +11,10 @@
 // 14/10/2026 como "campos sem uma ordem". A de Características já tinha rótulo.
 // Junto com o formulário, a conversão form ⇄ registro também mora aqui — as duas
 // cópias divergiam (uma mandava `undefined` nos enums vazios, a outra `null`).
+//
+// Pavimento da lista (27/10/2026, "ao clicar na gaveta nova unidade, o campo Pavimento deve listar os pavimentos
+// criados na seção Pavimentos"): com `pavimentos` (o cadastro da torre, expandido em andares), o campo vira uma lista;
+// escolher grava o andar, o tipo e o vínculo (`floor_id`). Sem cadastro, continua o número digitado.
 
 import React from 'react';
 import {
@@ -18,6 +22,7 @@ import {
   UnitPositionType, UnitSunOrientation, UnitViewType,
 } from '../../types';
 import { POSITION_LABEL, VIEW_LABEL, SUN_LABEL } from '../../utils/empreendimentoComercial';
+import type { AndarDoCadastro } from '../../utils/blueprintEstruturaDaTorre';
 
 /** Rótulo do tipo de pavimento. Antes duplicado em UnitEditor e CaracteristicasAdicionaisTab. */
 export const FLOOR_TIPO_LABEL: Record<FloorTipo, string> = {
@@ -30,6 +35,8 @@ export interface UnitFormValues {
   name: string;
   floor: string;
   floor_tipo: FloorTipo | '';
+  /** O pavimento cadastrado de onde veio o andar ('' = sem vínculo). */
+  floor_id: string;
   typology: string;
   private_area: string;
   common_area: string;
@@ -43,13 +50,13 @@ export interface UnitFormValues {
 }
 
 export const emptyUnitFormValues = (): UnitFormValues => ({
-  name: '', floor: '', floor_tipo: '', typology: '', private_area: '', common_area: '',
+  name: '', floor: '', floor_tipo: '', floor_id: '', typology: '', private_area: '', common_area: '',
   bedrooms: '', bathrooms: '', suites: '', parking_spaces: '',
   position_type: '', view_type: '', sun_orientation: '',
 });
 
 type UnitFormRecord = Pick<EmpreendimentoUnit,
-  'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'bedrooms'
+  'name' | 'floor' | 'floor_tipo' | 'floor_id' | 'typology' | 'private_area' | 'common_area' | 'bedrooms'
   | 'bathrooms' | 'suites' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation'>;
 
 const str = (n: number | null | undefined) => (n ?? null) === null ? '' : String(n);
@@ -59,6 +66,7 @@ export const unitFormFromRecord = (u: UnitFormRecord): UnitFormValues => ({
   name: u.name ?? '',
   floor: str(u.floor),
   floor_tipo: u.floor_tipo ?? '',
+  floor_id: u.floor_id ?? '',
   typology: u.typology ?? '',
   private_area: str(u.private_area),
   common_area: str(u.common_area),
@@ -72,7 +80,7 @@ export const unitFormFromRecord = (u: UnitFormRecord): UnitFormValues => ({
 });
 
 export type UnitFormPayload = Pick<EmpreendimentoUnitInsert,
-  'name' | 'floor' | 'floor_tipo' | 'typology' | 'private_area' | 'common_area' | 'total_area'
+  'name' | 'floor' | 'floor_tipo' | 'floor_id' | 'typology' | 'private_area' | 'common_area' | 'total_area'
   | 'bedrooms' | 'bathrooms' | 'suites' | 'parking_spaces' | 'position_type' | 'view_type' | 'sun_orientation'>;
 
 const num = (s: string): number | undefined => (s.trim() === '' ? undefined : Number(s));
@@ -89,6 +97,7 @@ export function unitFormToPayload(v: UnitFormValues): UnitFormPayload {
     name: v.name.trim(),
     floor: num(v.floor),
     floor_tipo: v.floor_tipo || null,
+    floor_id: v.floor_id || null,
     typology: v.typology.trim() || undefined,
     private_area: priv,
     common_area: common,
@@ -127,10 +136,12 @@ interface UnitFormFieldsProps {
   erroNome?: string;
   /** Prefixo dos ids dos campos, para dois formulários na mesma página não colidirem. */
   idPrefix?: string;
+  /** Os andares do cadastro de pavimentos da torre: com algum, "Pavimento" vira uma lista deles. */
+  pavimentos?: AndarDoCadastro[];
 }
 
 export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
-  value, onChange, towers, towerId, onTowerChange, erroNome, idPrefix = 'unidade',
+  value, onChange, towers, towerId, onTowerChange, erroNome, idPrefix = 'unidade', pavimentos = [],
 }) => {
   const id = (k: string) => `${idPrefix}-${k}`;
   const numero = (k: keyof UnitFormValues, rotulo: string, step?: string) => (
@@ -158,7 +169,29 @@ export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
         {erroNome && <p id={id('name-erro')} className="text-xs text-red-600">{erroNome}</p>}
       </Campo>
 
-      {numero('floor', 'Pavimento')}
+      {pavimentos.length > 0 ? (
+        <Campo rotulo="Pavimento" htmlFor={id('floor')}>
+          <select id={id('floor')} className={campoCls} value={value.floor}
+            onChange={e => {
+              const andar = pavimentos.find(a => String(a.numero) === e.target.value);
+              // O tipo e o vínculo vêm do cadastro: escolher o pavimento já diz os dois.
+              onChange(andar ? { floor: String(andar.numero), floor_tipo: andar.tipo, floor_id: andar.floorId } : { floor: '', floor_id: '' });
+            }}>
+            <option value="">Selecione o pavimento…</option>
+            {/* O andar que a unidade já tem e não está no cadastro continua visível (editar não o apaga). */}
+            {value.floor !== '' && !pavimentos.some(a => String(a.numero) === value.floor) && (
+              <option value={value.floor}>Andar {value.floor} (fora do cadastro)</option>
+            )}
+            {pavimentos.map(a => <option key={a.numero} value={String(a.numero)}>{a.nome} — andar {a.numero}</option>)}
+          </select>
+        </Campo>
+      ) : (
+        <Campo rotulo="Pavimento" htmlFor={id('floor')}>
+          <input id={id('floor')} type="number" className={campoCls} value={value.floor}
+            // Digitado à mão, o andar deixa de ser o do pavimento cadastrado que estava ligado.
+            onChange={e => onChange({ floor: e.target.value, floor_id: '' })} />
+        </Campo>
+      )}
       <Campo rotulo="Tipo de pavimento" htmlFor={id('floor_tipo')}>
         <select id={id('floor_tipo')} className={campoCls} value={value.floor_tipo}
           onChange={e => onChange({ floor_tipo: e.target.value as FloorTipo | '' })}>

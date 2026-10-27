@@ -592,7 +592,7 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
                             onChange={patchUnitForm}
                             towers={towers}
                             towerId={unitForm.tower_id}
-                            onTowerChange={id => patchUnitForm({ tower_id: id })}
+                            onTowerChange={id => patchUnitForm({ tower_id: id, floor_id: '' })}
                             erroNome={erroNome}
                         />
                     </div>

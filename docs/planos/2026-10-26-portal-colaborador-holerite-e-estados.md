@@ -23,8 +23,8 @@ Crítica arquivada em `.impeccable/critique/2026-10-26T20-30-01Z__components-lab
 | 3 | `/impeccable clarify` | P2 datas, status, termos | no ar (#191) |
 | 4 | `/impeccable init` + `shape` | marca da Alpa, Início = último holerite, navegação no rodapé | no ar (#193) |
 | 5 | `/impeccable typeset` | pesos e tamanhos | **item 5 abaixo** |
-| 6 | `/impeccable audit` | contraste, alvos de toque, ARIA | pendente |
-| 7 | `/impeccable polish` | passada final | pendente |
+| 6 | `/impeccable audit` | contraste, alvos de toque, ARIA | auditoria feita; **P1 abaixo** |
+| 7 | `/impeccable polish` | passada final | **item 7 abaixo** |
 
 ## Item 1 — harden
 
@@ -214,3 +214,39 @@ section-title, label, nav-label, button-label); algarismos tabulares em todo nú
 
 Fica para o item 6 (audit): `Button`/`ActionIconButton` do app dentro do portal; botão de fechar o
 aviso de download sem anel de foco; indicador de carregamento em #FF884C.
+
+## Item 6 — audit (13/20) e P1 (adapt)
+
+Pedido: "seguir para o item 6"; depois "p1".
+
+Auditoria (medida no harness renderizado, 5 abas, 390px e 360px com texto a 200%): contraste 100%
+dentro do mínimo; foco visível em tudo; nota 13/20 — Acessibilidade 3, Performance 3, Tokens 2,
+Responsivo 2, Integridade 3.
+
+P1 corrigidos:
+- **Texto a 200% vazava** 81–134px na horizontal (WCAG 1.4.4/1.4.10): rodapé com consulta de contêiner
+  em `em` — abaixo de ~19,5em fica só-ícone (rótulo vira nome acessível), grade de 5 colunas iguais;
+  linhas de ponto/férias/holerite/treinamento com `flex-wrap` (valor e status descem); título do cartão
+  prende só "de AAAA" (travar a competência inteira vazava 37px).
+- **Baixar documento 24×24px** → botão da marca de 44px (era o `ActionIconButton` do app).
+- de quebra: `h1` (só para leitor de tela) com o nome da aba.
+- [x] medido de novo: vazamento 0 nas 5 abas a 390 e a 360/200%; nenhum alvo < 44px; contraste e foco ok.
+
+P2/P3 da auditoria, ainda abertos: barra de progresso da Academia sem `role="progressbar"`; títulos de
+seção como parágrafo; cores escritas à mão (69 ocorrências); `Button` do app no "Tentar de novo";
+logo em data URI (~100 KB) a cada resumo; `PortalView` no pacote principal (import estático no App);
+spinner sem "reduzir movimento".
+
+## Item 7 — polish (P2/P3 da auditoria)
+
+Pedido: "de acordo" (publicar os PRs, rodar o polish, nova auditoria; desempenho depois).
+
+- cores do portal viram tokens `portal-*` no `@theme` (69 hex e 13 sombras à mão → 0); `MARCA` usa os tokens;
+- "Tentar de novo" na marca (era o `Button` do app, borda/foco azuis) — o portal não usa mais nenhum componente do app;
+- títulos de seção são `h2` (com o `h1` por aba do P1, a página tem estrutura de títulos);
+- barra de progresso da Academia com `role="progressbar"` e valor;
+- anel de foco da marca no cartão do curso e no fechar do aviso; spinners param com "reduzir movimento";
+- selo de treinamento volta para a direita quando cabe (o `flex-wrap` do P1 o empurrava para baixo).
+- [x] medido no harness: vazamento 0, alvos ≥ 44px, contraste e foco ok nas 5 abas a 390 e a 360/200%.
+
+Fica para `/impeccable optimize`: logo em data URI no resumo; `PortalView` no pacote principal.

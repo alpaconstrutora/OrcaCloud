@@ -3,7 +3,7 @@ import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
     LogOut, Loader2, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, ChevronDown, Eye, Receipt
+    Smartphone, Key, ChevronDown, Eye, Receipt, Download
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -15,7 +15,7 @@ import PaystubModal from './PaystubModal';
 import MobilePreviewFrame from './MobilePreviewFrame';
 import {
     MARCA, CabecalhoDoPortal, CartaoUltimoHolerite, LinhaDeHolerite, RodapeDoPortal,
-    useValorVisivel, type SecaoDoPortal,
+    useValorVisivel, rotuloDaSecao, type SecaoDoPortal,
 } from './portalColaborador/PortalMarca';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
@@ -79,33 +79,33 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
     if (carregando) {
         return (
             <div role="status" className="flex items-center justify-center gap-2 py-10">
-                <Loader2 className="w-5 h-5 text-[#FF884C] animate-spin" />
-                <span className="text-sm text-[#566375]">Carregando {oQue}...</span>
+                <Loader2 className="w-5 h-5 text-portal-laranja animate-spin motion-reduce:animate-none" />
+                <span className="text-sm text-portal-secundario">Carregando {oQue}...</span>
             </div>
         );
     }
     if (erro) {
         return (
-            <div role="alert" className="p-4 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)] space-y-3">
+            <div role="alert" className="p-4 rounded-2xl bg-white shadow-portal-traco space-y-3">
                 <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 text-portal-laranja-texto shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-sm font-semibold text-[#4B4B4D]">Não foi possível carregar {oQue}</p>
-                        <p className="text-sm text-[#566375] mt-0.5">{mensagemDoPortalColaborador(erro)}</p>
+                        <p className="text-sm font-semibold text-portal-grafite">Não foi possível carregar {oQue}</p>
+                        <p className="text-sm text-portal-secundario mt-0.5">{mensagemDoPortalColaborador(erro)}</p>
                     </div>
                 </div>
-                <Button variant="secondary" size="lg" onClick={onTentarDeNovo} className="w-full">
+                <button type="button" onClick={onTentarDeNovo} className="w-full h-11 inline-flex items-center justify-center gap-2 rounded-2xl bg-white border border-portal-grafite/20 text-sm font-semibold text-portal-grafite hover:bg-portal-chao disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-laranja-texto focus-visible:ring-offset-2">
                     <RefreshCw className="w-4 h-4" /> Tentar de novo
-                </Button>
+                </button>
             </div>
         );
     }
     if (vazio) {
         return (
             <div className="text-center py-10 px-4">
-                <VazioIcone className="w-8 h-8 text-[#808EA1] mx-auto mb-2" />
-                <p className="text-sm font-semibold text-[#4B4B4D]">{vazioTitulo}</p>
-                {vazioDica && <p className="text-sm text-[#566375] mt-1">{vazioDica}</p>}
+                <VazioIcone className="w-8 h-8 text-portal-azul mx-auto mb-2" />
+                <p className="text-sm font-semibold text-portal-grafite">{vazioTitulo}</p>
+                {vazioDica && <p className="text-sm text-portal-secundario mt-1">{vazioDica}</p>}
             </div>
         );
     }
@@ -119,11 +119,11 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
 // ok grafite sólido 8,7:1 · espera cinza-azulado 40% 5,7:1 · alerta laranja
 // claro 4,8:1 · recusado laranja escuro sólido 5,7:1.
 const COR_DO_TOM: Record<TomDoStatus, string> = {
-    ok: 'bg-[#4B4B4D] text-white',
-    espera: 'bg-[#CCD2D9] text-[#4B4B4D]',
-    alerta: 'bg-[#FFE7DB] text-[#A84A1C]',
-    recusado: 'bg-[#A84A1C] text-white',
-    neutro: 'bg-[#EDEDE8] text-[#566375]',
+    ok: 'bg-portal-grafite text-white',
+    espera: 'bg-portal-espera text-portal-grafite',
+    alerta: 'bg-portal-alerta text-portal-laranja-texto',
+    recusado: 'bg-portal-laranja-texto text-white',
+    neutro: 'bg-portal-chao text-portal-secundario',
 };
 const SeloDeStatus: React.FC<{ rotulo: string; tom: TomDoStatus }> = ({ rotulo, tom }) => (
     <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${COR_DO_TOM[tom]}`}>{rotulo}</span>
@@ -268,7 +268,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     if (isLoading) {
         return comFaixa(
             <div className={`flex flex-col items-center justify-center min-h-[60vh] gap-3 py-16 ${MARCA.chao}`}>
-                <Loader2 className="w-8 h-8 text-[#FF884C] animate-spin" />
+                <Loader2 className="w-8 h-8 text-portal-laranja animate-spin motion-reduce:animate-none" />
                 <p className={`text-sm font-medium ${MARCA.secundario}`}>Carregando...</p>
             </div>
         );
@@ -279,13 +279,13 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     if (summaryErro && !summary) {
         return comFaixa(
             <div className="max-w-md mx-auto h-full flex flex-col items-center justify-center bg-white p-6 text-center gap-3">
-                <AlertTriangle className="w-8 h-8 text-[#A84A1C]" />
-                <p className="text-base font-semibold text-[#4B4B4D]">Não foi possível abrir o seu portal</p>
-                <p role="alert" className="text-sm text-[#566375]">{mensagemDoPortalColaborador(summaryErro)}</p>
-                <Button variant="secondary" size="lg" onClick={() => recarregarSummary()} disabled={summaryRecarregando} className="w-full mt-2">
-                    {summaryRecarregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                <AlertTriangle className="w-8 h-8 text-portal-laranja-texto" />
+                <p className="text-base font-semibold text-portal-grafite">Não foi possível abrir o seu portal</p>
+                <p role="alert" className="text-sm text-portal-secundario">{mensagemDoPortalColaborador(summaryErro)}</p>
+                <button type="button" onClick={() => recarregarSummary()} disabled={summaryRecarregando} className="w-full mt-2 h-11 inline-flex items-center justify-center gap-2 rounded-2xl bg-white border border-portal-grafite/20 text-sm font-semibold text-portal-grafite hover:bg-portal-chao disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-portal-laranja-texto focus-visible:ring-offset-2">
+                    {summaryRecarregando ? <Loader2 className="w-4 h-4 animate-spin motion-reduce:animate-none" /> : <RefreshCw className="w-4 h-4" />}
                     Tentar de novo
-                </Button>
+                </button>
             </div>
         );
     }
@@ -340,6 +340,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
             {/* Content */}
             <main className="flex-1 p-4">
+                <h1 className="sr-only">{rotuloDaSecao(activeSection)}</h1>
 
                 {/* Holerites — a tela inicial: o último é o cartão grande, os anteriores abaixo */}
                 {activeSection === 'folha' && (
@@ -382,24 +383,24 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'ponto' && (
                     <div className="space-y-3">
                         {pontosEmAnalise > 0 && (
-                            <p className="text-base text-[#4B4B4D] [text-wrap:pretty] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                            <p className="text-base text-portal-grafite [text-wrap:pretty] bg-white rounded-2xl px-4 py-3 shadow-portal-traco">
                                 <strong className="font-semibold">{pontosEmAnalise === 1 ? '1 registro' : `${pontosEmAnalise} registros`} em análise</strong> — o RH ainda vai aprovar.
                             </p>
                         )}
-                        <p className="px-1 text-sm font-semibold text-[#566375]">Últimos registros</p>
+                        <h2 className="px-1 text-sm font-semibold text-portal-secundario">Últimos registros</h2>
                         <LeituraDoPortal
                             carregando={pontoCarregando} erro={pontoErro} vazio={recentEntries.length === 0}
                             onTentarDeNovo={() => recarregarPonto()} oQue="seus registros de ponto"
                             vazioIcone={Clock} vazioTitulo="Nenhum registro de ponto"
                         >
                             {recentEntries.slice(0, 10).map(e => (
-                                <div key={e.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <div key={e.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 bg-white rounded-2xl shadow-portal-traco">
                                     <div>
-                                        <p className="text-base font-semibold tabular-nums text-[#4B4B4D]">{dataBR(e.date)}</p>
-                                        <p className="text-sm text-[#566375]">{e.project_name || 'Sem obra'}</p>
+                                        <p className="text-base font-semibold tabular-nums text-portal-grafite">{dataBR(e.date)}</p>
+                                        <p className="text-sm text-portal-secundario">{e.project_name || 'Sem obra'}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-base font-semibold tabular-nums whitespace-nowrap text-[#4B4B4D]">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
+                                    <div className="ml-auto text-right">
+                                        <p className="text-base font-semibold tabular-nums whitespace-nowrap text-portal-grafite">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
                                         <SeloDeStatus {...statusDoPonto(e.status)} />
                                     </div>
                                 </div>
@@ -411,32 +412,32 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Férias */}
                 {activeSection === 'ferias' && (
                     <div className="space-y-3">
-                        <div className="px-4 py-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                            <p className="text-base text-[#4B4B4D] [text-wrap:pretty]">
+                        <div className="px-4 py-3 bg-white rounded-2xl shadow-portal-traco">
+                            <p className="text-base text-portal-grafite [text-wrap:pretty]">
                                 {(summary?.ferias_saldo ?? 0) > 0
                                     ? <>Você tem <strong className="font-semibold">{diasTexto(summary?.ferias_saldo)}</strong> de férias para tirar.</>
                                     : 'Você não tem dias de férias disponíveis agora.'}
                             </p>
                             {(summary?.ausencias_mes ?? 0) > 0 && (
-                                <p className="text-sm text-[#566375] mt-0.5">
+                                <p className="text-sm text-portal-secundario mt-0.5">
                                     {summary!.ausencias_mes === 1 ? '1 ausência aprovada' : `${summary!.ausencias_mes} ausências aprovadas`} neste mês.
                                 </p>
                             )}
                         </div>
-                        <p className="px-1 text-sm font-semibold text-[#566375]">Histórico</p>
+                        <h2 className="px-1 text-sm font-semibold text-portal-secundario">Histórico</h2>
                         <LeituraDoPortal
                             carregando={feriasCarregando} erro={feriasErro} vazio={absences.length === 0}
                             onTentarDeNovo={() => recarregarFerias()} oQue="seu histórico de férias e ausências"
                             vazioIcone={Calendar} vazioTitulo="Nenhuma ausência registrada"
                         >
                             {absences.slice(0, 8).map(a => (
-                                <div key={a.id} className="flex items-center justify-between gap-3 p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <div key={a.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 p-3 bg-white rounded-2xl shadow-portal-traco">
                                     <div>
-                                        <p className="text-base font-semibold text-[#4B4B4D]">{tipoDaAusencia(a.tipo)}</p>
-                                        <p className="text-sm text-[#566375]">{periodoTexto(a.data_inicio, a.data_fim)}</p>
+                                        <p className="text-base font-semibold text-portal-grafite">{tipoDaAusencia(a.tipo)}</p>
+                                        <p className="text-sm text-portal-secundario">{periodoTexto(a.data_inicio, a.data_fim)}</p>
                                     </div>
-                                    <div className="text-right">
-                                        <p className="text-base font-semibold tabular-nums whitespace-nowrap text-[#4B4B4D]">{diasTexto(a.dias)}</p>
+                                    <div className="ml-auto text-right">
+                                        <p className="text-base font-semibold tabular-nums whitespace-nowrap text-portal-grafite">{diasTexto(a.dias)}</p>
                                         <SeloDeStatus {...statusDaAusencia(a.status)} />
                                     </div>
                                 </div>
@@ -448,16 +449,16 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Documentos */}
                 {activeSection === 'docs' && (
                     <div className="space-y-3">
-                        <p className="px-1 text-sm font-semibold text-[#566375]">Meus documentos</p>
+                        <h2 className="px-1 text-sm font-semibold text-portal-secundario">Meus documentos</h2>
                         {erroDownload && (
-                            <div role="alert" className="flex items-start gap-2 p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                                <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0 mt-0.5" />
+                            <div role="alert" className="flex items-start gap-2 p-3 rounded-2xl bg-white shadow-portal-traco">
+                                <AlertTriangle className="w-4 h-4 text-portal-laranja-texto shrink-0 mt-0.5" />
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-[#4B4B4D] truncate">Não foi possível baixar "{erroDownload.nome}"</p>
-                                    <p className="text-sm text-[#566375] mt-0.5">{erroDownload.mensagem}</p>
+                                    <p className="text-sm font-semibold text-portal-grafite truncate">Não foi possível baixar "{erroDownload.nome}"</p>
+                                    <p className="text-sm text-portal-secundario mt-0.5">{erroDownload.mensagem}</p>
                                 </div>
                                 <button type="button" aria-label="Fechar aviso" onClick={() => setErroDownload(null)}
-                                    className="w-11 h-11 -m-2 flex items-center justify-center rounded-lg text-[#4B4B4D] hover:bg-[#EDEDE8] shrink-0">
+                                    className={`w-11 h-11 -m-2 flex items-center justify-center rounded-lg text-portal-grafite hover:bg-portal-chao shrink-0 ${MARCA.foco}`}>
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
@@ -471,22 +472,24 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             {documents.map(d => {
                                 const expired = situacaoDaValidade(d.data_validade) === 'vencido';
                                 return (
-                                    <div key={d.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                                        <FileText className="w-4 h-4 shrink-0 text-[#566375]" />
+                                    <div key={d.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-portal-traco">
+                                        <FileText className="w-4 h-4 shrink-0 text-portal-secundario" />
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-base font-semibold text-[#4B4B4D] truncate">{d.nome}</p>
-                                            <p className="text-sm text-[#566375]">
+                                            <p className="text-base font-semibold text-portal-grafite truncate">{d.nome}</p>
+                                            <p className="text-sm text-portal-secundario">
                                                 {d.categoria}{d.data_validade ? ' · ' : ''}
-                                                {d.data_validade && <span className={expired ? 'font-semibold text-[#A84A1C]' : ''}>{validadeTexto(d.data_validade)}</span>}
+                                                {d.data_validade && <span className={expired ? 'font-semibold text-portal-laranja-texto' : ''}>{validadeTexto(d.data_validade)}</span>}
                                             </p>
                                         </div>
-                                        {expired && <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0" aria-hidden="true" />}
+                                        {expired && <AlertTriangle className="w-4 h-4 text-portal-laranja-texto shrink-0" aria-hidden="true" />}
                                         {d.storage_path && (
-                                            <ActionIconButton kind="download" size="sm" className="shrink-0"
-                                                title={`Baixar ${d.nome}`} aria-label={`Baixar ${d.nome}`}
-                                                icon={baixando === d.storage_path ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : undefined}
+                                            // 44px: o botão do app tinha 24×24, pequeno para dedo de obra.
+                                            <button type="button" title={`Baixar ${d.nome}`} aria-label={`Baixar ${d.nome}`}
                                                 disabled={!!baixando}
-                                                onClick={() => handleDownloadDoc(d.storage_path, d.nome)} />
+                                                onClick={() => handleDownloadDoc(d.storage_path, d.nome)}
+                                                className={`w-11 h-11 -my-1 shrink-0 flex items-center justify-center rounded-xl ${MARCA.texto} hover:bg-portal-chao disabled:opacity-50 disabled:cursor-not-allowed ${MARCA.foco}`}>
+                                                {baixando === d.storage_path ? <Loader2 className="w-5 h-5 animate-spin motion-reduce:animate-none" /> : <Download className="w-5 h-5" />}
+                                            </button>
                                         )}
                                     </div>
                                 );
@@ -499,14 +502,14 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {activeSection === 'treino' && (
                     <div className="space-y-3">
                         {treinamentosVencendo > 0 && (
-                            <p className="text-base text-[#4B4B4D] [text-wrap:pretty] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                            <p className="text-base text-portal-grafite [text-wrap:pretty] bg-white rounded-2xl px-4 py-3 shadow-portal-traco">
                                 <strong className="font-semibold">{treinamentosVencendo === 1 ? '1 treinamento vence' : `${treinamentosVencendo} treinamentos vencem`} em até 30 dias.</strong> Fale com o RH para renovar.
                             </p>
                         )}
                         {/* Academia — treinamentos A FAZER (conteúdo EAD). Fica antes
                             da evidência porque é o que exige ação do colaborador. */}
                             <div className="space-y-3 pb-2">
-                                <p className="px-1 text-sm font-semibold text-[#566375]">Academia ÒPURA</p>
+                                <h2 className="px-1 text-sm font-semibold text-portal-secundario">Academia ÒPURA</h2>
 
                                 {/* Estes três estados existiam e eram invisíveis: a seção
                                     inteira sumia quando a lista vinha vazia OU quando a
@@ -514,8 +517,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     treinamento registrado" logo abaixo. */}
                                 {academiaCarregando && (
                                     <div className="flex items-center gap-2 py-4">
-                                        <Loader2 className="w-4 h-4 text-[#FF884C] animate-spin" />
-                                        <span className="text-sm text-[#566375]">Carregando treinamentos...</span>
+                                        <Loader2 className="w-4 h-4 text-portal-laranja animate-spin motion-reduce:animate-none" />
+                                        <span className="text-sm text-portal-secundario">Carregando treinamentos...</span>
                                     </div>
                                 )}
 
@@ -528,11 +531,11 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 )}
 
                                 {!academiaCarregando && !academiaErro && academia.length === 0 && (
-                                    <div className="p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                                        <p className="text-sm text-[#4B4B4D]">
+                                    <div className="p-3 rounded-2xl bg-white shadow-portal-traco">
+                                        <p className="text-sm text-portal-grafite">
                                             Nenhum treinamento atribuído a você no momento.
                                         </p>
-                                        <p className="text-sm text-[#566375] mt-1">
+                                        <p className="text-sm text-portal-secundario mt-1">
                                             Se você esperava algum, confirme com o RH se a atribuição
                                             foi feita para o seu cadastro.
                                         </p>
@@ -555,33 +558,35 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                             onClick={() => setAcademiaAberta(m)}
                                             disabled={!!previa}
                                             title={previa ? 'Na prévia os cursos não abrem' : undefined}
-                                            className={`w-full text-left p-3 rounded-2xl transition-colors disabled:cursor-not-allowed ${
-                                                'bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)] hover:bg-[#F7F7F4] disabled:hover:bg-white'
+                                            className={`w-full text-left p-3 rounded-2xl transition-colors disabled:cursor-not-allowed ${MARCA.foco} ${
+                                                'bg-white shadow-portal-traco hover:bg-portal-linha-hover disabled:hover:bg-white'
                                             }`}
                                         >
-                                            <div className="flex items-start justify-between gap-2">
-                                                <div className="min-w-0">
-                                                    <p className="text-base font-semibold text-[#4B4B4D] truncate">{m.curso}</p>
+                                            <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                                                <div className="flex-1 basis-0 min-w-[min(100%,12rem)]">
+                                                    <p className="text-base font-semibold text-portal-grafite truncate">{m.curso}</p>
                                                     {/* "NR-35 Trabalho em Altura" já diz a NR; não repetir embaixo. */}
                                                     {m.nr_referencia && !m.curso.startsWith(m.nr_referencia) && (
-                                                        <p className="text-xs font-semibold tracking-wide text-[#A84A1C]">{m.nr_referencia}</p>
+                                                        <p className="text-xs font-semibold tracking-wide text-portal-laranja-texto">{m.nr_referencia}</p>
                                                     )}
                                                     {/* "v1" era jargão do RH (versão do curso); o colaborador precisa do prazo. */}
                                                     {m.data_limite && (
-                                                        <p className="text-sm text-[#566375] mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
+                                                        <p className="text-sm text-portal-secundario mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
                                                     )}
                                                 </div>
-                                                <span className="text-xs font-semibold tabular-nums text-[#566375] shrink-0">
+                                                <span className="text-xs font-semibold tabular-nums text-portal-secundario shrink-0">
                                                     {Math.round(m.percentual)}%
                                                 </span>
                                             </div>
-                                            <div className="h-1.5 bg-[#EDEDE8] rounded-full overflow-hidden mt-2">
+                                            <div role="progressbar" aria-label={`Progresso em ${m.curso}`}
+                                                aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.min(100, m.percentual))}
+                                                className="h-1.5 bg-portal-chao rounded-full overflow-hidden mt-2">
                                                 <div
-                                                    className={`h-full ${'bg-[#FF884C]'}`}
+                                                    className={`h-full ${'bg-portal-laranja'}`}
                                                     style={{ width: `${Math.min(100, m.percentual)}%` }}
                                                 />
                                             </div>
-                                            <p className={`text-sm font-semibold mt-2 ${previa ? 'text-[#566375]' : 'text-[#A84A1C]'}`}>
+                                            <p className={`text-sm font-semibold mt-2 ${previa ? 'text-portal-secundario' : 'text-portal-laranja-texto'}`}>
                                                 {previa ? 'Não abre na prévia' : concluido ? 'Ver certificado' : m.status === 'NAO_INICIADO' ? 'Começar' : 'Continuar'}
                                             </p>
                                         </button>
@@ -589,7 +594,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 })}
                             </div>
 
-                        <p className="px-1 text-sm font-semibold text-[#566375]">Meus treinamentos</p>
+                        <h2 className="px-1 text-sm font-semibold text-portal-secundario">Meus treinamentos</h2>
                         <LeituraDoPortal
                             carregando={treinosCarregando} erro={treinosErro} vazio={trainings.length === 0}
                             onTentarDeNovo={() => recarregarTreinos()} oQue="seus treinamentos"
@@ -601,12 +606,12 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 const expired = situacao === 'vencido';
                                 const expiring = situacao === 'vencendo';
                                 return (
-                                    <div key={t.id} className="p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
-                                        <div className="flex items-start justify-between gap-2">
-                                            <div className="min-w-0">
-                                                <p className="text-base font-semibold text-[#4B4B4D]">{t.course_nome}</p>
-                                                {t.nr_referencia && <p className="text-xs font-semibold tracking-wide text-[#A84A1C]">{t.nr_referencia}</p>}
-                                                <p className="text-sm text-[#566375] mt-0.5">
+                                    <div key={t.id} className="p-3 rounded-2xl bg-white shadow-portal-traco">
+                                        <div className="flex flex-wrap items-start justify-between gap-x-2 gap-y-1">
+                                            <div className="flex-1 basis-0 min-w-[min(100%,12rem)]">
+                                                <p className="text-base font-semibold text-portal-grafite">{t.course_nome}</p>
+                                                {t.nr_referencia && <p className="text-xs font-semibold tracking-wide text-portal-laranja-texto">{t.nr_referencia}</p>}
+                                                <p className="text-sm text-portal-secundario mt-0.5">
                                                     {t.data_realizacao ? `Realizado em ${dataBR(t.data_realizacao)}` : ''}
                                                     {t.data_realizacao && t.data_validade ? ' · ' : ''}
                                                     {t.data_validade ? validadeTexto(t.data_validade) : ''}

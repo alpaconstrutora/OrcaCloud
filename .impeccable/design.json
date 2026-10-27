@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-10-26T00:00:00-03:00",
+  "title": "Design System: Portal do Colaborador",
+  "scope": "Somente o Portal do Colaborador (PortalView + components/portalColaborador/PortalMarca.tsx). O sistema do app principal ÒPURA vive em docs/ui_ux_guia_unificado.md.",
+  "extensions": {
+    "colorMeta": {
+      "alpa-orange": { "role": "primary", "displayName": "Laranja Alpa", "canonical": "oklch(74.8% 0.162 46)", "tonalRamp": ["#350000", "#5D0000", "#841000", "#AC3D00", "#D66321", "#FF894D", "#FFB88D", "#FFD5AA"], "contrast": "2.37:1 sobre branco — só preenchimento" },
+      "orange-ink": { "role": "primary", "displayName": "Laranja-tinta", "canonical": "oklch(52.4% 0.136 43)", "tonalRamp": ["#300000", "#560000", "#7C2100", "#A34617", "#CC6A3F", "#F58F64", "#FFB790", "#FFD4AD"], "contrast": "5.74:1 sobre branco" },
+      "graphite": { "role": "neutral", "displayName": "Grafite", "canonical": "oklch(41.4% 0.003 286)", "tonalRamp": ["#0B0B0C", "#262628", "#454547", "#666668", "#89898B", "#AEAEB0", "#D1D1D3", "#EEEEF1"], "contrast": "8.70:1 sobre branco; 7.41:1 sobre #EDEDE8" },
+      "graphite-hover": { "role": "neutral", "displayName": "Grafite (passar)" },
+      "graphite-active": { "role": "neutral", "displayName": "Grafite (pressionar)" },
+      "slate-secondary": { "role": "neutral", "displayName": "Cinza secundário", "canonical": "oklch(49.5% 0.033 257)", "tonalRamp": ["#030B19", "#1C2737", "#3A4657", "#5A6779", "#7D8A9D", "#A1AFC3", "#C3D2E7", "#E1F0FF"], "contrast": "6.11:1 sobre branco; 5.20:1 sobre #EDEDE8" },
+      "offwhite-ground": { "role": "neutral", "displayName": "Off-white", "canonical": "oklch(94.5% 0.007 107)", "tonalRamp": ["#0B0B08", "#272723", "#454541", "#666662", "#898985", "#AEAEA9", "#D1D1CC", "#EFEFEA"] },
+      "card-white": { "role": "neutral", "displayName": "Branco" },
+      "row-hover": { "role": "neutral", "displayName": "Branco-quente (passar)" },
+      "alpa-slate-blue": { "role": "secondary", "displayName": "Cinza-azulado Alpa", "canonical": "oklch(64.2% 0.033 256)", "tonalRamp": ["#030B19", "#1C2736", "#3A4657", "#5A6779", "#7C8A9D", "#A1AFC3", "#C3D2E7", "#E1F0FF"], "contrast": "decorativo; nunca texto" },
+      "espera-fill": { "role": "secondary", "displayName": "Cinza-azulado 40% (selo espera)", "contrast": "graphite sobre ele 5.7:1" },
+      "alerta-fill": { "role": "primary", "displayName": "Laranja claro (selo alerta)", "contrast": "orange-ink sobre ele 4.84:1" }
+    },
+    "typographyMeta": {
+      "hero-value": { "displayName": "Valor herói", "purpose": "Líquido a receber no cartão do último holerite. PROVISÓRIO (item 5)." },
+      "title": { "displayName": "Título", "purpose": "Nome do colaborador; título do cartão do holerite. PROVISÓRIO (item 5)." },
+      "body-strong": { "displayName": "Corpo forte", "purpose": "Competência nas linhas; rótulo do botão primário. PROVISÓRIO (item 5)." },
+      "body": { "displayName": "Corpo", "purpose": "Textos, legendas, rótulos de seção. PROVISÓRIO (item 5)." },
+      "label": { "displayName": "Rótulo", "purpose": "Selos de status. PROVISÓRIO (item 5)." },
+      "nav-label": { "displayName": "Rótulo do rodapé", "purpose": "Mesmo peso ativo e inativo para caber em 360px. PROVISÓRIO (item 5)." }
+    },
+    "shadows": [
+      { "name": "card-hairline", "value": "0 1px 2px rgba(75,75,77,0.08)", "purpose": "Todo cartão, linha, aviso e erro." },
+      { "name": "card-hero", "value": "0 1px 2px rgba(75,75,77,0.08), 0 12px 32px -16px rgba(75,75,77,0.35)", "purpose": "Só o cartão do último holerite." }
+    ],
+    "motion": [
+      { "name": "valor-assenta", "value": "filter, opacity 300ms ease-out; de blur(6px) opacity .4 para blur(0) opacity 1", "purpose": "Revelar o valor em reais; desligado com prefers-reduced-motion." },
+      { "name": "cor-padrao", "value": "transition-colors 150ms", "purpose": "Botão primário, pílula do rodapé, linhas clicáveis." }
+    ],
+    "focus": { "value": "outline none; ring 2px #A84A1C; ring-offset 2px", "purpose": "Todo controle do portal." },
+    "breakpoints": [
+      { "name": "coluna", "value": "448px", "purpose": "Largura máxima da coluna do portal; o chão ocupa o resto." },
+      { "name": "minimo-verificado", "value": "360px" }
+    ],
+    "exceptions": [
+      { "name": "moldura-previa-rh", "value": "amber-50 / amber-200 / amber-900", "purpose": "Faixa 'Prévia · vendo como' e aviso de cursos na prévia. Moldura do RH, não paleta do colaborador." }
+    ]
+  },
+  "components": [
+    {
+      "name": "Botão primário",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "Ação principal do cartão (Abrir holerite). Grafite, largura total.",
+      "html": "<button class=\"ds-btn-primary\">Abrir holerite</button>",
+      "css": ".ds-btn-primary { width: 100%; height: 48px; border: none; border-radius: 16px; background: #4B4B4D; color: #FFFFFF; font: 600 16px/1.5 Inter, system-ui, sans-serif; cursor: pointer; transition: background-color 150ms; } .ds-btn-primary:hover { background: #3A3A3C; } .ds-btn-primary:active { background: #2F2F31; } .ds-btn-primary:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; }"
+    },
+    {
+      "name": "Botão de texto laranja",
+      "kind": "button",
+      "refersTo": "button-text-orange",
+      "description": "Sair do portal, no cabeçalho.",
+      "html": "<button class=\"ds-btn-text\"><svg width=\"16\" height=\"16\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"><path d=\"M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4\"/><polyline points=\"16 17 21 12 16 7\"/><line x1=\"21\" y1=\"12\" x2=\"9\" y2=\"12\"/></svg> Sair</button>",
+      "css": ".ds-btn-text { height: 44px; padding: 0 12px; display: inline-flex; align-items: center; gap: 6px; border: none; border-radius: 12px; background: transparent; color: #A84A1C; font: 600 14px/1 Inter, system-ui, sans-serif; cursor: pointer; } .ds-btn-text:hover { background: #EDEDE8; } .ds-btn-text:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; }"
+    },
+    {
+      "name": "Cartão do último holerite",
+      "kind": "card",
+      "refersTo": "card-hero",
+      "description": "A tela de abertura: faixa laranja, valor escondido + olho, botão primário.",
+      "html": "<section class=\"ds-hero\"><div class=\"ds-hero-band\"></div><div class=\"ds-hero-body\"><h2 class=\"ds-hero-title\">Último holerite · Setembro de 2026</h2><p class=\"ds-hero-sub\">Folha mensal</p><div class=\"ds-hero-row\"><div><p class=\"ds-hero-sub\">Líquido a receber</p><span class=\"ds-hero-value\">R$ ••••</span></div><button class=\"ds-eye\" aria-label=\"Mostrar valores\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z\"/><circle cx=\"12\" cy=\"12\" r=\"3\"/></svg></button></div><button class=\"ds-hero-btn\">Abrir holerite</button></div></section>",
+      "css": ".ds-hero { max-width: 416px; background: #FFFFFF; border-radius: 24px; overflow: hidden; box-shadow: 0 1px 2px rgba(75,75,77,0.08), 0 12px 32px -16px rgba(75,75,77,0.35); font-family: Inter, system-ui, sans-serif; } .ds-hero-band { height: 8px; background: #FF884C; } .ds-hero-body { padding: 20px; } .ds-hero-title { margin: 0; font-size: 20px; font-weight: 700; line-height: 1.375; color: #4B4B4D; } .ds-hero-sub { margin: 2px 0 0; font-size: 14px; color: #566375; } .ds-hero-row { margin-top: 20px; display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; } .ds-hero-value { font-size: 30px; font-weight: 700; color: #4B4B4D; font-variant-numeric: tabular-nums; } .ds-eye { width: 44px; height: 44px; border: none; border-radius: 9999px; background: transparent; color: #4B4B4D; display: flex; align-items: center; justify-content: center; cursor: pointer; } .ds-eye:hover { background: #EDEDE8; } .ds-eye:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; } .ds-hero-btn { margin-top: 20px; width: 100%; height: 48px; border: none; border-radius: 16px; background: #4B4B4D; color: #FFFFFF; font: 600 16px Inter, system-ui, sans-serif; cursor: pointer; } .ds-hero-btn:hover { background: #3A3A3C; }"
+    },
+    {
+      "name": "Linha de holerite",
+      "kind": "card",
+      "refersTo": "list-row",
+      "description": "Holerites anteriores: botão inteiro, valor escondido, chevron.",
+      "html": "<button class=\"ds-row\"><span class=\"ds-row-text\"><span class=\"ds-row-title\">Agosto de 2026</span><span class=\"ds-row-sub\">Folha mensal</span></span><span class=\"ds-row-value\">R$ ••••</span><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"#566375\" stroke-width=\"2\"><polyline points=\"9 18 15 12 9 6\"/></svg></button>",
+      "css": ".ds-row { width: 100%; max-width: 416px; min-height: 64px; display: flex; align-items: center; gap: 12px; padding: 12px 16px; text-align: left; border: none; border-radius: 16px; background: #FFFFFF; box-shadow: 0 1px 2px rgba(75,75,77,0.08); font-family: Inter, system-ui, sans-serif; cursor: pointer; } .ds-row:hover { background: #F7F7F4; } .ds-row:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; } .ds-row-text { flex: 1; display: flex; flex-direction: column; } .ds-row-title { font-size: 16px; font-weight: 600; color: #4B4B4D; } .ds-row-sub { font-size: 14px; color: #566375; } .ds-row-value { font-size: 16px; font-weight: 600; color: #4B4B4D; font-variant-numeric: tabular-nums; }"
+    },
+    {
+      "name": "Selos de status",
+      "kind": "chip",
+      "refersTo": "status-ok",
+      "description": "Cinco tons; o rótulo diz tudo, a cor só reforça.",
+      "html": "<div class=\"ds-chips\"><span class=\"ds-chip ds-ok\">Aprovado</span><span class=\"ds-chip ds-espera\">Em análise</span><span class=\"ds-chip ds-alerta\">Vencendo</span><span class=\"ds-chip ds-recusado\">Vencido</span><span class=\"ds-chip ds-neutro\">Cancelado</span></div>",
+      "css": ".ds-chips { display: flex; gap: 8px; flex-wrap: wrap; } .ds-chip { display: inline-block; padding: 2px 8px; border-radius: 9999px; font: 600 12px/1.33 Inter, system-ui, sans-serif; } .ds-ok { background: #4B4B4D; color: #FFFFFF; } .ds-espera { background: #CCD2D9; color: #4B4B4D; } .ds-alerta { background: #FFE7DB; color: #A84A1C; } .ds-recusado { background: #A84A1C; color: #FFFFFF; } .ds-neutro { background: #EDEDE8; color: #566375; }"
+    },
+    {
+      "name": "Rodapé do portal",
+      "kind": "nav",
+      "refersTo": "nav-pill-active",
+      "description": "Cinco itens fixos; pílula laranja no ativo, ponto laranja-tinta onde há aviso.",
+      "html": "<nav class=\"ds-nav\"><button class=\"ds-nav-item is-active\"><span class=\"ds-nav-pill\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z\"/></svg></span><span class=\"ds-nav-label\">Holerites</span></button><button class=\"ds-nav-item\"><span class=\"ds-nav-pill\"><span class=\"ds-nav-icon\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><circle cx=\"12\" cy=\"12\" r=\"10\"/><polyline points=\"12 6 12 12 16 14\"/></svg><span class=\"ds-nav-dot\"></span></span></span><span class=\"ds-nav-label\">Ponto</span></button><button class=\"ds-nav-item\"><span class=\"ds-nav-pill\"><svg width=\"20\" height=\"20\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"2\"><path d=\"M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z\"/><path d=\"M14 2v4a2 2 0 0 0 2 2h4\"/></svg></span><span class=\"ds-nav-label\">Documentos</span></button></nav>",
+      "css": ".ds-nav { display: flex; justify-content: space-between; gap: 4px; padding: 0 8px; max-width: 448px; background: #FFFFFF; border-top: 1px solid rgba(75,75,77,0.1); font-family: Inter, system-ui, sans-serif; } .ds-nav-item { min-width: 44px; min-height: 64px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; padding: 8px 4px; border: none; background: transparent; color: #566375; cursor: pointer; } .ds-nav-item:focus-visible { outline: none; box-shadow: 0 0 0 2px #FFFFFF, 0 0 0 4px #A84A1C; } .ds-nav-pill { width: 48px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: 9999px; transition: background-color 150ms; } .ds-nav-item.is-active { color: #4B4B4D; } .ds-nav-item.is-active .ds-nav-pill { background: #FF884C; } .ds-nav-icon { position: relative; display: inline-flex; } .ds-nav-dot { position: absolute; top: -4px; right: -4px; width: 10px; height: 10px; border-radius: 9999px; background: #A84A1C; box-shadow: 0 0 0 2px #FFFFFF; } .ds-nav-label { font-size: 11px; font-weight: 500; line-height: 1.25; letter-spacing: -0.01em; white-space: nowrap; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "O contracheque no bolso",
+    "overview": "O portal abre no dinheiro do colaborador: o último holerite é a tela, não um atalho. É uma coluna de celular (até 448px) sobre um chão off-white quente, com cartões brancos de cantos largos — o mesmo arredondado generoso do símbolo da Alpa — e texto grafite. O laranja Alpa aparece pouco e só como preenchimento: a faixa no topo do cartão do holerite e a pílula do item ativo do rodapé. Tudo o mais é grafite, cinza-azulado e branco.\n\nA densidade é baixa e o toque é grosso: alvos de 44px ou mais, linhas de lista de 64px, botão principal de 48px. O público lê ao sol e perto de colegas, então o contraste de texto é sempre ≥ 4,5:1 e o valor em reais fica escondido até a pessoa pedir. A profundidade é quase plana: uma sombra de 1px quente em todo cartão, e uma sombra ambiente maior só no cartão do holerite.\n\nRejeições confirmadas pela direção: cabeçalho-dashboard de indicadores coloridos, degradê, glass, índigo e abas no topo.",
+    "keyCharacteristics": [
+      "Logo da empresa do colaborador no cabeçalho branco (altura fixa 48px, largura livre); sem logo, o nome da empresa em texto.",
+      "Chão `offwhite-ground`, cartões brancos, texto grafite.",
+      "Laranja Alpa só preenche; texto em laranja é sempre `orange-ink`.",
+      "Rodapé fixo de cinco itens com pílula laranja no ativo.",
+      "Valor escondido por padrão; revelado com um desfoque curto que assenta.",
+      "Status por selos com texto, cor só reforça."
+    ],
+    "rules": [
+      { "name": "The Fill-Only Orange Rule", "body": "`alpa-orange` só preenche áreas; qualquer laranja que precise ser lido (texto, ícone, ponto, foco) é `orange-ink`.", "section": "colors" },
+      { "name": "The Text-Says-It Rule", "body": "Status sempre com rótulo escrito; a cor do selo só reforça. Cada tom tem matiz próprio para que \"em análise\", \"aprovado\" e \"vencendo\" não virem três cinzas iguais.", "section": "colors" },
+      { "name": "The One Lift Rule", "body": "Uma única superfície por tela recebe a sombra ambiente: o cartão do último holerite.", "section": "elevation" }
+    ],
+    "dos": [
+      "**Do** usar `alpa-orange` só como preenchimento (faixa do cartão herói, pílula do rodapé, barra de progresso).",
+      "**Do** usar `orange-ink` para todo laranja legível: texto, ícone de alerta, ponto de aviso, anel de foco.",
+      "**Do** manter texto em `graphite` ou `slate-secondary`; nada de texto abaixo de 4,5:1.",
+      "**Do** dar a todo alvo de toque no mínimo 44px; linhas de lista 64px; botão primário 48px.",
+      "**Do** escrever o status no selo; a cor só reforça.",
+      "**Do** esconder valores em reais por padrão e revelar só a pedido.",
+      "**Do** usar a logo da organização do colaborador, nunca a da ÒPURA, no cabeçalho."
+    ],
+    "donts": [
+      "**Don't** usar `alpa-orange` como cor de texto ou de ícone que precise ser lido (2,37:1).",
+      "**Don't** usar degradê, glass, índigo nem o azul de acento do app principal neste portal.",
+      "**Don't** pôr indicadores coloridos ou abas no topo; os números moram na aba a que se referem e o rodapé acende um ponto.",
+      "**Don't** usar cores do Tailwind (slate, amber, emerald, rosa) em superfícies do colaborador; o âmbar existe só na moldura da prévia do RH.",
+      "**Don't** usar sombra preta; a sombra é grafite translúcido."
+    ]
+  }
+}

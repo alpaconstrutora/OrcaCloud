@@ -3,7 +3,7 @@ import {
     User, Clock, Umbrella, BookOpen, FileText, DollarSign,
     LogOut, Loader2, AlertTriangle, AlertCircle, CheckCircle2, ChevronRight,
     Calendar, Shield, QrCode, Copy, X, Plus, RefreshCw,
-    Smartphone, Key, ChevronDown, Eye
+    Smartphone, Key, ChevronDown, Eye, Receipt
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -13,6 +13,10 @@ import { PayrollRun } from '../services/payrollService';
 import { supabase } from '../lib/supabase';
 import PaystubModal from './PaystubModal';
 import MobilePreviewFrame from './MobilePreviewFrame';
+import {
+    MARCA, CabecalhoDoPortal, CartaoUltimoHolerite, LinhaDeHolerite, RodapeDoPortal,
+    useValorVisivel, type SecaoDoPortal,
+} from './portalColaborador/PortalMarca';
 import { STALE } from '../lib/queryClient';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
@@ -75,19 +79,19 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
     if (carregando) {
         return (
             <div role="status" className="flex items-center justify-center gap-2 py-10">
-                <Loader2 className="w-5 h-5 text-indigo-500 animate-spin" />
-                <span className="text-sm text-slate-600">Carregando {oQue}...</span>
+                <Loader2 className="w-5 h-5 text-[#FF884C] animate-spin" />
+                <span className="text-sm text-[#566375]">Carregando {oQue}...</span>
             </div>
         );
     }
     if (erro) {
         return (
-            <div role="alert" className="p-4 rounded-xl border border-rose-200 bg-rose-50 space-y-3">
+            <div role="alert" className="p-4 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)] space-y-3">
                 <div className="flex items-start gap-2">
-                    <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0 mt-0.5" />
                     <div>
-                        <p className="text-sm font-semibold text-rose-900">Não foi possível carregar {oQue}</p>
-                        <p className="text-sm text-rose-800 mt-0.5">{mensagemDoPortalColaborador(erro)}</p>
+                        <p className="text-sm font-semibold text-[#4B4B4D]">Não foi possível carregar {oQue}</p>
+                        <p className="text-sm text-[#566375] mt-0.5">{mensagemDoPortalColaborador(erro)}</p>
                     </div>
                 </div>
                 <Button variant="secondary" size="lg" onClick={onTentarDeNovo} className="w-full">
@@ -99,9 +103,9 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
     if (vazio) {
         return (
             <div className="text-center py-10 px-4">
-                <VazioIcone className="w-8 h-8 text-slate-300 mx-auto mb-2" />
-                <p className="text-sm font-medium text-slate-700">{vazioTitulo}</p>
-                {vazioDica && <p className="text-sm text-slate-600 mt-1">{vazioDica}</p>}
+                <VazioIcone className="w-8 h-8 text-[#808EA1] mx-auto mb-2" />
+                <p className="text-sm font-semibold text-[#4B4B4D]">{vazioTitulo}</p>
+                {vazioDica && <p className="text-sm text-[#566375] mt-1">{vazioDica}</p>}
             </div>
         );
     }
@@ -109,11 +113,17 @@ const LeituraDoPortal: React.FC<LeituraDoPortalProps> = ({
 };
 
 /** Status de ponto/ausência: o texto diz tudo, a cor só reforça. */
+// Tons da paleta Alpa (não os do Tailwind: rosa/âmbar/verde brigavam com o
+// laranja quente), cada estado com matiz próprio — tingir de leve deixava
+// "em análise", "aprovado" e "vencendo" três cinzas iguais. Contraste medido:
+// ok grafite sólido 8,7:1 · espera cinza-azulado 40% 5,7:1 · alerta laranja
+// claro 4,8:1 · recusado laranja escuro sólido 5,7:1.
 const COR_DO_TOM: Record<TomDoStatus, string> = {
-    ok: 'bg-emerald-100 text-emerald-800',
-    espera: 'bg-amber-100 text-amber-800',
-    recusado: 'bg-rose-100 text-rose-800',
-    neutro: 'bg-slate-100 text-slate-700',
+    ok: 'bg-[#4B4B4D] text-white',
+    espera: 'bg-[#CCD2D9] text-[#4B4B4D]',
+    alerta: 'bg-[#FFE7DB] text-[#A84A1C]',
+    recusado: 'bg-[#A84A1C] text-white',
+    neutro: 'bg-[#EDEDE8] text-[#566375]',
 };
 const SeloDeStatus: React.FC<{ rotulo: string; tom: TomDoStatus }> = ({ rotulo, tom }) => (
     <span className={`inline-block text-xs font-semibold px-2 py-0.5 rounded-full ${COR_DO_TOM[tom]}`}>{rotulo}</span>
@@ -157,8 +167,9 @@ const FaixaDePrevia: React.FC<{ nome: string; onSair: () => void }> = ({ nome, o
 );
 
 export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLogout, portalToken, previa }) => {
-    const [activeSection, setActiveSection] = useState<'home' | 'ponto' | 'ferias' | 'docs' | 'treino' | 'folha'>('home');
+    const [activeSection, setActiveSection] = useState<SecaoDoPortal>('folha');
     const [paystubOpen, setPaystubOpen] = useState<{ runId: string } | null>(null);
+    const [valorVisivel, alternarValor] = useValorVisivel();
     // Matrícula aberta na Academia — troca o conteúdo do portal pela sala de aula.
     const [academiaAberta, setAcademiaAberta] = useState<AcademyPortalEnrollment | null>(null);
 
@@ -256,9 +267,9 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
 
     if (isLoading) {
         return comFaixa(
-            <div className="flex flex-col items-center justify-center h-full gap-3 py-16">
-                <Loader2 className="w-8 h-8 text-indigo-500 animate-spin" />
-                <p className="text-sm text-slate-400 font-medium">Carregando...</p>
+            <div className={`flex flex-col items-center justify-center min-h-[60vh] gap-3 py-16 ${MARCA.chao}`}>
+                <Loader2 className="w-8 h-8 text-[#FF884C] animate-spin" />
+                <p className={`text-sm font-medium ${MARCA.secundario}`}>Carregando...</p>
             </div>
         );
     }
@@ -268,9 +279,9 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
     if (summaryErro && !summary) {
         return comFaixa(
             <div className="max-w-md mx-auto h-full flex flex-col items-center justify-center bg-white p-6 text-center gap-3">
-                <AlertTriangle className="w-8 h-8 text-rose-500" />
-                <p className="text-base font-semibold text-slate-900">Não foi possível abrir o seu portal</p>
-                <p role="alert" className="text-sm text-slate-600">{mensagemDoPortalColaborador(summaryErro)}</p>
+                <AlertTriangle className="w-8 h-8 text-[#A84A1C]" />
+                <p className="text-base font-semibold text-[#4B4B4D]">Não foi possível abrir o seu portal</p>
+                <p role="alert" className="text-sm text-[#566375]">{mensagemDoPortalColaborador(summaryErro)}</p>
                 <Button variant="secondary" size="lg" onClick={() => recarregarSummary()} disabled={summaryRecarregando} className="w-full mt-2">
                     {summaryRecarregando ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
                     Tentar de novo
@@ -298,65 +309,23 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         );
     }
 
+    // Os quatro indicadores que ficavam no topo agora moram na aba a que dizem
+    // respeito; o rodapé acende um ponto onde há o que olhar.
+    const pontosEmAnalise = summary?.pontos_pendentes ?? 0;
+    const treinamentosVencendo = summary?.treinamentos_vencendo ?? 0;
+    const [ultimoHolerite, ...holeritesAnteriores] = folhaRuns;
+
     return comFaixa(
-        <div className="max-w-md mx-auto h-full flex flex-col bg-white">
-            {/* Header */}
-            <div className="px-5 pt-8 pb-5 bg-gradient-to-br from-indigo-600 to-indigo-800 text-white">
-                <div className="flex items-center justify-between mb-6">
-                    <div className="flex items-center gap-3">
-                        <div className="w-12 h-12 bg-white/20 rounded-2xl flex items-center justify-center text-xl font-black">
-                            {emp?.name.charAt(0) || '?'}
-                        </div>
-                        <div>
-                            <p className="text-base font-black">{emp?.name || '—'}</p>
-                            <p className="text-indigo-200 text-xs">{emp?.role}</p>
-                        </div>
-                    </div>
-                    {onLogout && !previa && (
-                        <button onClick={onLogout} aria-label="Sair do portal" title="Sair do portal" className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors">
-                            <LogOut className="w-4 h-4" />
-                        </button>
-                    )}
-                </div>
-
-                {/* Cards resumo */}
-                <div className="grid grid-cols-2 gap-3">
-                    {[
-                        { label: 'Saldo de férias',          value: diasTexto(summary?.ferias_saldo),     icon: Umbrella, alert: (summary?.ferias_saldo ?? 0) === 0 },
-                        { label: 'Pontos em análise',        value: summary?.pontos_pendentes ?? 0,       icon: Clock,    alert: (summary?.pontos_pendentes ?? 0) > 0 },
-                        { label: 'Treinamentos vencendo',    value: summary?.treinamentos_vencendo ?? 0,  icon: BookOpen, alert: (summary?.treinamentos_vencendo ?? 0) > 0 },
-                        { label: 'Ausências no mês',         value: summary?.ausencias_mes ?? 0,          icon: Calendar, alert: false },
-                    ].map(({ label, value, icon: Icon, alert }) => (
-                        <div key={label} className={`p-3 rounded-2xl ${alert ? 'bg-amber-400/30 border border-amber-300/30' : 'bg-white/10'}`}>
-                            <div className="flex items-center gap-2">
-                                <Icon className="w-4 h-4 text-white/80" />
-                                <span className="text-xs font-black text-white/60 uppercase tracking-widest">{label}</span>
-                            </div>
-                            <p className="text-2xl font-black text-white mt-1">{value}</p>
-                        </div>
-                    ))}
-                </div>
-            </div>
-
-            {/* Navegação — nomes por extenso ("Docs", "Trein." eram abreviações).
-                Seis por extenso não cabem numa linha de 390px; em vez de rolagem
-                horizontal (esconde aba), duas linhas de três. */}
-            <nav aria-label="Seções do portal" className="grid grid-cols-3 gap-1 p-2 border-b border-slate-100 shrink-0">
-                {([
-                    ['home',   'Início',       User],
-                    ['ponto',  'Ponto',        Clock],
-                    ['ferias', 'Férias',       Umbrella],
-                    ['folha',  'Holerites',    DollarSign],
-                    ['docs',   'Documentos',   FileText],
-                    ['treino', 'Treinamentos', BookOpen],
-                ] as const).map(([id, label, Icon]) => (
-                    <button key={id} onClick={() => setActiveSection(id)} aria-current={activeSection === id ? 'page' : undefined}
-                        className={`flex flex-col items-center justify-center gap-1 min-h-14 px-1 py-2 rounded-lg text-xs font-semibold transition-colors ${activeSection === id ? 'bg-indigo-50 text-indigo-700' : 'text-slate-600 hover:bg-slate-50'}`}>
-                        <Icon className="w-5 h-5 shrink-0" />
-                        <span>{label}</span>
-                    </button>
-                ))}
-            </nav>
+        // Chão da marca na tela inteira (no computador sobra borda dos lados); a coluna é a do celular.
+        <div className={`w-full min-h-[100dvh] ${MARCA.chao}`}>
+        <div className="max-w-md mx-auto w-full min-h-[100dvh] flex flex-col">
+            <CabecalhoDoPortal
+                empresa={summary?.organization}
+                nome={emp?.name}
+                cargo={emp?.role}
+                desde={emp?.hire_date ? dataBR(emp.hire_date) : undefined}
+                onSair={onLogout && !previa ? onLogout : undefined}
+            />
 
             {/* Holerite Modal */}
             {paystubOpen && (
@@ -370,49 +339,67 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
             )}
 
             {/* Content */}
-            <div className="flex-1 overflow-y-auto p-5">
+            <main className="flex-1 p-4">
 
-                {/* Home */}
-                {activeSection === 'home' && (
-                    <div className="space-y-4">
-                        <div className="p-4 bg-indigo-50 rounded-2xl border border-indigo-100">
-                            <p className="text-xs font-black text-indigo-800 mb-1">Matrícula</p>
-                            <p className="text-lg font-black text-indigo-900">{emp?.matricula || '—'}</p>
-                        </div>
-                        <div className="p-4 bg-slate-50 rounded-2xl border border-slate-100">
-                            <p className="text-xs font-black text-slate-500 mb-1">Data de admissão</p>
-                            <p className="text-sm font-bold text-slate-800">{dataBR(emp?.hire_date)}</p>
-                        </div>
-                        <div className="grid grid-cols-2 gap-3">
-                            <Button variant="secondary" onClick={() => setActiveSection('ponto')} className="p-4 rounded-2xl flex flex-col items-center gap-2 h-auto normal-case tracking-normal">
-                                <Clock className="w-6 h-6 text-indigo-500" />
-                                <span className="text-xs font-black text-slate-700">Meu ponto</span>
-                            </Button>
-                            <Button variant="secondary" onClick={() => setActiveSection('ferias')} className="p-4 rounded-2xl flex flex-col items-center gap-2 h-auto normal-case tracking-normal">
-                                <Umbrella className="w-6 h-6 text-blue-500" />
-                                <span className="text-xs font-black text-slate-700">Férias</span>
-                            </Button>
-                        </div>
+                {/* Holerites — a tela inicial: o último é o cartão grande, os anteriores abaixo */}
+                {activeSection === 'folha' && (
+                    <div className="space-y-5">
+                        <LeituraDoPortal
+                            carregando={folhaCarregando} erro={folhaErro} vazio={folhaRuns.length === 0}
+                            onTentarDeNovo={() => recarregarFolha()} oQue="seus holerites"
+                            vazioIcone={Receipt} vazioTitulo="Nenhum holerite ainda"
+                            vazioDica="Seu primeiro holerite aparece aqui quando o RH fechar a folha."
+                        >
+                            {ultimoHolerite && (
+                                <CartaoUltimoHolerite
+                                    competencia={competenciaPorExtenso(ultimoHolerite.start_date)}
+                                    tipo={tipoDaFolha(ultimoHolerite.type)}
+                                    liquido={ultimoHolerite.net ?? 0}
+                                    visivel={valorVisivel}
+                                    onAlternarValor={alternarValor}
+                                    onAbrir={() => setPaystubOpen({ runId: ultimoHolerite.id })}
+                                />
+                            )}
+                            {holeritesAnteriores.length > 0 && (
+                                <section aria-labelledby="holerites-anteriores" className="space-y-2">
+                                    <h2 id="holerites-anteriores" className={`px-1 text-sm font-semibold ${MARCA.secundario}`}>Anteriores</h2>
+                                    {holeritesAnteriores.map(run => (
+                                        <LinhaDeHolerite key={run.id}
+                                            competencia={competenciaPorExtenso(run.start_date)}
+                                            tipo={tipoDaFolha(run.type)}
+                                            liquido={run.net ?? 0}
+                                            visivel={valorVisivel}
+                                            onAbrir={() => setPaystubOpen({ runId: run.id })}
+                                        />
+                                    ))}
+                                </section>
+                            )}
+                        </LeituraDoPortal>
                     </div>
                 )}
 
                 {/* Ponto */}
                 {activeSection === 'ponto' && (
                     <div className="space-y-3">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Últimos Registros</p>
+                        {pontosEmAnalise > 0 && (
+                            <p className="text-sm text-[#4B4B4D] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <strong className="font-semibold">{pontosEmAnalise === 1 ? '1 registro' : `${pontosEmAnalise} registros`} em análise</strong> — o RH ainda vai aprovar.
+                            </p>
+                        )}
+                        <p className="px-1 text-sm font-semibold text-[#566375]">Últimos registros</p>
                         <LeituraDoPortal
                             carregando={pontoCarregando} erro={pontoErro} vazio={recentEntries.length === 0}
                             onTentarDeNovo={() => recarregarPonto()} oQue="seus registros de ponto"
                             vazioIcone={Clock} vazioTitulo="Nenhum registro de ponto"
                         >
                             {recentEntries.slice(0, 10).map(e => (
-                                <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100 shadow-sm">
+                                <div key={e.id} className="flex items-center justify-between p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-800">{dataBR(e.date)}</p>
-                                        <p className="text-xs text-slate-400">{e.project_name || 'Sem obra'}</p>
+                                        <p className="text-sm font-bold text-[#4B4B4D]">{dataBR(e.date)}</p>
+                                        <p className="text-xs text-[#566375]">{e.project_name || 'Sem obra'}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-black text-slate-900">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
+                                        <p className="text-sm font-black text-[#4B4B4D]">{jornadaTexto(e.hours_worked, e.overtime_hours)}</p>
                                         <SeloDeStatus {...statusDoPonto(e.status)} />
                                     </div>
                                 </div>
@@ -424,27 +411,32 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Férias */}
                 {activeSection === 'ferias' && (
                     <div className="space-y-3">
-                        <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex items-center gap-3">
-                            <Umbrella className="w-5 h-5 text-blue-600 shrink-0" />
-                            <div>
-                                <p className="text-xs font-black text-blue-800">Saldo disponível</p>
-                                <p className="text-2xl font-black text-blue-900">{diasTexto(summary?.ferias_saldo)}</p>
-                            </div>
+                        <div className="px-4 py-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                            <p className="text-base text-[#4B4B4D]">
+                                {(summary?.ferias_saldo ?? 0) > 0
+                                    ? <>Você tem <strong className="font-semibold">{diasTexto(summary?.ferias_saldo)}</strong> de férias para tirar.</>
+                                    : 'Você não tem dias de férias disponíveis agora.'}
+                            </p>
+                            {(summary?.ausencias_mes ?? 0) > 0 && (
+                                <p className="text-sm text-[#566375] mt-0.5">
+                                    {summary!.ausencias_mes === 1 ? '1 ausência aprovada' : `${summary!.ausencias_mes} ausências aprovadas`} neste mês.
+                                </p>
+                            )}
                         </div>
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Histórico</p>
+                        <p className="px-1 text-sm font-semibold text-[#566375]">Histórico</p>
                         <LeituraDoPortal
                             carregando={feriasCarregando} erro={feriasErro} vazio={absences.length === 0}
                             onTentarDeNovo={() => recarregarFerias()} oQue="seu histórico de férias e ausências"
                             vazioIcone={Calendar} vazioTitulo="Nenhuma ausência registrada"
                         >
                             {absences.slice(0, 8).map(a => (
-                                <div key={a.id} className="flex items-center justify-between p-3 bg-white rounded-xl border border-slate-100">
+                                <div key={a.id} className="flex items-center justify-between p-3 bg-white rounded-2xl shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                     <div>
-                                        <p className="text-sm font-bold text-slate-800">{tipoDaAusencia(a.tipo)}</p>
-                                        <p className="text-xs text-slate-400">{periodoTexto(a.data_inicio, a.data_fim)}</p>
+                                        <p className="text-sm font-bold text-[#4B4B4D]">{tipoDaAusencia(a.tipo)}</p>
+                                        <p className="text-xs text-[#566375]">{periodoTexto(a.data_inicio, a.data_fim)}</p>
                                     </div>
                                     <div className="text-right">
-                                        <p className="text-sm font-black text-slate-900">{diasTexto(a.dias)}</p>
+                                        <p className="text-sm font-black text-[#4B4B4D]">{diasTexto(a.dias)}</p>
                                         <SeloDeStatus {...statusDaAusencia(a.status)} />
                                     </div>
                                 </div>
@@ -456,16 +448,16 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                 {/* Documentos */}
                 {activeSection === 'docs' && (
                     <div className="space-y-3">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus Documentos</p>
+                        <p className="px-1 text-sm font-semibold text-[#566375]">Meus documentos</p>
                         {erroDownload && (
-                            <div role="alert" className="flex items-start gap-2 p-3 rounded-xl border border-rose-200 bg-rose-50">
-                                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                            <div role="alert" className="flex items-start gap-2 p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0 mt-0.5" />
                                 <div className="flex-1 min-w-0">
-                                    <p className="text-sm font-semibold text-rose-900 truncate">Não foi possível baixar "{erroDownload.nome}"</p>
-                                    <p className="text-sm text-rose-800 mt-0.5">{erroDownload.mensagem}</p>
+                                    <p className="text-sm font-semibold text-[#4B4B4D] truncate">Não foi possível baixar "{erroDownload.nome}"</p>
+                                    <p className="text-sm text-[#566375] mt-0.5">{erroDownload.mensagem}</p>
                                 </div>
                                 <button type="button" aria-label="Fechar aviso" onClick={() => setErroDownload(null)}
-                                    className="w-11 h-11 -m-2 flex items-center justify-center rounded-lg text-rose-700 hover:bg-rose-100 shrink-0">
+                                    className="w-11 h-11 -m-2 flex items-center justify-center rounded-lg text-[#4B4B4D] hover:bg-[#EDEDE8] shrink-0">
                                     <X className="w-4 h-4" />
                                 </button>
                             </div>
@@ -479,13 +471,16 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                             {documents.map(d => {
                                 const expired = situacaoDaValidade(d.data_validade) === 'vencido';
                                 return (
-                                    <div key={d.id} className={`flex items-center gap-3 p-3 rounded-xl border ${expired ? 'border-rose-200 bg-rose-50' : 'border-slate-100 bg-white'}`}>
-                                        <FileText className={`w-4 h-4 shrink-0 ${expired ? 'text-rose-500' : 'text-indigo-500'}`} />
+                                    <div key={d.id} className="flex items-center gap-3 p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                        <FileText className="w-4 h-4 shrink-0 text-[#566375]" />
                                         <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-slate-800 truncate">{d.nome}</p>
-                                            <p className="text-xs text-slate-400">{d.categoria}{d.data_validade ? ` · ${validadeTexto(d.data_validade)}` : ''}</p>
+                                            <p className="text-sm font-bold text-[#4B4B4D] truncate">{d.nome}</p>
+                                            <p className="text-xs text-[#566375]">
+                                                {d.categoria}{d.data_validade ? ' · ' : ''}
+                                                {d.data_validade && <span className={expired ? 'font-semibold text-[#A84A1C]' : ''}>{validadeTexto(d.data_validade)}</span>}
+                                            </p>
                                         </div>
-                                        {expired && <AlertTriangle className="w-4 h-4 text-rose-500 shrink-0" />}
+                                        {expired && <AlertTriangle className="w-4 h-4 text-[#A84A1C] shrink-0" aria-hidden="true" />}
                                         {d.storage_path && (
                                             <ActionIconButton kind="download" size="sm" className="shrink-0"
                                                 title={`Baixar ${d.nome}`} aria-label={`Baixar ${d.nome}`}
@@ -500,55 +495,18 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                     </div>
                 )}
 
-                {/* Folha de Pagamento */}
-                {activeSection === 'folha' && (
-                    <div className="space-y-3">
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus holerites</p>
-                        <LeituraDoPortal
-                            carregando={folhaCarregando} erro={folhaErro} vazio={folhaRuns.length === 0}
-                            onTentarDeNovo={() => recarregarFolha()} oQue="seus holerites"
-                            vazioIcone={DollarSign} vazioTitulo="Nenhum holerite disponível"
-                            vazioDica="O holerite do mês aparece aqui quando o RH fecha a folha."
-                        >
-                            {folhaRuns.map(run => {
-                                const typeLabel = tipoDaFolha(run.type);
-                                const periodLabel = competenciaPorExtenso(run.start_date);
-                                return (
-                                    <Button
-                                        key={run.id}
-                                        variant="secondary"
-                                        onClick={() => setPaystubOpen({ runId: run.id })}
-                                        className="w-full flex items-center justify-between p-3 rounded-xl hover:border-indigo-100 text-left h-auto normal-case tracking-normal"
-                                    >
-                                        <div className="flex items-center gap-3">
-                                            <div className="w-9 h-9 bg-indigo-50 rounded-xl flex items-center justify-center shrink-0">
-                                                <DollarSign className="w-4 h-4 text-indigo-500" />
-                                            </div>
-                                            <div>
-                                                <p className="text-sm font-bold text-slate-800">{typeLabel}</p>
-                                                <p className="text-xs text-slate-400">{periodLabel}</p>
-                                            </div>
-                                        </div>
-                                        <div className="text-right">
-                                            <p className="text-sm font-black text-emerald-700">
-                                                {(run.net ?? 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })}
-                                            </p>
-                                            <p className="text-xs text-slate-400">líquido</p>
-                                        </div>
-                                    </Button>
-                                );
-                            })}
-                        </LeituraDoPortal>
-                    </div>
-                )}
-
                 {/* Treinamentos */}
                 {activeSection === 'treino' && (
                     <div className="space-y-3">
+                        {treinamentosVencendo > 0 && (
+                            <p className="text-sm text-[#4B4B4D] bg-white rounded-2xl px-4 py-3 shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
+                                <strong className="font-semibold">{treinamentosVencendo === 1 ? '1 treinamento vence' : `${treinamentosVencendo} treinamentos vencem`} em até 30 dias.</strong> Fale com o RH para renovar.
+                            </p>
+                        )}
                         {/* Academia — treinamentos A FAZER (conteúdo EAD). Fica antes
                             da evidência porque é o que exige ação do colaborador. */}
                             <div className="space-y-3 pb-2">
-                                <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Academia ÒPURA</p>
+                                <p className="px-1 text-sm font-semibold text-[#566375]">Academia ÒPURA</p>
 
                                 {/* Estes três estados existiam e eram invisíveis: a seção
                                     inteira sumia quando a lista vinha vazia OU quando a
@@ -556,8 +514,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                     treinamento registrado" logo abaixo. */}
                                 {academiaCarregando && (
                                     <div className="flex items-center gap-2 py-4">
-                                        <Loader2 className="w-4 h-4 text-indigo-500 animate-spin" />
-                                        <span className="text-sm text-slate-400">Carregando treinamentos...</span>
+                                        <Loader2 className="w-4 h-4 text-[#FF884C] animate-spin" />
+                                        <span className="text-sm text-[#566375]">Carregando treinamentos...</span>
                                     </div>
                                 )}
 
@@ -574,7 +532,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                         <p className="text-sm text-slate-500">
                                             Nenhum treinamento atribuído a você no momento.
                                         </p>
-                                        <p className="text-xs text-slate-400 mt-1">
+                                        <p className="text-xs text-[#566375] mt-1">
                                             Se você esperava algum, confirme com o RH se a atribuição
                                             foi feita para o seu cadastro.
                                         </p>
@@ -597,32 +555,33 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                             onClick={() => setAcademiaAberta(m)}
                                             disabled={!!previa}
                                             title={previa ? 'Na prévia os cursos não abrem' : undefined}
-                                            className={`w-full text-left p-3 rounded-xl border transition-colors disabled:cursor-not-allowed ${
-                                                concluido ? 'border-emerald-200 bg-emerald-50' : 'border-indigo-200 bg-indigo-50 hover:bg-indigo-100 disabled:hover:bg-indigo-50'
+                                            className={`w-full text-left p-3 rounded-2xl transition-colors disabled:cursor-not-allowed ${
+                                                'bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)] hover:bg-[#F7F7F4] disabled:hover:bg-white'
                                             }`}
                                         >
                                             <div className="flex items-start justify-between gap-2">
                                                 <div className="min-w-0">
-                                                    <p className="text-sm font-bold text-slate-800 truncate">{m.curso}</p>
-                                                    {m.nr_referencia && (
-                                                        <p className="text-xs font-black text-rose-600">{m.nr_referencia}</p>
+                                                    <p className="text-sm font-bold text-[#4B4B4D] truncate">{m.curso}</p>
+                                                    {/* "NR-35 Trabalho em Altura" já diz a NR; não repetir embaixo. */}
+                                                    {m.nr_referencia && !m.curso.startsWith(m.nr_referencia) && (
+                                                        <p className="text-xs font-black text-[#A84A1C]">{m.nr_referencia}</p>
                                                     )}
                                                     {/* "v1" era jargão do RH (versão do curso); o colaborador precisa do prazo. */}
                                                     {m.data_limite && (
-                                                        <p className="text-xs text-slate-400 mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
+                                                        <p className="text-xs text-[#566375] mt-0.5">Prazo: {dataBR(m.data_limite)}</p>
                                                     )}
                                                 </div>
                                                 <span className="text-xs font-black text-slate-500 shrink-0">
                                                     {Math.round(m.percentual)}%
                                                 </span>
                                             </div>
-                                            <div className="h-1.5 bg-white/70 rounded-full overflow-hidden mt-2">
+                                            <div className="h-1.5 bg-[#EDEDE8] rounded-full overflow-hidden mt-2">
                                                 <div
-                                                    className={`h-full ${concluido ? 'bg-emerald-500' : 'bg-indigo-500'}`}
+                                                    className={`h-full ${'bg-[#FF884C]'}`}
                                                     style={{ width: `${Math.min(100, m.percentual)}%` }}
                                                 />
                                             </div>
-                                            <p className={`text-xs font-bold mt-2 ${previa ? 'text-slate-600' : 'text-indigo-700'}`}>
+                                            <p className={`text-xs font-bold mt-2 ${previa ? 'text-[#566375]' : 'text-[#A84A1C]'}`}>
                                                 {previa ? 'Não abre na prévia' : concluido ? 'Ver certificado' : m.status === 'NAO_INICIADO' ? 'Começar' : 'Continuar'}
                                             </p>
                                         </button>
@@ -630,7 +589,7 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 })}
                             </div>
 
-                        <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Meus treinamentos</p>
+                        <p className="px-1 text-sm font-semibold text-[#566375]">Meus treinamentos</p>
                         <LeituraDoPortal
                             carregando={treinosCarregando} erro={treinosErro} vazio={trainings.length === 0}
                             onTentarDeNovo={() => recarregarTreinos()} oQue="seus treinamentos"
@@ -642,20 +601,18 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                                 const expired = situacao === 'vencido';
                                 const expiring = situacao === 'vencendo';
                                 return (
-                                    <div key={t.id} className={`p-3 rounded-xl border ${expired ? 'border-rose-200 bg-rose-50' : expiring ? 'border-amber-200 bg-amber-50' : 'border-slate-100 bg-white'}`}>
+                                    <div key={t.id} className="p-3 rounded-2xl bg-white shadow-[0_1px_2px_rgba(75,75,77,0.08)]">
                                         <div className="flex items-start justify-between gap-2">
                                             <div className="min-w-0">
-                                                <p className="text-sm font-bold text-slate-800">{t.course_nome}</p>
-                                                {t.nr_referencia && <p className="text-xs font-black text-rose-600">{t.nr_referencia}</p>}
-                                                <p className="text-xs text-slate-400 mt-0.5">
+                                                <p className="text-sm font-bold text-[#4B4B4D]">{t.course_nome}</p>
+                                                {t.nr_referencia && <p className="text-xs font-black text-[#A84A1C]">{t.nr_referencia}</p>}
+                                                <p className="text-xs text-[#566375] mt-0.5">
                                                     {t.data_realizacao ? `Realizado em ${dataBR(t.data_realizacao)}` : ''}
                                                     {t.data_realizacao && t.data_validade ? ' · ' : ''}
                                                     {t.data_validade ? validadeTexto(t.data_validade) : ''}
                                                 </p>
                                             </div>
-                                            <span className={`text-xs font-black px-2 py-0.5 rounded-full shrink-0 ${expired ? 'bg-rose-100 text-rose-700' : expiring ? 'bg-amber-100 text-amber-700' : 'bg-emerald-100 text-emerald-700'}`}>
-                                                {expired ? 'Vencido' : expiring ? 'Vencendo' : 'Válido'}
-                                            </span>
+                                            <SeloDeStatus rotulo={expired ? 'Vencido' : expiring ? 'Vencendo' : 'Válido'} tom={expired ? 'recusado' : expiring ? 'alerta' : 'ok'} />
                                         </div>
                                     </div>
                                 );
@@ -663,7 +620,17 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
                         </LeituraDoPortal>
                     </div>
                 )}
-            </div>
+            </main>
+
+            <RodapeDoPortal
+                ativa={activeSection}
+                onIr={setActiveSection}
+                avisos={{
+                    ponto: pontosEmAnalise > 0 ? `${pontosEmAnalise} em análise` : undefined,
+                    treino: treinamentosVencendo > 0 ? `${treinamentosVencendo} vencendo` : undefined,
+                }}
+            />
+        </div>
         </div>
     );
 };

@@ -20,7 +20,7 @@ import { hojeLocal } from './baixaRecebivel';
 
 export { dataBR, hojeLocal };
 
-export type TomDoStatus = 'ok' | 'espera' | 'recusado' | 'neutro';
+export type TomDoStatus = 'ok' | 'espera' | 'alerta' | 'recusado' | 'neutro';
 
 const STATUS_PONTO: Record<string, { rotulo: string; tom: TomDoStatus }> = {
     PENDENTE: { rotulo: 'Em análise', tom: 'espera' },

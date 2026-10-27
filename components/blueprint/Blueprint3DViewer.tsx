@@ -1685,7 +1685,10 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       .map((p) => {
         const geom = new THREE.ExtrudeGeometry(shapeDoAnel(p.anel), { depth: (p.topoMm - p.baseMm) * S, bevelEnabled: false });
         geom.rotateX(-Math.PI / 2);
-        return { ...p, geom, y: p.baseMm * S };
+        // DIVISÃO DOS PAVIMENTOS (27/10/2026): *"faça uma divisão dos pavimentos"* — a torre saía um bloco liso,
+        // sem linha entre um piso e outro (o `<Edges>` não aparecia na massa). Linha comum do WebGL, como as
+        // curvas de nível: o contorno de cada pavimento, e a junção de dois é a linha do piso.
+        return { ...p, geom, arestas: new THREE.EdgesGeometry(geom), y: p.baseMm * S };
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [massa]);
@@ -1879,8 +1882,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         const sel = selecionados?.has(p.id) ?? false;
         return (
           <mesh key={`massa-${p.chave}`} geometry={p.geom} position={[0, p.y, 0]} castShadow receiveShadow {...cliqueDe(p.id)}>
-            <meshStandardMaterial color={sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} />
-            <Edges color={sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#475569'} />
+            {/* A face recua um pouco na profundidade para a linha do piso, no mesmo plano, ganhar. */}
+            <meshStandardMaterial color={sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+            <lineSegments geometry={p.arestas} raycast={() => null}>
+              <lineBasicMaterial color={sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#1e293b'} />
+            </lineSegments>
           </mesh>
         );
       })}

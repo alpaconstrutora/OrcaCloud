@@ -93,9 +93,9 @@ concluídas (a view não filtrava tipo); `vw_fact_deal` com `is_vgv` = 0 vendas.
 |---|---|---|---|
 | 11 | Views com a regra "com contrato" (locação segue fechando em Concluído; conversão só de venda; `security_invoker` repetido) | `supabase/migrations/aplicar_20271027500000_bi_vgv_vendida_com_contrato.sql` | Depois de aplicada: `is_vgv` = 7 vendas / R$ 3.255.000; `vgv_fechado` sem locação; `reloptions` ainda `security_invoker=on` |
 
-- [ ] 11 — arquivo pronto, `migrationsPrefixo` + `segurancaMigrations` verdes; **aplicação no banco bloqueada pelo modo automático** — aguardando o usuário aplicar ou liberar.
+- [x] 11 — aplicada em 27/10 (usuário liberou). Medido DEPOIS: `is_vgv` = 7 vendas / R$ 3.255.000 (antes 0); `vgv_fechado` R$ 3.255.000 e ticket R$ 465.000 (antes R$ 17.739 / R$ 1.971 de locações); `is_fechado` 16 (7 vendas + 9 locações); base de conversão 7 (só venda); `reloptions` seguem `security_invoker=on` nas duas views.
 
 ### Pendente de decisão do usuário
 
-- ~~Card "Volume em Vendas" de `CommercialModule.tsx`~~ — usuário: **"sim"**; passou a `saleDealStage`. ⚠️ Mas o `CommercialModule.tsx` **não é importado por nenhum arquivo** (nem pelo `AppRouter`): a tela não aparece no app, é código morto. Candidato a remoção — perguntar.
+- ~~Card "Volume em Vendas" de `CommercialModule.tsx`~~ — usuário: **"sim"**; passou a `saleDealStage`. ⚠️ Mas o `CommercialModule.tsx` **não é importado por nenhum arquivo** (nem pelo `AppRouter`): a tela não aparece no app, é código morto. Usuário: remover (**"sim"**) — arquivo apagado; o único resto era um comentário em `DealModal.tsx`, reescrito.
 - ~~BI ainda conta só Concluído~~ — item 11 acima. Registro original: `vw_fact_deal.is_vgv`, as views executivas (`20260708000002`) e as RPCs de convergência (`20260710000003`) — além do card "Volume em Vendas" de `CommercialModule.tsx:403`. Com a regra nova nas telas de Venda de Ativos, esses números divergem (BI R$ 0 × telas R$ 3,26 mi). Mudar view SQL = migration — perguntar antes.

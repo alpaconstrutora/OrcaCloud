@@ -1550,7 +1550,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     clientService.listClients(),
                     organizationService.listOrganizations(),
                     // 'ALL': mapa de resolução do `formData.linked_project_id` já escolhido,
-                    // não seletor. Ver CommercialModule, mesmo caso.
+                    // não seletor — por isso traz todas as classificações (REGRA #3).
                     projectService.listProjects({ classifications: 'ALL' })
                 ]);
 

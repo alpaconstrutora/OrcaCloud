@@ -55,6 +55,8 @@ import {
  */
 export type OrigemDaZona = 'EMPREENDIMENTO' | 'CATALOGO';
 
+export type MotivoDaZonaAutomatica = 'UNICA' | 'APLICAVEL';
+
 export interface ZonaUrbanistica {
   origemDaZona: OrigemDaZona;
   setOrigemDaZona: (o: OrigemDaZona) => void;
@@ -66,8 +68,17 @@ export interface ZonaUrbanistica {
   empreendimentoAutomatico: boolean;
   /** A cidade do caminho do catálogo veio da ficha do empreendimento (22/10/2026). */
   cidadeAutomatica: boolean;
-  /** A zona em vigor foi aplicada sozinha nesta abertura: era a única do empreendimento. */
+  /** A zona em vigor foi aplicada sozinha nesta abertura (ou ao escolher o empreendimento). */
   zonaAplicadaAutomaticamente: boolean;
+  /** Por quê: era a única do empreendimento, ou é a marcada como aplicável nele. `null` = ninguém aplicou sozinho. */
+  motivoDaZonaAutomatica: MotivoDaZonaAutomatica | null;
+  /** A zona marcada como aplicável no empreendimento escolhido (só no caminho do empreendimento). */
+  zonaAplicavel: ZonaRegulatoria | null;
+  /**
+   * A zona em vigor não está mais na origem de onde veio (apagada — ex.: "Substituir as zonas atuais" do
+   * Mapa Regulatório): os valores em vigor são os de quando foi aplicada, e nada mais os confere.
+   */
+  zonaAplicadaSumiu: boolean;
 
   /** Caminho do catálogo: cidade → mapa → zona. */
   cidade: CitySearchValue | null;
@@ -157,6 +168,11 @@ const TODOS_OS_CAMPOS: CampoDaZona[] = [
   'afastamento_progressivo',
   'recuo_frente_escalonado',
 ];
+
+/** A zona do empreendimento que entra sem perguntar: a marcada como aplicável; sem marca, a única. Senão nenhuma. */
+function zonaDoEmpreendimento(zonas: ZonaRegulatoria[]): ZonaRegulatoria | null {
+  return zonas.find((z) => z.aplicavel) ?? (zonas.length === 1 ? zonas[0] : null);
+}
 
 const SEM_LIMITES: Omit<ValoresDaZona, 'recuoMm'> = {
   taxaOcupacaoMax: null,
@@ -258,7 +274,7 @@ export function useBlueprintZonaUrbanistica(
   /** A leitura do contexto salvo terminou (com ou sem linha) — antes disso, nada é aplicado sozinho. */
   const [contextoLido, setContextoLido] = useState(false);
   const [empreendimentoAutomatico, setEmpreendimentoAutomatico] = useState(false);
-  const [zonaAplicadaAutomaticamente, setZonaAplicadaAutomaticamente] = useState(false);
+  const [motivoDaZonaAutomatica, setMotivoDaZonaAutomatica] = useState<MotivoDaZonaAutomatica | null>(null);
   /** Aplicar sozinho acontece no máximo uma vez por abertura — desligar a zona não a traz de volta. */
   const jaAplicouSozinho = useRef(false);
 
@@ -432,8 +448,16 @@ export function useBlueprintZonaUrbanistica(
     };
   }, [origemDaZona, empreendimentoId, mapaId]);
 
+  /**
+   * O empreendimento que a PESSOA acabou de escolher: quando as zonas dele chegarem, a marcada como aplicável
+   * (ou a única) entra — escolher o empreendimento é dizer "a lei deste terreno" (26/10/2026). Ao contrário da
+   * entrada sozinha da abertura, vale mesmo com contexto salvo; só não passa por cima de ajuste à mão.
+   */
+  const aplicarAoCarregar = useRef<string | null>(null);
+
   const setEmpreendimentoId = useCallback((id: string) => {
     escolheuAMao.current = true;
+    aplicarAoCarregar.current = id || null;
     setEmpreendimentoIdBruto(id);
     setEmpreendimentoAutomatico(false);
   }, []);
@@ -531,17 +555,18 @@ export function useBlueprintZonaUrbanistica(
     if (jaAplicouSozinho.current || !contextoLido || contexto || persistenciaIndisponivel) return;
     if (origemDaZona !== 'EMPREENDIMENTO' || !empreendimentoId) return;
     if (zonasDe !== `EMPREENDIMENTO:${empreendimentoId}`) return;
-    const daVez = zonas.find((z) => z.aplicavel) ?? (zonas.length === 1 ? zonas[0] : null);
+    const daVez = zonaDoEmpreendimento(zonas);
     if (!daVez) return;
     jaAplicouSozinho.current = true;
+    aplicarAoCarregar.current = null; // a mesma zona: o efeito da escolha não grava de novo
     aplicarZona(daVez.id);
-    setZonaAplicadaAutomaticamente(true);
+    setMotivoDaZonaAutomatica(daVez.aplicavel ? 'APLICAVEL' : 'UNICA');
   }, [contextoLido, contexto, persistenciaIndisponivel, origemDaZona, empreendimentoId, zonasDe, zonas, aplicarZona]);
 
   const aplicarZonaAMao = useCallback(
     (zonaId: string) => {
       jaAplicouSozinho.current = true;
-      setZonaAplicadaAutomaticamente(false);
+      setMotivoDaZonaAutomatica(null);
       aplicarZona(zonaId);
     },
     [aplicarZona],
@@ -549,7 +574,7 @@ export function useBlueprintZonaUrbanistica(
 
   const desligar = useCallback(() => {
     jaAplicouSozinho.current = true;
-    setZonaAplicadaAutomaticamente(false);
+    setMotivoDaZonaAutomatica(null);
     setOrigemDosValores({});
     setRecuos(RECUOS_ZERO);
     setLimites(SEM_LIMITES);
@@ -668,6 +693,30 @@ export function useBlueprintZonaUrbanistica(
     return zonaDerivou({ recuoMm: recuos, ...limites }, origemDosValores, zonaAtual);
   }, [zonaAplicadaId, zonas, recuos, limites, origemDosValores]);
 
+  const zonasDoEmpreendimentoNaTela = origemDaZona === 'EMPREENDIMENTO' && !!empreendimentoId && zonasDe === `EMPREENDIMENTO:${empreendimentoId}`;
+  const zonaAplicavel = zonasDoEmpreendimentoNaTela ? (zonas.find((z) => z.aplicavel) ?? null) : null;
+
+  // Só se a lista na tela é a MESMA de onde a zona veio: com outro empreendimento (ou mapa) escolhido e ainda
+  // não aplicado, a zona em vigor não estar na lista é normal.
+  const zonaAplicadaSumiu = useMemo(() => {
+    if (!zonaAplicadaId || !contexto) return false;
+    const origemSalva = contexto.zona_origem ?? 'EMPREENDIMENTO';
+    const chaveDoContexto = origemSalva === 'CATALOGO' ? `CATALOGO:${contexto.regulatory_map_id ?? ''}` : `EMPREENDIMENTO:${contexto.empreendimento_id ?? ''}`;
+    return zonasDe === chaveDoContexto && !zonas.some((z) => z.id === zonaAplicadaId);
+  }, [zonaAplicadaId, contexto, zonasDe, zonas]);
+
+  useEffect(() => {
+    const id = aplicarAoCarregar.current;
+    if (!id || !contextoLido || id !== empreendimentoId || !zonasDoEmpreendimentoNaTela) return;
+    aplicarAoCarregar.current = null;
+    if (ajustadoAMao) return; // ajuste à mão só sai por clique — a aplicável fica oferecida no painel
+    const daVez = zonaDoEmpreendimento(zonas);
+    if (!daVez || daVez.id === zonaAplicadaId) return;
+    jaAplicouSozinho.current = true;
+    aplicarZona(daVez.id);
+    setMotivoDaZonaAutomatica(daVez.aplicavel ? 'APLICAVEL' : 'UNICA');
+  }, [contextoLido, empreendimentoId, zonasDoEmpreendimentoNaTela, ajustadoAMao, zonas, zonaAplicadaId, aplicarZona]);
+
   return {
     origemDaZona,
     setOrigemDaZona: escolherOrigem,
@@ -675,7 +724,10 @@ export function useBlueprintZonaUrbanistica(
     setEmpreendimentoId,
     empreendimentoAutomatico,
     cidadeAutomatica,
-    zonaAplicadaAutomaticamente,
+    zonaAplicadaAutomaticamente: motivoDaZonaAutomatica !== null,
+    motivoDaZonaAutomatica,
+    zonaAplicavel,
+    zonaAplicadaSumiu,
     cidade,
     setCidade: escolherCidade,
     mapas,

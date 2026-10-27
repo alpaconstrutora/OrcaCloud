@@ -3,7 +3,7 @@ import React from 'react';
 import { AlertTriangle, ArrowUpRight, Map, RefreshCw, Scale } from 'lucide-react';
 import CitySearchSelect, { type CitySearchValue } from '../regulatoryMap/CitySearchSelect';
 import type { RegulatoryMapWithCity } from '../../types/regulatoryMap';
-import type { OrigemDaZona } from '../../hooks/useBlueprintZonaUrbanistica';
+import type { MotivoDaZonaAutomatica, OrigemDaZona } from '../../hooks/useBlueprintZonaUrbanistica';
 import { useStore } from '../../store/useStore';
 import { rotuloMapaRegulatorio } from '../../utils/rotuloMapaRegulatorio';
 import {
@@ -46,7 +46,9 @@ import {
  *
  * Não aplica sozinho ao trocar o select: aplicar é BOTÃO. Sobrescrever os recuos
  * como efeito colateral de navegar pela lista apagaria um ajuste manual sem que
- * ninguém tivesse pedido.
+ * ninguém tivesse pedido. A exceção é ESCOLHER O EMPREENDIMENTO (26/10/2026): a
+ * zona que ele marca como aplicável entra junto, salvo ajuste à mão — aí ela fica
+ * oferecida aqui, com botão, como quando a zona em vigor sumiu da origem.
  */
 
 interface Props {
@@ -60,8 +62,14 @@ interface Props {
   onEmpreendimento: (id: string) => void;
   /** Texto sob o seletor quando o empreendimento entrou sozinho (vínculo ou obra); `null` = escolhido/salvo. */
   avisoDoEmpreendimento?: string | null;
-  /** A zona em vigor foi aplicada sozinha (era a única do empreendimento). */
+  /** A zona em vigor foi aplicada sozinha. */
   zonaAplicadaAutomaticamente?: boolean;
+  /** Por quê — muda o texto do aviso. Ausente = a única do empreendimento. */
+  motivoDaZonaAutomatica?: MotivoDaZonaAutomatica | null;
+  /** A zona marcada como aplicável no empreendimento escolhido. */
+  zonaAplicavel?: ZonaRegulatoria | null;
+  /** A zona em vigor não existe mais na origem: os valores são os de quando foi aplicada. */
+  zonaAplicadaSumiu?: boolean;
 
   /** Caminho da cidade. */
   cidade: CitySearchValue | null;
@@ -102,6 +110,9 @@ export default function PainelZonaUrbanistica({
   onEmpreendimento,
   avisoDoEmpreendimento = null,
   zonaAplicadaAutomaticamente = false,
+  motivoDaZonaAutomatica = null,
+  zonaAplicavel = null,
+  zonaAplicadaSumiu = false,
   cidade,
   onCidade,
   avisoDaCidade = null,
@@ -293,7 +304,9 @@ export default function PainelZonaUrbanistica({
         )}
         {zonaAplicadaAutomaticamente && aplicada && (
           <p className="text-xs text-slate-500" data-testid="aviso-zona-automatica">
-            Zona aplicada automaticamente: é a única cadastrada neste empreendimento.
+            {motivoDaZonaAutomatica === 'APLICAVEL'
+              ? 'Zona aplicada automaticamente: é a marcada como aplicável no empreendimento.'
+              : 'Zona aplicada automaticamente: é a única cadastrada neste empreendimento.'}
           </p>
         )}
       </div>
@@ -347,6 +360,38 @@ export default function PainelZonaUrbanistica({
             desligar
           </button>
         </p>
+      )}
+
+      {/* A zona em vigor sumiu da origem (ex.: "Substituir as zonas atuais" no Mapa Regulatório). Sem isto a
+          planta seguia com os números antigos e nada contava — `derivou` não tem com o que comparar. */}
+      {zonaAplicadaSumiu && (
+        <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1.5 text-xs text-amber-800" data-testid="aviso-zona-sumiu">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="min-w-0 space-y-1">
+            <p>
+              <strong className="font-semibold">A zona em vigor ({zonaRotuloSalvo ?? 'zona aplicada'}) não existe mais</strong>{' '}
+              {origemDaZona === 'CATALOGO' ? 'neste mapa' : 'no empreendimento'}. Os números são os valores de quando foi aplicada.
+              {!zonaAplicavel && ' Escolha a zona acima e aplique.'}
+            </p>
+            {zonaAplicavel && (
+              <BotaoAplicarAplicavel zona={zonaAplicavel} salvando={salvando} onAplicar={onAplicar} />
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* O empreendimento marca a zona que vale e ela não é a que está em vigor. */}
+      {!zonaAplicadaSumiu && zonaAplicavel && zonaAplicavel.id !== zonaAplicadaId && (
+        <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-blue-200 bg-blue-50 px-2 py-1.5 text-xs text-blue-800" data-testid="aviso-zona-aplicavel">
+          <Map className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <div className="min-w-0 space-y-1">
+            <p>
+              O empreendimento marca <strong className="font-semibold">{rotuloDaZona(zonaAplicavel)}</strong> como a zona aplicável
+              {aplicada ? `; esta planta usa ${zonaRotuloSalvo ?? 'outra zona'}.` : '.'}
+            </p>
+            <BotaoAplicarAplicavel zona={zonaAplicavel} salvando={salvando} onAplicar={onAplicar} />
+          </div>
+        </div>
       )}
 
       {derivou && (
@@ -405,6 +450,20 @@ export default function PainelZonaUrbanistica({
         <VocabularioComplementar vocabulario={vocabulario} onVocabulario={onVocabulario} />
       )}
     </div>
+  );
+}
+
+function BotaoAplicarAplicavel({ zona, salvando, onAplicar }: { zona: ZonaRegulatoria; salvando: boolean; onAplicar: (zonaId: string) => void }) {
+  return (
+    <button
+      type="button"
+      disabled={salvando}
+      title={salvando ? 'Aguarde: a zona está sendo gravada.' : `Aplicar ${rotuloDaZona(zona)} — os recuos e limites passam a ser os dela`}
+      onClick={() => onAplicar(zona.id)}
+      className="inline-flex items-center gap-1.5 rounded-md border border-slate-300 bg-white px-2 py-1 text-xs text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
+    >
+      {salvando ? 'Aplicando…' : 'Aplicar a zona aplicável'}
+    </button>
   );
 }
 

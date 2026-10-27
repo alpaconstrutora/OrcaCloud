@@ -10916,6 +10916,9 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               : null
           }
           zonaAplicadaAutomaticamente={zona.zonaAplicadaAutomaticamente}
+          motivoDaZonaAutomatica={zona.motivoDaZonaAutomatica}
+          zonaAplicavel={zona.zonaAplicavel}
+          zonaAplicadaSumiu={zona.zonaAplicadaSumiu}
           cidade={zona.cidade}
           onCidade={zona.setCidade}
           avisoDaCidade={zona.cidadeAutomatica ? 'Cidade preenchida automaticamente pela ficha do empreendimento.' : null}

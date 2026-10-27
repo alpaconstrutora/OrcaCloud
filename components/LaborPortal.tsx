@@ -22,6 +22,7 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
+import { logoDoPortal } from '../utils/portalColaboradorLogo';
 import TabsBar from './ui/TabsBar';
 import AcademyPlayerView from './academy/AcademyPlayerView';
 import { createPortalChannel } from './academy/academyChannel';
@@ -193,6 +194,22 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         staleTime: STALE.fast,
     });
 
+    // Logo fora do resumo: o resumo traz a versão, o logo vem uma vez e fica no
+    // aparelho (utils/portalColaboradorLogo.ts). `logo_url` no resumo é o
+    // formato anterior à migration 20271027200000, aceito na transição.
+    const empresaDoResumo = summary?.organization;
+    const logoVersao = empresaDoResumo?.logo_url ? null : (empresaDoResumo?.logo_versao ?? null);
+    const { data: logoBaixado, isPending: logoPendente } = useQuery({
+        queryKey: ['portal', 'logo', logoVersao],
+        queryFn: () => logoDoPortal(logoVersao!, () => atsService.getPortalLogo(portalToken)),
+        enabled: !!logoVersao,
+        staleTime: Infinity,
+        retry: 1,
+    });
+    const empresa = empresaDoResumo
+        ? { name: empresaDoResumo.name, logo_url: empresaDoResumo.logo_url ?? logoBaixado ?? null }
+        : empresaDoResumo;
+
     // Na prévia, todo estado (carregando, erro, sala de aula, portal) leva a faixa.
     const comFaixa = (tela: React.ReactElement) => previa
         ? <div className="min-h-full flex flex-col"><FaixaDePrevia nome={previa.nome} onSair={previa.onSair} />{tela}</div>
@@ -320,7 +337,8 @@ export const PortalView: React.FC<PortalViewProps> = ({ employeeId, orgId, onLog
         <div className={`w-full min-h-[100dvh] ${MARCA.chao}`}>
         <div className="max-w-md mx-auto w-full min-h-[100dvh] flex flex-col">
             <CabecalhoDoPortal
-                empresa={summary?.organization}
+                empresa={empresa}
+                logoPendente={!!logoVersao && logoPendente}
                 nome={emp?.name}
                 cargo={emp?.role}
                 desde={emp?.hire_date ? dataBR(emp.hire_date) : undefined}

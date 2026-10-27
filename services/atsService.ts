@@ -108,8 +108,12 @@ export interface PortalEmployeeSummary {
     pontos_pendentes: number;
     treinamentos_vencendo: number;
     ausencias_mes: number;
-    /** Empresa do colaborador — marca do portal (migration 20271026990000). */
-    organization?: { name: string; logo_url: string | null } | null;
+    /**
+     * Empresa do colaborador — marca do portal. Desde a migration 20271027200000
+     * o resumo traz só `logo_versao` (md5) e o logo vem por `getPortalLogo`;
+     * `logo_url` é o formato anterior (20271026990000), aceito na transição.
+     */
+    organization?: { name: string; logo_versao?: string | null; logo_url?: string | null } | null;
 }
 
 /** Retorno de `fn_colab_portal_paystub` — só os campos que o recibo usa. */
@@ -300,6 +304,18 @@ export const atsService = {
             : await supabase.rpc('portal_employee_summary', { p_employee_id: employeeId });
         if (error) throw error;
         return data as PortalEmployeeSummary;
+    },
+
+    /**
+     * Logo da empresa do colaborador, pelo token do link. Fora do resumo porque
+     * o logo é a imagem embutida (data URI, até ~134 KB) e o resumo é pedido a
+     * cada volta para a aba; o portal guarda o logo pela versão
+     * (`utils/portalColaboradorLogo.ts`) e só chama isto quando ela muda.
+     */
+    async getPortalLogo(portalToken: string): Promise<string | null> {
+        const { data, error } = await supabase.rpc('fn_colab_portal_logo', { p_token: portalToken });
+        if (error) throw error;
+        return (data as string | null) || null;
     },
 
     /**

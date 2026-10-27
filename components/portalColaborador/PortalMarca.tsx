@@ -86,22 +86,26 @@ export interface EmpresaDoPortal { name: string; logo_url: string | null }
 /**
  * Logo da empresa à esquerda, altura fixa e largura livre: o da Alpa é o
  * símbolo quadrado, o da SPE é o horizontal com texto. Sem logo (ou logo que
- * não carrega), o nome da empresa em texto.
+ * não carrega), o nome da empresa em texto. Com o logo ainda a caminho
+ * (`logoPendente`), a altura dele fica reservada: o nome não pisca no lugar.
  */
 export const CabecalhoDoPortal: React.FC<{
     empresa?: EmpresaDoPortal | null;
+    logoPendente?: boolean;
     nome?: string;
     cargo?: string;
     desde?: string;
     onSair?: () => void;
-}> = ({ empresa, nome, cargo, desde, onSair }) => {
+}> = ({ empresa, logoPendente, nome, cargo, desde, onSair }) => {
     const [logoFalhou, setLogoFalhou] = useState(false);
     const mostrarLogo = !!empresa?.logo_url && !logoFalhou;
     const linhaCargo = [cargo, desde ? `desde ${desde}` : null].filter(Boolean).join(' · ');
     return (
         <header className="bg-white px-5 pt-4 pb-5 border-b border-portal-grafite/10">
             <div className="flex items-center justify-between gap-3 min-h-11">
-                {mostrarLogo ? (
+                {logoPendente ? (
+                    <span className="h-12" aria-hidden="true" />
+                ) : mostrarLogo ? (
                     <img src={empresa!.logo_url!} alt={empresa!.name} onError={() => setLogoFalhou(true)}
                         className="h-12 w-auto max-w-[62%] object-contain object-left" />
                 ) : (

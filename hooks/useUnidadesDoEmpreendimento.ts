@@ -23,7 +23,11 @@ export interface UnidadesDoEmpreendimento {
   erro: string | null;
 }
 
-export function useUnidadesDoEmpreendimento(empreendimentoId: string | null, ativo: boolean): UnidadesDoEmpreendimento {
+/**
+ * `recarga` (27/10/2026): muda → relê. A planta com blocos lê sempre (a massa é dividida nas unidades), e abrir uma
+ * tela continua relendo — as unidades mudam em outra tela.
+ */
+export function useUnidadesDoEmpreendimento(empreendimentoId: string | null, ativo: boolean, recarga?: unknown): UnidadesDoEmpreendimento {
   const [estado, setEstado] = useState<UnidadesDoEmpreendimento>({ torres: [], pavimentosPorTorre: new Map(), carregadoDe: null, erro: null });
 
   useEffect(() => {
@@ -49,7 +53,7 @@ export function useUnidadesDoEmpreendimento(empreendimentoId: string | null, ati
     return () => {
       vivo = false;
     };
-  }, [ativo, empreendimentoId]);
+  }, [ativo, empreendimentoId, recarga]);
 
   return estado;
 }

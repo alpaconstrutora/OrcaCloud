@@ -626,6 +626,8 @@ import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendi
 import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 import { estruturasDoEmpreendimento } from '../../utils/blueprintEstruturaDaTorre';
 import { comandosDoAjuste, vestirBlocosPropostos } from '../../utils/blueprintAjusteAoEmpreendimento';
+import { fatiasPorArea } from '../../utils/blueprintUnidadesNoPavimento';
+import { chaveDaUnidade } from '../../utils/blueprintEstruturaDaTorre';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
 import type { EmpreendimentoUnit } from '../../types/empreendimento';
@@ -4657,8 +4659,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * clicado no 3D (ou escolhido no painel) vale só enquanto o bloco dele é a seleção — trocar a seleção o esquece
    * sem efeito nenhum. Estado de sessão: é ponteiro de leitura, não dado do estudo.
    */
-  const [pisoDaMassa, setPisoDaMassa] = useState<{ blocoId: string; indice: number } | null>(null);
+  const [pisoDaMassa, setPisoDaMassa] = useState<{ blocoId: string; indice: number; unidade?: string | null } | null>(null);
   const pisoDoBlocoSel = blocoSel && pisoDaMassa?.blocoId === blocoSel.id ? pisoDaMassa.indice : null;
+  /** A UNIDADE do pavimento escolhida (27/10/2026): o id da unidade do Empreendimento (ou o nome, sem id). */
+  const unidadeDoBlocoSel = pisoDoBlocoSel !== null ? (pisoDaMassa?.unidade ?? null) : null;
   const componenteSel = (editor.model.componentes ?? []).find((c) => c.id === editor.selectedId) ?? null;
   const guardaCorpoSel = (editor.model.guardaCorpos ?? []).find((g) => g.id === editor.selectedId) ?? null;
   const muroSel = (editor.model.muros ?? []).find((m) => m.id === editor.selectedId) ?? null;
@@ -9144,10 +9148,12 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   // da massa monta o mix por elas (25/10/2026: um hook para as duas telas; era um efeito só da Casa).
   const empreendimentoDaCasa = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido || null;
   const nomeDoEmpreendimentoDaCasa = empreendimentos.find((e) => e.id === empreendimentoDaCasa)?.name ?? null;
-  // 27/10/2026: também com um bloco selecionado — o painel dele compara o bloco com a torre do Empreendimento.
+  // 27/10/2026: também com blocos de massa — o painel do bloco compara com a torre do Empreendimento e o 3D divide cada
+  // pavimento nas unidades dele. Abrir uma das telas relê (`recarga`): as unidades mudam em outra tela.
   const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(
     empreendimentoDaCasa,
-    telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa' || telaAberta === 'casas-lotes' || !!blocoSel,
+    telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa' || telaAberta === 'casas-lotes' || !!blocoSel || (editor.model.blocos ?? []).length > 0,
+    telaAberta,
   );
   const torresDoEmpreendimento = unidadesDoEmpreendimento.carregadoDe === empreendimentoDaCasa ? unidadesDoEmpreendimento.torres : null;
   /**
@@ -9163,6 +9169,20 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa) : null),
     [estruturasDaCasa, editor.model],
   );
+  /**
+   * AS UNIDADES DE CADA PAVIMENTO NO 3D (27/10/2026): *"… também de cada unidade em cada pavimento"*. O piso de um
+   * bloco ligado a uma torre vira uma fatia por unidade do Empreendimento naquele andar, na proporção da área
+   * privativa (`fatiasPorArea`) — clicável, e a unidade aparece no painel. Sem unidades no andar, o piso inteiro.
+   */
+  const massa3dPorUnidade = useMemo(() => {
+    if (!ajusteAoEmpreendimento) return massa3d;
+    return massa3d.flatMap((p) => {
+      const unidades = ajusteAoEmpreendimento.papeis.get(p.id)?.pisos[p.indice - 1]?.unidades ?? [];
+      if (unidades.length === 0) return [p];
+      const fatias = fatiasPorArea(p.anel, unidades.map((u) => u.areaPrivativaM2));
+      return fatias.map((anel, k) => ({ ...p, chave: `${p.chave}-u${k}`, anel, nome: `${p.nome} · ${unidades[k].nome}`, piso: p.chave, unidade: chaveDaUnidade(unidades[k]) }));
+    });
+  }, [massa3d, ajusteAoEmpreendimento]);
   const unidadesDaCasa = useMemo(() => {
     const porId = new Map<string, EmpreendimentoUnit>();
     const opcoes: UnidadeParaOPrograma[] = [];
@@ -11343,6 +11363,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             : null
         }
         onPiso={(indice) => setPisoDaMassa(blocoSel && indice !== null ? { blocoId: blocoSel.id, indice } : null)}
+        unidadesDoPiso={
+          blocoSel && pisoDoBlocoSel !== null ? (ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.pisos[pisoDoBlocoSel - 1]?.unidades ?? []) : []
+        }
+        unidadeSelecionada={unidadeDoBlocoSel}
+        onUnidade={(chave) => blocoSel && pisoDoBlocoSel !== null && setPisoDaMassa({ blocoId: blocoSel.id, indice: pisoDoBlocoSel, unidade: chave })}
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}
         onExcluir={removerSelecionada}
         onAbrirEstudo={() => setTelaAberta('massa')}
@@ -12013,9 +12038,10 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       // CAMADAS: com o Terreno oculto, relevo, envelope e massa saem juntos (não são peça do modelo).
       mostrarTerreno={mostrarTerreno3d && temTerreno && terrenoAVista}
       envelope={mostrarEnvelope3d && temTerreno && terrenoAVista ? envelope3d?.prismas : undefined}
-      massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3d : undefined}
+      massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3dPorUnidade : undefined}
       pisoDaMassa={blocoSel && pisoDoBlocoSel !== null ? `${blocoSel.id}-${pisoDoBlocoSel}` : null}
-      onPisoDaMassa={(blocoId, indice) => setPisoDaMassa({ blocoId, indice })}
+      unidadeDaMassa={unidadeDoBlocoSel}
+      onPisoDaMassa={(blocoId, indice, unidade) => setPisoDaMassa({ blocoId, indice, unidade: unidade ?? null })}
       sol={solNo3d}
       entorno={hipotesesDeInsolacao.solNo3d ? prismasDoEntornoDoEstudo : undefined}
       relevo={mostrarTerreno3d && terrenoAVista ? relevo3d : null}

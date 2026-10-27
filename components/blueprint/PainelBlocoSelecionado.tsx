@@ -15,6 +15,9 @@
  *
  * Empreendimento (27/10/2026): *"trazer tudo conforme está no empreendimento da aba torres e unidades"* — de qual
  * torre o bloco é, os pavimentos dela × os da planta, o nome de cada pavimento e o "Ajustar ao Empreendimento".
+ *
+ * Unidades (27/10/2026): *"… também de cada unidade em cada pavimento"* — o pavimento escolhido lista as unidades do
+ * Empreendimento naquele andar; a clicada (aqui ou no 3D) mostra os dados dela.
  */
 import React, { useState } from 'react';
 import { ROTULO_DO_ESQUEMA, type DivisaoDoPavimento } from '../../utils/blueprintPavimentoTipoDaMassa';
@@ -23,6 +26,8 @@ import type { Bloco, UsoDoBloco } from '../../utils/blueprintKernel';
 import { MAX_PAVIMENTOS_DO_BLOCO, ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO } from '../../utils/blueprintKernel';
 import { resumoDoPiso, type MedidaDoBloco } from '../../utils/blueprintMassa';
 import type { LinhaDoAjuste, PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
+import { chaveDaUnidade, type UnidadeDoPiso } from '../../utils/blueprintEstruturaDaTorre';
+import { UNIT_STATUS_LABEL } from '../../utils/empreendimentoComercial';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
@@ -35,6 +40,10 @@ interface Props {
   /** O pavimento em destaque (1 = o de baixo); null = nenhum. Clicar no 3D ou nos botões escolhe. */
   pisoSelecionado?: number | null;
   onPiso?: (indice: number | null) => void;
+  /** As unidades do Empreendimento no pavimento escolhido; a escolhida (`chaveDaUnidade`) e a troca. */
+  unidadesDoPiso?: UnidadeDoPiso[];
+  unidadeSelecionada?: string | null;
+  onUnidade?: (chave: string | null) => void;
   /** A torre do Empreendimento casada com o bloco (pelo nome), a comparação e o ajuste de todos os blocos. */
   empreendimento?: {
     nome: string;
@@ -68,7 +77,7 @@ interface Props {
 
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, unidadesDoPiso = [], unidadeSelecionada = null, onUnidade, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   /** De qual ação é o `resultado` — cada seção mostra só o seu. */
@@ -93,6 +102,9 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
   const nomesDosPisos = empreendimento?.papel?.nomesDosPisos;
   const resumo = medida && pisoSelecionado !== null ? resumoDoPiso(medida, pisoSelecionado, nomesDosPisos) : null;
   const linha = empreendimento?.linha ?? null;
+  const unidade = unidadesDoPiso.find((u) => chaveDaUnidade(u) === unidadeSelecionada) ?? null;
+  const ORIENTACAO: Record<string, string> = { NORTE: 'Norte', SUL: 'Sul', LESTE: 'Leste', OESTE: 'Oeste' };
+  const POSICAO: Record<string, string> = { FRENTE: 'frente', LATERAL: 'lateral', FUNDOS: 'fundos' };
   const ESTADO_DA_LINHA: Record<LinhaDoAjuste['estado'], string> = { OK: 'confere', AJUSTAR: 'a ajustar', SEM_BLOCO: 'sem bloco', SEM_PAVIMENTOS: 'sem pavimentos' };
   const FONTE: Record<LinhaDoAjuste['fonte'], string> = { CADASTRO: 'pelo cadastro de pavimentos', UNIDADES: 'pelos andares das unidades', FLOORS_COUNT: 'pelo número de pavimentos da torre', NENHUMA: 'sem dados' };
   return (
@@ -246,6 +258,54 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
             </div>
           ) : (
             <p className="text-slate-500">Clique num pavimento no 3D, ou escolha acima, para ver os dados dele.</p>
+          )}
+          {resumo && unidadesDoPiso.length > 0 && onUnidade && (
+            <div className="space-y-1" data-testid="unidades-do-pavimento">
+              <p className="font-semibold text-slate-700">Unidades deste pavimento ({unidadesDoPiso.length})</p>
+              <div className="flex flex-wrap gap-1" role="group" aria-label="Unidades do pavimento">
+                {unidadesDoPiso.map((u) => {
+                  const chave = chaveDaUnidade(u);
+                  const ativa = chave === unidadeSelecionada;
+                  return (
+                    <button
+                      key={chave}
+                      type="button"
+                      aria-pressed={ativa}
+                      onClick={() => onUnidade(ativa ? null : chave)}
+                      title={[u.tipologia, u.areaPrivativaM2 ? `${n2(u.areaPrivativaM2)} m²` : null].filter(Boolean).join(' · ') || undefined}
+                      className={`rounded-md border px-1.5 py-0.5 font-medium transition-colors ${
+                        ativa ? 'border-amber-500 bg-amber-500 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                      }`}
+                    >
+                      {u.nome}
+                    </button>
+                  );
+                })}
+              </div>
+              {unidade ? (
+                <ul className="space-y-0.5 text-slate-600" data-testid="unidade-escolhida">
+                  <li className="font-semibold text-slate-700">
+                    Unidade {unidade.nome}
+                    {unidade.tipologia ? ` · ${unidade.tipologia}` : ''}
+                  </li>
+                  <li>
+                    {unidade.areaPrivativaM2 ? `${n2(unidade.areaPrivativaM2)} m² privativos` : 'Sem área privativa no cadastro'}
+                    {unidade.dormitorios ? ` · ${unidade.dormitorios} dorm.` : ''}
+                    {unidade.vagas ? ` · ${unidade.vagas} vaga(s)` : ''}
+                  </li>
+                  {(unidade.orientacao || unidade.posicao) && (
+                    <li>
+                      {unidade.orientacao ? `Sol: ${ORIENTACAO[unidade.orientacao] ?? unidade.orientacao}` : ''}
+                      {unidade.orientacao && unidade.posicao ? ' · ' : ''}
+                      {unidade.posicao ? `Posição: ${POSICAO[unidade.posicao] ?? unidade.posicao}` : ''}
+                    </li>
+                  )}
+                  {unidade.status && <li>Situação: {UNIT_STATUS_LABEL[unidade.status as keyof typeof UNIT_STATUS_LABEL] ?? unidade.status}</li>}
+                </ul>
+              ) : (
+                <p className="text-slate-500">Clique numa unidade no 3D, ou escolha acima, para ver os dados dela.</p>
+              )}
+            </div>
           )}
         </div>
       )}

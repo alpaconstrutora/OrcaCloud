@@ -12,6 +12,7 @@ import PainelBlocoSelecionado from '../../components/blueprint/PainelBlocoSeleci
 import type { Bloco } from '../../utils/blueprintKernel';
 import type { MedidaDoBloco, PisoDoBloco } from '../../utils/blueprintMassa';
 import type { LinhaDoAjuste } from '../../utils/blueprintAjusteAoEmpreendimento';
+import type { UnidadeDoPiso } from '../../utils/blueprintEstruturaDaTorre';
 
 const BLOCO = { id: 'b1', uid: 'u-b1', levelId: 'l0', nome: 'Torre A', uso: 'RESIDENCIAL', pontos: [{ x: 0, y: 0 }, { x: 1, y: 0 }, { x: 1, y: 1 }], cotaBaseMm: 0, pavimentos: 6, peDireitoMm: 3000 } as unknown as Bloco;
 const piso = (indice: number): PisoDoBloco => ({ indice, baseMm: (indice - 1) * 3000, topoMm: indice * 3000, subsolo: false, ordinal: indice, acimaDoGabarito: false, motivoDoGabarito: null, pecasDoEnvelope: [], cabe: true, areaForaMm2: 0, afastamentoMm: null });
@@ -20,9 +21,15 @@ const MEDIDA: MedidaDoBloco = {
   baseMm: 0, topoMm: 18000, alturaM: 18, pisos: [1, 2, 3, 4, 5, 6].map(piso), pisosAcimaDoGabarito: 0, pisosForaDoEnvelope: 0, apoiadoEm: null,
 };
 const LINHA: LinhaDoAjuste = { torre: 'Torre A', fonte: 'UNIDADES', acima: 4, garagens: 2, alturaAcimaM: 13.5, blocoNome: 'Torre A', pavimentosNaPlanta: 6, garagensNaPlanta: 0, estado: 'AJUSTAR' };
-const PAPEL = { torre: 'Torre A', tipo: 'TORRE' as const, nomesDosPisos: ['Térreo', 'Pavimento 1', 'Pavimento 2', 'Pavimento 3'] };
+const PAPEL = { torre: 'Torre A', tipo: 'TORRE' as const, nomesDosPisos: ['Térreo', 'Pavimento 1', 'Pavimento 2', 'Pavimento 3'], pisos: [] };
+const un = (id: string, nome: string, tipologia: string, area: number, extra: Partial<UnidadeDoPiso> = {}): UnidadeDoPiso => ({
+  id, nome, tipologia, areaPrivativaM2: area, dormitorios: null, vagas: null, orientacao: null, posicao: null, status: null, ...extra,
+});
+const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
-const montar = (extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null } = {}) =>
+const montar = (
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void } = {},
+) =>
   render(
     <PainelBlocoSelecionado
       bloco={BLOCO}
@@ -32,6 +39,9 @@ const montar = (extra: { pendentes?: number; onAjustar?: () => Promise<string | 
       onAbrirEstudo={vi.fn()}
       pisoSelecionado={extra.piso ?? null}
       onPiso={vi.fn()}
+      unidadesDoPiso={extra.unidades ?? []}
+      unidadeSelecionada={extra.unidade ?? null}
+      onUnidade={extra.onUnidade ?? vi.fn()}
       empreendimento={{
         nome: '011 - Garden Cambuhy',
         papel: PAPEL,
@@ -70,5 +80,25 @@ describe('painel do bloco › Empreendimento', () => {
     const b = screen.getByTestId('ajustar-ao-empreendimento');
     expect(b).toBeDisabled();
     expect(b).toHaveAttribute('title', expect.stringContaining('já seguem'));
+  });
+
+  it('o pavimento lista as unidades do Empreendimento naquele andar; clicar escolhe (27/10/2026)', async () => {
+    const onUnidade = vi.fn();
+    montar({ piso: 2, unidades: DO_1O, onUnidade });
+    const lista = screen.getByTestId('unidades-do-pavimento');
+    expect(lista).toHaveTextContent('Unidades deste pavimento (2)');
+    expect(screen.getByTestId('unidades-do-pavimento')).toHaveTextContent('Clique numa unidade no 3D');
+    await userEvent.click(screen.getByRole('button', { name: '102' }));
+    expect(onUnidade).toHaveBeenLastCalledWith('u102');
+  });
+
+  it('a unidade escolhida mostra os dados do cadastro', () => {
+    montar({ piso: 2, unidades: DO_1O, unidade: 'u101' });
+    expect(screen.getByRole('button', { name: '101' })).toHaveAttribute('aria-pressed', 'true');
+    const d = screen.getByTestId('unidade-escolhida');
+    expect(d).toHaveTextContent('Unidade 101 · Tipo 3');
+    expect(d).toHaveTextContent('127,00 m² privativos · 3 dorm. · 2 vaga(s)');
+    expect(d).toHaveTextContent('Sol: Norte · Posição: frente');
+    expect(d).toHaveTextContent('Situação: Disponível');
   });
 });

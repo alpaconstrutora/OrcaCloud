@@ -44,8 +44,8 @@ describe('massaDoEmpreendimento com a estrutura das torres (27/10/2026)', () => 
   const est = (nome: string, acima: number, garagens: number) => ({
     torreId: nome,
     nome,
-    acima: Array.from({ length: acima }, (_, i) => ({ numero: i, nome: `P${i}`, tipo: null, peDireitoMm: null })),
-    garagens: Array.from({ length: garagens }, (_, i) => ({ numero: -garagens + i, nome: `G${i}`, tipo: null, peDireitoMm: null })),
+    acima: Array.from({ length: acima }, (_, i) => ({ numero: i, nome: `P${i}`, tipo: null, peDireitoMm: null, unidades: [] })),
+    garagens: Array.from({ length: garagens }, (_, i) => ({ numero: -garagens + i, nome: `G${i}`, tipo: null, peDireitoMm: null, unidades: [] })),
     fonte: 'UNIDADES' as const,
     avisos: [],
   });

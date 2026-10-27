@@ -16,7 +16,8 @@ import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, Floo
 
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
   Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m'>> & {
-    units?: Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'>[];
+    units?: (Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'> &
+      Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order'>>)[];
   };
 
 export interface PisoDaTorre {
@@ -26,6 +27,28 @@ export interface PisoDaTorre {
   tipo: FloorTipo | null;
   /** Piso a piso em mm; null = nem o pavimento nem a torre dizem. */
   peDireitoMm: number | null;
+  /** As unidades do Empreendimento neste andar (27/10/2026), na ordem da aba — a massa divide o andar nelas. */
+  unidades: UnidadeDoPiso[];
+}
+
+/** Uma unidade do Empreendimento como a massa da Planta a identifica. */
+export interface UnidadeDoPiso {
+  id: string | null;
+  nome: string;
+  tipologia: string | null;
+  areaPrivativaM2: number | null;
+  dormitorios: number | null;
+  vagas: number | null;
+  orientacao: string | null;
+  posicao: string | null;
+  status: string | null;
+}
+
+type PisoSemUnidades = Omit<PisoDaTorre, 'unidades'>;
+
+/** A chave de uma unidade na Planta (o 3D e o painel combinam por ela): o id, ou o nome quando não há id. */
+export function chaveDaUnidade(u: Pick<UnidadeDoPiso, 'id' | 'nome'>): string {
+  return u.id ?? u.nome;
 }
 
 export type FonteDaEstrutura = 'CADASTRO' | 'UNIDADES' | 'FLOORS_COUNT' | 'NENHUMA';
@@ -55,8 +78,8 @@ export function nomeDaGaragem(torre: string): string {
 
 const emMm = (m: number | null | undefined) => (m == null || !Number.isFinite(Number(m)) ? null : Math.round(Number(m) * 1000));
 
-function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null): PisoDaTorre[] {
-  const out: PisoDaTorre[] = [];
+function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null): PisoSemUnidades[] {
+  const out: PisoSemUnidades[] = [];
   const visto = new Set<number>();
   for (const fl of [...pavimentos].sort((a, b) => a.sort_order - b.sort_order || a.floor_number - b.floor_number)) {
     const reps = Math.max(1, fl.repeat_count || 1);
@@ -71,7 +94,7 @@ function doCadastro(pavimentos: EmpreendimentoFloor[], padraoMm: number | null):
   return out;
 }
 
-function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number | null): PisoDaTorre[] {
+function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number | null): PisoSemUnidades[] {
   const tipos = new Map<number, Map<FloorTipo, number>>();
   for (const u of t.units ?? []) {
     if (typeof u.floor !== 'number' || !Number.isFinite(u.floor)) continue;
@@ -83,7 +106,7 @@ function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number |
   const andares = [...tipos.keys()];
   const min = Math.min(...andares);
   const max = Math.max(...andares);
-  const out: PisoDaTorre[] = [];
+  const out: PisoSemUnidades[] = [];
   for (let n = min; n <= max; n++) {
     const m = tipos.get(n);
     if (!m) avisos.push(`Torre "${t.name}": andar ${n} sem unidade — entra na torre mesmo assim.`);
@@ -93,23 +116,41 @@ function dasUnidades(t: TorreParaEstrutura, avisos: string[], padraoMm: number |
   return out;
 }
 
+/** As unidades do andar, na ordem da aba (sort_order, depois o nome com número). */
+function unidadesDoAndar(t: TorreParaEstrutura, andar: number): UnidadeDoPiso[] {
+  return (t.units ?? [])
+    .filter((u) => u.floor === andar)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0) || (a.name ?? '').localeCompare(b.name ?? '', 'pt-BR', { numeric: true }))
+    .map((u, k) => ({
+      id: u.id ?? null,
+      nome: u.name?.trim() || `Unidade ${k + 1}`,
+      tipologia: u.typology ?? null,
+      areaPrivativaM2: typeof u.private_area === 'number' && u.private_area > 0 ? u.private_area : null,
+      dormitorios: u.bedrooms ?? null,
+      vagas: u.parking_spaces ?? null,
+      orientacao: u.sun_orientation ?? null,
+      posicao: u.position_type ?? null,
+      status: u.status ?? null,
+    }));
+}
+
 export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: EmpreendimentoFloor[]): EstruturaDaTorre {
   const avisos: string[] = [];
   let fonte: FonteDaEstrutura = 'NENHUMA';
-  let pisos: PisoDaTorre[] = [];
+  let semUnidades: PisoSemUnidades[] = [];
   const padraoMm = emMm(t.pe_direito_padrao_m);
   if (pavimentos.length > 0) {
     fonte = 'CADASTRO';
-    pisos = doCadastro(pavimentos, padraoMm);
+    semUnidades = doCadastro(pavimentos, padraoMm);
   } else {
-    pisos = dasUnidades(t, avisos, padraoMm);
-    if (pisos.length > 0) fonte = 'UNIDADES';
+    semUnidades = dasUnidades(t, avisos, padraoMm);
+    if (semUnidades.length > 0) fonte = 'UNIDADES';
     else if (typeof t.floors_count === 'number' && t.floors_count >= 1) {
       fonte = 'FLOORS_COUNT';
-      pisos = Array.from({ length: Math.round(t.floors_count) }, (_, n) => ({ numero: n, nome: nomeDoAndar(n, null), tipo: null, peDireitoMm: padraoMm }));
+      semUnidades = Array.from({ length: Math.round(t.floors_count) }, (_, n) => ({ numero: n, nome: nomeDoAndar(n, null), tipo: null, peDireitoMm: padraoMm }));
     }
   }
-  pisos.sort((a, b) => a.numero - b.numero);
+  const pisos: PisoDaTorre[] = semUnidades.sort((a, b) => a.numero - b.numero).map((p) => ({ ...p, unidades: unidadesDoAndar(t, p.numero) }));
   const acima = pisos.filter((p) => p.numero >= 0);
   const garagens = pisos.filter((p) => p.numero < 0);
 

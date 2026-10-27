@@ -116,3 +116,24 @@ describe('pé-direito por pavimento (27/10/2026)', () => {
   });
 });
 
+describe('as unidades de cada andar (27/10/2026)', () => {
+  it('cada piso leva as unidades do andar dele, na ordem da aba', () => {
+    const e = estruturaDaTorre(
+      {
+        id: 't',
+        name: 'Torre A',
+        units: [
+          { id: 'u2', name: '102', floor: 1, floor_tipo: 'TIPO', typology: 'Tipo 4', private_area: 127, sort_order: 1 },
+          { id: 'u1', name: '101', floor: 1, floor_tipo: 'TIPO', typology: 'Tipo 3', private_area: 127, sort_order: 0, sun_orientation: 'NORTE' },
+          { id: 'u0', name: '002', floor: 0, floor_tipo: 'TERREO', typology: 'Tipo 4', private_area: 127 },
+          { id: 'ac', name: 'Área Comum Horizontal', floor: 0, floor_tipo: null },
+        ] as never,
+      },
+      [],
+    );
+    expect(e.acima[0].unidades.map((u) => [u.nome, u.areaPrivativaM2])).toEqual([['002', 127], ['Área Comum Horizontal', null]]);
+    expect(e.acima[1].unidades.map((u) => u.nome)).toEqual(['101', '102']);
+    expect(e.acima[1].unidades[0]).toMatchObject({ id: 'u1', tipologia: 'Tipo 3', orientacao: 'NORTE' });
+  });
+});
+

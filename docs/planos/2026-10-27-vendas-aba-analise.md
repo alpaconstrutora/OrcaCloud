@@ -64,6 +64,19 @@ VGV vendido de toda a carteira é R$ 0.
 | "Copiar link" encostava na borda a 390 px | A linha dos botões quebra |
 | Link de "Todos" (sem `emp=`) abria o recorte salvo no navegador — **herdado de Locações** | Link sem `emp` = Todos, nas DUAS telas |
 
+## Pedido seguinte (27/10/2026)
+
+Pergunta: *"Quer que eu passe a regra 'com contrato' para esses cards [da aba Imóveis] e para a aba Resultados também?"* — resposta do usuário: **"sim"**.
+
+| # | O que muda | Arquivos | Como sei que terminou |
+|---|---|---|---|
+| 7 | Classificador único de unidade (`saleUnitClassifier`) exportado pela lib; Análise, Imóveis e Resultados usam ele | `lib/salesAnalysis.ts` | 16 testes da lib seguem verdes |
+| 8 | Cards da aba Imóveis = `groupSalesAnalysis` (mestre: carteira inteira; edifício: as unidades dele) | `components/SalesModule.tsx` | Na tela: mestre 11/42 · R$ 3.255.000 · 26,2% — igual à Análise; Bella Vista 7/8 · 87,5% — igual à linha dela |
+| 9 | Aba Resultados: vendidas/abertas por `saleDealStage`, unidades pelas folhas + classificador, `commercial_deal_units` carregado sempre, unidade oculta (`visible_in_sales=false`) fora | `services/salesDashboardService.ts`, `components/SalesDashboard.tsx` | Na tela, Bella Vista: VGV vendido R$ 3.255.000; Estoque 7/8 (antes 7/9 — contava a unidade oculta) |
+| 10 | `biConvergence.test.ts`: a regra antiga fica nomeada como a do BI; bloco novo trava a regra das telas | `__tests__/biConvergence.test.ts` | verde |
+
+- [x] 7 · [x] 8 · [x] 9 · [x] 10 — tsc 0 erros; 41 testes da lib + convergência verdes; `check-ui-standard` limpo em `SalesModule`/`SalesDashboard`.
+
 ### Pendente de decisão do usuário
 
-- Os cards da aba **Imóveis** (Estoque, VGV Vendido, Sell-Through…) continuam com a regra antiga (só Concluído): mostram VGV vendido R$ 0 enquanto a Análise mostra R$ 3,26 mi. Trocar para a mesma regra muda uma tela fora do pedido — perguntar.
+- **BI ainda conta só Concluído:** `vw_fact_deal.is_vgv`, as views executivas (`20260708000002`) e as RPCs de convergência (`20260710000003`) — além do card "Volume em Vendas" de `CommercialModule.tsx:403`. Com a regra nova nas telas de Venda de Ativos, esses números divergem (BI R$ 0 × telas R$ 3,26 mi). Mudar view SQL = migration — perguntar antes.

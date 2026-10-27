@@ -6,7 +6,12 @@
  * ou se afastar da definição canônica das views SQL (vw_fact_*).
  *
  * Regras fixadas:
- *   VGV         = deals com type='SALE' AND status='COMPLETED'
+ *   VGV (BI)    = deals com type='SALE' AND status='COMPLETED' (vw_fact_deal.is_vgv)
+ *   VGV (telas de Venda de Ativos — Análise, Imóveis, Resultados) = negociação
+ *               em Contrato, Assinatura ou Concluído (decisão do usuário,
+ *               27/10/2026; `saleDealStage` em lib/salesAnalysis.ts). As
+ *               views de BI ainda não seguem — divergência conhecida, levada
+ *               ao usuário no PR #200.
  *   Receita     = dre_group='RECEITA_BRUTA'  (sem rec. financeira / venda de ativo)
  *   EBITDA      = RB − deduções − custos diretos − despesas adm/comercial
  *   Divergência = ROUND(divergencias / (recebidos + divergencias) * 100, 1)
@@ -15,6 +20,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { kpiService } from '../services/kpiService';
+import { saleDealStage } from '../lib/salesAnalysis';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Helpers — espelham a lógica dos services sem acesso ao Supabase
@@ -29,7 +35,9 @@ interface Deal {
     value: number;
 }
 
-/** Espelho de salesDashboardService — filtra VGV (decisão: type='SALE' AND status='COMPLETED') */
+/** Espelho da regra de BI (vw_fact_deal.is_vgv) — type='SALE' AND status='COMPLETED'.
+ *  `salesDashboardService` deixou de seguir esta regra em 27/10/2026: ver o
+ *  bloco "Venda de Ativos" abaixo, que testa a função real. */
 function computeVGV(deals: Deal[]): number {
     return deals
         .filter(d => d.type === 'SALE' && d.status === 'COMPLETED')
@@ -147,7 +155,7 @@ describe('kpiService — arredondamento (convergência com SQL ROUND(..., 1))', 
 // 2. VGV — só type='SALE' AND status='COMPLETED'
 // ─────────────────────────────────────────────────────────────────────────────
 
-describe('VGV (salesDashboardService) — somente deals type=SALE status=COMPLETED', () => {
+describe('VGV (BI, vw_fact_deal) — somente deals type=SALE status=COMPLETED', () => {
     const deals: Deal[] = [
         { type: 'SALE',   status: 'COMPLETED',      value: 500_000 }, // ✔ conta
         { type: 'SALE',   status: 'COMPLETED',      value: 300_000 }, // ✔ conta
@@ -173,6 +181,18 @@ describe('VGV (salesDashboardService) — somente deals type=SALE status=COMPLET
 
     it('sem deals → VGV = 0 (sem divisão por zero)', () => {
         expect(computeVGV([])).toBe(0);
+    });
+});
+
+describe('VGV (telas de Venda de Ativos) — vendida = com contrato', () => {
+    it('Contrato, Assinatura e Concluído contam; Proposta, Aprovação, Reserva e Cancelado não', () => {
+        const deals = [
+            { status: 'CONTRATO', value: 100 }, { status: 'ASSINATURA', value: 200 }, { status: 'COMPLETED', value: 400 },
+            { status: 'IN_NEGOTIATION', value: 1 }, { status: 'PENDING', value: 1 }, { status: 'RESERVA', value: 1 },
+            { status: 'CANCELLED', value: 1 },
+        ];
+        const vgv = deals.filter(d => saleDealStage(d.status) === 'sold').reduce((a, d) => a + d.value, 0);
+        expect(vgv).toBe(700);
     });
 });
 

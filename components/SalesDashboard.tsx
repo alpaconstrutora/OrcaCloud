@@ -230,8 +230,9 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
 
         {/* Antes o número era `total − disponíveis` sob o rótulo "Unidades
             vendidas" — o que contava reservada como vendida e contradizia o VGV
-            Vendido do card ao lado. Vendida é status SOLD; reservada tem linha
-            própria. */}
+            Vendido do card ao lado. Vendida segue a regra "com contrato"
+            (`saleUnitClassifier`, 27/10/2026): negociação em Contrato,
+            Assinatura ou Concluído, ou unidade SOLD; reservada tem linha própria. */}
         <KpiCard
           shadow={false} size="sm"
           label="Estoque Físico"

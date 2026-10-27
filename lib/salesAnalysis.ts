@@ -79,6 +79,59 @@ const statusDoCadastro = (s?: string | null): string => {
 // Entradas
 // ─────────────────────────────────────────────────────────────────────────────
 
+/** O mínimo que o classificador de unidade precisa de uma negociação. */
+export interface SaleDealRef {
+    id: string;
+    status?: string | null;
+    property_id?: string | null;
+    units?: { property_id: string }[] | null;
+}
+
+const unitIdsOfRef = (d: SaleDealRef): string[] =>
+    d.units && d.units.length > 0
+        ? d.units.map(u => u.property_id)
+        : (d.property_id ? [d.property_id] : []);
+
+/**
+ * Status de venda de cada unidade, pela regra "com contrato" — o ÚNICO lugar
+ * que decide. Usado pela aba Análise, pelos cards da aba Imóveis e pela aba
+ * Resultados (`salesDashboardService`): três telas, uma regra (antes cada uma
+ * tinha a sua, e duas diziam VGV vendido R$ 0 enquanto havia contratos).
+ *
+ * Devolve também a negociação que ocupa cada unidade. Uma unidade tem no
+ * máximo uma negociação ativa (trava no banco desde 11/10/2026); com dado
+ * antigo de mais de uma, a vendida prevalece.
+ */
+export const saleUnitClassifier = (deals: SaleDealRef[]) => {
+    const dealDaUnidade = new Map<string, SaleDealRef>();
+    for (const d of deals) {
+        const etapa = saleDealStage(d.status);
+        if (etapa === 'cancelled') continue;
+        for (const u of unitIdsOfRef(d)) {
+            const k = String(u ?? '').toLowerCase();
+            const atual = dealDaUnidade.get(k);
+            if (!atual || (etapa === 'sold' && saleDealStage(atual.status) !== 'sold')) dealDaUnidade.set(k, d);
+        }
+    }
+    const dealOf = (propertyId: string): SaleDealRef | undefined => dealDaUnidade.get(String(propertyId ?? '').toLowerCase());
+    const statusOf = (p: { id: string; status?: string | null }): SaleUnitStatus => {
+        const d = dealOf(p.id);
+        const cadastro = statusDoCadastro(p.status);
+        if (d && saleDealStage(d.status) === 'sold') return 'sold';
+        if (cadastro === 'SOLD') return 'sold';
+        if (cadastro === 'EXCHANGED') return 'exchanged';
+        if (d || cadastro === 'RESERVED') return 'reserved';
+        if (cadastro === 'AVAILABLE') return 'available';
+        return 'other';
+    };
+    /** Vendida pelo cadastro (`SOLD`), sem negociação vendida — fica fora do VGV. */
+    const soldWithoutDeal = (p: { id: string; status?: string | null }): boolean => {
+        const d = dealOf(p.id);
+        return statusOf(p) === 'sold' && !(d && saleDealStage(d.status) === 'sold');
+    };
+    return { statusOf, dealOf, soldWithoutDeal };
+};
+
 export interface SaleProperty extends PortfolioNode {
     status?: string | null;
     name?: string;
@@ -341,29 +394,10 @@ export const groupSalesAnalysis = (input: GroupSalesAnalysisInput): {
         return b;
     };
 
-    // ── Unidade → negociação que a ocupa ─────────────────────────────────────
-    // Uma unidade tem no máximo uma negociação ativa (trava no banco desde
-    // 11/10/2026). Se vier mais de uma (dado antigo), a vendida prevalece.
-    const dealDaUnidade = new Map<string, SaleDeal>();
-    for (const d of deals) {
-        const etapa = saleDealStage(d.status);
-        if (etapa === 'cancelled') continue;
-        for (const u of unitIdsOf(d)) {
-            const atual = dealDaUnidade.get(key(u));
-            if (!atual || (etapa === 'sold' && saleDealStage(atual.status) !== 'sold')) dealDaUnidade.set(key(u), d);
-        }
-    }
-
-    const statusDaUnidade = (p: SaleProperty): SaleUnitStatus => {
-        const d = dealDaUnidade.get(key(p.id));
-        const cadastro = statusDoCadastro(p.status);
-        if (d && saleDealStage(d.status) === 'sold') return 'sold';
-        if (cadastro === 'SOLD') return 'sold';
-        if (cadastro === 'EXCHANGED') return 'exchanged';
-        if (d || cadastro === 'RESERVED') return 'reserved';
-        if (cadastro === 'AVAILABLE') return 'available';
-        return 'other';
-    };
+    // ── Unidade → negociação que a ocupa, e o status de venda ────────────────
+    const classificador = saleUnitClassifier(deals);
+    const statusDaUnidade = classificador.statusOf;
+    const dealDaUnidade = { get: (k: string) => classificador.dealOf(k) as SaleDeal | undefined };
 
     // ── Imóveis ──────────────────────────────────────────────────────────────
     // Folhas decididas UMA vez, sobre a lista inteira (mesmo cuidado de
@@ -431,7 +465,7 @@ export const groupSalesAnalysis = (input: GroupSalesAnalysisInput): {
         for (const p of b.leaves) {
             const s = statusDaUnidade(p);
             unitStatus[s]++;
-            if (s === 'sold' && !(dealDaUnidade.get(key(p.id)) && saleDealStage(dealDaUnidade.get(key(p.id))!.status) === 'sold')) soldWithoutDeal++;
+            if (classificador.soldWithoutDeal(p)) soldWithoutDeal++;
             if (s === 'reserved' || s === 'available' || s === 'other') {
                 const preco = tablePriceOf(p);
                 if (preco > 0) vgvUnsold += preco;

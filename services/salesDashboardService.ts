@@ -7,6 +7,8 @@
 // `property_id`; lá qualquer status aparece, aqui só COMPLETED contava.
 import { supabase } from '../lib/supabase';
 import { WORKFLOW_STEPS, STATUS_LABELS, normalizeStatus, type DealWorkflowStatus } from '../lib/dealWorkflow';
+import { saleUnitClassifier, saleDealStage } from '../lib/salesAnalysis';
+import { leafNodes } from '../lib/rentalPortfolio';
 
 export interface DashboardMetrics {
   vgvTotal: number;
@@ -48,7 +50,11 @@ export const salesDashboardService = {
       //    abaixo — só serve para casar negociação.
       let propertiesQuery = supabase
         .from('commercial_properties')
-        .select('id, parent_id, initial_price, price, status, purpose');
+        .select('id, parent_id, initial_price, price, status, purpose')
+        // Unidade ocultada pelo "Publicar" do Espelho de Vendas não é oferta —
+        // o mesmo corte de `commercialService.listProperties`. Sem ele, esta aba
+        // dizia "7 / 9" onde a Análise e os cards de Imóveis dizem "7 / 8".
+        .not('visible_in_sales', 'is', false);
       if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
 
       if (projectId) {
@@ -59,26 +65,11 @@ export const salesDashboardService = {
       if (propertiesError) throw propertiesError;
 
       const isSalePurpose = (p: { purpose?: string | null }) => !p.purpose || p.purpose === 'SALE' || p.purpose === 'BOTH';
-      const statusOf = (p: { status?: string | null }) => String(p.status).toUpperCase();
 
       // Unidades do edifício (o master, quando veio junto, não é estoque).
       const rawSalesProps = (properties || [])
         .filter(isSalePurpose)
         .filter(p => !projectId || p.id !== projectId);
-
-      // Excluir unidades permutadas da base de cálculo (não são estoque para venda)
-      const salesProps = rawSalesProps.filter(p => {
-        const s = statusOf(p);
-        return s !== 'EXCHANGED' && s !== 'PERMUTADO';
-      });
-      const vgvTotal = salesProps.reduce((sum, p) => sum + (Number(p.initial_price) || Number(p.price) || 0), 0);
-      const unidadesTotal = salesProps.length;
-      const unidadesDisponiveis = salesProps.filter(p => {
-        const s = statusOf(p);
-        return s === 'AVAILABLE' || s === 'DISPONÍVEL' || s === 'DISPONIVEL';
-      }).length;
-      const unidadesReservadas = salesProps.filter(p => ['RESERVED', 'RESERVADO'].includes(statusOf(p))).length;
-      const unidadesVendidas = salesProps.filter(p => ['SOLD', 'VENDIDO'].includes(statusOf(p))).length;
 
       // Escopo de negociação: TODAS as properties do edifício (inclusive o master e
       // as permutadas, que saem só do estoque). É o que a aba Negociações usa.
@@ -94,45 +85,71 @@ export const salesDashboardService = {
       const { data: deals, error: dealsError } = await dealsQuery;
       if (dealsError) throw dealsError;
 
-      // Unidades de cada negociação (contrato multi-unidade). Sem isso, um negócio
-      // cuja unidade principal é de outro prédio — ou que não tem property_id — não
-      // casaria com o edifício, embora a aba Negociações o mostre. Best-effort: se a
-      // tabela não existir/estiver bloqueada, cai no property_id, como era antes.
+      // Unidades de cada negociação (contrato multi-unidade). Servem a duas
+      // coisas: casar o negócio com o edifício (a unidade principal pode ser de
+      // outro prédio, ou faltar) e saber QUAL unidade a negociação ocupa — sem
+      // isso o status de venda da unidade não sai (27/10/2026). Por isso carrega
+      // sempre, não só com edifício aberto. Best-effort: sem a tabela, cai no
+      // property_id, como era antes.
       const dealIds = (deals || []).map(d => d.id as string);
       const unitPropertyIdsByDeal = new Map<string, string[]>();
-      if (projectId && dealIds.length > 0) {
-        try {
+      try {
+        for (let i = 0; i < dealIds.length; i += 150) {
           const { data: dealUnits, error: unitsError } = await supabase
             .from('commercial_deal_units')
             .select('deal_id, property_id')
-            .in('deal_id', dealIds);
+            .in('deal_id', dealIds.slice(i, i + 150));
           if (unitsError) throw unitsError;
           for (const u of (dealUnits || []) as { deal_id: string; property_id: string }[]) {
             const list = unitPropertyIdsByDeal.get(u.deal_id) || [];
             list.push(u.property_id);
             unitPropertyIdsByDeal.set(u.deal_id, list);
           }
-        } catch (e) {
-          console.warn('[Dashboard] commercial_deal_units indisponível, casando só por property_id:', e);
         }
+      } catch (e) {
+        console.warn('[Dashboard] commercial_deal_units indisponível, casando só por property_id:', e);
       }
+      const unitsOf = (d: { id: unknown; property_id?: unknown }): string[] => {
+        const ids = [...(unitPropertyIdsByDeal.get(d.id as string) || [])];
+        if (d.property_id && !ids.includes(d.property_id as string)) ids.push(d.property_id as string);
+        return ids;
+      };
 
       // Filter deals by project if needed — mesmo critério de SalesModule.buildingDeals
       const filteredDeals = projectId
-        ? (deals || []).filter(d => {
-            const ids = unitPropertyIdsByDeal.get(d.id as string) || [];
-            if (d.property_id) ids.push(d.property_id as string);
-            return ids.some(id => dealScopeIds.has(id));
-          })
+        ? (deals || []).filter(d => unitsOf(d).some(id => dealScopeIds.has(id)))
         : deals || [];
 
-      // VGV = apenas vendas (type='SALE') concluídas — locação/permuta excluída
-      const completedDeals = filteredDeals.filter(d => d.status === 'COMPLETED' && d.type === 'SALE');
-      const vgvVendido = completedDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+      // ⚠️ "Vendida" = negociação em Contrato, Assinatura ou Concluído, ou
+      // unidade SOLD — a regra da aba Análise e dos cards de Imóveis
+      // (`saleUnitClassifier`, lib/salesAnalysis.ts; decisão do usuário,
+      // 27/10/2026). Até aqui só Concluído contava: com nenhuma negociação lá,
+      // esta aba dizia VGV vendido R$ 0 com 7 contratos assinados ou em assinatura.
+      const classificador = saleUnitClassifier(filteredDeals.map(d => ({
+        id: d.id as string,
+        status: d.status as string,
+        units: unitsOf(d).map(property_id => ({ property_id })),
+      })));
 
-      // Negociações abertas: tudo que não concluiu nem foi cancelado. É o número que
-      // faltava — sem ele a tela mostrava R$ 0 tendo milhões em pipeline.
-      const openDeals = filteredDeals.filter(d => d.status !== 'COMPLETED' && d.status !== 'CANCELLED');
+      // Unidades = FOLHAS da carteira (o edifício com unidades não é unidade),
+      // a mesma base da aba Análise. Permutadas saem da base vendável.
+      const salesProps = leafNodes(rawSalesProps as { id: string; parent_id?: string | null }[])
+        .filter(p => classificador.statusOf(p as { id: string; status?: string | null }) !== 'exchanged') as typeof rawSalesProps;
+      const vgvTotal = salesProps.reduce((sum, p) => sum + (Number(p.initial_price) || Number(p.price) || 0), 0);
+      const unidadesTotal = salesProps.length;
+      const contarStatus = (alvo: string) =>
+        salesProps.filter(p => classificador.statusOf(p as { id: string; status?: string | null }) === alvo).length;
+      const unidadesDisponiveis = contarStatus('available');
+      const unidadesReservadas = contarStatus('reserved');
+      const unidadesVendidas = contarStatus('sold');
+
+      // VGV vendido = negociações de venda com contrato (vendidas).
+      const soldDeals = filteredDeals.filter(d => saleDealStage(d.status as string) === 'sold');
+      const vgvVendido = soldDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
+
+      // Negociações abertas: Proposta, Aprovação e Reserva. Sem elas a tela
+      // mostrava R$ 0 tendo milhões em pipeline.
+      const openDeals = filteredDeals.filter(d => saleDealStage(d.status as string) === 'open');
       const vgvEmNegociacao = openDeals.reduce((sum, d) => sum + (Number(d.value) || 0), 0);
 
       // 3. Fetch Proposals for the broker ranking (Graceful error handling)
@@ -168,7 +185,7 @@ export const salesDashboardService = {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
       
-      const salesLast30Days = completedDeals.filter(d => new Date(d.date) >= thirtyDaysAgo).length;
+      const salesLast30Days = soldDeals.filter(d => new Date(d.date) >= thirtyDaysAgo).length;
       const vsoMensal = unidadesTotal > 0 ? (salesLast30Days / unidadesTotal) * 100 : 0;
       const vsoTarget = 6.0;
 
@@ -191,7 +208,7 @@ export const salesDashboardService = {
         const mIdx = dDate.getMonth();
         const yIdx = dDate.getFullYear();
         
-        const monthDeals = completedDeals.filter(d => {
+        const monthDeals = soldDeals.filter(d => {
           const dealDate = new Date(d.date);
           return dealDate.getMonth() === mIdx && dealDate.getFullYear() === yIdx;
         });
@@ -202,7 +219,7 @@ export const salesDashboardService = {
         const monthlyPlanejado = (vgvTotal / periodMonths) * (i + 1);
         
         // Cumulative Real
-        const previousMonthsDeals = completedDeals.filter(d => {
+        const previousMonthsDeals = soldDeals.filter(d => {
             const dealDate = new Date(d.date);
             return (dealDate.getFullYear() < yIdx) || (dealDate.getFullYear() === yIdx && dealDate.getMonth() < mIdx);
         });
@@ -264,9 +281,9 @@ export const salesDashboardService = {
             { id: '1', name: 'Nenhum dado', leads: 0, sales: 0, vgv: 0, responseTime: '---' }
         ],
         distratos: filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length,
-        reprovacaoCredito: completedDeals.length + filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length > 0
+        reprovacaoCredito: soldDeals.length + filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length > 0
           ? (filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length
-             / (completedDeals.length + filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length)) * 100
+             / (soldDeals.length + filteredDeals.filter(d => d.status === 'CANCELLED' && d.type === 'SALE').length)) * 100
           : 0
       };
     } catch (error) {

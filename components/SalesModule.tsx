@@ -1521,32 +1521,31 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         });
     }, [searchedBuildingDeals, properties, clients, dealsColumns.sortColumn, dealsColumns.sortDirection, empreendimentoByProperty]);
 
+    /**
+     * Cards da aba Imóveis — a MESMA conta da aba Análise (`groupSalesAnalysis`),
+     * com a regra "vendida = com contrato" (decisão do usuário, 27/10/2026).
+     * Antes daqui, "vendido" era só a etapa Concluído: com nenhuma das 14
+     * negociações lá, o VGV Vendido mostrava R$ 0 e contradizia a Análise.
+     *
+     * Recorte: dentro de um edifício, as unidades dele (com a busca); na visão
+     * mestre, a carteira inteira — `filteredProperties` ali só tem os edifícios,
+     * e contar edifício como unidade era outro desvio da conta antiga.
+     */
     const stats = useMemo(() => {
-        // Filtrar unidades vendáveis (excluir permutas da base estratégica)
-        const vendaveis = filteredProperties.filter(p => p.status !== PropertyStatus.EXCHANGED);
-        const soldUnitsCount = vendaveis.filter(p => p.status === PropertyStatus.SOLD).length;
-        const totalVendavel = vendaveis.length;
-        
-        const vgvRealizado = buildingDeals
-            .filter(d => d.type === 'SALE' && d.status === 'COMPLETED')
-            .reduce((acc, d) => acc + (Number(d.value) || 0), 0);
-            
-        const vgvRemanescente = vendaveis
-            .filter(p => p.status === PropertyStatus.AVAILABLE)
-            .reduce((acc, p) => acc + (Number(p.price || p.initial_price) || 0), 0);
-            
-        const sellThrough = totalVendavel > 0 ? (soldUnitsCount / totalVendavel) * 100 : 0;
-        const ticketMedio = soldUnitsCount > 0 ? vgvRealizado / soldUnitsCount : 0;
-
+        const total = groupSalesAnalysis({
+            properties: selectedBuildingId ? filteredProperties : properties,
+            deals: buildingDeals,
+            empreendimentoByProperty: {},
+        }).total;
         return {
-            totalVendavel,
-            soldUnitsCount,
-            vgvRealizado,
-            vgvRemanescente,
-            sellThrough: sellThrough.toFixed(1),
-            ticketMedio
+            totalVendavel: total.sellableCount,
+            soldUnitsCount: total.soldCount,
+            vgvRealizado: total.vgvSold,
+            vgvRemanescente: total.vgvUnsold,
+            sellThrough: total.soldRate == null ? '—' : `${(total.soldRate * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`,
+            ticketMedio: total.ticket,
         };
-    }, [filteredProperties, buildingDeals]);
+    }, [selectedBuildingId, filteredProperties, properties, buildingDeals]);
 
     const handleBulkUpdate = async (updates: Partial<Property>) => {
         if (selectedProperties.length === 0) return;
@@ -2195,9 +2194,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                     <KpiCard shadow={false} size="sm" label="Estoque (und)" value={`${stats.soldUnitsCount} / ${stats.totalVendavel}`} icon={<Building2 className="w-4 h-4" />} color="blue" />
                     <KpiCard shadow={false} size="sm" label="VGV Vendido" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRealizado)} icon={<DollarSign className="w-4 h-4" />} color="emerald" />
-                    <KpiCard shadow={false} size="sm" label="Sell-Through" value={`${stats.sellThrough}%`} icon={<Percent className="w-4 h-4" />} color="purple" />
+                    <KpiCard shadow={false} size="sm" label="Sell-Through" value={stats.sellThrough} icon={<Percent className="w-4 h-4" />} color="purple" />
                     <KpiCard shadow={false} size="sm" label="VGV Remanescente" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.vgvRemanescente)} icon={<Target className="w-4 h-4" />} color="amber" />
-                    <KpiCard shadow={false} size="sm" label="Ticket Médio" value={new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
+                    <KpiCard shadow={false} size="sm" label="Ticket Médio" value={stats.ticketMedio == null ? '—' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(stats.ticketMedio)} icon={<TrendingUp className="w-4 h-4" />} color="cyan" />
                 </div>
             )}
 

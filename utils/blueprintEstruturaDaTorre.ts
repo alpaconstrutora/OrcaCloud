@@ -19,10 +19,10 @@
 // entre as elevações. Plano: docs/planos/2026-10-27-elevacao-do-pavimento.md.
 
 import { compararNaOrdemDoEmpreendimento } from './empreendimentoOrdemDasUnidades';
-import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, FloorTipo } from '../types/empreendimento';
+import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, FloorTipo, OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
-  Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m' | 'elevacao_terreo_m'>> & {
+  Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m' | 'elevacao_terreo_m' | 'ordem_das_unidades_na_planta'>> & {
     units?: (Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'> &
       Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order'>>)[];
   };
@@ -78,6 +78,8 @@ export interface EstruturaDaTorre {
   garagens: PisoDaTorre[];
   fonte: FonteDaEstrutura;
   avisos: string[];
+  /** Como a Planta arruma as unidades desta torre, pelo Empreendimento (28/10/2026). Ausente = POSICAO. */
+  ordemDasUnidades?: OrdemDasUnidadesNaPlanta;
 }
 
 /** O nome do andar sem cadastro: o do estudo declarado ("Térreo", "Pavimento N"), e "Garagem N" na garagem. */
@@ -312,7 +314,7 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
       break;
     }
   }
-  return { torreId: t.id, nome: t.name, acima, garagens, fonte, avisos };
+  return { torreId: t.id, nome: t.name, acima, garagens, fonte, avisos, ordemDasUnidades: t.ordem_das_unidades_na_planta === 'SETAS' ? 'SETAS' : 'POSICAO' };
 }
 
 /**

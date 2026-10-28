@@ -22,6 +22,7 @@
 import type { BlueprintModel, Command, ObjectId, Point, UsoDoBloco } from './blueprintKernel';
 import { nomeDaGaragem, type EstruturaDaTorre, type PisoDaTorre } from './blueprintEstruturaDaTorre';
 import type { BlocoProposto } from './blueprintGeradorDeMassa';
+import type { OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 import { afastamentoNecessario, distanciaEntrePoligonosMm, transladar } from './blueprintDistanciaEntreTorres';
 
 /** A distância que o Empreendimento pede entre duas torres (ids de `EstruturaDaTorre.torreId`), em mm. */
@@ -73,6 +74,8 @@ export interface PapelDoBloco {
   nomesDosPisos: string[];
   /** Os pisos do Empreendimento neste bloco, de baixo para cima, com as unidades de cada um (27/10/2026). */
   pisos: PisoDaTorre[];
+  /** Como a torre manda arrumar as unidades na Planta (28/10/2026) — Torres e Unidades › Unidades. */
+  ordemDasUnidades?: OrdemDasUnidadesNaPlanta;
 }
 
 interface Mudanca {
@@ -214,7 +217,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
       const alvo: BlocoParaAjuste = { nome, pontos: b.pontos, cotaBaseMm: cota, pavimentos: t.pisos.length, peDireitoMm: t.pd, uso: b.uso, levelId: b.levelId };
       const j = ehTopo ? i : acharNosso(nome, `${b.nome} · ${t.pisos[0].nome}`);
       if (colocar(j, alvo)) mudou = true;
-      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'TORRE', nomesDosPisos: t.pisos.map((p) => p.nome), pisos: t.pisos });
+      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'TORRE', nomesDosPisos: t.pisos.map((p) => p.nome), pisos: t.pisos, ordemDasUnidades: e.ordemDasUnidades });
       cota += t.pisos.length * t.pd;
     });
     const alturaAcimaM = Math.round(cota / 10) / 100;
@@ -229,7 +232,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
       const alvo: BlocoParaAjuste = { nome, pontos: b.pontos, cotaBaseMm: cotaG, pavimentos: t.pisos.length, peDireitoMm: t.pd, uso: 'GARAGEM', levelId: b.levelId };
       const j = acharNosso(nome, ehTopo ? nomeDaGaragem(b.nome) : `${b.nome} · ${t.pisos[0].nome}`);
       if (colocar(j, alvo)) mudou = true;
-      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'GARAGEM', nomesDosPisos: t.pisos.map((p) => p.nome), pisos: t.pisos });
+      if (j >= 0) papeis.set(j, { torre: e.nome, tipo: 'GARAGEM', nomesDosPisos: t.pisos.map((p) => p.nome), pisos: t.pisos, ordemDasUnidades: e.ordemDasUnidades });
       cotaG += t.pisos.length * t.pd;
     });
     if (e.garagens.length === 0) {

@@ -26,7 +26,7 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { useToast } from '../../hooks/useToast';
 import { useUnsavedChanges } from '../../hooks/useUnsavedChanges';
 import {
-  EmpreendimentoTower, EmpreendimentoUnit, EmpreendimentoFloor, FloorTipo, EmpreendimentoUnitInsert,
+  EmpreendimentoTower, EmpreendimentoUnit, EmpreendimentoFloor, FloorTipo, EmpreendimentoUnitInsert, OrdemDasUnidadesNaPlanta,
   UnitPositionType, UnitSunOrientation, UnitViewType, RentalUnitStatus,
 } from '../../types';
 import UnitFormFields, {
@@ -87,6 +87,8 @@ interface Props {
   /** Pavimentos cadastrados na torre (FloorEditor) — base de "Gerar a partir dos pavimentos". */
   floors?: EmpreendimentoFloor[];
   onUnitsChange?: (towerId: string, units: EmpreendimentoUnit[]) => void;
+  /** A torre mudou aqui (28/10/2026: como a Planta arruma as unidades) — o pai atualiza a lista sem recarregar (§22). */
+  onTowerChange?: (towerId: string, campos: Partial<EmpreendimentoTower>) => void;
 }
 
 // ── Componente principal ─────────────────────────────────────────────────────
@@ -94,7 +96,7 @@ interface Props {
 /** Estável: o padrão `[]` novo a cada render refaria o cálculo da elevação a cada render. */
 const SEM_PAVIMENTOS: EmpreendimentoFloor[] = [];
 
-export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, onUnitsChange }) => {
+export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, onUnitsChange, onTowerChange }) => {
   const confirm = useConfirm();
   const [units, setUnits] = React.useState<EmpreendimentoUnit[]>([]);
   const [loading, setLoading] = React.useState(true);
@@ -336,8 +338,33 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
     } catch (err: any) { notify(`Erro ao excluir: ${err.message}`, 'error'); }
   };
 
+  // ── Como a Planta arruma as unidades desta torre (28/10/2026) ───────────────
+  // "implemente opção de ordenação de duas maneiras pelas setas ou pela posição. O usuário escolhe" — decisão: "Nos
+  // dois". Aqui é o padrão da torre (`ordem_das_unidades_na_planta`); na Planta, cada usuário pode trocar só para si.
+  const [ordemNaPlanta, setOrdemNaPlanta] = React.useState<OrdemDasUnidadesNaPlanta>(tower.ordem_das_unidades_na_planta === 'SETAS' ? 'SETAS' : 'POSICAO');
+  React.useEffect(() => {
+    setOrdemNaPlanta(tower.ordem_das_unidades_na_planta === 'SETAS' ? 'SETAS' : 'POSICAO');
+  }, [tower.ordem_das_unidades_na_planta]);
+  const [gravandoOrdemNaPlanta, setGravandoOrdemNaPlanta] = React.useState(false);
+  const escolherOrdemNaPlanta = async (ordem: OrdemDasUnidadesNaPlanta) => {
+    if (ordem === ordemNaPlanta) return;
+    const antes = ordemNaPlanta;
+    setOrdemNaPlanta(ordem);
+    setGravandoOrdemNaPlanta(true);
+    try {
+      await empreendimentoService.updateTower(tower.id, { ordem_das_unidades_na_planta: ordem });
+      onTowerChange?.(tower.id, { ordem_das_unidades_na_planta: ordem });
+      notify(`${tower.name}: a Planta arruma as unidades ${ordem === 'SETAS' ? 'pelas setas' : 'pela posição'}.`);
+    } catch (err: any) {
+      setOrdemNaPlanta(antes);
+      notify(`Erro ao gravar a escolha: ${err.message}`, 'error');
+    } finally {
+      setGravandoOrdemNaPlanta(false);
+    }
+  };
+
   // ── Ordem das unidades no pavimento ─────────────────────────────────────────
-  // A ordem MANUAL da massa da Planta (27/10/2026, "Ordem do Empreendimento"): as setas trocam a unidade com a
+  // A ordem MANUAL da massa da Planta (27/10/2026; "Pelas setas" desde 28/10/2026): as setas trocam a unidade com a
   // vizinha; "Ordenar por número" grava a ordem automática. Só pela coluna Pavimento: com a tabela ordenada por
   // outra coluna, a posição na tela não é a do pavimento.
   const [ordenando, setOrdenando] = React.useState(false);
@@ -536,6 +563,34 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
         </>}
       />
 
+      {/* Como a Planta Inteligente arruma as unidades desta torre no pavimento (28/10/2026). */}
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-testid="ordem-na-planta">
+        <span className="font-semibold text-slate-600">Na Planta Inteligente, arrumar as unidades:</span>
+        <div className="flex gap-1" role="group" aria-label="Como a Planta arruma as unidades desta torre">
+          {([['POSICAO', 'Pela posição'], ['SETAS', 'Pelas setas']] as const).map(([ordem, rotulo]) => (
+            <span key={ordem} title={gravandoOrdemNaPlanta ? 'Gravando a escolha…' : undefined}>
+              <button
+                type="button"
+                aria-pressed={ordemNaPlanta === ordem}
+                disabled={gravandoOrdemNaPlanta}
+                onClick={() => escolherOrdemNaPlanta(ordem)}
+                className={`rounded-[6px] border px-2 py-1 font-medium transition-colors disabled:pointer-events-none ${
+                  ordemNaPlanta === ordem ? 'border-blue-600 bg-blue-600 text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-blue-200 hover:text-blue-600'
+                }`}
+              >
+                {rotulo}
+              </button>
+            </span>
+          ))}
+        </div>
+        <span className="text-slate-500">
+          {ordemNaPlanta === 'SETAS'
+            ? 'Na ordem das setas ↑↓ de cada pavimento: a 1ª metade numa fileira, a 2ª na outra. Posição e Orientação não mudam a Planta.'
+            : 'Pela Posição e a Orientação de cada unidade; sem elas, pelo número (101, 102…). As setas ↑↓ não mudam a Planta.'}
+          {' '}Cada usuário pode trocar só para si, na Planta.
+        </span>
+      </div>
+
       {/* Tabela */}
       {loading ? (
         <div className="flex justify-center py-8"><Loader2 className="w-6 h-6 animate-spin text-blue-600" /></div>
@@ -654,7 +709,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                             : mudancas.length === 0 ? 'O pavimento já está na ordem pelo número'
                             : null;
                           return (
-                            <span title={motivo ?? 'Grava a ordem pelo número (101, 102…) — a que a massa da Planta segue em "Ordem do Empreendimento"'}>
+                            <span title={motivo ?? 'Grava a ordem pelo número (101, 102…) — a que a massa da Planta segue "Pelas setas"'}>
                               <button
                                 type="button"
                                 disabled={motivo !== null}

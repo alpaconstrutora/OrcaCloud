@@ -96,10 +96,14 @@ const OPCOES_MODO_DE_COR: readonly OpcaoDeExibicao[] = [
   { valor: 'DEPARTAMENTO', rotulo: 'Departamento (setor)' },
 ];
 
-/** Valores = `ArrumacaoDasUnidades` (utils/blueprintUnidadesNoPavimento). */
+/**
+ * Valores = `EscolhaDaArrumacao` (utils/blueprintUnidadesNoPavimento). 28/10/2026: "Do Empreendimento" (o padrão) segue
+ * a escolha de cada torre em Torres e Unidades; as outras duas valem só para quem escolheu.
+ */
 export const OPCOES_UNIDADES_NO_PAVIMENTO: readonly OpcaoDeExibicao[] = [
-  { valor: 'AUTOMATICA', rotulo: 'Automática (pelo número)' },
-  { valor: 'EMPREENDIMENTO', rotulo: 'Ordem do Empreendimento' },
+  { valor: 'DO_EMPREENDIMENTO', rotulo: 'Do Empreendimento' },
+  { valor: 'AUTOMATICA', rotulo: 'Pela posição' },
+  { valor: 'EMPREENDIMENTO', rotulo: 'Pelas setas' },
 ];
 
 /** A ORDEM do array é a ordem das linhas na tela (a do menu Exibir, grupo a grupo). */
@@ -161,7 +165,7 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
     grupo: '3D',
     tipo: 'opcao',
     opcoes: OPCOES_UNIDADES_NO_PAVIMENTO,
-    padrao: 'AUTOMATICA',
+    padrao: 'DO_EMPREENDIMENTO',
   },
 
   // ── Estilos ───────────────────────────────────────────────────────────────────────────

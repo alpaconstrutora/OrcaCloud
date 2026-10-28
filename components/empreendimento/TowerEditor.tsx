@@ -284,6 +284,10 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     setUnitsByTower(prev => ({ ...prev, [towerId]: units }));
   }, []);
 
+  const handleTowerChange = React.useCallback((towerId: string, campos: Partial<EmpreendimentoTower>) => {
+    setTowers(prev => prev.map(t => (t.id === towerId ? { ...t, ...campos } : t)));
+  }, []);
+
   const handleFloorsChange = React.useCallback((towerId: string, floors: EmpreendimentoFloor[]) => {
     setFloorsByTower(prev => ({ ...prev, [towerId]: floors }));
   }, []);
@@ -591,7 +595,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                     <FloorEditor tower={tower} onFloorsChange={handleFloorsChange} unidades={unitsByTower[tower.id]} />
                   </section>
                   <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Unidades" data-testid="secao-unidades">
-                    <UnitEditor tower={tower} floors={floorsByTower[tower.id]} onUnitsChange={handleUnitsChange} />
+                    <UnitEditor tower={tower} floors={floorsByTower[tower.id]} onUnitsChange={handleUnitsChange} onTowerChange={handleTowerChange} />
                   </section>
                 </fieldset>
               </TorreCard>

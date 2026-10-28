@@ -164,7 +164,7 @@ describe('ReconciliationDashboard — textos (passo 4)', () => {
         const c = conta({ difference: 0, pending_value: 2000, pending_count: 2 });
         servico.getDashboard.mockResolvedValue(dashboard(c));
         render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
-        const card = (await screen.findByText('A conciliar', { selector: 'p' })).parentElement as HTMLElement;
+        const card = (await screen.findByText('A conciliar', { selector: 'p' })).closest('div.rounded-xl') as HTMLElement;
         expect(card).toHaveTextContent(/2\.000,00/);
         expect(card).toHaveTextContent('2 lançamentos do extrato');
     });

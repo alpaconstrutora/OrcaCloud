@@ -146,7 +146,10 @@ export function KpiCard({
                     <span className="truncate">{value}</span>
                     {tom !== 'neutro' && <span className="sr-only">{tom === 'alerta' ? '(alerta)' : '(atenção)'}</span>}
                 </p>
-                {sub && <p className="mt-1 text-xs text-gray-500 truncate">{sub}</p>}
+                {/* Quebra em vez de cortar: no destaque a legenda é a BASE do número (§4.5) — em
+                    Conciliação › Dashboard ela nomeia as contas que não batem, e no celular o corte
+                    escondia os nomes (o `title` não existe no toque). */}
+                {sub && <p className="mt-1 text-xs text-gray-500 [text-wrap:pretty]">{sub}</p>}
                 {acao && (
                     <button
                         type="button"

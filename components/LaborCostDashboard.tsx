@@ -6,6 +6,7 @@ import {
 } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { payrollService, PayrollRun } from '../services/payrollService';
+import { ehFolhaComCusto } from '../utils/folhaDaCompetencia';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 
 // Colunas da tabela padrão (§6.10)
@@ -37,8 +38,10 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
         try {
             setLoading(true);
             const data = await payrollService.listRuns(orgId);
-            // Agora permitimos RASCUNHO para validação prévia de custos por obra
-            const filtered = data.filter(r => ['FECHADO', 'RASCUNHO'].includes(r.status));
+            // Mesma regra do Dashboard RH (utils/folhaDaCompetencia): mensal FECHADO ou
+            // PROCESSANDO. O filtro antigo pedia FECHADO/RASCUNHO — RASCUNHO não existe,
+            // então as folhas em processamento sumiam — e deixava passar adiantamento.
+            const filtered = data.filter(ehFolhaComCusto);
             setRuns(filtered);
             if (filtered.length > 0) {
                 setSelectedRun(filtered[0]);
@@ -88,7 +91,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
             {/* 1. Título */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">Custo por Obra</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Análise de custos consolidados por obra, baseada na folha fechada.</p>
+                <p className="text-gray-400 text-sm mt-1.5 font-medium">Análise de custos consolidados por obra, baseada na folha mensal (fechada ou em processamento).</p>
             </div>
 
             {/* Header / Filter */}
@@ -109,6 +112,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                         {runs.map(r => (
                             <option key={r.id} value={r.id}>
                                 {new Date(r.start_date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                {r.status !== 'FECHADO' && ' (em processamento)'}
                                 {!orgId && ` - [${r.org_id?.substring(0, 8)}]`}
                             </option>
                         ))}

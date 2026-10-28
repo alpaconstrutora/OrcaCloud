@@ -24,6 +24,10 @@ Depois do passo 1:
 
 > siga para o passo 2
 
+Depois do passo 2:
+
+> comece
+
 Respostas do passo 2 (shape), transcritas:
 
 > "O RH tem quatro painéis … Que papel cada um deve ter?"="3 painéis, cada um 1 pergunta (Recomendado)"
@@ -39,9 +43,9 @@ Respostas do passo 2 (shape), transcritas:
 | # | Comando | Assunto | Estado |
 |---|---|---|---|
 | 1 | harden | `rh_kpis`: "Todas", pertencimento, alertas vencidos, turnover, absenteísmo | ✅ PR #240 (`41e0ac9`), 28/10 |
-| 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | em andamento (brief confirmado 28/10) |
-| 3 | harden | custo do mês = folha da competência + apontamento | pendente |
-| 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba) | pendente |
+| 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | ✅ PR #243 (`813334c`), 28/10 |
+| 3 | harden | custo do mês = folha da competência + apontamento | em andamento |
+| 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto) | pendente |
 | 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | pendente |
 | 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | pendente |
 
@@ -148,7 +152,10 @@ teclado/contraste (6).
       "permission denied"; foto de org alheia → "Acesso negado".
 - [x] Aplicada; ACL de `rh_kpis_calcular` = `{postgres, service_role}`; 26 fotos com
       `dias_uteis` preenchido.
-- [ ] BI Analytics RH em produção mostra turnover 5,3% em out/26 para a Alpa.
+- [x] BI Analytics RH em produção (Alpa): histórico até ago/26 já pela conta nova
+      (HC 9→9, 0 adm/0 dem, 0%). ~~Mostra 5,3% em out/26~~ — reescrito: não há foto
+      de out/26 gravada (só o botão "Snapshot do mês" gera, e ele grava; não cliquei).
+      A foto de out/26 no ensaio deu 5,3% = Dashboard RH.
 
 ### 2.2 Tela
 
@@ -164,8 +171,73 @@ teclado/contraste (6).
   no passo 3); alerta de pontos pendentes.
 
 **Como sei que terminou:**
-- [ ] Menu "Visão Geral" do RH com 2 itens; `#/labor-dashboard` abre o Dashboard RH.
-- [ ] Alpa sem meta cadastrada: Turnover e Absenteísmo mostram "Definir meta" e
+- [x] Menu "Visão Geral" do RH com 2 itens; `#/labor-dashboard` abre o Dashboard RH
+      (item ativo no menu; o texto do endereço não é reescrito — mesmo comportamento
+      do redirecionamento de Treinamentos).
+- [x] Alpa sem meta cadastrada: Turnover e Absenteísmo mostram "Definir meta" e
       nenhum veredito; "Todas": nenhum veredito.
 - [x] `tsc` 0 erros; `check-ui-standard.sh` limpo nos 4 `.tsx`; testes de
       laborService/org/segurança/prefixo verdes.
+
+**Conferido em produção (28/10/2026, `813334c`).** Achado para o passo 4: no BI
+Analytics, "Headcount atual 9" é o número da ÚLTIMA FOTO (ago/26), não de hoje (10).
+
+## Passo 3 — custo pela folha, horas pelo apontamento
+
+Fatos do banco (28/10/2026) que decidiram o desenho:
+- **Não há folha de outubro**: a mais recente é set/26 (Alpa e SPE, `PROCESSANDO`).
+  A folha de um mês só é calculada no seguinte → "custo do mês corrente" pela folha
+  quase nunca existe. (A crítica disse "4 folhas em outubro" — errado.)
+- Status que existem: `FECHADO` e `PROCESSANDO`. O Custo por Obra filtrava
+  `FECHADO`/`RASCUNHO` → as folhas da Alpa (jul–set, todas `PROCESSANDO`) sumiam; e
+  deixava passar `adiantamento`, cujo custo está na mensal.
+- A folha não tem evento de hora extra; `time_entries` (apontamento) tem 0 linhas.
+- `payroll_results.employer_cost` não inclui CPP/RAT/terceiros; o Custo por Obra
+  (`getWorksiteCostSummary` → `custoPorDestino`) inclui. Uma conta só = a dele.
+
+Decisões tomadas por padrão (avisadas ao usuário): competência = **a última com
+folha mensal** até hoje, com o rótulo "folha de set/26 · em processamento"; folha
+`PROCESSANDO` entra (com o rótulo), porque é o único custo que existe.
+
+### 3.1 Regra das folhas — `utils/folhaDaCompetencia.ts`
+
+**O que muda:** `ehFolhaComCusto` (mensal + FECHADO/PROCESSANDO) e
+`folhasDaCompetencia` (última competência ≤ referência; uma folha por org, FECHADA
+vence). Usada pelo Dashboard RH e pelo Custo por Obra.
+
+**Como sei que terminou:**
+- [x] `__tests__/folhaDaCompetencia.test.ts` 8/8 (escrito antes da implementação).
+
+### 3.2 Serviço — `payrollService.custoDaFolhaDaCompetencia(org, ref)`
+
+**O que muda:** escolhe as folhas pela regra e soma `getWorksiteCostSummary` de
+cada uma (total, por obra, não alocado). Sem folha → `null`.
+
+**Como sei que terminou:**
+- [x] Testes da folha (22 arquivos, 179 testes) verdes.
+- [ ] Em produção, Alpa: "Custo da folha" = total do Custo por Obra de set/26.
+
+### 3.3 Migration `20271028790000_rh_kpis_horas_do_apontamento.sql`
+
+**O que muda:** `rh_kpis_calcular` devolve também `horas_trabalhadas` e
+`apontamentos` (aprovados no mês).
+
+**Como sei que terminou:**
+- [x] Aplicada; Alpa → `apontamentos 0`, turnover 5,3% inalterado; ACL fechada.
+
+### 3.4 Tela
+
+**O que muda:**
+- Dashboard RH: "Custo MO Aprovado (horas aprovadas)" → **"Custo da folha"**
+  (folha de set/26 · em processamento · N organizações em "Todas"), leva ao Custo por
+  Obra. Gráfico "Custo da folha por obra — set/26" (+ "Administrativo / sem obra").
+  Horas extras: "—" e "sem apontamento aprovado no mês" quando não há apontamento;
+  com apontamento, "% de Nh trabalhadas" e veredito pela meta `horas_extras_max_pct`.
+- Custo por Obra: mesma regra de folhas (entram as `PROCESSANDO`, sai adiantamento),
+  "(em processamento)" no seletor.
+
+**Como sei que terminou:**
+- [ ] Produção, Alpa: Custo da folha ≠ R$ 0, rótulo "folha de set/26 · em
+      processamento"; Horas extras "—"; gráfico com as obras da folha.
+- [ ] Produção: Custo por Obra lista set/26 da Alpa.
+- [x] `tsc` 0; `check-ui-standard.sh` limpo nos 3 `.tsx`.

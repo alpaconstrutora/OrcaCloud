@@ -349,7 +349,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                         <LaborRHDashboard
                             orgId={orgId}
                             employees={employees}
-                            costSummary={costSummary}
                             pontosPendentes={pendingEntries.length}
                             onNavigate={onChangeView}
                             organizations={organizations}

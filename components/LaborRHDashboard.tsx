@@ -119,16 +119,22 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
         staleTime: STALE.normal,
     });
 
-    // Distribuição por função (dos colaboradores ativos locais)
+    // Distribuição por função (dos colaboradores ativos locais). Conta cada um uma
+    // vez e na organização em que é REGISTRADO, como rh_kpis: a lista traz também
+    // compartilhados de outra org (employee_org_shares), que somavam 12 × 10 ativos.
     const byRole = React.useMemo(() => {
+        const unicos = new Map<string, Employee>();
+        employees
+            .filter(e => e.status === 'ATIVO' && (!orgId || e.org_id === orgId))
+            .forEach(e => unicos.set(e.id, e));
         const map = new Map<string, number>();
-        employees.filter(e => e.status === 'ATIVO').forEach(e => {
+        unicos.forEach(e => {
             map.set(e.role, (map.get(e.role) || 0) + 1);
         });
         return Array.from(map.entries())
             .map(([label, value]) => ({ label, value }))
             .sort((a, b) => b.value - a.value);
-    }, [employees]);
+    }, [employees, orgId]);
 
     // Custo por obra (do costSummary)
     const byProject = React.useMemo(() =>
@@ -206,7 +212,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                             trend={kpis.periodo.desligados > 0 ? 'up' : 'neutral'} />
                         <div className="col-span-2">
                             <KpiCard label="Turnover" value={`${kpis.periodo.turnover_pct}%`} icon={Activity} color="orange"
-                                sub="desligamentos / headcount"
+                                sub="(admissões + desligamentos) ÷ 2 ÷ headcount médio"
                                 trend={kpis.periodo.turnover_pct > 5 ? 'up' : kpis.periodo.turnover_pct === 0 ? 'neutral' : 'down'}
                                 trendLabel={kpis.periodo.turnover_pct > 5 ? 'Acima do ideal' : kpis.periodo.turnover_pct === 0 ? 'Estável' : 'Saudável'} />
                         </div>
@@ -226,7 +232,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                             trendLabel={kpis.custos.horas_extras > 80 ? 'Elevado' : undefined}
                             onClick={() => onNavigate?.('labor-timetracking')} />
                         <KpiCard label="Absenteísmo" value={`${kpis.qualidade.absenteismo_pct}%`} icon={Calendar} color="rose"
-                            sub="dias ausentes / dias úteis"
+                            sub={`faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`}
                             trend={kpis.qualidade.absenteismo_pct > 4 ? 'up' : 'neutral'}
                             trendLabel={kpis.qualidade.absenteismo_pct > 4 ? 'Acima do ideal' : 'Normal'} />
                     </div>
@@ -239,6 +245,20 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                     <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Alertas Pendentes
                 </h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    {/* Vencido vem primeiro e só quando há: férias vencidas são pagas em
+                        dobro, NR/ASO vencido tira o colaborador da obra. */}
+                    {kpis.alertas.ferias_vencidas > 0 && (
+                        <AlertItem count={kpis.alertas.ferias_vencidas} label="Férias vencidas (pagamento em dobro)"
+                            icon={Umbrella} color="rose" onClick={() => onNavigate?.('labor-absences')} />
+                    )}
+                    {kpis.alertas.docs_vencidos > 0 && (
+                        <AlertItem count={kpis.alertas.docs_vencidos} label="Documentos (ASO/NR) vencidos"
+                            icon={FileText} color="rose" onClick={() => onNavigate?.('labor-documents')} />
+                    )}
+                    {kpis.alertas.treinamentos_vencidos > 0 && (
+                        <AlertItem count={kpis.alertas.treinamentos_vencidos} label="Treinamentos vencidos"
+                            icon={BookOpen} color="rose" onClick={() => onNavigate?.('labor-trainings')} />
+                    )}
                     <AlertItem count={kpis.alertas.treinamentos_vencendo} label="Treinamentos vencendo em 30 dias"
                         icon={BookOpen} color="amber" onClick={() => onNavigate?.('labor-trainings')} />
                     <AlertItem count={kpis.alertas.docs_vencendo} label="Documentos (ASO/NR) vencendo"

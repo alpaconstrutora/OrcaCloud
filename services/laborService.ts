@@ -349,15 +349,28 @@ export interface VacationBalance {
 // (importados acima também, porque as assinaturas abaixo os usam localmente)
 export type { TrainingCategoria, TrainingCourse, EmployeeTraining };
 
+// Fórmulas e regra de "Todas" na migration 20271028740000 (rh_kpis).
 export interface RhKpis {
+    /** Quantas organizações entraram na conta (NULL = todas as do usuário). */
+    organizacoes: number;
     headcount: { total: number; ativos: number; afastados: number; em_ferias: number };
-    periodo: { admitidos: number; desligados: number; turnover_pct: number };
+    periodo: {
+        admitidos: number; desligados: number;
+        headcount_inicio: number; headcount_fim: number;
+        /** ((admitidos + desligados) / 2) / headcount médio * 100 */
+        turnover_pct: number;
+    };
     custos: { custo_mes: number; horas_extras: number };
-    qualidade: { absenteismo_pct: number };
+    /** Dias úteis de 1º do mês até a data de referência. */
+    qualidade: { absenteismo_pct: number; dias_uteis: number };
+    /** `*_vencidos` = data já passou; `*_vencendo` = de hoje até +30 (férias +60). */
     alertas: {
+        treinamentos_vencidos: number;
         treinamentos_vencendo: number;
+        docs_vencidos: number;
         docs_vencendo: number;
         epis_estoque_baixo: number;
+        ferias_vencidas: number;
         ferias_vencendo: number;
     };
 }

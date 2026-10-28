@@ -231,3 +231,12 @@ describe('distância entre torres (28/10/2026)', () => {
     expect(r.linhas.find((l) => l.torre === 'Torre B')?.estado).toBe('OK');
   });
 });
+
+describe('distância 0 = torres encostadas (28/10/2026)', () => {
+  it('pede 0: qualquer distância cumpre — confere ok, mostra no painel e não mexe', () => {
+    const model = plantaDoDia();
+    const r = comandosDoAjuste(model, [TORRE_A, TORRE_B], [{ torreA: 'tA', torreB: 'tB', mm: 0 }]);
+    expect(r.distancias).toEqual([{ torreA: 'Torre A', torreB: 'Torre B', medidaMm: 6000, exigidaMm: 0, ok: true }]);
+    expect(r.linhas.find((l) => l.torre === 'Torre B')?.estado).toBe('OK');
+  });
+});

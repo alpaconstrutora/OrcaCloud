@@ -37,7 +37,7 @@ export function paresDeTorres<T extends TorreDoPar>(torres: readonly T[]): [T, T
 
 const emOrdem = (a: string, b: string): [string, string] => (a < b ? [a, b] : [b, a]);
 
-/** O jsonb do banco, sanitizado: só pares de torres diferentes com distância positiva; o par em ordem. */
+/** O jsonb do banco, sanitizado: só pares de torres diferentes com distância ≥ 0 (0 = encostadas); o par em ordem. */
 export function lerDistancias(valor: unknown): DistanciaEntreTorres[] {
   if (!Array.isArray(valor)) return [];
   const out: DistanciaEntreTorres[] = [];
@@ -46,7 +46,7 @@ export function lerDistancias(valor: unknown): DistanciaEntreTorres[] {
     const { torre_a, torre_b, distancia_m } = v as Record<string, unknown>;
     if (typeof torre_a !== 'string' || typeof torre_b !== 'string' || torre_a === torre_b) continue;
     const m = Number(distancia_m);
-    if (!Number.isFinite(m) || m <= 0) continue;
+    if (!Number.isFinite(m) || m < 0) continue;
     const [a, b] = emOrdem(torre_a, torre_b);
     out.push({ torre_a: a, torre_b: b, distancia_m: m });
   }
@@ -66,10 +66,13 @@ export function comDistancia(lista: readonly DistanciaEntreTorres[], a: string, 
   return metros == null ? resto : [...resto, { torre_a: x, torre_b: y, distancia_m: metros }];
 }
 
-/** "6,50" ou "6.5" → 6.5; vazio → null (sem distância); zero, negativo, acima de 500 m ou não número → false. */
+/**
+ * "6,50" ou "6.5" → 6.5; "0" → 0 (torres encostadas, 28/10/2026); vazio → null (sem distância); negativo, acima de
+ * 500 m ou não número → false.
+ */
 export function lerDistanciaDigitada(texto: string): number | null | false {
   const t = texto.trim().replace(',', '.');
   if (!t) return null;
   const v = Math.round(Number(t) * 100) / 100;
-  return Number.isFinite(v) && v > 0 && v <= DISTANCIA_MAX_ENTRE_TORRES_M ? v : false;
+  return Number.isFinite(v) && v >= 0 && v <= DISTANCIA_MAX_ENTRE_TORRES_M ? v : false;
 }

@@ -442,6 +442,15 @@ describe('gerador de massa · seguir o Empreendimento', () => {
     expect(distanciaEntrePoligonosMm(acima[0].pontos, acima[1].pontos)).toBeGreaterThanOrEqual(12000 - 1);
   });
 
+  it('distância 0 = torres encostadas (28/10/2026): o gerador usa 0, e os blocos saem encostados', () => {
+    const r = gerarMassa(com(lote(40, 80), { torres: 2, pavimentosMin: null, pavimentosMax: null, afastamentoEntreBlocosM: 0 }), 1);
+    expect(r.decisoes.join(' ')).toContain('Afastamento entre blocos: 0 m, a distância entre torres do Empreendimento');
+    expect(r.melhores.length).toBeGreaterThan(0);
+    const acima = r.melhores[0].blocos.filter((b) => b.cotaBaseMm >= 0 && b.uso !== 'GARAGEM');
+    expect(acima.length).toBeGreaterThanOrEqual(2);
+    expect(distanciaEntrePoligonosMm(acima[0].pontos, acima[1].pontos)).toBe(0);
+  });
+
   it('torres do Empreendimento que não cabem lado a lado no envelope: diz em vez de "0 combinações" calado', () => {
     const r = gerarMassa(com(lote(40, 60), { torres: 5, pavimentosMin: null, pavimentosMax: null }), 1);
     expect(r.melhores).toHaveLength(0);

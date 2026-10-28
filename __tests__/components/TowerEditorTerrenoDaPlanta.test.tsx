@@ -88,3 +88,18 @@ describe('Torres & Unidades › Terreno × Planta vinculada', () => {
     expect(campo('Profundidade (m)').value).toBe('');
   });
 });
+
+describe('Torres & Unidades › seções em blocos (28/10/2026, "separe as sessões Terreno e torres")', () => {
+  it('Terreno e Torres são blocos separados, um não contém o outro', async () => {
+    svc.daPlanta.current = PLANTA_OK;
+    montar();
+    const terreno = await screen.findByTestId('secao-terreno');
+    const torres = screen.getByTestId('secao-torres');
+    expect(terreno).toHaveAttribute('aria-label', 'Terreno');
+    expect(torres).toHaveAttribute('aria-label', 'Torres');
+    expect(terreno.contains(torres)).toBe(false);
+    expect(torres.contains(terreno)).toBe(false);
+    expect(terreno.className).toContain('border');
+    expect(torres.className).toContain('border');
+  });
+});

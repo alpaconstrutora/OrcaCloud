@@ -150,6 +150,9 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
   },
   bool('vista3dEnvelope', 'Envelope edificável', '3D', true),
   bool('vista3dMassa', 'Blocos de massa', '3D', true),
+  // Os nomes no 3D (28/10/2026): "Torre A" acima do bloco e "101" no meio de cada unidade.
+  bool('vista3dNomesDosBlocos', 'Nomes dos blocos', '3D', true),
+  bool('vista3dNomesDasUnidades', 'Nomes das unidades', '3D', true),
   // A arrumação das unidades do Empreendimento em cada pavimento da massa (27/10/2026).
   {
     item: 'vista3dUnidadesNoPavimento',

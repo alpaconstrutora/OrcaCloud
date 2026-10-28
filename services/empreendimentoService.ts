@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { unidadesDosPavimentos } from '../utils/empreendimentoUnidadesDosPavimentos';
 import { imovibService } from './imovibService';
 import { commercialService } from './commercialService';
 import {
@@ -1528,36 +1529,14 @@ export const empreendimentoService = {
         }
     },
 
-    async generateUnitsFromFloors(tower: EmpreendimentoTower): Promise<EmpreendimentoUnit[]> {
+    /**
+     * As unidades que os pavimentos descrevem; `numeroInicial` é a 1ª de cada andar (28/10/2026 — 5 → 105, 106…).
+     * A conta mora em utils/empreendimentoUnidadesDosPavimentos (a mesma da prévia da tela).
+     */
+    async generateUnitsFromFloors(tower: EmpreendimentoTower, numeroInicial?: number): Promise<EmpreendimentoUnit[]> {
         const floors = await this.listFloors(tower.id);
         if (!floors.length) throw new Error('Nenhum pavimento cadastrado para esta torre.');
-
-        const toCreate: EmpreendimentoUnitInsert[] = [];
-        for (const fl of floors) {
-            const upf = fl.units_per_floor ?? tower.units_per_floor ?? 1;
-            for (let rep = 0; rep < fl.repeat_count; rep++) {
-                const floorNum = fl.floor_number + rep;
-                const floorLabel = floorNum < 0
-                    ? `SS${Math.abs(floorNum)}`
-                    : floorNum === 0 ? 'TR' : String(floorNum);
-                for (let u = 1; u <= upf; u++) {
-                    const unitNum = String(u).padStart(2, '0');
-                    const pre = fl.prefix ? `${fl.prefix}-` : '';
-                    toCreate.push({
-                        tower_id: tower.id,
-                        floor_id: fl.id,
-                        floor_tipo: fl.tipo,
-                        name: `${pre}${floorLabel}${unitNum}`,
-                        floor: floorNum,
-                        status: 'DISPONIVEL',
-                        is_vendavel: true,
-                        sort_order: toCreate.length,
-                    });
-                }
-            }
-        }
-
-        return this.bulkUpsertUnits(toCreate);
+        return this.bulkUpsertUnits(unidadesDosPavimentos(tower, floors, numeroInicial));
     },
 
     // ── Unidades ─────────────────────────────────────────────────────────────

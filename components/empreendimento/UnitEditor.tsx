@@ -10,6 +10,9 @@
 //   • "Nova unidade" — uma unidade, em painel lateral com os campos rotulados
 //     (era uma grade de 13 inputs sem rótulo acima da tabela).
 // O pedido que originou: docs/planos/2026-10-14-torres-unidades-reorganizacao.md.
+//
+// "Gerar a partir dos pavimentos" abre um painel (28/10/2026) com "Numeração começa em" — a 1ª unidade de cada
+// andar (5 → 105, 106…) — e a prévia por andar, com a mesma conta que grava (utils/empreendimentoUnidadesDosPavimentos).
 import React from 'react';
 import {
   Plus, Loader2, Layers, X, Check, Zap, Home, ListPlus, Hash, Tag,
@@ -36,6 +39,7 @@ import {
 import { useConfirm } from '../ui/confirm';
 import { andaresDoCadastro, estruturaDaTorre } from '../../utils/blueprintEstruturaDaTorre';
 import { fmtElevacao } from './FloorEditor';
+import { faixasPorAndar, lerNumeroInicial, unidadesDosPavimentos as montarUnidadesDosPavimentos, NUMERO_INICIAL_MAX } from '../../utils/empreendimentoUnidadesDosPavimentos';
 import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 
@@ -97,7 +101,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
   const [saving, setSaving] = React.useState(false);
 
   // Painel aberto — um só por vez (UI_PATTERNS §4: nada de drawer sobre drawer).
-  const [painel, setPainel] = React.useState<'nova' | 'serie' | null>(null);
+  const [painel, setPainel] = React.useState<'nova' | 'serie' | 'pavimentos' | null>(null);
+  // "Gerar a partir dos pavimentos": a 1ª unidade de cada andar (texto do campo; vazio = 1).
+  const [numeroInicial, setNumeroInicial] = React.useState('1');
 
   // "Nova unidade"
   const [form, setForm] = React.useState<UnitFormValues>(emptyUnitFormValues());
@@ -399,24 +405,27 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
 
   const totalDosPavimentos = unidadesDosPavimentos(floors, tower);
 
-  const handleGenerateFromFloors = async () => {
+  const abrirGerarDosPavimentos = () => {
     if (floors.length === 0) return;
-    const atuais = units.length;
-    const ok = await confirm({
-      title: `Gerar ${totalDosPavimentos} unidades a partir dos pavimentos?`,
-      message: atuais > 0
-        ? `As ${atuais} unidades atuais de "${tower.name}" serão excluídas e substituídas pelas que os pavimentos descrevem.`
-        : `As unidades de "${tower.name}" serão criadas conforme os pavimentos cadastrados.`,
-      confirmLabel: atuais > 0 ? 'Substituir e gerar' : 'Gerar unidades',
-      variant: 'warning',
-    });
-    if (!ok) return;
+    setNumeroInicial('1');
+    setPainel('pavimentos');
+  };
+  const numeroInicialLido = lerNumeroInicial(numeroInicial);
+  const faixasDaPrevia = React.useMemo(
+    () => (painel === 'pavimentos' && numeroInicialLido !== null ? faixasPorAndar(montarUnidadesDosPavimentos(tower, floors, numeroInicialLido)) : []),
+    [painel, numeroInicialLido, tower, floors],
+  );
+
+  const handleGenerateFromFloors = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (floors.length === 0 || numeroInicialLido === null) return;
     setGenerating(true);
     try {
       await empreendimentoService.deleteUnitsByTower(tower.id);
-      const criadas = await empreendimentoService.generateUnitsFromFloors(tower);
+      const criadas = await empreendimentoService.generateUnitsFromFloors(tower, numeroInicialLido);
       setUnits(criadas);
       setSelected(new Set());
+      setPainel(null);
       notify(`${criadas.length} unidades geradas a partir dos pavimentos.`);
     } catch (err: any) {
       notify(`Erro ao gerar unidades: ${err.message}`, 'error');
@@ -507,7 +516,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
         acoes={<>
           {/* span: botão desabilitado não mostra `title` em todo navegador — o motivo fica no invólucro */}
           <span title={semPavimentos ? motivoSemPavimentos : 'Substitui as unidades desta torre pelas que os pavimentos descrevem'}>
-            <Button variant="secondary" onClick={handleGenerateFromFloors} disabled={semPavimentos || generating}>
+            <Button variant="secondary" onClick={abrirGerarDosPavimentos} disabled={semPavimentos || generating}>
               {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-[15px] h-[15px]" />}
               Gerar a partir dos pavimentos{!semPavimentos ? ` (${totalDosPavimentos})` : ''}
             </Button>
@@ -866,6 +875,61 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
               {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
               Salvar unidade
             </Button>
+          </SheetFooter>
+        </form>
+        </>}
+      </Sheet>
+
+      {/* Painel: Gerar a partir dos pavimentos (28/10/2026) — número inicial + prévia por andar */}
+      <Sheet open={painel === 'pavimentos'} onClose={() => setPainel(null)} size="lg">
+        {painel === 'pavimentos' && <>
+        <SheetHeader onClose={() => setPainel(null)}>
+          <SheetTitle>Gerar a partir dos pavimentos</SheetTitle>
+          <SheetDescription>{tower.name} — as unidades que os pavimentos cadastrados descrevem.</SheetDescription>
+        </SheetHeader>
+        <form onSubmit={handleGenerateFromFloors} className="flex-1 flex flex-col min-h-0">
+          <SheetPanel className="p-6 space-y-6">
+            <div className="space-y-4">
+              <SecaoTitulo icon={Hash} titulo="Numeração" />
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                <div className="space-y-1.5">
+                  <label htmlFor={`pav-inicio-${tower.id}`} className={rotuloCls}>Numeração começa em</label>
+                  <input id={`pav-inicio-${tower.id}`} type="number" min="0" max={NUMERO_INICIAL_MAX} step="1" className={inputCls}
+                    value={numeroInicial} onChange={e => setNumeroInicial(e.target.value)}
+                    aria-invalid={numeroInicialLido === null} aria-describedby={`pav-inicio-ajuda-${tower.id}`} />
+                  <p id={`pav-inicio-ajuda-${tower.id}`} className={`text-xs ${numeroInicialLido === null ? 'text-red-600' : 'text-gray-500'}`}>
+                    {numeroInicialLido === null
+                      ? `Use um número inteiro de 0 a ${NUMERO_INICIAL_MAX}.`
+                      : 'A 1ª unidade de cada andar: 1 → 101, 102…; 5 → 105, 106…'}
+                  </p>
+                </div>
+              </div>
+              {faixasDaPrevia.length > 0 && (
+                <ul className="space-y-0.5 text-xs text-gray-600" data-testid="previa-dos-pavimentos">
+                  {faixasDaPrevia.map(f => (
+                    <li key={f.andar}>
+                      Andar {f.andar}: <span className="font-semibold text-gray-800">{f.de}</span>
+                      {f.quantas > 1 && <> a <span className="font-semibold text-gray-800">{f.ate}</span></>}
+                      <span className="text-gray-500"> ({f.quantas} unid.)</span>
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+            {units.length > 0 && (
+              <p className="rounded-[6px] border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="aviso-substituir">
+                As {units.length} unidades atuais de "{tower.name}" serão excluídas e substituídas pelas geradas.
+              </p>
+            )}
+          </SheetPanel>
+          <SheetFooter>
+            <Button type="button" variant="ghost" onClick={() => setPainel(null)}>Cancelar</Button>
+            <span title={numeroInicialLido === null ? `Use um número inteiro de 0 a ${NUMERO_INICIAL_MAX} em "Numeração começa em".` : undefined}>
+              <Button type="submit" disabled={generating || numeroInicialLido === null}>
+                {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Zap className="w-[15px] h-[15px]" />}
+                {units.length > 0 ? 'Substituir e gerar' : 'Gerar'} {totalDosPavimentos} unidades
+              </Button>
+            </span>
           </SheetFooter>
         </form>
         </>}

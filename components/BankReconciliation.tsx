@@ -75,7 +75,7 @@ type ReconciliationView = 'dashboard' | 'center' | 'divergences' | 'anomalies' |
 
 // Título/subtítulo de tela por aba — guia §20 (toda tela com título tem que TER um título).
 const VIEW_HEADERS: Record<ReconciliationView, { title: string; subtitle: string }> = {
-    dashboard: { title: 'Conciliação Bancária', subtitle: 'Visão geral da automação e saúde da conciliação.' },
+    dashboard: { title: 'Conciliação Bancária', subtitle: 'Se o saldo de cada conta bate com o banco, e o que falta conciliar.' },
     statement: { title: 'Extrato Bancário', subtitle: 'Lançamentos importados do banco, prontos para categorizar e conciliar.' },
     center: { title: 'Central de Conciliação', subtitle: 'Vincule manualmente extrato bancário e lançamentos internos.' },
     divergences: { title: 'Divergências', subtitle: 'Diferenças entre extrato bancário e lançamentos internos.' },

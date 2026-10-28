@@ -41,6 +41,21 @@ describe('entries() — parâmetros da RPC', () => {
     });
 });
 
+describe('aging() — faixas de atraso (2026-10-28)', () => {
+    it('manda base, dimensão e o escopo; converte qtd/valor para número', async () => {
+        rpc.mockClear();
+        rpc.mockResolvedValueOnce({ data: [{ dimension_key: null, faixa: 'mais_90', qtd: '76', valor: '2220292.00', atraso_max: 4139 }], error: null } as never);
+        const linhas = await opuraAnalyticsService.aging('org1', { clientIds: ['a'], dateFrom: '2026-01-01', dateTo: '2026-12-31' }, 'hoje', 'client');
+        const [fn, args] = rpc.mock.calls[0] as [string, Record<string, unknown>];
+        expect(fn).toBe('fn_opura_aging');
+        expect(args).toEqual({
+            p_organization_id: 'org1', p_client_id: null, p_client_ids: ['a'],
+            p_date_from: '2026-01-01', p_date_to: '2026-12-31', p_base: 'hoje', p_dimension: 'client',
+        });
+        expect(linhas[0]).toMatchObject({ faixa: 'mais_90', qtd: 76, valor: 2220292 });
+    });
+});
+
 describe('linha "— Sem …" (chave NULL) — 2026-10-27', () => {
     // Antes: { projectId: undefined } → a RPC lia "sem filtro" e a gaveta
     // "— Sem obra" listava os lançamentos de todas as obras.

@@ -115,6 +115,42 @@ describe('BoletoFormModal — aprovar sem vencimento', () => {
     });
 });
 
+/* 28/10/2026 — docs/planos/2026-10-28-boleto-aprovar-bloqueios.md:
+   Fornecedor, Valor (R$) e Vencimento bloqueiam o "Aprovar e Lançar". */
+describe('BoletoFormModal — aprovar sem fornecedor ou sem valor', () => {
+    const completo = {
+        id: 'b2', organization_id: 'org-1', status: 'revisao', documento_path: 'org-1/2026/d.pdf',
+        documento_nome: 'd.pdf', documento_hash: 'h', supplier_id: 'sup-1', valor: 10, vencimento: '2026-11-10',
+        created_at: '2026-10-01T00:00:00Z',
+    };
+    const abrir = (b: Record<string, unknown>) =>
+        render(<ConfirmProvider><BoletoFormModal organizationId="org-1" boleto={b as never} onClose={vi.fn()} onSaved={vi.fn()} /></ConfirmProvider>);
+
+    it('sem fornecedor: desligado, com o motivo', async () => {
+        abrir({ ...completo, supplier_id: null });
+        const botao = await screen.findByRole('button', { name: /Aprovar e Lançar/i });
+        expect(botao).toBeDisabled();
+        expect(botao.getAttribute('title')).toBe('Selecione um fornecedor antes de aprovar.');
+    });
+
+    it.each([null, 0])('valor %s: desligado, com o motivo', async (valor) => {
+        abrir({ ...completo, valor });
+        const botao = await screen.findByRole('button', { name: /Aprovar e Lançar/i });
+        expect(botao).toBeDisabled();
+        expect(botao.getAttribute('title')).toBe('Informe o valor antes de aprovar — o título nasceria sem valor.');
+    });
+
+    it('apagar o valor na tela desliga o botão sem salvar', async () => {
+        abrir(completo);
+        const botao = await screen.findByRole('button', { name: /Aprovar e Lançar/i });
+        await waitFor(() => expect(botao).not.toBeDisabled());
+        const campoValor = screen.getAllByPlaceholderText('0,00')[0];
+        fireEvent.change(campoValor, { target: { value: '' } });
+        await waitFor(() => expect(botao).toBeDisabled());
+        expect(svc.associar).not.toHaveBeenCalled();
+    });
+});
+
 describe('BoletoFormModal — origem por e-mail e histórico (15/10/2026)', () => {
     const base = {
         id: 'b9', organization_id: 'org-1', status: 'revisao', documento_path: 'org-1/2026/c.pdf',

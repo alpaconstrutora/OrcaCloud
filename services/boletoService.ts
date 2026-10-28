@@ -13,7 +13,7 @@ import { processService } from './processService';
 import { motivoParaNaoPagar } from '../utils/situacaoAprovacaoTitulo';
 import { validateCpfCnpj } from '../lib/validators';
 import { MOTIVO_STATUS_PROGRAMADO, planoDeStatusDoBoleto } from '../utils/boletoStatus';
-import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR } from '../utils/boletoAprovacaoLote';
+import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR, MOTIVO_SEM_VALOR } from '../utils/boletoAprovacaoLote';
 import type {
     Boleto,
     BoletoStatus,
@@ -539,6 +539,11 @@ export const boletoService = {
 
         if (!boletoRow.supplier_id) {
             throw new Error(MOTIVO_SEM_FORNECEDOR);
+        }
+        /* Sem valor o título nasceria zerado em Contas a Pagar (28/10/2026) —
+           a mesma regra que o lote já aplicava (utils/boletoAprovacaoLote.ts). */
+        if (!(Number(boletoRow.valor) > 0)) {
+            throw new Error(MOTIVO_SEM_VALOR);
         }
         // Nome do fornecedor para a descrição/contraparte do título quando o PDF não
         // trouxe beneficiário — antes caía no NOME DO ARQUIVO (16/10/2026).

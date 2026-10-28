@@ -64,6 +64,7 @@ vi.mock('../services/boletoNomeDocumentoService', () => ({
 }));
 
 import { boletoService, MOTIVO_SEM_VENCIMENTO } from '../services/boletoService';
+import { MOTIVO_SEM_VALOR } from '../utils/boletoAprovacaoLote';
 
 const ORG = 'org-1';
 
@@ -95,6 +96,18 @@ describe('aprovar boleto sem vencimento', () => {
     it('o fornecedor continua sendo cobrado primeiro', async () => {
         db.boletos[0].supplier_id = null;
         await expect(boletoService.aprovarECriarInvoice('b1', ORG)).rejects.toThrow(/fornecedor/i);
+    });
+});
+
+/* 28/10/2026 — docs/planos/2026-10-28-boleto-aprovar-bloqueios.md: só o lote
+   conferia o valor; pela página do boleto o título nascia zerado. */
+describe('aprovar boleto sem valor', () => {
+    it.each([null, 0])('valor %s: recusa com MOTIVO_SEM_VALOR e não grava nota nem título', async (valor) => {
+        db.boletos[0].vencimento = '2026-11-10';
+        db.boletos[0].valor = valor;
+        await expect(boletoService.aprovarECriarInvoice('b1', ORG)).rejects.toThrow(MOTIVO_SEM_VALOR);
+        expect(inserts).toHaveLength(0);
+        expect(db.boletos[0].status).toBe('rascunho');
     });
 });
 

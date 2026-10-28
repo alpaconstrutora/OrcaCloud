@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Landmark, ShieldCheck, AlertTriangle, BookOpen, RefreshCw,
-    Check, X, Tag, Receipt, Scale, Building2, HardHat,
+    Check, X, Tag, Receipt, Scale, Building2, HardHat, ArrowRight,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { useConfirm } from './ui/confirm';
+import InformarSaldoBancoSheet from './reconciliation/InformarSaldoBancoSheet';
+import AjustarSaldoInicialSheet from './reconciliation/AjustarSaldoInicialSheet';
 import { reconciliationDashboardService } from '../services/reconciliationDashboardService';
 import { useToast } from '../hooks/useToast';
 import type {
@@ -13,9 +15,32 @@ import type {
     ReconciliationConsolidated,
 } from '../types/financial';
 import { formatMoney as formatBRL, formatDateBR } from './ui/Format';
+import {
+    estadoDoSaldoBanco, resumoDoBanco, sugestoesDeAjuste, contaComMais, ROTULO_ORIGEM,
+} from '../utils/conciliacaoSaldoBanco';
 
 // Tolerância para considerar saldos "batendo" (centavos de arredondamento).
 const EPS = 0.01;
+
+/** Para onde um número do dashboard leva (passo 2 do plano: "todo número leva à ação"). */
+export interface DestinoConciliacao {
+    aba: 'center' | 'pending' | 'divergences' | 'anomalies';
+    contaId?: string;
+    /** Recorte de Pendentes vindo daqui — as MESMAS linhas que o alerta contou. */
+    recorte?: 'tarifas' | 'sem-classificacao';
+    /** Abre a gaveta de Regras da Central já preenchida. */
+    regra?: 'tarifas';
+}
+
+/** Link de ação de um número (guia §4.5): texto azul com seta, só quando há o que fazer. */
+function LinkDeAcao({ children, onClick }: { children: React.ReactNode; onClick: () => void }) {
+    return (
+        <button type="button" onClick={onClick}
+            className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline">
+            {children} <ArrowRight className="w-3.5 h-3.5" />
+        </button>
+    );
+}
 
 interface KPIProps {
     label: string;
@@ -24,8 +49,9 @@ interface KPIProps {
     iconBg: string;
     hint?: string;
     tone?: 'neutral' | 'good' | 'warn';
+    acao?: { label: string; onClick: () => void } | null;
 }
-function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral' }: KPIProps) {
+function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral', acao }: KPIProps) {
     const valueColor =
         tone === 'good' ? 'text-emerald-600'
         : tone === 'warn' ? 'text-amber-600'
@@ -40,6 +66,7 @@ function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral' }: K
                     <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
                     <p className={`text-xl font-black mt-0.5 tabular-nums ${valueColor}`}>{formatBRL(value)}</p>
                     {hint && <p className="text-xs text-gray-400 mt-1 font-medium">{hint}</p>}
+                    {acao && <div className="mt-2"><LinkDeAcao onClick={acao.onClick}>{acao.label}</LinkDeAcao></div>}
                 </div>
             </div>
         </div>
@@ -48,6 +75,8 @@ function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral' }: K
 
 interface ReconciliationDashboardProps {
     organizationId: string | null;
+    /** Sem ele (uso fora da Conciliação), os números não ganham ação. */
+    onIrPara?: (destino: DestinoConciliacao) => void;
 }
 
 /** Texto do erro do Supabase/rede, quando ele diz algo além do genérico. */
@@ -56,7 +85,7 @@ function detalheDoErro(e: unknown): string | null {
     return typeof msg === 'string' && msg.trim() ? msg.trim() : null;
 }
 
-const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ organizationId }) => {
+const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ organizationId, onIrPara }) => {
     const { showToast } = useToast();
     const confirm = useConfirm();
     const [asOf, setAsOf] = useState(new Date().toISOString().split('T')[0]);
@@ -79,6 +108,10 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     // campo, Enter/Esc param de funcionar e a linha fica presa em edição (visto em produção).
     const edicaoRef = useRef<HTMLDivElement>(null);
     const focarCampoDoSaldo = () => requestAnimationFrame(() => edicaoRef.current?.querySelector('input')?.focus());
+
+    // Saldo do banco (passo 2): as duas gavetas abrem por conta.
+    const [informarContaId, setInformarContaId] = useState<string | null>(null);
+    const [ajustarContaId, setAjustarContaId] = useState<string | null>(null);
 
     const load = useCallback(async () => {
         const carga = ++cargaRef.current;
@@ -188,6 +221,29 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     const soBaixado = ledger?.so_baixado_count ?? 0;
     const fees = data?.fees ?? { value: 0, count: 0 };
 
+    // Passo 2: saldo do banco e ação em cada número que preocupa.
+    const contas = data?.accounts ?? [];
+    const banco = resumoDoBanco(contas);
+    const contaPendente = contaComMais(contas, 'pending_count');
+    const contaSemClassificacao = contaComMais(contas, 'unclassified_count');
+    const contaInformar = contas.find(c => c.account_id === informarContaId) ?? null;
+    const contaAjustar = contas.find(c => c.account_id === ajustarContaId) ?? null;
+    const estadoAjustar = contaAjustar ? estadoDoSaldoBanco(contaAjustar) : null;
+
+    const informarSaldo = async (data: string, saldo: number) => {
+        if (!contaInformar) return;
+        await reconciliationDashboardService.informarSaldoDoBanco(contaInformar.account_id, data, saldo);
+        showToast(`Saldo do extrato de ${contaInformar.account_name} gravado`, 'success');
+        await load();
+    };
+
+    const ajustarSaldoInicial = async (saldo: number, dataInicio: string | null) => {
+        if (!contaAjustar) return;
+        await reconciliationDashboardService.setOpeningBalance(contaAjustar.account_id, saldo, dataInicio);
+        showToast(`Saldo inicial de ${contaAjustar.account_name} ajustado`, 'success');
+        await load();
+    };
+
     return (
         <div className="space-y-5 min-h-[500px]">
             {/* Header / filtro */}
@@ -282,6 +338,10 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                     iconBg="bg-amber-50 text-amber-600"
                     tone={Math.abs(totals?.difference ?? 0) > EPS ? 'warn' : 'good'}
                     hint={`${totals?.pending_count ?? 0} lançamento(s) pendente(s)`}
+                    acao={onIrPara && contaPendente ? {
+                        label: `Conciliar ${contaPendente.account_name} na Central`,
+                        onClick: () => onIrPara({ aba: 'center', contaId: contaPendente.account_id }),
+                    } : null}
                 />
                 <KPICard
                     label="Saldo Contábil do Sistema"
@@ -308,6 +368,11 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                         diferença acima não indica vínculo faltando: os dois lados medem coisas diferentes.
                                     </span>
                                 )}
+                                {onIrPara && (
+                                    <span className="block mt-1.5 font-normal">
+                                        <LinkDeAcao onClick={() => onIrPara({ aba: 'divergences' })}>Ver na aba Divergências</LinkDeAcao>
+                                    </span>
+                                )}
                             </p>
                         </div>
                     )}
@@ -325,20 +390,35 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         </div>
                     )}
                     {(totals?.unclassified_count ?? 0) > 0 && (
-                        <div className="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
                             <Tag className="w-4 h-4 text-amber-500 flex-shrink-0" />
                             <p className="text-sm font-semibold text-amber-700">
                                 {totals?.unclassified_count} movimentação(ões) pendente(s) sem classificação.
                             </p>
+                            {onIrPara && contaSemClassificacao && (
+                                <LinkDeAcao onClick={() => onIrPara({ aba: 'pending', contaId: contaSemClassificacao.account_id, recorte: 'sem-classificacao' })}>
+                                    Classificar {contaSemClassificacao.account_name} em Pendentes
+                                </LinkDeAcao>
+                            )}
                         </div>
                     )}
                     {fees.count > 0 && (
-                        <div className="flex items-center gap-3 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
                             <Receipt className="w-4 h-4 text-orange-500 flex-shrink-0" />
                             <p className="text-sm font-semibold text-orange-700">
                                 {fees.count} possível(is) tarifa(s) bancária(s) não contabilizada(s) —{' '}
                                 <span className="font-black tabular-nums">{formatBRL(fees.value)}</span>.
                             </p>
+                            {onIrPara && (
+                                <>
+                                    <LinkDeAcao onClick={() => onIrPara({ aba: 'pending', contaId: contaSemClassificacao?.account_id, recorte: 'tarifas' })}>
+                                        Ver tarifas em Pendentes
+                                    </LinkDeAcao>
+                                    <LinkDeAcao onClick={() => onIrPara({ aba: 'center', contaId: contaSemClassificacao?.account_id, regra: 'tarifas' })}>
+                                        Criar regra
+                                    </LinkDeAcao>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
@@ -349,6 +429,28 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                 <div className="px-5 py-3 border-b border-gray-50">
                     <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Conciliação por Conta Bancária</h5>
                 </div>
+                {/* A resposta direta para "bate com o banco?" — as contas de cada estado, nomeadas. */}
+                {banco.total > 0 && (
+                    <div className="px-5 py-3 border-b border-gray-100 text-sm text-gray-700" role="status">
+                        <p>
+                            <span className="font-semibold text-gray-900">
+                                {banco.bate.length} de {banco.total} {banco.total === 1 ? 'conta bate' : 'contas batem'} com o banco
+                            </span>
+                            {banco.bate.length > 0 && <span className="text-gray-600"> ({banco.bate.join(', ')})</span>}.
+                        </p>
+                        {banco.fora.length > 0 && (
+                            <p className="mt-0.5 text-amber-800">
+                                <AlertTriangle className="inline w-3.5 h-3.5 -mt-0.5 mr-1" aria-hidden="true" />
+                                Não {banco.fora.length === 1 ? 'bate' : 'batem'}: {banco.fora.join(', ')}.
+                            </p>
+                        )}
+                        {banco.sem.length > 0 && (
+                            <p className="mt-0.5 text-gray-600">
+                                O banco não informou o saldo de: {banco.sem.join(', ')}.
+                            </p>
+                        )}
+                    </div>
+                )}
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>
@@ -356,6 +458,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                 <th className="text-left  px-5 py-3">Conta</th>
                                 <th className="text-right px-3 py-3">Saldo Inicial</th>
                                 <th className="text-right px-3 py-3">Saldo Bancário</th>
+                                <th className="text-right px-3 py-3">Saldo no banco</th>
                                 <th className="text-right px-3 py-3">Conciliado</th>
                                 <th className="text-right px-3 py-3">Diferença</th>
                                 <th className="text-right px-3 py-3">Pendentes</th>
@@ -403,6 +506,41 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                             )}
                                         </td>
                                         <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(acc.bank_balance)}</td>
+                                        <td className="px-3 py-3 text-right align-top">
+                                            {(() => {
+                                                const e = estadoDoSaldoBanco(acc);
+                                                const informar = (rotulo: string) => (
+                                                    <button type="button" onClick={() => setInformarContaId(acc.account_id)}
+                                                        className="text-sm font-medium text-blue-700 hover:text-blue-900 hover:underline">
+                                                        {rotulo}
+                                                    </button>
+                                                );
+                                                if (e.tipo === 'sem') return informar('Informar saldo do extrato');
+                                                return (
+                                                    <div className="flex flex-col items-end gap-0.5">
+                                                        <span className="tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.saldo)}</span>
+                                                        <span className="text-xs text-gray-500">em {formatDateBR(e.data)} · {ROTULO_ORIGEM[e.origem]}</span>
+                                                        {e.tipo === 'bate' ? (
+                                                            <span className="inline-flex items-center gap-1 text-xs font-medium text-emerald-700">
+                                                                <Check className="w-3.5 h-3.5" aria-hidden="true" /> bate
+                                                            </span>
+                                                        ) : (
+                                                            <>
+                                                                <span className="text-xs text-amber-800 tabular-nums">
+                                                                    app calcula {formatBRL(e.calculado)}
+                                                                </span>
+                                                                <button type="button" onClick={() => setAjustarContaId(acc.account_id)}
+                                                                    className="inline-flex items-center gap-1 text-xs font-medium text-blue-700 hover:text-blue-900 hover:underline">
+                                                                    Ajustar <ArrowRight className="w-3 h-3" />
+                                                                </button>
+                                                            </>
+                                                        )}
+                                                        {/* OFX e Asaas se atualizam sozinhos; o digitado, a pessoa corrige. */}
+                                                        {e.origem === 'MANUAL' && <span className="text-xs">{informar('Atualizar')}</span>}
+                                                    </div>
+                                                );
+                                            })()}
+                                        </td>
                                         <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-emerald-600">{formatBRL(acc.reconciled_balance)}</td>
                                         <td className={`px-3 py-3 text-right tabular-nums text-sm font-medium ${conciliada ? 'text-gray-300' : 'text-amber-600'}`}>
                                             {conciliada ? '—' : formatBRL(diff)}
@@ -439,13 +577,23 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <ActionIconButton
-                                                    ref={el => { botoesEditar.current[acc.account_id] = el; }}
-                                                    kind="edit"
-                                                    title={`Editar saldo inicial de ${acc.account_name}`}
-                                                    aria-label={`Editar saldo inicial de ${acc.account_name}`}
-                                                    onClick={() => startEdit(acc)}
-                                                />
+                                                <div className="flex items-center justify-end gap-1.5">
+                                                    {onIrPara && acc.pending_count > 0 && (
+                                                        <button type="button"
+                                                            onClick={() => onIrPara({ aba: 'pending', contaId: acc.account_id })}
+                                                            aria-label={`Conciliar ${acc.account_name} em Pendentes`}
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">
+                                                            Conciliar
+                                                        </button>
+                                                    )}
+                                                    <ActionIconButton
+                                                        ref={el => { botoesEditar.current[acc.account_id] = el; }}
+                                                        kind="edit"
+                                                        title={`Editar saldo inicial de ${acc.account_name}`}
+                                                        aria-label={`Editar saldo inicial de ${acc.account_name}`}
+                                                        onClick={() => startEdit(acc)}
+                                                    />
+                                                </div>
                                             )}
                                         </td>
                                     </tr>
@@ -453,7 +601,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             })}
                             {!loading && (data?.accounts ?? []).length === 0 && (
                                 <tr>
-                                    <td colSpan={7} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
+                                    <td colSpan={8} className="px-5 py-10 text-center text-sm text-gray-400 font-medium">
                                         Nenhuma conta bancária cadastrada.
                                     </td>
                                 </tr>
@@ -465,6 +613,8 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                     <td className="px-5 py-3 text-xs uppercase tracking-widest text-gray-500">Total</td>
                                     <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.opening_balance)}</td>
                                     <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.bank_balance)}</td>
+                                    {/* Sem total de "Saldo no banco": cada conta tem a sua data. */}
+                                    <td className="px-3 py-3" />
                                     <td className="px-3 py-3 text-right tabular-nums text-emerald-600">{formatBRL(totals.reconciled_balance)}</td>
                                     <td className={`px-3 py-3 text-right tabular-nums ${Math.abs(totals.difference) <= EPS ? 'text-gray-300' : 'text-amber-600'}`}>
                                         {Math.abs(totals.difference) <= EPS ? '—' : formatBRL(totals.difference)}
@@ -478,6 +628,28 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                 </div>
             </div>
             </>)}
+
+            <InformarSaldoBancoSheet
+                open={!!contaInformar}
+                conta={contaInformar ? { id: contaInformar.account_id, nome: contaInformar.account_name } : null}
+                dataSugerida={asOf}
+                atual={contaInformar && contaInformar.saldo_banco_origem === 'MANUAL' && contaInformar.saldo_banco != null && contaInformar.saldo_banco_data
+                    ? { saldo: contaInformar.saldo_banco, data: contaInformar.saldo_banco_data } : null}
+                onClose={() => setInformarContaId(null)}
+                onSalvar={informarSaldo}
+            />
+            <AjustarSaldoInicialSheet
+                open={!!contaAjustar && estadoAjustar?.tipo === 'fora'}
+                conta={contaAjustar ? {
+                    id: contaAjustar.account_id, nome: contaAjustar.account_name,
+                    saldoInicial: contaAjustar.opening_balance ?? 0, dataInicial: contaAjustar.opening_balance_date ?? null,
+                } : null}
+                estado={estadoAjustar?.tipo === 'fora' ? estadoAjustar : null}
+                sugestoes={contaAjustar ? sugestoesDeAjuste(contaAjustar) : null}
+                onClose={() => setAjustarContaId(null)}
+                onAplicar={ajustarSaldoInicial}
+                onVerAnomalias={onIrPara ? () => { setAjustarContaId(null); onIrPara({ aba: 'anomalies' }); } : undefined}
+            />
 
             {/* Consolidado por empresa (SPE) */}
             {consolidated && consolidated.by_empresa.length > 0 && (

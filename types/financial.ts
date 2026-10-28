@@ -352,6 +352,14 @@ export interface ReconciliationAccountBalance {
     pending_value: number;       // soma bruta dos lançamentos pendentes
     pending_count: number;
     unclassified_count: number;
+    /** Último saldo que o BANCO informou até a "Posição em" (migration 20271028800000). */
+    saldo_banco?: number | null;
+    saldo_banco_data?: string | null;
+    saldo_banco_origem?: 'MANUAL' | 'OFX' | 'ASAAS' | null;
+    /** Saldo inicial + extrato até `saldo_banco_data` — o número a comparar com `saldo_banco`. */
+    calculado_na_data_banco?: number | null;
+    /** Pendentes depois de `saldo_banco_data` (os que ficam se a conta recomeçar ali). */
+    pendentes_apos_data_banco?: number | null;
 }
 
 export interface ReconciliationDashboardTotals {

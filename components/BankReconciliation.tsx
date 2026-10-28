@@ -36,7 +36,9 @@ import { useConfirm } from './ui/confirm';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import ReconciliationDashboardView from './ReconciliationDashboard';
+import ReconciliationDashboardView, { type DestinoConciliacao } from './ReconciliationDashboard';
+import type { RegraPreenchida } from './reconciliation/RegrasSheet';
+import { pareceTarifa } from '../utils/conciliacaoSaldoBanco';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
@@ -287,6 +289,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [defaultView]);
 
+    // O recorte vindo do Dashboard vale para a aba Pendentes daquele clique; trocou de aba, some.
+    useEffect(() => {
+        if (activeView !== 'pending') setRecorteDoDashboard(null);
+    }, [activeView]);
+
     // Precisa vir antes de statementTableTotalWidth — ele usa flowFilter no cálculo
     // (colunas Cliente/Credor ficam de fora da soma quando ocultadas pelo filtro).
     const [flowFilter, setFlowFilter] = usePersistedState<'ALL' | 'INCOME' | 'EXPENSE'>('extratoBancario:flowFilter', 'ALL');
@@ -389,6 +396,22 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     // Filtros e Ordenação
     const [bankSearch, setBankSearch] = usePersistedState<string>('extratoBancario:search', '');
+    // Recorte de Pendentes vindo de um número do Dashboard (as MESMAS linhas que o alerta
+    // contou). Não persiste: é a resposta àquele clique, e some ao sair da aba.
+    const [recorteDoDashboard, setRecorteDoDashboard] = useState<DestinoConciliacao['recorte'] | null>(null);
+    // "Criar regra" do alerta de tarifas: a Central abre a gaveta de Regras já preenchida.
+    const [regraInicial, setRegraInicial] = useState<RegraPreenchida | null>(null);
+
+    /** Um número do Dashboard leva à aba onde ele se resolve, já na conta certa. */
+    const irPara = (d: DestinoConciliacao) => {
+        if (d.contaId) setSelectedAccountId(d.contaId);
+        setRegraInicial(d.regra === 'tarifas' ? {
+            name: 'Tarifas bancárias', contem: 'TARIFA', category: '', counterparty: '', direcao: 'DEBIT',
+        } : null);
+        setActiveView(d.aba);
+        // Depois de trocar a aba: o efeito acima limpa o recorte ao SAIR de Pendentes.
+        setRecorteDoDashboard(d.aba === 'pending' ? d.recorte ?? null : null);
+    };
     const [internalSearch, setInternalSearch] = usePersistedState<string>('extratoBancario:internalSearch', '');
     const [bankCategoryFilter, setBankCategoryFilter] = useState<string[]>(() => {
         try { return JSON.parse(localStorage.getItem('reconciliation_bank_cat_filter') || '[]'); } catch { return []; }
@@ -431,6 +454,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     const sortedBankTransactions = useMemo(() => {
         let filtered = [...bankTransactions];
+        if (activeView === 'pending' && recorteDoDashboard === 'tarifas') filtered = filtered.filter(pareceTarifa);
+        if (activeView === 'pending' && recorteDoDashboard === 'sem-classificacao') filtered = filtered.filter(tx => !tx.category);
         if (bankSearch) {
             // Várias palavras em qualquer ordem (ver utils/buscaPendentes.ts).
             filtered = filtered.filter(tx => combinaComBusca(bankSearch, [
@@ -504,7 +529,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             if (valA > valB) return bankSortOrder === 'asc' ? 1 : -1;
             return 0;
         });
-    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, orgNameById, statementAdvancedFilters.rules, statementFilterFields]);
+    }, [bankTransactions, bankSortOrder, bankSortField, bankSearch, bankCategoryFilter, bankCounterpartyFilter, flowFilter, masterProjects, masterCostCenters, masterPlanoContas, orgNameById, statementAdvancedFilters.rules, statementFilterFields, activeView, recorteDoDashboard]);
 
     // Filtros e ordem dos lançamentos SEM a busca de texto: ela precisa de displayTitle/txCode/…,
     // declarados mais abaixo (ver `sortedInternalTransactions`).
@@ -3513,7 +3538,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             {/* Main Content Area */}
             {activeView === 'dashboard' ? (
-                <ReconciliationDashboardView organizationId={organizationId} />
+                <ReconciliationDashboardView organizationId={organizationId} onIrPara={irPara} />
             ) : activeView === 'center' ? (
                 <SmartReconciliationCenter
                     organizationId={organizationId}
@@ -3526,6 +3551,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     categories={uniqueCategories}
                     clienteRegistros={clienteRegistros}
                     credorRegistros={credorRegistros}
+                    regraInicial={regraInicial}
+                    onRegraInicialUsada={() => setRegraInicial(null)}
                 />
             ) : activeView === 'divergences' ? (
                 <DivergencesPanel organizationId={organizationId} onChanged={() => { loadTransactions(); loadStats(); }} />
@@ -3552,6 +3579,19 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 />
             ) : (activeView === 'pending' || activeView === 'statement') ? (
                 <div className="space-y-6">
+                    {activeView === 'pending' && recorteDoDashboard && (
+                        <div role="status" className="flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-[10px] px-4 py-2.5 text-sm text-blue-900">
+                            <span>
+                                Mostrando só {recorteDoDashboard === 'tarifas'
+                                    ? 'possíveis tarifas (saídas sem classificação com TARIFA, TAXA, CESTA, MANUTENÇÃO, PACOTE, IOF ou ANUIDADE)'
+                                    : 'o extrato sem classificação'}, como no Dashboard.
+                            </span>
+                            <button type="button" onClick={() => setRecorteDoDashboard(null)}
+                                className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-900 hover:underline">
+                                <X className="w-3.5 h-3.5" /> Mostrar todos os pendentes
+                            </button>
+                        </div>
+                    )}
                     {activeView === 'pending' && (
                     <div className="flex justify-end px-4 -mb-4">
                         <div className="flex bg-white border border-gray-100 p-1 rounded-xl shadow-sm">

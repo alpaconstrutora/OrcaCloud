@@ -128,7 +128,22 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
   - **Achado na conferência e corrigido (PR seguinte):** depois de Cancelar na confirmação o
     foco ia para o `<body>` e o Esc não saía mais da edição. Agora o foco volta ao campo (também
     quando salvar falha); teste "não confirmou" cobre (reprova com a versão anterior).
-- [ ] Passos 2 a 7
+- [ ] Passo 2 — 5 de 5 no código; falta conferência visual em produção
+  - [x] 2.1 migration `aplicar_20271028800000_conciliacao_saldo_do_banco.sql` — **aplicada pelo
+    usuário** em 28/10 (o modo automático barrou a minha aplicação). Conferido como
+    desenvolvedor@: Itaú −39.048,13 em 14/09 (OFX) × calculado 10.850.187,26, 0 pendentes depois;
+    Asaas 138,35 (Asaas) × 138,35; Asaas Sandbox 56,03 × 0,00; Sicredi ×2 sem saldo do banco;
+    tabela nova com RLS.
+  - [x] 2.2 coluna "Saldo no banco" (bate / app calcula + Ajustar / Informar; "Atualizar" no digitado)
+  - [x] 2.3 "N de M contas batem com o banco", com as contas de cada estado nomeadas
+  - [x] 2.4 `AjustarSaldoInicialSheet` (recomeçar = padrão; manter a data; aviso + Anomalias)
+  - [x] 2.5 ações: KPI Pendente → Central da conta com mais pendentes; Divergência → aba;
+    Sem classificação e Tarifas → Pendentes com recorte (aviso azul + "Mostrar todos"); Criar regra
+    → Central com a gaveta de Regras preenchida; linha → "Conciliar"
+  - Testes: `conciliacaoSaldoBanco.test.ts` (9, inclui paridade da expressão de tarifas com o SQL),
+    `ReconciliationDashboardSaldoBanco.test.tsx` (8), `conciliacaoStatusUnico.test.ts` (+1). `tsc`
+    limpo; `check-ui-standard.sh` sem violação nos 5 arquivos tocados.
+- [ ] Passos 3 a 7
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)
 

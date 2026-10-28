@@ -194,3 +194,40 @@ describe('pé-direito por pavimento (27/10/2026): a torre vira blocos empilhados
   });
 });
 
+
+describe('distância entre torres (28/10/2026)', () => {
+  // Na planta do dia as torres estão a 6 m (Torre A y 13–29 m, Torre B y 35–51 m).
+  it('pedido 10 m: a conferência mostra 6 m de 10 m e o ajuste afasta a Torre B 4 m, para longe da A', () => {
+    const model = plantaDoDia();
+    const r = comandosDoAjuste(model, [TORRE_A, TORRE_B], [{ torreA: 'tA', torreB: 'tB', mm: 10000 }]);
+    expect(r.distancias).toEqual([{ torreA: 'Torre A', torreB: 'Torre B', medidaMm: 6000, exigidaMm: 10000, ok: false }]);
+    expect(r.linhas.find((l) => l.torre === 'Torre B')?.estado).toBe('AJUSTAR');
+    expect(r.avisos.join(' ')).toContain('Torre "Torre B" afastada 4,00 m da "Torre A" para ficar a 10,00 m');
+    const depois = applyBatch(model, r.comandos).model;
+    const porNome = new Map((depois.blocos ?? []).map((b) => [b.nome, b]));
+    expect(porNome.get('Torre B')!.pontos[0]).toEqual({ x: 3000, y: 39000 });
+    // A Torre A (a primeira da aba) fica onde estava, e a garagem nova dela continua sob ela.
+    expect(porNome.get('Torre A')!.pontos[0]).toEqual({ x: 3000, y: 13000 });
+    expect(porNome.get('Torre A · Garagem')!.pontos).toEqual(porNome.get('Torre A')!.pontos);
+    // Depois de ajustar, o par cumpre e não há mais nada a fazer.
+    const r2 = comandosDoAjuste(depois, [TORRE_A, TORRE_B], [{ torreA: 'tA', torreB: 'tB', mm: 10000 }]);
+    expect(r2.distancias[0]).toMatchObject({ medidaMm: 10000, ok: true });
+    expect(r2.comandos).toEqual([]);
+  });
+
+  it('a torre afastada leva a pilha dela inteira (a garagem sob ela também)', () => {
+    const model = plantaDoDia();
+    const comGaragem = { ...TORRE_B, garagens: pisos(-1, -1, () => 'Garagem 1') };
+    const r = comandosDoAjuste(model, [TORRE_A, comGaragem], [{ torreA: 'tA', torreB: 'tB', mm: 8000 }]);
+    const porNome = new Map((applyBatch(model, r.comandos).model.blocos ?? []).map((b) => [b.nome, b]));
+    expect(porNome.get('Torre B · Garagem')!.pontos).toEqual(porNome.get('Torre B')!.pontos);
+    expect(porNome.get('Torre B')!.pontos[0]).toEqual({ x: 3000, y: 37000 });
+  });
+
+  it('pedido já cumprido: confere ok e não mexe', () => {
+    const model = plantaDoDia();
+    const r = comandosDoAjuste(model, [TORRE_A, TORRE_B], [{ torreA: 'tB', torreB: 'tA', mm: 5000 }]);
+    expect(r.distancias[0]).toMatchObject({ medidaMm: 6000, exigidaMm: 5000, ok: true });
+    expect(r.linhas.find((l) => l.torre === 'Torre B')?.estado).toBe('OK');
+  });
+});

@@ -10,12 +10,13 @@
 
 import type { EmpreendimentoTower } from '../types/empreendimento';
 import type { EstruturaDaTorre } from './blueprintEstruturaDaTorre';
+import { distanciaDoPar, type DistanciaEntreTorres } from './empreendimentoDistanciasEntreTorres';
 
-export type TorreParaAMassa = Pick<EmpreendimentoTower, 'name'> & Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_bloco_uid' | 'blueprint_quadra_uid'>>;
+export type TorreParaAMassa = Pick<EmpreendimentoTower, 'name'> & Partial<Pick<EmpreendimentoTower, 'id' | 'floors_count' | 'blueprint_bloco_uid' | 'blueprint_quadra_uid'>>;
 
 export interface MassaDoEmpreendimento {
   /** A restrição pronta para `RestricoesDaMassa.doEmpreendimento`; `null` = nada a seguir (o `motivo` diz). */
-  restricao: { torres: number; pavimentosMin: number | null; pavimentosMax: number | null } | null;
+  restricao: { torres: number; pavimentosMin: number | null; pavimentosMax: number | null; afastamentoEntreBlocosM?: number | null } | null;
   motivo: string | null;
   avisos: string[];
   /** "2 torres × 12 pavimentos", para a tela. */
@@ -27,7 +28,12 @@ export interface MassaDoEmpreendimento {
  * pavimentos de cada torre são os acima do solo dela, e não só `floors_count`: o Garden Cambuhy tinha a Torre A sem
  * `floors_count` e a faixa saía só da Torre B (a A nascia com 6 em vez de 4).
  */
-export function massaDoEmpreendimento(torres: TorreParaAMassa[], estruturas: readonly EstruturaDaTorre[] = []): MassaDoEmpreendimento {
+export function massaDoEmpreendimento(
+  torres: TorreParaAMassa[],
+  estruturas: readonly EstruturaDaTorre[] = [],
+  /** 28/10/2026: as distâncias entre torres (Torres e Unidades); o gerador usa a maior entre os blocos. */
+  distancias: readonly DistanciaEntreTorres[] = [],
+): MassaDoEmpreendimento {
   const avisos: string[] = [];
   const daMassa = torres.filter((t) => t.blueprint_bloco_uid).length;
   const quadras = torres.filter((t) => !t.blueprint_bloco_uid && t.blueprint_quadra_uid).length;
@@ -55,5 +61,35 @@ export function massaDoEmpreendimento(torres: TorreParaAMassa[], estruturas: rea
     porTorre.length === n
       ? porTorre.map((e) => `${e.nome}: ${e.acima.length}${e.garagens.length ? ` + ${e.garagens.length} ${e.garagens.length === 1 ? 'garagem' : 'garagens'}` : ''}`).join(' · ')
       : `${n} ${n === 1 ? 'torre' : 'torres'} × ${min == null ? 'pavimentos livres' : min === max ? `${min} pavimentos` : `${min} a ${max} pavimentos`}`;
-  return { restricao: { torres: n, pavimentosMin: min, pavimentosMax: max }, motivo: null, avisos, resumo };
+  // Distância entre torres (28/10/2026): o gerador põe a MESMA folga entre todos os blocos — vale a maior pedida.
+  let afastamentoEntreBlocosM: number | null = null;
+  if (n >= 2) {
+    const pedidas: number[] = [];
+    let semDistancia = 0;
+    for (let i = 0; i < proprias.length; i++)
+      for (let j = i + 1; j < proprias.length; j++) {
+        const a = proprias[i].id;
+        const b = proprias[j].id;
+        const m = a && b ? distanciaDoPar(distancias, a, b) : null;
+        if (m == null) semDistancia++;
+        else pedidas.push(m);
+      }
+    if (pedidas.length > 0) {
+      afastamentoEntreBlocosM = Math.max(...pedidas);
+      if (Math.min(...pedidas) !== afastamentoEntreBlocosM) {
+        avisos.push(`As distâncias entre torres vão de ${Math.min(...pedidas).toLocaleString('pt-BR')} a ${afastamentoEntreBlocosM.toLocaleString('pt-BR')} m — o gerador usa a maior entre todos os blocos.`);
+      }
+    }
+    // Só quando parte dos pares foi informada: o empreendimento que nunca usou o campo não recebe aviso.
+    if (semDistancia > 0 && pedidas.length > 0) {
+      avisos.push(`${semDistancia} par(es) de torres sem distância em Torres e Unidades — vale a maior informada.`);
+    }
+  }
+  const resumoComDistancia = afastamentoEntreBlocosM != null ? `${resumo} · entre torres ${afastamentoEntreBlocosM.toLocaleString('pt-BR')} m` : resumo;
+  return {
+    restricao: { torres: n, pavimentosMin: min, pavimentosMax: max, ...(afastamentoEntreBlocosM != null ? { afastamentoEntreBlocosM } : {}) },
+    motivo: null,
+    avisos,
+    resumo: resumoComDistancia,
+  };
 }

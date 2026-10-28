@@ -10,7 +10,7 @@
 //     └ card  — Pavimentos (FloorEditor) · Unidades (UnitEditor)
 // Plano e decisões: docs/planos/2026-10-14-torres-unidades-reorganizacao.md.
 import React from 'react';
-import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MapPin } from 'lucide-react';
+import { Plus, Loader2, Building, HardHat, Check, X, BarChart2, MapPin, MoveHorizontal } from 'lucide-react';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { terrenoDaPlantaVinculada, type TerrenoDaPlanta } from '../../services/blueprintTerrenoDaPlanta';
 import { compararComFicha, type SituacaoDoCampo } from '../../utils/blueprintTerrenoDaFicha';
@@ -30,6 +30,7 @@ import UnitEditor from './UnitEditor';
 import FloorEditor, { fmtElevacao, lerElevacao, lerPeDireito } from './FloorEditor';
 import { TorreCard, TorreEmpty, TorreTotais, TorreTotalMetric } from '../torres/TorreCard';
 import { isObra } from '../../utils/projectClassification';
+import { comDistancia, distanciaDoPar, lerDistanciaDigitada, lerDistancias, paresDeTorres, DISTANCIA_MAX_ENTRE_TORRES_M, type DistanciaEntreTorres } from '../../utils/empreendimentoDistanciasEntreTorres';
 
 interface Props {
   empreendimentoId: string;
@@ -233,6 +234,49 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       notify(`Erro ao salvar terreno: ${err.message}`, 'error');
     } finally {
       setSavingTerreno(false);
+    }
+  };
+
+  // ── Distância entre torres (28/10/2026) ────────────────────────────────────
+  // "quando um empreendimento tem mais de uma torre a distância entre torres deve ser informada": uma por PAR
+  // (decisão do usuário). Mora no empreendimento (`distancias_entre_torres`); a Planta confere e o Gerar massa usa.
+  const distanciasSalvas = React.useMemo(() => lerDistancias(empreendimento?.distancias_entre_torres), [empreendimento?.distancias_entre_torres]);
+  const pares = React.useMemo(() => paresDeTorres(towers), [towers]);
+  const chaveDoPar = (a: string, b: string) => [a, b].sort().join('|');
+  const textoSalvo = React.useCallback(
+    (a: string, b: string) => {
+      const m = distanciaDoPar(distanciasSalvas, a, b);
+      return m == null ? '' : m.toFixed(2).replace('.', ',');
+    },
+    [distanciasSalvas],
+  );
+  const [distanciaForm, setDistanciaForm] = React.useState<Record<string, string>>({});
+  React.useEffect(() => {
+    setDistanciaForm(Object.fromEntries(pares.map(([a, b]) => [chaveDoPar(a.id, b.id), textoSalvo(a.id, b.id)])));
+  }, [pares, textoSalvo]);
+  const distanciasDirty = pares.some(([a, b]) => (distanciaForm[chaveDoPar(a.id, b.id)] ?? textoSalvo(a.id, b.id)) !== textoSalvo(a.id, b.id));
+  const [savingDistancias, setSavingDistancias] = React.useState(false);
+  const handleSaveDistancias = async (e: React.FormEvent) => {
+    e.preventDefault();
+    let lista: DistanciaEntreTorres[] = [];
+    for (const [a, b] of pares) {
+      const v = lerDistanciaDigitada(distanciaForm[chaveDoPar(a.id, b.id)] ?? textoSalvo(a.id, b.id));
+      if (v === false) {
+        notify(`${a.name} ↔ ${b.name}: use metros entre 0,01 e ${DISTANCIA_MAX_ENTRE_TORRES_M} (ou deixe vazio).`, 'error');
+        return;
+      }
+      lista = comDistancia(lista, a.id, b.id, v);
+    }
+    setSavingDistancias(true);
+    try {
+      // Só os pares das torres de agora: o de torre apagada sai ao salvar.
+      await empreendimentoService.update(empreendimentoId, { distancias_entre_torres: lista });
+      notify('Distâncias entre torres salvas.');
+      onTerrenoSaved?.();
+    } catch (err: any) {
+      notify(`Erro ao salvar as distâncias: ${err.message}`, 'error');
+    } finally {
+      setSavingDistancias(false);
     }
   };
 
@@ -554,6 +598,41 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
             );
           })}
         </div>
+      )}
+
+      {/* Distância entre torres (28/10/2026): com 2 torres ou mais, uma por par. Só com o empreendimento em mãos. */}
+      {empreendimento && pares.length > 0 && (
+        <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
+          <form onSubmit={handleSaveDistancias} className="space-y-3 rounded-[10px] border border-gray-100 bg-gray-50/40 p-4" data-testid="distancias-entre-torres">
+            <div className="flex items-center gap-2">
+              <MoveHorizontal className="w-4 h-4 text-gray-400" />
+              <p className="text-sm font-semibold text-gray-700">Distância entre torres</p>
+            </div>
+            <p className="text-xs text-gray-500">
+              A menor distância entre as faces de cada par, em metros. A Planta Inteligente confere os blocos, o Gerar massa usa e o "Ajustar ao Empreendimento" afasta as torres.
+            </p>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
+              {pares.map(([a, b]) => {
+                const k = chaveDoPar(a.id, b.id);
+                return (
+                  <div key={k} className="space-y-1.5">
+                    <label htmlFor={`distancia-${k}`} className={rotuloCls}>{a.name} ↔ {b.name} (m)</label>
+                    <input id={`distancia-${k}`} className={inputCls} inputMode="decimal" placeholder="ex: 6,00"
+                      value={distanciaForm[k] ?? textoSalvo(a.id, b.id)} onChange={e => setDistanciaForm(p => ({ ...p, [k]: e.target.value }))} />
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex justify-end">
+              <span title={!distanciasDirty ? 'Nada mudou nas distâncias.' : undefined}>
+                <Button type="submit" disabled={savingDistancias || !distanciasDirty}>
+                  {savingDistancias ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-[15px] h-[15px]" />}
+                  Salvar distâncias
+                </Button>
+              </span>
+            </div>
+          </form>
+        </fieldset>
       )}
 
       {/* Totais gerais — só quando há pelo menos 1 torre com unidades */}

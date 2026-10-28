@@ -13,10 +13,32 @@
 // apagado no desenho: o que não é do Empreendimento fica, com aviso. Duas saídas do mesmo plano: comandos para os
 // blocos desenhados (o botão "Ajustar ao Empreendimento") e os blocos propostos vestidos (o Aplicar do Gerar
 // massa). Puro.
+//
+// DISTÂNCIA ENTRE TORRES (28/10/2026, docs/planos/2026-10-28-distancia-entre-torres.md): a que o Empreendimento pede
+// para cada par é conferida contorno a contorno (`distancias`, o que o painel mostra em vermelho) e o ajuste AFASTA a
+// torre de trás (a segunda na ordem da aba) com a pilha dela inteira — decisão do usuário. O motor da massa remede
+// depois: torre que sair do envelope fica vermelha lá.
 
 import type { BlueprintModel, Command, ObjectId, Point, UsoDoBloco } from './blueprintKernel';
 import { nomeDaGaragem, type EstruturaDaTorre, type PisoDaTorre } from './blueprintEstruturaDaTorre';
 import type { BlocoProposto } from './blueprintGeradorDeMassa';
+import { afastamentoNecessario, distanciaEntrePoligonosMm, transladar } from './blueprintDistanciaEntreTorres';
+
+/** A distância que o Empreendimento pede entre duas torres (ids de `EstruturaDaTorre.torreId`), em mm. */
+export interface ExigenciaEntreTorres {
+  torreA: string;
+  torreB: string;
+  mm: number;
+}
+
+/** A conferência de um par de torres com bloco na planta, medida nos blocos como estão desenhados. */
+export interface ConferenciaDaDistancia {
+  torreA: string;
+  torreB: string;
+  medidaMm: number;
+  exigidaMm: number;
+  ok: boolean;
+}
 
 interface BlocoParaAjuste {
   nome: string;
@@ -66,6 +88,7 @@ interface PlanoDoAjuste {
   subsolosAvulsos: number[];
   papeis: Map<number, PapelDoBloco>;
   avisos: string[];
+  distancias: ConferenciaDaDistancia[];
 }
 
 const norm = (s: string) => s.trim().toLocaleLowerCase('pt-BR');
@@ -89,12 +112,14 @@ function trechos(pisos: readonly PisoDaTorre[], pdDoBloco: number): { pisos: Pis
   return out;
 }
 
-function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly EstruturaDaTorre[]): PlanoDoAjuste {
+function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly EstruturaDaTorre[], exigencias: readonly ExigenciaEntreTorres[] = []): PlanoDoAjuste {
   const linhas: LinhaDoAjuste[] = [];
   const mudancas: Mudanca[] = [];
   const novos: BlocoParaAjuste[] = [];
   const papeis = new Map<number, PapelDoBloco>();
   const avisos: string[] = [];
+  // A pilha de cada torre casada (o bloco dela, os blocos existentes da pilha e os novos) — para medir e afastar.
+  const pilhas = new Map<string, { casado: number; indices: number[]; novos: number[] }>();
 
   // Um bloco com outro apoiado em cima (embasamento, o térreo empilhado) não é torre; garagem e subsolo também não.
   const temOutroEmCima = (i: number) => {
@@ -147,9 +172,11 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
     const nossos = new Set([...nomesDaPilha(e.nome, e), ...nomesDaPilha(b.nome, e)]);
     const acharNosso = (nome: string, outroNome: string) => blocos.findIndex((o, j) => j !== i && (norm(o.nome) === norm(nome) || norm(o.nome) === norm(outroNome)));
     const usadosDaPilha = new Set<number>([i]);
+    const novosDaTorre: number[] = [];
     /** Põe o bloco `j` (ou um novo) no lugar `alvo`; devolve se mudou algo. */
     const colocar = (j: number, alvo: BlocoParaAjuste): boolean => {
       if (j < 0) {
+        novosDaTorre.push(novos.length);
         novos.push(alvo);
         return true;
       }
@@ -219,6 +246,7 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
       }
     });
 
+    pilhas.set(e.torreId, { casado: i, indices: [...usadosDaPilha], novos: novosDaTorre });
     const naPilha = [...usadosDaPilha].map((j) => blocos[j]);
     linhas.push({
       ...base,
@@ -230,21 +258,75 @@ function planejar(blocos: readonly BlocoParaAjuste[], estruturas: readonly Estru
     });
   }
 
+  const distancias = afastarTorres(blocos, estruturas, exigencias, pilhas, mudancas, novos, linhas, avisos);
+
   for (const c of candidatos) if (!usados.has(c)) avisos.push(`O bloco "${blocos[c].nome}" não corresponde a nenhuma torre do Empreendimento — fica como está.`);
   const subsolosAvulsos = blocos
     .map((b, i) => ({ b, i }))
     .filter(({ b }) => b.uso === 'GARAGEM' && b.cotaBaseMm < 0 && !daPilha.has(norm(b.nome)))
     .map(({ i }) => i);
-  return { linhas, mudancas, novos, subsolosAvulsos, papeis, avisos };
+  return { linhas, mudancas, novos, subsolosAvulsos, papeis, avisos, distancias };
+}
+
+/**
+ * Confere cada par pedido nos blocos COMO ESTÃO (o que o painel mostra) e afasta a torre de trás com a pilha toda,
+ * pelo contorno de depois das mudanças. Os pares em sequência: afastar um pode mexer em outro — o motor remede.
+ */
+function afastarTorres(
+  blocos: readonly BlocoParaAjuste[],
+  estruturas: readonly EstruturaDaTorre[],
+  exigencias: readonly ExigenciaEntreTorres[],
+  pilhas: Map<string, { casado: number; indices: number[]; novos: number[] }>,
+  mudancas: Mudanca[],
+  novos: BlocoParaAjuste[],
+  linhas: LinhaDoAjuste[],
+  avisos: string[],
+): ConferenciaDaDistancia[] {
+  const ordem = new Map(estruturas.map((e, k) => [e.torreId, k]));
+  const nome = new Map(estruturas.map((e) => [e.torreId, e.nome]));
+  const conferencias: ConferenciaDaDistancia[] = [];
+  const pegada = new Map<string, Point[]>();
+  for (const [id, p] of pilhas) pegada.set(id, blocos[p.casado].pontos);
+  const pares = exigencias.filter((x) => pilhas.has(x.torreA) && pilhas.has(x.torreB) && x.mm > 0);
+  for (const x of pares) {
+    const medidaMm = distanciaEntrePoligonosMm(pegada.get(x.torreA)!, pegada.get(x.torreB)!);
+    conferencias.push({ torreA: nome.get(x.torreA)!, torreB: nome.get(x.torreB)!, medidaMm, exigidaMm: x.mm, ok: medidaMm >= x.mm });
+  }
+  const deslocamento = new Map<string, Point>();
+  for (const x of pares) {
+    const [fixa, movel] = (ordem.get(x.torreA) ?? 0) <= (ordem.get(x.torreB) ?? 0) ? [x.torreA, x.torreB] : [x.torreB, x.torreA];
+    const d = afastamentoNecessario(pegada.get(fixa)!, pegada.get(movel)!, x.mm);
+    if (!d) continue;
+    pegada.set(movel, transladar(pegada.get(movel)!, d));
+    const antes = deslocamento.get(movel) ?? { x: 0, y: 0 };
+    deslocamento.set(movel, { x: antes.x + d.x, y: antes.y + d.y });
+    avisos.push(
+      `Torre "${nome.get(movel)}" afastada ${(Math.hypot(d.x, d.y) / 1000).toFixed(2).replace('.', ',')} m da "${nome.get(fixa)}" para ficar a ${(x.mm / 1000).toFixed(2).replace('.', ',')} m — confira se ainda cabe no envelope.`,
+    );
+  }
+  for (const [id, d] of deslocamento) {
+    const p = pilhas.get(id)!;
+    for (const j of p.indices) {
+      const m = mudancas.find((x) => x.indice === j);
+      const pontos = transladar(m?.campos.pontos ?? blocos[j].pontos, d);
+      if (m) m.campos.pontos = pontos;
+      else mudancas.push({ indice: j, campos: { pontos } });
+    }
+    for (const k of p.novos) novos[k] = { ...novos[k], pontos: transladar(novos[k].pontos, d) };
+    const linha = linhas.find((l) => l.torre === nome.get(id));
+    if (linha) linha.estado = 'AJUSTAR';
+  }
+  return conferencias;
 }
 
 /** Os blocos DESENHADOS: o que mostrar (linhas, papéis por id, avisos) e os comandos do "Ajustar ao Empreendimento". */
 export function comandosDoAjuste(
   model: BlueprintModel,
   estruturas: readonly EstruturaDaTorre[],
-): { linhas: LinhaDoAjuste[]; comandos: Command[]; papeis: Map<ObjectId, PapelDoBloco>; avisos: string[] } {
+  exigencias: readonly ExigenciaEntreTorres[] = [],
+): { linhas: LinhaDoAjuste[]; comandos: Command[]; papeis: Map<ObjectId, PapelDoBloco>; avisos: string[]; distancias: ConferenciaDaDistancia[] } {
   const blocos = model.blocos ?? [];
-  const p = planejar(blocos, estruturas);
+  const p = planejar(blocos, estruturas, exigencias);
   const avisos = [...p.avisos];
   if (p.subsolosAvulsos.length > 0 && estruturas.some((e) => e.garagens.length > 0)) {
     for (const i of p.subsolosAvulsos) avisos.push(`O bloco "${blocos[i].nome}" não é de nenhuma torre (as garagens do Empreendimento ficam sob cada torre) — fica como está; apague se não for usar.`);
@@ -255,15 +337,19 @@ export function comandosDoAjuste(
   ];
   const papeis = new Map<ObjectId, PapelDoBloco>();
   for (const [i, papel] of p.papeis) papeis.set(blocos[i].id, papel);
-  return { linhas: p.linhas, comandos, papeis, avisos };
+  return { linhas: p.linhas, comandos, papeis, avisos, distancias: p.distancias };
 }
 
 /**
  * Os blocos PROPOSTOS pelo Gerar massa, vestidos com as torres antes do `AddBloco`. O subsolo do lote inteiro
  * do gerador sai quando o Empreendimento declara garagem em alguma torre — a garagem passa a ser a dele.
  */
-export function vestirBlocosPropostos(blocos: readonly BlocoProposto[], estruturas: readonly EstruturaDaTorre[]): { blocos: BlocoProposto[]; avisos: string[] } {
-  const p = planejar(blocos, estruturas);
+export function vestirBlocosPropostos(
+  blocos: readonly BlocoProposto[],
+  estruturas: readonly EstruturaDaTorre[],
+  exigencias: readonly ExigenciaEntreTorres[] = [],
+): { blocos: BlocoProposto[]; avisos: string[] } {
+  const p = planejar(blocos, estruturas, exigencias);
   const avisos = [...p.avisos];
   const tirar = new Set(estruturas.some((e) => e.garagens.length > 0) ? p.subsolosAvulsos : []);
   if (tirar.size > 0) avisos.push('O subsolo do lote inteiro do gerador saiu: as garagens são as do Empreendimento, sob cada torre.');

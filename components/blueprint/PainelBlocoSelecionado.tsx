@@ -25,7 +25,7 @@ import { ROTULO_DO_PONTO_CARDEAL } from '../../utils/blueprintGrafoEspacial';
 import type { Bloco, UsoDoBloco } from '../../utils/blueprintKernel';
 import { MAX_PAVIMENTOS_DO_BLOCO, ROTULO_DO_USO_DO_BLOCO, USOS_DO_BLOCO } from '../../utils/blueprintKernel';
 import { resumoDoPiso, type MedidaDoBloco } from '../../utils/blueprintMassa';
-import type { LinhaDoAjuste, PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
+import type { ConferenciaDaDistancia, LinhaDoAjuste, PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
 import { chaveDaUnidade, type UnidadeDoPiso } from '../../utils/blueprintEstruturaDaTorre';
 import { UNIT_STATUS_LABEL } from '../../utils/empreendimentoComercial';
 import type { ArrumacaoDasUnidades } from '../../utils/blueprintUnidadesNoPavimento';
@@ -52,6 +52,8 @@ interface Props {
     nome: string;
     papel: PapelDoBloco | null;
     linha: LinhaDoAjuste | null;
+    /** A distância às outras torres que o Empreendimento pede, medida nos blocos (28/10/2026). */
+    distancias?: ConferenciaDaDistancia[];
     avisos: string[];
     /** Quantas mudanças o "Ajustar" faria; 0 = já segue. */
     pendentes: number;
@@ -360,6 +362,18 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
             </p>
           ) : (
             <p className="text-slate-500">Este bloco não corresponde a nenhuma torre do Empreendimento.</p>
+          )}
+          {empreendimento.papel && (empreendimento.distancias?.length ?? 0) > 0 && (
+            <ul className="space-y-0.5" data-testid="distancias-entre-torres">
+              {empreendimento.distancias!.map((d) => {
+                const outra = d.torreA === empreendimento.papel!.torre ? d.torreB : d.torreA;
+                return (
+                  <li key={outra} className={d.ok ? 'text-emerald-700' : 'text-red-700'}>
+                    Distância à {outra}: {n2(d.medidaMm / 1000)} m {d.ok ? `(pede ${n2(d.exigidaMm / 1000)} m)` : `— o Empreendimento pede ${n2(d.exigidaMm / 1000)} m`}
+                  </li>
+                );
+              })}
+            </ul>
           )}
           {empreendimento.avisos.length > 0 && (
             <ul className="space-y-0.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800" data-testid="avisos-do-empreendimento">

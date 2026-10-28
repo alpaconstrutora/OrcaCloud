@@ -28,7 +28,7 @@ const un = (id: string, nome: string, tipologia: string, area: number, extra: Pa
 const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
 const montar = (
-  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[] } = {},
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[]; avisosDasUnidades?: string[] } = {},
 ) =>
   render(
     <PainelBlocoSelecionado
@@ -43,6 +43,7 @@ const montar = (
       unidadeSelecionada={extra.unidade ?? null}
       onUnidade={extra.onUnidade ?? vi.fn()}
       arrumacaoDasUnidades={extra.arrumacao}
+      avisosDasUnidades={extra.avisosDasUnidades}
       empreendimento={{
         nome: '011 - Garden Cambuhy',
         papel: extra.papel ?? PAPEL,
@@ -119,12 +120,17 @@ describe('painel do bloco › Empreendimento', () => {
     expect(screen.getByText(/Distância à Torre B/)).toHaveClass('text-red-700');
   });
 
+  it('os avisos da posição/orientação aparecem junto da arrumação (28/10/2026)', () => {
+    montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'AUTOMATICA', onModo: vi.fn() }, avisosDasUnidades: ['Unidade 101: posição Frente e sol Norte apontam para lados opostos nesta planta — confira o cadastro.'] });
+    expect(screen.getByTestId('avisos-das-unidades')).toHaveTextContent('Unidade 101: posição Frente e sol Norte apontam para lados opostos');
+  });
+
   it('a arrumação das unidades: automática ou a ordem do Empreendimento, com o que cada uma faz (27/10/2026)', async () => {
     const onModo = vi.fn();
     montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'AUTOMATICA', onModo } });
     const a = screen.getByTestId('arrumacao-das-unidades');
     expect(screen.getByRole('button', { name: 'Automática' })).toHaveAttribute('aria-pressed', 'true');
-    expect(a).toHaveTextContent('Pelo número (101 sobre 201 sobre 301)');
+    expect(a).toHaveTextContent('Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número');
     await userEvent.click(screen.getByRole('button', { name: 'Ordem do Empreendimento' }));
     expect(onModo).toHaveBeenLastCalledWith('EMPREENDIMENTO');
   });

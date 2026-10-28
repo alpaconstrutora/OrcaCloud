@@ -72,3 +72,30 @@ describe('TelaGeradorDeMassa › Seguir o Empreendimento', () => {
     expect(screen.getByTestId('avisos-seguir-empreendimento').textContent).toMatch(/não tem torres/);
   });
 });
+
+describe('Gerar massa › a zona mudou no Mapa Regulatório (28/10/2026)', () => {
+  it('avisa o que mudou e "Aplicar de novo" chama a planta; sem mudança, nada aparece', () => {
+    const aplicar = vi.fn();
+    render(
+      <TelaGeradorDeMassa
+        gerador={gerador()}
+        model={lote()}
+        regua={REGUA}
+        proximoNumero={1}
+        onAbrirProduto={vi.fn()}
+        onCriarAlternativa={vi.fn()}
+        onAplicar={vi.fn()}
+        zonaMudou={{ zona: 'ZEPEC 2', mudancas: ['recuo de frente: 1,5 m → 5 m', 'recuo de fundos: 0 m → 3 m'], onAplicarDeNovo: aplicar, salvando: false }}
+      />,
+    );
+    const aviso = screen.getByTestId('zona-mudou-no-gerador');
+    expect(aviso).toHaveTextContent('A zona ZEPEC 2 mudou no Mapa Regulatório depois de aplicada nesta planta');
+    expect(aviso).toHaveTextContent('recuo de frente: 1,5 m → 5 m');
+    expect(aviso).toHaveTextContent('recuo de fundos: 0 m → 3 m');
+    fireEvent.click(screen.getByRole('button', { name: 'Aplicar de novo' }));
+    expect(aplicar).toHaveBeenCalledTimes(1);
+    cleanup();
+    tela(null);
+    expect(screen.queryByTestId('zona-mudou-no-gerador')).not.toBeInTheDocument();
+  });
+});

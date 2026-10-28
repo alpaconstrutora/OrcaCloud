@@ -14,7 +14,8 @@ import {
   lerZona,
   recuosDaZona,
   rotuloDaZona,
-  zonaDerivou,
+  diferencasDaZona,
+  type DiferencaDaZona,
   type CampoDaZona,
   type ValoresDaZona,
   type CampoDoVocabulario,
@@ -129,6 +130,8 @@ export interface ZonaUrbanistica {
   zonaRotuloSalvo: string | null;
   ajustadoAMao: boolean;
   derivou: boolean;
+  /** O que mudou na zona de origem desde que foi aplicada (28/10/2026 — o Gerar massa avisa com isto). */
+  diferencas: DiferencaDaZona[];
   salvando: boolean;
   persistenciaIndisponivel: boolean;
 }
@@ -684,14 +687,15 @@ export function useBlueprintZonaUrbanistica(
     [origemDosValores],
   );
 
-  const derivou = useMemo(() => {
-    if (!zonaAplicadaId) return false;
+  const diferencas = useMemo((): DiferencaDaZona[] => {
+    if (!zonaAplicadaId) return [];
     const zonaAtual = zonas.find((z) => z.id === zonaAplicadaId);
     // Zona de origem apagada — ou fora da lista carregada agora — não é deriva:
     // não há com o que comparar, e o estudo segue válido com o que já tinha.
-    if (!zonaAtual) return false;
-    return zonaDerivou({ recuoMm: recuos, ...limites }, origemDosValores, zonaAtual);
+    if (!zonaAtual) return [];
+    return diferencasDaZona({ recuoMm: recuos, ...limites }, origemDosValores, zonaAtual);
   }, [zonaAplicadaId, zonas, recuos, limites, origemDosValores]);
+  const derivou = diferencas.length > 0;
 
   const zonasDoEmpreendimentoNaTela = origemDaZona === 'EMPREENDIMENTO' && !!empreendimentoId && zonasDe === `EMPREENDIMENTO:${empreendimentoId}`;
   const zonaAplicavel = zonasDoEmpreendimentoNaTela ? (zonas.find((z) => z.aplicavel) ?? null) : null;
@@ -751,6 +755,7 @@ export function useBlueprintZonaUrbanistica(
     zonaRotuloSalvo: contexto?.zona_rotulo ?? null,
     ajustadoAMao,
     derivou,
+    diferencas,
     salvando,
     persistenciaIndisponivel,
   };

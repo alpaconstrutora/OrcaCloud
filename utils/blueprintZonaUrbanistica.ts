@@ -418,6 +418,48 @@ export function zonaDerivou(
   origem: Record<CampoDaZona, 'ZONA' | 'MANUAL'> | Record<string, string>,
   zonaAtual: ZonaRegulatoria,
 ): boolean {
+  return diferencasDaZona(aplicados, origem, zonaAtual).length > 0;
+}
+
+/** Um campo que a zona de origem hoje diz diferente do que está em vigor no estudo. */
+export interface DiferencaDaZona {
+  campo: CampoDaZona;
+  /** Número na unidade do editor (recuo/testada em mm, taxa em %, gabarito em m…); texto nos compostos. */
+  antes: number | string | null;
+  depois: number | string | null;
+}
+
+const UNIDADE_DO_CAMPO: Partial<Record<CampoDaZona, { divisor: number; sufixo: string }>> = {
+  recuo_frente: { divisor: 1000, sufixo: ' m' },
+  recuo_fundos: { divisor: 1000, sufixo: ' m' },
+  recuo_lateral_direita: { divisor: 1000, sufixo: ' m' },
+  recuo_lateral_esquerda: { divisor: 1000, sufixo: ' m' },
+  testada_minima: { divisor: 1000, sufixo: ' m' },
+  taxa_ocupacao_max: { divisor: 1, sufixo: ' %' },
+  taxa_permeabilidade_min: { divisor: 1, sufixo: ' %' },
+  gabarito_altura_max: { divisor: 1, sufixo: ' m' },
+  area_minima_lote: { divisor: 1, sufixo: ' m²' },
+  area_minima_unidade: { divisor: 1, sufixo: ' m²' },
+  insolacao_minima: { divisor: 1, sufixo: ' h' },
+};
+
+/** "recuo de frente: 1,5 m → 5 m" (28/10/2026, o aviso do Gerar massa). */
+export function textoDaDiferenca(d: DiferencaDaZona): string {
+  const u = UNIDADE_DO_CAMPO[d.campo];
+  const fmt = (v: number | string | null) =>
+    v == null ? 'sem limite' : typeof v === 'string' ? v : `${(v / (u?.divisor ?? 1)).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${u?.sufixo ?? ''}`;
+  return `${ROTULO_DO_CAMPO[d.campo]}: ${fmt(d.antes)} → ${fmt(d.depois)}`;
+}
+
+/**
+ * O que a zona de origem hoje diz diferente do que está em vigor no estudo, campo a campo (28/10/2026: o Gerar massa
+ * avisa "a zona mudou" com o que mudou). As mesmas regras de `zonaDerivou`, que agora pergunta se a lista é vazia.
+ */
+export function diferencasDaZona(
+  aplicados: ValoresAplicados,
+  origem: Record<CampoDaZona, 'ZONA' | 'MANUAL'> | Record<string, string>,
+  zonaAtual: ZonaRegulatoria,
+): DiferencaDaZona[] {
   const hoje = lerZona(zonaAtual).valores;
   const daZona = (campo: CampoDaZona) => origem[campo] !== 'MANUAL';
 
@@ -452,7 +494,13 @@ export function zonaDerivou(
   const escAplicado = aplicados.recuoFrenteEscalonado ?? null;
   const escHoje = hoje.recuoFrenteEscalonado;
   const escalonadoDerivou = daZona('recuo_frente_escalonado') && ((escAplicado?.aPartirDoPavimento ?? null) !== (escHoje?.aPartirDoPavimento ?? null) || (escAplicado?.recuoMm ?? null) !== (escHoje?.recuoMm ?? null));
-  return afastamentoDerivou || escalonadoDerivou || pares.some(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual);
+
+  const out: DiferencaDaZona[] = pares.filter(([campo, aplicado, atual]) => daZona(campo) && aplicado !== atual).map(([campo, antes, depois]) => ({ campo, antes, depois }));
+  const afast = (a: typeof apAplicado) => (a ? `${a.formula ?? '?'} a partir de ${a.aPartirDeM ?? '?'} m` : null);
+  if (afastamentoDerivou) out.push({ campo: 'afastamento_progressivo', antes: afast(apAplicado), depois: afast(apHoje) });
+  const esc = (e: typeof escAplicado) => (e ? `${(e.recuoMm / 1000).toLocaleString('pt-BR')} m a partir do ${e.aPartirDoPavimento}º pavimento` : null);
+  if (escalonadoDerivou) out.push({ campo: 'recuo_frente_escalonado', antes: esc(escAplicado), depois: esc(escHoje) });
+  return out;
 }
 
 /** O que a exportação precisa da zona para refazer o envelope (os recuos não moram no modelo). */

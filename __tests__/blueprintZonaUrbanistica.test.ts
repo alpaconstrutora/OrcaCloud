@@ -17,6 +17,8 @@ import {
   recuosDaZona,
   rotuloDaZona,
   zonaDerivou,
+  diferencasDaZona,
+  textoDaDiferenca,
   type CampoDaZona,
 } from '../utils/blueprintZonaUrbanistica';
 
@@ -183,5 +185,24 @@ describe('zonaDerivou', () => {
     expect(zonaDerivou(ajustado, origem, ZR2)).toBe(false);
     // Mas outro campo que continua da zona ainda é vigiado.
     expect(zonaDerivou(ajustado, origem, zona({ ...ZR2, recuo_fundos: '4,00' }))).toBe(true);
+  });
+});
+
+describe('diferencasDaZona (28/10/2026): o QUE mudou, para o Gerar massa avisar', () => {
+  it('o caso do Garden: a planta tinha frente 1,5 m e fundos 0; o Mapa hoje diz 5 m e 3 m', () => {
+    const antes = zona({ ...ZR2, recuo_frente: '1,5', recuo_fundos: null as never, recuo_lateral_direita: null as never, recuo_lateral_esquerda: null as never });
+    const { valores } = lerZona(antes);
+    const aplicado = { ...valores, recuoMm: recuosDaZona(valores) };
+    const hoje = zona({ ...antes, recuo_frente: '5', recuo_fundos: '3' });
+    const d = diferencasDaZona(aplicado, {}, hoje);
+    expect(d.map(textoDaDiferenca)).toEqual(['recuo de frente: 1,5 m → 5 m', 'recuo de fundos: 0 m → 3 m']);
+    expect(zonaDerivou(aplicado, {}, hoje)).toBe(true);
+  });
+
+  it('o que foi ajustado à mão não entra; zona intacta = nenhuma diferença', () => {
+    const { valores } = lerZona(ZR2);
+    expect(diferencasDaZona(valores, {}, ZR2)).toEqual([]);
+    const mudada = zona({ ...ZR2, recuo_frente: '6,00', taxa_ocupacao_maxima: '0,7' });
+    expect(diferencasDaZona(valores, { recuo_frente: 'MANUAL' }, mudada).map(textoDaDiferenca)).toEqual(['taxa de ocupação: 80 % → 70 %']);
   });
 });

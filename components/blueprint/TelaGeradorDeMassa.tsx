@@ -71,6 +71,12 @@ interface Props {
    * Empreendimento ligado; `massa.restricao` nula = nada a seguir (o motivo vai no `title` da caixa desligada).
    */
   empreendimento?: { nome: string; massa: MassaDoEmpreendimento } | null;
+  /**
+   * A ZONA MUDOU no Mapa Regulatório depois de aplicada nesta planta (28/10/2026, "verifique se o gerador de massa está
+   * considerando os recuos informados em mapa regulatório"): o gerador usa a CÓPIA aplicada — o aviso diz o que mudou
+   * e "Aplicar de novo" traz os valores de hoje. Decisão do usuário: avisar aqui, não atualizar sozinho.
+   */
+  zonaMudou?: { zona: string | null; mudancas: string[]; onAplicarDeNovo: () => void; salvando: boolean } | null;
 }
 
 interface TurnoDaMassa {
@@ -175,7 +181,7 @@ function formatarObjetivo(v: number | null, objetivo: ObjetivoDaMassa): string {
   }
 }
 
-export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumero, onAbrirProduto, onCriarAlternativa, onAplicar, onProduto, onPedirIa, empreendimento = null }: Props) {
+export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumero, onAbrirProduto, onCriarAlternativa, onAplicar, onProduto, onPedirIa, empreendimento = null, zonaMudou = null }: Props) {
   const [cfg, setCfg] = usePersistedState<Configuracao>('blueprint:gerador-de-massa', PADRAO);
   const c: Configuracao = { ...PADRAO, ...cfg, restricoes: { ...PADRAO.restricoes, ...cfg.restricoes }, hipoteses: { ...PADRAO.hipoteses, ...cfg.hipoteses }, pesos: { ...PADRAO.pesos, ...cfg.pesos } };
   // SEGUIR O EMPREENDIMENTO (26/10/2026): ligado por padrão; a restrição sai das torres de agora, nunca da configuração guardada.
@@ -573,6 +579,29 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
           </span>
         </div>
         {motivoDoGerar && <p className="text-xs text-amber-800">{motivoDoGerar}.</p>}
+        {zonaMudou && zonaMudou.mudancas.length > 0 && (
+          <div className="flex flex-wrap items-start gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800" data-testid="zona-mudou-no-gerador">
+            <div className="min-w-0 flex-1 space-y-0.5">
+              <p className="font-semibold">
+                A zona{zonaMudou.zona ? ` ${zonaMudou.zona}` : ''} mudou no Mapa Regulatório depois de aplicada nesta planta — o gerador ainda usa os valores antigos:
+              </p>
+              <ul className="list-disc pl-4">
+                {zonaMudou.mudancas.map((m) => (
+                  <li key={m}>{m}</li>
+                ))}
+              </ul>
+            </div>
+            <button
+              type="button"
+              onClick={zonaMudou.onAplicarDeNovo}
+              disabled={zonaMudou.salvando}
+              title={zonaMudou.salvando ? 'Gravando a zona…' : 'Traz os valores de hoje do Mapa Regulatório para esta planta'}
+              className="h-8 shrink-0 rounded-[6px] border border-amber-300 bg-white px-3 text-xs font-medium text-amber-800 hover:bg-amber-100 disabled:opacity-60"
+            >
+              Aplicar de novo
+            </button>
+          </div>
+        )}
         {empreendimento && (motivoSemSeguir || (seguindo && empreendimento.massa.avisos.length > 0)) && (
           <p className="text-xs text-slate-600" data-testid="avisos-seguir-empreendimento">
             {motivoSemSeguir ?? empreendimento.massa.avisos.join(' ')}

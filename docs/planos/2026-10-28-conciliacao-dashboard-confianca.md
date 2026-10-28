@@ -75,13 +75,15 @@ Um passo por PR, na ordem do plano de ação aprovado.
 
 ## Estado
 
-- [ ] Passo 1 — 4 de 5 no código; **1.2 escrita mas NÃO aplicada no banco**
+- [ ] Passo 1 — 5 de 5 no código e no banco; falta só a conferência visual em produção
   - [x] 1.1 fileira de KPIs compactos removida da aba Dashboard
-  - [ ] 1.2 migration `aplicar_20271028300000_conciliacao_status_unico.sql` — a aplicação no
-    banco remoto foi barrada pelo modo automático em 28/10; aguarda autorização do usuário.
-    "Antes" medido (conciliado por conta − por empresa): Todas −100,00 · Alpa Construtora
-    −278.916,00 · Altair 287.816,00 · Garden SPE −9.000,00. Depois de aplicar, a mesma
-    consulta tem de dar 0 em todas as linhas e `contas_com_data` = `contas`.
+  - [x] 1.2 migration `aplicar_20271028300000_conciliacao_status_unico.sql` — aplicada no
+    banco remoto em 28/10/2026, com autorização do usuário ("sim"; a 1ª tentativa tinha
+    sido barrada pelo modo automático). Conciliado por conta − por empresa, como
+    desenvolvedor@: **antes** Todas −100,00 · Alpa Construtora −278.916,00 · Altair
+    287.816,00 · Garden SPE −9.000,00; **depois** 0,00 em todas as linhas, e
+    `contas_com_data` = `contas` (5 de 5). `pg_get_functiondef`: as duas funções usam o
+    helper e não têm lista literal; ACL das 4 sem PUBLIC/anon.
   - [x] 1.3 trava `__tests__/conciliacaoStatusUnico.test.ts` (controle negativo: sem a
     migration reprova os 4 casos)
   - [x] 1.4 edição do saldo inicial (`MoneyCentsInput permitirNegativo`, data preservada,

@@ -3,6 +3,7 @@ import { AlertTriangle, Loader2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { formatMoney, formatDateBR } from '../ui/Format';
+import { hojeLocal } from '../../utils/baixaRecebivel';
 
 /**
  * "Informar saldo do extrato" — para a conta cujo banco não chega ao app em OFX nem pela API
@@ -23,11 +24,6 @@ interface Props {
 
 const label = 'text-xs font-semibold text-slate-500';
 const field = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 placeholder:text-gray-400 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 disabled:opacity-50';
-
-function hojeLocal(): string {
-    const d = new Date();
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 const InformarSaldoBancoSheet: React.FC<Props> = ({ open, conta, dataSugerida, atual, onClose, onSalvar }) => {
     const [data, setData] = useState(dataSugerida);

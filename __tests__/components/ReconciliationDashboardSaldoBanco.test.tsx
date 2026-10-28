@@ -66,7 +66,7 @@ const linhaDa = async (conta: string) => (await screen.findByText(conta, { selec
 
 describe('Dashboard — saldo no banco', () => {
     it('responde "bate?" nomeando as contas de cada estado', async () => {
-        render(<ReconciliationDashboardView organizationId={null} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
         const resumo = await screen.findByText(/de 3 contas batem com o banco/);
         expect(resumo).toHaveTextContent('1 de 3 contas batem com o banco');
         expect(screen.getByText(/Não bate: Banco Itaú/)).toBeInTheDocument();
@@ -74,7 +74,7 @@ describe('Dashboard — saldo no banco', () => {
     });
 
     it('cada linha mostra o seu estado: bate, fora (com o calculado) e sem saldo', async () => {
-        render(<ReconciliationDashboardView organizationId={null} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
         const lAsaas = await linhaDa('Asaas');
         expect(within(lAsaas).getByText('bate')).toBeInTheDocument();
         expect(within(lAsaas).getByText(/em 28\/10\/2026 · Asaas/)).toBeInTheDocument();
@@ -89,7 +89,7 @@ describe('Dashboard — saldo no banco', () => {
     });
 
     it('Ajustar: recomeçar no saldo do banco grava o saldo do banco a partir do dia seguinte', async () => {
-        render(<ReconciliationDashboardView organizationId={null} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
         fireEvent.click(within(await linhaDa('Banco Itaú')).getByRole('button', { name: /Ajustar/ }));
         expect(await screen.findByText(/7\.516 pendentes deixam de contar/)).toBeInTheDocument();
         fireEvent.click(screen.getByRole('button', { name: 'Ajustar saldo inicial' }));
@@ -97,7 +97,7 @@ describe('Dashboard — saldo no banco', () => {
     });
 
     it('Ajustar: manter a data grava o valor que fecha, com todo o extrato', async () => {
-        render(<ReconciliationDashboardView organizationId={null} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
         fireEvent.click(within(await linhaDa('Banco Itaú')).getByRole('button', { name: /Ajustar/ }));
         fireEvent.click(await screen.findByRole('radio', { name: /Manter a data de início/ }));
         fireEvent.click(screen.getByRole('button', { name: 'Ajustar saldo inicial' }));
@@ -105,7 +105,7 @@ describe('Dashboard — saldo no banco', () => {
     });
 
     it('Informar saldo do extrato grava data e valor da conta', async () => {
-        render(<ReconciliationDashboardView organizationId={null} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
         fireEvent.click(within(await linhaDa('Sicredi')).getByRole('button', { name: 'Informar saldo do extrato' }));
         fireEvent.change(await screen.findByLabelText('Data do saldo'), { target: { value: '2026-09-30' } });
         fireEvent.change(screen.getByLabelText('Saldo no extrato'), { target: { value: '-1234567' } });
@@ -117,7 +117,7 @@ describe('Dashboard — saldo no banco', () => {
 describe('Dashboard — ação em cada número', () => {
     it('cada número que preocupa leva à aba onde se resolve, na conta certa', async () => {
         const onIrPara = vi.fn();
-        render(<ReconciliationDashboardView organizationId={null} onIrPara={onIrPara} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" onIrPara={onIrPara} />);
 
         fireEvent.click(await screen.findByRole('button', { name: /Conciliar Banco Itaú na Central/ }));
         expect(onIrPara).toHaveBeenLastCalledWith({ aba: 'center', contaId: 'itau' });
@@ -137,14 +137,14 @@ describe('Dashboard — ação em cada número', () => {
 
     it('número que não preocupa não ganha ação', async () => {
         servico.getDashboard.mockResolvedValue(dashboard([base({ account_id: 'ok', account_name: 'Conta em dia' })], { value: 0, count: 0 }));
-        render(<ReconciliationDashboardView organizationId={null} onIrPara={vi.fn()} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" onIrPara={vi.fn()} />);
         await linhaDa('Conta em dia');
         expect(screen.queryByRole('button', { name: /Conciliar/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /tarifas/ })).toBeNull();
     });
 
     it('fora da Conciliação (sem onIrPara) nenhum número vira link', async () => {
-        render(<ReconciliationDashboardView organizationId={null} />);
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
         await linhaDa('Banco Itaú');
         expect(screen.queryByRole('button', { name: /na Central/ })).toBeNull();
         expect(screen.queryByRole('button', { name: /Conciliar Sicredi/ })).toBeNull();

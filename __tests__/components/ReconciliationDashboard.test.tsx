@@ -177,7 +177,7 @@ describe('ReconciliationDashboard — textos (passo 4)', () => {
         });
         render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
         const titulo = await screen.findByText(/esperada por enquanto/);
-        const bloco = titulo.closest('div.rounded-xl') as HTMLElement;
+        const bloco = titulo.closest('div.border') as HTMLElement;
         expect(bloco.className).toMatch(/bg-amber-50/);
         expect(bloco).toHaveTextContent(/O sistema tem R\$\s500,00 a mais que o extrato conciliado/);
         expect(bloco).toHaveTextContent(/7 lançamentos baixados/);
@@ -192,7 +192,7 @@ describe('ReconciliationDashboard — textos (passo 4)', () => {
             ledger: { baixado_net: 900, baixado_count: 10, conferido_net: 900, conferido_count: 10, so_baixado_count: 0 },
         });
         render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
-        const bloco = (await screen.findByText(/^Divergência de/)).closest('div.rounded-xl') as HTMLElement;
+        const bloco = (await screen.findByText(/^Divergência de/)).closest('div.border') as HTMLElement;
         expect(bloco.className).toMatch(/bg-red-50/);
         expect(bloco).toHaveTextContent(/vínculo faltando ou duplicado/);
     });

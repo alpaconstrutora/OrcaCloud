@@ -10,6 +10,7 @@ import SupplierSelect from './SupplierSelect';
 import CostCenterSelect from './CostCenterSelect';
 import { STATUS_LABELS, STATUS_TEXT_COLORS, transicoesDoBoleto, motivoSemTransicao, type TransicaoDeStatus } from '../utils/boletoStatus';
 import { boletoService, MOTIVO_SEM_VENCIMENTO } from '../services/boletoService';
+import { MOTIVO_SEM_FORNECEDOR, MOTIVO_SEM_VALOR } from '../utils/boletoAprovacaoLote';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
@@ -675,12 +676,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
-    /** Por que "Aprovar e Lançar" está desligado — o botão mostra a frase (botão mudo é defeito). */
+    /** Por que "Aprovar e Lançar" está desligado — o botão mostra a frase (botão mudo é defeito).
+     *  Fornecedor, valor e vencimento são obrigatórios (28/10/2026, docs/planos/2026-10-28-boleto-aprovar-bloqueios.md);
+     *  o valor lê o campo da tela, não o gravado — o clique salva antes de aprovar. */
     const motivoParaNaoAprovar: string | null = !supplierId
-        ? 'Selecione um fornecedor antes de aprovar.'
-        : !vencimento
-            ? MOTIVO_SEM_VENCIMENTO
-            : null;
+        ? MOTIVO_SEM_FORNECEDOR
+        : !(Number(valor) > 0)
+            ? MOTIVO_SEM_VALOR
+            : !vencimento
+                ? MOTIVO_SEM_VENCIMENTO
+                : null;
 
     /* ─── Campo Status (23/10/2026, decisão do usuário: guiado pelo fluxo) ───
        Só as mudanças válidas a partir do status atual; cada uma faz o mesmo que o

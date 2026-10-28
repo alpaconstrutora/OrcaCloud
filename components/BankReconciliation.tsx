@@ -408,6 +408,20 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
         setRegraInicial(d.regra === 'tarifas' ? {
             name: 'Tarifas bancárias', contem: 'TARIFA', category: '', counterparty: '', direcao: 'DEBIT',
         } : null);
+        if (d.aba === 'pending') {
+            // O número do Dashboard conta TODO o extrato pendente da conta até hoje. Busca, filtros
+            // e período guardados de uma visita anterior a Pendentes recortavam por cima — na
+            // conferência em produção (28/10) "Ver tarifas" abriu VAZIO com 99 tarifas no alerta
+            // (busca antiga + "Despesas" + 57 categorias + competência 2026).
+            setBankSearch('');
+            setBankCategoryFilter([]);
+            setBankCounterpartyFilter([]);
+            setFlowFilter('ALL');
+            statementAdvancedFilters.clearRules();
+            setCompetencia('');
+            setStartDate('');
+            setEndDate('');
+        }
         setActiveView(d.aba);
         // Depois de trocar a aba: o efeito acima limpa o recorte ao SAIR de Pendentes.
         setRecorteDoDashboard(d.aba === 'pending' ? d.recorte ?? null : null);
@@ -3584,7 +3598,8 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             <span>
                                 Mostrando só {recorteDoDashboard === 'tarifas'
                                     ? 'possíveis tarifas (saídas sem classificação com TARIFA, TAXA, CESTA, MANUTENÇÃO, PACOTE, IOF ou ANUIDADE)'
-                                    : 'o extrato sem classificação'}, como no Dashboard.
+                                    : 'o extrato sem classificação'}, de todo o período, como no Dashboard
+                                {' '}(a busca, os filtros e a competência anteriores foram limpos).
                             </span>
                             <button type="button" onClick={() => setRecorteDoDashboard(null)}
                                 className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-900 hover:underline">

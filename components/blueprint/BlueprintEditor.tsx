@@ -6114,7 +6114,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   const vestirComOEmpreendimento = (c: CandidatoDeMassa, opcoes?: { seguirEmpreendimento: boolean }): { c: CandidatoDeMassa; recado: string | null } => {
     if (!opcoes?.seguirEmpreendimento || !estruturasDaCasa || estruturasDaCasa.length === 0) return { c, recado: null };
-    const v = vestirBlocosPropostos(c.blocos, estruturasDaCasa);
+    const v = vestirBlocosPropostos(c.blocos, estruturasDaCasa, exigenciasEntreTorres);
     const resumo = estruturasDaCasa.filter((e) => e.acima.length > 0).map((e) => `${e.nome} ${e.acima.length} pav${e.garagens.length ? ` + ${e.garagens.length} garagem(ns)` : ''}`).join(' · ');
     return { c: { ...c, blocos: v.blocos }, recado: `Blocos seguindo as torres do Empreendimento: ${resumo}.${v.avisos.length ? ` ${v.avisos.join(' ')}` : ''}` };
   };
@@ -9167,9 +9167,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     () => (torresDoEmpreendimento ? estruturasDoEmpreendimento(torresDoEmpreendimento, unidadesDoEmpreendimento.pavimentosPorTorre) : null),
     [torresDoEmpreendimento, unidadesDoEmpreendimento.pavimentosPorTorre],
   );
+  // DISTÂNCIA ENTRE TORRES (28/10/2026): a que o Empreendimento pede para cada par, em mm — o ajuste confere e afasta.
+  const distanciasDaCasa = torresDoEmpreendimento ? unidadesDoEmpreendimento.distancias : null;
+  const exigenciasEntreTorres = useMemo(
+    () => (distanciasDaCasa ?? []).map((d) => ({ torreA: d.torre_a, torreB: d.torre_b, mm: Math.round(d.distancia_m * 1000) })),
+    [distanciasDaCasa],
+  );
   const ajusteAoEmpreendimento = useMemo(
-    () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa) : null),
-    [estruturasDaCasa, editor.model],
+    () => (estruturasDaCasa && estruturasDaCasa.length > 0 ? comandosDoAjuste(editor.model, estruturasDaCasa, exigenciasEntreTorres) : null),
+    [estruturasDaCasa, editor.model, exigenciasEntreTorres],
   );
   /**
    * AS UNIDADES DE CADA PAVIMENTO NO 3D (27/10/2026): *"… também de cada unidade em cada pavimento"*. O piso de um
@@ -9269,11 +9275,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         ? {
             nome: nomeDoEmpreendimentoDaCasa,
             massa: torresDoEmpreendimento
-              ? massaDoEmpreendimento(torresDoEmpreendimento, estruturasDaCasa ?? [])
+              ? massaDoEmpreendimento(torresDoEmpreendimento, estruturasDaCasa ?? [], distanciasDaCasa ?? [])
               : { restricao: null, motivo: 'Carregando as torres do Empreendimento…', avisos: [], resumo: null },
           }
         : null,
-    [empreendimentoDaCasa, nomeDoEmpreendimentoDaCasa, torresDoEmpreendimento, estruturasDaCasa],
+    [empreendimentoDaCasa, nomeDoEmpreendimentoDaCasa, torresDoEmpreendimento, estruturasDaCasa, distanciasDaCasa],
   );
   /** F15 + 25/10/2026: escolher a unidade preenche o programa por ela e a grava como A unidade desta casa. */
   const escolherUnidadeDaCasa = useCallback(
@@ -11353,6 +11359,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   nome: nomeDoEmpreendimentoDaCasa,
                   papel,
                   linha: papel ? ajusteAoEmpreendimento.linhas.find((l) => l.torre === papel.torre) ?? null : null,
+                  distancias: papel ? ajusteAoEmpreendimento.distancias.filter((d) => d.torreA === papel.torre || d.torreB === papel.torre) : [],
                   avisos: [...(estruturasDaCasa ?? []).flatMap((e) => e.avisos), ...ajusteAoEmpreendimento.avisos],
                   pendentes: ajusteAoEmpreendimento.comandos.length,
                   onAjustar: async () => {

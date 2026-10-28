@@ -6,6 +6,7 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 import { applyBatch, emptyModel, point, type BlueprintModel, type Command } from '../utils/blueprintKernel';
+import { distanciaEntrePoligonosMm } from '../utils/blueprintDistanciaEntreTorres';
 import { ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { produtoDaColuna, produtoSemente, vagasQueCabem } from '../utils/blueprintProduto';
 import { cenarioDeMassa, type CenarioDeMassa } from '../utils/blueprintComparadorDeMassa';
@@ -430,6 +431,15 @@ describe('gerador de massa · seguir o Empreendimento', () => {
     expect(texto).toMatch(/até 3/);
     expect(texto).toMatch(/gabarito em altura/);
     expect(texto).toMatch(/Seguir o Empreendimento/);
+  });
+
+  it('distância entre torres do Empreendimento (28/10/2026): vale no lugar da hipótese, e os blocos saem com ela', () => {
+    const r = gerarMassa(com(lote(40, 80), { torres: 2, pavimentosMin: null, pavimentosMax: null, afastamentoEntreBlocosM: 12 }), 1);
+    expect(r.decisoes.join(' ')).toContain('Afastamento entre blocos: 12 m, a distância entre torres do Empreendimento (no lugar da hipótese de 6 m).');
+    expect(r.melhores.length).toBeGreaterThan(0);
+    const acima = r.melhores[0].blocos.filter((b) => b.cotaBaseMm >= 0 && b.uso !== 'GARAGEM');
+    expect(acima.length).toBeGreaterThanOrEqual(2);
+    expect(distanciaEntrePoligonosMm(acima[0].pontos, acima[1].pontos)).toBeGreaterThanOrEqual(12000 - 1);
   });
 
   it('torres do Empreendimento que não cabem lado a lado no envelope: diz em vez de "0 combinações" calado', () => {

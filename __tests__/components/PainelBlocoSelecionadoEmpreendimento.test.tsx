@@ -28,7 +28,7 @@ const un = (id: string, nome: string, tipologia: string, area: number, extra: Pa
 const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
 const montar = (
-  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void }; papel?: typeof PAPEL } = {},
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[] } = {},
 ) =>
   render(
     <PainelBlocoSelecionado
@@ -46,6 +46,7 @@ const montar = (
       empreendimento={{
         nome: '011 - Garden Cambuhy',
         papel: extra.papel ?? PAPEL,
+        distancias: extra.distancias,
         linha: LINHA,
         avisos: ['Torre "Torre A": sem número de pavimentos no cadastro da torre — contados pelas unidades (4 acima do solo + 2 abaixo).'],
         pendentes: extra.pendentes ?? 2,
@@ -108,6 +109,14 @@ describe('painel do bloco › Empreendimento', () => {
     const papel = { ...PAPEL, pisos: [piso(0, 0, false), piso(1, 4500, true), piso(2, 7500, false), piso(3, 10500, false)] } as unknown as typeof PAPEL;
     montar({ piso: 2, papel });
     expect(screen.getByTestId('elevacao-do-pavimento')).toHaveTextContent('Elevação +4,50 m (digitada no Empreendimento)');
+  });
+
+  it('a distância às outras torres: vermelho quando está mais perto do que o Empreendimento pede (28/10/2026)', () => {
+    montar({ distancias: [{ torreA: 'Torre A', torreB: 'Torre B', medidaMm: 6000, exigidaMm: 10000, ok: false }, { torreA: 'Torre C', torreB: 'Torre A', medidaMm: 12000, exigidaMm: 8000, ok: true }] });
+    const d = screen.getByTestId('distancias-entre-torres');
+    expect(d).toHaveTextContent('Distância à Torre B: 6,00 m — o Empreendimento pede 10,00 m');
+    expect(d).toHaveTextContent('Distância à Torre C: 12,00 m (pede 8,00 m)');
+    expect(screen.getByText(/Distância à Torre B/)).toHaveClass('text-red-700');
   });
 
   it('a arrumação das unidades: automática ou a ordem do Empreendimento, com o que cada uma faz (27/10/2026)', async () => {

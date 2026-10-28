@@ -56,3 +56,30 @@ describe('massaDoEmpreendimento com a estrutura das torres (27/10/2026)', () => 
   });
 });
 
+
+describe('massaDoEmpreendimento com a distância entre torres (28/10/2026)', () => {
+  const T = (id: string, name: string) => ({ id, name, floors_count: 6 });
+  it('o gerador usa a MAIOR distância dos pares, e o resumo diz', () => {
+    const r = massaDoEmpreendimento([T('a', 'Torre A'), T('b', 'Torre B'), T('c', 'Torre C')], [], [
+      { torre_a: 'a', torre_b: 'b', distancia_m: 6 },
+      { torre_a: 'a', torre_b: 'c', distancia_m: 8 },
+      { torre_a: 'b', torre_b: 'c', distancia_m: 7 },
+    ]);
+    expect(r.restricao?.afastamentoEntreBlocosM).toBe(8);
+    expect(r.resumo).toContain('entre torres 8 m');
+    expect(r.avisos.join(' ')).toContain('As distâncias entre torres vão de 6 a 8 m — o gerador usa a maior entre todos os blocos.');
+  });
+  it('parte dos pares informada: avisa o que falta; nenhuma informada = a hipótese do gerador, sem aviso', () => {
+    const parcial = massaDoEmpreendimento([T('a', 'Torre A'), T('b', 'Torre B'), T('c', 'Torre C')], [], [{ torre_a: 'a', torre_b: 'b', distancia_m: 6 }]);
+    expect(parcial.restricao?.afastamentoEntreBlocosM).toBe(6);
+    expect(parcial.avisos.join(' ')).toContain('2 par(es) de torres sem distância em Torres e Unidades — vale a maior informada.');
+    const nenhuma = massaDoEmpreendimento([T('a', 'Torre A'), T('b', 'Torre B')], [], []);
+    expect(nenhuma.restricao?.afastamentoEntreBlocosM).toBeUndefined();
+    expect(nenhuma.avisos.join(' ')).not.toContain('distância');
+  });
+  it('uma torre só: sem distância e sem aviso', () => {
+    const r = massaDoEmpreendimento([T('a', 'Torre A')], [], []);
+    expect(r.restricao?.afastamentoEntreBlocosM).toBeUndefined();
+    expect(r.avisos.join(' ')).not.toContain('distância');
+  });
+});

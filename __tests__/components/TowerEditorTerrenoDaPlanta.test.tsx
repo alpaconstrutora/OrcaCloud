@@ -7,7 +7,7 @@
  */
 import React from 'react';
 import { fireEvent, render, screen, waitFor } from '@testing-library/react';
-import { describe, expect, it, vi, beforeEach } from 'vitest';
+import { describe, expect, it, vi, beforeEach, onTestFinished } from 'vitest';
 import type { TerrenoDaPlanta } from '../../services/blueprintTerrenoDaPlanta';
 
 const svc = vi.hoisted(() => ({
@@ -101,5 +101,31 @@ describe('Torres & Unidades › seções em blocos (28/10/2026, "separe as sess�
     expect(torres.contains(terreno)).toBe(false);
     expect(terreno.className).toContain('border');
     expect(torres.className).toContain('border');
+  });
+});
+
+describe('Torres & Unidades › distância entre torres (28/10/2026)', () => {
+  it('com 2 torres: um campo por par, com o valor salvo; salvar grava a lista no empreendimento', async () => {
+    // Durante o teste inteiro (não "Once"): sob carga, outra montagem podia consumir a resposta única.
+    const { empreendimentoService } = await import('../../services/empreendimentoService');
+    const listTowers = empreendimentoService.listTowers as unknown as { mockImplementation: (f: () => Promise<unknown>) => void };
+    listTowers.mockImplementation(async () => [
+      { id: 'tA', empreendimento_id: 'emp-1', name: 'Torre A', sort_order: 0, created_at: '', updated_at: '' },
+      { id: 'tB', empreendimento_id: 'emp-1', name: 'Torre B', sort_order: 1, created_at: '', updated_at: '' },
+    ]);
+    onTestFinished(() => listTowers.mockImplementation(async () => []));
+    svc.update.mockClear();
+    montar({ ...GARDEN, distancias_entre_torres: [{ torre_a: 'tA', torre_b: 'tB', distancia_m: 6 }] } as never);
+    const campo = (await screen.findByLabelText('Torre A ↔ Torre B (m)', {}, { timeout: 5000 })) as HTMLInputElement;
+    expect(campo.value).toBe('6,00');
+    fireEvent.change(campo, { target: { value: '8,5' } });
+    fireEvent.click(screen.getByRole('button', { name: /Salvar distâncias/ }));
+    await waitFor(() => expect(svc.update).toHaveBeenCalledWith('emp-1', { distancias_entre_torres: [{ torre_a: 'tA', torre_b: 'tB', distancia_m: 8.5 }] }));
+  });
+
+  it('uma torre só: o bloco de distâncias não aparece', async () => {
+    montar();
+    await screen.findByTestId('secao-torres');
+    expect(screen.queryByTestId('distancias-entre-torres')).not.toBeInTheDocument();
   });
 });

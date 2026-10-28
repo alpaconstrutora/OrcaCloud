@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { empreendimentoService } from '../services/empreendimentoService';
 import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoWithChildren } from '../types/empreendimento';
+import { lerDistancias, type DistanciaEntreTorres } from '../utils/empreendimentoDistanciasEntreTorres';
 
 /**
  * As TORRES com as UNIDADES do Empreendimento ligado ao estudo (25/10/2026) — uma leitura para as duas telas da
@@ -18,6 +19,8 @@ export interface UnidadesDoEmpreendimento {
   torres: EmpreendimentoTower[];
   /** Torre → pavimentos cadastrados (vazio = a torre não tem cadastro de pavimentos). */
   pavimentosPorTorre: ReadonlyMap<string, EmpreendimentoFloor[]>;
+  /** A distância pedida entre cada par de torres (28/10/2026, Torres e Unidades). */
+  distancias: DistanciaEntreTorres[];
   /** O empreendimento da lista em `torres`; `null` = nada carregado ainda. */
   carregadoDe: string | null;
   erro: string | null;
@@ -28,7 +31,7 @@ export interface UnidadesDoEmpreendimento {
  * tela continua relendo — as unidades mudam em outra tela.
  */
 export function useUnidadesDoEmpreendimento(empreendimentoId: string | null, ativo: boolean, recarga?: unknown): UnidadesDoEmpreendimento {
-  const [estado, setEstado] = useState<UnidadesDoEmpreendimento>({ torres: [], pavimentosPorTorre: new Map(), carregadoDe: null, erro: null });
+  const [estado, setEstado] = useState<UnidadesDoEmpreendimento>({ torres: [], pavimentosPorTorre: new Map(), distancias: [], carregadoDe: null, erro: null });
 
   useEffect(() => {
     if (!ativo || !empreendimentoId) return;
@@ -43,12 +46,12 @@ export function useUnidadesDoEmpreendimento(empreendimentoId: string | null, ati
         if (!vivo) return;
         const pavimentosPorTorre = new Map<string, EmpreendimentoFloor[]>();
         for (const f of pavimentos) pavimentosPorTorre.set(f.tower_id, [...(pavimentosPorTorre.get(f.tower_id) ?? []), f]);
-        setEstado({ torres, pavimentosPorTorre, carregadoDe: empreendimentoId, erro: null });
+        setEstado({ torres, pavimentosPorTorre, distancias: lerDistancias(e?.distancias_entre_torres), carregadoDe: empreendimentoId, erro: null });
       })
       .catch((err) => {
         if (!vivo) return;
         console.warn('[planta] unidades do empreendimento indisponíveis:', err);
-        setEstado({ torres: [], pavimentosPorTorre: new Map(), carregadoDe: null, erro: err instanceof Error ? err.message : String(err) });
+        setEstado({ torres: [], pavimentosPorTorre: new Map(), distancias: [], carregadoDe: null, erro: err instanceof Error ? err.message : String(err) });
       });
     return () => {
       vivo = false;

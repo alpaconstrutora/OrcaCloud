@@ -410,10 +410,26 @@ export default function TelaGeradorDeMassa({ gerador, model, regua, proximoNumer
               className="h-8 w-32 rounded-[6px] border border-slate-300 bg-white px-2 text-sm tabular-nums"
             />
           </label>
-          <label className="flex flex-col gap-1">
-            Entre blocos (m)
-            <input type="number" min={3} step={0.5} value={c.hipoteses.afastamentoEntreBlocosM} onChange={(e) => Number(e.target.value) >= 3 && setH({ afastamentoEntreBlocosM: Number(e.target.value) })} aria-label="Afastamento entre blocos (m)" className={campo} />
-          </label>
+          {/* Distância entre torres do Empreendimento (28/10/2026): seguindo, vale a dela — o campo mostra e diz por quê. */}
+          {seguindo && restricaoDoEmpreendimento?.afastamentoEntreBlocosM != null ? (
+            <label className="flex flex-col gap-1" title="A distância entre torres informada em Torres e Unidades (a maior dos pares). Desligue &quot;Seguir o Empreendimento&quot; para usar outra.">
+              Entre blocos (m)
+              <input
+                type="number"
+                value={restricaoDoEmpreendimento.afastamentoEntreBlocosM}
+                readOnly
+                aria-label="Afastamento entre blocos (m)"
+                aria-describedby="entre-blocos-do-empreendimento"
+                className={campo}
+              />
+              <span id="entre-blocos-do-empreendimento" className="text-[11px] text-slate-500">do Empreendimento</span>
+            </label>
+          ) : (
+            <label className="flex flex-col gap-1">
+              Entre blocos (m)
+              <input type="number" min={3} step={0.5} value={c.hipoteses.afastamentoEntreBlocosM} onChange={(e) => Number(e.target.value) >= 3 && setH({ afastamentoEntreBlocosM: Number(e.target.value) })} aria-label="Afastamento entre blocos (m)" className={campo} />
+            </label>
+          )}
           {/* FOLGA ATÉ O RECUO (04/10/2026): era 10 cm fixos no gerador. Guardada em mm, editada em cm. */}
           <label
             className="flex flex-col gap-1"

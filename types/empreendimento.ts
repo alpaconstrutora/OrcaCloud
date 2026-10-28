@@ -43,6 +43,11 @@ export interface Empreendimento {
 
     /** LOTEAMENTO (B3): o estudo da Planta Inteligente que originou este empreendimento. */
     blueprint_study_id?: string | null;
+    /**
+     * Distância entre cada par de torres (28/10/2026), m — `{ torre_a, torre_b, distancia_m }`, lida por
+     * `lerDistancias` (utils/empreendimentoDistanciasEntreTorres). A Planta confere e o Gerar massa usa.
+     */
+    distancias_entre_torres?: unknown;
 
     // Obra principal (projects.id). Não substitui o vínculo por torre
     // (EmpreendimentoTower.project_id), que é o correto no multi-torre.

@@ -65,12 +65,35 @@ beforeEach(() => {
 const linhaDa = async (conta: string) => (await screen.findByText(conta, { selector: 'td p' })).closest('tr') as HTMLElement;
 
 describe('Dashboard — saldo no banco', () => {
-    it('responde "bate?" nomeando as contas de cada estado', async () => {
+    it('"Bate com o banco" é o cartão principal, com as contas nomeadas e o tom pelo limiar', async () => {
         render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
-        const resumo = await screen.findByText(/de 3 contas batem com o banco/);
-        expect(resumo).toHaveTextContent('1 de 3 contas batem com o banco');
-        expect(screen.getByText(/Não bate: Banco Itaú/)).toBeInTheDocument();
-        expect(screen.getByText(/O banco não informou o saldo de: Sicredi/)).toBeInTheDocument();
+        const card = (await screen.findByText('Bate com o banco')).closest('div.rounded-xl') as HTMLElement;
+        expect(card).toHaveTextContent('1 de 3 contas');
+        expect(card).toHaveTextContent('Não bate: Banco Itaú · sem saldo do banco: Sicredi');
+        // Uma conta fora → alerta (ícone + texto para leitor de tela, não só cor).
+        expect(card).toHaveTextContent('(alerta)');
+        // A ação vai para a conta mais fora.
+        fireEvent.click(within(card).getByRole('button', { name: /Ajustar Banco Itaú/ }));
+        expect(await screen.findByText(/7\.516 pendentes deixam de contar/)).toBeInTheDocument();
+    });
+
+    it('sem nenhuma conta fora, a ação do cartão principal é informar o saldo que falta', async () => {
+        servico.getDashboard.mockResolvedValue(dashboard([asaas, sicredi]));
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
+        const card = (await screen.findByText('Bate com o banco')).closest('div.rounded-xl') as HTMLElement;
+        expect(card).toHaveTextContent('1 de 2 contas');
+        expect(card).toHaveTextContent('(atenção)');
+        expect(within(card).getByRole('button', { name: /Informar saldo de Sicredi/ })).toBeInTheDocument();
+    });
+
+    it('todas batem: cartão neutro, sem ação', async () => {
+        servico.getDashboard.mockResolvedValue(dashboard([asaas]));
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-28" />);
+        const card = (await screen.findByText('Bate com o banco')).closest('div.rounded-xl') as HTMLElement;
+        expect(card).toHaveTextContent('1 de 1 conta');
+        expect(card).toHaveTextContent('Todas batem com o saldo que o banco informa');
+        expect(card).not.toHaveTextContent(/\((alerta|atenção)\)/);
+        expect(within(card).queryByRole('button')).toBeNull();
     });
 
     it('cada linha mostra o seu estado: bate, fora (com o calculado) e sem saldo', async () => {

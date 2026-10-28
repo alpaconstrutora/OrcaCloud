@@ -4,6 +4,7 @@ import {
     Check, X, Tag, Receipt, Scale, Building2, HardHat, ArrowRight,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { KpiCard } from './ui/KpiCard';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { useConfirm } from './ui/confirm';
 import InformarSaldoBancoSheet from './reconciliation/InformarSaldoBancoSheet';
@@ -43,36 +44,19 @@ function LinkDeAcao({ children, onClick }: { children: React.ReactNode; onClick:
     );
 }
 
-interface KPIProps {
-    label: string;
-    value: number;
-    icon: React.ElementType;
-    iconBg: string;
-    hint?: string;
-    tone?: 'neutral' | 'good' | 'warn';
-    acao?: { label: string; onClick: () => void } | null;
-}
-function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral', acao }: KPIProps) {
-    const valueColor =
-        tone === 'good' ? 'text-emerald-600'
-        : tone === 'warn' ? 'text-amber-600'
-        : value < 0 ? 'text-red-600' : 'text-gray-900';
-    return (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm">
-            <div className="flex items-start gap-4">
-                <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${iconBg}`}>
-                    <Icon className="w-5 h-5" />
-                </div>
-                <div className="min-w-0">
-                    <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider">{label}</p>
-                    <p className={`text-xl font-black mt-0.5 tabular-nums ${valueColor}`}>{formatBRL(value)}</p>
-                    {hint && <p className="text-xs text-gray-400 mt-1 font-medium">{hint}</p>}
-                    {acao && <div className="mt-2"><LinkDeAcao onClick={acao.onClick}>{acao.label}</LinkDeAcao></div>}
-                </div>
-            </div>
-        </div>
-    );
-}
+/**
+ * Limiares dos indicadores de destaque (guia §4.5): a cor só aparece por eles, e moram num
+ * lugar só porque são hipótese de gestão — alguém vai querer mudá-los.
+ * Passo 5 do plano docs/planos/2026-10-28-conciliacao-dashboard-confianca.md.
+ */
+const LIMIAR = {
+    /** Conta cujo saldo não bate com o que o banco informa: alerta a partir da 1ª. */
+    contasForaAlerta: 0,
+    /** Conta sem saldo do banco (não dá para responder "bate?"): atenção a partir da 1ª. */
+    contasSemSaldoAtencao: 0,
+    /** Lançamentos do extrato a conciliar: atenção a partir do 1º. */
+    pendentesAtencao: 0,
+} as const;
 
 interface ReconciliationDashboardProps {
     organizationId: string | null;
@@ -239,6 +223,25 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     const contaAjustar = contas.find(c => c.account_id === ajustarContaId) ?? null;
     const estadoAjustar = contaAjustar ? estadoDoSaldoBanco(contaAjustar) : null;
 
+    // Cartão principal: "bate com o banco?". A ação vai para a conta mais fora (a maior diferença)
+    // ou, sem nenhuma fora, para a primeira sem saldo do banco.
+    const estados = contas.map(c => ({ c, e: estadoDoSaldoBanco(c) }));
+    const contaMaisFora = estados
+        .filter(x => x.e.tipo === 'fora')
+        .sort((a, b) => Math.abs((b.e as { diferenca: number }).diferenca) - Math.abs((a.e as { diferenca: number }).diferenca))[0]?.c ?? null;
+    const contaSemSaldo = estados.find(x => x.e.tipo === 'sem')?.c ?? null;
+    const tomBanco = banco.fora.length > LIMIAR.contasForaAlerta ? 'alerta'
+        : banco.sem.length > LIMIAR.contasSemSaldoAtencao ? 'atencao' : 'neutro';
+    const subBanco = [
+        banco.fora.length > 0 ? `Não ${banco.fora.length === 1 ? 'bate' : 'batem'}: ${banco.fora.join(', ')}` : null,
+        banco.sem.length > 0 ? `sem saldo do banco: ${banco.sem.join(', ')}` : null,
+    ].filter(Boolean).join(' · ') || (banco.total > 0 ? 'Todas batem com o saldo que o banco informa' : 'Nenhuma conta bancária');
+    const acaoBanco = contaMaisFora
+        ? { label: `Ajustar ${contaMaisFora.account_name}`, onClick: () => setAjustarContaId(contaMaisFora.account_id) }
+        : contaSemSaldo
+            ? { label: `Informar saldo de ${contaSemSaldo.account_name}`, onClick: () => setInformarContaId(contaSemSaldo.account_id) }
+            : null;
+
     const informarSaldo = async (data: string, saldo: number) => {
         if (!contaInformar) return;
         await reconciliationDashboardService.informarSaldoDoBanco(contaInformar.account_id, data, saldo);
@@ -259,11 +262,21 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
             {!data && !erro && (
                 <div aria-busy="true" className="space-y-4">
                     <span className="sr-only" role="status">Carregando a conciliação…</span>
-                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" aria-hidden="true">
-                        {[0, 1, 2, 3].map(i => (
-                            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm animate-pulse">
+                    {/* Mesmo desenho do carregado: 2 destaques (o 1º ocupa 2/3) + faixa de 3. */}
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-hidden="true">
+                        {[0, 1].map(i => (
+                            <div key={i} className={`bg-white rounded-xl border border-gray-200 px-4 py-3.5 animate-pulse ${i === 0 ? 'sm:col-span-2' : ''}`}>
+                                <div className="h-3 w-28 bg-gray-100 rounded" />
+                                <div className="h-6 w-36 bg-gray-100 rounded mt-2.5" />
+                                <div className="h-3 w-48 bg-gray-100 rounded mt-2" />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3" aria-hidden="true">
+                        {[0, 1, 2].map(i => (
+                            <div key={i} className="bg-white rounded-xl border border-gray-200 px-4 py-3 animate-pulse">
                                 <div className="h-3 w-24 bg-gray-100 rounded" />
-                                <div className="h-5 w-32 bg-gray-100 rounded mt-3" />
+                                <div className="h-4 w-28 bg-gray-100 rounded mt-2" />
                             </div>
                         ))}
                     </div>
@@ -298,47 +311,50 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
             )}
 
             {data && (<>
-            {/* KPIs principais */}
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-                {/* Não é o saldo que o banco informa (esse está na coluna "Saldo no banco"):
-                    é o que o app soma a partir do saldo inicial e do extrato importado. */}
-                <KPICard
-                    label="Saldo pelo extrato"
-                    value={totals?.bank_balance ?? 0}
-                    icon={Landmark}
-                    iconBg="bg-blue-50 text-blue-600"
-                    hint="Saldo inicial + extrato importado"
-                />
-                <KPICard
-                    label="Saldo conciliado"
-                    value={reconciledTotal}
-                    icon={ShieldCheck}
-                    iconBg="bg-emerald-50 text-emerald-600"
-                    hint="Saldo inicial + o que já foi conciliado"
-                />
-                {/* Valor BRUTO pendente: a diferença líquida somava +1.000 com −1.000 e mostrava
-                    R$ 0,00 em verde com "2 pendentes" embaixo. */}
-                <KPICard
-                    label="A conciliar"
-                    value={totals?.pending_value ?? 0}
-                    icon={AlertTriangle}
-                    iconBg="bg-amber-50 text-amber-600"
-                    tone={(totals?.pending_count ?? 0) > 0 ? 'warn' : 'good'}
-                    hint={(totals?.pending_count ?? 0) > 0
-                        ? `${plural(totals?.pending_count ?? 0, 'lançamento', 'lançamentos')} do extrato`
-                        : 'Nada pendente no extrato'}
-                    acao={onIrPara && contaPendente ? {
-                        label: `Conciliar ${contaPendente.account_name} na Central`,
-                        onClick: () => onIrPara({ aba: 'center', contaId: contaPendente.account_id }),
-                    } : null}
-                />
-                <KPICard
-                    label="Saldo contábil"
-                    value={systemBalance}
-                    icon={BookOpen}
-                    iconBg="bg-indigo-50 text-indigo-600"
-                    hint="Saldo inicial + lançamentos baixados no sistema, de qualquer origem"
-                />
+            {/* Hierarquia (passo 5, guia §4.5): a pergunta da tela — "bate com o banco?" — é o
+                número principal; "a conciliar" é o segundo. Os três saldos são contexto e vão
+                numa faixa secundária neutra logo abaixo. A cor só aparece por LIMIAR. */}
+            <div className="space-y-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <KpiCard
+                        destaque
+                        className="sm:col-span-2"
+                        label="Bate com o banco"
+                        icon={<Landmark />}
+                        value={`${banco.bate.length} de ${plural(banco.total, 'conta', 'contas')}`}
+                        sub={subBanco}
+                        title={subBanco}
+                        tom={tomBanco}
+                        acao={acaoBanco ?? undefined}
+                    />
+                    {/* Valor BRUTO pendente: a diferença líquida somava +1.000 com −1.000 e mostrava
+                        R$ 0,00 em verde com "2 pendentes" embaixo. */}
+                    <KpiCard
+                        destaque
+                        label="A conciliar"
+                        icon={<AlertTriangle />}
+                        value={formatBRL(totals?.pending_value ?? 0)}
+                        sub={(totals?.pending_count ?? 0) > 0
+                            ? `${plural(totals?.pending_count ?? 0, 'lançamento', 'lançamentos')} do extrato`
+                            : 'Nada pendente no extrato'}
+                        tom={(totals?.pending_count ?? 0) > LIMIAR.pendentesAtencao ? 'atencao' : 'neutro'}
+                        acao={onIrPara && contaPendente ? {
+                            label: `Conciliar ${contaPendente.account_name} na Central`,
+                            onClick: () => onIrPara({ aba: 'center', contaId: contaPendente.account_id }),
+                        } : undefined}
+                    />
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    {/* Não é o saldo que o banco informa (esse está no cartão acima e na coluna
+                        "Saldo no banco"): é o que o app soma a partir do saldo inicial e do extrato. */}
+                    <KpiCard size="sm" color="gray" icon={<Landmark />} label="Saldo pelo extrato"
+                        value={formatBRL(totals?.bank_balance ?? 0)} sub="Saldo inicial + extrato importado" />
+                    <KpiCard size="sm" color="gray" icon={<ShieldCheck />} label="Saldo conciliado"
+                        value={formatBRL(reconciledTotal)} sub="Saldo inicial + o que já foi conciliado" />
+                    <KpiCard size="sm" color="gray" icon={<BookOpen />} label="Saldo contábil"
+                        value={formatBRL(systemBalance)} sub="Saldo inicial + lançamentos baixados no sistema"
+                        title="Saldo inicial + lançamentos baixados no sistema, de qualquer origem (cobrança online, boleto, sync comercial ou conciliação)" />
+                </div>
             </div>
 
             {/* Alertas */}
@@ -404,28 +420,6 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                 <div className="px-5 py-3 border-b border-gray-50">
                     <h5 className="text-xs font-black text-gray-400 uppercase tracking-widest">Por conta bancária</h5>
                 </div>
-                {/* A resposta direta para "bate com o banco?" — as contas de cada estado, nomeadas. */}
-                {banco.total > 0 && (
-                    <div className="px-5 py-3 border-b border-gray-100 text-sm text-gray-700" role="status">
-                        <p>
-                            <span className="font-semibold text-gray-900">
-                                {banco.bate.length} de {banco.total} {banco.total === 1 ? 'conta bate' : 'contas batem'} com o banco
-                            </span>
-                            {banco.bate.length > 0 && <span className="text-gray-600"> ({banco.bate.join(', ')})</span>}.
-                        </p>
-                        {banco.fora.length > 0 && (
-                            <p className="mt-0.5 text-amber-800">
-                                <AlertTriangle className="inline w-3.5 h-3.5 -mt-0.5 mr-1" aria-hidden="true" />
-                                Não {banco.fora.length === 1 ? 'bate' : 'batem'}: {banco.fora.join(', ')}.
-                            </p>
-                        )}
-                        {banco.sem.length > 0 && (
-                            <p className="mt-0.5 text-gray-600">
-                                O banco não informou o saldo de: {banco.sem.join(', ')}.
-                            </p>
-                        )}
-                    </div>
-                )}
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm">
                         <thead>

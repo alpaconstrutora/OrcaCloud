@@ -107,6 +107,14 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
 | 4.4 | Colunas "Diferença" → "A conciliar" (bruto) nas tabelas por conta e por empresa, com total; "Saldo Bancário" → "Saldo pelo extrato"; títulos "Por conta bancária", "Por empresa", "Caixa realizado por obra" | Na tela |
 | 4.5 | Plurais de verdade (`plural`): pendentes, sem classificação, tarifas, empresas/contas; "Grupo" → "Total"; estado vazio diz onde cadastrar conta | Nenhum "(s)/(ões)/(is)" no componente |
 ### Passo 5 — `/impeccable layout`: `KpiCard destaque` com ação (§4.5) e hierarquia
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 5.1 | O cartão feito à mão (`KPICard` local, §4 "não reimplementar") sai; entra o `KpiCard` canônico | Componente sem `KPICard` |
+| 5.2 | 1ª fileira, dois `KpiCard destaque`: **"Bate com o banco"** (2/3 da largura; "1 de 5 contas"; as que não batem e as sem saldo nomeadas; ação "Ajustar <conta mais fora>" ou "Informar saldo de <conta>") e **"A conciliar"** (bruto + quantidade; "Conciliar <conta> na Central") | Testes do cartão principal (alerta / atenção / neutro, ação certa) |
+| 5.3 | Tom só por `LIMIAR` (no topo do componente): conta fora → alerta; conta sem saldo do banco → atenção; lançamento a conciliar → atenção | Idem |
+| 5.4 | Faixa secundária neutra (`size="sm" color="gray"`): Saldo pelo extrato · Saldo conciliado · Saldo contábil | Na tela |
+| 5.5 | Sai a frase "N de M batem" de dentro da tabela (virou o cartão principal); esqueleto de carregamento no desenho novo | Na tela |
 ### Passo 6 — `/impeccable audit`: rótulos de campo, foco, títulos, abas como abas, contraste, conciliado negativo, data local
 ### Passo 7 — `/impeccable polish`
 
@@ -170,9 +178,13 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
 - [x] Passo 3 — 4 de 4. PR #235 (`00120ea`). Conferido em produção (28/10): barra do Dashboard com
   "Posição em" (hoje, `max` = hoje, rótulo ligado) + Atualizar + Importar extrato; linha antiga
   sumiu; Extrato mantém conta e competência.
-- [ ] Passo 4 — 5 de 5 no código; falta conferência em produção. Testes: `conciliacaoTextos.test.ts`
-  (4) + 3 de tela.
-- [ ] Passos 5 a 7
+- [x] Passo 4 — 5 de 5. PR #236 (`90ba286`). Conferido em produção (28/10, org Alpa): subtítulo,
+  4 rótulos, divergência âmbar "esperada por enquanto" com o lado ("O sistema tem R$ 762.260,22 a
+  mais…", 408 de 479 baixados), zero "(s)/(ões)/(is)", "Total". "A conciliar" na Alpa passou de
+  R$ 241.513,39 (líquido) para R$ 11.341.299,57 (bruto, 5.332 lançamentos).
+- [ ] Passo 5 — 5 de 5 no código; falta conferência em produção. Testes de tela: 21. Suíte: 12.166 ✓;
+  16 falhas em 9 arquivos não tocados (Planta, Contas a Pagar, webhooks) que passam 411/411 isolados.
+- [ ] Passos 6 e 7
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)
 

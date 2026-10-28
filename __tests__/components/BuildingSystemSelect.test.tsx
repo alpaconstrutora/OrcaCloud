@@ -56,7 +56,10 @@ const montar = (inicial: BuildingSystem[], valor = '') =>
 
 const abrir = async (user: ReturnType<typeof userEvent.setup>) => {
     await user.click(screen.getByRole('button', { expanded: false }));
-    return await screen.findByText('Sistemas prediais');
+    // Espera a gaveta ABRIR, não só o título existir: o seletor monta o Sheet
+    // fechado e abre um quadro depois; fechado ele é `inert` (27/10/2026) e o
+    // getByRole logo em seguida perdia a corrida na CI.
+    return await screen.findByRole('dialog', { name: 'Sistemas prediais' });
 };
 
 beforeEach(() => {

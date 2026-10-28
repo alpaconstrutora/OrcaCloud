@@ -1395,7 +1395,7 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
           {/* A organização vem do useOrgContext dentro da tela (REGRA #5). */}
-          <CentralCliente />
+          <CentralCliente onNavigate={setActiveView} />
         </React.Suspense>
       );
 

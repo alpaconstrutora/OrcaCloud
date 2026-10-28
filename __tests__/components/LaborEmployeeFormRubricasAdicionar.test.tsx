@@ -71,12 +71,15 @@ const abrirAba = async () => {
     await screen.findByText('Vale transporte extra');
 };
 
-const drawer = () => screen.getByText('Adicionar rubricas recorrentes').closest('[role="dialog"]') as HTMLElement;
+// Espera a gaveta ABRIR, não só o título existir: o seletor monta o Sheet
+// fechado e abre um quadro depois. Até 27/10/2026 o conteúdo de gaveta fechada
+// era acessível, e o teste agia nela ainda fechada — hoje ela é `inert`.
+const drawer = () => screen.findByRole('dialog', { name: 'Adicionar rubricas recorrentes' });
 const linha = (onde: HTMLElement, nome: string) => within(onde).getByText(nome).closest('tr') as HTMLElement;
 const marcar = (onde: HTMLElement, nome: string) => fireEvent.click(within(linha(onde, nome)).getByRole('checkbox'));
 const adicionar = async (...nomes: string[]) => {
     fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
-    const d = await waitFor(drawer);
+    const d = await drawer();
     nomes.forEach(n => marcar(d, n));
     fireEvent.click(within(d).getByRole('button', { name: /^Adicionar \d+ rubricas?$/ }));
 };
@@ -94,7 +97,7 @@ describe('LaborEmployeeForm › Folha de Pagamento — Adicionar rubricas', () =
     it('o drawer lista também as não-automáticas, trava o INSS com o motivo e adiciona as marcadas', async () => {
         await abrirAba();
         fireEvent.click(screen.getByRole('button', { name: 'Adicionar' }));
-        const d = await waitFor(drawer);
+        const d = await drawer();
 
         expect(within(d).getByText('Gratificação')).toBeTruthy();
         expect(within(d).getByText('Auxílio creche')).toBeTruthy();

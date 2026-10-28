@@ -39,6 +39,7 @@ import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilter
 import ReconciliationDashboardView, { type DestinoConciliacao } from './ReconciliationDashboard';
 import type { RegraPreenchida } from './reconciliation/RegrasSheet';
 import { pareceTarifa } from '../utils/conciliacaoSaldoBanco';
+import { hojeLocal } from '../utils/baixaRecebivel';
 import DivergencesPanel from './DivergencesPanel';
 import FinancialClosePanel from './FinancialClosePanel';
 import AnomaliesPanel from './AnomaliesPanel';
@@ -401,6 +402,12 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
     const [recorteDoDashboard, setRecorteDoDashboard] = useState<DestinoConciliacao['recorte'] | null>(null);
     // "Criar regra" do alerta de tarifas: a Central abre a gaveta de Regras já preenchida.
     const [regraInicial, setRegraInicial] = useState<RegraPreenchida | null>(null);
+    // Aba Dashboard: "Posição em" é o único controle que muda os números dela, e por isso é o
+    // único que a barra de escopo mostra ali (conta/competência/período não chegavam ao
+    // dashboard). Dia no fuso local: `toISOString()` virava o dia seguinte depois das 21h.
+    const [posicaoEm, setPosicaoEm] = useState(() => hojeLocal());
+    const [recargaDashboard, setRecargaDashboard] = useState(0);
+    const [dashboardCarregando, setDashboardCarregando] = useState(false);
 
     /** Um número do Dashboard leva à aba onde ele se resolve, já na conta certa. */
     const irPara = (d: DestinoConciliacao) => {
@@ -1085,6 +1092,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     useEffect(() => {
         const fetchData = async () => {
+            // A aba Dashboard lê só as RPCs do ReconciliationDashboard. O extrato MATCHED da conta
+            // do seletor servia à fileira de KPIs removida em 28/10 — carregá-lo aqui era rede à toa
+            // a cada abertura da Conciliação (Dashboard é a aba padrão). Trocar de aba recarrega.
+            if (activeView === 'dashboard') return;
             if (selectedAccountId) {
                 loadTransactions();
                 loadStats();
@@ -3137,6 +3148,28 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             {/* Toolbar de botões — guia §5.3/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+                {activeView === 'dashboard' ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                        <label htmlFor="conciliacao-posicao-em" className="text-sm font-medium text-gray-700 pl-1">Posição em</label>
+                        <input
+                            id="conciliacao-posicao-em"
+                            type="date"
+                            value={posicaoEm}
+                            max={hojeLocal()}
+                            onChange={(e) => { if (e.target.value) setPosicaoEm(e.target.value); }}
+                            className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                        />
+                        <button
+                            onClick={() => setRecargaDashboard(n => n + 1)}
+                            disabled={dashboardCarregando}
+                            className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-100 transition-all disabled:opacity-50 border border-blue-100/50"
+                            title={dashboardCarregando ? 'Carregando…' : 'Atualizar'}
+                            aria-label={dashboardCarregando ? 'Carregando…' : 'Atualizar'}
+                        >
+                            <RefreshCw className={`w-4 h-4 ${dashboardCarregando ? 'animate-spin' : ''}`} />
+                        </button>
+                    </div>
+                ) : (
                 <div className="flex flex-wrap items-center gap-2">
                     <select
                         value={selectedAccountId || ''}
@@ -3271,6 +3304,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </button>
                     )}
                 </div>
+                )}
 
                 {/* Ações — §17. "Sincronizar"/"Novo" só na aba Pendentes (Lançamentos);
                     saíram da toolbar acoplada da tabela para aqui, junto do resto das ações. */}
@@ -3552,7 +3586,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
             {/* Main Content Area */}
             {activeView === 'dashboard' ? (
-                <ReconciliationDashboardView organizationId={organizationId} onIrPara={irPara} />
+                <ReconciliationDashboardView
+                    organizationId={organizationId}
+                    asOf={posicaoEm}
+                    recarga={recargaDashboard}
+                    onCarregando={setDashboardCarregando}
+                    onIrPara={irPara}
+                />
             ) : activeView === 'center' ? (
                 <SmartReconciliationCenter
                     organizationId={organizationId}

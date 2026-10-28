@@ -90,6 +90,13 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
 **Fora do passo 2 (achado ao detalhar):** "Sem empresa" não ganha link — nenhuma tela edita
 `payment_accounts.empresa_id` (Minha Organização › Contas de Pagamento não tem o campo).
 ### Passo 3 — `/impeccable distill`: na aba Dashboard, só "Posição em" e "Importar extrato"
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 3.1 | Na aba Dashboard, a barra de escopo mostra só "Posição em" (com rótulo ligado ao campo) + Atualizar à esquerda e "Importar extrato" à direita; conta, competência e Início/Fim saem (não chegavam ao dashboard). As outras abas não mudam | Na tela: barra do Dashboard com 3 controles; Extrato/Pendentes iguais a antes |
+| 3.2 | Sai a linha "Saldo Bancário vs. Contábil · Posição em · Atualizar" de dentro do conteúdo (era o mesmo controle em segundo lugar); o dashboard recebe `asOf`/`recarga`/`onCarregando` | Teste: trocar a data e clicar Atualizar recarregam; o componente não tem controle de data próprio |
+| 3.3 | "Posição em" abre em hoje no fuso local (`hojeLocal`); antes `toISOString()` virava o dia seguinte depois das 21h. Não aceita data futura | Na tela: campo com `max` = hoje |
+| 3.4 | A aba Dashboard deixa de carregar o extrato `MATCHED` da conta do seletor e as contagens de `loadStats` (serviam só à fileira removida em 1.1) | Rede: abrir a Conciliação no Dashboard não pede `bank_transactions` |
 ### Passo 4 — `/impeccable clarify`: rótulos (Pendente bruto, legenda do Contábil, alerta de divergência, plurais, "Grupo", subtítulo)
 ### Passo 5 — `/impeccable layout`: `KpiCard destaque` com ação (§4.5) e hierarquia
 ### Passo 6 — `/impeccable audit`: rótulos de campo, foco, títulos, abas como abas, contraste, conciliado negativo, data local

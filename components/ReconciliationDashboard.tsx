@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
-    Landmark, ShieldCheck, AlertTriangle, BookOpen, RefreshCw,
+    Landmark, ShieldCheck, AlertTriangle, BookOpen,
     Check, X, Tag, Receipt, Scale, Building2, HardHat, ArrowRight,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
@@ -75,6 +75,13 @@ function KPICard({ label, value, icon: Icon, iconBg, hint, tone = 'neutral', aca
 
 interface ReconciliationDashboardProps {
     organizationId: string | null;
+    /** "Posição em" ('YYYY-MM-DD'). Mora na barra de escopo da tela-mãe (passo 3 do plano):
+     *  é o único controle que muda estes números, então é o único que a barra mostra aqui. */
+    asOf: string;
+    /** Muda a cada clique em Atualizar na barra. */
+    recarga?: number;
+    /** Para o ícone de Atualizar da barra girar enquanto carrega. */
+    onCarregando?: (carregando: boolean) => void;
     /** Sem ele (uso fora da Conciliação), os números não ganham ação. */
     onIrPara?: (destino: DestinoConciliacao) => void;
 }
@@ -85,10 +92,9 @@ function detalheDoErro(e: unknown): string | null {
     return typeof msg === 'string' && msg.trim() ? msg.trim() : null;
 }
 
-const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ organizationId, onIrPara }) => {
+const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ organizationId, onIrPara, asOf, recarga = 0, onCarregando }) => {
     const { showToast } = useToast();
     const confirm = useConfirm();
-    const [asOf, setAsOf] = useState(new Date().toISOString().split('T')[0]);
     const [data, setData] = useState<DashboardData | null>(null);
     const [consolidated, setConsolidated] = useState<ReconciliationConsolidated | null>(null);
     const [loading, setLoading] = useState(false);
@@ -134,7 +140,9 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
         }
     }, [organizationId, asOf]);
 
-    useEffect(() => { load(); }, [load]);
+    // `recarga` é o botão Atualizar da barra da tela-mãe: cada clique soma 1.
+    useEffect(() => { load(); }, [load, recarga]);
+    useEffect(() => { onCarregando?.(loading); }, [loading, onCarregando]);
 
     const startEdit = (acc: ReconciliationAccountBalance) => {
         setEditingId(acc.account_id);
@@ -246,32 +254,6 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
 
     return (
         <div className="space-y-5 min-h-[500px]">
-            {/* Header / filtro */}
-            <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
-                    <Scale className="w-4 h-4" />
-                    Saldo Bancário vs. Contábil
-                </h4>
-                <div className="flex items-center gap-2">
-                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Posição em</label>
-                    <input
-                        type="date"
-                        value={asOf}
-                        onChange={e => setAsOf(e.target.value)}
-                        className="px-3 py-1.5 rounded-lg border border-gray-200 text-sm font-semibold text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    />
-                    <button
-                        onClick={load}
-                        disabled={loading}
-                        className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-50"
-                        title={loading ? 'Carregando…' : 'Atualizar'}
-                        aria-label={loading ? 'Carregando…' : 'Atualizar'}
-                    >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
-                    </button>
-                </div>
-            </div>
-
             {/* Sem dado ainda: nada de R$ 0,00 — zero aqui seria uma afirmação sobre o banco. */}
             {!data && !erro && (
                 <div aria-busy="true" className="space-y-4">

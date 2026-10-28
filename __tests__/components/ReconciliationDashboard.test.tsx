@@ -58,7 +58,7 @@ beforeEach(() => {
 
 async function abrirEdicao(c = conta()) {
     servico.getDashboard.mockResolvedValue(dashboard(c));
-    render(<ReconciliationDashboardView organizationId="org1" />);
+    render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
     fireEvent.click(await screen.findByRole('button', { name: `Editar saldo inicial de ${c.account_name}` }));
     return screen.getByLabelText(`Saldo inicial de ${c.account_name}`);
 }
@@ -66,14 +66,14 @@ async function abrirEdicao(c = conta()) {
 describe('ReconciliationDashboard — estados de carga', () => {
     it('enquanto carrega pela primeira vez não mostra número nenhum', () => {
         servico.getDashboard.mockReturnValue(new Promise(() => {}));
-        render(<ReconciliationDashboardView organizationId="org1" />);
+        render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
         expect(screen.getByText('Carregando a conciliação…')).toBeInTheDocument();
         expect(screen.queryByText(/R\$\s*0,00/)).toBeNull();
     });
 
     it('falhou: diz o que falhou, não mostra R$ 0,00, e "Tentar de novo" recarrega', async () => {
         servico.getDashboard.mockRejectedValueOnce(new Error('Acesso negado')).mockResolvedValue(dashboard());
-        render(<ReconciliationDashboardView organizationId="org1" />);
+        render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
         expect(await screen.findByRole('alert')).toHaveTextContent(/Não foi possível carregar a posição em/);
         expect(screen.getByRole('alert')).toHaveTextContent('Acesso negado');
         expect(screen.queryByText(/R\$\s*0,00/)).toBeNull();
@@ -82,6 +82,25 @@ describe('ReconciliationDashboard — estados de carga', () => {
         expect(await screen.findByText('Itaú')).toBeInTheDocument();
         expect(screen.queryByRole('alert')).toBeNull();
         expect(servico.getDashboard).toHaveBeenCalledTimes(2);
+    });
+
+    it('"Posição em" e "Atualizar" vêm da barra da tela-mãe (passo 3): trocar a data ou clicar recarrega', async () => {
+        servico.getDashboard.mockResolvedValue(dashboard());
+        const onCarregando = vi.fn();
+        const { rerender } = render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" recarga={0} onCarregando={onCarregando} />);
+        await screen.findByText('Itaú');
+        expect(servico.getDashboard).toHaveBeenLastCalledWith('org1', '2026-10-28');
+        // Nenhum controle de data próprio: ele mora na barra.
+        expect(screen.queryByText('Posição em')).toBeNull();
+
+        rerender(<ReconciliationDashboardView organizationId="org1" asOf="2026-09-30" recarga={0} onCarregando={onCarregando} />);
+        await waitFor(() => expect(servico.getDashboard).toHaveBeenLastCalledWith('org1', '2026-09-30'));
+
+        const antes = servico.getDashboard.mock.calls.length;
+        rerender(<ReconciliationDashboardView organizationId="org1" asOf="2026-09-30" recarga={1} onCarregando={onCarregando} />);
+        await waitFor(() => expect(servico.getDashboard.mock.calls.length).toBe(antes + 1));
+        expect(onCarregando).toHaveBeenCalledWith(true);
+        await waitFor(() => expect(onCarregando).toHaveBeenLastCalledWith(false));
     });
 });
 

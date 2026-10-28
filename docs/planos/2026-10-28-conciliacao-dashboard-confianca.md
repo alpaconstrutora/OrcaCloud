@@ -116,6 +116,24 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
 | 5.4 | Faixa secundária neutra (`size="sm" color="gray"`): Saldo pelo extrato · Saldo conciliado · Saldo contábil | Na tela |
 | 5.5 | Sai a frase "N de M batem" de dentro da tabela (virou o cartão principal); esqueleto de carregamento no desenho novo | Na tela |
 ### Passo 6 — `/impeccable audit`: rótulos de campo, foco, títulos, abas como abas, contraste, conciliado negativo, data local
+
+Medido em produção antes (28/10, aba Dashboard, "Todas"): **49 textos abaixo do AA** — cabeçalhos
+das 3 tabelas e títulos de seção 2,6:1; "—" e legendas cinza-claro 1,47:1; conciliado verde
+3,65:1 (inclusive negativo); a conciliar âmbar 3,2:1; subtítulo 2,49:1. Títulos h1 → h5; abas sem
+estado para leitor de tela; tabelas sem nome nem `scope`; ✓ e "—" mudos. ("Data local" já saiu no
+passo 3.)
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 6.1 | Cabeçalhos das 3 tabelas no padrão §6.2/§6.11 (`bg-white text-gray-700 font-semibold`, sentence case) com `scope="col"` | Contraste ≥ 4,5:1 medido; teste de `scope` |
+| 6.2 | Títulos de seção viram `h2` (`text-sm font-semibold text-gray-900`) e dão nome à tabela (`aria-labelledby`) | Teste: `table` com nome "Por conta bancária" |
+| 6.3 | Conciliado sem cor (é valor, `text-gray-800`, §7) — negativo deixava de ser verde; âmbar `-600` → `-700`; cinza-claro `-300/-400` → `-500`; entradas por obra `emerald-700` | Nenhum texto < 4,5:1 na medição de produção |
+| 6.4 | "—" com "nada a conciliar" e ✓ com "nenhum pendente" para leitor de tela | Teste |
+| 6.5 | Tela-mãe: subtítulo `text-gray-500`; trilho de abas com `role="navigation"` + `aria-current="page"` na ativa; rótulos em conta, ano e mês da competência, início e fim; "Competência" em `indigo-700`; mês da competência não corta mais ("Ano tod") | Medição em produção |
+| 6.6 | Guia §20 e §23.1: snippet do subtítulo passa a `text-gray-500` (2,49:1 medido), telas migram ao serem tocadas | `docs/ui_ux_guia_unificado.md` |
+
+Fora (registrado): o anel de foco do seletor de conta das outras abas é o do snippet §5.3
+(`ring-blue-500/20` + borda azul) — mudar é decisão do guia, não desta tela.
 ### Passo 7 — `/impeccable polish`
 
 (Os passos 2–7 ganham a tabela "o que muda / como sei que terminou" quando chegar a vez de cada um.)
@@ -182,9 +200,11 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
   4 rótulos, divergência âmbar "esperada por enquanto" com o lado ("O sistema tem R$ 762.260,22 a
   mais…", 408 de 479 baixados), zero "(s)/(ões)/(is)", "Total". "A conciliar" na Alpa passou de
   R$ 241.513,39 (líquido) para R$ 11.341.299,57 (bruto, 5.332 lançamentos).
-- [ ] Passo 5 — 5 de 5 no código; falta conferência em produção. Testes de tela: 21. Suíte: 12.166 ✓;
-  16 falhas em 9 arquivos não tocados (Planta, Contas a Pagar, webhooks) que passam 411/411 isolados.
-- [ ] Passos 6 e 7
+- [x] Passo 5 — 5 de 5. PR #238 (`ed69558`). Conferido em produção (28/10, "Todas"): "Bate com o
+  banco · 1 de 5 contas · (alerta)" com 2/3 da largura (1065 × 527 px), "Ajustar Banco Itaú →";
+  "A conciliar R$ 47.288.696,78 (atenção) · 13.229 lançamentos"; frase da tabela sumiu.
+- [ ] Passo 6 — 6 de 6 no código; falta medir de novo em produção. Testes de tela: 12 + 9.
+- [ ] Passo 7
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)
 

@@ -197,3 +197,17 @@ describe('ReconciliationDashboard — textos (passo 4)', () => {
         expect(bloco).toHaveTextContent(/vínculo faltando ou duplicado/);
     });
 });
+
+describe('ReconciliationDashboard — acessibilidade (passo 6)', () => {
+    it('tabelas com nome pelo título da seção (h2), cabeçalhos com scope, "—" e ✓ com texto', async () => {
+        const c = conta({ pending_count: 0, pending_value: 0, difference: 0 });
+        servico.getDashboard.mockResolvedValue(dashboard(c));
+        render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
+        expect(await screen.findByRole('heading', { level: 2, name: 'Por conta bancária' })).toBeInTheDocument();
+        const tabela = screen.getByRole('table', { name: 'Por conta bancária' });
+        expect(tabela.querySelectorAll('th[scope="col"]').length).toBe(tabela.querySelectorAll('thead th').length);
+        // Leitor de tela ouve o estado, não "travessão" nem um ícone mudo.
+        expect(screen.getAllByText('nada a conciliar').length).toBeGreaterThan(0);
+        expect(screen.getByText('nenhum pendente')).toBeInTheDocument();
+    });
+});

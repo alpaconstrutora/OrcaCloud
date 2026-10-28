@@ -57,6 +57,18 @@ export const reconciliationDashboardService = {
     },
 
     /**
+     * Grava o saldo que o extrato do banco mostra numa data (conta sem OFX/API do Asaas).
+     * Um por conta e dia: gravar o mesmo dia de novo corrige. A organização é posta pelo
+     * gatilho do banco a partir da conta (migration 20271028800000).
+     */
+    async informarSaldoDoBanco(accountId: string, data: string, saldo: number): Promise<void> {
+        const { error } = await supabase
+            .from('payment_account_saldo_informado')
+            .upsert({ payment_account_id: accountId, data, saldo }, { onConflict: 'payment_account_id,data' });
+        if (error) throw error;
+    },
+
+    /**
      * Atualiza o saldo inicial de uma conta bancária (ponto de partida da conciliação).
      * `openingBalanceDate` `undefined` = não mexe na data: quem chama não a conhece (o
      * dashboard só devolve a data desde a migration 20271028300000) e gravar NULL faria

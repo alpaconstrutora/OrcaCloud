@@ -67,6 +67,14 @@ describe('conciliação · conciliado e pendente com uma definição só', () =>
     }
   });
 
+  it('o dashboard devolve o saldo do banco e o calculado na MESMA data', () => {
+    // Passo 2: comparar o saldo do banco com o calculado de hoje seria comparar datas diferentes.
+    const { corpo } = definicaoVigente('fn_reconciliation_dashboard');
+    for (const chave of ['saldo_banco', 'saldo_banco_data', 'saldo_banco_origem', 'calculado_na_data_banco', 'pendentes_apos_data_banco']) {
+      expect(corpo).toContain(`'${chave}'`);
+    }
+  });
+
   it('o dashboard devolve a data do saldo inicial de cada conta', () => {
     // Sem ela a tela de edição do saldo inicial não sabe a data atual e grava NULL.
     expect(definicaoVigente('fn_reconciliation_dashboard').corpo).toContain("'opening_balance_date'");

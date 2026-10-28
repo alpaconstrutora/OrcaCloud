@@ -87,6 +87,10 @@ interface SmartReconciliationCenterProps {
     categories: string[];
     clienteRegistros: ClientOption[];
     credorRegistros: SupplierOption[];
+    /** Abre a gaveta de Regras já preenchida (ex.: "Criar regra" do alerta de tarifas do Dashboard). */
+    regraInicial?: RegraPreenchida | null;
+    /** Avisa que `regraInicial` já abriu, para não reabrir a cada visita à aba. */
+    onRegraInicialUsada?: () => void;
 }
 
 /** Uma linha da Central: um movimento do extrato, o melhor candidato e os demais. */
@@ -189,7 +193,7 @@ const DEFAULT_SETTINGS = {
 
 const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
     organizationId, selectedAccountId, suggestions, bankTransactions, onConfirm, onReject, onReload,
-    categories, clienteRegistros, credorRegistros,
+    categories, clienteRegistros, credorRegistros, regraInicial, onRegraInicialUsada,
 }) => {
     // ⚠️ `localToast` PRECISA ser desenhado. A Central chamava showToast em nove
     // lugares e nunca renderizava nada: toda mensagem, de erro e de sucesso, era
@@ -255,6 +259,14 @@ const SmartReconciliationCenter: React.FC<SmartReconciliationCenterProps> = ({
         });
         setRegrasAberto(true);
     };
+
+    React.useEffect(() => {
+        if (!regraInicial) return;
+        setPreenchida(regraInicial);
+        setRegrasAberto(true);
+        onRegraInicialUsada?.();
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [regraInicial]);
 
     const [band, setBand] = useState<Band>('all');
     const [busy, setBusy] = useState<string | null>(null);

@@ -143,6 +143,15 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
   - Testes: `conciliacaoSaldoBanco.test.ts` (9, inclui paridade da expressão de tarifas com o SQL),
     `ReconciliationDashboardSaldoBanco.test.tsx` (8), `conciliacaoStatusUnico.test.ts` (+1). `tsc`
     limpo; `check-ui-standard.sh` sem violação nos 5 arquivos tocados.
+  - Publicado no PR #227 (`096a4ba`). Conferência em produção (28/10): resumo "1 de 5 contas
+    batem com o banco (Asaas). Não batem: Asaas Sandbox, Banco Itaú. O banco não informou:
+    Sicredi, Sicredi - Garden"; coluna e links como desenhados.
+  - **Achado na conferência e corrigido (PR seguinte):** "Ver tarifas em Pendentes" abriu a aba
+    com o extrato VAZIO — busca, filtros e competência guardados de uma visita anterior recortavam
+    por cima do recorte (busca antiga + "Despesas" + 57 categorias + 2026). Agora chegar de um
+    número do Dashboard limpa busca, filtros rápidos, filtro avançado e período, e o aviso diz isso.
+    Sem teste de componente (`BankReconciliation.tsx` não tem montagem de teste); conferido em
+    produção depois do merge.
 - [ ] Passos 3 a 7
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)

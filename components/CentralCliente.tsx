@@ -130,13 +130,19 @@ const INITIAL_DIMENSION = { width: 520, height: 200 };
 /** Faixas de atraso: rótulo e a rampa APROVADA no §28.4 (um matiz, do cinza "a
  *  vencer" ao vermelho mais escuro). A ponta clara tem 2,77:1, por isso valor
  *  e quantidade de cada faixa ficam também em texto, abaixo do gráfico. */
-const FAIXA: Record<OpuraFaixaAtraso, { label: string; cor: string }> = {
-    a_vencer: { label: 'A vencer', cor: '#94a3b8' },
-    '1_30':   { label: '1 a 30 dias', cor: '#f87171' },
-    '31_60':  { label: '31 a 60 dias', cor: '#ef4444' },
-    '61_90':  { label: '61 a 90 dias', cor: '#b91c1c' },
-    mais_90:  { label: 'Mais de 90 dias', cor: '#7f1d1d' },
+const FAIXA: Record<OpuraFaixaAtraso, { label: string; curto: string; cor: string }> = {
+    a_vencer: { label: 'A vencer', curto: 'A vencer', cor: '#94a3b8' },
+    '1_30':   { label: '1 a 30 dias', curto: '1–30', cor: '#f87171' },
+    '31_60':  { label: '31 a 60 dias', curto: '31–60', cor: '#ef4444' },
+    '61_90':  { label: '61 a 90 dias', curto: '61–90', cor: '#b91c1c' },
+    mais_90:  { label: 'Mais de 90 dias', curto: '+90', cor: '#7f1d1d' },
 };
+/** Abaixo desta largura o rótulo inteiro do eixo se atropela ("A vencer1 a 30
+ *  dias31 a 60…" a 390 px); o eixo passa ao curto — a legenda embaixo mantém o inteiro. */
+const LARGURA_ROTULO_CURTO = 520;
+const ROTULO_CURTO: Record<string, string> = Object.fromEntries(
+    Object.values(FAIXA).map(f => [f.label, f.curto]),
+);
 
 /** Soma as linhas da RPC por faixa, sempre nas 5 faixas e na ordem de leitura. */
 function porFaixa(linhas: OpuraAgingRow[]) {
@@ -169,8 +175,10 @@ const ChartCard: React.FC<{
     children: React.ReactNode;
 }> = ({ title, subtitle, aside, children }) => (
     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 flex flex-col">
-        <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0">
+        {/* flex-wrap: no celular o alternador não cabe ao lado e espremia o
+            título a uma palavra por linha — agora desce para baixo dele. */}
+        <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0 flex-1 basis-56">
                 <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
                 {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
             </div>
@@ -244,18 +252,23 @@ function paraRecebivel(r: OpuraPivotRow, atraso: Map<string | null, number>): Li
 /** Quem mais deve primeiro: é a pergunta da tela. O cabeçalho reordena. */
 const porVencido = (a: LinhaRecebivel, b: LinhaRecebivel) => b.vencido - a.vencido || b.aberto - a.aberto;
 
+/** Ordem de cobrança: o que decide (Vencido, Atraso) logo após o nome — no
+ *  celular e com zoom de 200% o Vencido ficava fora da tela, atrás de
+ *  Faturado/Recebido/Em aberto (crítica 2, 28/10/2026). */
 function colunas(nome: string): StandardTableColumn[] {
     return [
         { key: 'nome', label: nome, sortable: true, width: 280 },
-        { key: 'faturado', label: 'Faturado', sortable: true, width: 140, align: 'right' },
-        { key: 'recebido', label: 'Recebido', sortable: true, width: 140, align: 'right' },
-        { key: 'aberto', label: 'Em aberto', sortable: true, width: 140, align: 'right' },
         { key: 'vencido', label: 'Vencido', sortable: true, width: 150, align: 'right' },
         { key: 'atrasoMax', label: 'Atraso máx.', sortable: true, width: 120, align: 'right' },
+        { key: 'aberto', label: 'Em aberto', sortable: true, width: 140, align: 'right' },
+        { key: 'faturado', label: 'Faturado', sortable: true, width: 140, align: 'right' },
+        { key: 'recebido', label: 'Recebido', sortable: true, width: 140, align: 'right' },
         { key: 'pctRecebido', label: 'Recebido do faturado', sortable: true, width: 180 },
         { key: 'qtd', label: 'Lançamentos', sortable: true, width: 120, align: 'right' },
     ];
 }
+/** As linhas chegam de quem mais deve para quem menos deve: o cabeçalho diz isso. */
+const ORDEM_DE_COBRANCA = { column: 'vencido', direction: 'desc' as const };
 const COLUNAS_CLIENTE = colunas('Cliente');
 const COLUNAS_OBRA = colunas('Obra');
 
@@ -371,6 +384,9 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const [baseAtraso, setBaseAtraso] = usePersistedState<OpuraAgingBase>('centralCliente:baseAtraso', 'hoje');
     const [loading, setLoading] = React.useState(false);
     const [error, setError]     = React.useState<string | null>(null);
+
+    /** Largura medida do gráfico de faixas: decide rótulo inteiro ou curto no eixo. */
+    const [larguraFaixas, setLarguraFaixas] = React.useState(INITIAL_DIMENSION.width);
 
     // Drill-down extrato. `filters` fica guardado para o "Carregar mais".
     // `linha` = a linha clicada: o resumo da gaveta usa os MESMOS números dela.
@@ -640,7 +656,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const totalAberto = serie.reduce((a, f) => a + f.valor, 0);
     const totalVencido = serie.filter(f => f.faixa !== 'a_vencer').reduce((a, f) => a + f.valor, 0);
 
-    const controle = 'h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+    const controle = 'h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
     return (
         <div className="space-y-6">
@@ -781,7 +797,8 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                     {todos && (
                         <div ref={porClienteRef}>
                         <StandardTable<LinhaRecebivel>
-                            storageKey="centralCliente:porCliente"
+                            storageKey="centralCliente:porCliente:v2"
+                            defaultSort={ORDEM_DE_COBRANCA}
                             toolbarTop={<TituloSecao titulo="Por cliente" subtitulo="Entradas lançadas no período, de quem mais deve para quem menos deve. Clique num cliente para ver só ele." />}
                             columns={COLUNAS_CLIENTE}
                             rows={linhasCliente}
@@ -825,10 +842,11 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                                 {/* Figura, não controle: fora do Tab, com os números como nome. */}
                                 <div style={{ height: 220 }} role="img"
                                     aria-label={`Em aberto por faixa de atraso: ${serie.map(f => `${f.label} ${fBRL(f.valor)}`).join('; ')}.`}>
-                                    <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
+                                    <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION} onResize={w => setLarguraFaixas(w)}>
                                         <BarChart data={serie} margin={{ top: 20, right: 8, bottom: 0, left: 0 }} barCategoryGap="30%" accessibilityLayer={false}>
                                             <CartesianGrid vertical={false} stroke={GRID} />
-                                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} interval={0} />
+                                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} interval={0}
+                                                tickFormatter={(v: string) => larguraFaixas < LARGURA_ROTULO_CURTO ? (ROTULO_CURTO[v] ?? v) : v} />
                                             {/* 64 px (§28.2): "2,2 mi" e "600 mil" numa linha só. */}
                                             <YAxis
                                                 axisLine={false}
@@ -859,7 +877,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                                                     (24 px) — "2,2 / mi" em duas linhas. */}
                                                 <LabelList dataKey="valor" content={({ x, y, width, value }) => (
                                                     Number(value) > 0 ? (
-                                                        <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fontSize={11} fill="#64748b">
+                                                        <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fontSize={11} fill="#64748b" className="rotulo-grafico">
                                                             {compactAxis(Number(value))}
                                                         </text>
                                                     ) : null
@@ -892,7 +910,8 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                     {/* Por obra → extrato. Antes mostrava só o realizado: a obra com
                         R$ 466 mil em aberto aparecia "R$ 0,00 · 0%". */}
                     <StandardTable<LinhaRecebivel>
-                        storageKey="centralCliente:porObra"
+                        storageKey="centralCliente:porObra:v2"
+                        defaultSort={ORDEM_DE_COBRANCA}
                         toolbarTop={<TituloSecao titulo="Por obra" subtitulo={`Entradas do período ${todos ? 'dos clientes do recorte' : 'deste cliente'} por obra. Clique numa obra para ver o extrato.`} />}
                         columns={COLUNAS_OBRA}
                         rows={linhasObra}

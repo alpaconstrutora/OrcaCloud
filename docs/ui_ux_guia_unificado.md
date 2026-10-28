@@ -2467,7 +2467,7 @@ contendo só `<h1>` + `<p>`, seguido **imediatamente** pelo grid de `KpiCard`:
 <div className="space-y-6">
   <div>
     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Meus Fornecedores</h1>
-    <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
+    <p className="text-gray-500 text-sm mt-1.5 font-medium">Gerencie sua rede de parceiros e fornecedores.</p>
   </div>
 
   <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
@@ -2478,6 +2478,12 @@ contendo só `<h1>` + `<p>`, seguido **imediatamente** pelo grid de `KpiCard`:
 ```
 
 Referência: `SupplierList.tsx`, `ClientList.tsx`, `InvestorList.tsx`.
+
+> ℹ️ **Subtítulo em `text-gray-500` desde 28/10/2026.** Era `text-gray-400`: medido em
+> produção a 2,49:1 sobre o fundo da página, abaixo dos 4,5:1 do WCAG AA (Financeiro ›
+> Conciliação Bancária, `docs/planos/2026-10-28-conciliacao-dashboard-confianca.md`, passo 6).
+> Mesma troca já feita na legenda do `KpiCard` (§4). As telas que ainda têm `text-gray-400`
+> no subtítulo migram ao serem tocadas — não é varredura.
 
 > ✅ `<h1>` solto, **nunca dentro de card/hero/banda colorida**. Subtítulo sempre
 > `mt-1.5` (não `mt-1`, não `mt-0.5`, não ausente).
@@ -2803,7 +2809,7 @@ exceção local.
     </button>
     <h1 className="text-3xl font-black text-gray-900 tracking-tight">{titulo}</h1>
   </div>
-  <p className="text-gray-400 text-sm mt-1.5 font-medium ml-12">{subtitulo}</p>
+  <p className="text-gray-500 text-sm mt-1.5 font-medium ml-12">{subtitulo}</p>
 </div>
 ```
 

@@ -3067,7 +3067,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             {/* Cabeçalho de tela — guia §20 */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">{VIEW_HEADERS[activeView].title}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle}</p>
+                <p className="text-gray-500 text-sm mt-1.5 font-medium">{VIEW_HEADERS[activeView].subtitle}</p>
             </div>
 
             {/* Toolbar de abas — guia §19/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
@@ -3076,63 +3076,73 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
                     visível) corta texto no meio sem nenhum indício de que há mais abas —
                     quebra de linha garante que todas ficam sempre visíveis. */}
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="navigation" aria-label="Abas da Conciliação Bancária" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     <button
                         onClick={() => setActiveView('dashboard')}
+                        aria-current={activeView === 'dashboard' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Dashboard
                     </button>
                     <button
                         onClick={() => setActiveView('statement')}
+                        aria-current={activeView === 'statement' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Extrato
                     </button>
                     <button
                         onClick={() => setActiveView('center')}
+                        aria-current={activeView === 'center' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Central
                     </button>
                     <button
                         onClick={() => setActiveView('divergences')}
+                        aria-current={activeView === 'divergences' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Divergências
                     </button>
                     <button
                         onClick={() => setActiveView('anomalies')}
+                        aria-current={activeView === 'anomalies' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Anomalias
                     </button>
                     <button
                         onClick={() => setActiveView('pending')}
+                        aria-current={activeView === 'pending' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pendentes
                     </button>
                     <button
                         onClick={() => setActiveView('conciliated')}
+                        aria-current={activeView === 'conciliated' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Conciliados
                     </button>
                     <button
                         onClick={() => setActiveView('categories')}
+                        aria-current={activeView === 'categories' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Categorias
                     </button>
                     <button
                         onClick={() => setActiveView('close')}
+                        aria-current={activeView === 'close' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Fechamento
                     </button>
                     <button
                         onClick={() => setActiveView('prolabore')}
+                        aria-current={activeView === 'prolabore' ? 'page' : undefined}
                         className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pró-labore
@@ -3172,6 +3182,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 ) : (
                 <div className="flex flex-wrap items-center gap-2">
                     <select
+                        aria-label="Conta bancária"
                         value={selectedAccountId || ''}
                         className="h-9 pl-3 pr-8 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
                         onChange={(e) => setSelectedAccountId(e.target.value)}
@@ -3184,8 +3195,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
                     {/* Filtro de competência — ano isolado (ano todo) ou ano+mês */}
                     <div className="flex items-center gap-1.5 h-9 bg-indigo-50 px-2.5 rounded-[6px] border border-indigo-100">
-                        <span className="text-xs font-medium text-indigo-400">Competência</span>
+                        <span className="text-xs font-medium text-indigo-700" id="conciliacao-competencia">Competência</span>
                         <select
+                            aria-label="Ano da competência"
                             value={competencia ? competencia.split('-')[0] : ''}
                             onChange={(e) => {
                                 const year = e.target.value;
@@ -3218,6 +3230,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ))}
                         </select>
                         <select
+                            aria-label="Mês da competência"
                             value={competencia.includes('-') ? competencia.split('-')[1] : ''}
                             disabled={!competencia}
                             onChange={(e) => {
@@ -3236,7 +3249,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     setEndDate(`${year}-12-31`);
                                 }
                             }}
-                            className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-16 cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
+                            className="bg-transparent border-none text-xs font-semibold text-indigo-700 focus:ring-0 p-0 w-[76px] cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             <option value="">Ano todo</option>
                             {['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'].map((m, i) => (
@@ -3259,6 +3272,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         <input
                             type="date"
                             title="Início"
+                            aria-label="Início do período"
                             value={startDate}
                             onChange={(e) => { setStartDate(e.target.value); setCompetencia(''); }}
                             className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:ring-0 p-0 w-[92px]"
@@ -3267,6 +3281,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         <input
                             type="date"
                             title="Fim"
+                            aria-label="Fim do período"
                             value={endDate}
                             onChange={(e) => { setEndDate(e.target.value); setCompetencia(''); }}
                             className="bg-transparent border-none text-xs font-semibold text-gray-700 focus:ring-0 p-0 w-[92px]"

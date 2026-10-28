@@ -157,3 +157,43 @@ describe('ReconciliationDashboard — saldo inicial', () => {
         await waitFor(() => expect(servico.setOpeningBalance).toHaveBeenCalledWith('a1', 1, undefined));
     });
 });
+
+describe('ReconciliationDashboard — textos (passo 4)', () => {
+    it('"A conciliar" mostra o valor BRUTO: pendências de sinais opostos não somem', async () => {
+        // +1.000 e −1.000 pendentes: a diferença líquida era R$ 0,00 em verde com "2 pendentes".
+        const c = conta({ difference: 0, pending_value: 2000, pending_count: 2 });
+        servico.getDashboard.mockResolvedValue(dashboard(c));
+        render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
+        const card = (await screen.findByText('A conciliar', { selector: 'p' })).parentElement as HTMLElement;
+        expect(card).toHaveTextContent(/2\.000,00/);
+        expect(card).toHaveTextContent('2 lançamentos do extrato');
+    });
+
+    it('diferença explicada por baixados sem conferir: um bloco âmbar, com o lado da diferença', async () => {
+        servico.getDashboard.mockResolvedValue({
+            ...dashboard(),
+            system_balance: 900,   // conciliado 400 − sistema 900 = o sistema tem 500 a mais
+            ledger: { baixado_net: 900, baixado_count: 10, conferido_net: 0, conferido_count: 3, so_baixado_count: 7 },
+        });
+        render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
+        const titulo = await screen.findByText(/esperada por enquanto/);
+        const bloco = titulo.closest('div.rounded-xl') as HTMLElement;
+        expect(bloco.className).toMatch(/bg-amber-50/);
+        expect(bloco).toHaveTextContent(/O sistema tem R\$\s500,00 a mais que o extrato conciliado/);
+        expect(bloco).toHaveTextContent(/7 lançamentos baixados/);
+        // A faixa "N de M conferidos" separada não existe mais.
+        expect(screen.queryByText(/foram conferidos contra o extrato/)).toBeNull();
+    });
+
+    it('sem nada que explique a diferença: vermelho', async () => {
+        servico.getDashboard.mockResolvedValue({
+            ...dashboard(),
+            system_balance: 900,
+            ledger: { baixado_net: 900, baixado_count: 10, conferido_net: 900, conferido_count: 10, so_baixado_count: 0 },
+        });
+        render(<ReconciliationDashboardView organizationId="org1" asOf="2026-10-28" />);
+        const bloco = (await screen.findByText(/^Divergência de/)).closest('div.rounded-xl') as HTMLElement;
+        expect(bloco.className).toMatch(/bg-red-50/);
+        expect(bloco).toHaveTextContent(/vínculo faltando ou duplicado/);
+    });
+});

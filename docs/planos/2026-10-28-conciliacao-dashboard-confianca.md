@@ -98,6 +98,14 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
 | 3.3 | "Posição em" abre em hoje no fuso local (`hojeLocal`); antes `toISOString()` virava o dia seguinte depois das 21h. Não aceita data futura | Na tela: campo com `max` = hoje |
 | 3.4 | A aba Dashboard deixa de carregar o extrato `MATCHED` da conta do seletor e as contagens de `loadStats` (serviam só à fileira removida em 1.1) | Rede: abrir a Conciliação no Dashboard não pede `bank_transactions` |
 ### Passo 4 — `/impeccable clarify`: rótulos (Pendente bruto, legenda do Contábil, alerta de divergência, plurais, "Grupo", subtítulo)
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 4.1 | Subtítulo: "Se o saldo de cada conta bate com o banco, e o que falta conciliar." (falava de automação) | Na tela |
+| 4.2 | KPIs: "Saldo pelo extrato" (era "Saldo Bancário (Real)" — não é o saldo do banco); "Saldo conciliado"; **"A conciliar" = valor BRUTO + quantidade** (era a diferença líquida: +1.000 e −1.000 davam R$ 0,00 verde com "2 pendentes"); legenda do "Saldo contábil" corrigida para "lançamentos baixados no sistema, de qualquer origem" | Teste "A conciliar mostra o valor BRUTO" |
+| 4.3 | Divergência num bloco só (`utils/conciliacaoTextos.textoDaDivergencia`): diz o lado ("o sistema tem R$ X a mais…"); **âmbar "esperada por enquanto"** quando há baixados sem conferir, com quantos e o que fecha; **vermelho** só quando tudo foi conferido (vínculo faltando ou duplicado). Sai a faixa separada "N de M conferidos" | Testes de texto (4) e de tela (âmbar / vermelho) |
+| 4.4 | Colunas "Diferença" → "A conciliar" (bruto) nas tabelas por conta e por empresa, com total; "Saldo Bancário" → "Saldo pelo extrato"; títulos "Por conta bancária", "Por empresa", "Caixa realizado por obra" | Na tela |
+| 4.5 | Plurais de verdade (`plural`): pendentes, sem classificação, tarifas, empresas/contas; "Grupo" → "Total"; estado vazio diz onde cadastrar conta | Nenhum "(s)/(ões)/(is)" no componente |
 ### Passo 5 — `/impeccable layout`: `KpiCard destaque` com ação (§4.5) e hierarquia
 ### Passo 6 — `/impeccable audit`: rótulos de campo, foco, títulos, abas como abas, contraste, conciliado negativo, data local
 ### Passo 7 — `/impeccable polish`
@@ -159,7 +167,12 @@ fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Ne
     número do Dashboard limpa busca, filtros rápidos, filtro avançado e período, e o aviso diz isso.
     Sem teste de componente (`BankReconciliation.tsx` não tem montagem de teste); conferido em
     produção depois do merge.
-- [ ] Passos 3 a 7
+- [x] Passo 3 — 4 de 4. PR #235 (`00120ea`). Conferido em produção (28/10): barra do Dashboard com
+  "Posição em" (hoje, `max` = hoje, rótulo ligado) + Atualizar + Importar extrato; linha antiga
+  sumiu; Extrato mantém conta e competência.
+- [ ] Passo 4 — 5 de 5 no código; falta conferência em produção. Testes: `conciliacaoTextos.test.ts`
+  (4) + 3 de tela.
+- [ ] Passos 5 a 7
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)
 

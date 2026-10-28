@@ -115,12 +115,18 @@ describe('ReconciliationDashboard — saldo inicial', () => {
     });
 
     it('não confirmou: não grava', async () => {
-        confirmar.mockResolvedValue(false);
+        // Como o modal de verdade: ele tira o foco do campo enquanto está aberto.
+        confirmar.mockImplementation(async () => { (document.activeElement as HTMLElement | null)?.blur(); return false; });
         const campo = await abrirEdicao();
         fireEvent.change(campo, { target: { value: '100' } });
         fireEvent.keyDown(campo, { key: 'Enter' });
         await waitFor(() => expect(confirmar).toHaveBeenCalled());
         expect(servico.setOpeningBalance).not.toHaveBeenCalled();
+        // Fechar a confirmação devolve o foco ao campo — senão o Esc não sai da edição
+        // (visto em produção em 28/10/2026).
+        await waitFor(() => expect(document.activeElement).toBe(screen.getByLabelText('Saldo inicial de Itaú')));
+        fireEvent.keyDown(document.activeElement as Element, { key: 'Escape' });
+        expect(screen.queryByLabelText('Saldo inicial de Itaú')).toBeNull();
     });
 
     it('banco ainda sem a data no retorno: grava o saldo e NÃO apaga a data', async () => {

@@ -75,6 +75,10 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
     const [editDate, setEditDate] = useState('');
     const [saving, setSaving] = useState(false);
     const botoesEditar = useRef<Record<string, HTMLButtonElement | null>>({});
+    // Fechar a confirmação (ou falhar ao salvar) deixa o foco no <body>: sem devolvê-lo ao
+    // campo, Enter/Esc param de funcionar e a linha fica presa em edição (visto em produção).
+    const edicaoRef = useRef<HTMLDivElement>(null);
+    const focarCampoDoSaldo = () => requestAnimationFrame(() => edicaoRef.current?.querySelector('input')?.focus());
 
     const load = useCallback(async () => {
         const carga = ++cargaRef.current;
@@ -149,7 +153,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                 </div>
             ),
         });
-        if (!ok) return;
+        if (!ok) { focarCampoDoSaldo(); return; }
 
         setSaving(true);
         try {
@@ -161,6 +165,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
             console.error('[ReconciliationDashboard] saveEdit', e);
             const detalhe = detalheDoErro(e);
             showToast(`Não foi possível salvar o saldo inicial${detalhe ? `: ${detalhe}` : ''}. O valor digitado continua no campo.`, 'error');
+            focarCampoDoSaldo();
         } finally {
             setSaving(false);
         }
@@ -370,7 +375,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                         </td>
                                         <td className="px-3 py-3 text-right">
                                             {isEditing ? (
-                                                <div className="flex flex-col items-end gap-1">
+                                                <div ref={edicaoRef} className="flex flex-col items-end gap-1">
                                                     <MoneyCentsInput
                                                         permitirNegativo
                                                         autoFocus

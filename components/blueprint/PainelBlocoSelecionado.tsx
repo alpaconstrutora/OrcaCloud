@@ -47,6 +47,8 @@ interface Props {
   onUnidade?: (chave: string | null) => void;
   /** Como as unidades se arrumam no andar (27/10/2026): pelo número ou na ordem do Empreendimento. */
   arrumacaoDasUnidades?: { modo: ArrumacaoDasUnidades; onModo: (modo: ArrumacaoDasUnidades) => void };
+  /** O que a posição/orientação do cadastro não deixou fazer neste pavimento (28/10/2026). */
+  avisosDasUnidades?: string[];
   /** A torre do Empreendimento casada com o bloco (pelo nome), a comparação e o ajuste de todos os blocos. */
   empreendimento?: {
     nome: string;
@@ -81,14 +83,18 @@ interface Props {
 }
 
 const ARRUMACOES: { modo: ArrumacaoDasUnidades; rotulo: string; dica: string }[] = [
-  { modo: 'AUTOMATICA', rotulo: 'Automática', dica: 'Pelo número (101 sobre 201 sobre 301), com as fileiras de áreas parecidas.' },
+  {
+    modo: 'AUTOMATICA',
+    rotulo: 'Automática',
+    dica: 'Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número (101 sobre 201), com as fileiras de áreas parecidas.',
+  },
   { modo: 'EMPREENDIMENTO', rotulo: 'Ordem do Empreendimento', dica: 'Na ordem da aba Torres e Unidades (setas ↑↓): a 1ª metade numa fileira, a 2ª na outra.' },
 ];
 
 const fmtElevacao = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, unidadesDoPiso = [], unidadeSelecionada = null, onUnidade, arrumacaoDasUnidades, empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
+export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExcluir, onAbrirEstudo, pisoSelecionado = null, onPiso, unidadesDoPiso = [], unidadeSelecionada = null, onUnidade, arrumacaoDasUnidades, avisosDasUnidades = [], empreendimento = null, pavimentoTipo, plantas, garagem }: Props) {
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [resultado, setResultado] = useState<string | null>(null);
   /** De qual ação é o `resultado` — cada seção mostra só o seu. */
@@ -300,6 +306,13 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
                     ))}
                   </div>
                   <p className="text-slate-500">{ARRUMACOES.find((a) => a.modo === arrumacaoDasUnidades.modo)?.dica}</p>
+                  {avisosDasUnidades.length > 0 && (
+                    <ul className="space-y-0.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800" data-testid="avisos-das-unidades">
+                      {avisosDasUnidades.map((a) => (
+                        <li key={a}>{a}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
               <div className="flex flex-wrap gap-1" role="group" aria-label="Unidades do pavimento">

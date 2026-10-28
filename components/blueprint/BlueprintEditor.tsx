@@ -626,7 +626,8 @@ import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendi
 import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 import { estruturasDoEmpreendimento } from '../../utils/blueprintEstruturaDaTorre';
 import { comandosDoAjuste, vestirBlocosPropostos } from '../../utils/blueprintAjusteAoEmpreendimento';
-import { arrumarUnidades, fatiasPorArea, type ArrumacaoDasUnidades } from '../../utils/blueprintUnidadesNoPavimento';
+import { arrumarUnidades, fatiasPorArea, fatiasPorDirecao, type ArrumacaoDasUnidades, type ReferenciasDaPlanta } from '../../utils/blueprintUnidadesNoPavimento';
+import { frenteDoLote } from '../../utils/blueprintAncorasHidro';
 import { chaveDaUnidade } from '../../utils/blueprintEstruturaDaTorre';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
@@ -9182,16 +9183,34 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * bloco ligado a uma torre vira uma fatia por unidade do Empreendimento naquele andar, na proporção da área
    * privativa (`fatiasPorArea`) — clicável, e a unidade aparece no painel. Sem unidades no andar, o piso inteiro.
    */
+  /**
+   * POSIÇÃO E ORIENTAÇÃO DAS UNIDADES (28/10/2026): onde fica a rua para cada bloco (a frente do lote mais perto dele,
+   * para FORA) e o norte do desenho — a Automática põe Frente/Fundos/Lateral e N/S/L/O do cadastro nos lados certos.
+   */
+  const referenciasDosBlocos = useMemo(() => {
+    const m = new Map<string, ReferenciasDaPlanta>();
+    for (const b of editor.model.blocos ?? []) {
+      if (b.pontos.length < 3) continue;
+      const c = { x: b.pontos.reduce((s, q) => s + q.x, 0) / b.pontos.length, y: b.pontos.reduce((s, q) => s + q.y, 0) / b.pontos.length };
+      const frente = frenteDoLote(editor.model, c);
+      const seg = frente?.segmentos
+        .map((sg) => ({ sg, d: Math.hypot((sg.a.x + sg.b.x) / 2 - c.x, (sg.a.y + sg.b.y) / 2 - c.y) }))
+        .sort((x, y) => x.d - y.d)[0]?.sg;
+      m.set(b.id, { frenteParaFora: seg ? { x: -seg.dentro.x, y: -seg.dentro.y } : null, rotacaoNorteDeg: norteDoDesenho });
+    }
+    return m;
+  }, [editor.model, norteDoDesenho]);
   const massa3dPorUnidade = useMemo(() => {
     if (!ajusteAoEmpreendimento) return massa3d;
     return massa3d.flatMap((p) => {
-      const arrumadas = arrumarUnidades(ajusteAoEmpreendimento.papeis.get(p.id)?.pisos[p.indice - 1]?.unidades ?? [], arrumacaoDasUnidades);
+      const arrumadas = arrumarUnidades(ajusteAoEmpreendimento.papeis.get(p.id)?.pisos[p.indice - 1]?.unidades ?? [], arrumacaoDasUnidades, referenciasDosBlocos.get(p.id));
       const unidades = arrumadas.unidades;
       if (unidades.length === 0) return [p];
-      const fatias = fatiasPorArea(p.anel, unidades.map((u) => u.areaPrivativaM2), arrumadas.fileiras);
+      const pesos = unidades.map((u) => u.areaPrivativaM2);
+      const fatias = arrumadas.direcoes ? fatiasPorDirecao(p.anel, pesos, arrumadas.direcoes) : fatiasPorArea(p.anel, pesos, arrumadas.fileiras);
       return fatias.map((anel, k) => ({ ...p, chave: `${p.chave}-u${k}`, anel, nome: `${p.nome} · ${unidades[k].nome}`, piso: p.chave, unidade: chaveDaUnidade(unidades[k]) }));
     });
-  }, [massa3d, ajusteAoEmpreendimento, arrumacaoDasUnidades]);
+  }, [massa3d, ajusteAoEmpreendimento, arrumacaoDasUnidades, referenciasDosBlocos]);
   const unidadesDaCasa = useMemo(() => {
     const porId = new Map<string, EmpreendimentoUnit>();
     const opcoes: UnidadeParaOPrograma[] = [];
@@ -11376,6 +11395,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         unidadesDoPiso={
           blocoSel && pisoDoBlocoSel !== null
             ? arrumarUnidades(ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.pisos[pisoDoBlocoSel - 1]?.unidades ?? [], arrumacaoDasUnidades).unidades
+            : []
+        }
+        avisosDasUnidades={
+          blocoSel && pisoDoBlocoSel !== null
+            ? (arrumarUnidades(
+                ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.pisos[pisoDoBlocoSel - 1]?.unidades ?? [],
+                arrumacaoDasUnidades,
+                referenciasDosBlocos.get(blocoSel.id),
+              ).avisos ?? [])
             : []
         }
         arrumacaoDasUnidades={{ modo: arrumacaoDasUnidades, onModo: setArrumacaoDasUnidades }}

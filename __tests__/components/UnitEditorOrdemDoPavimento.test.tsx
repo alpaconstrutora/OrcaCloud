@@ -100,3 +100,31 @@ describe('Torres e Unidades › elevação no cabeçalho do pavimento (27/10/202
     expect(screen.getAllByTestId('elevacao-do-grupo')[1]).not.toHaveTextContent('calc.');
   });
 });
+
+describe('Torres e Unidades › Unidades com o nome e a elevação do pavimento (28/10/2026)', () => {
+  beforeEach(() => {
+    svc.listUnits.mockReset();
+  });
+  const pav = (extra: Record<string, unknown>) => ({ id: 'f', tower_id: 't1', tipo: 'TIPO', repeat_count: 1, sort_order: 0, created_at: '', updated_at: '', ...extra });
+
+  it('o grupo leva o NOME do pavimento cadastrado ("Estacionamento 2", não "Pavimento -4") e o andar ao lado', async () => {
+    svc.listUnits.mockResolvedValue([und('SS405', -4, 0), und('101', 1, 0)]);
+    render(
+      <UnitEditor
+        tower={TORRE as never}
+        floors={[pav({ id: 'g', name: 'Estacionamento 2', tipo: 'GARAGEM', floor_number: -4, elevacao_m: -12.3 }), pav({ id: 'p', name: 'Pavimento 1', floor_number: 1 })] as never}
+      />,
+    );
+    await waitFor(() => expect(screen.getAllByTestId('nome-do-pavimento')).toHaveLength(2));
+    expect(screen.getAllByTestId('nome-do-pavimento').map((e) => e.textContent)).toEqual(['Estacionamento 2', 'Pavimento 1']);
+    expect(screen.getByText('andar -4')).toBeInTheDocument();
+  });
+
+  it('a coluna Elevação mostra a do andar da unidade (digitada ou calculada)', async () => {
+    svc.listUnits.mockResolvedValue([und('002', 0, 0), und('101', 1, 0)]);
+    render(<UnitEditor tower={{ ...TORRE, pe_direito_padrao_m: 3 } as never} floors={[pav({ name: 'Térreo', tipo: 'TERREO', floor_number: 0, elevacao_m: -0.3 }), pav({ name: 'Pavimento 1', floor_number: 1 })] as never} />);
+    await waitFor(() => expect(screen.getAllByTestId('elevacao-da-unidade')).toHaveLength(2));
+    expect(screen.getAllByTestId('elevacao-da-unidade').map((e) => e.textContent)).toEqual(['-0,30 m', '+2,70 m (calc.)']);
+    expect(screen.getByRole('columnheader', { name: 'Elevação' })).toBeInTheDocument();
+  });
+});

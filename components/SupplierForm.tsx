@@ -61,6 +61,9 @@ function maskCPF(value: string): string {
             .replace(/\.(\d{3})(\d)/, '.$1-$2');
 }
 
+// Liga o botão Salvar (que mora no cabeçalho, fora do <form>) ao formulário.
+const SUPPLIER_FORM_ID = 'supplier-form';
+
 // Abas do cadastro — §19.1 do guia (card branco, aba ativa `bg-white
 // text-blue-600 shadow-sm` sobre trilho `bg-gray-50`). O `<h1>` continua sendo
 // o nome do fornecedor; quem muda com a aba é o subtítulo, como em ClientForm.
@@ -320,7 +323,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSubmit, onCl
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                 </button>
-                <div>
+                <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-blue-600">
                             {initialData ? (initialData.code || 'Fornecedor') : 'Novo cadastro'}
@@ -328,10 +331,42 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSubmit, onCl
                         <span className="w-1 h-1 bg-gray-300 rounded-full" />
                         <span className="text-xs font-medium text-gray-400">Meus Fornecedores</span>
                     </div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
-                        {initialData ? (formData.name || initialData.name) : 'Novo fornecedor'}
-                    </h1>
+                    {/* Ações na linha do título, à direita (pedido do usuário, 2026-10-28).
+                        Ficam fora do <form>, então o submit se liga a ele pelo atributo
+                        `form` — e salvar continua funcionando de qualquer aba, inclusive
+                        a de contas bancárias (que grava sozinha, conta a conta). §25:
+                        "Voltar" (não "Cancelar") em edição; salvar desligado sem pendência. */}
+                    <div className="flex items-center justify-between gap-4">
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight min-w-0 truncate">
+                            {initialData ? (formData.name || initialData.name) : 'Novo fornecedor'}
+                        </h1>
+                        <div className="flex items-center gap-3 shrink-0">
+                            {initialData && <SaveStatus dirty={dirty} savedAt={savedAt} />}
+                            <button
+                                type="button"
+                                onClick={handleBack}
+                                className="flex items-center justify-center h-9 px-3.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                {initialData ? 'Voltar' : 'Cancelar'}
+                            </button>
+                            <button
+                                type="submit"
+                                form={SUPPLIER_FORM_ID}
+                                disabled={isSubmitting || !formData.name?.trim() || (!!initialData && !dirty)}
+                                title={!formData.name?.trim() ? 'Informe o nome do fornecedor' : initialData && !dirty ? 'Nenhuma alteração para salvar' : undefined}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? 'Salvando...' : initialData ? 'Salvar alterações' : 'Salvar fornecedor'}
+                            </button>
+                        </div>
+                    </div>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_SUBTITLES[activeTab]}</p>
+                    {formError && (
+                        <p className="mt-2 flex items-center gap-2 text-sm font-medium text-rose-600">
+                            <AlertCircle className="w-4 h-4 shrink-0" />
+                            {formError}
+                        </p>
+                    )}
                 </div>
             </div>
 
@@ -353,7 +388,7 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSubmit, onCl
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form id={SUPPLIER_FORM_ID} onSubmit={handleSubmit}>
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     {activeTab === 'bancario' && initialData ? (
                         // O componente da aba é `h-full`: sem uma altura no pai
@@ -755,33 +790,6 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSubmit, onCl
                         </div>
                     )}
 
-                    {/* Rodapé canônico da §25 — "Voltar" (não "Cancelar") em edição:
-                        o que já foi salvo fica salvo. Fica fora do bloco de abas
-                        para que salvar funcione de qualquer aba, inclusive a de
-                        contas bancárias (que grava sozinha, conta a conta). */}
-                    <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
-                        {formError && (
-                            <p className="mr-auto flex items-center gap-2 text-sm font-medium text-rose-600">
-                                <AlertCircle className="w-4 h-4 shrink-0" />
-                                {formError}
-                            </p>
-                        )}
-                        {initialData && !formError && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
-                        <button
-                            type="button"
-                            onClick={handleBack}
-                            className="flex items-center justify-center h-9 px-3.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            {initialData ? 'Voltar' : 'Cancelar'}
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || !formData.name?.trim() || (!!initialData && !dirty)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSubmitting ? 'Salvando...' : initialData ? 'Salvar alterações' : 'Salvar fornecedor'}
-                        </button>
-                    </div>
                 </div>
             </form>
         </div>

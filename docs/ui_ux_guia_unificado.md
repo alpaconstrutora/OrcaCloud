@@ -3026,6 +3026,17 @@ explicitamente — nunca um único `setIsModalOpen(false)` incondicional.
 > cancelar sugere descartar; aqui só se sai da tela, o que já foi salvo fica
 > salvo). Criação mantém "Cancelar".
 
+> ✅ **Variante — ações na linha do título (2026-10-28, a pedido do usuário,
+> `SupplierForm.tsx`):** *"mover os botões de salvar e voltar para a linha do
+> título da tela, alinhado à direita"*. O indicador `SaveStatus` + "Voltar" +
+> "Salvar" saem do rodapé do card e vão para a mesma linha do `<h1>`, num grupo
+> `flex items-center gap-3 shrink-0` à direita (`justify-between` com o título).
+> Como ficam fora do `<form>`, o botão de salvar leva `type="submit"` +
+> `form="<id do form>"`. A mensagem de erro de validação desce para logo abaixo
+> do subtítulo (não há mais rodapé para abrigá-la). Regras de dirty/rótulo
+> ("Voltar" em edição, salvar desligado sem pendência) seguem iguais. Outras
+> telas migram ao serem tocadas, não em varredura.
+
 ### Pendência de propagação
 
 Aplicado em `LaborEmployeeForm.tsx`/`LaborModule.tsx`, `ProjectModal.tsx`/

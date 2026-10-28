@@ -19,16 +19,20 @@ describe('paresDeTorres', () => {
 });
 
 describe('lerDistancias (o jsonb do banco)', () => {
-  it('aceita a lista válida e descarta o que não é par com número positivo', () => {
+  it('aceita a lista válida (0 = encostadas) e descarta o que não é par com número ≥ 0', () => {
     expect(
       lerDistancias([
         { torre_a: 'a', torre_b: 'b', distancia_m: 6 },
         { torre_a: 'a', torre_b: 'a', distancia_m: 6 },
         { torre_a: 'a', torre_b: 'c', distancia_m: -1 },
+        { torre_a: 'b', torre_b: 'c', distancia_m: 0 },
         { torre_a: 'b' },
         'lixo',
       ]),
-    ).toEqual([{ torre_a: 'a', torre_b: 'b', distancia_m: 6 }]);
+    ).toEqual([
+      { torre_a: 'a', torre_b: 'b', distancia_m: 6 },
+      { torre_a: 'b', torre_b: 'c', distancia_m: 0 },
+    ]);
     expect(lerDistancias(null)).toEqual([]);
   });
 });
@@ -47,11 +51,12 @@ describe('distanciaDoPar / comDistancia', () => {
 });
 
 describe('lerDistanciaDigitada', () => {
-  it('metros com vírgula ou ponto; vazio = sem distância; zero, negativo ou acima de 500 m recusado', () => {
+  it('metros com vírgula ou ponto; 0 = encostadas; vazio = sem distância; negativo ou acima de 500 m recusado', () => {
     expect(lerDistanciaDigitada('6,50')).toBe(6.5);
     expect(lerDistanciaDigitada('12')).toBe(12);
     expect(lerDistanciaDigitada('  ')).toBeNull();
-    expect(lerDistanciaDigitada('0')).toBe(false);
+    expect(lerDistanciaDigitada('0')).toBe(0);
+    expect(lerDistanciaDigitada('0,00')).toBe(0);
     expect(lerDistanciaDigitada('-3')).toBe(false);
     expect(lerDistanciaDigitada('600')).toBe(false);
     expect(lerDistanciaDigitada('abc')).toBe(false);

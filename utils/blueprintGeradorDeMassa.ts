@@ -716,7 +716,8 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const hip: HipotesesDoGeradorDeMassa = {
     ...hipMesclada,
     // Distância entre torres do Empreendimento (28/10/2026): no lugar da hipótese, quando informada.
-    ...(afastamentoDoEmpreendimento != null && afastamentoDoEmpreendimento > 0 ? { afastamentoEntreBlocosM: afastamentoDoEmpreendimento } : {}),
+    // 0 = torres encostadas (28/10/2026): vale também.
+    ...(afastamentoDoEmpreendimento != null && afastamentoDoEmpreendimento >= 0 ? { afastamentoEntreBlocosM: afastamentoDoEmpreendimento } : {}),
     margemDoEnvelopeMm: Number.isFinite(margemLida) ? Math.min(MARGEM_MAX_DO_ENVELOPE_MM, Math.max(0, Math.round(margemLida))) : P.margemDoEnvelopeMm,
     folgaDaTaxaDeOcupacaoPct: faixa(hipMesclada.folgaDaTaxaDeOcupacaoPct, 0, FOLGA_MAX_DA_TAXA_DE_OCUPACAO_PCT, P.folgaDaTaxaDeOcupacaoPct),
     pisoDeUnidadesNoSolPct: faixa(hipMesclada.pisoDeUnidadesNoSolPct, 0, 100, P.pisoDeUnidadesNoSolPct),
@@ -724,7 +725,7 @@ export function gerarMassa(entrada: EntradaDoGeradorDeMassa, semente = 1, hipPar
   const { model, regua, objetivo, restricoes } = entrada;
   const decisoes: string[] = [];
   const avisos: string[] = [];
-  if (afastamentoDoEmpreendimento != null && afastamentoDoEmpreendimento > 0) {
+  if (afastamentoDoEmpreendimento != null && afastamentoDoEmpreendimento >= 0) {
     decisoes.push(`Afastamento entre blocos: ${afastamentoDoEmpreendimento.toLocaleString('pt-BR')} m, a distância entre torres do Empreendimento (no lugar da hipótese de ${Number(hipMesclada.afastamentoEntreBlocosM).toLocaleString('pt-BR')} m).`);
   }
   const vazio = (motivo: string): ResultadoDoGeradorDeMassa => ({ semente, objetivo, melhores: [], pareto: [], avaliados: 0, viaveis: 0, descartes: [], decisoes, avisos: [...avisos, motivo], quadro: null, levelId: null });

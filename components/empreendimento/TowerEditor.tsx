@@ -262,7 +262,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     for (const [a, b] of pares) {
       const v = lerDistanciaDigitada(distanciaForm[chaveDoPar(a.id, b.id)] ?? textoSalvo(a.id, b.id));
       if (v === false) {
-        notify(`${a.name} ↔ ${b.name}: use metros entre 0,01 e ${DISTANCIA_MAX_ENTRE_TORRES_M} (ou deixe vazio).`, 'error');
+        notify(`${a.name} ↔ ${b.name}: use metros entre 0 (encostadas) e ${DISTANCIA_MAX_ENTRE_TORRES_M}, ou deixe vazio.`, 'error');
         return;
       }
       lista = comDistancia(lista, a.id, b.id, v);
@@ -609,7 +609,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
               <p className="text-sm font-semibold text-gray-700">Distância entre torres</p>
             </div>
             <p className="text-xs text-gray-500">
-              A menor distância entre as faces de cada par, em metros. A Planta Inteligente confere os blocos, o Gerar massa usa e o "Ajustar ao Empreendimento" afasta as torres.
+              A menor distância entre as faces de cada par, em metros (0 = torres encostadas). A Planta Inteligente confere os blocos, o Gerar massa usa e o "Ajustar ao Empreendimento" afasta as torres.
             </p>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-3">
               {pares.map(([a, b]) => {

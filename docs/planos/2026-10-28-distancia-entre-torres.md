@@ -70,3 +70,17 @@
 - **Banco:**
   - ensaio da migration num bloco que desfaz: OK, 19 empreendimentos com `[]`;
   - aplicar com autorização **antes** do deploy, porque o front seleciona a coluna (`EMPREENDIMENTO_COLS`).
+
+## Seguimento: 0 = torres encostadas (28/10/2026)
+
+> "Torre A ↔ Torre B: use metros entre 0,01 e 500 (ou deixe vazio). permita colocar 0 que significa que as torres
+> estão encostadas uma na outra"
+
+O 0 passa a valer em todo o caminho:
+
+- `lerDistanciaDigitada` e `lerDistancias` aceitam 0. A mensagem diz "entre 0 (encostadas) e 500", e o texto do
+  bloco explica o 0.
+- **Ajuste:** confere o par com 0. Qualquer distância cumpre, então nada é afastado, e o painel mostra "(pede 0,00 m)".
+- **Gerar massa:** com 0 o gerador usa 0 entre os blocos, e as duas torres saem encostadas.
+
+A distância continua sendo a **menor permitida**. Com 0, a Planta não aproxima as torres que estão afastadas.

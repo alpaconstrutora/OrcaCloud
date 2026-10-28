@@ -287,7 +287,7 @@ function afastarTorres(
   const conferencias: ConferenciaDaDistancia[] = [];
   const pegada = new Map<string, Point[]>();
   for (const [id, p] of pilhas) pegada.set(id, blocos[p.casado].pontos);
-  const pares = exigencias.filter((x) => pilhas.has(x.torreA) && pilhas.has(x.torreB) && x.mm > 0);
+  const pares = exigencias.filter((x) => pilhas.has(x.torreA) && pilhas.has(x.torreB) && x.mm >= 0);
   for (const x of pares) {
     const medidaMm = distanciaEntrePoligonosMm(pegada.get(x.torreA)!, pegada.get(x.torreB)!);
     conferencias.push({ torreA: nome.get(x.torreA)!, torreB: nome.get(x.torreB)!, medidaMm, exigidaMm: x.mm, ok: medidaMm >= x.mm });

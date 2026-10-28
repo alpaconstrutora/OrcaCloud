@@ -136,6 +136,16 @@ Fora (registrado): o anel de foco do seletor de conta das outras abas é o do sn
 (`ring-blue-500/20` + borda azul) — mudar é decisão do guia, não desta tela.
 ### Passo 7 — `/impeccable polish`
 
+Backlog da crítica (snapshot `2026-10-28T13-29-50Z`, 2 P0 + 3 P1): todos resolvidos nos passos 1–4.
+Desvios do sistema que sobraram no componente, corrigidos aqui:
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 7.1 | Escala compacta §16: cards `rounded-2xl` → `rounded-[10px]`; alertas e erro `rounded-xl` → `rounded-[10px]`; botões e campos da edição inline `rounded-lg`/`rounded` → `rounded-[6px]` | Nenhum `rounded-2xl`/`rounded-lg`/`rounded border` no componente (os 2 `rounded-xl` que ficam são o esqueleto que imita o `KpiCard`, que é `rounded-xl`) |
+| 7.2 | Células §6.6/§7.2: `px-6` + `border-r border-gray-100 last:border-r-0` em toda `th`/`td`, `py-2` no cabeçalho e `py-2.5` no corpo; cabeçalho de card `px-6` alinhado às células | Na tela |
+| 7.3 | Rodapé de total §6.10: sem `font-black` nem caixa alta ("Total" `text-xs font-semibold text-gray-500`; valores `font-medium` pelo `<tfoot>` — no `<tr>` cinza a trava `cabecalhoSemCinzaGuard` o leria como cabeçalho); valor das tarifas no alerta `font-semibold` | Nenhum `font-black`/`uppercase` no componente |
+| 7.4 | Limpeza: nenhum import sem uso; seletores de teste que dependiam de `rounded-xl` trocados | `tsc` limpo; 22 testes de tela |
+
 (Os passos 2–7 ganham a tabela "o que muda / como sei que terminou" quando chegar a vez de cada um.)
 
 ## Estado
@@ -203,8 +213,11 @@ Fora (registrado): o anel de foco do seletor de conta das outras abas é o do sn
 - [x] Passo 5 — 5 de 5. PR #238 (`ed69558`). Conferido em produção (28/10, "Todas"): "Bate com o
   banco · 1 de 5 contas · (alerta)" com 2/3 da largura (1065 × 527 px), "Ajustar Banco Itaú →";
   "A conciliar R$ 47.288.696,78 (atenção) · 13.229 lançamentos"; frase da tabela sumiu.
-- [ ] Passo 6 — 6 de 6 no código; falta medir de novo em produção. Testes de tela: 12 + 9.
-- [ ] Passo 7
+- [x] Passo 6 — 6 de 6. PR #241 (`fc5d24c`). Medido de novo em produção (28/10): **49 → 1** texto
+  abaixo de AA (o que sobra é "Sincronizando Opura…", carregamento global fora da tela); h1 → h2;
+  3 tabelas com nome e `scope` 8/8, 6/6, 4/4; aba ativa com `aria-current`; 4 textos para leitor de
+  tela. Os 3 `select` sem rótulo que restam estão na gaveta "Importar extrato", fechada e `inert`.
+- [ ] Passo 7 — 4 de 4 no código; falta conferir em produção (desktop e celular).
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)
 

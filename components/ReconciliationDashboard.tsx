@@ -290,14 +290,14 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             </div>
                         ))}
                     </div>
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3 animate-pulse" aria-hidden="true">
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-5 space-y-3 animate-pulse" aria-hidden="true">
                         {[0, 1, 2].map(i => <div key={i} className="h-3 bg-gray-100 rounded" />)}
                     </div>
                 </div>
             )}
 
             {erro && (
-                <div role="alert" className="flex flex-wrap items-start justify-between gap-3 bg-white border border-red-200 rounded-xl px-4 py-3">
+                <div role="alert" className="flex flex-wrap items-start justify-between gap-3 bg-white border border-red-200 rounded-[10px] px-4 py-3">
                     <div className="flex items-start gap-3 min-w-0">
                         <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
                         <div className="text-sm text-gray-700 min-w-0">
@@ -373,7 +373,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                     {/* Um bloco só: antes eram dois (o vermelho que a 2ª frase desmentia e a faixa
                         "N de M conferidos" sempre visível). Vermelho só quando nada explica a diferença. */}
                     {divergencia && (
-                        <div className={`flex items-start gap-3 rounded-xl px-4 py-3 border ${
+                        <div className={`flex items-start gap-3 rounded-[10px] px-4 py-3 border ${
                             divergencia.tom === 'divergencia' ? 'bg-red-50 border-red-200' : 'bg-amber-50 border-amber-200'
                         }`}>
                             {divergencia.tom === 'divergencia'
@@ -391,7 +391,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         </div>
                     )}
                     {(totals?.unclassified_count ?? 0) > 0 && (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-amber-50 border border-amber-100 rounded-xl px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-amber-50 border border-amber-100 rounded-[10px] px-4 py-3">
                             <Tag className="w-4 h-4 text-amber-500 flex-shrink-0" />
                             <p className="text-sm font-semibold text-amber-700">
                                 {plural(totals?.unclassified_count ?? 0, 'lançamento do extrato pendente está', 'lançamentos do extrato pendentes estão')} sem classificação.
@@ -404,11 +404,11 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         </div>
                     )}
                     {fees.count > 0 && (
-                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-orange-50 border border-orange-100 rounded-xl px-4 py-3">
+                        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 bg-orange-50 border border-orange-100 rounded-[10px] px-4 py-3">
                             <Receipt className="w-4 h-4 text-orange-500 flex-shrink-0" />
                             <p className="text-sm font-semibold text-orange-700">
                                 {plural(fees.count, 'possível tarifa bancária', 'possíveis tarifas bancárias')} sem lançamento —{' '}
-                                <span className="font-black tabular-nums">{formatBRL(fees.value)}</span>.
+                                <span className="font-semibold tabular-nums">{formatBRL(fees.value)}</span>.
                             </p>
                             {onIrPara && (
                                 <>
@@ -426,22 +426,22 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
             )}
 
             {/* Tabela por conta */}
-            <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="px-5 py-3 border-b border-gray-50">
+            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                <div className="px-6 py-3 border-b border-gray-100">
                     <h2 id="conciliacao-por-conta" className="text-sm font-semibold text-gray-900">Por conta bancária</h2>
                 </div>
                 <div className="overflow-x-auto">
                     <table className="w-full text-sm" aria-labelledby="conciliacao-por-conta">
                         <thead>
                             <tr className="bg-white text-xs font-semibold text-gray-700 border-b border-gray-200">
-                                <th scope="col" className="text-left  px-5 py-3">Conta</th>
-                                <th scope="col" className="text-right px-3 py-3">Saldo inicial</th>
-                                <th scope="col" className="text-right px-3 py-3">Saldo pelo extrato</th>
-                                <th scope="col" className="text-right px-3 py-3">Saldo no banco</th>
-                                <th scope="col" className="text-right px-3 py-3">Conciliado</th>
-                                <th scope="col" className="text-right px-3 py-3">A conciliar</th>
-                                <th scope="col" className="text-right px-3 py-3">Pendentes</th>
-                                <th scope="col" className="text-right px-5 py-3"></th>
+                                <th scope="col" className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Conta</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Saldo inicial</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Saldo pelo extrato</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Saldo no banco</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Conciliado</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">A conciliar</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Pendentes</th>
+                                <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0"></th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-50">
@@ -453,11 +453,11 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                 const conciliada = (acc.pending_count ?? 0) === 0;
                                 return (
                                     <tr key={acc.account_id} className="hover:bg-gray-50/50">
-                                        <td className="px-5 py-3">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                             <p className="text-sm font-normal text-gray-700">{acc.account_name}</p>
                                             {acc.bank_name && <p className="text-xs text-gray-500">{acc.bank_name}</p>}
                                         </td>
-                                        <td className="px-3 py-3 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             {isEditing ? (
                                                 <div ref={edicaoRef} className="flex flex-col items-end gap-1">
                                                     <MoneyCentsInput
@@ -469,7 +469,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                         disabled={saving}
                                                         aria-label={`Saldo inicial de ${acc.account_name}`}
                                                         title="Digite só os números (os dois últimos são os centavos). Um “-” deixa o saldo negativo. Enter salva, Esc cancela."
-                                                        className="w-32 px-2 py-1 rounded border border-gray-200 text-right text-sm text-gray-900 tabular-nums placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-32 px-2 py-1 rounded-[6px] border border-gray-200 text-right text-sm text-gray-900 tabular-nums placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     />
                                                     <input
                                                         type="date"
@@ -479,15 +479,15 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                         disabled={saving}
                                                         aria-label={`Extrato de ${acc.account_name} conta a partir de`}
                                                         title="A partir de quando o extrato entra no saldo desta conta. Vazio = todo o extrato."
-                                                        className="w-32 px-2 py-1 rounded border border-gray-200 text-right text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        className="w-32 px-2 py-1 rounded-[6px] border border-gray-200 text-right text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     />
                                                 </div>
                                             ) : (
                                                 <span className="tabular-nums text-gray-600">{formatBRL(acc.opening_balance)}</span>
                                             )}
                                         </td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(acc.bank_balance)}</td>
-                                        <td className="px-3 py-3 text-right align-top">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(acc.bank_balance)}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right align-top">
                                             {(() => {
                                                 const e = estadoDoSaldoBanco(acc);
                                                 const informar = (rotulo: string) => (
@@ -522,11 +522,11 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                 );
                                             })()}
                                         </td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(acc.reconciled_balance)}</td>
-                                        <td className={`px-3 py-3 text-right tabular-nums text-sm font-medium ${conciliada ? 'text-gray-500' : 'text-amber-700'}`}>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(acc.reconciled_balance)}</td>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium ${conciliada ? 'text-gray-500' : 'text-amber-700'}`}>
                                             {conciliada ? <NadaAConciliar /> : formatBRL(aConciliar)}
                                         </td>
-                                        <td className="px-3 py-3 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             {acc.pending_count > 0 ? (
                                                 <span className="text-sm font-normal text-amber-700">
                                                     {acc.pending_count}
@@ -535,13 +535,13 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                 <><Check className="w-4 h-4 text-emerald-600 inline" aria-hidden="true" /><span className="sr-only">nenhum pendente</span></>
                                             )}
                                         </td>
-                                        <td className="px-5 py-3 text-right">
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right">
                                             {isEditing ? (
                                                 <div className="flex items-center justify-end gap-1">
                                                     <button
                                                         onClick={() => saveEdit(acc)}
                                                         disabled={saving}
-                                                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                                        className="p-1.5 rounded-[6px] bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
                                                         title={saving ? 'Salvando…' : 'Salvar (Enter)'}
                                                         aria-label={`Salvar saldo inicial de ${acc.account_name}`}
                                                     >
@@ -550,7 +550,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                     <button
                                                         onClick={cancelEdit}
                                                         disabled={saving}
-                                                        className="p-1.5 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                                                        className="p-1.5 rounded-[6px] bg-gray-50 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
                                                         title={saving ? 'Salvando…' : 'Cancelar (Esc)'}
                                                         aria-label={`Cancelar edição do saldo inicial de ${acc.account_name}`}
                                                     >
@@ -563,7 +563,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                                         <button type="button"
                                                             onClick={() => onIrPara({ aba: 'pending', contaId: acc.account_id })}
                                                             aria-label={`Conciliar ${acc.account_name} em Pendentes`}
-                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all">
+                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all">
                                                             Conciliar
                                                         </button>
                                                     )}
@@ -589,19 +589,19 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             )}
                         </tbody>
                         {(data?.accounts ?? []).length > 0 && totals && (
-                            <tfoot>
-                                <tr className="border-t-2 border-gray-100 bg-gray-50/50 font-black text-gray-900">
-                                    <td className="px-5 py-3 text-xs uppercase tracking-widest text-gray-500">Total</td>
-                                    <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.opening_balance)}</td>
-                                    <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.bank_balance)}</td>
+                            <tfoot className="font-medium">
+                                <tr className="border-t-2 border-gray-100 bg-gray-50/50 text-gray-900">
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-semibold text-gray-500">Total</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{formatBRL(totals.opening_balance)}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{formatBRL(totals.bank_balance)}</td>
                                     {/* Sem total de "Saldo no banco": cada conta tem a sua data. */}
-                                    <td className="px-3 py-3" />
-                                    <td className="px-3 py-3 text-right tabular-nums">{formatBRL(totals.reconciled_balance)}</td>
-                                    <td className={`px-3 py-3 text-right tabular-nums ${totals.pending_count === 0 ? 'text-gray-500' : 'text-amber-700'}`}>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0" />
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{formatBRL(totals.reconciled_balance)}</td>
+                                    <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums ${totals.pending_count === 0 ? 'text-gray-500' : 'text-amber-700'}`}>
                                         {totals.pending_count === 0 ? <NadaAConciliar /> : formatBRL(totals.pending_value)}
                                     </td>
-                                    <td className="px-3 py-3 text-right tabular-nums">{totals.pending_count}</td>
-                                    <td className="px-5 py-3"></td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{totals.pending_count}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"></td>
                                 </tr>
                             </tfoot>
                         )}
@@ -634,8 +634,8 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
 
             {/* Consolidado por empresa (SPE) */}
             {consolidated && consolidated.by_empresa.length > 0 && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2">
                         <Building2 className="w-4 h-4 text-indigo-500" />
                         <h2 id="conciliacao-por-empresa" className="text-sm font-semibold text-gray-900">
                             Por empresa
@@ -648,36 +648,36 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         <table className="w-full text-sm" aria-labelledby="conciliacao-por-empresa">
                             <thead>
                                 <tr className="bg-white text-xs font-semibold text-gray-700 border-b border-gray-200">
-                                    <th scope="col" className="text-left  px-5 py-3">Empresa</th>
-                                    <th scope="col" className="text-right px-3 py-3">Contas</th>
-                                    <th scope="col" className="text-right px-3 py-3">Saldo pelo extrato</th>
-                                    <th scope="col" className="text-right px-3 py-3">Conciliado</th>
-                                    <th scope="col" className="text-right px-3 py-3">A conciliar</th>
-                                    <th scope="col" className="text-right px-5 py-3">Pendentes</th>
+                                    <th scope="col" className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Empresa</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Contas</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Saldo pelo extrato</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Conciliado</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">A conciliar</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Pendentes</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {consolidated.by_empresa.map(e => (
                                     <tr key={e.empresa_id ?? 'none'} className="hover:bg-gray-50/50">
-                                        <td className="px-5 py-3 text-sm font-normal text-gray-700">{e.empresa_name}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-gray-500">{e.account_count}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.bank_balance)}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.reconciled_balance)}</td>
-                                        <td className={`px-3 py-3 text-right tabular-nums text-sm font-medium ${!e.pending_count ? 'text-gray-500' : 'text-amber-700'}`}>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{e.empresa_name}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-gray-500">{e.account_count}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.bank_balance)}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.reconciled_balance)}</td>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium ${!e.pending_count ? 'text-gray-500' : 'text-amber-700'}`}>
                                             {!e.pending_count ? <NadaAConciliar /> : formatBRL(e.pending_value)}
                                         </td>
-                                        <td className="px-5 py-3 text-right tabular-nums">{e.pending_count || <NadaAConciliar />}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{e.pending_count || <NadaAConciliar />}</td>
                                     </tr>
                                 ))}
                             </tbody>
-                            <tfoot>
-                                <tr className="border-t-2 border-gray-100 bg-gray-50/50 font-black text-gray-900">
-                                    <td className="px-5 py-3 text-xs uppercase tracking-widest text-gray-500">Total</td>
-                                    <td className="px-3 py-3 text-right tabular-nums">{consolidated.totals.account_count}</td>
-                                    <td className="px-3 py-3 text-right tabular-nums">{formatBRL(consolidated.totals.bank_balance)}</td>
-                                    <td className="px-3 py-3 text-right tabular-nums">{formatBRL(consolidated.totals.reconciled_balance)}</td>
-                                    <td className="px-3 py-3 text-right tabular-nums text-amber-700">{formatBRL(consolidated.totals.pending_value)}</td>
-                                    <td className="px-5 py-3"></td>
+                            <tfoot className="font-medium">
+                                <tr className="border-t-2 border-gray-100 bg-gray-50/50 text-gray-900">
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-xs font-semibold text-gray-500">Total</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{consolidated.totals.account_count}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{formatBRL(consolidated.totals.bank_balance)}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums">{formatBRL(consolidated.totals.reconciled_balance)}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-amber-700">{formatBRL(consolidated.totals.pending_value)}</td>
+                                    <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"></td>
                                 </tr>
                             </tfoot>
                         </table>
@@ -687,8 +687,8 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
 
             {/* Caixa realizado por obra */}
             {consolidated && consolidated.by_project.length > 0 && (
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="px-5 py-3 border-b border-gray-50 flex items-center gap-2">
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="px-6 py-3 border-b border-gray-100 flex items-center gap-2">
                         <HardHat className="w-4 h-4 text-orange-500" />
                         <h2 id="conciliacao-por-obra" className="text-sm font-semibold text-gray-900">
                             Caixa realizado por obra
@@ -699,19 +699,19 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         <table className="w-full text-sm" aria-labelledby="conciliacao-por-obra">
                             <thead>
                                 <tr className="bg-white text-xs font-semibold text-gray-700 border-b border-gray-200">
-                                    <th scope="col" className="text-left  px-5 py-3">Obra</th>
-                                    <th scope="col" className="text-right px-3 py-3">Entradas</th>
-                                    <th scope="col" className="text-right px-3 py-3">Saídas</th>
-                                    <th scope="col" className="text-right px-5 py-3">Caixa Líquido</th>
+                                    <th scope="col" className="text-left px-6 py-2 border-r border-gray-100 last:border-r-0">Obra</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Entradas</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Saídas</th>
+                                    <th scope="col" className="text-right px-6 py-2 border-r border-gray-100 last:border-r-0">Caixa Líquido</th>
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-50">
                                 {consolidated.by_project.map(p => (
                                     <tr key={p.project_id} className="hover:bg-gray-50/50">
-                                        <td className="px-5 py-3 text-sm font-normal text-gray-700">{p.project_name}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-emerald-700">{formatBRL(p.credit)}</td>
-                                        <td className="px-3 py-3 text-right tabular-nums text-red-600">{formatBRL(p.debit)}</td>
-                                        <td className={`px-5 py-3 text-right tabular-nums text-sm font-medium ${p.net >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatBRL(p.net)}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{p.project_name}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-emerald-700">{formatBRL(p.credit)}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-red-600">{formatBRL(p.debit)}</td>
+                                        <td className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium ${p.net >= 0 ? 'text-gray-900' : 'text-red-600'}`}>{formatBRL(p.net)}</td>
                                     </tr>
                                 ))}
                             </tbody>

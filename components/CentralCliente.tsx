@@ -288,6 +288,20 @@ function celulaRecebivel(key: string, l: LinhaRecebivel): React.ReactNode {
     }
 }
 
+/** Falha de carga com saída: o que falhou, o que fazer, e o texto técnico
+ *  rebaixado (antes ele ERA a mensagem — "TypeError: Failed to fetch"). */
+const FalhaComSaida: React.FC<{ oQue: string; detalhe: string; onTentar: () => void }> = ({ oQue, detalhe, onTentar }) => (
+    <div role="alert" className="flex flex-col items-center justify-center gap-2 py-8 text-center px-4">
+        <AlertTriangle className="w-6 h-6 text-red-600" aria-hidden="true" />
+        <p className="text-sm font-medium text-gray-800">Não foi possível carregar {oQue}.</p>
+        <p className="text-sm text-gray-600">Confira a conexão e tente de novo. Se continuar, avise o suporte com o detalhe abaixo.</p>
+        <Button variant="secondary" onClick={onTentar} className="mt-1 text-sm gap-2">
+            <RefreshCw className="w-3.5 h-3.5" /> Tentar de novo
+        </Button>
+        <p className="text-xs text-gray-500 max-w-md break-words">Detalhe técnico: {detalhe}</p>
+    </div>
+);
+
 /** Título de seção dentro do card da tabela (mesma anatomia do ChartCard §28.2). */
 const TituloSecao: React.FC<{ titulo: string; subtitulo: string }> = ({ titulo, subtitulo }) => (
     <div className="mb-3">
@@ -378,7 +392,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                 clientCategoryService.list(organizationId || undefined).catch(() => []),
             ]);
             setClientesCarregados(true);
-            if (error) { showToast(`Erro ao carregar clientes: ${error.message}`, 'error'); return; }
+            if (error) { showToast(`Não foi possível carregar a lista de clientes (${error.message}). Atualize a página para tentar de novo.`, 'error'); return; }
             setClients((data || []) as ClientLite[]);
             setTiposCatalogo(catalogo.map(c => c.name));
         })();
@@ -443,8 +457,8 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
         } catch (e: unknown) {
             if (seq !== loadSeq.current) return;
             const msg = mensagemDeErro(e);
+            // Sem toast: o cartão de erro já diz o que falhou e oferece "Tentar de novo".
             setKpis(null); setByClient([]); setByProject([]); setError(msg);
-            showToast(`Erro ao carregar Central de Clientes: ${msg}`, 'error');
             console.error('[CentralCliente]', e);
         } finally {
             if (seq === loadSeq.current) setLoading(false);
@@ -516,7 +530,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
             const data = await opuraAnalyticsService.entries(organizationId, drill.filters, ENTRIES_PAGE, entries.length);
             if (req === drillReq.current) setEntries(prev => [...prev, ...data]);
         } catch (e: unknown) {
-            if (req === drillReq.current) showToast(`Erro ao carregar extrato: ${mensagemDeErro(e)}`, 'error');
+            if (req === drillReq.current) showToast(`Não foi possível carregar mais lançamentos (${mensagemDeErro(e)}). Clique em "Carregar mais" de novo.`, 'error');
         } finally {
             if (req === drillReq.current) setEntriesLoadingMore(false);
         }
@@ -626,7 +640,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                             </button>
                         )}
                     </div>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">Quem deve, quanto e há quanto tempo — por cliente e por obra.</p>
                     <p role="status" className="sr-only">{anuncio}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
@@ -670,21 +684,16 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
             </div>
 
             {error ? (
-                <div className="bg-white rounded-[10px] border border-red-100 shadow-sm p-8 flex flex-col items-center text-center gap-3">
-                    <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
-                        <AlertTriangle className="w-6 h-6" aria-hidden="true" />
-                    </div>
-                    <p className="text-sm font-bold text-gray-800">Não foi possível carregar a Central de Clientes</p>
-                    <p className="text-xs text-gray-500 max-w-md break-words">{error}</p>
-                    <Button onClick={atualizar} className="mt-2 text-sm gap-2">
-                        <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                    </Button>
+                <div className="bg-white rounded-[10px] border border-red-100 shadow-sm">
+                    <FalhaComSaida oQue="os números da Central de Clientes" detalhe={error} onTentar={atualizar} />
                 </div>
             ) : !clientId ? (
-                <div className="flex items-center justify-center h-48 text-sm text-gray-500">Selecione um cliente.</div>
+                <div className="flex items-center justify-center h-48 text-sm text-gray-500">Escolha um cliente no seletor acima.</div>
             ) : clientesCarregados && clientIds && clientIds.length === 0 ? (
-                <div className="flex items-center justify-center h-48 text-sm text-gray-500">
-                    {clients.length === 0 ? 'Nenhum cliente cadastrado.' : `Nenhum cliente do tipo "${tipoAtivo}".`}
+                <div className="flex items-center justify-center h-48 text-sm text-gray-600 text-center px-4">
+                    {clients.length === 0
+                        ? 'Nenhum cliente cadastrado nesta organização. Cadastre em Minha Organização › Meus Clientes.'
+                        : `Nenhum cliente do tipo "${tipoAtivo}". Escolha outro tipo ou "Todos os tipos".`}
                 </div>
             ) : (
                 <>
@@ -708,21 +717,38 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         </div>
                     ) : (
                     <div className={`grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
+                        {/* As bases ficam escritas: os contratos não têm período, e o
+                            faturado é do período — o antigo "% do contratado" dividia uma
+                            base pela outra (26,7% que não significava nada). */}
                         <KpiCard destaque label="Contratado" icon={<FileSignature />}
                             value={fBRL(contratado)}
-                            sub={plural(kpis?.qtd_contratos ?? 0, 'contrato', 'contratos')} />
+                            sub={`${plural(kpis?.qtd_contratos ?? 0, 'contrato', 'contratos')}, sem recorte de período`} />
                         <KpiCard destaque label="Faturado" icon={<Receipt />}
                             value={fBRL(faturado)}
-                            sub={pct(faturado, contratado) !== null ? `recebido + a receber · ${fPct(pct(faturado, contratado))} do contratado` : 'recebido + a receber'} />
+                            sub="recebido + em aberto, lançados no período" />
                         <KpiCard destaque label="Recebido" icon={<TrendingUp />}
                             value={fBRL(recebido)}
                             sub={pct(recebido, faturado) !== null ? `${fPct(pct(recebido, faturado))} do faturado` : undefined} />
                         <KpiCard destaque label="Inadimplência" icon={<Clock />}
                             value={fBRL(vencido)}
-                            sub={aReceber > 0 ? `${fPct(fracaoVencida * 100)} do saldo devedor de ${fBRL(aReceber)}` : 'nada em aberto'}
+                            sub={aReceber > 0 ? `${fPct(fracaoVencida * 100)} do em aberto de ${fBRL(aReceber)}` : 'nada em aberto no período'}
                             tom={tomInadimplencia}
                             acao={vencido > 0 && onNavigate ? { label: 'Cobrar em Contas a Receber', onClick: () => onNavigate('contas-a-receber') } : undefined} />
                     </div>
+                    )}
+                    {/* A regra do alerta, escrita (crítica 2: "o limiar de 30% não
+                        aparece em lugar nenhum"). Só quando o alerta está aceso. */}
+                    {!semNumeros && tomInadimplencia !== 'neutro' && (
+                        <p className="-mt-3 text-xs text-gray-600">
+                            {[
+                                fracaoVencida >= LIMIAR.vencidoSobreAbertoAtencao
+                                    ? `${fPct(fracaoVencida * 100)} do em aberto do período já venceu (alerta a partir de ${Math.round(LIMIAR.vencidoSobreAbertoAlerta * 100)}%, atenção a partir de ${Math.round(LIMIAR.vencidoSobreAbertoAtencao * 100)}%)`
+                                    : null,
+                                dividaVelhaHoje > 0
+                                    ? `${fBRL(dividaVelhaHoje)} vencidos há mais de ${LIMIAR.diasDividaVelha} dias, lançados em qualquer data`
+                                    : null,
+                            ].filter(Boolean).join(' · ')}.
+                        </p>
                     )}
 
                     {/* Quem deve: a quebra que o subtítulo promete. Só em "Todos". */}
@@ -730,7 +756,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         <div ref={porClienteRef}>
                         <StandardTable<LinhaRecebivel>
                             storageKey="centralCliente:porCliente"
-                            toolbarTop={<TituloSecao titulo="Por cliente" subtitulo="Entradas do período, de quem mais deve para quem menos deve. Clique num cliente para ver só ele." />}
+                            toolbarTop={<TituloSecao titulo="Por cliente" subtitulo="Entradas lançadas no período, de quem mais deve para quem menos deve. Clique num cliente para ver só ele." />}
                             columns={COLUNAS_CLIENTE}
                             rows={linhasCliente}
                             rowKey={l => l.key ?? `sem:${l.nome}`}
@@ -739,9 +765,9 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                             sortValue={sortRecebivel}
                             renderCell={celulaRecebivel}
                             onRowClick={recortarPara}
-                            rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido, ${fBRL(l.aberto)} em aberto. Ver só este cliente`}
+                            rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido${l.atrasoMax != null ? ` há até ${plural(l.atrasoMax, 'dia', 'dias')}` : ''}, ${fBRL(l.aberto)} em aberto. Ver só este cliente`}
                             loading={semNumeros || (loading && linhasCliente.length === 0)}
-                            empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma entrada no período', subtitle: 'Nenhum cliente do recorte tem lançamento a receber nestas datas.' }}
+                            empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma entrada no período', subtitle: 'Nenhum cliente do recorte tem entrada lançada nestas datas. Amplie o período.' }}
                             maxHeight="480px"
                         />
                         </div>
@@ -754,17 +780,11 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         title="Em aberto por faixa de atraso"
                         subtitle={baseAtraso === 'hoje'
                             ? `Tudo o que ${todos ? 'os clientes do recorte devem' : 'este cliente deve'} hoje, lançado quando for, pela idade do vencimento.`
-                            : `Só o que foi lançado no período, pela idade do vencimento — a soma fecha com o Em aberto da tela.`}
+                            : `Só o que foi lançado no período, pela idade do vencimento. A soma fecha com o em aberto da Inadimplência e das tabelas.`}
                         aside={<BaseToggle value={baseAtraso} onChange={setBaseAtraso} />}
                     >
                         {faixasErro ? (
-                            <div role="alert" className="flex flex-col items-center justify-center gap-2 min-h-[160px] text-center px-4">
-                                <p className="text-sm text-gray-700">Não foi possível carregar as faixas de atraso.</p>
-                                <p className="text-xs text-gray-500 max-w-md break-words">{faixasErro}</p>
-                                <Button variant="secondary" onClick={() => void carregarFaixas()} className="text-sm gap-2">
-                                    <RefreshCw className="w-3.5 h-3.5" /> Tentar de novo
-                                </Button>
-                            </div>
+                            <FalhaComSaida oQue="as faixas de atraso" detalhe={faixasErro} onTentar={() => void carregarFaixas()} />
                         ) : faixas === null ? (
                             // Esqueleto (§28.5): três barras, sem afirmar zero.
                             <div className="min-h-[160px] flex flex-col justify-end gap-3 px-2 pb-2" aria-busy="true" aria-label="Carregando faixas de atraso">
@@ -856,7 +876,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         sortValue={sortRecebivel}
                         renderCell={celulaRecebivel}
                         onRowClick={openDrill}
-                        rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido, ${fBRL(l.aberto)} em aberto. Abrir o extrato`}
+                        rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido${l.atrasoMax != null ? ` há até ${plural(l.atrasoMax, 'dia', 'dias')}` : ''}, ${fBRL(l.aberto)} em aberto. Abrir o extrato`}
                         loading={semNumeros || (loading && linhasObra.length === 0)}
                         empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Sem lançamentos no período' }}
                         maxHeight="480px"
@@ -876,22 +896,15 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                     {entriesLoading ? (
                         <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando extrato...</div>
                     ) : entriesError ? (
-                        <div role="alert" className="flex flex-col items-center justify-center gap-3 py-10 text-center">
-                            <AlertTriangle className="w-6 h-6 text-red-600" aria-hidden="true" />
-                            <p className="text-sm font-medium text-gray-800">Não foi possível carregar o extrato.</p>
-                            <p className="text-xs text-gray-500 max-w-md break-words">{entriesError}</p>
-                            <Button variant="secondary" onClick={() => drill && void carregarExtrato(drill.filters)} className="text-sm gap-2">
-                                <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
-                            </Button>
-                        </div>
+                        <FalhaComSaida oQue="o extrato" detalhe={entriesError} onTentar={() => drill && void carregarExtrato(drill.filters)} />
                     ) : entries.length === 0 ? (
-                        <div className="flex items-center justify-center h-40 text-sm text-gray-500">Sem lançamentos.</div>
+                        <div className="flex items-center justify-center h-40 text-sm text-gray-500">Nenhuma entrada lançada no período.</div>
                     ) : (
                         <div className="overflow-x-auto rounded-[10px] border border-gray-100">
                             <table className="w-full text-left border-collapse">
                                 <thead>
                                     <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                        <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>
+                                        <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Lançado em</th>
                                         <th className="px-4 py-2 border-r border-gray-100">Lançamento</th>
                                         <th className="px-3 py-2 text-right whitespace-nowrap">Valor</th>
                                     </tr>
@@ -909,15 +922,19 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                                                     <p className="text-xs text-gray-500">
                                                         {[todos ? e.client_name : null, e.category_name, e.project_name].filter(Boolean).join(' · ')}
                                                     </p>
-                                                    {/* O vencido diz que venceu, em texto — não só a cor. */}
-                                                    {pendente && (dias > 0 ? (
+                                                    {/* Situação em palavras, com o vocabulário da tela (Vencido ·
+                                                        A vencer · Recebido) — não só a cor. Era "previsto · vencido
+                                                        há N dias (venc. dd/mm)": dois estados e a data repetida. */}
+                                                    {saida ? null : !pendente ? (
+                                                        <p className="mt-0.5 text-xs text-gray-500">Recebido{e.payment_date ? ` em ${fData(e.payment_date)}` : ''}</p>
+                                                    ) : dias > 0 ? (
                                                         <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-red-700">
                                                             <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
-                                                            previsto · vencido há {plural(dias, 'dia', 'dias')} (venc. {fData(e.due_date)})
+                                                            Vencido há {plural(dias, 'dia', 'dias')}
                                                         </p>
                                                     ) : (
-                                                        <p className="mt-0.5 text-xs text-gray-500">previsto{e.due_date ? ` · vence ${fData(e.due_date)}` : ''}</p>
-                                                    ))}
+                                                        <p className="mt-0.5 text-xs text-gray-500">{e.due_date ? `A vencer em ${fData(e.due_date)}` : 'A vencer'}</p>
+                                                    )}
                                                 </td>
                                                 {/* Verde só no que ENTROU: pendente não é receita ainda. */}
                                                 <td className={`px-3 py-2.5 text-right whitespace-nowrap tabular-nums text-sm font-medium align-top ${

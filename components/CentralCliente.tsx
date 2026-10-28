@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    RefreshCw, AlertTriangle, TrendingUp, FileSignature, Receipt, Clock, Inbox, X,
+    RefreshCw, AlertTriangle, TrendingUp, FileSignature, Receipt, Clock, Inbox, X, ArrowRight,
 } from 'lucide-react';
 import {
     BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -67,7 +67,10 @@ function diasVencido(dueDate: string | null, hoje: string): number {
 }
 
 /** Página do extrato — mesma de Relatórios ÒPURA. */
-const ENTRIES_PAGE = 200;
+// 500, não 200: a gaveta agrupa e ordena por situação NO NAVEGADOR (vencidos do
+// mais antigo primeiro), e a ordem só vale para o que foi carregado. A maior
+// linha medida tem 53 lançamentos; acima de 500 a gaveta avisa.
+const ENTRIES_PAGE = 500;
 
 /** Limiares da Inadimplência (guia §4.5: cor só por limiar com nome) —
  *  hipótese de gestão, ajuste aqui. Regra "os dois" (usuário, 28/10/2026):
@@ -370,7 +373,8 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const [error, setError]     = React.useState<string | null>(null);
 
     // Drill-down extrato. `filters` fica guardado para o "Carregar mais".
-    const [drill, setDrill] = React.useState<{ label: string; filters: OpuraEntryFilters } | null>(null);
+    // `linha` = a linha clicada: o resumo da gaveta usa os MESMOS números dela.
+    const [drill, setDrill] = React.useState<{ label: string; filters: OpuraEntryFilters; linha: LinhaRecebivel } | null>(null);
     const [entries, setEntries] = React.useState<OpuraEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = React.useState(false);
     const [entriesLoadingMore, setEntriesLoadingMore] = React.useState(false);
@@ -518,7 +522,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
         // Só entradas, como a linha que foi clicada — a quantidade bate.
         const base: OpuraEntryFilters = { dateFrom, dateTo, direction: 'CREDIT', ...obra };
         const f: OpuraEntryFilters = clientIds ? { clientIds, ...base } : { clientId, ...base };
-        setDrill({ label: row.nome, filters: f });
+        setDrill({ label: row.nome, filters: f, linha: row });
         void carregarExtrato(f);
     }, [carregarExtrato, clientId, clientIds, dateFrom, dateTo]);
 
@@ -543,6 +547,28 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
         setEntriesLoadingMore(false);
     }, []);
     const totalEntries = entries[0]?.total_count ?? entries.length;
+    // Extrato por situação, na ordem de cobrança (crítica 2: o 1º vencido era a
+    // linha 11 de 53, atrás dos a vencer de dezembro). Vencidos do mais antigo;
+    // a vencer do mais próximo; recebidos do mais recente.
+    const gruposExtrato = React.useMemo(() => {
+        const vencidos: OpuraEntry[] = [], aVencer: OpuraEntry[] = [], recebidos: OpuraEntry[] = [], devolucoes: OpuraEntry[] = [];
+        for (const e of entries) {
+            if (e.direction === 'DEBIT') devolucoes.push(e);
+            else if (e.status !== 'PENDING') recebidos.push(e);
+            else if (diasVencido(e.due_date, hoje) > 0) vencidos.push(e);
+            else aVencer.push(e);
+        }
+        const data = (e: OpuraEntry, campo: 'due_date' | 'payment_date') => e[campo] ?? e.transaction_date;
+        vencidos.sort((a, b) => data(a, 'due_date').localeCompare(data(b, 'due_date')));
+        aVencer.sort((a, b) => data(a, 'due_date').localeCompare(data(b, 'due_date')));
+        recebidos.sort((a, b) => data(b, 'payment_date').localeCompare(data(a, 'payment_date')));
+        return [
+            { id: 'vencidos', titulo: 'Vencidos', itens: vencidos, alerta: true },
+            { id: 'a_vencer', titulo: 'A vencer', itens: aVencer, alerta: false },
+            { id: 'recebidos', titulo: 'Recebidos', itens: recebidos, alerta: false },
+            { id: 'devolucoes', titulo: 'Devoluções', itens: devolucoes, alerta: false },
+        ].filter(g => g.itens.length > 0);
+    }, [entries, hoje]);
     const hasMoreEntries = entries.length < totalEntries;
 
     // Recorte por cliente pelo teclado (crítica 2): Enter numa linha de "Por
@@ -892,6 +918,37 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         {escopoLabel} · {entriesLoading ? 'carregando…' : entriesError ? 'não carregou' : plural(totalEntries, 'lançamento', 'lançamentos')}
                     </SheetDescription>
                 </SheetHeader>
+                {/* Resumo da linha clicada — os mesmos números da tabela — e o
+                    caminho para resolver (princípio 5: número leva à ação). */}
+                {drill && (
+                    // Alinhado pelo TOPO: com "há até N dias" só no Vencido, o
+                    // alinhamento pela base desnivelava os três valores.
+                    <div className="px-6 py-3 border-b border-gray-100 shrink-0 flex flex-wrap items-start gap-x-8 gap-y-2">
+                        <div>
+                            <p className="text-xs text-gray-500">Vencido</p>
+                            <p className={`text-base font-semibold tabular-nums ${drill.linha.vencido > 0 ? 'text-red-700' : 'text-gray-800'}`}>{fBRL(drill.linha.vencido)}</p>
+                            {drill.linha.atrasoMax != null && <p className="text-xs text-gray-500">há até {plural(drill.linha.atrasoMax, 'dia', 'dias')}</p>}
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500">A vencer</p>
+                            <p className="text-base font-semibold tabular-nums text-gray-800">{fBRL(Math.max(0, drill.linha.aberto - drill.linha.vencido))}</p>
+                        </div>
+                        <div>
+                            <p className="text-xs text-gray-500">Recebido</p>
+                            <p className="text-base font-semibold tabular-nums text-gray-800">{fBRL(drill.linha.recebido)}</p>
+                        </div>
+                        {drill.linha.vencido > 0 && onNavigate && (
+                            <button
+                                type="button"
+                                onClick={() => { closeDrill(); onNavigate('contas-a-receber'); }}
+                                className="ml-auto self-center inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                            >
+                                Cobrar em Contas a Receber
+                                <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
+                )}
                 <SheetPanel className="px-6 py-5">
                     {entriesLoading ? (
                         <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando extrato...</div>
@@ -909,8 +966,15 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                                         <th className="px-3 py-2 text-right whitespace-nowrap">Valor</th>
                                     </tr>
                                 </thead>
-                                <tbody className="divide-y divide-gray-200">
-                                    {entries.map(e => {
+                                {gruposExtrato.map(g => (
+                                <tbody key={g.id} className="divide-y divide-gray-200">
+                                    {/* Cabeçalho do grupo: a situação, quantos e quanto. */}
+                                    <tr className="bg-gray-50">
+                                        <th colSpan={3} scope="colgroup" className={`px-3 py-2 text-left text-xs font-semibold tabular-nums ${g.alerta ? 'text-red-700' : 'text-gray-700'}`}>
+                                            {g.titulo} · {plural(g.itens.length, 'lançamento', 'lançamentos')} · {fBRL(g.itens.reduce((a, e) => a + Number(e.amount || 0), 0))}
+                                        </th>
+                                    </tr>
+                                    {g.itens.map(e => {
                                         const pendente = e.status === 'PENDING';
                                         const dias = pendente ? diasVencido(e.due_date, hoje) : 0;
                                         const saida = e.direction === 'DEBIT';
@@ -946,14 +1010,16 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                                         );
                                     })}
                                 </tbody>
+                                ))}
                             </table>
                         </div>
                     )}
-                    {/* O extrato vem em páginas de 200 — o cabeçalho diz o total,
-                        então a lista diz quantos mostra e busca o resto. */}
+                    {/* O extrato vem em páginas — o cabeçalho diz o total, então a lista
+                        diz quantos mostra, que a ordem por situação vale para eles, e
+                        busca o resto. */}
                     {!entriesLoading && hasMoreEntries && (
                         <div className="flex flex-wrap items-center gap-3 pt-3 text-sm text-gray-500">
-                            <span>Exibindo {entries.length} de {totalEntries}</span>
+                            <span>Exibindo {entries.length} de {totalEntries} — a ordem por situação vale para os exibidos.</span>
                             <Button variant="secondary" onClick={loadMoreEntries} disabled={entriesLoadingMore}>
                                 <RefreshCw className={`w-[15px] h-[15px] ${entriesLoadingMore ? 'animate-spin' : ''}`} />
                                 {entriesLoadingMore ? 'Carregando…' : `Carregar mais ${Math.min(ENTRIES_PAGE, totalEntries - entries.length)}`}

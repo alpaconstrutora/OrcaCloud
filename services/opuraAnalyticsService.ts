@@ -67,6 +67,19 @@ export interface OpuraObraKpis {
   qtd_lancamentos: number;
 }
 
+/** Faixas de atraso do Em aberto, na ordem de leitura (fn_opura_aging). */
+export const FAIXAS_ATRASO = ['a_vencer', '1_30', '31_60', '61_90', 'mais_90'] as const;
+export type OpuraFaixaAtraso = typeof FAIXAS_ATRASO[number];
+export type OpuraAgingBase = 'periodo' | 'hoje';
+export interface OpuraAgingRow {
+  dimension_key: string | null;
+  faixa: OpuraFaixaAtraso;
+  qtd: number;
+  valor: number;
+  /** Dias da parcela vencida mais antiga da faixa (null em "a vencer"). */
+  atraso_max: number | null;
+}
+
 /** KPIs financeiros de um cliente (Central de Clientes — Categoria 8). */
 export interface OpuraClienteKpis {
   contratado: number;
@@ -398,6 +411,33 @@ export const opuraAnalyticsService = {
     if (error) throw error;
     const row = Array.isArray(data) ? data[0] : data;
     return (row ?? null) as OpuraClienteKpis | null;
+  },
+
+  /**
+   * Em aberto dos clientes por faixa de atraso (Central de Clientes, 28/10/2026).
+   * `base` 'periodo' = lançados no período (fecha com os KPIs); 'hoje' = tudo o
+   * que está em aberto hoje. `dimension` agrupa por cliente/obra (coluna
+   * "Atraso máx." das tabelas). Sem cliente nem lista, a RPC não devolve nada.
+   */
+  async aging(
+    organizationId: string | null,
+    escopo: { clientId?: string; clientIds?: string[]; dateFrom?: string; dateTo?: string },
+    base: OpuraAgingBase,
+    dimension: 'client' | 'project' | null = null,
+  ): Promise<OpuraAgingRow[]> {
+    const { data, error } = await supabase.rpc('fn_opura_aging', {
+      p_organization_id: organizationId || null,
+      p_client_id:       escopo.clientId ?? null,
+      p_client_ids:      escopo.clientIds ?? null,
+      p_date_from:       escopo.dateFrom ?? null,
+      p_date_to:         escopo.dateTo ?? null,
+      p_base:            base,
+      p_dimension:       dimension,
+    });
+    if (error) throw error;
+    return ((data || []) as OpuraAgingRow[]).map(r => ({
+      ...r, qtd: Number(r.qtd) || 0, valor: Number(r.valor) || 0,
+    }));
   },
 
   async fornecedorKpis(

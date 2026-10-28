@@ -3,13 +3,17 @@ import {
     RefreshCw, AlertTriangle, TrendingUp, FileSignature, Receipt, Clock, Inbox, X,
 } from 'lucide-react';
 import {
-    BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
+    BarChart, Bar, Cell, LabelList, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
 } from 'recharts';
 import {
     opuraAnalyticsService,
+    FAIXAS_ATRASO,
+    type OpuraAgingBase,
+    type OpuraAgingRow,
     type OpuraClienteKpis,
     type OpuraEntry,
     type OpuraEntryFilters,
+    type OpuraFaixaAtraso,
     type OpuraPivotRow,
 } from '../services/opuraAnalyticsService';
 import { supabase } from '../lib/supabase';
@@ -23,7 +27,6 @@ import { KpiCard, type KpiTom } from './ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import { SegmentedProgress } from './ui/SegmentedProgress';
 import { usePersistedState } from './ui/TableUtils';
-import { montarSeriePrevistoRealizado, type Granularidade } from '../lib/opuraPrevistoRealizadoSerie';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fBRL(v: number | null): string {
@@ -66,11 +69,15 @@ function diasVencido(dueDate: string | null, hoje: string): number {
 /** Página do extrato — mesma de Relatórios ÒPURA. */
 const ENTRIES_PAGE = 200;
 
-/** Limiares da Inadimplência (guia §4.5: cor só por limiar com nome). Fração do
- *  saldo devedor que já venceu — hipótese de gestão, ajuste aqui. */
+/** Limiares da Inadimplência (guia §4.5: cor só por limiar com nome) —
+ *  hipótese de gestão, ajuste aqui. Regra "os dois" (usuário, 28/10/2026):
+ *  alerta se a fração vencida do saldo do período passar do limite OU se houver
+ *  qualquer valor vencido há mais de `diasDividaVelha` na posição de HOJE
+ *  (dívida velha é dívida velha, lançada quando for). */
 const LIMIAR = {
     vencidoSobreAbertoAtencao: 0.10,
     vencidoSobreAbertoAlerta: 0.30,
+    diasDividaVelha: 90,
 };
 
 /** Tick de eixo: "12 mil" / "1,2 mi" — o eixo é régua, não valor; a moeda
@@ -96,14 +103,6 @@ function niceTicks(max: number, count = 4): number[] {
     return ticks;
 }
 
-const MESES_EXTENSO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
-/** Rótulo do tooltip com o ano: o eixo mostra "jul", e "jul" de que ano? */
-function rotuloPeriodo(key: string | undefined): string {
-    if (!key) return '';
-    const [y, m] = key.split('-').map(Number);
-    return m ? `${MESES_EXTENSO[m - 1] ?? key} de ${y}` : String(y);
-}
-
 interface ClientLite { id: string; name: string; document: string | null; category: string | null; }
 
 /** Valor do seletor de cliente que significa "todos os clientes (do tipo escolhido)". */
@@ -125,11 +124,39 @@ const TOOLTIP_CURSOR = { fill: '#f8fafc' };
 /** Medida do PRIMEIRO render, antes de o container ser medido — sem isto o
  *  Recharts avisa "width(-1)" no console a cada gráfico montado. */
 const INITIAL_DIMENSION = { width: 520, height: 200 };
-/** Forma "ênfase" (§28.4): realizado é a série, previsto é o contexto em cinza
- *  recessivo — validado com o script do dataviz; o cinza reprova no piso de
- *  croma DE PROPÓSITO e exige legenda + valores visíveis (abaixo). */
-const SERIE_REALIZADO = '#3b82f6';
-const SERIE_PREVISTO = '#94a3b8';
+/** Faixas de atraso: rótulo e a rampa APROVADA no §28.4 (um matiz, do cinza "a
+ *  vencer" ao vermelho mais escuro). A ponta clara tem 2,77:1, por isso valor
+ *  e quantidade de cada faixa ficam também em texto, abaixo do gráfico. */
+const FAIXA: Record<OpuraFaixaAtraso, { label: string; cor: string }> = {
+    a_vencer: { label: 'A vencer', cor: '#94a3b8' },
+    '1_30':   { label: '1 a 30 dias', cor: '#f87171' },
+    '31_60':  { label: '31 a 60 dias', cor: '#ef4444' },
+    '61_90':  { label: '61 a 90 dias', cor: '#b91c1c' },
+    mais_90:  { label: 'Mais de 90 dias', cor: '#7f1d1d' },
+};
+
+/** Soma as linhas da RPC por faixa, sempre nas 5 faixas e na ordem de leitura. */
+function porFaixa(linhas: OpuraAgingRow[]) {
+    return FAIXAS_ATRASO.map(f => {
+        const da = linhas.filter(l => l.faixa === f);
+        return {
+            faixa: f,
+            label: FAIXA[f].label,
+            valor: da.reduce((a, l) => a + l.valor, 0),
+            qtd: da.reduce((a, l) => a + l.qtd, 0),
+        };
+    });
+}
+
+/** Maior atraso (dias) por chave — coluna "Atraso máx." das tabelas. */
+function atrasoMaxPorChave(linhas: OpuraAgingRow[]): Map<string | null, number> {
+    const m = new Map<string | null, number>();
+    for (const l of linhas) {
+        if (l.atraso_max == null) continue;
+        m.set(l.dimension_key, Math.max(m.get(l.dimension_key) ?? 0, l.atraso_max));
+    }
+    return m;
+}
 
 const ChartCard: React.FC<{
     title: string;
@@ -157,27 +184,15 @@ const ChartEmpty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     </div>
 );
 
-/** Legenda HTML — obrigatória com 2+ séries (a identidade nunca fica só na cor). */
-const Legend: React.FC<{ items: { label: string; color: string }[] }> = ({ items }) => (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mb-2">
-        {items.map(i => (
-            <span key={i.label} className="inline-flex items-center gap-1.5 text-xs text-gray-500">
-                <span className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: i.color }} />
-                {i.label}
-            </span>
-        ))}
-    </div>
-);
-
-/** Alternador Mensal / Anual — trilho do §19.1 em `h-7`. É um alternador (dois
- *  estados do mesmo gráfico), não abas: botões com `aria-pressed`. */
-const GRANULARIDADES: { id: Granularidade; label: string }[] = [
-    { id: 'mensal', label: 'Mensal' },
-    { id: 'anual', label: 'Anual' },
+/** Alternador da base das faixas — trilho do §19.1 em `h-7`. É um alternador
+ *  (duas leituras do mesmo gráfico), não abas: botões com `aria-pressed`. */
+const BASES: { id: OpuraAgingBase; label: string }[] = [
+    { id: 'hoje', label: 'Posição de hoje' },
+    { id: 'periodo', label: 'Lançados no período' },
 ];
-const GranularidadeToggle: React.FC<{ value: Granularidade; onChange: (g: Granularidade) => void }> = ({ value, onChange }) => (
-    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" role="group" aria-label="Período do gráfico">
-        {GRANULARIDADES.map(g => (
+const BaseToggle: React.FC<{ value: OpuraAgingBase; onChange: (b: OpuraAgingBase) => void }> = ({ value, onChange }) => (
+    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" role="group" aria-label="Base das faixas de atraso">
+        {BASES.map(g => (
             <button
                 key={g.id}
                 type="button"
@@ -206,8 +221,10 @@ interface LinhaRecebivel {
     vencido: number;
     pctRecebido: number | null;
     qtd: number;
+    /** Dias da parcela vencida mais antiga da linha (null = nada vencido). */
+    atrasoMax: number | null;
 }
-function paraRecebivel(r: OpuraPivotRow): LinhaRecebivel {
+function paraRecebivel(r: OpuraPivotRow, atraso: Map<string | null, number>): LinhaRecebivel {
     const recebido = Number(r.credit_realizado) || 0;
     const aberto = Number(r.credit_previsto) || 0;
     const faturado = recebido + aberto;
@@ -218,6 +235,7 @@ function paraRecebivel(r: OpuraPivotRow): LinhaRecebivel {
         vencido: Number(r.vencido) || 0,
         pctRecebido: faturado > 0 ? (recebido / faturado) * 100 : null,
         qtd: Number(r.qtd) || 0,
+        atrasoMax: atraso.get(r.dimension_key) ?? null,
     };
 }
 /** Quem mais deve primeiro: é a pergunta da tela. O cabeçalho reordena. */
@@ -230,6 +248,7 @@ function colunas(nome: string): StandardTableColumn[] {
         { key: 'recebido', label: 'Recebido', sortable: true, width: 140, align: 'right' },
         { key: 'aberto', label: 'Em aberto', sortable: true, width: 140, align: 'right' },
         { key: 'vencido', label: 'Vencido', sortable: true, width: 150, align: 'right' },
+        { key: 'atrasoMax', label: 'Atraso máx.', sortable: true, width: 120, align: 'right' },
         { key: 'pctRecebido', label: 'Recebido do faturado', sortable: true, width: 180 },
         { key: 'qtd', label: 'Lançamentos', sortable: true, width: 120, align: 'right' },
     ];
@@ -255,6 +274,13 @@ function celulaRecebivel(key: string, l: LinhaRecebivel): React.ReactNode {
             return l.pctRecebido === null
                 ? <span className="text-sm text-gray-600">—</span>
                 : <SegmentedProgress percent={l.pctRecebido} title="Recebido sobre o faturado desta linha" />;
+        case 'atrasoMax':
+            // Dívida velha (além do limiar) em vermelho, com o texto "dias" — não só a cor.
+            return l.atrasoMax == null
+                ? <span className="text-sm text-gray-600">—</span>
+                : <span className={`text-sm tabular-nums ${l.atrasoMax > LIMIAR.diasDividaVelha ? 'font-medium text-red-700' : 'font-normal text-gray-700'}`}>
+                    {plural(l.atrasoMax, 'dia', 'dias')}
+                </span>;
         case 'qtd':
             return <span className="text-sm font-normal text-gray-600 tabular-nums">{l.qtd.toLocaleString('pt-BR')}</span>;
         default:
@@ -318,10 +344,14 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const [kpis, setKpis]       = React.useState<OpuraClienteKpis | null>(null);
     const [byClient, setByClient] = React.useState<OpuraPivotRow[]>([]);
     const [byProject, setByProject] = React.useState<OpuraPivotRow[]>([]);
-    // Série do gráfico Previsto × Realizado: pivot por mês do lançamento, com
-    // o MESMO recorte (cliente + período + transaction_date) dos KPIs.
-    const [byMonth, setByMonth] = React.useState<OpuraPivotRow[]>([]);
-    const [granularidade, setGranularidade] = usePersistedState<Granularidade>('centralCliente:granularidade', 'mensal');
+    // Faixas de atraso (fn_opura_aging) — consulta própria, com erro próprio (§28.5):
+    // as duas bases do gráfico + a idade por cliente/obra das tabelas (período).
+    const [faixas, setFaixas] = React.useState<{
+        hoje: OpuraAgingRow[]; periodo: OpuraAgingRow[]; porCliente: OpuraAgingRow[]; porObra: OpuraAgingRow[];
+    } | null>(null);
+    const [faixasErro, setFaixasErro] = React.useState<string | null>(null);
+    // Abre em "Posição de hoje": a dívida real que a cobrança vê primeiro (brief, 28/10).
+    const [baseAtraso, setBaseAtraso] = usePersistedState<OpuraAgingBase>('centralCliente:baseAtraso', 'hoje');
     const [loading, setLoading] = React.useState(false);
     const [error, setError]     = React.useState<string | null>(null);
 
@@ -392,7 +422,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
         const seq = ++loadSeq.current;
         // "Todos" sem nenhum cliente no recorte: não há o que somar (e a RPC
         // exige cliente ou lista) — zera sem ir à rede.
-        if (clientIds && clientIds.length === 0) { setKpis(null); setByClient([]); setByProject([]); setByMonth([]); return; }
+        if (clientIds && clientIds.length === 0) { setKpis(null); setByClient([]); setByProject([]); return; }
         setLoading(true);
         setError(null);
         try {
@@ -401,21 +431,19 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
             // assim a soma da coluna Vencido fecha com ele (o vencido do pivô
             // somaria saídas pendentes também).
             const recebiveis = { ...filtro, direction: 'CREDIT' as const };
-            const [k, cli, proj, meses] = await Promise.all([
+            const [k, cli, proj] = await Promise.all([
                 opuraAnalyticsService.clienteKpis(organizationId, clientIds ? null : clientId, dateFrom, dateTo, clientIds),
                 clientIds ? opuraAnalyticsService.pivot(organizationId, 'client', recebiveis) : Promise.resolve([] as OpuraPivotRow[]),
                 opuraAnalyticsService.pivot(organizationId, 'project', recebiveis),
-                opuraAnalyticsService.pivot(organizationId, 'tx_month', filtro),
             ]);
             if (seq !== loadSeq.current) return; // resposta de um recorte que já não é o da tela
             setKpis(k);
             setByClient(cli);
             setByProject(proj);
-            setByMonth(meses);
         } catch (e: unknown) {
             if (seq !== loadSeq.current) return;
             const msg = mensagemDeErro(e);
-            setKpis(null); setByClient([]); setByProject([]); setByMonth([]); setError(msg);
+            setKpis(null); setByClient([]); setByProject([]); setError(msg);
             showToast(`Erro ao carregar Central de Clientes: ${msg}`, 'error');
             console.error('[CentralCliente]', e);
         } finally {
@@ -424,6 +452,34 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     }, [organizationId, clientId, clientIds, dateFrom, dateTo, showToast]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    // Faixas de atraso: 4 leituras da mesma RPC (total de hoje, total do período,
+    // e a idade por cliente/obra para as tabelas). Falha aqui fica no card do
+    // gráfico, com "Tentar de novo" — não derruba KPIs e tabelas.
+    const faixasSeq = React.useRef(0);
+    const carregarFaixas = React.useCallback(async () => {
+        const seq = ++faixasSeq.current;
+        if (!clientId || (clientIds && clientIds.length === 0)) { setFaixas(null); setFaixasErro(null); return; }
+        setFaixasErro(null);
+        const escopo = clientIds ? { clientIds, dateFrom, dateTo } : { clientId, dateFrom, dateTo };
+        try {
+            const [hoje, periodo, porCliente, porObra] = await Promise.all([
+                opuraAnalyticsService.aging(organizationId, escopo, 'hoje'),
+                opuraAnalyticsService.aging(organizationId, escopo, 'periodo'),
+                clientIds ? opuraAnalyticsService.aging(organizationId, escopo, 'periodo', 'client') : Promise.resolve([] as OpuraAgingRow[]),
+                opuraAnalyticsService.aging(organizationId, escopo, 'periodo', 'project'),
+            ]);
+            if (seq !== faixasSeq.current) return;
+            setFaixas({ hoje, periodo, porCliente, porObra });
+        } catch (e: unknown) {
+            if (seq !== faixasSeq.current) return;
+            setFaixas(null);
+            setFaixasErro(mensagemDeErro(e));
+            console.error('[CentralCliente/faixas]', e);
+        }
+    }, [organizationId, clientId, clientIds, dateFrom, dateTo]);
+    React.useEffect(() => { void carregarFaixas(); }, [carregarFaixas]);
+    const atualizar = () => { void load(); void carregarFaixas(); };
 
     // Primeira página do extrato. O erro fica DENTRO da gaveta, com "Tentar
     // novamente": antes só ia para o toast, e a gaveta dizia "Sem lançamentos." —
@@ -504,11 +560,18 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const faturado = recebido + aReceber;
     const pct = (parte: number, todo: number) => (todo > 0 ? (parte / todo) * 100 : null);
     const fracaoVencida = aReceber > 0 ? vencido / aReceber : 0;
-    const tomInadimplencia: KpiTom = fracaoVencida >= LIMIAR.vencidoSobreAbertoAlerta ? 'alerta'
+    // Faixas de atraso nas duas bases, sempre as 5 faixas na ordem de leitura.
+    const faixasHoje = React.useMemo(() => porFaixa(faixas?.hoje ?? []), [faixas]);
+    const faixasPeriodo = React.useMemo(() => porFaixa(faixas?.periodo ?? []), [faixas]);
+    const dividaVelhaHoje = faixasHoje.find(f => f.faixa === 'mais_90')?.valor ?? 0;
+    // Regra "os dois": fração vencida do período OU dívida velha hoje.
+    const tomInadimplencia: KpiTom = fracaoVencida >= LIMIAR.vencidoSobreAbertoAlerta || dividaVelhaHoje > 0 ? 'alerta'
         : fracaoVencida >= LIMIAR.vencidoSobreAbertoAtencao ? 'atencao' : 'neutro';
 
-    const linhasCliente = React.useMemo(() => byClient.map(paraRecebivel).sort(porVencido), [byClient]);
-    const linhasObra = React.useMemo(() => byProject.map(paraRecebivel).sort(porVencido), [byProject]);
+    const atrasoCliente = React.useMemo(() => atrasoMaxPorChave(faixas?.porCliente ?? []), [faixas]);
+    const atrasoObra = React.useMemo(() => atrasoMaxPorChave(faixas?.porObra ?? []), [faixas]);
+    const linhasCliente = React.useMemo(() => byClient.map(r => paraRecebivel(r, atrasoCliente)).sort(porVencido), [byClient, atrasoCliente]);
+    const linhasObra = React.useMemo(() => byProject.map(r => paraRecebivel(r, atrasoObra)).sort(porVencido), [byProject, atrasoObra]);
 
     // Voltou para "Todos" pelo chip: quando "Por cliente" recarregar, o foco
     // volta à linha do cliente de onde se saiu (o rótulo começa pelo nome).
@@ -530,23 +593,12 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
         : kpis ? `Mostrando ${escopoLabel}: ${fBRL(vencido)} vencido de ${fBRL(aReceber)} em aberto.`
         : '';
 
-    // Gráfico Previsto × Realizado — todos os períodos do intervalo, vazio = 0.
-    const serie = React.useMemo(
-        () => montarSeriePrevistoRealizado(byMonth, dateFrom, dateTo, granularidade),
-        [byMonth, dateFrom, dateTo, granularidade],
-    );
-    const serieMax = Math.max(0, ...serie.map(p => Math.max(p.previsto, p.realizado)));
+    // Gráfico "Em aberto por faixa de atraso" — a base do alternador.
+    const serie = baseAtraso === 'hoje' ? faixasHoje : faixasPeriodo;
+    const serieMax = Math.max(0, ...serie.map(f => f.valor));
     const yTicks = niceTicks(serieMax);
-    const totalPrevisto = serie.reduce((a, p) => a + p.previsto, 0);
-    const totalRealizado = serie.reduce((a, p) => a + p.realizado, 0);
-    const pctRealizadoSerie = totalPrevisto + totalRealizado > 0 ? (totalRealizado / (totalPrevisto + totalRealizado)) * 100 : null;
-    // Acima disto os rótulos de mês colidem mesmo em card de largura inteira.
-    const MESES_MAX_VISAO_MENSAL = 60;
-    // `barSize` FIXO, não `maxBarSize`: com maxBarSize o Recharts centraliza
-    // cada barra no próprio slot e o par Previsto/Realizado do mesmo período
-    // se afasta (~80px na visão anual). Com barSize fixo ele encosta as duas
-    // (barGap) e centraliza o par na banda; se não couber, reduz sozinho.
-    const barSize = serie.length <= 12 ? 24 : serie.length <= 24 ? 14 : 10;
+    const totalAberto = serie.reduce((a, f) => a + f.valor, 0);
+    const totalVencido = serie.filter(f => f.faixa !== 'a_vencer').reduce((a, f) => a + f.valor, 0);
 
     const controle = 'h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
@@ -611,7 +663,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                             onChange={e => setDateToInput(e.target.value)}
                             className={`${controle} px-3`} />
                     </div>
-                    <Button variant="secondary" onClick={load} disabled={loading} className="text-sm gap-2">
+                    <Button variant="secondary" onClick={atualizar} disabled={loading} className="text-sm gap-2">
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Atualizar
                     </Button>
                 </div>
@@ -624,7 +676,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                     </div>
                     <p className="text-sm font-bold text-gray-800">Não foi possível carregar a Central de Clientes</p>
                     <p className="text-xs text-gray-500 max-w-md break-words">{error}</p>
-                    <Button onClick={load} className="mt-2 text-sm gap-2">
+                    <Button onClick={atualizar} className="mt-2 text-sm gap-2">
                         <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
                     </Button>
                 </div>
@@ -695,82 +747,98 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         </div>
                     )}
 
-                    {/* Previsto × Realizado por período (guia §28) — mesma base
-                        dos KPIs Saldo devedor (previsto) e Recebido (realizado). */}
+                    {/* Em aberto por faixa de atraso (guia §28; brief de 28/10/2026).
+                        Responde "há quanto tempo está vencido" — o gráfico anterior
+                        (Previsto × Realizado) respondia "quando foi lançado". */}
                     <ChartCard
-                        title="Previsto × Realizado por período"
-                        subtitle={`Lançamentos a receber ${todos ? 'dos clientes do recorte' : 'deste cliente'}, pela data do lançamento: previsto = pendente, realizado = conciliado. A soma fecha com Saldo devedor e Recebido.`}
-                        aside={<GranularidadeToggle value={granularidade} onChange={setGranularidade} />}
+                        title="Em aberto por faixa de atraso"
+                        subtitle={baseAtraso === 'hoje'
+                            ? `Tudo o que ${todos ? 'os clientes do recorte devem' : 'este cliente deve'} hoje, lançado quando for, pela idade do vencimento.`
+                            : `Só o que foi lançado no período, pela idade do vencimento — a soma fecha com o Em aberto da tela.`}
+                        aside={<BaseToggle value={baseAtraso} onChange={setBaseAtraso} />}
                     >
-                        {(semNumeros || loading) && byMonth.length === 0 ? (
-                            <ChartEmpty>Carregando...</ChartEmpty>
-                        ) : serie.length === 0 ? (
-                            <ChartEmpty>Período inválido — a data inicial precisa ser anterior à final.</ChartEmpty>
-                        ) : granularidade === 'mensal' && serie.length > MESES_MAX_VISAO_MENSAL ? (
-                            <ChartEmpty>Período longo demais para a visão mensal ({serie.length} meses). Use a visão anual ou encurte o período.</ChartEmpty>
+                        {faixasErro ? (
+                            <div role="alert" className="flex flex-col items-center justify-center gap-2 min-h-[160px] text-center px-4">
+                                <p className="text-sm text-gray-700">Não foi possível carregar as faixas de atraso.</p>
+                                <p className="text-xs text-gray-500 max-w-md break-words">{faixasErro}</p>
+                                <Button variant="secondary" onClick={() => void carregarFaixas()} className="text-sm gap-2">
+                                    <RefreshCw className="w-3.5 h-3.5" /> Tentar de novo
+                                </Button>
+                            </div>
+                        ) : faixas === null ? (
+                            // Esqueleto (§28.5): três barras, sem afirmar zero.
+                            <div className="min-h-[160px] flex flex-col justify-end gap-3 px-2 pb-2" aria-busy="true" aria-label="Carregando faixas de atraso">
+                                {[80, 55, 30].map(w => <div key={w} className="h-3 rounded bg-gray-100 motion-safe:animate-pulse" style={{ width: `${w}%` }} />)}
+                            </div>
                         ) : serieMax === 0 ? (
-                            <ChartEmpty>Nenhum lançamento a receber {todos ? 'dos clientes do recorte' : 'deste cliente'} no período.</ChartEmpty>
+                            <ChartEmpty>
+                                Nada em aberto {todos ? 'dos clientes do recorte' : 'deste cliente'}{baseAtraso === 'periodo' ? ' lançado no período' : ''}.
+                            </ChartEmpty>
                         ) : (
                             <>
-                                <Legend items={[{ label: 'Previsto', color: SERIE_PREVISTO }, { label: 'Realizado', color: SERIE_REALIZADO }]} />
-                                {/* O gráfico é figura, não controle: fora do Tab (o Recharts
-                                    deixava o SVG focável e sem nome), com o resumo como nome. */}
+                                {/* Figura, não controle: fora do Tab, com os números como nome. */}
                                 <div style={{ height: 220 }} role="img"
-                                    aria-label={`Previsto × Realizado por período: previsto ${fBRL(totalPrevisto)}, realizado ${fBRL(totalRealizado)}.`}>
+                                    aria-label={`Em aberto por faixa de atraso: ${serie.map(f => `${f.label} ${fBRL(f.valor)}`).join('; ')}.`}>
                                     <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                        <BarChart data={serie} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barGap={2} barCategoryGap="30%" accessibilityLayer={false}>
+                                        <BarChart data={serie} margin={{ top: 20, right: 8, bottom: 0, left: 0 }} barCategoryGap="30%" accessibilityLayer={false}>
                                             <CartesianGrid vertical={false} stroke={GRID} />
-                                            <XAxis
-                                                dataKey="label"
-                                                axisLine={false}
-                                                tickLine={false}
-                                                tick={TICK}
-                                                interval="preserveStartEnd"
-                                                minTickGap={8}
-                                            />
-                                            {/* 60 px: com 48 o "600 mil" quebrava em duas linhas
-                                                e o tick do topo saía cortado. */}
+                                            <XAxis dataKey="label" axisLine={false} tickLine={false} tick={TICK} interval={0} />
+                                            {/* 64 px (§28.2): "2,2 mi" e "600 mil" numa linha só. */}
                                             <YAxis
                                                 axisLine={false}
                                                 tickLine={false}
                                                 tick={TICK}
                                                 tickFormatter={compactAxis}
-                                                width={60}
+                                                width={64}
                                                 ticks={yTicks}
                                                 domain={[0, yTicks[yTicks.length - 1]]}
                                             />
                                             <RechartsTooltip
                                                 cursor={TOOLTIP_CURSOR}
                                                 contentStyle={TOOLTIP_STYLE}
-                                                itemStyle={{ color: '#1f2937' }}
+                                                itemStyle={{ color: '#1f2937', fontWeight: 500 }}
                                                 labelStyle={{ color: '#64748b' }}
                                                 separator=": "
-                                                labelFormatter={(_, payload) => rotuloPeriodo((payload?.[0]?.payload as { key?: string } | undefined)?.key)}
-                                                formatter={(val, name) => [fBRL(Number(val)), name === 'realizado' ? 'Realizado' : 'Previsto']}
+                                                formatter={(val, _n, item) => [
+                                                    `${fBRL(Number(val))} · ${plural((item?.payload as { qtd?: number } | undefined)?.qtd ?? 0, 'parcela', 'parcelas')}`,
+                                                    'Em aberto',
+                                                ]}
                                             />
-                                            {/* Sem animação: re-renderiza ao trocar Mensal/Anual, e a
-                                                barra que "cresce" a cada clique lê como dado mudando. */}
-                                            <Bar dataKey="previsto" fill={SERIE_PREVISTO} radius={[4, 4, 0, 0]} barSize={barSize} isAnimationActive={false} />
-                                            <Bar dataKey="realizado" fill={SERIE_REALIZADO} radius={[4, 4, 0, 0]} barSize={barSize} isAnimationActive={false} />
+                                            {/* Sem animação: trocar a base re-renderiza, e a barra que
+                                                "cresce" a cada clique lê como dado mudando. Uma série,
+                                                cor por faixa (rampa ordinal), rótulo na ponta em cor de texto. */}
+                                            <Bar dataKey="valor" radius={[4, 4, 0, 0]} maxBarSize={24} isAnimationActive={false}>
+                                                {serie.map(f => <Cell key={f.faixa} fill={FAIXA[f.faixa].cor} />)}
+                                                {/* Rótulo próprio: o do Recharts quebra na largura da barra
+                                                    (24 px) — "2,2 / mi" em duas linhas. */}
+                                                <LabelList dataKey="valor" content={({ x, y, width, value }) => (
+                                                    Number(value) > 0 ? (
+                                                        <text x={Number(x) + Number(width) / 2} y={Number(y) - 6} textAnchor="middle" fontSize={11} fill="#64748b">
+                                                            {compactAxis(Number(value))}
+                                                        </text>
+                                                    ) : null
+                                                )} />
+                                            </Bar>
                                         </BarChart>
                                     </ResponsiveContainer>
                                 </div>
-                                {/* A leitura sem passar o mouse — e a "vista de tabela" que o
-                                    cinza recessivo do previsto exige. */}
-                                <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-gray-500 truncate">Previsto no período</p>
-                                        <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fBRL(totalPrevisto)}</p>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-gray-500 truncate">Realizado no período</p>
-                                        <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fBRL(totalRealizado)}</p>
-                                    </div>
-                                    <div className="min-w-0">
-                                        <p className="text-xs text-gray-500 truncate">Realizado sobre o total</p>
-                                        <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fPct(pctRealizadoSerie)}</p>
-                                    </div>
+                                {/* A vista de tabela: valor e parcelas de cada faixa em texto
+                                    (a ponta clara da rampa tem 2,77:1 — a cor nunca é o único sinal). */}
+                                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3 mt-2 pt-2 border-t border-gray-100">
+                                    {serie.map(f => (
+                                        <div key={f.faixa} className="min-w-0">
+                                            <p className="flex items-center gap-1.5 text-xs text-gray-500 truncate">
+                                                <span className="w-2.5 h-2.5 rounded-[2px] shrink-0" style={{ backgroundColor: FAIXA[f.faixa].cor }} aria-hidden="true" />
+                                                {f.label}
+                                            </p>
+                                            <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fBRL(f.valor)}</p>
+                                            <p className="text-xs text-gray-500 tabular-nums">{plural(f.qtd, 'parcela', 'parcelas')}</p>
+                                        </div>
+                                    ))}
                                 </div>
+                                <p className="mt-2 text-xs text-gray-500 tabular-nums">
+                                    Em aberto {fBRL(totalAberto)} · vencido {fBRL(totalVencido)}
+                                </p>
                             </>
                         )}
                     </ChartCard>

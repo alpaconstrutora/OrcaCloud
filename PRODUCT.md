@@ -10,6 +10,12 @@ web
 
 - **Equipe interna do grupo Alpa** (administração, RH, financeiro, suprimentos, engenharia):
   opera a ÒPURA no computador, o dia todo. Perfis `ADMIN` e `USER`.
+- **Quem lê Análises e Dados** (Central de Clientes, Central de Obras, Central de
+  Fornecedores, Relatórios ÒPURA) — confirmado pelo usuário em 28/10/2026, os quatro:
+  - **financeiro / cobrança:** quem cobrar e quanto já venceu; age em Contas a Receber/Pagar;
+  - **diretoria / sócios:** saúde da carteira e das obras, para decidir prioridade, risco e investimento;
+  - **comercial:** contratos, vendas e locações por cliente;
+  - **engenharia / obra:** custo realizado × previsto por obra.
 - **Públicos externos, pelo celular, por portais próprios:** colaborador de obra
   (Portal do Colaborador, por link sem conta), cliente/comprador, fornecedor,
   corretor, investidor e síndico. Perfis `CLIENT`, `SUPPLIER`, `BROKER`, `INVESTOR`.
@@ -75,8 +81,18 @@ folha e fiscal brasileiras como domínio, não como integração.
 3. **O que o usuário vê na prévia é o que ele vê de verdade:** mesmo caminho, mesmo
    token.
 4. **Dinheiro é privado por padrão** em tela de celular usada em público.
+5. **Todo número de análise leva à ação** (app interno; confirmado pelo usuário em
+   28/10/2026): o número que preocupa traz, ao lado, o caminho para a tela onde se
+   resolve — ex.: Inadimplência → "Cobrar em Contas a Receber". Número sem ação é
+   tela incompleta.
 
 ## Accessibility & Inclusion
 
 Público de obra: leitura ao sol, dedos grossos, letramento variado. Contraste
 ≥ 4,5:1 no texto, alvos de toque ≥ 44px, nada dito só por cor, frases curtas.
+
+App interno (confirmado pelo usuário em 28/10/2026): **WCAG AA com teclado completo**.
+Contraste ≥ 4,5:1 no texto; toda ação alcançável por teclado — inclusive linha de
+tabela clicável e alternadores; foco sempre visível; gaveta (`Sheet`) leva o foco
+para dentro ao abrir, prende o Tab e o devolve a quem abriu ao fechar; gaveta
+fechada fora do Tab.

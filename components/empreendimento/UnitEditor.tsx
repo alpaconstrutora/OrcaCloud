@@ -34,7 +34,7 @@ import {
   RENTAL_STATUS_LABEL,
 } from '../../utils/empreendimentoComercial';
 import { useConfirm } from '../ui/confirm';
-import { estruturaDaTorre } from '../../utils/blueprintEstruturaDaTorre';
+import { andaresDoCadastro, estruturaDaTorre } from '../../utils/blueprintEstruturaDaTorre';
 import { fmtElevacao } from './FloorEditor';
 import { compararNaOrdemDoEmpreendimento, moverNaOrdem, ordemPorNumero, type NovaOrdem } from '../../utils/empreendimentoOrdemDasUnidades';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
@@ -858,7 +858,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
         </SheetHeader>
         <form onSubmit={handleCreate} className="flex-1 flex flex-col min-h-0">
           <SheetPanel className="p-6">
-            <UnitFormFields idPrefix={`nova-unidade-${tower.id}`} value={form} onChange={patchForm} erroNome={erroNome} />
+            <UnitFormFields idPrefix={`nova-unidade-${tower.id}`} value={form} onChange={patchForm} erroNome={erroNome} pavimentos={andaresDoCadastro(floors)} />
           </SheetPanel>
           <SheetFooter>
             <Button type="button" variant="ghost" onClick={pedirFecharNova}>Cancelar</Button>

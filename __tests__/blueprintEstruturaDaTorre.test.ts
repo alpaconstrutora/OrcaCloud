@@ -194,3 +194,34 @@ describe('elevação do pavimento (27/10/2026)', () => {
     expect(e.avisos.join(' ')).toContain('Tipo está em +1,00 m (digitada) — o Térreo ficaria com 1,00 m de altura, fora de 2 a 15 m; a massa usa o pé-direito.');
   });
 });
+
+describe('cadastro com o andar trocado (Garden, 27/10/2026)', () => {
+  /** O cadastro da Torre A como estava no banco: garagens nos andares 1 e 2, tipos em 100/200/300. */
+  const GARDEN = [
+    pav({ name: 'Pavimento Térreo', tipo: 'TERREO', floor_number: 0, elevacao_m: -0.3, sort_order: 0 }),
+    pav({ name: 'Pavimento 1', tipo: 'TIPO', floor_number: 100, elevacao_m: 2.7, sort_order: 1 }),
+    pav({ name: 'Pavimento 2', tipo: 'TIPO', floor_number: 200, elevacao_m: 5.7, sort_order: 2 }),
+    pav({ name: 'Pavimento 3', tipo: 'TIPO', floor_number: 300, elevacao_m: 8.7, sort_order: 3 }),
+    pav({ name: 'Estacionamento 1', tipo: 'GARAGEM', floor_number: 1, elevacao_m: -3.3, sort_order: 4 }),
+    pav({ name: 'Estacionamento 2', tipo: 'GARAGEM', floor_number: 2, elevacao_m: -6.3, sort_order: 5 }),
+  ];
+  const e = estruturaDaTorre(TORRE_A, GARDEN);
+  const avisos = e.avisos.join('\n');
+
+  it('a elevação digitada abaixo do de baixo diz que o ANDAR está trocado — não uma altura negativa', () => {
+    expect(avisos).not.toMatch(/ficaria com -/);
+    expect(avisos).toContain(
+      'Torre "Torre A": Estacionamento 1 está em -3,30 m (digitada), abaixo do Pavimento Térreo (-0,30 m), mas o andar dele (1) o põe acima — confira o Nº inicial.',
+    );
+  });
+
+  it('garagem com andar positivo: avisa que garagem e subsolo têm andar negativo', () => {
+    expect(avisos).toContain('Torre "Torre A": Estacionamento 1 é garagem, mas está no andar 1 — garagem e subsolo ficam abaixo do térreo, com andar negativo (-1, -2…).');
+  });
+
+  it('andares do cadastro que não casam com os das unidades: avisa (o andar é 1, não 101)', () => {
+    expect(avisos).toContain(
+      'Torre "Torre A": as unidades estão nos andares -2, -1, 0, 1, 2, 3, mas o cadastro de pavimentos não tem -2, -1, 3 e tem 100, 200, 300 — o andar é o número do pavimento (1, 2, 3…), não o da unidade (101).',
+    );
+  });
+});

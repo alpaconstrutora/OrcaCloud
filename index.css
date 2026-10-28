@@ -210,7 +210,7 @@
   }
 }
 
-/* Portal do Cliente â€” tipografia DM Sans SOMENTE no mobile (< md / 768px).
+/* Portais (Cliente, Investidor, Fornecedor, Corretor, Credor) — tipografia DM Sans SOMENTE no mobile (< md / 768px).
    No desktop o portal mantém Inter. font-family herda para toda a subárvore,
    inclusive nav fixa e bottom-sheets. */
 @media (max-width: 767px) {
@@ -375,6 +375,42 @@
 }
 .theme-midnight .recharts-default-tooltip[style*="background-color: rgb(255, 255, 255)"] .recharts-tooltip-label { color: #949bab !important; }
 .theme-midnight .recharts-default-tooltip[style*="background-color: rgb(255, 255, 255)"] .recharts-tooltip-item[style*="color: rgb(31, 41, 55)"] { color: #e6e8ee !important; }
+
+/* --- Tinta translúcida de linha/área: `bg-<matiz>-50/N` ------------------
+   28/10/2026 — linha vencida de Contas a Receber (`bg-red-50/30`) e as ~200
+   linhas com hover `bg-blue-50/50` viravam CINZA-CLARO sobre o escuro, sob
+   texto claro. Vira a tinta escura do mesmo matiz. Selo de fundo SÓLIDO
+   (`bg-red-50`, sem `/N`) fica como está. O seletor `[class*=" bg-…-50/"]`
+   (com espaço) / `[class^="bg-…-50/"]` não pega `hover:bg-…-50/N`, que tem
+   regra própria. Texto colorido escuro NO MESMO elemento (ex.: `text-blue-700
+   bg-blue-50/30`, 31 lugares) clareia junto — senão ficava escuro sobre escuro. */
+.theme-midnight :is([class*=" bg-red-50/"], [class^="bg-red-50/"]) { background-color: rgba(248, 113, 113, 0.10); }
+.theme-midnight [class*="hover:bg-red-50/"]:hover { background-color: rgba(248, 113, 113, 0.14); }
+.theme-midnight :is([class*=" bg-red-50/"], [class^="bg-red-50/"]):is(.text-red-600, .text-red-700, .text-red-800) { color: #f87171; }
+.theme-midnight :is([class*=" bg-rose-50/"], [class^="bg-rose-50/"]) { background-color: rgba(251, 113, 133, 0.10); }
+.theme-midnight [class*="hover:bg-rose-50/"]:hover { background-color: rgba(251, 113, 133, 0.14); }
+.theme-midnight :is([class*=" bg-rose-50/"], [class^="bg-rose-50/"]):is(.text-rose-600, .text-rose-700, .text-rose-800) { color: #fb7185; }
+.theme-midnight :is([class*=" bg-orange-50/"], [class^="bg-orange-50/"]) { background-color: rgba(251, 146, 60, 0.10); }
+.theme-midnight [class*="hover:bg-orange-50/"]:hover { background-color: rgba(251, 146, 60, 0.14); }
+.theme-midnight :is([class*=" bg-orange-50/"], [class^="bg-orange-50/"]):is(.text-orange-600, .text-orange-700, .text-orange-800) { color: #fb923c; }
+.theme-midnight :is([class*=" bg-amber-50/"], [class^="bg-amber-50/"]) { background-color: rgba(251, 191, 36, 0.10); }
+.theme-midnight [class*="hover:bg-amber-50/"]:hover { background-color: rgba(251, 191, 36, 0.14); }
+.theme-midnight :is([class*=" bg-amber-50/"], [class^="bg-amber-50/"]):is(.text-amber-600, .text-amber-700, .text-amber-800) { color: #fbbf24; }
+.theme-midnight :is([class*=" bg-emerald-50/"], [class^="bg-emerald-50/"]) { background-color: rgba(52, 211, 153, 0.10); }
+.theme-midnight [class*="hover:bg-emerald-50/"]:hover { background-color: rgba(52, 211, 153, 0.14); }
+.theme-midnight :is([class*=" bg-emerald-50/"], [class^="bg-emerald-50/"]):is(.text-emerald-600, .text-emerald-700, .text-emerald-800) { color: #34d399; }
+.theme-midnight :is([class*=" bg-green-50/"], [class^="bg-green-50/"]) { background-color: rgba(74, 222, 128, 0.10); }
+.theme-midnight [class*="hover:bg-green-50/"]:hover { background-color: rgba(74, 222, 128, 0.14); }
+.theme-midnight :is([class*=" bg-green-50/"], [class^="bg-green-50/"]):is(.text-green-600, .text-green-700, .text-green-800) { color: #4ade80; }
+.theme-midnight :is([class*=" bg-blue-50/"], [class^="bg-blue-50/"]) { background-color: rgba(96, 165, 250, 0.10); }
+.theme-midnight [class*="hover:bg-blue-50/"]:hover { background-color: rgba(96, 165, 250, 0.14); }
+.theme-midnight :is([class*=" bg-blue-50/"], [class^="bg-blue-50/"]):is(.text-blue-600, .text-blue-700, .text-blue-800) { color: #60a5fa; }
+.theme-midnight :is([class*=" bg-indigo-50/"], [class^="bg-indigo-50/"]) { background-color: rgba(129, 140, 248, 0.10); }
+.theme-midnight [class*="hover:bg-indigo-50/"]:hover { background-color: rgba(129, 140, 248, 0.14); }
+.theme-midnight :is([class*=" bg-indigo-50/"], [class^="bg-indigo-50/"]):is(.text-indigo-600, .text-indigo-700, .text-indigo-800) { color: #818cf8; }
+.theme-midnight :is([class*=" bg-purple-50/"], [class^="bg-purple-50/"]) { background-color: rgba(192, 132, 252, 0.10); }
+.theme-midnight [class*="hover:bg-purple-50/"]:hover { background-color: rgba(192, 132, 252, 0.14); }
+.theme-midnight :is([class*=" bg-purple-50/"], [class^="bg-purple-50/"]):is(.text-purple-600, .text-purple-700, .text-purple-800) { color: #c084fc; }
 
 /* =====================================================================
    ALTO CONTRASTE — acessibilidade (texto e bordas)

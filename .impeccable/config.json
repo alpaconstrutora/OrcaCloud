@@ -1,0 +1,23 @@
+{
+  "detector": {
+    "ignoreRules": [],
+    "ignoreFiles": [],
+    "ignoreValues": [
+      {
+        "rule": "design-system-font",
+        "value": "dm sans",
+        "createdAt": "2026-10-28T17:40:09.967Z",
+        "reason": "Fonte dos portais Cliente/Investidor/Fornecedor/Corretor/Credor no celular (.portal-mobile-font, desde 18/06/2026); o DESIGN.md é o design system do Portal do Colaborador, que usa só Inter — verificado por git grep 28/10/2026"
+      },
+      {
+        "rule": "side-tab",
+        "value": "*",
+        "files": [
+          "components/ui/TableUtils.tsx"
+        ],
+        "createdAt": "2026-10-28T17:40:10.129Z",
+        "reason": "Não é acento de cartão: é o indicador de 2px de 'solte aqui' ao arrastar coluna no cabeçalho (before:w-0.5 só durante dragOver) — verificado no código 28/10/2026"
+      }
+    ]
+  }
+}

@@ -815,6 +815,11 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const viewFocus = useStore(s => s.viewFocus);
     const setViewFocus = useStore(s => s.setViewFocus);
     const focusId = viewFocus?.source === 'CONTA_RECEBER' ? viewFocus.ref : undefined;
+    // "Cobrar em Contas a Receber" da Central de Clientes: chega como viewFocus
+    // VENCIDOS_DO_CLIENTE com o id do cliente (= `party_id` do título). Recorte
+    // NÃO persistido: é a resposta àquele clique (mesmo contrato do #233).
+    const recorteClientePedido = viewFocus?.source === 'VENCIDOS_DO_CLIENTE' ? viewFocus.ref : undefined;
+    const [recorteCliente, setRecorteCliente] = useState<string | null>(null);
     const [destacado, setDestacado] = useState<string | null>(null);
     /** Quando o foco limpou o período, espera a recarga que isso dispara
      *  (valor = loadSeq no momento da limpeza) antes de concluir "não achei". */
@@ -1171,8 +1176,13 @@ export default function ContasReceberManager({ organizationId, organizations }: 
     const rowsFiltrados = useMemo(
         () => filtrarRecebiveis(rows, { search, status: statusFilter })
             .filter(r => !vencAno || (r.due_date ?? '').slice(0, 4) === vencAno)
-            .filter(r => !vencMes || (r.due_date ?? '').slice(5, 7) === vencMes),
-        [rows, search, statusFilter, vencAno, vencMes],
+            .filter(r => !vencMes || (r.due_date ?? '').slice(5, 7) === vencMes)
+            .filter(r => !recorteCliente || (r.party_id === recorteCliente && r.effective_status === 'VENCIDO')),
+        [rows, search, statusFilter, vencAno, vencMes, recorteCliente],
+    );
+    const nomeDoRecorte = useMemo(
+        () => (recorteCliente ? rows.find(r => r.party_id === recorteCliente)?.party_name ?? 'este cliente' : ''),
+        [rows, recorteCliente],
     );
     // Anos com vencimento nos recebíveis carregados, mais recente primeiro.
     const anosVencimento = useMemo(
@@ -1277,6 +1287,22 @@ export default function ContasReceberManager({ organizationId, organizations }: 
             : 'Título destacado. O recibo está na coluna Recibo.');
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [focusId, loading, rows, sorted]);
+
+    useEffect(() => {
+        if (!recorteClientePedido) return;
+        // A Central conta TODO o vencido do cliente. Busca, status, período e filtro
+        // avançado guardados de uma visita anterior recortariam por cima (a lição do
+        // #233 na Conciliação: "Ver tarifas" abria vazio por filtro antigo).
+        setSearch('');
+        setStatusFilter('all');
+        clearDueRange();
+        setVencAno('');
+        setVencMes('');
+        advancedFilters.clearRules();
+        setRecorteCliente(recorteClientePedido);
+        setViewFocus(null);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [recorteClientePedido]);
 
     // O destaque some sozinho — é orientação, não estado.
     useEffect(() => {
@@ -1424,6 +1450,19 @@ export default function ContasReceberManager({ organizationId, organizations }: 
                 costura visível do border-b da toolbar. */}
             {error && (
                 <div className="p-4 bg-red-50 border border-red-200 rounded-[10px] text-sm text-red-700 font-semibold">{error}</div>
+            )}
+
+            {recorteCliente && (
+                <div role="status" className="flex flex-wrap items-center gap-3 bg-blue-50 border border-blue-200 rounded-[10px] px-4 py-2.5 text-sm text-blue-900">
+                    <span>
+                        Mostrando só os títulos vencidos de <span className="font-semibold">{nomeDoRecorte}</span>, de
+                        qualquer período, vindo da Central de Clientes (a busca, os filtros e o período anteriores foram limpos).
+                    </span>
+                    <button type="button" onClick={() => setRecorteCliente(null)}
+                        className="inline-flex items-center gap-1 font-medium text-blue-700 hover:text-blue-900 hover:underline">
+                        <X className="w-3.5 h-3.5" aria-hidden="true" /> Mostrar todos os títulos
+                    </button>
+                </div>
             )}
 
             {/* Toolbar acoplada à tabela (§5.2) — toolbar e tabela dividem um único card;

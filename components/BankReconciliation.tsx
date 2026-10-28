@@ -33,7 +33,6 @@ import { useStore } from '../store/useStore';
 import { useOrgWriteTarget, useWritableOrganizations, errorMessage } from '../hooks/useOrgContext';
 import { motivoParaNaoMudarOrganizacao, planoDaMudanca, type OrgDasDimensoes } from '../utils/extratoMudarOrganizacao';
 import { useConfirm } from './ui/confirm';
-import { KpiCardCompact } from './ui/KpiCardCompact';
 import { formatMoney, formatDateBR } from './ui/Format';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
@@ -3091,25 +3090,11 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 </div>
             </div>
 
-            {/* Header / Stats — mesmo desenho dos KPIs do Calendário Financeiro
-                (FinancialCalendar.tsx), via KpiCardCompact.
-                Grade simétrica: os 4 KPIs são métricas independentes, sem relação
-                total→decomposição (guia §4.2). Só na aba Dashboard: os KPIs refletem a aba
-                ativa (guia — ANATOMIA DA TELA), e "Pendentes"/"Automação"/"Regras ativas"/
-                "Atenção" são uma visão geral do módulo, não dado específico de
-                Extrato/Central/Regras/etc. */}
-            {/* mb-3 — ritmo de cromo do guia §20.1: o bloco de controles (KPIs → botões →
-                toolbar acoplada) respira 12px, metade do space-y-6 do container raiz. */}
-            {activeView === 'dashboard' && (
-                <div className="relative mb-3">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
-                        <KpiCardCompact label="Pendentes" value={bankTransactions.length} icon={<ArrowRightLeft className="w-4 h-4" />} color="blue" />
-                        <KpiCardCompact label="Automação" value={`${stats.automationRate}%`} icon={<Zap className="w-4 h-4" />} color="emerald" />
-                        <KpiCardCompact label="Regras ativas" value={rules.length} icon={<ShieldCheck className="w-4 h-4" />} color="purple" />
-                        <KpiCardCompact label="Atenção" value={internalTransactions.length} icon={<AlertCircle className="w-4 h-4" />} color="amber" />
-                    </div>
-                </div>
-            )}
+            {/* A aba Dashboard NÃO tem KPIs aqui: os dela são os do ReconciliationDashboard.
+                Até 28/10/2026 havia uma fileira "Pendentes / Automação / Regras ativas /
+                Atenção" — mas, nesta aba, `loadTransactions` carrega só o extrato MATCHED da
+                conta do seletor, e "Pendentes" mostrava a quantidade de CONCILIADOS (0 com
+                7.516 pendentes no Itaú). Plano: docs/planos/2026-10-28-conciliacao-dashboard-confianca.md. */}
 
             {/* Toolbar de botões — guia §5.3/§20.1 (mb-3: ritmo de cromo, metade do space-y-6 raiz) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">

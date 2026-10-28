@@ -1,16 +1,18 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
     Landmark, ShieldCheck, AlertTriangle, BookOpen, RefreshCw,
     Check, X, Tag, Receipt, Scale, Building2, HardHat,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import MoneyCentsInput from './ui/MoneyCentsInput';
+import { useConfirm } from './ui/confirm';
 import { reconciliationDashboardService } from '../services/reconciliationDashboardService';
 import { useToast } from '../hooks/useToast';
 import type {
     ReconciliationDashboard as DashboardData, ReconciliationAccountBalance,
     ReconciliationConsolidated,
 } from '../types/financial';
-import { formatMoney as formatBRL } from './ui/Format';
+import { formatMoney as formatBRL, formatDateBR } from './ui/Format';
 
 // Tolerância para considerar saldos "batendo" (centavos de arredondamento).
 const EPS = 0.01;
@@ -48,68 +50,125 @@ interface ReconciliationDashboardProps {
     organizationId: string | null;
 }
 
+/** Texto do erro do Supabase/rede, quando ele diz algo além do genérico. */
+function detalheDoErro(e: unknown): string | null {
+    const msg = (e as { message?: unknown })?.message;
+    return typeof msg === 'string' && msg.trim() ? msg.trim() : null;
+}
+
 const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ organizationId }) => {
     const { showToast } = useToast();
+    const confirm = useConfirm();
     const [asOf, setAsOf] = useState(new Date().toISOString().split('T')[0]);
     const [data, setData] = useState<DashboardData | null>(null);
     const [consolidated, setConsolidated] = useState<ReconciliationConsolidated | null>(null);
     const [loading, setLoading] = useState(false);
+    // Falha da última carga. Com `data` ainda na tela, os números são de `data.as_of`, não
+    // de `asOf` — a tela tem de dizer isso, senão mostra outra data como se fosse a pedida.
+    const [erro, setErro] = useState<{ detalhe: string | null } | null>(null);
+    // Trocar "Posição em" rápido dispara cargas em paralelo; só a última vale.
+    const cargaRef = useRef(0);
 
     // Edição de saldo inicial inline
     const [editingId, setEditingId] = useState<string | null>(null);
     const [editBalance, setEditBalance] = useState('');
     const [editDate, setEditDate] = useState('');
     const [saving, setSaving] = useState(false);
+    const botoesEditar = useRef<Record<string, HTMLButtonElement | null>>({});
 
     const load = useCallback(async () => {
+        const carga = ++cargaRef.current;
         setLoading(true);
+        setErro(null);
         try {
             const [d, cons] = await Promise.all([
                 reconciliationDashboardService.getDashboard(organizationId, asOf),
                 reconciliationDashboardService.getConsolidated(organizationId, asOf),
             ]);
+            if (carga !== cargaRef.current) return;
             setData(d);
             setConsolidated(cons);
         } catch (e) {
+            if (carga !== cargaRef.current) return;
             console.error('[ReconciliationDashboard]', e);
-            showToast('Erro ao carregar dashboard de conciliação', 'error');
+            setErro({ detalhe: detalheDoErro(e) });
         } finally {
-            setLoading(false);
+            if (carga === cargaRef.current) setLoading(false);
         }
-    }, [organizationId, asOf, showToast]);
+    }, [organizationId, asOf]);
 
     useEffect(() => { load(); }, [load]);
 
     const startEdit = (acc: ReconciliationAccountBalance) => {
         setEditingId(acc.account_id);
         setEditBalance(String(acc.opening_balance ?? 0));
-        setEditDate('');
+        setEditDate(acc.opening_balance_date ?? '');
     };
 
     const cancelEdit = () => {
+        const id = editingId;
         setEditingId(null);
         setEditBalance('');
         setEditDate('');
+        // A linha sai do modo edição e o foco ficaria no <body>: devolve ao lápis dela.
+        if (id) requestAnimationFrame(() => botoesEditar.current[id]?.focus());
     };
 
-    const saveEdit = async (accountId: string) => {
-        const parsed = parseFloat(editBalance.replace(',', '.'));
-        if (isNaN(parsed)) {
-            showToast('Saldo inicial inválido', 'error');
+    const saveEdit = async (acc: ReconciliationAccountBalance) => {
+        if (editBalance === '-') {
+            showToast('Digite o valor do saldo inicial depois do sinal de menos', 'error');
             return;
         }
+        const novoSaldo = editBalance === '' ? 0 : Number(editBalance);
+        // `undefined` na conta = a função do banco ainda não devolve a data (ver o tipo):
+        // aí só se grava a data se a pessoa digitou uma; nunca NULL por não saber.
+        const dataConhecida = acc.opening_balance_date !== undefined;
+        const dataAtual = acc.opening_balance_date ?? null;
+        const novaData = editDate || null;
+        const dataParaGravar = dataConhecida ? novaData : (novaData ?? undefined);
+        const mudouSaldo = Math.abs(novoSaldo - (acc.opening_balance ?? 0)) > EPS / 2;
+        const mudouData = dataParaGravar !== undefined && dataParaGravar !== dataAtual;
+        if (!mudouSaldo && !mudouData) { cancelEdit(); return; }
+
+        const ok = await confirm({
+            title: 'Alterar o saldo inicial?',
+            variant: 'warning',
+            confirmLabel: 'Alterar saldo inicial',
+            message: (
+                <div className="space-y-2 text-sm text-gray-700">
+                    <p className="font-medium text-gray-900">{acc.account_name}</p>
+                    <p className="tabular-nums">
+                        Saldo inicial: {formatBRL(acc.opening_balance ?? 0)} → <span className="font-semibold text-gray-900">{formatBRL(novoSaldo)}</span>
+                    </p>
+                    {mudouData && (
+                        <p className="tabular-nums">
+                            Extrato a partir de: {dataAtual ? formatDateBR(dataAtual) : 'todo o extrato'} → <span className="font-semibold text-gray-900">{novaData ? formatDateBR(novaData) : 'todo o extrato'}</span>
+                        </p>
+                    )}
+                    <p className="text-gray-600">O saldo bancário, o conciliado e a diferença desta conta são recalculados a partir daí, em todas as datas.</p>
+                </div>
+            ),
+        });
+        if (!ok) return;
+
         setSaving(true);
         try {
-            await reconciliationDashboardService.setOpeningBalance(accountId, parsed, editDate || null);
+            await reconciliationDashboardService.setOpeningBalance(acc.account_id, novoSaldo, dataParaGravar);
             showToast('Saldo inicial atualizado', 'success');
             cancelEdit();
             await load();
         } catch (e) {
             console.error('[ReconciliationDashboard] saveEdit', e);
-            showToast('Erro ao salvar saldo inicial', 'error');
+            const detalhe = detalheDoErro(e);
+            showToast(`Não foi possível salvar o saldo inicial${detalhe ? `: ${detalhe}` : ''}. O valor digitado continua no campo.`, 'error');
         } finally {
             setSaving(false);
         }
+    };
+
+    const teclaNaEdicao = (e: React.KeyboardEvent, acc: ReconciliationAccountBalance) => {
+        if (e.key === 'Enter') { e.preventDefault(); if (!saving) void saveEdit(acc); }
+        else if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); if (!saving) cancelEdit(); }
     };
 
     const totals = data?.totals;
@@ -144,13 +203,57 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                         onClick={load}
                         disabled={loading}
                         className="p-2 rounded-lg border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 transition-colors disabled:opacity-50"
-                        title="Atualizar"
+                        title={loading ? 'Carregando…' : 'Atualizar'}
+                        aria-label={loading ? 'Carregando…' : 'Atualizar'}
                     >
                         <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
                     </button>
                 </div>
             </div>
 
+            {/* Sem dado ainda: nada de R$ 0,00 — zero aqui seria uma afirmação sobre o banco. */}
+            {!data && !erro && (
+                <div aria-busy="true" className="space-y-4">
+                    <span className="sr-only" role="status">Carregando a conciliação…</span>
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4" aria-hidden="true">
+                        {[0, 1, 2, 3].map(i => (
+                            <div key={i} className="bg-white rounded-2xl border border-gray-100 p-5 shadow-sm animate-pulse">
+                                <div className="h-3 w-24 bg-gray-100 rounded" />
+                                <div className="h-5 w-32 bg-gray-100 rounded mt-3" />
+                            </div>
+                        ))}
+                    </div>
+                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5 space-y-3 animate-pulse" aria-hidden="true">
+                        {[0, 1, 2].map(i => <div key={i} className="h-3 bg-gray-100 rounded" />)}
+                    </div>
+                </div>
+            )}
+
+            {erro && (
+                <div role="alert" className="flex flex-wrap items-start justify-between gap-3 bg-white border border-red-200 rounded-xl px-4 py-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                        <AlertTriangle className="w-4 h-4 text-red-600 flex-shrink-0 mt-0.5" />
+                        <div className="text-sm text-gray-700 min-w-0">
+                            <p className="font-semibold text-gray-900">
+                                Não foi possível carregar a posição em {formatDateBR(asOf)}.
+                            </p>
+                            {data && (
+                                <p className="mt-0.5">Os números abaixo ainda são da posição em {formatDateBR(data.as_of)}.</p>
+                            )}
+                            {erro.detalhe && <p className="mt-0.5 text-gray-600 break-words">{erro.detalhe}</p>}
+                        </div>
+                    </div>
+                    <button
+                        onClick={load}
+                        disabled={loading}
+                        className="h-9 px-3.5 rounded-[6px] border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 shrink-0"
+                    >
+                        {loading ? 'Tentando…' : 'Tentar de novo'}
+                    </button>
+                </div>
+            )}
+
+            {data && (<>
             {/* KPIs principais */}
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
                 <KPICard
@@ -268,19 +371,26 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                         <td className="px-3 py-3 text-right">
                                             {isEditing ? (
                                                 <div className="flex flex-col items-end gap-1">
-                                                    <input
-                                                        type="text"
+                                                    <MoneyCentsInput
+                                                        permitirNegativo
+                                                        autoFocus
                                                         value={editBalance}
-                                                        onChange={e => setEditBalance(e.target.value)}
-                                                        placeholder="0,00"
-                                                        className="w-28 px-2 py-1 rounded border border-gray-200 text-right text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        onChange={setEditBalance}
+                                                        onKeyDown={e => teclaNaEdicao(e, acc)}
+                                                        disabled={saving}
+                                                        aria-label={`Saldo inicial de ${acc.account_name}`}
+                                                        title="Digite só os números (os dois últimos são os centavos). Um “-” deixa o saldo negativo. Enter salva, Esc cancela."
+                                                        className="w-32 px-2 py-1 rounded border border-gray-200 text-right text-sm text-gray-900 tabular-nums placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     />
                                                     <input
                                                         type="date"
                                                         value={editDate}
                                                         onChange={e => setEditDate(e.target.value)}
-                                                        title="Data de início (opcional)"
-                                                        className="w-28 px-2 py-1 rounded border border-gray-200 text-right text-xs focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                        onKeyDown={e => teclaNaEdicao(e, acc)}
+                                                        disabled={saving}
+                                                        aria-label={`Extrato de ${acc.account_name} conta a partir de`}
+                                                        title="A partir de quando o extrato entra no saldo desta conta. Vazio = todo o extrato."
+                                                        className="w-32 px-2 py-1 rounded border border-gray-200 text-right text-xs text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500"
                                                     />
                                                 </div>
                                             ) : (
@@ -305,24 +415,32 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                                             {isEditing ? (
                                                 <div className="flex items-center justify-end gap-1">
                                                     <button
-                                                        onClick={() => saveEdit(acc.account_id)}
+                                                        onClick={() => saveEdit(acc)}
                                                         disabled={saving}
-                                                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-600 hover:bg-emerald-100 disabled:opacity-50"
-                                                        title="Salvar"
+                                                        className="p-1.5 rounded-lg bg-emerald-50 text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
+                                                        title={saving ? 'Salvando…' : 'Salvar (Enter)'}
+                                                        aria-label={`Salvar saldo inicial de ${acc.account_name}`}
                                                     >
                                                         <Check className="w-4 h-4" />
                                                     </button>
                                                     <button
                                                         onClick={cancelEdit}
                                                         disabled={saving}
-                                                        className="p-1.5 rounded-lg bg-gray-50 text-gray-500 hover:bg-gray-100 disabled:opacity-50"
-                                                        title="Cancelar"
+                                                        className="p-1.5 rounded-lg bg-gray-50 text-gray-600 hover:bg-gray-100 disabled:opacity-50"
+                                                        title={saving ? 'Salvando…' : 'Cancelar (Esc)'}
+                                                        aria-label={`Cancelar edição do saldo inicial de ${acc.account_name}`}
                                                     >
                                                         <X className="w-4 h-4" />
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <ActionIconButton kind="edit" title="Editar saldo inicial" onClick={() => startEdit(acc)} />
+                                                <ActionIconButton
+                                                    ref={el => { botoesEditar.current[acc.account_id] = el; }}
+                                                    kind="edit"
+                                                    title={`Editar saldo inicial de ${acc.account_name}`}
+                                                    aria-label={`Editar saldo inicial de ${acc.account_name}`}
+                                                    onClick={() => startEdit(acc)}
+                                                />
                                             )}
                                         </td>
                                     </tr>
@@ -354,6 +472,7 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                     </table>
                 </div>
             </div>
+            </>)}
 
             {/* Consolidado por empresa (SPE) */}
             {consolidated && consolidated.by_empresa.length > 0 && (

@@ -28,6 +28,10 @@ Crítica gravada em `.impeccable/critique/2026-10-28T13-29-50Z__components-recon
 | 28/10/2026 | Escopo | Tudo, inclusive observações menores |
 | 28/10/2026 | Saldo informado pelo banco ao lado do calculado | Sim |
 | 28/10/2026 | Ritmo | Um passo de cada vez (um PR por passo) |
+| 28/10/2026 | Passo 2: conta sem saldo informado pelo banco (Sicredi ×2; Itaú só em OFX) — digitar à mão? | **Sim, à mão com data** (o automático continua valendo; o mais recente vence) |
+| 28/10/2026 | Passo 2: banco ≠ calculado — oferecer saldo inicial que fecha? | **Sim, sugere e confirma** (antes → depois; nunca automático) |
+| 28/10/2026 | Passo 2: tarifas levam para onde? | **Pendentes, já filtrado**, com "Criar regra" ao lado |
+| 28/10/2026 | Passo 2: o Itaú tem extrato de 02/01/2014 a 31/08/2026 com saldo inicial 0 (não é extrato em dobro: 67 linhas repetidas, R$ 11.416,35); "ajustar o valor" daria −R$ 10.889.235,39 em 2014. O que o "Ajustar" oferece? | **As duas, com o impacto**: (a) manter a data e ajustar o valor; (b) recomeçar no saldo do banco a partir do dia seguinte — cada uma com saldo inicial, data e quantos pendentes deixam de contar |
 
 ## O que a crítica comprovou (no código e no banco, não só no relatório dos agentes)
 
@@ -65,6 +69,26 @@ Um passo por PR, na ordem do plano de ação aprovado.
 | 1.5 | Estados: esqueleto enquanto carrega pela 1ª vez (sem números), cartão de erro com "Tentar de novo" se falhar, e o tom de "Pendente" só calculado com dado | Teste de componente: serviço rejeita → aparece "Tentar de novo" e nenhum "R$ 0,00"; clicar tenta de novo |
 
 ### Passo 2 — `/impeccable shape`: saldo do banco ao lado do calculado e ação em cada número
+
+**O que já existe (medido em 28/10):** `bank_statement_imports.ledger_balance/_date` (saldo de
+fechamento do OFX) e `payment_account_gateway.saldo/saldo_em` (API do Asaas). Nenhuma tela mostra.
+
+| Conta | Banco informa | App calcula hoje |
+|---|---|---|
+| Banco Itaú | −R$ 39.048,13 em 14/09/2026 (OFX; 24 de 98 importações têm saldo) | R$ 10.850.187,26 |
+| Asaas | R$ 138,35 (API, 28/10) | R$ 138,35 |
+| Sicredi, Sicredi - Garden | — (nenhuma importação registrada) | −R$ 41.405,70 / R$ 9.070,63 |
+
+| # | O que muda | Como sei que terminou |
+|---|---|---|
+| 2.1 | Tabela nova de saldo informado à mão (conta, data, valor, quem, quando; RLS pela org da conta; RPC nova com REVOKE). `fn_reconciliation_dashboard` devolve por conta o **último saldo informado com data ≤ "Posição em"** — origem OFX, Asaas ou à mão, o mais recente vence — e o **calculado naquela mesma data** (saldo inicial + extrato até ela) | Consulta: Itaú devolve −39.048,13 em 14/09 (OFX) e o calculado em 14/09; Asaas 138,35 (Asaas); Sicredi nulo; `conciliacaoStatusUnico.test` continua verde |
+| 2.2 | Coluna "Saldo no banco" na tabela por conta: valor + "em dd/mm · OFX/Asaas/informado" e o estado *bate* / *fora R$ X* / *o banco não informou*. Sem saldo: "Informar saldo do extrato" (valor + data) | Teste de componente dos três estados; na tela, Itaú "fora", Asaas "bate", Sicredi "Informar" |
+| 2.3 | Resposta direta acima da tabela: "N de M contas batem com o banco" com as que não batem nomeadas | Teste: contagem com os três estados |
+| 2.4 | "Ajustar" abre uma gaveta com duas opções e o impacto de cada uma: **(a) manter a data** — saldo inicial + (banco − calculado na data); **(b) recomeçar no saldo do banco** — saldo inicial = saldo do banco, a partir do dia seguinte, dizendo quantos pendentes deixam de contar. Aviso de que extrato em dobro ou período faltando também abrem diferença (link para Anomalias). Grava só ao confirmar | Teste: as duas sugestões calculadas; grava a escolhida, com a data certa |
+| 2.5 | Ação em cada número que preocupa (link azul com seta, guia §4.5): Pendente → Central da conta com mais pendentes (nomeada); Divergência → aba Divergências; Sem classificação → Pendentes da conta com mais; Tarifas → Pendentes buscando os termos de tarifa + "Criar regra"; linha da conta → "Conciliar" (Pendentes da conta). Número que não preocupa não ganha ação | Teste: cada ação chama a navegação com aba + conta (+ busca); sem pendência, sem link |
+
+**Fora do passo 2 (achado ao detalhar):** "Sem empresa" não ganha link — nenhuma tela edita
+`payment_accounts.empresa_id` (Minha Organização › Contas de Pagamento não tem o campo).
 ### Passo 3 — `/impeccable distill`: na aba Dashboard, só "Posição em" e "Importar extrato"
 ### Passo 4 — `/impeccable clarify`: rótulos (Pendente bruto, legenda do Contábil, alerta de divergência, plurais, "Grupo", subtítulo)
 ### Passo 5 — `/impeccable layout`: `KpiCard destaque` com ação (§4.5) e hierarquia

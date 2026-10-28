@@ -208,6 +208,12 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
     );
     return new Map([...e.garagens, ...e.acima].map(p => [p.numero, p]));
   }, [tower.id, tower.name, tower.floors_count, tower.pe_direito_padrao_m, tower.elevacao_terreo_m, units, floors]);
+  /** A elevação do andar para a coluna da unidade: "+2,70 m", "(calc.)" quando calculada, "—" sem andar. */
+  const textoDaElevacao = (andar: number | null) => {
+    const piso = andar == null || !Number.isFinite(andar) ? undefined : elevacaoDoAndar.get(andar);
+    if (!piso) return '—';
+    return `${fmtElevacao(piso.elevacaoMm / 1000)} m${piso.elevacaoDigitada ? '' : ' (calc.)'}`;
+  };
 
   // ── Seleção ─────────────────────────────────────────────────────────────────
 
@@ -558,6 +564,8 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                 <SortableHeader col="name" current={sortCol} dir={sortDir} onSort={handleSort}>Unidade</SortableHeader>
                 <SortableHeader col="floor" current={sortCol} dir={sortDir} onSort={handleSort}>Pav.</SortableHeader>
                 <SortableHeader col="floor_tipo" current={sortCol} dir={sortDir} onSort={handleSort}>Tipo Pav.</SortableHeader>
+                {/* Elevação do andar da unidade (28/10/2026): a mesma da seção Pavimentos — calculada ou digitada. */}
+                <th className="py-2.5 px-4 text-table-header font-semibold text-gray-500 whitespace-nowrap">Elevação</th>
                 <SortableHeader col="typology" current={sortCol} dir={sortDir} onSort={handleSort}>Tipologia</SortableHeader>
                 <SortableHeader col="private_area" current={sortCol} dir={sortDir} onSort={handleSort}>Priv. m²</SortableHeader>
                 <SortableHeader col="common_area" current={sortCol} dir={sortDir} onSort={handleSort}>Comum m²</SortableHeader>
@@ -589,7 +597,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                         />
                       </td>
                       {/* Label + toggle */}
-                      <td colSpan={4} className="py-2 px-3">
+                      <td colSpan={5} className="py-2 px-3">
                         <button
                           onClick={() => setCollapsedGroups(prev => {
                             const n = new Set(prev);
@@ -602,7 +610,12 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                             ? <ChevronRight className="w-3.5 h-3.5 text-gray-400" />
                             : <ChevronDown className="w-3.5 h-3.5 text-gray-400" />
                           }
-                          <span className="font-semibold text-gray-700 text-sm">{group.label}</span>
+                          {/* O nome do pavimento como está na seção Pavimentos (28/10/2026: "Pavimento -4" confundia com
+                              "Estacionamento 2"); sem cadastro, o nome que a estrutura dá ao andar. O número do andar fica ao lado. */}
+                          <span className="font-semibold text-gray-700 text-sm" data-testid="nome-do-pavimento">
+                            {group.key === '__null__' ? group.label : (elevacaoDoAndar.get(Number(group.key))?.nome ?? group.label)}
+                          </span>
+                          {group.key !== '__null__' && <span className="text-xs font-normal text-gray-500">andar {group.key}</span>}
                           <span className="bg-gray-200 text-gray-600 text-[10px] font-semibold px-1.5 py-0.5 rounded-full">
                             {group.units.length}
                           </span>
@@ -682,6 +695,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                                   {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
                                 </select>
                               </td>
+                              <td className="py-2 px-3 text-sm text-gray-700 whitespace-nowrap" title="A elevação é do pavimento — mude na seção Pavimentos">
+                                {textoDaElevacao(editForm.floor === '' ? null : Number(editForm.floor))}
+                              </td>
                               <td className="py-2 px-3"><input className={editCls} value={editForm.typology} onChange={e => setEditForm(p => ({ ...p, typology: e.target.value }))} /></td>
                               <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.private_area} onChange={e => setEditForm(p => ({ ...p, private_area: e.target.value }))} /></td>
                               <td className="py-2 px-3"><input className={editCls} type="number" step="0.01" value={editForm.common_area} onChange={e => setEditForm(p => ({ ...p, common_area: e.target.value }))} /></td>
@@ -722,6 +738,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
                                 {u.floor_tipo
                                   ? <span className={textColor(FLOOR_TIPO_STYLE[u.floor_tipo])}>{FLOOR_TIPO_LABEL[u.floor_tipo]}</span>
                                   : <span className="text-gray-300">—</span>}
+                              </td>
+                              <td className="py-2.5 px-4 text-sm font-normal text-gray-600 whitespace-nowrap" data-testid="elevacao-da-unidade">
+                                {textoDaElevacao(u.floor ?? null)}
                               </td>
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.typology || '—'}</td>
                               <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
@@ -783,7 +802,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
             <tfoot>
               <tr className="border-t-2 border-gray-200 bg-gray-50/70 text-sm text-gray-700">
                 <td className="py-2.5 px-3" />
-                <td className="py-2.5 px-4" colSpan={4}>
+                <td className="py-2.5 px-4" colSpan={5}>
                   <span className="text-xs font-semibold text-gray-500">Total ({units.length} unid.)</span>
                 </td>
                 <td className="py-2.5 px-4 font-medium text-blue-600">{totalPriv > 0 ? `${fmtArea(totalPriv)} m²` : '—'}</td>

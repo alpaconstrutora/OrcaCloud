@@ -45,10 +45,10 @@ import Button from './ui/Button';
 
 // ─── Types ──────────────────────────────────────────────────
 // 'allocations' saiu: virou aba de `LaborPayroll` em 2026-08-23.
-type LaborTab = 'dashboard' | 'employees' | 'teams' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
+type LaborTab = 'employees' | 'teams' | 'timetracking' | 'productivity' | 'costs' | 'payroll' | 'documents' | 'cost_dashboard' | 'rubrics' | 'fiscal' | 'encargos' | 'epis' | 'absences' | 'trainings' | 'rh_dashboard' | 'termination' | 'timebank' | 'sst' | 'contractors' | 'diary' | 'ats' | 'portal' | 'evaluation' | 'comunicacao' | 'bi_analytics' | 'esocial' | 'vale_refeicao' | 'incentivos' | 'cargos' | 'remuneracao_societaria';
 
 const SECTION_TO_TAB: Record<string, LaborTab> = {
-    'labor-dashboard': 'dashboard',
+    'labor-dashboard': 'rh_dashboard',   // endereço antigo (o AppRouter também redireciona)
     'labor-cost-dashboard': 'cost_dashboard',
     'labor-employees': 'employees',
     'labor-teams': 'teams',
@@ -93,6 +93,8 @@ const TAB_TO_SECTION: Record<LaborTab, string> = {
     // 'labor-allocations'), e o inverso automático fica com a ÚLTIMA. Sem esta
     // linha, abrir a folha pelo menu gravaria a view de Alocações.
     payroll: 'labor-payroll',
+    // Idem: 'labor-dashboard' (endereço antigo) também aponta para 'rh_dashboard'.
+    rh_dashboard: 'labor-rh-dashboard',
 };
 
 interface LaborModuleProps {
@@ -104,143 +106,17 @@ interface LaborModuleProps {
     onChangeView?: (view: string) => void;
 }
 
-// ─── KPI Card ───────────────────────────────────────────────
-// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga
-// desta tela (ícone como componente, cor derivada do bgColor).
-const KpiCard: React.FC<{
-    label: string;
-    value: string;
-    sub?: string;
-    icon: React.ElementType;
-    color: string;
-    bgColor: string;
-}> = ({ label, value, sub, icon: Icon, bgColor }) => (
-    <KpiCardBase label={label} value={value} sub={sub} icon={<Icon className="w-4 h-4" />}
-        color={bgColor.replace(/^bg-/, '').replace(/-\d+$/, '') as KpiColor} />
-);
-
-// ─── Dashboard Tab ──────────────────────────────────────────
-const LaborDashboardTab: React.FC<{
-    employees: Employee[];
-    teams: LaborTeam[];
-    pendingEntries: TimeEntry[];
-    productivity: ProductivityLog[];
-    costSummary: LaborCostSummary | null;
-    onOpenTab: (tab: LaborTab) => void;
-    onRefresh: () => void;
-}> = ({ employees, teams, pendingEntries, productivity, costSummary, onOpenTab, onRefresh }) => {
-    const activeCount = employees.filter(e => e.status === 'ATIVO').length;
-    const avgProductivity = productivity.length > 0
-        ? productivity.reduce((s, p) => s + (p.productivity_pct || 0), 0) / productivity.length
-        : 0;
-
-    return (
-        <div className="space-y-6">
-            {/* 1. Título */}
-            <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">Gestão de Mão de Obra</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">Controle total de pessoal, produtividade e custos em obra.</p>
-            </div>
-
-            {/* KPI Grid */}
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-                <KpiCard label="Colaboradores Ativos" value={`${activeCount}`} sub={`${employees.length} cadastrados`} icon={Users} color="text-indigo-600" bgColor="bg-indigo-50" />
-                <KpiCard label="Equipes" value={`${teams.length}`} sub="ATIVAS" icon={Shield} color="text-emerald-600" bgColor="bg-emerald-50" />
-                <KpiCard label="Pontos Pendentes" value={`${pendingEntries.length}`} sub="AGUARDAM APROVAÇÃO" icon={Clock} color="text-amber-600" bgColor="bg-amber-50" />
-                <KpiCard label="Custo Aprovado" value={`R$ ${(costSummary?.totalCost || 0).toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`} sub={`${(costSummary?.totalHours || 0).toFixed(0)}h registradas`} icon={DollarSign} color="text-rose-600" bgColor="bg-rose-50" />
-            </div>
-
-            {/* Quick Action Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                {[
-                    { tab: 'employees' as LaborTab, icon: UserPlus, title: 'Colaboradores', desc: `${activeCount} ativos • Gerencie o cadastro e vínculos`, color: 'indigo' },
-                    { tab: 'cargos' as LaborTab, icon: Briefcase, title: 'Cargos & Funções', desc: 'Estrutura de cargos, níveis e responsabilidades', color: 'violet' },
-                    { tab: 'timetracking' as LaborTab, icon: Clock, title: 'Registro de Ponto', desc: `${pendingEntries.length} pontos aguardando aprovação`, color: 'amber', badge: pendingEntries.length },
-                    { tab: 'productivity' as LaborTab, icon: Target, title: 'Produtividade', desc: `Média: ${avgProductivity.toFixed(0)}% do planejado`, color: 'emerald' },
-                    { tab: 'incentivos' as LaborTab, icon: Gift, title: 'Incentivos & Produtividade', desc: 'Gratificações, metas e guarda de habitualidade', color: 'indigo' },
-                    { tab: 'remuneracao_societaria' as LaborTab, icon: Banknote, title: 'Remuneração Societária', desc: 'Pró-labore de sócios-administradores', color: 'emerald' },
-                    { tab: 'teams' as LaborTab, icon: Shield, title: 'Equipes', desc: `${teams.length} equipes configuradas`, color: 'blue' },
-                    { tab: 'costs' as LaborTab, icon: DollarSign, title: 'Custos de MO', desc: 'Custo por colaborador e obra', color: 'rose' },
-                    { tab: 'payroll' as LaborTab, icon: Calculator, title: 'Folha de Pagamento', desc: 'Cálculo de INSS, FGTS e IRRF', color: 'blue' },
-                    { tab: 'timetracking' as LaborTab, icon: BarChart3, title: 'Horas Trabalhadas', desc: `${(costSummary?.totalHours || 0).toFixed(0)}h aprovadas no total`, color: 'purple' },
-                    { tab: 'epis' as LaborTab, icon: HardHat, title: 'Gestão de EPIs', desc: 'Catálogo, entregas e controle de estoque', color: 'amber' },
-                    { tab: 'absences'    as LaborTab, icon: Umbrella,         title: 'Férias e Ausências', desc: 'Solicitações, saldos e alertas de vencimento', color: 'cyan' },
-                    { tab: 'trainings'   as LaborTab, icon: BookOpen,         title: 'Treinamentos',       desc: 'NRs, certificados e controle de vencimento', color: 'emerald' },
-                    { tab: 'rh_dashboard' as LaborTab, icon: LayoutDashboard, title: 'Dashboard RH',     desc: 'KPIs executivos: turnover, absenteísmo, custos', color: 'violet' },
-                    { tab: 'termination'  as LaborTab, icon: UserMinus,       title: 'Desligamentos',   desc: 'Checklist, entrevista e encerramento de acesso', color: 'rose' },
-                    { tab: 'timebank'     as LaborTab, icon: Clock,           title: 'Banco de Horas',  desc: 'Saldos, QR Code check-in e geolocalização', color: 'blue' },
-                    { tab: 'sst'          as LaborTab, icon: ShieldAlert,     title: 'SST',             desc: 'Acidentes (CAT), checklists e indicadores TFCA', color: 'orange' },
-                    { tab: 'contractors'  as LaborTab, icon: Truck,           title: 'Empreiteiros',    desc: 'Cadastro, medições com retenções e documentos', color: 'purple' },
-                    { tab: 'diary'        as LaborTab, icon: ClipboardList,   title: 'Diário de Obra',  desc: 'Apontamento HH em lote — fecha e gera ponto', color: 'teal' },
-                    { tab: 'ats'          as LaborTab, icon: UserSearch,      title: 'Recrutamento',    desc: 'Pipeline Kanban, banco de talentos, contratação', color: 'violet' },
-                    { tab: 'portal'       as LaborTab, icon: Smartphone,      title: 'Portal Colaborador', desc: 'Link self-service: ponto, férias, docs no celular', color: 'indigo' },
-                    { tab: 'evaluation'   as LaborTab, icon: Award,           title: 'Avaliação 360°',  desc: 'Ciclos, competências, PDI e ranking de equipes', color: 'violet' },
-                    { tab: 'comunicacao'  as LaborTab, icon: MessageSquare,   title: 'Comunicação',     desc: 'Avisos, DDS digitais, treinamentos e WhatsApp', color: 'teal' },
-                    { tab: 'bi_analytics' as LaborTab, icon: BarChart3,       title: 'BI Analytics RH', desc: 'Turnover, retenção, produtividade e movimentações', color: 'sky' },
-                    { tab: 'esocial'        as LaborTab, icon: FileText,          title: 'eSocial',             desc: 'Eventos S-1xxx/S-2xxx, lotes e transmissão', color: 'orange' },
-                    { tab: 'vale_refeicao'  as LaborTab, icon: UtensilsCrossed,   title: 'Vale Refeição',        desc: 'Cálculo automático mensal por dias elegíveis', color: 'orange' },
-                ].map(({ tab, icon: Icon, title, desc, color, badge }) => (
-                    <button
-                        key={`${tab}-${title}`}
-                        onClick={() => onOpenTab(tab)}
-                        className={`bg-white p-5 rounded-2xl border border-slate-100 shadow-sm hover:shadow-md hover:border-${color}-200 transition-all duration-200 text-left group flex items-start gap-4`}
-                    >
-                        <div className={`p-3 bg-${color}-50 rounded-xl group-hover:scale-110 transition-transform`}>
-                            <Icon className={`w-5 h-5 text-${color}-600`} />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                            <div className="flex items-center justify-between">
-                                <h3 className="text-sm font-black text-slate-900">{title}</h3>
-                                {badge !== undefined && badge > 0 && (
-                                    <span className="px-2 py-0.5 bg-red-500 text-white text-[9px] font-black rounded-full">{badge}</span>
-                                )}
-                            </div>
-                            <p className="text-xs text-slate-500 mt-0.5 truncate">{desc}</p>
-                        </div>
-                        <ChevronRight className="w-4 h-4 text-slate-300 group-hover:text-slate-500 transition-colors self-center" />
-                    </button>
-                ))}
-            </div>
-
-            {/* Top Performers */}
-            {(costSummary?.byEmployee || []).length > 0 && (
-                <div className="bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4 flex items-center gap-2">
-                        <TrendingUp className="w-4 h-4 text-indigo-600" /> Top Custo por Colaborador
-                    </h3>
-                    <div className="space-y-3">
-                        {(costSummary?.byEmployee || []).slice(0, 5).map((emp, i) => {
-                            const maxCost = Math.max(...(costSummary?.byEmployee || []).map(e => e.cost));
-                            const pct = maxCost > 0 ? (emp.cost / maxCost * 100) : 0;
-                            return (
-                                <div key={emp.employee_id} className="flex items-center gap-4">
-                                    <div className="w-6 h-6 rounded-full bg-indigo-50 flex items-center justify-center text-xs font-black text-indigo-600">{i + 1}</div>
-                                    <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-1">
-                                            <span className="text-xs font-bold text-slate-700 truncate">{emp.name}</span>
-                                            <span className="text-xs font-black text-slate-900 ml-2">R$ {emp.cost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                        </div>
-                                        <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
-                                            <div className="h-full bg-indigo-500 rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
-                                        </div>
-                                    </div>
-                                    <span className="text-xs text-slate-400 w-12 text-right">{emp.hours.toFixed(0)}h</span>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
-        </div>
-    );
-};
+// "Dashboard" (Gestão de Mão de Obra, KPIs + 26 atalhos) saiu em 28/10/2026: o
+// Dashboard RH é a entrada do RH e o menu lateral já tem todos os atalhos
+// (docs/planos/2026-10-28-dashboard-rh-numeros-e-paineis.md, passo 2). "Pontos
+// pendentes" virou alerta lá; "Equipes" saiu.
 
 // ─── MAIN MODULE ────────────────────────────────────────────
 const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection, onChangeView }) => {
-    const activeTab: LaborTab = SECTION_TO_TAB[activeSection || ''] || 'dashboard';
+    const activeTab: LaborTab = SECTION_TO_TAB[activeSection || ''] || 'rh_dashboard';
 
     const handleOpenTab = (tab: LaborTab) => {
-        if (onChangeView) onChangeView(TAB_TO_SECTION[tab] || 'labor-dashboard');
+        if (onChangeView) onChangeView(TAB_TO_SECTION[tab] || 'labor-rh-dashboard');
     };
 
     const queryClient = useQueryClient();
@@ -338,17 +214,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
 
             {/* Content */}
             <div className="flex-1 overflow-y-auto pb-6">
-                    {activeTab === 'dashboard' && (
-                        <LaborDashboardTab
-                            employees={employees}
-                            teams={teams}
-                            pendingEntries={pendingEntries}
-                            productivity={productivityLogs}
-                            costSummary={costSummary}
-                            onOpenTab={handleOpenTab}
-                            onRefresh={refetchAll}
-                        />
-                    )}
                     {activeTab === 'cost_dashboard' && (
                         <LaborCostDashboard
                             orgId={orgId}
@@ -485,6 +350,7 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                             orgId={orgId}
                             employees={employees}
                             costSummary={costSummary}
+                            pontosPendentes={pendingEntries.length}
                             onNavigate={onChangeView}
                             organizations={organizations}
                         />

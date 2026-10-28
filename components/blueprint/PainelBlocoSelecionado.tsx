@@ -28,7 +28,8 @@ import { resumoDoPiso, type MedidaDoBloco } from '../../utils/blueprintMassa';
 import type { ConferenciaDaDistancia, LinhaDoAjuste, PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
 import { chaveDaUnidade, type UnidadeDoPiso } from '../../utils/blueprintEstruturaDaTorre';
 import { UNIT_STATUS_LABEL } from '../../utils/empreendimentoComercial';
-import type { ArrumacaoDasUnidades } from '../../utils/blueprintUnidadesNoPavimento';
+import type { EscolhaDaArrumacao } from '../../utils/blueprintUnidadesNoPavimento';
+import type { OrdemDasUnidadesNaPlanta } from '../../types/empreendimento';
 import IdentificadorDoElemento from './IdentificadorDoElemento';
 
 interface Props {
@@ -45,8 +46,12 @@ interface Props {
   unidadesDoPiso?: UnidadeDoPiso[];
   unidadeSelecionada?: string | null;
   onUnidade?: (chave: string | null) => void;
-  /** Como as unidades se arrumam no andar (27/10/2026): pelo número ou na ordem do Empreendimento. */
-  arrumacaoDasUnidades?: { modo: ArrumacaoDasUnidades; onModo: (modo: ArrumacaoDasUnidades) => void };
+  /**
+   * Como as unidades se arrumam no andar (28/10/2026, *"pelas setas ou pela posição. O usuário escolhe"*): "Do
+   * Empreendimento" segue a torre (`daTorre`, de Torres e Unidades); "Pela posição" e "Pelas setas" valem só para quem
+   * escolheu.
+   */
+  arrumacaoDasUnidades?: { modo: EscolhaDaArrumacao; onModo: (modo: EscolhaDaArrumacao) => void; torre?: string | null; daTorre?: OrdemDasUnidadesNaPlanta | null };
   /** O que a posição/orientação do cadastro não deixou fazer neste pavimento (28/10/2026). */
   avisosDasUnidades?: string[];
   /** A torre do Empreendimento casada com o bloco (pelo nome), a comparação e o ajuste de todos os blocos. */
@@ -82,14 +87,20 @@ interface Props {
   };
 }
 
-const ARRUMACOES: { modo: ArrumacaoDasUnidades; rotulo: string; dica: string }[] = [
-  {
-    modo: 'AUTOMATICA',
-    rotulo: 'Automática',
-    dica: 'Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número (101 sobre 201), com as fileiras de áreas parecidas.',
-  },
-  { modo: 'EMPREENDIMENTO', rotulo: 'Ordem do Empreendimento', dica: 'Na ordem da aba Torres e Unidades (setas ↑↓): a 1ª metade numa fileira, a 2ª na outra.' },
+const DICA_DA_POSICAO = 'Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número (101 sobre 201), com as fileiras de áreas parecidas.';
+const DICA_DAS_SETAS = 'Na ordem das setas ↑↓ da aba Torres e Unidades: a 1ª metade numa fileira, a 2ª na outra.';
+const ARRUMACOES: { modo: EscolhaDaArrumacao; rotulo: string; dica: string }[] = [
+  { modo: 'DO_EMPREENDIMENTO', rotulo: 'Do Empreendimento', dica: 'Como cada torre está em Torres e Unidades › Unidades.' },
+  { modo: 'AUTOMATICA', rotulo: 'Pela posição', dica: DICA_DA_POSICAO },
+  { modo: 'EMPREENDIMENTO', rotulo: 'Pelas setas', dica: DICA_DAS_SETAS },
 ];
+/** O texto sob os botões: o que a escolha faz e, fora de "Do Empreendimento", que vale só para quem escolheu. */
+function dicaDaArrumacao(modo: EscolhaDaArrumacao, torre: string | null | undefined, daTorre: OrdemDasUnidadesNaPlanta | null | undefined): string {
+  const doEmpreendimento = daTorre === 'SETAS' ? 'pelas setas' : 'pela posição';
+  const quem = torre ? `a ${torre}` : 'a torre';
+  if (modo === 'DO_EMPREENDIMENTO') return `Como ${quem} está em Torres e Unidades › Unidades: ${doEmpreendimento}. ${daTorre === 'SETAS' ? DICA_DAS_SETAS : DICA_DA_POSICAO}`;
+  return `${modo === 'EMPREENDIMENTO' ? DICA_DAS_SETAS : DICA_DA_POSICAO} Só na sua visualização — no Empreendimento, ${quem} está ${doEmpreendimento}.`;
+}
 
 const fmtElevacao = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const n2 = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -305,7 +316,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
                       </button>
                     ))}
                   </div>
-                  <p className="text-slate-500">{ARRUMACOES.find((a) => a.modo === arrumacaoDasUnidades.modo)?.dica}</p>
+                  <p className="text-slate-500">{dicaDaArrumacao(arrumacaoDasUnidades.modo, arrumacaoDasUnidades.torre, arrumacaoDasUnidades.daTorre)}</p>
                   {avisosDasUnidades.length > 0 && (
                     <ul className="space-y-0.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800" data-testid="avisos-das-unidades">
                       {avisosDasUnidades.map((a) => (

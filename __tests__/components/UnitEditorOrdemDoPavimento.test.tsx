@@ -12,6 +12,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const svc = vi.hoisted(() => ({
   listUnits: vi.fn(),
   updateUnit: vi.fn(),
+  updateTower: vi.fn(),
 }));
 vi.mock('../../services/empreendimentoService', () => ({ empreendimentoService: svc }));
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
@@ -71,6 +72,37 @@ describe('Torres e Unidades › ordem das unidades no pavimento', () => {
     await waitFor(() => expect(nomesNaTela()).toEqual(['101', '102', '201', '202', '303', '204']));
     expect(svc.updateUnit).toHaveBeenCalledWith('201', { sort_order: 12 });
     expect(svc.updateUnit).toHaveBeenCalledWith('204', { sort_order: 15 });
+  });
+});
+
+describe('Torres e Unidades › como a Planta arruma as unidades da torre (28/10/2026)', () => {
+  beforeEach(() => {
+    svc.listUnits.mockReset();
+    svc.listUnits.mockResolvedValue([und('101', 1, 0)]);
+    svc.updateTower.mockReset();
+    svc.updateTower.mockImplementation(async (id: string, p: Record<string, unknown>) => ({ ...TORRE, id, ...p }));
+  });
+
+  it('sem escolha gravada, "Pela posição"; trocar grava na torre e avisa o pai', async () => {
+    const onTowerChange = vi.fn();
+    render(<UnitEditor tower={TORRE as never} onTowerChange={onTowerChange} />);
+    const caixa = screen.getByTestId('ordem-na-planta');
+    expect(within(caixa).getByRole('button', { name: 'Pela posição' })).toHaveAttribute('aria-pressed', 'true');
+    expect(caixa).toHaveTextContent('As setas ↑↓ não mudam a Planta.');
+    await userEvent.click(within(caixa).getByRole('button', { name: 'Pelas setas' }));
+    await waitFor(() => expect(svc.updateTower).toHaveBeenCalledWith('t1', { ordem_das_unidades_na_planta: 'SETAS' }));
+    await waitFor(() => expect(onTowerChange).toHaveBeenCalledWith('t1', { ordem_das_unidades_na_planta: 'SETAS' }));
+    expect(within(caixa).getByRole('button', { name: 'Pelas setas' })).toHaveAttribute('aria-pressed', 'true');
+    expect(caixa).toHaveTextContent('Posição e Orientação não mudam a Planta.');
+  });
+
+  it('erro ao gravar volta a escolha de antes', async () => {
+    svc.updateTower.mockRejectedValue(new Error('sem permissão'));
+    render(<UnitEditor tower={{ ...TORRE, ordem_das_unidades_na_planta: 'SETAS' } as never} />);
+    const caixa = screen.getByTestId('ordem-na-planta');
+    expect(within(caixa).getByRole('button', { name: 'Pelas setas' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(within(caixa).getByRole('button', { name: 'Pela posição' }));
+    await waitFor(() => expect(within(caixa).getByRole('button', { name: 'Pelas setas' })).toHaveAttribute('aria-pressed', 'true'));
   });
 });
 

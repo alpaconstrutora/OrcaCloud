@@ -225,3 +225,10 @@ describe('cadastro com o andar trocado (Garden, 27/10/2026)', () => {
     );
   });
 });
+
+describe('como a Planta arruma as unidades da torre (28/10/2026)', () => {
+  it('leva a escolha da torre; sem nada gravado, pela posição', () => {
+    expect(estruturaDaTorre({ ...TORRE_A, ordem_das_unidades_na_planta: 'SETAS' }, []).ordemDasUnidades).toBe('SETAS');
+    expect(estruturaDaTorre(TORRE_A, []).ordemDasUnidades).toBe('POSICAO');
+  });
+});

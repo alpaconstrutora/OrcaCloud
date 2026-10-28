@@ -151,6 +151,11 @@ export interface EmpreendimentoTower {
     pe_direito_padrao_m?: number | null;
     /** Elevação do térreo, em metros (27/10/2026): a referência dos pavimentos sem elevação digitada; null = 0. */
     elevacao_terreo_m?: number | null;
+    /**
+     * Como a Planta Inteligente arruma as unidades no pavimento (28/10/2026): pela Posição/Orientação (sem elas, o
+     * número) ou pela ordem das setas ↑↓. O padrão do Empreendimento; na Planta, cada usuário pode trocar para si.
+     */
+    ordem_das_unidades_na_planta?: OrdemDasUnidadesNaPlanta;
     construction_cost_sqm?: number;
     sales_price_sqm?: number;
     sort_order?: number;
@@ -158,6 +163,9 @@ export interface EmpreendimentoTower {
     updated_at: string;
     units?: EmpreendimentoUnit[];
 }
+
+/** 'POSICAO' = Posição/Orientação (sem elas, o número); 'SETAS' = a ordem das setas (sort_order). */
+export type OrdemDasUnidadesNaPlanta = 'POSICAO' | 'SETAS';
 
 export type EmpreendimentoTowerInsert = Omit<EmpreendimentoTower, 'id' | 'created_at' | 'updated_at' | 'units'>;
 export type EmpreendimentoTowerUpdate = Partial<EmpreendimentoTowerInsert>;

@@ -18,6 +18,7 @@
 
 import type { Point } from './blueprintKernel';
 import { compararNomesPorNumero } from './empreendimentoOrdemDasUnidades';
+import type { OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 
 /**
  * Como as unidades se arrumam no andar (27/10/2026, *"ordenação de duas maneiras, automática … e manual"*):
@@ -25,6 +26,19 @@ import { compararNomesPorNumero } from './empreendimentoOrdemDasUnidades';
  *  - EMPREENDIMENTO: a ordem da aba Torres e Unidades, a 1ª metade numa fileira e a 2ª na outra.
  */
 export type ArrumacaoDasUnidades = 'AUTOMATICA' | 'EMPREENDIMENTO';
+
+/**
+ * A escolha de quem olha a Planta (28/10/2026, *"opção de ordenação de duas maneiras pelas setas ou pela posição. O
+ * usuário escolhe"*; decisão: "Nos dois"). DO_EMPREENDIMENTO (o padrão) segue cada torre em Torres e Unidades ›
+ * Unidades; AUTOMATICA ("Pela posição") e EMPREENDIMENTO ("Pelas setas") valem só para quem escolheu.
+ */
+export type EscolhaDaArrumacao = 'DO_EMPREENDIMENTO' | ArrumacaoDasUnidades;
+
+/** A arrumação que vale para o bloco: a escolha do usuário, ou — em "Do Empreendimento" — a da torre dele. */
+export function arrumacaoEfetiva(escolha: EscolhaDaArrumacao | null | undefined, daTorre: OrdemDasUnidadesNaPlanta | null | undefined): ArrumacaoDasUnidades {
+  if (escolha === 'AUTOMATICA' || escolha === 'EMPREENDIMENTO') return escolha;
+  return daTorre === 'SETAS' ? 'EMPREENDIMENTO' : 'AUTOMATICA';
+}
 
 /** Onde a planta está: a frente do lote (para FORA, para a rua) e o norte do desenho (`georreferencia.rotacaoNorteDeg`). */
 export interface ReferenciasDaPlanta {

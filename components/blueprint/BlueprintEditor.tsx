@@ -626,7 +626,7 @@ import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendi
 import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 import { estruturasDoEmpreendimento } from '../../utils/blueprintEstruturaDaTorre';
 import { comandosDoAjuste, vestirBlocosPropostos } from '../../utils/blueprintAjusteAoEmpreendimento';
-import { arrumarUnidades, fatiasPorArea, fatiasPorDirecao, type ArrumacaoDasUnidades, type ReferenciasDaPlanta } from '../../utils/blueprintUnidadesNoPavimento';
+import { arrumacaoEfetiva, arrumarUnidades, fatiasPorArea, fatiasPorDirecao, type EscolhaDaArrumacao, type ReferenciasDaPlanta } from '../../utils/blueprintUnidadesNoPavimento';
 import { frenteDoLote } from '../../utils/blueprintAncorasHidro';
 import { chaveDaUnidade } from '../../utils/blueprintEstruturaDaTorre';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
@@ -1957,7 +1957,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   /** ENVELOPE 3D (E3.3): os prismas edificáveis por pavimento, translúcidos. */
   const [mostrarEnvelope3d, setMostrarEnvelope3d] = usePreferenciaDaPlanta<boolean>('vista3dEnvelope');
   // Unidades no pavimento da massa (27/10/2026): pelo número (automática) ou na ordem do Empreendimento (manual).
-  const [arrumacaoDasUnidades, setArrumacaoDasUnidades] = usePreferenciaDaPlanta<ArrumacaoDasUnidades>('vista3dUnidadesNoPavimento');
+  // 28/10/2026: a escolha do usuário; "Do Empreendimento" (o padrão) segue cada torre — ver `arrumacaoEfetiva`.
+  const [arrumacaoDasUnidades, setArrumacaoDasUnidades] = usePreferenciaDaPlanta<EscolhaDaArrumacao>('vista3dUnidadesNoPavimento');
 
   /**
    * VISTA DEPENDENTE (P2.17): o recorte nomeado que está aberto. É a planta
@@ -9206,7 +9207,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const massa3dPorUnidade = useMemo(() => {
     if (!ajusteAoEmpreendimento) return massa3d;
     return massa3d.flatMap((p) => {
-      const arrumadas = arrumarUnidades(ajusteAoEmpreendimento.papeis.get(p.id)?.pisos[p.indice - 1]?.unidades ?? [], arrumacaoDasUnidades, referenciasDosBlocos.get(p.id));
+      const papel = ajusteAoEmpreendimento.papeis.get(p.id);
+      const arrumadas = arrumarUnidades(papel?.pisos[p.indice - 1]?.unidades ?? [], arrumacaoEfetiva(arrumacaoDasUnidades, papel?.ordemDasUnidades), referenciasDosBlocos.get(p.id));
       const unidades = arrumadas.unidades;
       if (unidades.length === 0) return [p];
       const pesos = unidades.map((u) => u.areaPrivativaM2);
@@ -11399,19 +11401,27 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         onPiso={(indice) => setPisoDaMassa(blocoSel && indice !== null ? { blocoId: blocoSel.id, indice } : null)}
         unidadesDoPiso={
           blocoSel && pisoDoBlocoSel !== null
-            ? arrumarUnidades(ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.pisos[pisoDoBlocoSel - 1]?.unidades ?? [], arrumacaoDasUnidades).unidades
+            ? arrumarUnidades(
+                ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.pisos[pisoDoBlocoSel - 1]?.unidades ?? [],
+                arrumacaoEfetiva(arrumacaoDasUnidades, ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.ordemDasUnidades),
+              ).unidades
             : []
         }
         avisosDasUnidades={
           blocoSel && pisoDoBlocoSel !== null
             ? (arrumarUnidades(
                 ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.pisos[pisoDoBlocoSel - 1]?.unidades ?? [],
-                arrumacaoDasUnidades,
+                arrumacaoEfetiva(arrumacaoDasUnidades, ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.ordemDasUnidades),
                 referenciasDosBlocos.get(blocoSel.id),
               ).avisos ?? [])
             : []
         }
-        arrumacaoDasUnidades={{ modo: arrumacaoDasUnidades, onModo: setArrumacaoDasUnidades }}
+        arrumacaoDasUnidades={{
+          modo: arrumacaoDasUnidades,
+          onModo: setArrumacaoDasUnidades,
+          torre: blocoSel ? (ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.torre ?? null) : null,
+          daTorre: blocoSel ? (ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.ordemDasUnidades ?? null) : null,
+        }}
         unidadeSelecionada={unidadeDoBlocoSel}
         onUnidade={(chave) => blocoSel && pisoDoBlocoSel !== null && setPisoDaMassa({ blocoId: blocoSel.id, indice: pisoDoBlocoSel, unidade: chave })}
         onProps={(campos) => blocoSel && editor.run({ type: 'SetBlocoProps', blocoId: blocoSel.id, ...campos })}

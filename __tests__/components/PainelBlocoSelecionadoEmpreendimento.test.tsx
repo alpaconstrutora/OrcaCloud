@@ -8,6 +8,7 @@ import React from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
+import type { EscolhaDaArrumacao } from '../../utils/blueprintUnidadesNoPavimento';
 import PainelBlocoSelecionado from '../../components/blueprint/PainelBlocoSelecionado';
 import type { Bloco } from '../../utils/blueprintKernel';
 import type { MedidaDoBloco, PisoDoBloco } from '../../utils/blueprintMassa';
@@ -28,7 +29,7 @@ const un = (id: string, nome: string, tipologia: string, area: number, extra: Pa
 const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
 const montar = (
-  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: 'AUTOMATICA' | 'EMPREENDIMENTO'; onModo: (m: 'AUTOMATICA' | 'EMPREENDIMENTO') => void }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[]; avisosDasUnidades?: string[] } = {},
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: EscolhaDaArrumacao; onModo: (m: EscolhaDaArrumacao) => void; torre?: string | null; daTorre?: 'POSICAO' | 'SETAS' | null }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[]; avisosDasUnidades?: string[] } = {},
 ) =>
   render(
     <PainelBlocoSelecionado
@@ -125,13 +126,23 @@ describe('painel do bloco › Empreendimento', () => {
     expect(screen.getByTestId('avisos-das-unidades')).toHaveTextContent('Unidade 101: posição Frente e sol Norte apontam para lados opostos');
   });
 
-  it('a arrumação das unidades: automática ou a ordem do Empreendimento, com o que cada uma faz (27/10/2026)', async () => {
+  it('a arrumação das unidades: do Empreendimento, pela posição ou pelas setas, com o que cada uma faz (28/10/2026)', async () => {
     const onModo = vi.fn();
-    montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'AUTOMATICA', onModo } });
+    montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'DO_EMPREENDIMENTO', onModo, torre: 'Torre A', daTorre: 'SETAS' } });
     const a = screen.getByTestId('arrumacao-das-unidades');
-    expect(screen.getByRole('button', { name: 'Automática' })).toHaveAttribute('aria-pressed', 'true');
-    expect(a).toHaveTextContent('Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número');
-    await userEvent.click(screen.getByRole('button', { name: 'Ordem do Empreendimento' }));
+    expect(screen.getByRole('button', { name: 'Do Empreendimento' })).toHaveAttribute('aria-pressed', 'true');
+    expect(a).toHaveTextContent('Como a Torre A está em Torres e Unidades › Unidades: pelas setas.');
+    await userEvent.click(screen.getByRole('button', { name: 'Pela posição' }));
+    expect(onModo).toHaveBeenLastCalledWith('AUTOMATICA');
+    await userEvent.click(screen.getByRole('button', { name: 'Pelas setas' }));
     expect(onModo).toHaveBeenLastCalledWith('EMPREENDIMENTO');
+  });
+
+  it('fora de "Do Empreendimento", a escolha vale só para quem olha — e diz o que a torre usa (28/10/2026)', () => {
+    montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'AUTOMATICA', onModo: vi.fn(), torre: 'Torre A', daTorre: 'SETAS' } });
+    const a = screen.getByTestId('arrumacao-das-unidades');
+    expect(screen.getByRole('button', { name: 'Pela posição' })).toHaveAttribute('aria-pressed', 'true');
+    expect(a).toHaveTextContent('Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número');
+    expect(a).toHaveTextContent('Só na sua visualização — no Empreendimento, a Torre A está pelas setas.');
   });
 });

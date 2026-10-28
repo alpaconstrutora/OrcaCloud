@@ -116,7 +116,7 @@ export const buildCommercialAddressFields = (emp: Empreendimento): CommercialAdd
 // explícita: coluna nova de proveniência entra AQUI também (como TOWER_COLS).
 const EMPREENDIMENTO_COLS = 'id, organization_id, company_id, name, code, status, tipo, imovib_study_id, blueprint_study_id, distancias_entre_torres, project_id, last_synced_at, matricula, construtora, responsavel_tecnico, crea_cau, numero_processo, endereco_street, endereco_number, endereco_complement, endereco_neighborhood, endereco_city, endereco_state, endereco_zip_code, spe_razao_social, spe_cnpj, spe_nome_fantasia, condominio_cnpj, condominio_razao_social, condominio_instalado_em, sindico_client_id, sindico_mandato_inicio, sindico_mandato_fim, rateio_exige_aprovacao_sindico, condominio_org_id, terreno_street, terreno_number, terreno_complement, terreno_neighborhood, terreno_city, terreno_state, terreno_zip_code, terreno_area, terreno_tipo, terreno_frente, terreno_fundos, terreno_profundidade, terreno_lateral_direita, terreno_lateral_esquerda, terreno_frente_azimute, terreno_latitude, terreno_longitude, vgv_total, commercial_building_id, commercial_rental_building_id, developer_name, manager, launch_date, expected_delivery_date, metadata, created_at, updated_at';
 
-const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, blueprint_quadra_uid, blueprint_bloco_uid, name, floors_count, units_per_floor, pe_direito_padrao_m, elevacao_terreo_m, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
+const TOWER_COLS = 'id, empreendimento_id, project_id, imovib_block_id, blueprint_quadra_uid, blueprint_bloco_uid, name, floors_count, units_per_floor, pe_direito_padrao_m, elevacao_terreo_m, ordem_das_unidades_na_planta, construction_cost_sqm, sales_price_sqm, sort_order, created_at, updated_at';
 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, pe_direito_m, elevacao_m, sort_order, created_at, updated_at';
 
@@ -439,6 +439,8 @@ export const empreendimentoService = {
                 // Pé-direito e elevação do térreo (27/10/2026) são dado físico: vão junto.
                 pe_direito_padrao_m: tower.pe_direito_padrao_m,
                 elevacao_terreo_m: tower.elevacao_terreo_m,
+                // Como a Planta arruma as unidades (28/10/2026): é escolha da torre, vai junto com as setas (sort_order).
+                ordem_das_unidades_na_planta: tower.ordem_das_unidades_na_planta,
                 sort_order: tower.sort_order,
                 // project_id / imovib_block_id / planta_ai_scenario_id ficam de fora
                 // de propósito: vínculo e proveniência não se duplicam.

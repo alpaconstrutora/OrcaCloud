@@ -4,7 +4,7 @@
  * Empreendimento — identificação, não projeto. Puro.
  */
 import { describe, expect, it } from 'vitest';
-import { arrumarUnidades, direcoesDasUnidades, fatiasPorArea, fatiasPorDirecao } from '../utils/blueprintUnidadesNoPavimento';
+import { arrumacaoEfetiva, arrumarUnidades, direcoesDasUnidades, fatiasPorArea, fatiasPorDirecao } from '../utils/blueprintUnidadesNoPavimento';
 
 const area = (anel: { x: number; y: number }[]) => Math.abs(anel.reduce((s, p, i) => { const q = anel[(i + 1) % anel.length]; return s + p.x * q.y - q.x * p.y; }, 0) / 2) / 1e6;
 /** Torre A do Garden: 11 × 16 m. */
@@ -180,5 +180,19 @@ describe('Lateral com sol (o Garden, 28/10/2026)', () => {
     expect(r.avisos).toEqual([]);
     expect(Math.round(r.direcoes[0]!.y)).toBe(-1);
     expect(Math.round(r.direcoes[1]!.y)).toBe(1);
+  });
+});
+
+describe('arrumacaoEfetiva — a escolha do usuário × a da torre (28/10/2026)', () => {
+  it('"Do Empreendimento" (e sem escolha) segue a torre; sem nada na torre, pela posição', () => {
+    expect(arrumacaoEfetiva('DO_EMPREENDIMENTO', 'SETAS')).toBe('EMPREENDIMENTO');
+    expect(arrumacaoEfetiva('DO_EMPREENDIMENTO', 'POSICAO')).toBe('AUTOMATICA');
+    expect(arrumacaoEfetiva(null, 'SETAS')).toBe('EMPREENDIMENTO');
+    expect(arrumacaoEfetiva('DO_EMPREENDIMENTO', undefined)).toBe('AUTOMATICA');
+  });
+
+  it('"Pela posição" e "Pelas setas" valem por cima da torre', () => {
+    expect(arrumacaoEfetiva('AUTOMATICA', 'SETAS')).toBe('AUTOMATICA');
+    expect(arrumacaoEfetiva('EMPREENDIMENTO', 'POSICAO')).toBe('EMPREENDIMENTO');
   });
 });

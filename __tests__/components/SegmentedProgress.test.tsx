@@ -5,9 +5,18 @@ import { render, screen } from '@testing-library/react';
 import { describe, it, expect } from 'vitest';
 import { SegmentedProgress } from '../../components/ui/SegmentedProgress';
 
-const quadradinhos = () => Array.from(screen.getByRole('img').querySelectorAll('span'));
+// Os quadradinhos são decorativos (aria-hidden): o percentual em texto é o que o
+// leitor de tela lê, uma vez só (28/10/2026 — antes era lido duas vezes).
+const quadradinhos = () => Array.from(document.querySelectorAll('[aria-hidden="true"] > span'));
 
 describe('SegmentedProgress', () => {
+    it('o leitor de tela ouve o percentual uma vez: os quadradinhos ficam fora da árvore', () => {
+        render(<SegmentedProgress percent={40} />);
+        expect(screen.getByText('40%')).toBeInTheDocument();
+        expect(screen.queryByRole('img')).toBeNull();
+        expect(quadradinhos()).toHaveLength(12);
+    });
+
     it('78% → 9 de 12 preenchidos em verde, percentual em texto', () => {
         render(<SegmentedProgress percent={78} />);
         expect(screen.getByText('78%')).toBeInTheDocument();

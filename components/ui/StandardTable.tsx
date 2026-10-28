@@ -106,6 +106,9 @@ interface StandardTableProps<T> {
     /** Linha de detalhe logo abaixo da linha — só renderiza quando devolve algo. */
     renderExpanded?: (row: T, visibleCount: number) => React.ReactNode;
     maxHeight?: string;
+    /** Ordenação de quem nunca escolheu uma — use quando as linhas chegam
+     *  pré-ordenadas, para o cabeçalho anunciar a ordem real (aria-sort + ícone). */
+    defaultSort?: { column: string; direction: 'asc' | 'desc' };
     /** Sem moldura própria — quando a tabela já vive dentro de um card do pai. */
     bare?: boolean;
     /** Seleção em lote (§10): coluna de checkbox à esquerda, só nas linhas que
@@ -136,7 +139,7 @@ interface StandardTableProps<T> {
 export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
     search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowLabel, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
-    footer, renderTotals, totaisPorColuna, renderExpanded, maxHeight = '70vh', bare, selection, pagination, agrupamento: agrupar,
+    footer, renderTotals, totaisPorColuna, renderExpanded, maxHeight = '70vh', defaultSort, bare, selection, pagination, agrupamento: agrupar,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
         () => (actions ? [...columns, { key: 'actions', label: actions.label ?? 'Ações', sortable: false }] : columns),
@@ -149,7 +152,7 @@ export function StandardTable<T>({
         return w;
     }, [columns, actions]);
 
-    const tableColumns = useTableColumns(allColumns, `${storageKey}:columns`);
+    const tableColumns = useTableColumns(allColumns, `${storageKey}:columns`, defaultSort);
     const cols = useResizableColumns(defaultWidths, `${storageKey}:widths`);
 
     // Busca persistida (§3). Escopada quando a tabela vive dentro de um registro.
@@ -260,6 +263,9 @@ export function StandardTable<T>({
                             <input
                                 type="text"
                                 placeholder={searchPlaceholder}
+                                // O placeholder some ao digitar e não é nome: sem isto o
+                                // leitor de tela anunciava só "caixa de texto".
+                                aria-label={searchPlaceholder.replace(/\.{3}|…$/, '').trim()}
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"

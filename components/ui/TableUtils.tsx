@@ -134,14 +134,22 @@ function loadPersistedTableState(
   }
 }
 
-export const useTableColumns = (defaultColumns: ColumnConfig[], storageKey: string = 'tableColumns') => {
+export const useTableColumns = (
+  defaultColumns: ColumnConfig[],
+  storageKey: string = 'tableColumns',
+  /** Ordenação de quem nunca escolheu uma (nada guardado). Sem ela, uma tabela
+   *  que chega pré-ordenada (ex.: "quem mais deve primeiro") anunciava
+   *  aria-sort="none" e nenhum ícone de ordem — crítica da Central, 28/10/2026. */
+  defaultSort?: { column: string; direction: 'asc' | 'desc' },
+) => {
   const allColumns = defaultColumns.map(col => col.key);
   const defaultVisibleColumns = defaultColumns.filter(col => !col.defaultHidden).map(col => col.key);
 
   const [initial] = React.useState(() => loadPersistedTableState(storageKey, defaultVisibleColumns, allColumns));
   const [visibleColumns, setVisibleColumns] = React.useState<string[]>(initial.visibleColumns);
-  const [sortColumn, setSortColumn] = React.useState<string | null>(initial.sortColumn);
-  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(initial.sortDirection);
+  const usaPadrao = initial.sortColumn == null && !!defaultSort;
+  const [sortColumn, setSortColumn] = React.useState<string | null>(usaPadrao ? defaultSort!.column : initial.sortColumn);
+  const [sortDirection, setSortDirection] = React.useState<'asc' | 'desc'>(usaPadrao ? defaultSort!.direction : initial.sortDirection);
   const [knownColumns, setKnownColumns] = React.useState<string[]>(initial.knownColumns);
   const [columnOrder, setColumnOrder] = React.useState<string[]>(initial.columnOrder);
   const [showColumnConfig, setShowColumnConfig] = React.useState(false);

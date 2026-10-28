@@ -330,6 +330,52 @@
 .theme-midnight input::placeholder,
 .theme-midnight textarea::placeholder { color: #6b7280; }
 
+/* --- Polish da Central de Clientes (28/10/2026) ----------------------
+   Furos achados conferindo a tela no escuro; valem para o app inteiro. */
+
+/* Fundo recuado com opacidade (cabeçalho de grupo, hover de linha de gaveta):
+   `bg-gray-50/60` é outra classe e ficava cinza-claro sobre o painel escuro. */
+.theme-midnight .bg-gray-50\/50,
+.theme-midnight .bg-gray-50\/60,
+.theme-midnight .bg-gray-50\/80,
+.theme-midnight .bg-slate-50\/50,
+.theme-midnight .bg-slate-50\/60,
+.theme-midnight .bg-slate-50\/80 { background-color: var(--opura-mid-recess); }
+.theme-midnight .hover\:bg-gray-50\/50:hover,
+.theme-midnight .hover\:bg-gray-50\/60:hover { background-color: var(--opura-mid-raised); }
+
+/* Trilho vazio (quadradinhos da barra segmentada §29, trilho de toggle):
+   `bg-gray-200` ficava quase branco e gritava mais que a parte preenchida. */
+.theme-midnight .bg-gray-200,
+.theme-midnight .bg-slate-200 { background-color: var(--opura-mid-raised2); }
+
+/* Divisores no seletor do Tailwind v4 (`> :not(:last-child)`); as regras
+   acima são do v3 (`~`) e não casavam mais — divisória branca no escuro. */
+.theme-midnight .divide-gray-100 > :not(:last-child),
+.theme-midnight .divide-slate-100 > :not(:last-child) { border-color: var(--opura-mid-border-soft); }
+.theme-midnight .divide-gray-200 > :not(:last-child),
+.theme-midnight .divide-slate-200 > :not(:last-child) { border-color: var(--opura-mid-border); }
+
+/* Vermelho de alerta em texto solto: o red-700 dá ~2,6:1 sobre o painel
+   escuro (abaixo do AA). Selo com fundo próprio (bg-red-50 text-red-700)
+   continua como está — o fundo dele não escurece. */
+.theme-midnight .text-red-700:not([class*="bg-"]),
+.theme-midnight .text-red-600:not([class*="bg-"]) { color: #f87171; }
+
+/* Recharts: grade, cursor e eixo vêm em atributo SVG (o CSS vence);
+   a caixa do tooltip vem em style inline (só !important vence). Só a
+   caixa BRANCA escurece — tooltip que já é escuro fica como está. */
+.theme-midnight .recharts-cartesian-grid line { stroke: rgba(255, 255, 255, 0.06); }
+.theme-midnight .recharts-tooltip-cursor { fill: rgba(255, 255, 255, 0.04); }
+.theme-midnight .recharts-cartesian-axis-tick-value,
+.theme-midnight .rotulo-grafico { fill: #949bab; }
+.theme-midnight .recharts-default-tooltip[style*="background-color: rgb(255, 255, 255)"] {
+  background-color: var(--opura-mid-raised) !important;
+  border-color: var(--opura-mid-border) !important;
+}
+.theme-midnight .recharts-default-tooltip[style*="background-color: rgb(255, 255, 255)"] .recharts-tooltip-label { color: #949bab !important; }
+.theme-midnight .recharts-default-tooltip[style*="background-color: rgb(255, 255, 255)"] .recharts-tooltip-item[style*="color: rgb(31, 41, 55)"] { color: #e6e8ee !important; }
+
 /* =====================================================================
    ALTO CONTRASTE — acessibilidade (texto e bordas)
    ---------------------------------------------------------------------

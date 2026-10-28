@@ -43,7 +43,9 @@ export function SegmentedProgress({ percent, segments = 12, tone, hint, title, c
                 <span className="text-sm font-medium text-gray-800 tabular-nums">{pct.toFixed(0)}%</span>
                 {hint && <span className="text-xs text-gray-500 truncate">{hint}</span>}
             </div>
-            <div className="flex items-center gap-0.5" role="img" aria-label={`${pct.toFixed(0)}%`}>
+            {/* Os quadradinhos repetem o percentual que já está em texto acima: fora
+                da árvore de acessibilidade, senão o leitor dizia "0%" duas vezes. */}
+            <div className="flex items-center gap-0.5" aria-hidden="true">
                 {Array.from({ length: segments }, (_, i) => (
                     <span key={i} className={`h-2.5 w-2 rounded-[2px] ${i < filled ? fill : 'bg-gray-200'}`} />
                 ))}

@@ -6,7 +6,8 @@ import {
 } from 'lucide-react';
 import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import { useQuery } from '@tanstack/react-query';
-import { laborService, RhKpis, Employee, LaborCostSummary } from '../services/laborService';
+import { laborService, RhKpis, Employee } from '../services/laborService';
+import { payrollService } from '../services/payrollService';
 import { hrAnalyticsService } from '../services/hrAnalyticsService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
@@ -72,7 +73,8 @@ const BarChart: React.FC<{
     data: { label: string; value: number; color?: string }[];
     title: string;
     valueFormat?: (v: number) => string;
-}> = ({ data, title, valueFormat }) => {
+    vazio?: string;
+}> = ({ data, title, valueFormat, vazio = 'Sem dados no período' }) => {
     const max = Math.max(...data.map(d => d.value), 1);
     return (
         <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
@@ -93,7 +95,7 @@ const BarChart: React.FC<{
                     </div>
                 ))}
                 {data.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-4">Sem dados no período</p>
+                    <p className="text-xs text-slate-400 text-center py-4">{vazio}</p>
                 )}
             </div>
         </div>
@@ -114,19 +116,23 @@ const vereditoPelaMeta = (valor: number, meta: number | null | undefined, comOrg
     return { texto: valor > meta ? `Acima da meta (${metaTxt})` : `Dentro da meta (${metaTxt})`, definirMeta: false };
 };
 
+const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
+/** 'AAAA-MM' → 'set/26' */
+const competenciaCurta = (c: string) => `${MESES[Number(c.slice(5, 7)) - 1]}/${c.slice(2, 4)}`;
+const brl = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborRHDashboardProps {
     orgId: string | null;
     employees: Employee[];
-    costSummary: LaborCostSummary | null;
     /** Pontos aguardando aprovação (veio do antigo "Dashboard" do RH). */
     pontosPendentes?: number;
     onNavigate?: (tab: string) => void;
     organizations: Array<{ id: string; name: string }>;
 }
 
-const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, pontosPendentes = 0, onNavigate, organizations }) => {
+const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, pontosPendentes = 0, onNavigate, organizations }) => {
     const today = new Date().toISOString().split('T')[0];
     const [refDate] = useState(today);
     const anoRef = Number(refDate.slice(0, 4));
@@ -161,16 +167,21 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
             .sort((a, b) => b.value - a.value);
     }, [employees, orgId]);
 
-    // Custo por obra (do costSummary)
-    const byProject = React.useMemo(() =>
-        (costSummary?.byProject || [])
-            .sort((a, b) => b.cost - a.cost)
-            .map(p => ({
-                label: p.project_name,
-                value: p.cost,
-                color: 'bg-indigo-400',
-            }))
-    , [costSummary]);
+    // Custo de mão de obra = FOLHA da última competência (a de outubro só existe em
+    // novembro), pela mesma conta do Custo por Obra. Antes vinha do apontamento
+    // (time_entries), vazio em produção — a tela afirmava "R$ 0".
+    const { data: folha, isLoading: carregandoFolha } = useQuery({
+        queryKey: ['rh-custo-folha', orgId, refDate],
+        queryFn: () => payrollService.custoDaFolhaDaCompetencia(orgId, refDate),
+        staleTime: STALE.normal,
+    });
+
+    const byProject = React.useMemo(() => {
+        if (!folha) return [];
+        const linhas = folha.porObra.map(p => ({ label: p.name, value: p.cost, color: 'bg-indigo-400' }));
+        if (folha.naoAlocado > 0) linhas.push({ label: 'Administrativo / sem obra', value: folha.naoAlocado, color: 'bg-slate-400' });
+        return linhas;
+    }, [folha]);
 
     if (isLoading) {
         return (
@@ -197,6 +208,10 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
     const mesAtual = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
     const vTurnover = vereditoPelaMeta(kpis.periodo.turnover_pct, meta?.turnover_max_pct, !!orgId);
     const vAbsenteismo = vereditoPelaMeta(kpis.qualidade.absenteismo_pct, meta?.absenteismo_max_pct, !!orgId);
+    // Meta de horas extras é % das horas trabalhadas (BI › Metas: "Ex: 10 das horas totais").
+    const pctHorasExtras = kpis.custos.horas_trabalhadas > 0
+        ? Math.round(kpis.custos.horas_extras / kpis.custos.horas_trabalhadas * 1000) / 10 : 0;
+    const vHorasExtras = vereditoPelaMeta(pctHorasExtras, meta?.horas_extras_max_pct, !!orgId);
     const irParaMetas = () => onNavigate?.('labor-bi-analytics');
 
     return (
@@ -251,15 +266,24 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                 <div>
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Custos e Horas</p>
                     <div className="grid grid-cols-1 gap-4">
-                        <KpiCard label="Custo MO Aprovado (mês)" icon={DollarSign} color="indigo"
-                            value={`R$ ${kpis.custos.custo_mes.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
-                            sub="horas aprovadas"
-                            onClick={() => onNavigate?.('labor-costs')} />
-                        <KpiCard label="Horas Extras" value={`${kpis.custos.horas_extras.toFixed(0)}h`} icon={Clock} color="amber"
-                            sub="no mês"
-                            onClick={() => onNavigate?.('labor-timetracking')} />
-                        {/* Horas extras sem veredito: a meta (horas_extras_max_pct) é % sobre as
-                            horas trabalhadas, que só chegam com a fonte de custo do passo 3. */}
+                        <KpiCard label="Custo da folha" icon={DollarSign} color="indigo"
+                            value={carregandoFolha ? '…' : folha ? brl(folha.total) : '—'}
+                            sub={carregandoFolha ? 'carregando a folha' : folha
+                                ? [`folha de ${competenciaCurta(folha.competencia)}`,
+                                   folha.fechadas < folha.folhas ? 'em processamento' : 'fechada',
+                                   !orgId ? `${folha.folhas} organizaç${folha.folhas === 1 ? 'ão' : 'ões'}` : undefined,
+                                  ].filter(Boolean).join(' · ')
+                                : 'nenhuma folha mensal calculada'}
+                            onClick={() => onNavigate?.('labor-cost-dashboard')} />
+                        {/* Horas vêm do APONTAMENTO (Diário de Obra / ponto). Sem apontamento
+                            aprovado no mês, "—" — não 0h, que afirmaria ninguém ter feito hora extra. */}
+                        <KpiCard label="Horas Extras" icon={Clock} color="amber"
+                            value={kpis.custos.apontamentos > 0 ? `${kpis.custos.horas_extras.toFixed(0)}h` : '—'}
+                            sub={kpis.custos.apontamentos > 0
+                                ? `${pctHorasExtras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de ${kpis.custos.horas_trabalhadas.toFixed(0)}h trabalhadas`
+                                : 'sem apontamento aprovado no mês'}
+                            trend="neutral" trendLabel={kpis.custos.apontamentos > 0 ? vHorasExtras.texto : undefined}
+                            onClick={() => onNavigate?.(kpis.custos.apontamentos > 0 && vHorasExtras.definirMeta ? 'labor-bi-analytics' : 'labor-timetracking')} />
                         <KpiCard label="Absenteísmo" value={`${kpis.qualidade.absenteismo_pct}%`} icon={Calendar} color="rose"
                             sub={`faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`}
                             trend="neutral" trendLabel={vAbsenteismo.texto}
@@ -311,9 +335,10 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                     valueFormat={v => `${v} pessoa${v !== 1 ? 's' : ''}`}
                 />
                 <BarChart
-                    title="Custo de MO por Obra"
+                    title={folha ? `Custo da folha por obra — ${competenciaCurta(folha.competencia)}` : 'Custo da folha por obra'}
                     data={byProject}
-                    valueFormat={v => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0 })}`}
+                    valueFormat={brl}
+                    vazio={carregandoFolha ? 'Carregando a folha…' : 'Nenhuma folha mensal calculada'}
                 />
             </div>
         </div>

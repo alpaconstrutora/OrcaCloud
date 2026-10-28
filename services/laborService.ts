@@ -360,7 +360,10 @@ export interface RhKpis {
         /** ((admitidos + desligados) / 2) / headcount médio * 100 */
         turnover_pct: number;
     };
-    custos: { custo_mes: number; horas_extras: number };
+    /** Do APONTAMENTO aprovado (time_entries). O custo de MO da tela vem da folha
+     *  (payrollService.custoDaFolhaDaCompetencia); `custo_mes` fica para quem usa
+     *  o apontamento. `apontamentos` = 0 → horas "não medidas", não 0h. */
+    custos: { custo_mes: number; horas_extras: number; horas_trabalhadas: number; apontamentos: number };
     /** Dias úteis de 1º do mês até a data de referência. */
     qualidade: { absenteismo_pct: number; dias_uteis: number };
     /** `*_vencidos` = data já passou; `*_vencendo` = de hoje até +30 (férias +60). */

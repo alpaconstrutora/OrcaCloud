@@ -12,6 +12,7 @@ import {
 import type { DadosDaFolhaDoMes } from '../utils/relacoesDaFolha';
 import { valorParaGravar, type ValorRecorrente } from '../lib/payrollRubricaRecorrente';
 import type { OrganizacaoParaHolerite } from '../utils/empregadorDoHolerite';
+import { folhasDaCompetencia } from '../utils/folhaDaCompetencia';
 
 /** Vínculo colaborador↔rubrica recorrente (`employee_automatic_rubrics`), com o valor dele. */
 export interface EmployeeRecurringRubric extends ValorRecorrente {
@@ -62,6 +63,19 @@ export interface PayrollRubric {
     dia_lancamento?: number;              // dia do mês (1–28) para vencimento do lançamento individual
     /** Desconto que o empregador repassa a outra entidade (sindicato, pensão): vira título na folha. */
     repasse_terceiros?: boolean;
+}
+
+export interface CustoDaFolhaDaCompetencia {
+    /** 'AAAA-MM' */
+    competencia: string;
+    /** Quantas folhas (uma por organização) entraram; quantas estão FECHADAS. */
+    folhas: number;
+    fechadas: number;
+    /** Salário + encargos (FGTS, CPP, RAT, terceiros), como o Custo por Obra. */
+    total: number;
+    /** Parte sem obra (administrativo / sem alocação). */
+    naoAlocado: number;
+    porObra: { id: string; name: string; cost: number }[];
 }
 
 export interface PayrollRun {
@@ -1531,6 +1545,37 @@ export const payrollService = {
             unallocatedEmployees: naoAlocado?.colaboradores ?? [],
             total: Math.round(destinos.reduce((s, d) => s + d.custo, 0) * 100) / 100,
             encargos: cfg,
+        };
+    },
+
+    /**
+     * Custo de mão de obra da última competência com folha até `refDate`, somando
+     * as organizações do escopo (null = "Todas", a RLS recorta). Mesma conta do
+     * Custo por Obra (`getWorksiteCostSummary`), folha a folha — quais folhas entram
+     * é `folhasDaCompetencia`. Sem folha: null (a tela diz "não medido", não R$ 0).
+     */
+    async custoDaFolhaDaCompetencia(orgId: string | null, refDate: string): Promise<CustoDaFolhaDaCompetencia | null> {
+        const runs = await this.listRuns(orgId);
+        const { competencia, folhas } = folhasDaCompetencia(runs, refDate);
+        if (!competencia) return null;
+
+        const resumos = await Promise.all(folhas.map(f => this.getWorksiteCostSummary(f.id)));
+        const porObra = new Map<string, { id: string; name: string; cost: number }>();
+        for (const r of resumos) {
+            for (const w of r.byWorksite) {
+                const atual = porObra.get(w.id);
+                if (atual) atual.cost += w.cost;
+                else porObra.set(w.id, { id: w.id, name: w.name, cost: w.cost });
+            }
+        }
+        const arred = (v: number) => Math.round(v * 100) / 100;
+        return {
+            competencia,
+            folhas: folhas.length,
+            fechadas: folhas.filter(f => f.status === 'FECHADO').length,
+            total: arred(resumos.reduce((s, r) => s + r.total, 0)),
+            naoAlocado: arred(resumos.reduce((s, r) => s + r.unallocated, 0)),
+            porObra: [...porObra.values()].map(o => ({ ...o, cost: arred(o.cost) })).sort((a, b) => b.cost - a.cost),
         };
     },
 

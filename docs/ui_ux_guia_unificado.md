@@ -173,7 +173,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §1 Imports obrigatórios
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas (+ §3.1 busca de seletor em drawer é transitória)
-- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência, §4.5 `destaque` em painel analítico)
+- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência, §4.5 `destaque` em painel analítico, §4.5.1 painel com faixas "Hoje" × "Período")
 - [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela; §5.5 filtro avançado: campo com valores conhecidos traz `options` e `getValue` = o que a célula mostra)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita
@@ -475,6 +475,66 @@ destaca. Aqui a cor passa a significar **estado**, e só aparece por limiar.
 > ❌ Não pintar `tom` por gosto: sem limiar escrito, é `neutro`.
 > ℹ️ Em uso: `components/rentals/RentalAnalysisOverview.tsx` (leituras Operação e
 > Investimento).
+
+### 4.5.1 Painel com duas leituras empilhadas — "Hoje" × "Período"
+
+**Criado em 28/10/2026 (Financeiro › Dashboard financeiro, `components/FinancialDashboard.tsx`).**
+Plano: `docs/planos/2026-10-28-dashboard-financeiro-hoje-e-periodo.md`.
+
+Quando um painel analítico responde duas perguntas que não dependem do mesmo controle
+— a posição de **hoje** (vencido, saldo, o que vence) e o **resultado de um período**
+escolhido —, as duas viram **faixas** empilhadas, cada uma com o seu título. Nunca uma
+grade única de cartões em que metade obedece ao seletor de período e metade não: o
+leitor não tem como saber quais números mudaram ao trocar o mês.
+
+```tsx
+<div className="space-y-6 pb-20">
+  <div>{/* h1 + p — §20 */}</div>
+
+  <section aria-labelledby="faixa-hoje" className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <h2 id="faixa-hoje" className="text-base font-semibold text-gray-900">
+        Hoje<span className="font-normal text-gray-500"> · 28/10/2026</span>
+      </h2>
+      {/* link de texto para o detalhe que mora em outra tela */}
+    </div>
+    {/* KpiCard destaque (§4.5) + faixa de apoio size="sm" color="gray" */}
+  </section>
+
+  <section aria-labelledby="faixa-periodo" className="space-y-3">
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+      <h2 id="faixa-periodo" className="text-base font-semibold text-gray-900">Resultado do período</h2>
+      {/* seletor Mês/Trimestre/Ano (alternador do §19.1, h-7 dentro de bg-gray-50 p-1)
+          + ‹ rótulo › em h-9 rounded-[6px] */}
+    </div>
+    {/* KPIs de apoio + ChartCard (§28) */}
+  </section>
+</div>
+```
+
+- **Título de faixa = `<h2>` `text-base font-semibold text-gray-900`**, fora de card. Não é o
+  `SecaoTitulo` (§30): aquele separa seções DENTRO de um card de formulário, com borda e
+  legenda em cinza. A hierarquia fica `h1` (tela) → `h2` (faixa) → `h3` (título do `ChartCard`).
+- **O seletor de período mora na linha do `<h2>` da faixa que ele recorta**, à direita — não
+  numa barra §5.3 acima de tudo. Assim fica claro, sem legenda, que ele não mexe na faixa "Hoje".
+- Ritmo do §20.1: 24px entre faixas (a pergunta muda), 12px dentro da faixa.
+- Cada faixa carrega e falha **sozinha**: trocar o período não apaga "Hoje"; uma consulta
+  que falha mostra **uma** mensagem com "Tentar de novo" na faixa, não uma por gráfico.
+- Ao trocar de organização ou de período, a faixa volta ao esqueleto — nunca mostra os
+  números do recorte anterior enquanto o novo carrega.
+- Mês que ainda não começou não entra em série de "realizado" (seria um zero afirmado sobre
+  o que não aconteceu — §28.5).
+- Gráfico mensal dentro da faixa do período: **no mínimo 6 meses** (um mês sozinho é uma
+  coluna, não uma tendência); os meses do período em cor cheia e os anteriores com
+  `fillOpacity` 0,35, com uma frase dizendo isso. Rótulo direto na ponta nos meses do
+  período e, fora dele, só em coluna visível (≥ 3% do máximo) — valor de coluna visível nunca
+  só no tooltip (§28.3). Em Mês/Trimestre, os valores dos meses do período vão por extenso abaixo do
+  gráfico ("out/26 · recebido R$ 0 · pago R$ 300"): movimento pequeno some na escala de um
+  mês grande, e é justamente ele que a faixa pergunta.
+- Ranking de "maiores credores": registro **sem** fornecedor não é credor — sai do ranking e
+  aparece como linha própria, com valor, quantidade e a ação de corrigir o cadastro.
+- Subtítulo da tela em `text-gray-500`, não o `text-gray-400` do snippet do §20: 2,6:1 fica
+  abaixo do AA que o PRODUCT.md exige (a mesma troca já feita no `KpiCard` e no §28.5).
 
 ---
 

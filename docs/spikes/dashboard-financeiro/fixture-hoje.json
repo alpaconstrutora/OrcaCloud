@@ -1,0 +1,37 @@
+{
+ "contas": [
+  {
+   "banco": null,
+   "conta": "Asaas",
+   "conta_id": "baaad17a-1f57-4440-bae1-71fec4d89dc2",
+   "saldo_banco": 138.35,
+   "saldo_banco_data": "2026-10-28",
+   "saldo_banco_origem": "ASAAS",
+   "saldo_calculado": 138.35
+  },
+  {
+   "banco": "Sicredi",
+   "conta": "Sicredi",
+   "conta_id": "3fba3210-3783-4fc1-9e88-ab18a213b4c3",
+   "saldo_banco": null,
+   "saldo_banco_data": null,
+   "saldo_banco_origem": null,
+   "saldo_calculado": -41405.7
+  }
+ ],
+ "hoje": "2026-10-28",
+ "pagar_30": 3129.45,
+ "pagar_30_qtd": 19,
+ "pagar_7": 0,
+ "pagar_7_qtd": 0,
+ "receber_30": 11442.86,
+ "receber_30_qtd": 5,
+ "receber_7": 800,
+ "receber_7_qtd": 1,
+ "vencido_pagar": 1832862.22,
+ "vencido_pagar_desde": "2015-01-10",
+ "vencido_pagar_qtd": 780,
+ "vencido_receber": 3132268.07,
+ "vencido_receber_desde": "2015-06-29",
+ "vencido_receber_qtd": 95
+}

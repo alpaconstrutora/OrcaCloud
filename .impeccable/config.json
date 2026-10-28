@@ -17,6 +17,12 @@
         ],
         "createdAt": "2026-10-28T17:40:10.129Z",
         "reason": "Não é acento de cartão: é o indicador de 2px de 'solte aqui' ao arrastar coluna no cabeçalho (before:w-0.5 só durante dragOver) — verificado no código 28/10/2026"
+      },
+      {
+        "rule": "overused-font",
+        "value": "inter",
+        "createdAt": "2026-10-28T18:26:46.543Z",
+        "reason": "Inter é a fonte do app inteiro e do DESIGN.md ('Inter — a mesma do app, já carregada'); trocar seria redesign do mundo visual, fora do escopo"
       }
     ]
   }

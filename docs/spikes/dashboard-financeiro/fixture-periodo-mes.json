@@ -1,0 +1,74 @@
+{
+ "a_pagar_total": 4329.45,
+ "credores": [
+  {
+   "nome": "Clickup",
+   "qtd": 1,
+   "valor": 700
+  },
+  {
+   "nome": "INSS",
+   "qtd": 4,
+   "valor": 322.5
+  },
+  {
+   "nome": "Altair Pereira da Rosa",
+   "qtd": 1,
+   "valor": 200
+  },
+  {
+   "nome": "Geleia",
+   "qtd": 1,
+   "valor": 150
+  },
+  {
+   "nome": "COFINS",
+   "qtd": 4,
+   "valor": 129
+  },
+  {
+   "nome": "Claude Code",
+   "qtd": 1,
+   "valor": 100
+  }
+ ],
+ "credores_qtd": 10,
+ "meses": [
+  {
+   "mes": "2026-05-01",
+   "pago": 1200,
+   "recebido": 1000
+  },
+  {
+   "mes": "2026-06-01",
+   "pago": 44.58,
+   "recebido": 0
+  },
+  {
+   "mes": "2026-07-01",
+   "pago": 0,
+   "recebido": 0
+  },
+  {
+   "mes": "2026-08-01",
+   "pago": 54.04,
+   "recebido": 0
+  },
+  {
+   "mes": "2026-09-01",
+   "pago": 10101.31,
+   "recebido": 532400
+  },
+  {
+   "mes": "2026-10-01",
+   "pago": 300,
+   "recebido": 0
+  }
+ ],
+ "pago": 300,
+ "pago_qtd": 2,
+ "recebido": 0,
+ "recebido_qtd": 0,
+ "sem_fornecedor_qtd": 5,
+ "sem_fornecedor_valor": 2500
+}

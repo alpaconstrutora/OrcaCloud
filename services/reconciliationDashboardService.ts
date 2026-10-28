@@ -58,17 +58,20 @@ export const reconciliationDashboardService = {
 
     /**
      * Atualiza o saldo inicial de uma conta bancária (ponto de partida da conciliação).
+     * `openingBalanceDate` `undefined` = não mexe na data: quem chama não a conhece (o
+     * dashboard só devolve a data desde a migration 20271028300000) e gravar NULL faria
+     * o cálculo puxar o extrato inteiro. `null` limpa a data de propósito.
      */
     async setOpeningBalance(
         accountId: string,
         openingBalance: number,
-        openingBalanceDate: string | null,
+        openingBalanceDate: string | null | undefined,
     ): Promise<void> {
         const { error } = await supabase
             .from('payment_accounts')
             .update({
                 opening_balance: openingBalance,
-                opening_balance_date: openingBalanceDate,
+                ...(openingBalanceDate !== undefined ? { opening_balance_date: openingBalanceDate } : {}),
             })
             .eq('id', accountId);
         if (error) throw error;

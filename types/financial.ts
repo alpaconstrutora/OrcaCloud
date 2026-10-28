@@ -343,6 +343,9 @@ export interface ReconciliationAccountBalance {
     account_name: string;
     bank_name: string | null;
     opening_balance: number;
+    /** A partir de quando o extrato conta. Ausente (não `null`) = função anterior à
+     *  migration 20271028300000, que não devolvia a data. */
+    opening_balance_date?: string | null;
     bank_balance: number;        // saldo inicial + extrato (CREDIT − DEBIT)
     reconciled_balance: number;  // saldo inicial + extrato já conciliado
     difference: number;          // bank_balance − reconciled_balance

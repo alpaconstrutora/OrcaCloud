@@ -30,4 +30,21 @@ describe('MoneyCentsInput — digitação por centavos', () => {
         expect(decimalParaExibicao(null)).toBe('');
         expect(decimalParaExibicao(undefined)).toBe('');
     });
+    it('sem permitirNegativo o "-" continua ignorado (quem já usa não muda)', () => {
+        expect(digitosParaDecimal('-4210')).toBe('42.10');
+        expect(digitosParaDecimal('-')).toBe('');
+    });
+    it('permitirNegativo: "-" em qualquer posição deixa negativo; sozinho é preservado', () => {
+        expect(digitosParaDecimal('-4210', true)).toBe('-42.10');
+        expect(digitosParaDecimal('42,10-', true)).toBe('-42.10');
+        expect(digitosParaDecimal('-', true)).toBe('-');
+        expect(digitosParaDecimal('', true)).toBe('');
+        expect(decimalParaExibicao('-')).toBe('-');
+        expect(decimalParaExibicao('-1234.56')).toBe('-1.234,56');
+    });
+    it('permitirNegativo: digitar depois do sinal e apagar o sinal', () => {
+        const exibido = decimalParaExibicao('-42.10'); // "-42,10"
+        expect(digitosParaDecimal(`${exibido}5`, true)).toBe('-421.05');
+        expect(digitosParaDecimal(exibido.slice(1), true)).toBe('42.10');
+    });
 });

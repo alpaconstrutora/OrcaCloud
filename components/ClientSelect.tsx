@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, Search, User } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { SortableHeader } from './ui/TableUtils';
+import { useFocoAoAbrir, useListaDeEscolhaPorTeclado, FOCO_DA_LINHA } from '../hooks/useSeletorEmGaveta';
 
 /**
  * Seletor de Cliente — drawer lateral com a lista em três colunas ordenáveis
@@ -96,11 +97,8 @@ const ClientSelect: React.FC<Props> = ({
     // O `Sheet` mantém o conteúdo montado enquanto fechado, então `autoFocus`
     // dispararia uma vez só, na montagem (oculta). O foco tem de ir ao abrir.
     const searchRef = useRef<HTMLInputElement>(null);
-    useEffect(() => {
-        if (!shown) return;
-        const t = window.setTimeout(() => searchRef.current?.focus(), 50);
-        return () => window.clearTimeout(t);
-    }, [shown]);
+    useFocoAoAbrir(shown, searchRef);
+    const teclado = useListaDeEscolhaPorTeclado(searchRef);
 
     const linhas = useMemo(() => clients.map(c => ({
         id: c.id,
@@ -145,6 +143,13 @@ const ClientSelect: React.FC<Props> = ({
 
     const fechar = () => { setOpen(false); setSearch(''); };
     const escolher = (id: string) => { onChange(id); fechar(); };
+    // Enter na busca: só com algo digitado (busca vazia + Enter não escolhe ninguém
+    // por acidente), e o primeiro CLIENTE — a opção fixa "Todos" fica de fora.
+    const escolherPrimeiro = () => {
+        if (!search.trim()) return;
+        const primeiro = visiveis.find(l => !bloqueados.has(l.id));
+        if (primeiro) escolher(primeiro.id);
+    };
 
     const thCls = 'px-4 py-2 border-r border-gray-100 last:border-r-0';
     const tdCls = 'px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
@@ -198,6 +203,8 @@ const ClientSelect: React.FC<Props> = ({
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
+                            onKeyDown={teclado.busca(escolherPrimeiro)}
+                            aria-label="Buscar cliente por nome, CPF/CNPJ ou e-mail"
                             placeholder="Buscar por nome, CPF/CNPJ ou e-mail..."
                             className="w-full h-9 pl-9 pr-3 text-form-input rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                         />
@@ -221,17 +228,19 @@ const ClientSelect: React.FC<Props> = ({
                                 <SortableHeader label="Cidade / UF" colKey="city" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody ref={teclado.corpoRef} className="divide-y divide-gray-100">
                             {allOption && (
                                 <tr
+                                    {...teclado.linha(() => escolher(allOption.id))}
                                     onClick={() => escolher(allOption.id)}
-                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${allSelected ? 'bg-gray-100' : ''}`}
+                                    aria-current={allSelected || undefined}
+                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${FOCO_DA_LINHA} ${allSelected ? 'bg-gray-100' : ''}`}
                                 >
                                     <td colSpan={3} className={`${tdCls} text-gray-900`}>{allOption.label}</td>
                                 </tr>
                             )}
                             {value && allowClear && !allSelected && (
-                                <tr onClick={() => escolher('')} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                <tr {...teclado.linha(() => escolher(''))} onClick={() => escolher('')} className={`cursor-pointer hover:bg-gray-50 transition-colors ${FOCO_DA_LINHA}`}>
                                     <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">{placeholder}</td>
                                 </tr>
                             )}
@@ -246,11 +255,13 @@ const ClientSelect: React.FC<Props> = ({
                                 return (
                                 <tr
                                     key={l.id}
+                                    {...(bloqueado ? {} : teclado.linha(() => escolher(l.id)))}
                                     onClick={bloqueado ? undefined : () => escolher(l.id)}
                                     aria-disabled={bloqueado || undefined}
+                                    aria-current={l.id === value || undefined}
                                     className={bloqueado
                                         ? 'opacity-50 cursor-not-allowed'
-                                        : `cursor-pointer transition-colors hover:bg-blue-50/50 ${l.id === value ? 'bg-gray-100' : ''}`}
+                                        : `cursor-pointer transition-colors hover:bg-blue-50/50 ${FOCO_DA_LINHA} ${l.id === value ? 'bg-gray-100' : ''}`}
                                 >
                                     <td className={`${tdCls} text-gray-900`}>
                                         <p className="break-words">

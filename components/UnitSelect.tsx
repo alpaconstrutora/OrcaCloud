@@ -5,6 +5,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './
 import { SortableHeader } from './ui/TableUtils';
 import type { WarrantyUnitOption } from '../types/warranty';
 import { ROLE_LABELS, unitLabel } from '../utils/warrantyAutofill';
+import { useFocoAoAbrir, useListaDeEscolhaPorTeclado, FOCO_DA_LINHA } from '../hooks/useSeletorEmGaveta';
 
 /**
  * Seletor de Unidade — drawer lateral no molde do `ClientSelect` (§7.1.1):
@@ -67,11 +68,8 @@ const UnitSelect: React.FC<Props> = ({
     const [sortColumn, setSortColumn] = useState<ColKey | null>(null);
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
     const searchRef = useRef<HTMLInputElement>(null);
-    useEffect(() => {
-        if (!shown) return;
-        const t = window.setTimeout(() => searchRef.current?.focus(), 50);
-        return () => window.clearTimeout(t);
-    }, [shown]);
+    useFocoAoAbrir(shown, searchRef);
+    const teclado = useListaDeEscolhaPorTeclado(searchRef);
 
     const linhas = useMemo(() => units.map((u, ordem) => ({
         unit: u,
@@ -113,6 +111,8 @@ const UnitSelect: React.FC<Props> = ({
 
     const fechar = () => { setOpen(false); setSearch(''); setVerTodas(false); };
     const escolher = (u: WarrantyUnitOption | null) => { onChange(u); fechar(); };
+    // Enter na busca escolhe a primeira unidade — só com algo digitado.
+    const escolherPrimeiro = () => { if (search.trim() && visiveis[0]) escolher(visiveis[0].unit); };
 
     const thCls = 'px-4 py-2 border-r border-gray-100 last:border-r-0';
     const tdCls = 'px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
@@ -159,6 +159,8 @@ const UnitSelect: React.FC<Props> = ({
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
+                            onKeyDown={teclado.busca(escolherPrimeiro)}
+                            aria-label="Buscar unidade por unidade, empreendimento ou cliente"
                             placeholder="Buscar por unidade, empreendimento ou cliente..."
                             className="w-full h-9 pl-9 pr-3 text-form-input rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                         />
@@ -197,9 +199,9 @@ const UnitSelect: React.FC<Props> = ({
                                 <SortableHeader label="Cliente(s)" colKey="clientes" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody ref={teclado.corpoRef} className="divide-y divide-gray-100">
                             {value && (
-                                <tr onClick={() => escolher(null)} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                <tr {...teclado.linha(() => escolher(null))} onClick={() => escolher(null)} className={`cursor-pointer hover:bg-gray-50 transition-colors ${FOCO_DA_LINHA}`}>
                                     <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">Sem unidade vinculada</td>
                                 </tr>
                             )}
@@ -214,8 +216,10 @@ const UnitSelect: React.FC<Props> = ({
                             ) : visiveis.map(l => (
                                 <tr
                                     key={l.unit.unit_id}
+                                    {...teclado.linha(() => escolher(l.unit))}
                                     onClick={() => escolher(l.unit)}
-                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${l.unit.unit_id === value ? 'bg-gray-100' : ''}`}
+                                    aria-current={l.unit.unit_id === value || undefined}
+                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${FOCO_DA_LINHA} ${l.unit.unit_id === value ? 'bg-gray-100' : ''}`}
                                 >
                                     <td className={`${tdCls} text-gray-900`}>
                                         <p className="break-words">{l.unidade}</p>

@@ -20,6 +20,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search, Plus, Layers, AlertCircle } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
+import { useFocoAoAbrir } from '../../hooks/useSeletorEmGaveta';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import { maintenanceService } from '../../services/maintenanceService';
@@ -72,6 +73,10 @@ const BuildingSystemSelect: React.FC<Props> = ({
         const t = window.setTimeout(() => setMounted(false), 300);
         return () => window.clearTimeout(t);
     }, [open]);
+    // Busca focada ao ABRIR: `autoFocus` disparava na montagem, com o Sheet
+    // ainda fechado (`inert` desde o #213), e o navegador recusava o foco.
+    const buscaRef = React.useRef<HTMLInputElement>(null);
+    useFocoAoAbrir(shown, buscaRef);
 
     // §3.1 — a busca filtra o seletor, não a tela: estado transitório.
     const [busca, setBusca] = React.useState('');
@@ -343,10 +348,11 @@ const BuildingSystemSelect: React.FC<Props> = ({
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
-                                autoFocus
+                                ref={buscaRef}
                                 type="text"
                                 value={busca}
                                 onChange={e => setBusca(e.target.value)}
+                                aria-label="Buscar sistema por nome ou norma"
                                 placeholder="Buscar por nome ou norma..."
                                 className={`${CAMPO} pl-9`}
                             />

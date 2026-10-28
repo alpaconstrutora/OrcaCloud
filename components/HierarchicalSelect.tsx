@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search } from 'lucide-react';
 import { getCodeLevel, getLevelStyle, sortByCode } from '../utils/codeHierarchy';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
+import { useFocoAoAbrir } from '../hooks/useSeletorEmGaveta';
 
 export interface HierarchicalSelectItem {
     id: string;
@@ -192,6 +193,10 @@ const HierarchicalSelect: React.FC<Props> = ({
         const t = window.setTimeout(() => setMounted(false), 300);
         return () => window.clearTimeout(t);
     }, [open, panelVariant]);
+    // Busca da gaveta focada ao ABRIR: `autoFocus` disparava na montagem, com o
+    // Sheet ainda fechado (`inert` desde o #213), e o navegador recusava o foco.
+    const drawerSearchRef = useRef<HTMLInputElement>(null);
+    useFocoAoAbrir(shown, drawerSearchRef);
 
     const getItemValue = (item: HierarchicalSelectItem): string => {
         if (valueField === 'code') return item.code ?? '';
@@ -400,10 +405,11 @@ const HierarchicalSelect: React.FC<Props> = ({
                         <div className="relative flex-1">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                             <input
-                                autoFocus
+                                ref={drawerSearchRef}
                                 type="text"
                                 value={search}
                                 onChange={e => setSearch(e.target.value)}
+                                aria-label={searchPlaceholder}
                                 placeholder={searchPlaceholder}
                                 className="w-full h-9 pl-9 pr-3 text-form-input rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                             />

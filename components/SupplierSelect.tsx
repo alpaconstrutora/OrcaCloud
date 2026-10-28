@@ -1,10 +1,11 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, Search, Tag } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import { SortableHeader } from './ui/TableUtils';
 import { getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
+import { useFocoAoAbrir, useListaDeEscolhaPorTeclado, FOCO_DA_LINHA } from '../hooks/useSeletorEmGaveta';
 
 /**
  * Seletor de Fornecedor — drawer lateral com a lista em TRÊS colunas
@@ -81,6 +82,11 @@ const SupplierSelect: React.FC<Props> = ({
     const [categoria, setCategoria] = useState('');
     const [sortColumn, setSortColumn] = useState<ColKey>('name');
     const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+    // Foco na busca ao ABRIR: o `autoFocus` disparava na montagem, com o Sheet
+    // ainda fechado (`inert` desde o #213), e o navegador recusava.
+    const searchRef = useRef<HTMLInputElement>(null);
+    useFocoAoAbrir(shown, searchRef);
+    const teclado = useListaDeEscolhaPorTeclado(searchRef);
 
     const modo = appSettingsService.get().supplierNameDisplay;
     const linhas = useMemo(() => suppliers.map(s => ({
@@ -127,6 +133,8 @@ const SupplierSelect: React.FC<Props> = ({
 
     const fechar = () => { setOpen(false); setSearch(''); setCategoria(''); };
     const escolher = (id: string) => { onChange(id); fechar(); };
+    // Enter na busca escolhe o primeiro fornecedor — só com algo digitado.
+    const escolherPrimeiro = () => { if (search.trim() && visiveis[0]) escolher(visiveis[0].id); };
 
     const thCls = 'px-4 py-2 border-r border-gray-100 last:border-r-0';
     const tdCls = 'px-4 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal';
@@ -175,10 +183,12 @@ const SupplierSelect: React.FC<Props> = ({
                     <div className="relative flex-1">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                         <input
-                            autoFocus
+                            ref={searchRef}
                             type="text"
                             value={search}
                             onChange={e => setSearch(e.target.value)}
+                            onKeyDown={teclado.busca(escolherPrimeiro)}
+                            aria-label="Buscar fornecedor por nome ou CNPJ/CPF"
                             placeholder="Buscar por nome ou CNPJ/CPF..."
                             className="w-full h-9 pl-9 pr-3 text-form-input rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                         />
@@ -219,9 +229,10 @@ const SupplierSelect: React.FC<Props> = ({
                                 <SortableHeader label="Categoria" colKey="category" uppercase={false} sortColumn={sortColumn} sortDirection={sortDirection} onSort={onSort} className={thCls} />
                             </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-100">
+                        <tbody ref={teclado.corpoRef} className="divide-y divide-gray-100">
                             {(clearLabel || value) && (
-                                <tr onClick={() => escolher(clearLabel ? (clearValue ?? '') : '')} className="cursor-pointer hover:bg-gray-50 transition-colors">
+                                <tr {...teclado.linha(() => escolher(clearLabel ? (clearValue ?? '') : ''))}
+                                    onClick={() => escolher(clearLabel ? (clearValue ?? '') : '')} className={`cursor-pointer hover:bg-gray-50 transition-colors ${FOCO_DA_LINHA}`}>
                                     <td colSpan={3} className="px-4 py-2 text-form-input font-medium text-slate-400">{clearLabel ?? placeholder}</td>
                                 </tr>
                             )}
@@ -232,8 +243,10 @@ const SupplierSelect: React.FC<Props> = ({
                             ) : visiveis.map(l => (
                                 <tr
                                     key={l.id}
+                                    {...teclado.linha(() => escolher(l.id))}
                                     onClick={() => escolher(l.id)}
-                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${l.id === value ? 'bg-gray-100' : ''}`}
+                                    aria-current={l.id === value || undefined}
+                                    className={`cursor-pointer transition-colors hover:bg-blue-50/50 ${FOCO_DA_LINHA} ${l.id === value ? 'bg-gray-100' : ''}`}
                                 >
                                     <td className={`${tdCls} text-gray-900`}><p className="break-words">{l.name}</p></td>
                                     <td className={`${tdCls} text-gray-600 whitespace-nowrap`}>{l.document || <span className="text-gray-300">{SEM_CATEGORIA}</span>}</td>

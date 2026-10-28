@@ -2,6 +2,7 @@ import React from 'react';
 import { Search, Link2 } from 'lucide-react';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from '../ui/sheet';
 import { warrantySuprimentosService, type Vinculavel } from '../../services/warrantySuprimentosService';
+import { useFocoAoAbrir } from '../../hooks/useSeletorEmGaveta';
 
 /**
  * Pós-Obra & Garantia › chamado › Suprimentos › "Vincular existente" (2026-10-11, Fase 4.3).
@@ -27,6 +28,10 @@ const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', curren
 const VincularSuprimentosSheet: React.FC<Props> = ({ organizationId, projectId, nomeDaObra, onClose, onEscolher }) => {
     const [shown, setShown] = React.useState(false);
     React.useEffect(() => { const r = requestAnimationFrame(() => setShown(true)); return () => cancelAnimationFrame(r); }, []);
+    // Busca focada ao ABRIR: `autoFocus` disparava na montagem, com o Sheet
+    // ainda fechado (`inert` desde o #213), e o navegador recusava o foco.
+    const buscaRef = React.useRef<HTMLInputElement>(null);
+    useFocoAoAbrir(shown, buscaRef);
     const [itens, setItens] = React.useState<Vinculavel[]>([]);
     const [carregando, setCarregando] = React.useState(true);
     const [erro, setErro] = React.useState<string | null>(null);
@@ -72,9 +77,10 @@ const VincularSuprimentosSheet: React.FC<Props> = ({ organizationId, projectId, 
                 <div className="relative">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
                     <input
-                        autoFocus
+                        ref={buscaRef}
                         value={busca}
                         onChange={e => setBusca(e.target.value)}
+                        aria-label="Buscar por número, descrição ou obra"
                         placeholder="Buscar por número, descrição ou obra..."
                         className="w-full h-9 pl-9 pr-3 rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 text-sm text-slate-700"
                     />

@@ -402,7 +402,7 @@ import { fichaDoElemento } from '../../utils/blueprintFicha';
 import { deleteParameterDefinition, listParameterDefinitions, updateParameterDefinition, type DefinicaoDeParametro } from '../../services/blueprintParameterDefinitionService';
 import { camposDaEscada, camposDoTelhado, propriedadesDaEscada, propriedadesDoTelhado } from '../../utils/blueprintTipos';
 import { conferirRestricoes, violacoes } from '../../utils/blueprintRestricoes';
-import { conferirLote, conferirTipologias, ordinalDoPavimento, recuosEfetivos } from '../../utils/blueprintZonaUrbanistica';
+import { conferirLote, conferirTipologias, ordinalDoPavimento, recuosEfetivos, textoDaDiferenca } from '../../utils/blueprintZonaUrbanistica';
 import { envelopePorPavimentoParaRegras, envelopeVertical } from '../../utils/blueprintEnvelope3d';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
@@ -12445,6 +12445,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 setTelaAberta('alternativas');
               }}
               onAplicar={aplicarMassaGerada}
+              zonaMudou={
+                zona.derivou && zona.zonaAplicadaId
+                  ? {
+                      zona: zona.zonaRotuloSalvo,
+                      mudancas: zona.diferencas.map(textoDaDiferenca),
+                      onAplicarDeNovo: () => zona.aplicarZona(zona.zonaAplicadaId!),
+                      salvando: zona.salvando,
+                    }
+                  : null
+              }
               onProduto={produtoDoEstudo.setProduto}
               onPedirIa={pedirMudancasDaMassaAIa}
               empreendimento={massaDoEmpreendimentoNaTela}

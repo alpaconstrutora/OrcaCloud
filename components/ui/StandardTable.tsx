@@ -69,7 +69,10 @@ interface StandardTableProps<T> {
     searchScope?: string;
     /** Coluna "Ações" — sempre a última, sempre visível, nunca ordenável (§9). */
     actions?: { render: (row: T) => React.ReactNode; width?: number; label?: string };
+    /** Ação da linha. Também abre pelo teclado: a linha entra no Tab e Enter/Espaço disparam. */
     onRowClick?: (row: T) => void;
+    /** Nome acessível da linha clicável ("Cliente X: R$ … vencido. Ver só este cliente"). */
+    rowLabel?: (row: T) => string;
     rowClassName?: (row: T) => string;
     loading?: boolean;
     empty?: { icon?: React.ReactNode; title: string; subtitle?: string };
@@ -132,7 +135,7 @@ interface StandardTableProps<T> {
 
 export function StandardTable<T>({
     columns, storageKey, rows, rowKey, renderCell, sortValue, searchText, searchPlaceholder = 'Buscar...',
-    search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
+    search: controlledSearch, onSearchChange, searchScope, actions, onRowClick, rowLabel, rowClassName, loading, empty, dense, filters, toolbarRight, filtersPanel, toolbarTop,
     footer, renderTotals, totaisPorColuna, renderExpanded, maxHeight = '70vh', bare, selection, pagination, agrupamento: agrupar,
 }: StandardTableProps<T>) {
     const allColumns: ColumnConfig[] = useMemo(
@@ -365,7 +368,17 @@ export function StandardTable<T>({
                                 <React.Fragment key={rowKey(row)}>
                                 <tr
                                     onClick={onRowClick ? () => onRowClick(row) : undefined}
-                                    className={`hover:bg-blue-50/50 transition-colors ${onRowClick ? 'cursor-pointer' : ''} ${rowClassName?.(row) ?? ''}`}
+                                    // Linha clicável só por mouse deixava o teclado sem a ação
+                                    // dominante (§9.1) — crítica da Central de Clientes, 27/10/2026.
+                                    // Só a própria linha: Enter num campo/botão da célula é dele.
+                                    tabIndex={onRowClick ? 0 : undefined}
+                                    aria-label={onRowClick ? rowLabel?.(row) : undefined}
+                                    onKeyDown={onRowClick ? e => {
+                                        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+                                        e.preventDefault();
+                                        onRowClick(row);
+                                    } : undefined}
+                                    className={`hover:bg-blue-50/50 transition-colors ${onRowClick ? 'cursor-pointer focus:outline-none focus-visible:bg-blue-50/50 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40' : ''} ${rowClassName?.(row) ?? ''}`}
                                 >
                                     {selection && (
                                         <td className="px-4 py-2.5 border-r border-gray-100 text-center" onClick={e => e.stopPropagation()}>

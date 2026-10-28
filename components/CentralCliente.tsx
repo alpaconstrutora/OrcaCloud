@@ -1,7 +1,6 @@
 import React from 'react';
 import {
-    RefreshCw, AlertTriangle, Users, TrendingUp, FileSignature,
-    Wallet, Receipt, Clock,
+    RefreshCw, AlertTriangle, TrendingUp, FileSignature, Receipt, Clock, Inbox,
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -20,6 +19,8 @@ import { useOrgContext } from '../hooks/useOrgContext';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel } from './ui/sheet';
 import ClientSelect from './ClientSelect';
 import Button from './ui/Button';
+import { KpiCard, type KpiTom } from './ui/KpiCard';
+import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import { SegmentedProgress } from './ui/SegmentedProgress';
 import { usePersistedState } from './ui/TableUtils';
 import { montarSeriePrevistoRealizado, type Granularidade } from '../lib/opuraPrevistoRealizadoSerie';
@@ -31,7 +32,13 @@ function fBRL(v: number | null): string {
 }
 function fPct(v: number | null): string {
     if (v === null || v === undefined) return '—';
-    return `${v.toFixed(1)}%`;
+    return `${v.toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+}
+function plural(n: number, um: string, varios: string): string {
+    return `${n.toLocaleString('pt-BR')} ${n === 1 ? um : varios}`;
+}
+function fData(iso: string | null): string {
+    return iso ? iso.split('-').reverse().join('/') : '—';
 }
 
 /** Data pronta para virar período: ano de 4 dígitos ≥ 1900. Enquanto se digita
@@ -41,8 +48,21 @@ function dataCompleta(v: string): boolean {
     return /^\d{4}-\d{2}-\d{2}$/.test(v) && Number(v.slice(0, 4)) >= 1900;
 }
 
+/** Dias desde o vencimento (0 = vence hoje ou ainda não venceu). */
+function diasVencido(dueDate: string | null, hoje: string): number {
+    if (!dueDate || dueDate >= hoje) return 0;
+    return Math.round((Date.parse(hoje) - Date.parse(dueDate)) / 86_400_000);
+}
+
 /** Página do extrato — mesma de Relatórios ÒPURA. */
 const ENTRIES_PAGE = 200;
+
+/** Limiares da Inadimplência (guia §4.5: cor só por limiar com nome). Fração do
+ *  saldo devedor que já venceu — hipótese de gestão, ajuste aqui. */
+const LIMIAR = {
+    vencidoSobreAbertoAtencao: 0.10,
+    vencidoSobreAbertoAlerta: 0.30,
+};
 
 /** Tick de eixo: "12 mil" / "1,2 mi" — o eixo é régua, não valor; a moeda
  *  está no subtítulo e no tooltip, e "R$ 10 mil" quebrava em duas linhas. */
@@ -65,6 +85,14 @@ function niceTicks(max: number, count = 4): number[] {
     const ticks: number[] = [];
     for (let t = 0; t <= max + passo * 0.999; t += passo) ticks.push(Math.round(t * 1000) / 1000);
     return ticks;
+}
+
+const MESES_EXTENSO = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+/** Rótulo do tooltip com o ano: o eixo mostra "jul", e "jul" de que ano? */
+function rotuloPeriodo(key: string | undefined): string {
+    if (!key) return '';
+    const [y, m] = key.split('-').map(Number);
+    return m ? `${MESES_EXTENSO[m - 1] ?? key} de ${y}` : String(y);
 }
 
 interface ClientLite { id: string; name: string; document: string | null; category: string | null; }
@@ -104,8 +132,8 @@ const ChartCard: React.FC<{
     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 flex flex-col">
         <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
-                <h3 className="text-sm font-semibold text-gray-700">{title}</h3>
-                {subtitle && <p className="text-xs text-gray-400 mt-0.5">{subtitle}</p>}
+                <h2 className="text-sm font-semibold text-gray-700">{title}</h2>
+                {subtitle && <p className="text-xs text-gray-500 mt-0.5">{subtitle}</p>}
             </div>
             {aside}
         </div>
@@ -115,7 +143,7 @@ const ChartCard: React.FC<{
 
 /** Estado vazio de um card de gráfico — texto só, sem ícone grande (§28.5). */
 const ChartEmpty: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <div className="flex items-center justify-center min-h-[160px] text-sm text-gray-400 text-center px-4">
+    <div className="flex items-center justify-center min-h-[160px] text-sm text-gray-500 text-center px-4">
         {children}
     </div>
 );
@@ -132,21 +160,21 @@ const Legend: React.FC<{ items: { label: string; color: string }[] }> = ({ items
     </div>
 );
 
-/** Alternador Mensal / Anual — trilho de abas do §19.1, em `h-7`. */
+/** Alternador Mensal / Anual — trilho do §19.1 em `h-7`. É um alternador (dois
+ *  estados do mesmo gráfico), não abas: botões com `aria-pressed`. */
 const GRANULARIDADES: { id: Granularidade; label: string }[] = [
     { id: 'mensal', label: 'Mensal' },
     { id: 'anual', label: 'Anual' },
 ];
 const GranularidadeToggle: React.FC<{ value: Granularidade; onChange: (g: Granularidade) => void }> = ({ value, onChange }) => (
-    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" role="tablist" aria-label="Período do gráfico">
+    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0" role="group" aria-label="Período do gráfico">
         {GRANULARIDADES.map(g => (
             <button
                 key={g.id}
                 type="button"
-                role="tab"
-                aria-selected={value === g.id}
+                aria-pressed={value === g.id}
                 onClick={() => onChange(g.id)}
-                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
                     value === g.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
             >
@@ -156,32 +184,97 @@ const GranularidadeToggle: React.FC<{ value: Granularidade; onChange: (g: Granul
     </div>
 );
 
-// ── KPI card ───────────────────────────────────────────────────────────────────
-function KPICard({ label, value, sub, icon: Icon, color }: {
-    label: string; value: string; sub?: string; icon: React.ElementType; color: string;
-}) {
-    return (
-        <div className="bg-white rounded-2xl border border-gray-100 p-5 flex items-start gap-4 shadow-sm">
-            <div className={`w-11 h-11 rounded-xl flex items-center justify-center flex-shrink-0 ${color}`}>
-                <Icon className="w-5 h-5" />
-            </div>
-            <div className="min-w-0">
-                <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider leading-none">{label}</p>
-                <p className="text-xl font-black text-gray-900 mt-1">{value}</p>
-                {sub && <p className="text-xs text-gray-400 mt-0.5">{sub}</p>}
-            </div>
-        </div>
-    );
+// ── Tabelas "Por cliente" e "Por obra" ─────────────────────────────────────────
+/** Uma linha do pivô lida como recebível: o que foi faturado, o que entrou, o
+ *  que falta e quanto disso já venceu. O pivô roda só com entradas (CREDIT), a
+ *  mesma base do KPI Inadimplência — a soma da coluna Vencido fecha com ele. */
+interface LinhaRecebivel {
+    key: string | null;
+    nome: string;
+    faturado: number;
+    recebido: number;
+    aberto: number;
+    vencido: number;
+    pctRecebido: number | null;
+    qtd: number;
+}
+function paraRecebivel(r: OpuraPivotRow): LinhaRecebivel {
+    const recebido = Number(r.credit_realizado) || 0;
+    const aberto = Number(r.credit_previsto) || 0;
+    const faturado = recebido + aberto;
+    return {
+        key: r.dimension_key,
+        nome: r.dimension_label,
+        faturado, recebido, aberto,
+        vencido: Number(r.vencido) || 0,
+        pctRecebido: faturado > 0 ? (recebido / faturado) * 100 : null,
+        qtd: Number(r.qtd) || 0,
+    };
+}
+/** Quem mais deve primeiro: é a pergunta da tela. O cabeçalho reordena. */
+const porVencido = (a: LinhaRecebivel, b: LinhaRecebivel) => b.vencido - a.vencido || b.aberto - a.aberto;
+
+function colunas(nome: string): StandardTableColumn[] {
+    return [
+        { key: 'nome', label: nome, sortable: true, width: 280 },
+        { key: 'faturado', label: 'Faturado', sortable: true, width: 140, align: 'right' },
+        { key: 'recebido', label: 'Recebido', sortable: true, width: 140, align: 'right' },
+        { key: 'aberto', label: 'Em aberto', sortable: true, width: 140, align: 'right' },
+        { key: 'vencido', label: 'Vencido', sortable: true, width: 150, align: 'right' },
+        { key: 'pctRecebido', label: 'Recebido do faturado', sortable: true, width: 180 },
+        { key: 'qtd', label: 'Lançamentos', sortable: true, width: 120, align: 'right' },
+    ];
+}
+const COLUNAS_CLIENTE = colunas('Cliente');
+const COLUNAS_OBRA = colunas('Obra');
+
+const sortRecebivel = (key: string, l: LinhaRecebivel) =>
+    key === 'nome' ? l.nome : (l[key as keyof LinhaRecebivel] as number | null);
+
+function celulaRecebivel(key: string, l: LinhaRecebivel): React.ReactNode {
+    switch (key) {
+        case 'nome':
+            return <span className="block truncate text-sm font-normal text-gray-700" title={l.nome}>{l.nome}</span>;
+        case 'vencido':
+            return l.vencido > 0 ? (
+                <span className="inline-flex items-center justify-end gap-1 text-sm font-medium text-red-700 tabular-nums">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                    {fBRL(l.vencido)}
+                </span>
+            ) : <span className="text-sm font-medium text-gray-800 tabular-nums">{fBRL(0)}</span>;
+        case 'pctRecebido':
+            return l.pctRecebido === null
+                ? <span className="text-sm text-gray-600">—</span>
+                : <SegmentedProgress percent={l.pctRecebido} title="Recebido sobre o faturado desta linha" />;
+        case 'qtd':
+            return <span className="text-sm font-normal text-gray-600 tabular-nums">{l.qtd.toLocaleString('pt-BR')}</span>;
+        default:
+            return <span className="text-sm font-medium text-gray-800 tabular-nums">{fBRL(l[key as 'faturado' | 'recebido' | 'aberto'])}</span>;
+    }
 }
 
+/** Título de seção dentro do card da tabela (mesma anatomia do ChartCard §28.2). */
+const TituloSecao: React.FC<{ titulo: string; subtitulo: string }> = ({ titulo, subtitulo }) => (
+    <div className="mb-3">
+        <h2 className="text-sm font-semibold text-gray-700">{titulo}</h2>
+        <p className="text-xs text-gray-500 mt-0.5">{subtitulo}</p>
+    </div>
+);
+
 // ── Componente ──────────────────────────────────────────────────────────────────
-const CentralCliente: React.FC = () => {
+interface CentralClienteProps {
+    /** Leva à tela onde o número se resolve (ação "Cobrar em Contas a Receber"). */
+    onNavigate?: (view: string) => void;
+}
+
+const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const { showToast } = useToast();
     // REGRA #5: a organização vem do seletor do topo (empresa/obra herdam a
     // org dona). A prop que o AppRouter passava era o valor cru do store — com
     // uma EMPRESA escolhida ficava vazia e a tela somava todas as organizações.
     const { orgId: organizationId } = useOrgContext();
     const now = new Date();
+    const hoje = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const [clients, setClients] = React.useState<ClientLite[]>([]);
     // "Todos os clientes" é o padrão: a tela abria no 1º cliente em ordem
     // alfabética, que costuma não ter lançamento — e parecia zerada (14/09/2026).
@@ -211,6 +304,7 @@ const CentralCliente: React.FC = () => {
     }, [dateToInput]);
 
     const [kpis, setKpis]       = React.useState<OpuraClienteKpis | null>(null);
+    const [byClient, setByClient] = React.useState<OpuraPivotRow[]>([]);
     const [byProject, setByProject] = React.useState<OpuraPivotRow[]>([]);
     // Série do gráfico Previsto × Realizado: pivot por mês do lançamento, com
     // o MESMO recorte (cliente + período + transaction_date) dos KPIs.
@@ -284,24 +378,30 @@ const CentralCliente: React.FC = () => {
         const seq = ++loadSeq.current;
         // "Todos" sem nenhum cliente no recorte: não há o que somar (e a RPC
         // exige cliente ou lista) — zera sem ir à rede.
-        if (clientIds && clientIds.length === 0) { setKpis(null); setByProject([]); setByMonth([]); return; }
+        if (clientIds && clientIds.length === 0) { setKpis(null); setByClient([]); setByProject([]); setByMonth([]); return; }
         setLoading(true);
         setError(null);
         try {
             const filtro = clientIds ? { clientIds, dateFrom, dateTo } : { clientId, dateFrom, dateTo };
-            const [k, proj, meses] = await Promise.all([
+            // Tabelas só com entradas (CREDIT): é a base do KPI Inadimplência, e
+            // assim a soma da coluna Vencido fecha com ele (o vencido do pivô
+            // somaria saídas pendentes também).
+            const recebiveis = { ...filtro, direction: 'CREDIT' as const };
+            const [k, cli, proj, meses] = await Promise.all([
                 opuraAnalyticsService.clienteKpis(organizationId, clientIds ? null : clientId, dateFrom, dateTo, clientIds),
-                opuraAnalyticsService.pivot(organizationId, 'project', filtro),
+                clientIds ? opuraAnalyticsService.pivot(organizationId, 'client', recebiveis) : Promise.resolve([] as OpuraPivotRow[]),
+                opuraAnalyticsService.pivot(organizationId, 'project', recebiveis),
                 opuraAnalyticsService.pivot(organizationId, 'tx_month', filtro),
             ]);
             if (seq !== loadSeq.current) return; // resposta de um recorte que já não é o da tela
             setKpis(k);
+            setByClient(cli);
             setByProject(proj);
             setByMonth(meses);
         } catch (e: unknown) {
             if (seq !== loadSeq.current) return;
             const msg = e instanceof Error ? e.message : String(e);
-            setKpis(null); setByProject([]); setByMonth([]); setError(msg);
+            setKpis(null); setByClient([]); setByProject([]); setByMonth([]); setError(msg);
             showToast(`Erro ao carregar Central de Clientes: ${msg}`, 'error');
             console.error('[CentralCliente]', e);
         } finally {
@@ -311,15 +411,15 @@ const CentralCliente: React.FC = () => {
 
     React.useEffect(() => { load(); }, [load]);
 
-    const openDrill = React.useCallback(async (row: OpuraPivotRow) => {
+    const openDrill = React.useCallback(async (row: LinhaRecebivel) => {
         // "— Sem obra" tem chave NULL: pede as linhas SEM obra. Mandar
         // projectId vazio era "sem filtro" e listava todas as obras.
-        const obra: OpuraEntryFilters = row.dimension_key ? { projectId: row.dimension_key } : { semDimensao: 'project' };
-        const f: OpuraEntryFilters = clientIds
-            ? { clientIds, dateFrom, dateTo, ...obra }
-            : { clientId, dateFrom, dateTo, ...obra };
+        const obra: OpuraEntryFilters = row.key ? { projectId: row.key } : { semDimensao: 'project' };
+        // Só entradas, como a linha que foi clicada — a quantidade bate.
+        const base: OpuraEntryFilters = { dateFrom, dateTo, direction: 'CREDIT', ...obra };
+        const f: OpuraEntryFilters = clientIds ? { clientIds, ...base } : { clientId, ...base };
         const req = ++drillReq.current;
-        setDrill({ label: row.dimension_label, filters: f });
+        setDrill({ label: row.nome, filters: f });
         setEntries([]); setEntriesLoading(true);
         try {
             const data = await opuraAnalyticsService.entries(organizationId, f, ENTRIES_PAGE, 0);
@@ -360,15 +460,13 @@ const CentralCliente: React.FC = () => {
     const aReceber = kpis?.a_receber ?? 0;
     const vencido = kpis?.vencido ?? 0;
     const faturado = recebido + aReceber;
-    const pctRecebido = faturado > 0 ? (recebido / faturado) * 100 : null;
+    const pct = (parte: number, todo: number) => (todo > 0 ? (parte / todo) * 100 : null);
+    const fracaoVencida = aReceber > 0 ? vencido / aReceber : 0;
+    const tomInadimplencia: KpiTom = fracaoVencida >= LIMIAR.vencidoSobreAbertoAlerta ? 'alerta'
+        : fracaoVencida >= LIMIAR.vencidoSobreAbertoAtencao ? 'atencao' : 'neutro';
 
-    const curvaMax = Math.max(1, contratado, faturado, recebido);
-    const curva = [
-        { label: 'Contratado', value: contratado, color: 'bg-slate-400' },
-        { label: 'Faturado',   value: faturado,   color: 'bg-blue-500' },
-        { label: 'Recebido',   value: recebido,   color: 'bg-emerald-500' },
-    ];
-    const maxProjAbs = Math.max(1, ...byProject.map(c => Math.abs(c.net_realizado)));
+    const linhasCliente = React.useMemo(() => byClient.map(paraRecebivel).sort(porVencido), [byClient]);
+    const linhasObra = React.useMemo(() => byProject.map(paraRecebivel).sort(porVencido), [byProject]);
 
     // Gráfico Previsto × Realizado — todos os períodos do intervalo, vazio = 0.
     const serie = React.useMemo(
@@ -388,29 +486,32 @@ const CentralCliente: React.FC = () => {
     // (barGap) e centraliza o par na banda; se não couber, reduz sozinho.
     const barSize = serie.length <= 12 ? 24 : serie.length <= 24 ? 14 : 10;
 
+    const controle = 'h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+
     return (
         <div className="space-y-6">
-            {/* Header */}
-            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight flex items-center gap-2">
-                        <Users className="w-7 h-7 text-blue-600" /> Central de Clientes
-                    </h1>
+            {/* Cabeçalho (§20): h1 + p, controles de escopo à direita só a partir
+                de 1536 px — em 1280, ao lado dos ~920 px de controles, o título
+                quebrava em duas linhas. */}
+            <div className="flex flex-col 2xl:flex-row 2xl:items-end justify-between gap-4">
+                <div className="min-w-0">
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Clientes</h1>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
                 </div>
-                <div className="flex items-center gap-2 flex-wrap">
+                <div className="flex flex-wrap items-center gap-2">
                     {/* Tipo de cliente — recorta o seletor e o "Todos". */}
                     <select
                         value={tipoAtivo}
                         onChange={e => setTipo(e.target.value)}
+                        aria-label="Tipo de cliente"
                         title="Tipo de cliente"
-                        className="h-9 pl-3 pr-8 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer max-w-[220px]"
+                        className={`${controle} pl-3 pr-8 cursor-pointer w-full sm:w-auto sm:max-w-[220px]`}
                     >
                         <option value={TODOS_TIPOS}>Todos os tipos</option>
                         {tipos.map(t => <option key={t} value={t}>{t}</option>)}
                     </select>
                     {/* Escopo da tela: um cliente do tipo, ou todos eles (sem "limpar"). */}
-                    <div className="w-[260px]">
+                    <div className="w-full sm:w-[260px]">
                         <ClientSelect
                             clients={clientesDoTipo}
                             value={clientId}
@@ -422,24 +523,25 @@ const CentralCliente: React.FC = () => {
                             triggerClassName="w-full h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none focus:border-blue-400"
                         />
                     </div>
-                    <input type="date" value={dateFromInput} aria-label="Data inicial do período"
-                        onChange={e => setDateFromInput(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
-                    <span className="text-gray-400 text-sm">até</span>
-                    <input type="date" value={dateToInput} aria-label="Data final do período"
-                        onChange={e => setDateToInput(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
-                    <Button onClick={load} disabled={loading}
-                        className="text-sm gap-2">
+                    <div className="flex items-center gap-2">
+                        <input type="date" value={dateFromInput} aria-label="Data inicial do período"
+                            onChange={e => setDateFromInput(e.target.value)}
+                            className={`${controle} px-3`} />
+                        <span className="text-gray-500 text-sm">até</span>
+                        <input type="date" value={dateToInput} aria-label="Data final do período"
+                            onChange={e => setDateToInput(e.target.value)}
+                            className={`${controle} px-3`} />
+                    </div>
+                    <Button variant="secondary" onClick={load} disabled={loading} className="text-sm gap-2">
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} /> Atualizar
                     </Button>
                 </div>
             </div>
 
             {error ? (
-                <div className="bg-white rounded-2xl border border-red-100 shadow-sm p-8 flex flex-col items-center text-center gap-3">
-                    <div className="w-12 h-12 rounded-xl bg-red-50 text-red-500 flex items-center justify-center">
-                        <AlertTriangle className="w-6 h-6" />
+                <div className="bg-white rounded-[10px] border border-red-100 shadow-sm p-8 flex flex-col items-center text-center gap-3">
+                    <div className="w-12 h-12 rounded-full bg-red-50 text-red-600 flex items-center justify-center">
+                        <AlertTriangle className="w-6 h-6" aria-hidden="true" />
                     </div>
                     <p className="text-sm font-bold text-gray-800">Não foi possível carregar a Central de Clientes</p>
                     <p className="text-xs text-gray-500 max-w-md break-words">{error}</p>
@@ -448,37 +550,53 @@ const CentralCliente: React.FC = () => {
                     </Button>
                 </div>
             ) : !clientId ? (
-                <div className="flex items-center justify-center h-48 text-sm text-gray-400">Selecione um cliente.</div>
+                <div className="flex items-center justify-center h-48 text-sm text-gray-500">Selecione um cliente.</div>
             ) : clientIds && clientIds.length === 0 ? (
-                <div className="flex items-center justify-center h-48 text-sm text-gray-400">
+                <div className="flex items-center justify-center h-48 text-sm text-gray-500">
                     {clients.length === 0 ? 'Nenhum cliente cadastrado.' : `Nenhum cliente do tipo "${tipoAtivo}".`}
                 </div>
             ) : (
                 <>
-                    {/* KPIs */}
-                    <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4">
-                        <KPICard label="Contratado"    value={fBRL(contratado)} sub={`${kpis?.qtd_contratos ?? 0} contrato(s)`} icon={FileSignature} color="bg-slate-50 text-slate-600" />
-                        <KPICard label="Faturado"      value={fBRL(faturado)}   sub={pctRecebido !== null ? `${fPct(pctRecebido)} recebido` : undefined} icon={Receipt} color="bg-blue-50 text-blue-600" />
-                        <KPICard label="Recebido"      value={fBRL(recebido)}   icon={TrendingUp} color="bg-green-50 text-green-600" />
-                        <KPICard label="Saldo devedor" value={fBRL(aReceber)}   sub="a receber em aberto" icon={Wallet} color="bg-amber-50 text-amber-600" />
-                        <KPICard label="Inadimplência" value={fBRL(vencido)}    sub="vencido" icon={Clock} color={vencido > 0 ? 'bg-red-50 text-red-600' : 'bg-gray-50 text-gray-400'} />
+                    {/* Indicadores (§4.5 `destaque`): cor só por limiar. A
+                        Inadimplência é a pergunta da tela — leva à cobrança.
+                        2×2 até 1536 px: em 4 colunas, com a barra lateral, um
+                        valor de milhões não cabe no card. */}
+                    <div className={`grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
+                        <KpiCard destaque label="Contratado" icon={<FileSignature />}
+                            value={fBRL(contratado)}
+                            sub={plural(kpis?.qtd_contratos ?? 0, 'contrato', 'contratos')} />
+                        <KpiCard destaque label="Faturado" icon={<Receipt />}
+                            value={fBRL(faturado)}
+                            sub={pct(faturado, contratado) !== null ? `recebido + a receber · ${fPct(pct(faturado, contratado))} do contratado` : 'recebido + a receber'} />
+                        <KpiCard destaque label="Recebido" icon={<TrendingUp />}
+                            value={fBRL(recebido)}
+                            sub={pct(recebido, faturado) !== null ? `${fPct(pct(recebido, faturado))} do faturado` : undefined} />
+                        <KpiCard destaque label="Inadimplência" icon={<Clock />}
+                            value={fBRL(vencido)}
+                            sub={aReceber > 0 ? `${fPct(fracaoVencida * 100)} do saldo devedor de ${fBRL(aReceber)}` : 'nada em aberto'}
+                            tom={tomInadimplencia}
+                            acao={vencido > 0 && onNavigate ? { label: 'Cobrar em Contas a Receber', onClick: () => onNavigate('contas-a-receber') } : undefined} />
                     </div>
 
-                    {/* Curva: Contratado × Faturado × Recebido */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-wider mb-4">Contratado × Faturado × Recebido</p>
-                        <div className="space-y-3">
-                            {curva.map(c => (
-                                <div key={c.label} className="flex items-center gap-3">
-                                    <span className="text-xs font-bold text-gray-500 w-24 flex-shrink-0">{c.label}</span>
-                                    <div className="flex-1 h-5 rounded-lg bg-gray-50 overflow-hidden">
-                                        <div className={`h-full ${c.color} rounded-lg transition-all`} style={{ width: `${c.value / curvaMax * 100}%` }} />
-                                    </div>
-                                    <span className="text-sm font-black text-gray-800 tabular-nums w-32 text-right flex-shrink-0">{fBRL(c.value)}</span>
-                                </div>
-                            ))}
-                        </div>
-                    </div>
+                    {/* Quem deve: a quebra que o subtítulo promete. Só em "Todos". */}
+                    {todos && (
+                        <StandardTable<LinhaRecebivel>
+                            storageKey="centralCliente:porCliente"
+                            toolbarTop={<TituloSecao titulo="Por cliente" subtitulo="Entradas do período, de quem mais deve para quem menos deve. Clique num cliente para ver só ele." />}
+                            columns={COLUNAS_CLIENTE}
+                            rows={linhasCliente}
+                            rowKey={l => l.key ?? `sem:${l.nome}`}
+                            searchText={l => l.nome}
+                            searchPlaceholder="Buscar cliente..."
+                            sortValue={sortRecebivel}
+                            renderCell={celulaRecebivel}
+                            onRowClick={l => { if (l.key) setClientId(l.key); }}
+                            rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido, ${fBRL(l.aberto)} em aberto. Ver só este cliente`}
+                            loading={loading && linhasCliente.length === 0}
+                            empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma entrada no período', subtitle: 'Nenhum cliente do recorte tem lançamento a receber nestas datas.' }}
+                            maxHeight="480px"
+                        />
+                    )}
 
                     {/* Previsto × Realizado por período (guia §28) — mesma base
                         dos KPIs Saldo devedor (previsto) e Recebido (realizado). */}
@@ -498,23 +616,29 @@ const CentralCliente: React.FC = () => {
                         ) : (
                             <>
                                 <Legend items={[{ label: 'Previsto', color: SERIE_PREVISTO }, { label: 'Realizado', color: SERIE_REALIZADO }]} />
-                                <div style={{ height: 220 }}>
+                                {/* O gráfico é figura, não controle: fora do Tab (o Recharts
+                                    deixava o SVG focável e sem nome), com o resumo como nome. */}
+                                <div style={{ height: 220 }} role="img"
+                                    aria-label={`Previsto × Realizado por período: previsto ${fBRL(totalPrevisto)}, realizado ${fBRL(totalRealizado)}.`}>
                                     <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                        <BarChart data={serie} margin={{ top: 8, right: 8, bottom: 0, left: 0 }} barGap={2} barCategoryGap="30%">
+                                        <BarChart data={serie} margin={{ top: 12, right: 8, bottom: 0, left: 0 }} barGap={2} barCategoryGap="30%" accessibilityLayer={false}>
                                             <CartesianGrid vertical={false} stroke={GRID} />
                                             <XAxis
                                                 dataKey="label"
                                                 axisLine={false}
                                                 tickLine={false}
                                                 tick={TICK}
-                                                interval={serie.length <= 12 ? 0 : 'preserveStartEnd'}
+                                                interval="preserveStartEnd"
+                                                minTickGap={8}
                                             />
+                                            {/* 60 px: com 48 o "600 mil" quebrava em duas linhas
+                                                e o tick do topo saía cortado. */}
                                             <YAxis
                                                 axisLine={false}
                                                 tickLine={false}
                                                 tick={TICK}
                                                 tickFormatter={compactAxis}
-                                                width={48}
+                                                width={60}
                                                 ticks={yTicks}
                                                 domain={[0, yTicks[yTicks.length - 1]]}
                                             />
@@ -523,6 +647,8 @@ const CentralCliente: React.FC = () => {
                                                 contentStyle={TOOLTIP_STYLE}
                                                 itemStyle={{ color: '#1f2937' }}
                                                 labelStyle={{ color: '#64748b' }}
+                                                separator=": "
+                                                labelFormatter={(_, payload) => rotuloPeriodo((payload?.[0]?.payload as { key?: string } | undefined)?.key)}
                                                 formatter={(val, name) => [fBRL(Number(val)), name === 'realizado' ? 'Realizado' : 'Previsto']}
                                             />
                                             {/* Sem animação: re-renderiza ao trocar Mensal/Anual, e a
@@ -536,98 +662,106 @@ const CentralCliente: React.FC = () => {
                                     cinza recessivo do previsto exige. */}
                                 <div className="grid grid-cols-3 gap-3 mt-2 pt-2 border-t border-gray-100">
                                     <div className="min-w-0">
-                                        <p className="text-xs text-gray-400 truncate">Previsto no período</p>
-                                        <p className="text-sm font-medium text-gray-800 truncate">{fBRL(totalPrevisto)}</p>
+                                        <p className="text-xs text-gray-500 truncate">Previsto no período</p>
+                                        <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fBRL(totalPrevisto)}</p>
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="text-xs text-gray-400 truncate">Realizado no período</p>
-                                        <p className="text-sm font-medium text-gray-800 truncate">{fBRL(totalRealizado)}</p>
+                                        <p className="text-xs text-gray-500 truncate">Realizado no período</p>
+                                        <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fBRL(totalRealizado)}</p>
                                     </div>
                                     <div className="min-w-0">
-                                        <p className="text-xs text-gray-400 truncate">Realizado sobre o total</p>
-                                        <p className="text-sm font-medium text-gray-800 truncate">{fPct(pctRealizadoSerie)}</p>
+                                        <p className="text-xs text-gray-500 truncate">Realizado sobre o total</p>
+                                        <p className="text-sm font-medium text-gray-800 truncate tabular-nums">{fPct(pctRealizadoSerie)}</p>
                                     </div>
                                 </div>
                             </>
                         )}
                     </ChartCard>
 
-                    {/* Cliente por Obra (clicável → extrato) */}
-                    <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                        <p className="text-xs font-black text-gray-400 uppercase tracking-wider px-5 pt-5 pb-2">Por Obra <span className="text-gray-300 normal-case font-medium">· clique para o extrato</span></p>
-                        {loading ? (
-                            <div className="flex items-center justify-center h-32 text-sm text-gray-400">Carregando...</div>
-                        ) : byProject.length === 0 ? (
-                            <div className="flex items-center justify-center h-32 text-sm text-gray-400">Sem lançamentos no período.</div>
-                        ) : (
-                            <table className="w-full text-sm">
-                                <tbody>
-                                    {byProject.map((c, i) => (
-                                        <tr key={c.dimension_key ?? `p-${i}`} onClick={() => openDrill(c)}
-                                            tabIndex={0}
-                                            aria-label={`${c.dimension_label}: ${fBRL(c.net_realizado)}. Abrir o extrato`}
-                                            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openDrill(c); } }}
-                                            className="border-t border-gray-50 hover:bg-blue-50/40 cursor-pointer group focus:outline-none focus-visible:bg-blue-50/40 focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500/40">
-                                            <td className="px-5 py-2.5">
-                                                <div className="flex items-center gap-3">
-                                                    <span className="text-sm font-normal text-gray-700 truncate group-hover:text-blue-700">{c.dimension_label}</span>
-                                                </div>
-                                            </td>
-                                            <td className="px-3 py-2.5 text-right tabular-nums text-sm font-normal text-gray-400">{c.qtd}</td>
-                                            <td className={`px-5 py-2.5 text-right tabular-nums text-sm font-medium ${c.net_realizado < 0 ? 'text-red-600' : 'text-gray-900'}`}>
-                                                {fBRL(c.net_realizado)}
-                                            </td>
-                                            {/* §29 — proporção desta linha em relação ao maior realizado da lista */}
-                                            <td className="px-5 py-2.5 w-44">
-                                                <SegmentedProgress percent={Math.abs(c.net_realizado) / maxProjAbs * 100} title="Realizado desta linha em relação ao maior da lista" />
-                                            </td>
-                                        </tr>
-                                    ))}
-                                </tbody>
-                            </table>
-                        )}
-                    </div>
+                    {/* Por obra → extrato. Antes mostrava só o realizado: a obra com
+                        R$ 466 mil em aberto aparecia "R$ 0,00 · 0%". */}
+                    <StandardTable<LinhaRecebivel>
+                        storageKey="centralCliente:porObra"
+                        toolbarTop={<TituloSecao titulo="Por obra" subtitulo={`Entradas do período ${todos ? 'dos clientes do recorte' : 'deste cliente'} por obra. Clique numa obra para ver o extrato.`} />}
+                        columns={COLUNAS_OBRA}
+                        rows={linhasObra}
+                        rowKey={l => l.key ?? 'sem-obra'}
+                        searchText={l => l.nome}
+                        searchPlaceholder="Buscar obra..."
+                        sortValue={sortRecebivel}
+                        renderCell={celulaRecebivel}
+                        onRowClick={openDrill}
+                        rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido, ${fBRL(l.aberto)} em aberto. Abrir o extrato`}
+                        loading={loading && linhasObra.length === 0}
+                        empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Sem lançamentos no período' }}
+                        maxHeight="480px"
+                    />
                 </>
             )}
 
-            {/* Drawer extrato */}
+            {/* Drawer extrato (§6.9: tabela compacta, cabeçalho em sentence case) */}
             <Sheet open={drill !== null} onClose={closeDrill} size="2xl">
                 <SheetHeader onClose={closeDrill}>
                     <SheetTitle>{drill?.label ?? 'Extrato'}</SheetTitle>
                     <SheetDescription>
-                        {escopoLabel} · {entriesLoading ? 'carregando…' : `${totalEntries} ${totalEntries === 1 ? 'lançamento' : 'lançamentos'}`}
+                        {escopoLabel} · {entriesLoading ? 'carregando…' : plural(totalEntries, 'lançamento', 'lançamentos')}
                     </SheetDescription>
                 </SheetHeader>
-                <SheetPanel>
+                <SheetPanel className="px-6 py-5">
                     {entriesLoading ? (
-                        <div className="flex items-center justify-center h-40 text-sm text-gray-400">Carregando extrato...</div>
+                        <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando extrato...</div>
                     ) : entries.length === 0 ? (
-                        <div className="flex items-center justify-center h-40 text-sm text-gray-400">Sem lançamentos.</div>
+                        <div className="flex items-center justify-center h-40 text-sm text-gray-500">Sem lançamentos.</div>
                     ) : (
-                        <table className="w-full text-sm">
-                            <tbody>
-                                {entries.map(e => (
-                                    <tr key={e.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/50">
-                                        <td className="px-4 py-2.5 whitespace-nowrap text-gray-500 tabular-nums">{e.transaction_date.split('-').reverse().join('/')}</td>
-                                        <td className="px-2 py-2.5">
-                                            <p className="text-gray-700 font-medium truncate max-w-[260px]">{e.description || e.category_name || '—'}</p>
-                                            <p className="text-xs text-gray-400 truncate">
-                                                {[e.category_name, e.project_name].filter(Boolean).join(' · ')}
-                                                {e.status === 'PENDING' ? ' · previsto' : ''}
-                                            </p>
-                                        </td>
-                                        <td className={`px-4 py-2.5 text-right tabular-nums text-sm font-medium ${e.direction === 'DEBIT' ? 'text-red-600' : 'text-green-600'}`}>
-                                            {e.direction === 'DEBIT' ? '−' : '+'}{fBRL(e.amount)}
-                                        </td>
+                        <div className="overflow-x-auto rounded-[10px] border border-gray-100">
+                            <table className="w-full text-left border-collapse">
+                                <thead>
+                                    <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
+                                        <th className="px-3 py-2 border-r border-gray-100 whitespace-nowrap">Data</th>
+                                        <th className="px-4 py-2 border-r border-gray-100">Lançamento</th>
+                                        <th className="px-3 py-2 text-right whitespace-nowrap">Valor</th>
                                     </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                                </thead>
+                                <tbody className="divide-y divide-gray-200">
+                                    {entries.map(e => {
+                                        const pendente = e.status === 'PENDING';
+                                        const dias = pendente ? diasVencido(e.due_date, hoje) : 0;
+                                        const saida = e.direction === 'DEBIT';
+                                        return (
+                                            <tr key={e.id} className="hover:bg-gray-50/50">
+                                                <td className="px-3 py-2.5 border-r border-gray-100 whitespace-nowrap text-sm font-normal text-gray-600 tabular-nums align-top">{fData(e.transaction_date)}</td>
+                                                <td className="px-4 py-2.5 border-r border-gray-100 align-top min-w-0">
+                                                    <p className="text-sm font-normal text-gray-700 break-words text-pretty">{e.description || e.category_name || '—'}</p>
+                                                    <p className="text-xs text-gray-500">
+                                                        {[todos ? e.client_name : null, e.category_name, e.project_name].filter(Boolean).join(' · ')}
+                                                    </p>
+                                                    {/* O vencido diz que venceu, em texto — não só a cor. */}
+                                                    {pendente && (dias > 0 ? (
+                                                        <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-red-700">
+                                                            <AlertTriangle className="w-3 h-3 shrink-0" aria-hidden="true" />
+                                                            previsto · vencido há {plural(dias, 'dia', 'dias')} (venc. {fData(e.due_date)})
+                                                        </p>
+                                                    ) : (
+                                                        <p className="mt-0.5 text-xs text-gray-500">previsto{e.due_date ? ` · vence ${fData(e.due_date)}` : ''}</p>
+                                                    ))}
+                                                </td>
+                                                {/* Verde só no que ENTROU: pendente não é receita ainda. */}
+                                                <td className={`px-3 py-2.5 text-right whitespace-nowrap tabular-nums text-sm font-medium align-top ${
+                                                    saida ? 'text-red-600' : pendente ? 'text-gray-800' : 'text-green-700'
+                                                }`}>
+                                                    {saida ? '−' : pendente ? '' : '+'}{fBRL(e.amount)}
+                                                </td>
+                                            </tr>
+                                        );
+                                    })}
+                                </tbody>
+                            </table>
+                        </div>
                     )}
                     {/* O extrato vem em páginas de 200 — o cabeçalho diz o total,
                         então a lista diz quantos mostra e busca o resto. */}
                     {!entriesLoading && hasMoreEntries && (
-                        <div className="flex flex-wrap items-center gap-3 px-4 py-3 border-t border-gray-100 text-sm text-gray-500">
+                        <div className="flex flex-wrap items-center gap-3 pt-3 text-sm text-gray-500">
                             <span>Exibindo {entries.length} de {totalEntries}</span>
                             <Button variant="secondary" onClick={loadMoreEntries} disabled={entriesLoadingMore}>
                                 <RefreshCw className={`w-[15px] h-[15px] ${entriesLoadingMore ? 'animate-spin' : ''}`} />

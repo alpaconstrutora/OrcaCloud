@@ -96,6 +96,12 @@ const sizeClasses: Record<NonNullable<SheetProps['size']>, string> = {
  */
 const pilhaAbertos: symbol[] = [];
 
+/** O `id` do `SheetTitle` da gaveta mais próxima — é o nome acessível do painel. */
+const SheetTitleIdContext = React.createContext<string | undefined>(undefined);
+
+/** O que recebe Tab dentro do painel (para prender o foco nele). */
+const FOCAVEIS = 'a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])';
+
 export function Sheet({ open, onClose, children, side = 'right', size = 'xl', dirty = false, variant = 'floating', zIndex = 50, modal = true, topPx }: SheetProps) {
   const confirm = useConfirm();
   const id = React.useRef(Symbol('sheet')).current;
@@ -123,11 +129,50 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
   const requestCloseRef = React.useRef(requestClose);
   requestCloseRef.current = requestClose;
 
+  const titleId = React.useId();
+  const painelRef = React.useRef<HTMLDivElement>(null);
+
+  // Foco (27/10/2026, crítica da Central de Clientes): abrir pelo teclado
+  // deixava o foco na linha de TRÁS da gaveta — o leitor de tela nem sabia que
+  // ela abriu — e fechar o largava no <body>. Só no modal: o painel sem véu
+  // (propriedades da Planta) acompanha a seleção e não pode roubar o foco do desenho.
+  React.useEffect(() => {
+    if (!open || !modal) return;
+    const anterior = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    const painel = painelRef.current;
+    if (painel && !painel.contains(document.activeElement)) painel.focus({ preventScroll: true });
+    return () => {
+      // Fechado, o painel vira `inert` e o navegador solta o foco no <body>:
+      // devolve a quem abriu — a menos que o usuário já esteja noutro lugar.
+      const agora = document.activeElement;
+      const solto = !agora || agora === document.body || (painel?.contains(agora) ?? false);
+      if (anterior?.isConnected && solto) anterior.focus({ preventScroll: true });
+    };
+  }, [open, modal]);
+
   React.useEffect(() => {
     if (!open) return;
     pilhaAbertos.push(id);
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape' && pilhaAbertos[pilhaAbertos.length - 1] === id) requestCloseRef.current();
+      // Tab não sai do painel modal. Só age com o foco DENTRO dele: um confirm
+      // ou um menu em portal aberto por cima continua com o próprio Tab.
+      if (e.key === 'Tab' && modal && pilhaAbertos[pilhaAbertos.length - 1] === id) {
+        const painel = painelRef.current;
+        if (!painel || !painel.contains(document.activeElement)) return;
+        // Filtro por ATRIBUTO, não por layout: no jsdom `getClientRects()` é
+        // sempre vazio, a lista zerava e o Tab era engolido — o campo nunca
+        // perdia o foco e o valor digitado não era gravado (BlueprintEditor).
+        const itens = [...painel.querySelectorAll<HTMLElement>(FOCAVEIS)].filter(el => !el.closest('[hidden], [inert], [aria-hidden="true"]'));
+        if (itens.length === 0) return;
+        const primeiro = itens[0];
+        const ultimo = itens[itens.length - 1];
+        if (e.shiftKey && (document.activeElement === primeiro || document.activeElement === painel)) {
+          e.preventDefault(); ultimo.focus();
+        } else if (!e.shiftKey && document.activeElement === ultimo) {
+          e.preventDefault(); primeiro.focus();
+        }
+      }
     };
     document.addEventListener('keydown', onKey);
     return () => {
@@ -135,7 +180,7 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
       const i = pilhaAbertos.lastIndexOf(id);
       if (i >= 0) pilhaAbertos.splice(i, 1);
     };
-  }, [open, id]);
+  }, [open, id, modal]);
 
   const floating = variant === 'floating';
 
@@ -158,11 +203,15 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
   const closedTransform = `translate-y-full sm:translate-y-0 ${closedX}`;
 
   return (
+    <SheetTitleIdContext.Provider value={titleId}>
+    {/* Fechada, a gaveta continua montada (para deslizar) mas sai do Tab e da
+        árvore de acessibilidade: antes cada Sheet fechado era um `dialog
+        aria-modal` permanente, com o X e os campos ainda recebendo Tab. */}
     <div
       style={{ zIndex }}
       className={`fixed inset-0 transition-all duration-200 ${open && modal ? 'pointer-events-auto' : 'pointer-events-none'}`}
-      aria-modal={modal ? 'true' : undefined}
-      role="dialog"
+      inert={!open}
+      aria-hidden={open ? undefined : true}
     >
       {/* Backdrop — só no modal. Sem véu, o que está atrás continua vivo. */}
       {modal && (
@@ -175,8 +224,14 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
       {/* Painel: bottom sheet no mobile, lateral no desktop. O topo no desktop
           sai de uma variável CSS para `topPx` valer só a partir de `sm:`. */}
       <div
+        ref={painelRef}
+        role="dialog"
+        aria-modal={modal ? 'true' : undefined}
+        aria-labelledby={titleId}
+        tabIndex={-1}
         style={topPx != null ? ({ '--sheet-top': `${Math.max(0, topPx) + (floating ? 16 : 0)}px` } as React.CSSProperties) : undefined}
         className={[
+          'outline-none',
           // A sombra só existe ABERTO. Fechado o painel só é empurrado para fora da tela
           // (translate), e o desfoque de `shadow-2xl` (50px) vazava ~20px para DENTRO da
           // tela, por cima da barra de rolagem do <main> — e cada Sheet montado fechado
@@ -209,6 +264,7 @@ export function Sheet({ open, onClose, children, side = 'right', size = 'xl', di
         {children}
       </div>
     </div>
+    </SheetTitleIdContext.Provider>
   );
 }
 
@@ -224,9 +280,12 @@ export function SheetHeader({
   return (
     <div className={`px-6 py-5 border-b border-gray-100 bg-gray-50/60 shrink-0 flex items-start gap-3 ${className}`}>
       <div className="flex-1 min-w-0">{children}</div>
+      {/* "Fechar painel", não "Fechar": muitas gavetas têm um botão "Fechar"
+          no rodapé, e dois botões com o mesmo nome confundem quem navega por nome. */}
       {onClose && (
-        <button onClick={onClose} className="p-2 -m-1 hover:bg-gray-100 rounded-xl transition-all shrink-0">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500">
+        <button type="button" onClick={onClose} aria-label="Fechar painel" title="Fechar painel"
+          className="p-2 -m-1 hover:bg-gray-100 rounded-xl transition-all shrink-0 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-gray-500" aria-hidden="true">
             <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
           </svg>
         </button>
@@ -236,7 +295,8 @@ export function SheetHeader({
 }
 
 export function SheetTitle({ children, className = '' }: { children: React.ReactNode; className?: string }) {
-  return <h2 className={`text-lg font-bold text-gray-900 leading-tight ${className}`}>{children}</h2>;
+  const id = React.useContext(SheetTitleIdContext);
+  return <h2 id={id} className={`text-lg font-bold text-gray-900 leading-tight ${className}`}>{children}</h2>;
 }
 
 export function SheetDescription({ children, className = '' }: { children: React.ReactNode; className?: string }) {

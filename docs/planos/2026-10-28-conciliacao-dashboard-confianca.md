@@ -95,7 +95,15 @@ Um passo por PR, na ordem do plano de ação aprovado.
     componente antigo reprova os 7), `moneyCentsInput.test.ts` (+3). `tsc` limpo;
     `check-ui-standard.sh` sem violação nos 3 arquivos. Suíte: 12.105 ok, 2 falhas em
     `PainelVersoes.test.tsx` (Planta, não tocado) que passam 39/39 isolado.
-  - Conferência visual: pendente (o app local exige login; conferir em produção depois do merge).
+  - Publicado no PR #219 (`7e0723ab`); produção conferida pelo bundle (`conferir-producao.sh`).
+  - Conferência visual em produção (28/10, Chrome, "Todas"): fileira compacta sumiu; botões
+    "Editar saldo inicial de <conta>"; digitar 123456 mostra "1.234,56" com foco no campo;
+    Enter abre "Alterar o saldo inicial? · Banco Itaú · R$ 0,00 → R$ 1.234,56"; Cancelar não
+    grava (saldo segue R$ 0,00); X devolve o foco ao lápis. Conciliado por empresa agora fecha
+    com o por conta na tela ("Sem empresa" R$ 377.042,84 = Itaú + Asaas + Sandbox).
+  - **Achado na conferência e corrigido (PR seguinte):** depois de Cancelar na confirmação o
+    foco ia para o `<body>` e o Esc não saía mais da edição. Agora o foco volta ao campo (também
+    quando salvar falha); teste "não confirmou" cobre (reprova com a versão anterior).
 - [ ] Passos 2 a 7
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)

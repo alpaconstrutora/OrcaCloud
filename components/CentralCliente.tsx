@@ -27,6 +27,7 @@ import { KpiCard, type KpiTom } from './ui/KpiCard';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import { SegmentedProgress } from './ui/SegmentedProgress';
 import { usePersistedState } from './ui/TableUtils';
+import { useStore } from '../store/useStore';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 function fBRL(v: number | null): string {
@@ -442,6 +443,13 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const selected = todos ? null : (clients.find(c => c.id === clientId) ?? null);
     // Lista de ids que a RPC recebe em "Todos" (já recortada por org + tipo).
     const clientIds = React.useMemo(() => (todos ? clientesDoTipo.map(c => c.id) : undefined), [todos, clientesDoTipo]);
+    const navigateToFocus = useStore(s => s.navigateToFocus);
+    /** Com um cliente no topo, Contas a Receber abre já nos vencidos DELE (antes abria a
+     *  tela inteira e a pessoa tinha de achar o cliente de novo). Em "Todos", só a tela. */
+    const cobrar = () => {
+        if (selected) navigateToFocus('contas-a-receber', selected.id, 'VENCIDOS_DO_CLIENTE');
+        else onNavigate?.('contas-a-receber');
+    };
     const escopoLabel = todos
         ? (tipoAtivo ? `Todos os clientes · ${tipoAtivo}` : 'Todos os clientes')
         : (selected?.name ?? '');
@@ -759,12 +767,15 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         </div>
                     ) : (
                     <div className={`grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
-                        {/* As bases ficam escritas: os contratos não têm período, e o
+                        {/* Locação é contrato recorrente: o valor dele é a PARCELA, e a RPC soma
+                            parcela × nº de parcelas (o Reginaldo aparecia com R$ 1.000 contratado e
+                            R$ 12.000 faturados — migration 20271028900000).
+                            As bases ficam escritas: os contratos não têm período, e o
                             faturado é do período — o antigo "% do contratado" dividia uma
                             base pela outra (26,7% que não significava nada). */}
                         <KpiCard destaque label="Contratado" icon={<FileSignature />}
                             value={fBRL(contratado)}
-                            sub={`${plural(kpis?.qtd_contratos ?? 0, 'contrato', 'contratos')}, sem recorte de período`} />
+                            sub={`${plural(kpis?.qtd_contratos ?? 0, 'contrato', 'contratos')}, valor total (locação: todas as parcelas), sem recorte de período`} />
                         <KpiCard destaque label="Faturado" icon={<Receipt />}
                             value={fBRL(faturado)}
                             sub="recebido + em aberto, lançados no período" />
@@ -775,7 +786,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                             value={fBRL(vencido)}
                             sub={aReceber > 0 ? `${fPct(fracaoVencida * 100)} do em aberto de ${fBRL(aReceber)}` : 'nada em aberto no período'}
                             tom={tomInadimplencia}
-                            acao={vencido > 0 && onNavigate ? { label: 'Cobrar em Contas a Receber', onClick: () => onNavigate('contas-a-receber') } : undefined} />
+                            acao={vencido > 0 && onNavigate ? { label: 'Cobrar em Contas a Receber', onClick: cobrar } : undefined} />
                     </div>
                     )}
                     {/* A regra do alerta, escrita (crítica 2: "o limiar de 30% não
@@ -959,7 +970,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         {drill.linha.vencido > 0 && onNavigate && (
                             <button
                                 type="button"
-                                onClick={() => { closeDrill(); onNavigate('contas-a-receber'); }}
+                                onClick={() => { closeDrill(); cobrar(); }}
                                 className="ml-auto self-center inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                             >
                                 Cobrar em Contas a Receber

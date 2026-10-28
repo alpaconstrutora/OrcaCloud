@@ -5510,6 +5510,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           id: b.id,
           chave: `${b.id}-${p.indice}`,
           nome: `${b.nome} · ${p.indice}º`,
+          bloco: b.nome,
           anel: b.pontos,
           baseMm: p.baseMm,
           topoMm: p.topoMm,
@@ -5521,6 +5522,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     [massa, editor.model.blocos],
   );
   const [mostrarMassa3d, setMostrarMassa3d] = usePreferenciaDaPlanta<boolean>('vista3dMassa');
+  const [mostrarNomesDosBlocos3d, setMostrarNomesDosBlocos3d] = usePreferenciaDaPlanta<boolean>('vista3dNomesDosBlocos');
+  const [mostrarNomesDasUnidades3d, setMostrarNomesDasUnidades3d] = usePreferenciaDaPlanta<boolean>('vista3dNomesDasUnidades');
   /**
    * PRODUTO NA MASSA (M2): unidades por pavimento depois de núcleo, paredes e
    * corredor; eficiências; vagas pedidas pelo produto/zona × as que cabem.
@@ -9208,9 +9211,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       if (unidades.length === 0) return [p];
       const pesos = unidades.map((u) => u.areaPrivativaM2);
       const fatias = arrumadas.direcoes ? fatiasPorDirecao(p.anel, pesos, arrumadas.direcoes) : fatiasPorArea(p.anel, pesos, arrumadas.fileiras);
-      return fatias.map((anel, k) => ({ ...p, chave: `${p.chave}-u${k}`, anel, nome: `${p.nome} · ${unidades[k].nome}`, piso: p.chave, unidade: chaveDaUnidade(unidades[k]) }));
+      return fatias.map((anel, k) => ({ ...p, chave: `${p.chave}-u${k}`, anel, nome: `${p.nome} · ${unidades[k].nome}`, piso: p.chave, unidade: chaveDaUnidade(unidades[k]), rotuloDaUnidade: unidades[k].nome }));
     });
   }, [massa3d, ajusteAoEmpreendimento, arrumacaoDasUnidades, referenciasDosBlocos]);
+  /** A massa está dividida nas unidades do Empreendimento? Sem isso, não há nome de unidade para mostrar no 3D. */
+  const massaTemUnidades = useMemo(() => massa3dPorUnidade.some((p) => 'rotuloDaUnidade' in p && !!p.rotuloDaUnidade), [massa3dPorUnidade]);
   const unidadesDaCasa = useMemo(() => {
     const porId = new Map<string, EmpreendimentoUnit>();
     const opcoes: UnidadeParaOPrograma[] = [];
@@ -12080,6 +12085,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
       mostrarTerreno={mostrarTerreno3d && temTerreno && terrenoAVista}
       envelope={mostrarEnvelope3d && temTerreno && terrenoAVista ? envelope3d?.prismas : undefined}
       massa={mostrarMassa3d && massa3d.length > 0 && terrenoAVista ? massa3dPorUnidade : undefined}
+      rotulosDaMassa={{ blocos: mostrarNomesDosBlocos3d, unidades: mostrarNomesDasUnidades3d }}
       pisoDaMassa={blocoSel && pisoDoBlocoSel !== null ? `${blocoSel.id}-${pisoDoBlocoSel}` : null}
       unidadeDaMassa={unidadeDoBlocoSel}
       onPisoDaMassa={(blocoId, indice, unidade) => setPisoDaMassa({ blocoId, indice, unidade: unidade ?? null })}
@@ -15411,6 +15417,37 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                             (editor.model.blocos ?? []).length > 0
                               ? 'Os blocos do estudo de massa, um prisma por pavimento na cor do uso; vermelho onde sai do envelope ou passa do gabarito.'
                               : 'Não há bloco de massa — desenhe um na aba Terreno › Massa.',
+                        },
+                        {
+                          // 28/10/2026: "implementar identificação dos blocos e das unidades diretamente na planta 3d".
+                          chave: 'nomes-dos-blocos-3d',
+                          rotulo: 'Nomes dos blocos',
+                          icone: Building2,
+                          ligado: mostrarNomesDosBlocos3d,
+                          alternar: () => setMostrarNomesDosBlocos3d((v) => !v),
+                          desabilitado: (editor.model.blocos ?? []).length === 0 || !mostrarMassa3d,
+                          ajuda:
+                            (editor.model.blocos ?? []).length === 0
+                              ? 'Não há bloco de massa — desenhe um na aba Terreno › Massa.'
+                              : !mostrarMassa3d
+                                ? 'Ligue os Blocos de massa (acima): o nome fica sobre o bloco.'
+                                : 'Escreve o nome de cada bloco ("Torre A") acima dele; o subsolo leva o nome abaixo do fundo.',
+                        },
+                        {
+                          chave: 'nomes-das-unidades-3d',
+                          rotulo: 'Nomes das unidades',
+                          icone: Hash,
+                          ligado: mostrarNomesDasUnidades3d,
+                          alternar: () => setMostrarNomesDasUnidades3d((v) => !v),
+                          desabilitado: (editor.model.blocos ?? []).length === 0 || !mostrarMassa3d || !massaTemUnidades,
+                          ajuda:
+                            (editor.model.blocos ?? []).length === 0
+                              ? 'Não há bloco de massa — desenhe um na aba Terreno › Massa.'
+                              : !mostrarMassa3d
+                                ? 'Ligue os Blocos de massa (acima): o nome fica dentro de cada unidade.'
+                                : !massaTemUnidades
+                                  ? 'A massa não está dividida em unidades: ligue a planta a um Empreendimento com as unidades cadastradas em Torres e Unidades.'
+                                  : 'Escreve o nome de cada unidade ("101") no meio dela, em cada pavimento.',
                         },
                       ],
                 ]}

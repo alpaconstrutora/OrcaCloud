@@ -72,6 +72,7 @@ class CurvaDoEletroduto extends THREE.Curve {
 import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { embutimentoEletrico } from '../../utils/blueprintEletricaEmbutida';
 import { CAIXA_OCTOGONAL_MM, caminhosDosEletrodutos } from '../../utils/blueprintEletrodutoFlexivel3D';
+import { rotulosDaMassa } from '../../utils/blueprintRotulosDaMassa';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -136,7 +137,12 @@ interface Props {
    * Sólido (não translúcido como o envelope): é a massa, não a referência.
    * Clicar seleciona o bloco (`id`), como as demais peças.
    */
-  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number; piso?: string; unidade?: string }[];
+  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number; piso?: string; unidade?: string; bloco?: string; rotuloDaUnidade?: string }[];
+  /**
+   * NOMES NO 3D (28/10/2026): a etiqueta de cada bloco (`bloco`, acima dele) e de cada unidade (`rotuloDaUnidade`, no
+   * meio da fatia) — ligadas no Exibir. Ausente = nenhuma.
+   */
+  rotulosDaMassa?: { blocos: boolean; unidades: boolean };
   /**
    * PAVIMENTO DA MASSA CLICADO (27/10/2026): *"permitir clicar em cada pavimento e identificar em propriedades"*.
    * A `chave` do piso em destaque, e o aviso de qual piso o clique acertou (além de selecionar o bloco).
@@ -1188,14 +1194,18 @@ function useTexturaDoMapa(m: { plano: PlanoDaTexturaDoMapa; chave: string } | nu
   return textura;
 }
 
-function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; posicao: [number, number, number] }) {
+/**
+ * Etiqueta de texto que sempre olha para a câmera. `alturaM` é a altura no mundo, em metros; `porCima` desenha sem
+ * teste de profundidade — a etiqueta da unidade mora DENTRO do prisma dela e sumiria atrás da própria face.
+ */
+function RotuloDeRede({ texto, cor, posicao, alturaM = 0.11, porCima = false, peso = 600 }: { texto: string; cor: string; posicao: [number, number, number]; alturaM?: number; porCima?: boolean; peso?: number }) {
   const textura = useMemo(() => {
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext?.('2d');
     if (!ctx) return null;
     const px = 44;
-    const fonte = `600 ${px}px system-ui, sans-serif`;
+    const fonte = `${peso} ${px}px system-ui, sans-serif`;
     ctx.font = fonte;
     const largura = Math.ceil(ctx.measureText(texto).width) + 24;
     const altura = px + 16;
@@ -1210,18 +1220,18 @@ function RotuloDeRede({ texto, cor, posicao }: { texto: string; cor: string; pos
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return { t, aspecto: largura / altura };
-  }, [texto, cor]);
+  }, [texto, cor, peso]);
   useEffect(() => () => textura?.t.dispose(), [textura]);
   if (!textura) return null;
-  const alturaM = 0.11;
   return (
-    <sprite position={posicao} scale={[alturaM * textura.aspecto, alturaM, 1]} renderOrder={20}>
-      <spriteMaterial map={textura.t} transparent />
+    // Sem raycast: a etiqueta não rouba o clique da peça que está atrás dela.
+    <sprite position={posicao} scale={[alturaM * textura.aspecto, alturaM, 1]} renderOrder={porCima ? 30 : 20} raycast={() => null}>
+      <spriteMaterial map={textura.t} transparent depthTest={!porCima} depthWrite={false} />
     </sprite>
   );
 }
 
-function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
+function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, rotulosDaMassa: mostrarRotulosDaMassa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
 
@@ -1702,6 +1712,11 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [massa]);
+  /** NOMES DOS BLOCOS E DAS UNIDADES (28/10/2026), cada um ligado no Exibir. */
+  const etiquetasDaMassa = useMemo(
+    () => (massa && mostrarRotulosDaMassa ? rotulosDaMassa(massa, mostrarRotulosDaMassa) : []),
+    [massa, mostrarRotulosDaMassa?.blocos, mostrarRotulosDaMassa?.unidades],
+  );
 
   /** COMPONENTES (E7.1): caixas no piso do pavimento — mobiliário cinza-quente, louça branca. */
   const caixasDeComponentes = useMemo(() => {
@@ -2162,6 +2177,13 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
       {rotulos3d.map((r) => (
         <RotuloDeRede key={`rotulo-${r.chave}`} texto={r.texto} cor={r.cor} posicao={r.posicao} />
       ))}
+      {etiquetasDaMassa.map((r) =>
+        r.tipo === 'BLOCO' ? (
+          <RotuloDeRede key={r.chave} texto={r.texto} cor="#0f172a" posicao={r.posicao} alturaM={1.1} porCima peso={700} />
+        ) : (
+          <RotuloDeRede key={r.chave} texto={r.texto} cor="#1e3a8a" posicao={r.posicao} alturaM={0.55} porCima />
+        ),
+      )}
       {quadros3d.map((q) => (
         <mesh
           key={`quadro-${q.id}`}

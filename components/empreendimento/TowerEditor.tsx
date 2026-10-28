@@ -363,13 +363,17 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
     { key: 'terreno_profundidade', label: 'Profundidade (m)' },
   ];
 
+  // Terreno e Torres em blocos separados (28/10/2026, "separe as sessões Terreno e torres") — o mesmo padrão de
+  // Pavimentos e Unidades dentro de cada torre.
+  const blocoCls = 'rounded-[10px] border border-gray-200 bg-white p-5 space-y-4';
+
   return (
-    <div className="space-y-8">
+    <div className="space-y-6">
       {/* Terreno — dado do empreendimento (não de uma torre), 1 por empreendimento.
           Só com o empreendimento em mãos: nas telas de estudo ele não vem e a seção
           mostraria campos vazios como se não houvesse terreno cadastrado. */}
       {empreendimento && (
-        <section className="space-y-4">
+        <section className={blocoCls} aria-label="Terreno" data-testid="secao-terreno">
           <SecaoTitulo icon={MapPin} titulo="Terreno" />
           <fieldset disabled={travado} title={somenteLeitura} className="imovib-ro min-w-0 border-0 p-0 m-0">
             {/* items-start: a linha "Planta: …" sob alguns campos não pode desalinhar os campos entre si. */}
@@ -441,7 +445,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
         </section>
       )}
 
-      <section className="space-y-4">
+      <section className={blocoCls} aria-label="Torres" data-testid="secao-torres">
         <SecaoTitulo
           icon={Building}
           titulo="Torres"

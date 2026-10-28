@@ -226,6 +226,16 @@ export const empreendimentoProposalService = {
         return resolveNames((data ?? []) as FieldProposal[]);
     },
 
+    /** Quantas propostas o empreendimento já teve, em qualquer situação — o bloco Curadoria só aparece com alguma. */
+    async countAll(empreendimentoId: string): Promise<number> {
+        const { count, error } = await supabase
+            .from('empreendimento_field_proposals')
+            .select('id', { count: 'exact', head: true })
+            .eq('empreendimento_id', empreendimentoId);
+        if (error) throw new Error(`Falha ao contar propostas: ${error.message}`);
+        return count ?? 0;
+    },
+
     async countPending(empreendimentoId: string): Promise<number> {
         const { count, error } = await supabase
             .from('empreendimento_field_proposals')

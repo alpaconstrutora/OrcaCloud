@@ -7,6 +7,11 @@
 //
 // Estrutura herdada de FiscalJobs (dead letter): predicado único de "pendente", filtro
 // Pendentes/decididas como abas, nada é apagado ao rejeitar.
+//
+// Desde 28/10/2026 NÃO é mais uma aba: é o bloco "Curadoria" no fim da aba Sincronização, que é de onde vêm todos os
+// conflitos ("avalie novamente a aba curadoria … pode ser absorvida por outra aba"; em produção a tabela nunca teve
+// uma proposta). O bloco só aparece quando o empreendimento já teve alguma.
+// Plano: docs/planos/2026-10-28-curadoria-dentro-da-sincronizacao.md.
 import React from 'react';
 import { Loader2, Building, CheckCircle2, XCircle, ArrowRight, Inbox, AlertCircle, Clock, X, ListFilter } from 'lucide-react';
 import { empreendimentoProposalService, FieldProposal, ProposalStatus } from '../../services/empreendimentoProposalService';

@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-    RefreshCw, AlertTriangle, TrendingUp, FileSignature, Receipt, Clock, Inbox,
+    RefreshCw, AlertTriangle, TrendingUp, FileSignature, Receipt, Clock, Inbox, X,
 } from 'lucide-react';
 import {
     BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer,
@@ -39,6 +39,15 @@ function plural(n: number, um: string, varios: string): string {
 }
 function fData(iso: string | null): string {
     return iso ? iso.split('-').reverse().join('/') : '—';
+}
+/** Texto do erro em qualquer formato: o Supabase devolve objeto `{ message }`
+ *  que não é `Error`, e `String(e)` virava "[object Object]" na tela (28/10/2026). */
+function mensagemDeErro(e: unknown): string {
+    if (e instanceof Error) return e.message;
+    if (e && typeof e === 'object' && 'message' in e && typeof (e as { message: unknown }).message === 'string') {
+        return (e as { message: string }).message;
+    }
+    return String(e);
 }
 
 /** Data pronta para virar período: ano de 4 dígitos ≥ 1900. Enquanto se digita
@@ -276,6 +285,9 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const now = new Date();
     const hoje = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
     const [clients, setClients] = React.useState<ClientLite[]>([]);
+    // Antes da lista chegar ela está vazia — sem isto a tela dizia "Nenhum
+    // cliente cadastrado." durante a carga (visto no navegador, 28/10/2026).
+    const [clientesCarregados, setClientesCarregados] = React.useState(false);
     // "Todos os clientes" é o padrão: a tela abria no 1º cliente em ordem
     // alfabética, que costuma não ter lançamento — e parecia zerada (14/09/2026).
     const [clientId, setClientId] = React.useState<string>(TODOS_CLIENTES);
@@ -318,6 +330,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const [entries, setEntries] = React.useState<OpuraEntry[]>([]);
     const [entriesLoading, setEntriesLoading] = React.useState(false);
     const [entriesLoadingMore, setEntriesLoadingMore] = React.useState(false);
+    const [entriesError, setEntriesError] = React.useState<string | null>(null);
     // Abrir a obra A e logo a B: a resposta de A não pode encher a gaveta de B.
     const drillReq = React.useRef(0);
 
@@ -334,6 +347,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                 // derruba a tela: o filtro ainda lista os tipos presentes nos clientes.
                 clientCategoryService.list(organizationId || undefined).catch(() => []),
             ]);
+            setClientesCarregados(true);
             if (error) { showToast(`Erro ao carregar clientes: ${error.message}`, 'error'); return; }
             setClients((data || []) as ClientLite[]);
             setTiposCatalogo(catalogo.map(c => c.name));
@@ -400,7 +414,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
             setByMonth(meses);
         } catch (e: unknown) {
             if (seq !== loadSeq.current) return;
-            const msg = e instanceof Error ? e.message : String(e);
+            const msg = mensagemDeErro(e);
             setKpis(null); setByClient([]); setByProject([]); setByMonth([]); setError(msg);
             showToast(`Erro ao carregar Central de Clientes: ${msg}`, 'error');
             console.error('[CentralCliente]', e);
@@ -411,25 +425,32 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
 
     React.useEffect(() => { load(); }, [load]);
 
-    const openDrill = React.useCallback(async (row: LinhaRecebivel) => {
+    // Primeira página do extrato. O erro fica DENTRO da gaveta, com "Tentar
+    // novamente": antes só ia para o toast, e a gaveta dizia "Sem lançamentos." —
+    // uma falha lida como "este cliente não tem nada" (crítica 2, 28/10/2026).
+    const carregarExtrato = React.useCallback(async (f: OpuraEntryFilters) => {
+        const req = ++drillReq.current;
+        setEntries([]); setEntriesError(null); setEntriesLoading(true);
+        try {
+            const data = await opuraAnalyticsService.entries(organizationId, f, ENTRIES_PAGE, 0);
+            if (req === drillReq.current) setEntries(data);
+        } catch (e: unknown) {
+            if (req === drillReq.current) setEntriesError(mensagemDeErro(e));
+        } finally {
+            if (req === drillReq.current) setEntriesLoading(false);
+        }
+    }, [organizationId]);
+
+    const openDrill = React.useCallback((row: LinhaRecebivel) => {
         // "— Sem obra" tem chave NULL: pede as linhas SEM obra. Mandar
         // projectId vazio era "sem filtro" e listava todas as obras.
         const obra: OpuraEntryFilters = row.key ? { projectId: row.key } : { semDimensao: 'project' };
         // Só entradas, como a linha que foi clicada — a quantidade bate.
         const base: OpuraEntryFilters = { dateFrom, dateTo, direction: 'CREDIT', ...obra };
         const f: OpuraEntryFilters = clientIds ? { clientIds, ...base } : { clientId, ...base };
-        const req = ++drillReq.current;
         setDrill({ label: row.nome, filters: f });
-        setEntries([]); setEntriesLoading(true);
-        try {
-            const data = await opuraAnalyticsService.entries(organizationId, f, ENTRIES_PAGE, 0);
-            if (req === drillReq.current) setEntries(data);
-        } catch (e: unknown) {
-            if (req === drillReq.current) showToast(`Erro ao carregar extrato: ${e instanceof Error ? e.message : String(e)}`, 'error');
-        } finally {
-            if (req === drillReq.current) setEntriesLoading(false);
-        }
-    }, [organizationId, clientId, clientIds, dateFrom, dateTo, showToast]);
+        void carregarExtrato(f);
+    }, [carregarExtrato, clientId, clientIds, dateFrom, dateTo]);
 
     const loadMoreEntries = React.useCallback(async () => {
         if (!drill) return;
@@ -439,7 +460,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
             const data = await opuraAnalyticsService.entries(organizationId, drill.filters, ENTRIES_PAGE, entries.length);
             if (req === drillReq.current) setEntries(prev => [...prev, ...data]);
         } catch (e: unknown) {
-            if (req === drillReq.current) showToast(`Erro ao carregar extrato: ${e instanceof Error ? e.message : String(e)}`, 'error');
+            if (req === drillReq.current) showToast(`Erro ao carregar extrato: ${mensagemDeErro(e)}`, 'error');
         } finally {
             if (req === drillReq.current) setEntriesLoadingMore(false);
         }
@@ -454,6 +475,27 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
     const totalEntries = entries[0]?.total_count ?? entries.length;
     const hasMoreEntries = entries.length < totalEntries;
 
+    // Recorte por cliente pelo teclado (crítica 2): Enter numa linha de "Por
+    // cliente" desmontava a própria tabela e o foco caía no <body>, sem volta.
+    // Agora o foco vai para o chip do recorte; desfazer pelo chip devolve o foco
+    // à linha daquele cliente em "Por cliente".
+    const chipRef = React.useRef<HTMLButtonElement>(null);
+    const porClienteRef = React.useRef<HTMLDivElement>(null);
+    const focarChip = React.useRef(false);
+    const voltarParaLinha = React.useRef<string | null>(null);
+    const recortarPara = (l: LinhaRecebivel) => {
+        if (!l.key) return;
+        focarChip.current = true;
+        setClientId(l.key);
+    };
+    const voltarParaTodos = () => {
+        voltarParaLinha.current = selected?.name ?? null;
+        setClientId(TODOS_CLIENTES);
+    };
+    React.useEffect(() => {
+        if (focarChip.current && chipRef.current) { focarChip.current = false; chipRef.current.focus(); }
+    }, [clientId]);
+
     // Derivados
     const contratado = kpis?.contratado ?? 0;
     const recebido = kpis?.recebido ?? 0;
@@ -467,6 +509,26 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
 
     const linhasCliente = React.useMemo(() => byClient.map(paraRecebivel).sort(porVencido), [byClient]);
     const linhasObra = React.useMemo(() => byProject.map(paraRecebivel).sort(porVencido), [byProject]);
+
+    // Voltou para "Todos" pelo chip: quando "Por cliente" recarregar, o foco
+    // volta à linha do cliente de onde se saiu (o rótulo começa pelo nome).
+    React.useEffect(() => {
+        const nome = voltarParaLinha.current;
+        if (!nome || !todos || linhasCliente.length === 0) return;
+        voltarParaLinha.current = null;
+        const linhas = [...(porClienteRef.current?.querySelectorAll<HTMLElement>('tr[tabindex="0"]') ?? [])];
+        (linhas.find(tr => tr.getAttribute('aria-label')?.startsWith(`${nome}:`)) ?? linhas[0])?.focus();
+    }, [todos, linhasCliente]);
+
+    // Ainda não há número nenhum (1ª carga): KPIs, tabelas e gráfico mostram
+    // "carregando", nunca zero nem "nenhuma entrada".
+    const semNumeros = kpis === null;
+
+    // Anúncio do recorte para leitor de tela: trocar cliente/tipo/período
+    // mudava todos os números sem nenhum aviso.
+    const anuncio = loading ? `Carregando ${escopoLabel}…`
+        : kpis ? `Mostrando ${escopoLabel}: ${fBRL(vencido)} vencido de ${fBRL(aReceber)} em aberto.`
+        : '';
 
     // Gráfico Previsto × Realizado — todos os períodos do intervalo, vazio = 0.
     const serie = React.useMemo(
@@ -495,8 +557,25 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                 quebrava em duas linhas. */}
             <div className="flex flex-col 2xl:flex-row 2xl:items-end justify-between gap-4">
                 <div className="min-w-0">
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Clientes</h1>
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                        <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Clientes</h1>
+                        {/* Recorte ativo, e o caminho de volta (mouse e teclado). */}
+                        {!todos && selected && (
+                            <button
+                                ref={chipRef}
+                                type="button"
+                                onClick={voltarParaTodos}
+                                aria-label={`Recorte: ${selected.name}. Voltar para todos os clientes`}
+                                title="Voltar para todos os clientes"
+                                className="inline-flex items-center gap-1.5 h-8 max-w-full pl-3 pr-2 rounded-[6px] border border-blue-200 bg-blue-50 text-sm font-medium text-blue-700 hover:bg-blue-100 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                            >
+                                <span className="truncate">Cliente: {selected.name}</span>
+                                <X className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />
+                            </button>
+                        )}
+                    </div>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Contratado × Faturado × Recebido — por cliente.</p>
+                    <p role="status" className="sr-only">{anuncio}</p>
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                     {/* Tipo de cliente — recorta o seletor e o "Todos". */}
@@ -551,7 +630,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                 </div>
             ) : !clientId ? (
                 <div className="flex items-center justify-center h-48 text-sm text-gray-500">Selecione um cliente.</div>
-            ) : clientIds && clientIds.length === 0 ? (
+            ) : clientesCarregados && clientIds && clientIds.length === 0 ? (
                 <div className="flex items-center justify-center h-48 text-sm text-gray-500">
                     {clients.length === 0 ? 'Nenhum cliente cadastrado.' : `Nenhum cliente do tipo "${tipoAtivo}".`}
                 </div>
@@ -561,6 +640,21 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         Inadimplência é a pergunta da tela — leva à cobrança.
                         2×2 até 1536 px: em 4 colunas, com a barra lateral, um
                         valor de milhões não cabe no card. */}
+                    {semNumeros ? (
+                        // Esqueleto enquanto não há número (§28.5): a tela não afirma
+                        // "R$ 0,00 · nada em aberto" — dizia, e era falso. Não depende
+                        // de `loading`: entre a lista de clientes chegar e o efeito de
+                        // carga ligar o `loading` há um quadro pintado (medido).
+                        <div className="grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3" aria-busy="true" aria-label="Carregando indicadores">
+                            {[0, 1, 2, 3].map(i => (
+                                <div key={i} className="bg-white rounded-xl border border-gray-200 px-4 py-3.5 space-y-2.5">
+                                    <div className="h-3.5 w-24 rounded bg-gray-100 motion-safe:animate-pulse" />
+                                    <div className="h-7 w-40 max-w-full rounded bg-gray-100 motion-safe:animate-pulse" />
+                                    <div className="h-3 w-32 rounded bg-gray-100 motion-safe:animate-pulse" />
+                                </div>
+                            ))}
+                        </div>
+                    ) : (
                     <div className={`grid grid-cols-1 sm:grid-cols-2 2xl:grid-cols-4 gap-3 transition-opacity ${loading ? 'opacity-60' : ''}`} aria-busy={loading}>
                         <KpiCard destaque label="Contratado" icon={<FileSignature />}
                             value={fBRL(contratado)}
@@ -577,9 +671,11 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                             tom={tomInadimplencia}
                             acao={vencido > 0 && onNavigate ? { label: 'Cobrar em Contas a Receber', onClick: () => onNavigate('contas-a-receber') } : undefined} />
                     </div>
+                    )}
 
                     {/* Quem deve: a quebra que o subtítulo promete. Só em "Todos". */}
                     {todos && (
+                        <div ref={porClienteRef}>
                         <StandardTable<LinhaRecebivel>
                             storageKey="centralCliente:porCliente"
                             toolbarTop={<TituloSecao titulo="Por cliente" subtitulo="Entradas do período, de quem mais deve para quem menos deve. Clique num cliente para ver só ele." />}
@@ -590,12 +686,13 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                             searchPlaceholder="Buscar cliente..."
                             sortValue={sortRecebivel}
                             renderCell={celulaRecebivel}
-                            onRowClick={l => { if (l.key) setClientId(l.key); }}
+                            onRowClick={recortarPara}
                             rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido, ${fBRL(l.aberto)} em aberto. Ver só este cliente`}
-                            loading={loading && linhasCliente.length === 0}
+                            loading={semNumeros || (loading && linhasCliente.length === 0)}
                             empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhuma entrada no período', subtitle: 'Nenhum cliente do recorte tem lançamento a receber nestas datas.' }}
                             maxHeight="480px"
                         />
+                        </div>
                     )}
 
                     {/* Previsto × Realizado por período (guia §28) — mesma base
@@ -605,7 +702,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         subtitle={`Lançamentos a receber ${todos ? 'dos clientes do recorte' : 'deste cliente'}, pela data do lançamento: previsto = pendente, realizado = conciliado. A soma fecha com Saldo devedor e Recebido.`}
                         aside={<GranularidadeToggle value={granularidade} onChange={setGranularidade} />}
                     >
-                        {loading && byMonth.length === 0 ? (
+                        {(semNumeros || loading) && byMonth.length === 0 ? (
                             <ChartEmpty>Carregando...</ChartEmpty>
                         ) : serie.length === 0 ? (
                             <ChartEmpty>Período inválido — a data inicial precisa ser anterior à final.</ChartEmpty>
@@ -692,7 +789,7 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                         renderCell={celulaRecebivel}
                         onRowClick={openDrill}
                         rowLabel={l => `${l.nome}: ${fBRL(l.vencido)} vencido, ${fBRL(l.aberto)} em aberto. Abrir o extrato`}
-                        loading={loading && linhasObra.length === 0}
+                        loading={semNumeros || (loading && linhasObra.length === 0)}
                         empty={{ icon: <Inbox className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Sem lançamentos no período' }}
                         maxHeight="480px"
                     />
@@ -704,12 +801,21 @@ const CentralCliente: React.FC<CentralClienteProps> = ({ onNavigate }) => {
                 <SheetHeader onClose={closeDrill}>
                     <SheetTitle>{drill?.label ?? 'Extrato'}</SheetTitle>
                     <SheetDescription>
-                        {escopoLabel} · {entriesLoading ? 'carregando…' : plural(totalEntries, 'lançamento', 'lançamentos')}
+                        {escopoLabel} · {entriesLoading ? 'carregando…' : entriesError ? 'não carregou' : plural(totalEntries, 'lançamento', 'lançamentos')}
                     </SheetDescription>
                 </SheetHeader>
                 <SheetPanel className="px-6 py-5">
                     {entriesLoading ? (
                         <div className="flex items-center justify-center h-40 text-sm text-gray-500">Carregando extrato...</div>
+                    ) : entriesError ? (
+                        <div role="alert" className="flex flex-col items-center justify-center gap-3 py-10 text-center">
+                            <AlertTriangle className="w-6 h-6 text-red-600" aria-hidden="true" />
+                            <p className="text-sm font-medium text-gray-800">Não foi possível carregar o extrato.</p>
+                            <p className="text-xs text-gray-500 max-w-md break-words">{entriesError}</p>
+                            <Button variant="secondary" onClick={() => drill && void carregarExtrato(drill.filters)} className="text-sm gap-2">
+                                <RefreshCw className="w-3.5 h-3.5" /> Tentar novamente
+                            </Button>
+                        </div>
                     ) : entries.length === 0 ? (
                         <div className="flex items-center justify-center h-40 text-sm text-gray-500">Sem lançamentos.</div>
                     ) : (

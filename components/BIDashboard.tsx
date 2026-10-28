@@ -366,6 +366,12 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                                     </p>
                                     <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                                         {[
+                                            // Vencido só aparece quando há: "vencendo" não conta mais o que já venceu.
+                                            ...[
+                                                { label: 'Férias vencidas',       value: kpis.rh.alertas.ferias_vencidas ?? 0 },
+                                                { label: 'Treinamentos vencidos', value: kpis.rh.alertas.treinamentos_vencidos ?? 0 },
+                                                { label: 'Docs vencidos',         value: kpis.rh.alertas.docs_vencidos ?? 0 },
+                                            ].filter(a => a.value > 0),
                                             { label: 'Treinamentos vencendo', value: kpis.rh.alertas.treinamentos_vencendo },
                                             { label: 'Docs vencendo',         value: kpis.rh.alertas.docs_vencendo },
                                             { label: 'EPIs estoque baixo',    value: kpis.rh.alertas.epis_estoque_baixo },

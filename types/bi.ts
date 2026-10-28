@@ -49,10 +49,14 @@ export interface BIRH {
     qualidade: {
         absenteismo_pct: number;
     };
+    // Mesmo objeto de rh_kpis (migration 20271028740000): vencidos ≠ vencendo.
     alertas: {
+        treinamentos_vencidos: number;
         treinamentos_vencendo: number;
+        docs_vencidos: number;
         docs_vencendo: number;
         epis_estoque_baixo: number;
+        ferias_vencidas: number;
         ferias_vencendo: number;
     };
 }

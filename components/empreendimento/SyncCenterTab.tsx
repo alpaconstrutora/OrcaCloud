@@ -203,7 +203,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
   const mensagemDoEnvio = (r: ArquiteturaSyncReport, torres: string, unidades: string, regra: string) => {
     const linhas = [`Serão criadas/atualizadas ${r.towersCreated + r.towersUpdated} ${torres} e ${r.unitsCreated + r.unitsUpdated} ${unidades}.`];
     if (r.conflitosNovos) {
-      linhas.push(`${plural(r.conflitosNovos, 'campo diverge', 'campos divergem')} do que o cadastro já tem: não ${r.conflitosNovos === 1 ? 'é gravado' : 'são gravados'}, ${r.conflitosNovos === 1 ? 'vai' : 'vão'} para a aba Curadoria, onde você decide.`);
+      linhas.push(`${plural(r.conflitosNovos, 'campo diverge', 'campos divergem')} do que o cadastro já tem: não ${r.conflitosNovos === 1 ? 'é gravado' : 'são gravados'}, ${r.conflitosNovos === 1 ? 'vai' : 'vão'} para a Curadoria, no fim desta aba, onde você decide.`);
     }
     linhas.push(regra);
     return linhas.join('\n\n');
@@ -243,7 +243,7 @@ export const SyncCenterTab: React.FC<Props> = ({ empreendimento: e, onChanged })
       message:
         `${terrenoReport.fills.length} campo(s) vazio(s) da ficha serão preenchidos com o terreno da versão PUBLICADA da planta.` +
         (terrenoReport.conflicts.length > 0
-          ? `\n\n${terrenoReport.conflicts.length} campo(s) com valor diferente NÃO são trocados: viram propostas na aba Curadoria, para você aprovar ou rejeitar um a um.`
+          ? `\n\n${terrenoReport.conflicts.length} campo(s) com valor diferente NÃO são trocados: viram propostas na Curadoria, no fim desta aba, para você aprovar ou rejeitar um a um.`
           : ''),
       confirmLabel: 'Trazer',
       variant: 'warning',

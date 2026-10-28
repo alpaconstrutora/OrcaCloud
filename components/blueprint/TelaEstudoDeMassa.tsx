@@ -544,7 +544,7 @@ export default function TelaEstudoDeMassa({ medida: r, hipoteses: h, onHipoteses
               <h3 className="border-b border-gray-100 pb-3 text-sm font-semibold text-gray-900">Enviar ao Empreendimento</h3>
               <p className="text-xs text-gray-500">
                 Os blocos da versão <strong>publicada</strong> viram torres e o produto vira unidades no cadastro (espelho de vendas). Daí a Viabilidade recebe pelo caminho de
-                sempre. Preço e status de unidades que já existem lá não são tocados; divergências vão para a Curadoria; o que sumir do estudo é avisado, nunca apagado.
+                sempre. Preço e status de unidades que já existem lá não são tocados; divergências vão para a Curadoria (aba Sincronização do empreendimento); o que sumir do estudo é avisado, nunca apagado.
               </p>
               <div className="flex items-end gap-3">
                 <div className="flex-1 space-y-1.5">

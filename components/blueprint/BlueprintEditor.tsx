@@ -7771,7 +7771,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
         message:
           `Da versão PUBLICADA: ${previa.towersCreated} torre(s) nova(s), ${previa.towersUpdated} atualizada(s); ${previa.unitsCreated} unidade(s) nova(s), ${previa.unitsUpdated} atualizada(s).` +
           (orfas > 0 ? `\n\n${orfas} item(ns) do cadastro não estão mais no estudo: ficam lá e são avisados, nada é apagado.` : '') +
-          '\n\nPreço e status de venda das unidades que já existem não são tocados; divergências vão para a Curadoria.',
+          '\n\nPreço e status de venda das unidades que já existem não são tocados; divergências vão para a Curadoria (aba Sincronização do empreendimento).',
         confirmLabel: 'Enviar',
         variant: 'warning',
       });

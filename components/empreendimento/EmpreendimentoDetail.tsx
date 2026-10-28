@@ -7,6 +7,7 @@ import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
 import CuradoriaTab from './CuradoriaTab';
+import SecaoTitulo from '../ui/SecaoTitulo';
 import CaracteristicasAdicionaisTab from './CaracteristicasAdicionaisTab';
 import { empreendimentoProposalService } from '../../services/empreendimentoProposalService';
 import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
@@ -66,7 +67,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'curadoria' | 'torres' | 'caracteristicas' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
+type Tab = 'visao' | 'sync' | 'torres' | 'caracteristicas' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
   const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
@@ -81,6 +82,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     window.location.hash = `#/blueprint?studyId=${studyId}&tela=areas-nbr12721`;
   };
   const [pendingCuradoria, setPendingCuradoria] = React.useState(0);
+  // Quantas propostas o empreendimento já teve: sem nenhuma, o bloco Curadoria nem aparece na Sincronização.
+  const [totalCuradoria, setTotalCuradoria] = React.useState(0);
   const [tipoNameMap, setTipoNameMap] = React.useState<Record<string, string>>({});
   const [orgName, setOrgName] = React.useState<string | undefined>(undefined);
   const [companyLabel, setCompanyLabel] = React.useState<string | undefined>(undefined);
@@ -93,9 +96,15 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   const loadPendingCuradoria = React.useCallback(async () => {
     try {
-      setPendingCuradoria(await empreendimentoProposalService.countPending(e.id));
+      const [pendentes, total] = await Promise.all([
+        empreendimentoProposalService.countPending(e.id),
+        empreendimentoProposalService.countAll(e.id),
+      ]);
+      setPendingCuradoria(pendentes);
+      setTotalCuradoria(total);
     } catch {
       setPendingCuradoria(0); // curadoria indisponível (migration não aplicada) — badge some
+      setTotalCuradoria(0);
     }
   }, [e.id]);
 
@@ -219,8 +228,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   const tabs: { id: Tab; label: string; icon: any; badge?: number }[] = [
     { id: 'visao', label: 'Visão Geral', icon: FileText },
-    { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight },
-    { id: 'curadoria', label: 'Curadoria', icon: Inbox, badge: pendingCuradoria },
+    // A Curadoria (conflitos da sincronização) mora DENTRO desta aba desde 28/10/2026: o contador vem junto.
+    { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight, badge: pendingCuradoria },
     { id: 'torres', label: 'Torres & Unidades', icon: Layers },
     // Só existe quando o catálogo (Configurações do Sistema → Características de
     // Unidade) tem ao menos 1 característica aplicável ao tipo deste empreendimento.
@@ -451,16 +460,29 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         <EspelhoLocacoesTab empreendimento={e} />
       )}
       {tab === 'sync' && (
-        <SyncCenterTab
-          key={refreshKey}
-          empreendimento={e}
-          // Sem bumpar o refreshKey: ele remontaria a aba e apagaria a mensagem do resultado.
-          // O contador da Curadoria recarrega direto; o empreendimento, pelo pai.
-          onChanged={() => { loadPendingCuradoria(); onSynced?.(); }}
-        />
-      )}
-      {tab === 'curadoria' && (
-        <CuradoriaTab empreendimentoId={e.id} onChanged={() => setRefreshKey(k => k + 1)} />
+        <div className="space-y-6">
+          <SyncCenterTab
+            key={refreshKey}
+            empreendimento={e}
+            // Sem bumpar o refreshKey: ele remontaria a aba e apagaria a mensagem do resultado.
+            // O contador da Curadoria recarrega direto; o empreendimento, pelo pai.
+            onChanged={() => { loadPendingCuradoria(); onSynced?.(); }}
+          />
+          {/* Curadoria (28/10/2026): os conflitos que os envios acima geram, para aprovar ou rejeitar. Só com algum. */}
+          {(pendingCuradoria > 0 || totalCuradoria > 0) && (
+            <section className="rounded-[10px] border border-gray-200 bg-white p-5 space-y-4" aria-label="Curadoria" data-testid="secao-curadoria">
+              <SecaoTitulo
+                icon={Inbox}
+                titulo="Curadoria"
+                resumo={pendingCuradoria > 0 ? `${pendingCuradoria} conflito(s) a decidir` : 'nenhum conflito pendente'}
+              />
+              <p className="text-xs text-gray-500">
+                O que um envio acima encontrou diferente do cadastro não é trocado sozinho: aprove (usa o valor da origem) ou rejeite (mantém o do empreendimento).
+              </p>
+              <CuradoriaTab empreendimentoId={e.id} onChanged={() => setRefreshKey(k => k + 1)} />
+            </section>
+          )}
+        </div>
       )}
       {tab === 'vinculos' && (
         <VinculacoesTab

@@ -106,7 +106,7 @@ describe('Central de Sincronização — a arquitetura é a Planta Inteligente',
     expect(screen.getByTestId('terreno-sync-terreno_fundos')).toHaveTextContent('Fundos do terreno (m): 11 → 12');
     await user.click(screen.getByRole('button', { name: 'Trazer o terreno' }));
     const titulo = await screen.findByText('Trazer o terreno da planta?');
-    expect(titulo.closest('[role="dialog"]')).toHaveTextContent(/viram propostas na aba Curadoria/);
+    expect(titulo.closest('[role="dialog"]')).toHaveTextContent(/viram propostas na Curadoria, no fim desta aba/);
     await user.click(within(titulo.closest('[role="dialog"]') as HTMLElement).getByRole('button', { name: /^trazer$/i }));
     await waitFor(() => expect(syncTerreno).toHaveBeenCalledWith('emp_1'));
   });

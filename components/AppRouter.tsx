@@ -1413,10 +1413,8 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
     case 'financial-dashboard':
       return (
         <React.Suspense fallback={<div className="flex items-center justify-center py-20"><div className="w-8 h-8 border-2 border-blue-600 border-t-transparent rounded-full animate-spin" /></div>}>
-          <FinancialDashboard
-            organizationId={activeOrganizationId || ''}
-            onNavigate={setActiveView}
-          />
+          {/* A organização vem do useOrgContext dentro da tela (REGRA #5). */}
+          <FinancialDashboard onNavigate={setActiveView} />
         </React.Suspense>
       );
 

@@ -103,7 +103,7 @@ const RULES: Rule[] = [
             // 30 → 29 em 2026-10-21: Inteligência Financeira passou a ler a
             // organização do useOrgContext (com EMPRESA no topo ela mostrava todas).
             // 29 → 28 em 2026-10-27: Central de Clientes, mesma correção.
-            'components/AppRouter.tsx': 28,
+            'components/AppRouter.tsx': 27,
             'components/OpuraDocsModule.tsx': 1,
         },
     },

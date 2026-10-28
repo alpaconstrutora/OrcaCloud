@@ -80,7 +80,9 @@ describe('conciliação · saldo do banco', () => {
     it('a expressão de tarifa é a MESMA da função do banco (o alerta e o recorte contam igual)', () => {
         const pasta = path.join(process.cwd(), 'supabase', 'migrations');
         const ultima = readdirSync(pasta).filter(f => f.endsWith('.sql'))
-            .filter(f => /fn_reconciliation_dashboard/.test(readFileSync(path.join(pasta, f), 'utf8')))
+            // A que DEFINE a função — não basta citar: o Dashboard financeiro a CHAMA
+            // (aplicar_20271029400000) e virava a "última", sem a expressão de tarifa.
+            .filter(f => /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.fn_reconciliation_dashboard\s*\(/i.test(readFileSync(path.join(pasta, f), 'utf8')))
             .sort((a, b) => (a.replace(/^aplicar_/, '')).localeCompare(b.replace(/^aplicar_/, ''))).pop()!;
         const sql = readFileSync(path.join(pasta, ultima), 'utf8');
         const m = /description_normalized ~ '([^']+)'/.exec(sql);

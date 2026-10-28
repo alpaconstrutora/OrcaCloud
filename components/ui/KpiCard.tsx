@@ -151,7 +151,7 @@ export function KpiCard({
                     <button
                         type="button"
                         onClick={acao.onClick}
-                        className="mt-2 self-start inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                        className="mt-2 self-start inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
                     >
                         {acao.label}
                         <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />

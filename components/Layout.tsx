@@ -1010,15 +1010,16 @@ const Layout: React.FC<LayoutProps> = ({
                   icon={Users}
                   isOpen={isLaborOpen}
                   onToggle={() => {
-                    if (isCollapsed) { onChangeView('labor-dashboard'); }
+                    if (isCollapsed) { onChangeView('labor-rh-dashboard'); }
                     else { setIsLaborOpen(o => !o); }
                   }}
                   hasActiveChild={isLaborView(activeView)}
                 >
+                  {/* "Dashboard" (Gestão de Mão de Obra) saiu em 28/10/2026: o Dashboard RH é
+                      a entrada; o AppRouter redireciona o endereço antigo. */}
                   <DropdownGroupLabel label="Visão Geral" />
-                  <DropdownItem id="labor-dashboard" label="Dashboard" icon={BarChart3} />
-                  <DropdownItem id="labor-cost-dashboard" label="Custo por Obra" icon={TrendingUp} />
                   <DropdownItem id="labor-rh-dashboard" label="Dashboard RH" icon={Activity} />
+                  <DropdownItem id="labor-cost-dashboard" label="Custo por Obra" icon={TrendingUp} />
 
                   <DropdownGroupLabel label="Pessoas" />
                   <DropdownItem id="labor-employees" label="Colaboradores" icon={Users} />

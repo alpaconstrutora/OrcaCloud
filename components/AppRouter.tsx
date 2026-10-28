@@ -333,6 +333,14 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
       return;
     }
 
+    // RH › "Dashboard" (Gestão de Mão de Obra) saiu em 28/10/2026: o Dashboard RH
+    // é a entrada do RH (docs/planos/2026-10-28-dashboard-rh-numeros-e-paineis.md,
+    // passo 2). O endereço antigo — view salva, link, busca — cai nele.
+    if (activeView === 'labor-dashboard') {
+      setActiveView('labor-rh-dashboard');
+      return;
+    }
+
     // Mapear activeView para suas respectivas permissões
     let allowed = true;
 

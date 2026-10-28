@@ -7,6 +7,7 @@ import {
 import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import { useQuery } from '@tanstack/react-query';
 import { laborService, RhKpis, Employee, LaborCostSummary } from '../services/laborService';
+import { hrAnalyticsService } from '../services/hrAnalyticsService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 
@@ -99,24 +100,48 @@ const BarChart: React.FC<{
     );
 };
 
+// ── Veredito pela meta ────────────────────────────────────────────────────────
+
+// O limite é a META da organização (hr_targets, editada em BI Analytics RH ›
+// Metas), nunca um número fixo no código. Em "Todas" não há veredito — cada org
+// tem a sua meta; sem meta cadastrada, a tela pede para definir em vez de julgar.
+type Veredito = { texto?: string; definirMeta: boolean };
+
+const vereditoPelaMeta = (valor: number, meta: number | null | undefined, comOrg: boolean): Veredito => {
+    if (!comOrg) return { definirMeta: false };
+    if (meta == null) return { texto: 'Definir meta', definirMeta: true };
+    const metaTxt = `${meta.toLocaleString('pt-BR')}%`;
+    return { texto: valor > meta ? `Acima da meta (${metaTxt})` : `Dentro da meta (${metaTxt})`, definirMeta: false };
+};
+
 // ── Componente principal ─────────────────────────────────────────────────────
 
 interface LaborRHDashboardProps {
     orgId: string | null;
     employees: Employee[];
     costSummary: LaborCostSummary | null;
+    /** Pontos aguardando aprovação (veio do antigo "Dashboard" do RH). */
+    pontosPendentes?: number;
     onNavigate?: (tab: string) => void;
     organizations: Array<{ id: string; name: string }>;
 }
 
-const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, onNavigate, organizations }) => {
+const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, costSummary, pontosPendentes = 0, onNavigate, organizations }) => {
     const today = new Date().toISOString().split('T')[0];
     const [refDate] = useState(today);
+    const anoRef = Number(refDate.slice(0, 4));
 
     const { data: kpis, isLoading, error, refetch } = useQuery<RhKpis>({
         queryKey: laborKeys.rhKpis(orgId, refDate),
         queryFn: () => laborService.getRhKpis(orgId, refDate),
         staleTime: STALE.normal,
+    });
+
+    // Mesma chave do BI Analytics RH: salvar a meta lá atualiza aqui.
+    const { data: meta } = useQuery({
+        queryKey: ['hr-target', orgId, anoRef],
+        queryFn: () => hrAnalyticsService.getTarget(orgId, anoRef),
+        staleTime: STALE.slow,
     });
 
     // Distribuição por função (dos colaboradores ativos locais). Conta cada um uma
@@ -170,6 +195,9 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
     }
 
     const mesAtual = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    const vTurnover = vereditoPelaMeta(kpis.periodo.turnover_pct, meta?.turnover_max_pct, !!orgId);
+    const vAbsenteismo = vereditoPelaMeta(kpis.qualidade.absenteismo_pct, meta?.absenteismo_max_pct, !!orgId);
+    const irParaMetas = () => onNavigate?.('labor-bi-analytics');
 
     return (
         <div className="space-y-6">
@@ -207,14 +235,15 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                     <div className="grid grid-cols-2 gap-4">
                         <KpiCard label="Admissões" value={kpis.periodo.admitidos} icon={UserCheck} color="emerald"
                             trendLabel={kpis.periodo.admitidos > 0 ? '+' + kpis.periodo.admitidos : undefined} trend="neutral" />
+                        {/* Sem seta: ▲/▼ só com comparação a um período, que esta tela ainda não tem. */}
                         <KpiCard label="Desligamentos" value={kpis.periodo.desligados} icon={UserMinus} color="rose"
                             trendLabel={kpis.periodo.desligados > 0 ? String(kpis.periodo.desligados) : undefined}
-                            trend={kpis.periodo.desligados > 0 ? 'up' : 'neutral'} />
+                            trend="neutral" />
                         <div className="col-span-2">
                             <KpiCard label="Turnover" value={`${kpis.periodo.turnover_pct}%`} icon={Activity} color="orange"
                                 sub="(admissões + desligamentos) ÷ 2 ÷ headcount médio"
-                                trend={kpis.periodo.turnover_pct > 5 ? 'up' : kpis.periodo.turnover_pct === 0 ? 'neutral' : 'down'}
-                                trendLabel={kpis.periodo.turnover_pct > 5 ? 'Acima do ideal' : kpis.periodo.turnover_pct === 0 ? 'Estável' : 'Saudável'} />
+                                trend="neutral" trendLabel={vTurnover.texto}
+                                onClick={vTurnover.definirMeta ? irParaMetas : undefined} />
                         </div>
                     </div>
                 </div>
@@ -228,13 +257,13 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                             onClick={() => onNavigate?.('labor-costs')} />
                         <KpiCard label="Horas Extras" value={`${kpis.custos.horas_extras.toFixed(0)}h`} icon={Clock} color="amber"
                             sub="no mês"
-                            trend={kpis.custos.horas_extras > 80 ? 'up' : 'neutral'}
-                            trendLabel={kpis.custos.horas_extras > 80 ? 'Elevado' : undefined}
                             onClick={() => onNavigate?.('labor-timetracking')} />
+                        {/* Horas extras sem veredito: a meta (horas_extras_max_pct) é % sobre as
+                            horas trabalhadas, que só chegam com a fonte de custo do passo 3. */}
                         <KpiCard label="Absenteísmo" value={`${kpis.qualidade.absenteismo_pct}%`} icon={Calendar} color="rose"
                             sub={`faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`}
-                            trend={kpis.qualidade.absenteismo_pct > 4 ? 'up' : 'neutral'}
-                            trendLabel={kpis.qualidade.absenteismo_pct > 4 ? 'Acima do ideal' : 'Normal'} />
+                            trend="neutral" trendLabel={vAbsenteismo.texto}
+                            onClick={vAbsenteismo.definirMeta ? irParaMetas : undefined} />
                     </div>
                 </div>
             </div>
@@ -258,6 +287,10 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, c
                     {kpis.alertas.treinamentos_vencidos > 0 && (
                         <AlertItem count={kpis.alertas.treinamentos_vencidos} label="Treinamentos vencidos"
                             icon={BookOpen} color="rose" onClick={() => onNavigate?.('labor-trainings')} />
+                    )}
+                    {pontosPendentes > 0 && (
+                        <AlertItem count={pontosPendentes} label="Pontos aguardando aprovação"
+                            icon={Clock} color="amber" onClick={() => onNavigate?.('labor-timetracking')} />
                     )}
                     <AlertItem count={kpis.alertas.treinamentos_vencendo} label="Treinamentos vencendo em 30 dias"
                         icon={BookOpen} color="amber" onClick={() => onNavigate?.('labor-trainings')} />

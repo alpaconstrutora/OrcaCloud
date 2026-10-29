@@ -63,7 +63,7 @@ Respostas do passo 2 (shape), transcritas:
 | 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + #248 (`92fcb33`, fuso), 28/10 |
 | 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto; Custo por Obra em "Todas" mostra `[a2c4b292]` no lugar do nome da org) | ✅ PR #250 (`399ed33`), 29/10 |
 | 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | ✅ PR #253 (`280c128`), 29/10 |
-| 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | em andamento |
+| 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | ✅ PR #257 (`3302381`), 29/10 |
 
 ## Passo 1 — números da `rh_kpis`
 
@@ -413,5 +413,22 @@ esqueleto por faixa, setas ▲/▼, `sort` no lugar do cache, classes por interp
 **Como sei que terminou:**
 - [x] `tsc` 0; `check-ui-standard.sh` limpo; `impeccable detect` 0; testes do RH (21
       arquivos, 149 testes) verdes.
-- [ ] Produção (Todas): gráfico por função com "Pedreiro 3" (não "Pedreiro");
-      "Administrativo / sem obra" inteiro; subtítulo sem o mês.
+- [x] Produção (`e0d2bc2`, contém `3302381`, Todas): gráfico por função com "Pedreiro 3";
+      "Administrativo / sem obra — R$ 14.446" inteiro; subtítulo "O que precisa de ação,
+      como está o mês e onde está a mão de obra."
+
+## Fechamento — 29/10/2026
+
+**6 de 6 passos concluídos e conferidos em produção**, mais duas correções que
+nasceram das conferências: fuso horário (PR #248) e Férias e Ausências vencido ≠
+vencendo (PR #251). PRs: #240, #243, #245, #248, #250, #251, #253, #257.
+
+Migrations aplicadas: `20271028740000`, `20271028770000`, `20271028790000`,
+`20271029200000`.
+
+Fica para depois (não pedido neste plano):
+- `fn_bi_executive` executável por `anon` (é de invoker e, sem sessão, não vê
+  organização nenhuma — anterior a este plano).
+- Cabeçalho do modal "Nova ausência" em gradiente índigo (apontado pelo hook de
+  design; fora do Dashboard RH).
+- Nova `/impeccable critique` do Dashboard RH para medir contra os 13/40 iniciais.

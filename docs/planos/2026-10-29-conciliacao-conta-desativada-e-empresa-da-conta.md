@@ -66,7 +66,7 @@ Divergências (5.170 / 947 / 963) e anomalias (27) não mudaram — e é o certo
 Sandbox já eram `IGNORED` e de menos de R$ 100.
 
 - [x] 1. Conta desativada fora da Conciliação — 1.1 a 1.3
-- [ ] 2. Empresa da conta — 2.1 e 2.2 conferidos no banco; 2.3 e 2.4 com teste, falta conferir na tela em produção
+- [x] 2. Empresa da conta — 2.1 a 2.4. PR #252 (`abbc629`). Conferido em produção (29/10): Asaas abre com "Empresa = Alpa Construtora e Incorporadora" (rótulo ligado); Itaú mostra "não tem empresa cadastrada (pessoa física)" sem select; Dashboard › Por empresa = Altair (pessoa física) · Garden · Alpa (2)
 
 ### Achado na conferência em produção (PR #252, 29/10)
 
@@ -75,3 +75,8 @@ O Dashboard ficou certo (4 contas; "1 de 4 contas"; "Altair Pereira da Rosa (pes
 de conta das abas Extrato/Pendentes/Central: `loadAccounts` (`BankReconciliation.tsx`) não filtrava
 `is_active`. Corrigido (PR seguinte): a consulta deixa de fora conta desativada, e a conta escolhida
 que saiu da lista cai na primeira (antes a tela seguia carregando o extrato dela).
+
+Publicado no PR #256 (`e0d2bc2`) e conferido em produção: nenhuma ocorrência de "Asaas Sandbox" no
+Dashboard nem na aba Extrato; o seletor lista Asaas, Banco Itaú, Sicredi, Sicredi - Garden.
+
+**Plano concluído: 2 de 2.**

@@ -36,6 +36,10 @@ Depois do passo 4, à pergunta "Quer que eu inclua também o bug de Férias e Au
 
 > Sim
 
+Depois da correção de Férias e Ausências:
+
+> pode comecar
+
 Respostas do passo 2 (shape), transcritas:
 
 > "O RH tem quatro painéis … Que papel cada um deve ter?"="3 painéis, cada um 1 pergunta (Recomendado)"
@@ -54,7 +58,7 @@ Respostas do passo 2 (shape), transcritas:
 | 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | ✅ PR #243 (`813334c`), 28/10 |
 | 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + #248 (`92fcb33`, fuso), 28/10 |
 | 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto; Custo por Obra em "Todas" mostra `[a2c4b292]` no lugar do nome da org) | ✅ PR #250 (`399ed33`), 29/10 |
-| 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | pendente |
+| 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | em andamento |
 | 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | pendente |
 
 ## Passo 1 — números da `rh_kpis`
@@ -336,5 +340,41 @@ Feito como correção à parte, antes do passo 5 (é número, como o passo 1).
 **Como sei que terminou:**
 - [x] `tsc` 0; `check-ui-standard.sh` limpo; testes de ausências/laborService (20
       arquivos, 135 testes) verdes.
-- [ ] Produção (Todas): faixa vermelha "1 período de férias vencido — pagamento em
-      dobro — Claudinei da Costa Vieira (venceu em 15/10/2026)"; nenhuma faixa âmbar.
+- [x] Produção (`4b73311`, PR #251, Todas): faixa vermelha "1 período de férias vencido —
+      pagamento em dobro (CLT art. 137) — Claudinei da Costa Vieira (venceu em
+      15/10/2026)"; nenhuma faixa âmbar; "vence 14/08/2027" na faixa de disponíveis.
+
+## Passo 5 — layout
+
+Tese: a entrada do RH responde "o que exige ação e como está o mês". Modelo: guia
+§4.5 / §4.5.1 e `components/FinancialDashboard.tsx`.
+
+**O que muda (`LaborRHDashboard.tsx`, reescrito na estrutura; dados iguais aos passos 1–4):**
+- Três `<section>` com `<h2>` (§4.5.1), 24px entre faixas e 12px dentro de cada uma:
+  1. **Pendências**: só as que existem, o vencido primeiro. Uma lista (`ul`), não
+     uma grade de cartões; cada linha é um botão com o texto da ação ("Ver saldo de
+     férias", "Aprovar pontos"…). Sem nenhuma: "Nada vencido nem vencendo…". Saem os 4
+     cartões zerados a 50% de opacidade.
+  2. **O mês** (título = "Outubro de 2026"): 4 `KpiCard destaque` — Colaboradores,
+     Turnover, Absenteísmo, Custo da folha. Cor só por `tom` = acima da meta
+     (`TOM_ACIMA_DA_META = 'atencao'`, constante com nome). `acao` só quando há o que
+     fazer: "Definir meta" (sem meta), "Ver desligamentos" (desligados > 0), "Ver faltas
+     e atestados" (absenteísmo > 0), "Ver afastados", "Ver custo por obra" / "Abrir a
+     folha". Faixa de apoio neutra (`size="sm" color="gray"`): Admissões,
+     Desligamentos, Férias no mês, Afastados, Horas extras.
+  3. **Distribuição**: barras horizontais no cromo da §28 (`rounded-[10px]
+     border-gray-100`, `h3` + base do dado, azul único, valor escrito na ponta), "Outros
+     (N)" acima de 8 itens.
+- Esqueleto por faixa e falha por faixa ("Não foi possível carregar… Tentar de
+  novo"), no lugar do spinner de tela cheia e da tela de erro inteira.
+- Saem o wrapper com cor por KPI, as classes montadas por interpolação
+  (`bg-${color}-50`, frágeis no Tailwind v4) e os rótulos cinza em caixa alta.
+- Custo por Obra: barra em gradiente índigo (apontada pelo hook de design) → azul
+  sólido.
+
+**Como sei que terminou:**
+- [x] `tsc` 0; `check-ui-standard.sh` limpo; `impeccable detect` 0 achados nos 2 `.tsx`.
+- [ ] Produção, "Todas" e Alpa: 3 faixas na ordem; Pendências com a férias vencida
+      (nome) e EPIs; zerados ausentes; Turnover da Alpa com "Definir meta".
+- [ ] Produção: Tab percorre Atualizar → linhas de pendência → ações dos cartões, com
+      foco visível; largura de celular (390px) sem rolagem horizontal.

@@ -1,10 +1,9 @@
 import React, { useState } from 'react';
 import {
-    Users, TrendingDown, TrendingUp, DollarSign, Clock, AlertTriangle,
-    HardHat, BookOpen, Umbrella, FileText, Activity, Calendar,
-    Loader2, RefreshCw, ChevronRight, UserCheck, UserMinus, Stethoscope
+    Users, DollarSign, AlertTriangle, HardHat, BookOpen, Umbrella, FileText,
+    Activity, Calendar, Clock, RefreshCw, ChevronRight, ArrowRight, CheckCircle2,
 } from 'lucide-react';
-import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
+import { KpiCard, type KpiTom } from './ui/KpiCard';
 import { useQuery } from '@tanstack/react-query';
 import { laborService, RhKpis, RhVencido, Employee } from '../services/laborService';
 import { payrollService } from '../services/payrollService';
@@ -13,127 +12,180 @@ import { hrAnalyticsService } from '../services/hrAnalyticsService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
 
-// ── KPI Card ─────────────────────────────────────────────────────────────────
+/*
+ * Dashboard RH — a ENTRADA do RH: "como está o mês e o que exige ação".
+ * Painel analítico (guia §4.5 / §4.5.1), em três faixas, na ordem de leitura:
+ *   1. Pendências — só as que existem; cada linha leva à tela onde se resolve.
+ *   2. O mês — 4 indicadores `destaque` (cor só por meta) + faixa de apoio neutra.
+ *   3. Distribuição — barras horizontais (§28): função e custo da folha por obra.
+ * Plano: docs/planos/2026-10-28-dashboard-rh-numeros-e-paineis.md (passo 5).
+ */
 
-// Wrapper fino sobre o KpiCard canônico (guia §4) — mantém a assinatura antiga
-// desta tela; a tendência vira sufixo da dica (▲ sobe, ▼ desce).
-const KpiCard: React.FC<{
-    label: string;
-    value: string | number;
-    sub?: string;
-    icon: React.ElementType;
-    color: string;
-    trend?: 'up' | 'down' | 'neutral';
-    trendLabel?: string;
-    onClick?: () => void;
-}> = ({ label, value, sub, icon: Icon, color, trend, trendLabel, onClick }) => {
-    const seta = trend === 'up' ? '▲ ' : trend === 'down' ? '▼ ' : '';
-    const dica = [sub, trendLabel ? `${seta}${trendLabel}` : undefined].filter(Boolean).join(' · ');
-    return (
-        <KpiCardBase label={label} value={value} sub={dica || undefined} icon={<Icon className="w-4 h-4" />}
-            color={color as KpiColor} onClick={onClick} />
-    );
-};
-
-// ── Alert Item ────────────────────────────────────────────────────────────────
-
-/** 'AAAA-MM-DD' → 'dd/mm/aaaa' por split (new Date(str) volta um dia em Brasília). */
-const dataBr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
-
-const AlertItem: React.FC<{
-    count: number;
-    label: string;
-    icon: React.ElementType;
-    color: string;
-    onClick?: () => void;
-    /** Quem venceu: nome e data na própria tela, sem abrir outra para saber "quem". */
-    itens?: RhVencido[];
-}> = ({ count, label, icon: Icon, color, onClick, itens = [] }) => (
-    <button
-        onClick={onClick}
-        disabled={count === 0}
-        className={`flex items-center gap-3 p-3 rounded-xl border transition-all text-left w-full ${
-            count > 0
-                ? `border-${color}-200 bg-${color}-50 hover:bg-${color}-100`
-                : 'border-slate-100 bg-slate-50 opacity-50 cursor-default'
-        }`}
-    >
-        <div className={`p-2 rounded-lg ${count > 0 ? `bg-${color}-100` : 'bg-slate-100'}`}>
-            <Icon className={`w-4 h-4 ${count > 0 ? `text-${color}-600` : 'text-slate-400'}`} />
-        </div>
-        <div className="flex-1 min-w-0">
-            <p className={`text-xs font-black ${count > 0 ? `text-${color}-900` : 'text-slate-500'}`}>{label}</p>
-            {itens.map((v, i) => (
-                <p key={i} className={`text-xs text-${color}-800 mt-0.5 truncate`}>
-                    {v.nome.replace(/\s+/g, ' ')} — venceu em {dataBr(v.data)}{v.detalhe ? ` · ${v.detalhe}` : ''}
-                </p>
-            ))}
-            {count > itens.length && itens.length > 0 && (
-                <p className={`text-xs text-${color}-800 mt-0.5`}>e mais {count - itens.length}</p>
-            )}
-        </div>
-        <span className={`text-lg font-black px-2.5 py-1 rounded-xl ${
-            count > 0 ? `bg-${color}-100 text-${color}-700` : 'bg-slate-100 text-slate-400'
-        }`}>
-            {count}
-        </span>
-        {count > 0 && <ChevronRight className={`w-3.5 h-3.5 text-${color}-400 shrink-0`} />}
-    </button>
-);
-
-// ── Bar Chart simples ──────────────────────────────────────────────────────────
-
-const BarChart: React.FC<{
-    data: { label: string; value: number; color?: string }[];
-    title: string;
-    valueFormat?: (v: number) => string;
-    vazio?: string;
-}> = ({ data, title, valueFormat, vazio = 'Sem dados no período' }) => {
-    const max = Math.max(...data.map(d => d.value), 1);
-    return (
-        <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-            <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">{title}</h3>
-            <div className="space-y-3">
-                {data.slice(0, 8).map((d, i) => (
-                    <div key={i} className="flex items-center gap-3">
-                        <p className="text-xs font-bold text-slate-600 w-28 shrink-0 truncate">{d.label}</p>
-                        <div className="flex-1 h-2 bg-slate-100 rounded-full overflow-hidden">
-                            <div
-                                className={`h-full rounded-full transition-all duration-700 ${d.color || 'bg-indigo-500'}`}
-                                style={{ width: `${(d.value / max) * 100}%` }}
-                            />
-                        </div>
-                        <p className="text-xs font-black text-slate-700 w-20 text-right shrink-0">
-                            {valueFormat ? valueFormat(d.value) : d.value}
-                        </p>
-                    </div>
-                ))}
-                {data.length === 0 && (
-                    <p className="text-xs text-slate-400 text-center py-4">{vazio}</p>
-                )}
-            </div>
-        </div>
-    );
-};
-
-// ── Veredito pela meta ────────────────────────────────────────────────────────
+// ── Meta (limiar) ────────────────────────────────────────────────────────────
 
 // O limite é a META da organização (hr_targets, editada em BI Analytics RH ›
 // Metas), nunca um número fixo no código. Em "Todas" não há veredito — cada org
 // tem a sua meta; sem meta cadastrada, a tela pede para definir em vez de julgar.
-type Veredito = { texto?: string; definirMeta: boolean };
+/** Acima da meta é ATENÇÃO, não alarme: a meta é hipótese de gestão (§4.5). */
+const TOM_ACIMA_DA_META: KpiTom = 'atencao';
+
+type Veredito = { texto?: string; tom: KpiTom; definirMeta: boolean };
 
 const vereditoPelaMeta = (valor: number, meta: number | null | undefined, comOrg: boolean): Veredito => {
-    if (!comOrg) return { definirMeta: false };
-    if (meta == null) return { texto: 'Definir meta', definirMeta: true };
+    if (!comOrg) return { tom: 'neutro', definirMeta: false };
+    if (meta == null) return { texto: 'sem meta definida', tom: 'neutro', definirMeta: true };
     const metaTxt = `${meta.toLocaleString('pt-BR')}%`;
-    return { texto: valor > meta ? `Acima da meta (${metaTxt})` : `Dentro da meta (${metaTxt})`, definirMeta: false };
+    return valor > meta
+        ? { texto: `acima da meta (${metaTxt})`, tom: TOM_ACIMA_DA_META, definirMeta: false }
+        : { texto: `dentro da meta (${metaTxt})`, tom: 'neutro', definirMeta: false };
 };
+
+// ── Formatação ───────────────────────────────────────────────────────────────
 
 const MESES = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 /** 'AAAA-MM' → 'set/26' */
 const competenciaCurta = (c: string) => `${MESES[Number(c.slice(5, 7)) - 1]}/${c.slice(2, 4)}`;
 const brl = (v: number) => `R$ ${v.toLocaleString('pt-BR', { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
+const pct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+/** 'AAAA-MM-DD' → 'dd/mm/aaaa' por split (new Date(str) volta um dia em Brasília). */
+const dataBr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+
+// ── Peças de faixa (mesmas do FinancialDashboard, §4.5.1) ─────────────────────
+
+const FaixaTitulo: React.FC<{ id: string; titulo: string; resumo?: string; children?: React.ReactNode }> = ({ id, titulo, resumo, children }) => (
+    <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
+        <h2 id={id} className="text-base font-semibold text-gray-900">
+            {titulo}
+            {resumo && <span className="font-normal text-gray-500"> · {resumo}</span>}
+        </h2>
+        {children}
+    </div>
+);
+
+const LinkDeAcao: React.FC<{ onClick: () => void; children: React.ReactNode }> = ({ onClick, children }) => (
+    <button
+        type="button"
+        onClick={onClick}
+        className="inline-flex items-center gap-1 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+    >
+        {children}
+        <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+    </button>
+);
+
+const CartoesCarregando: React.FC<{ quantos: number; grade: string; rotulo: string }> = ({ quantos, grade, rotulo }) => (
+    <div className={`grid gap-3 ${grade}`} aria-busy="true" aria-label={rotulo}>
+        {Array.from({ length: quantos }, (_, i) => (
+            <div key={i} className="bg-white rounded-xl border border-gray-200 px-4 py-3.5 h-[104px]">
+                <div className="h-3 w-1/2 rounded bg-gray-100 animate-pulse" />
+                <div className="h-6 w-2/3 rounded bg-gray-100 animate-pulse mt-3" />
+                <div className="h-3 w-3/4 rounded bg-gray-100 animate-pulse mt-3" />
+            </div>
+        ))}
+    </div>
+);
+
+const FalhaDaFaixa: React.FC<{ oQue: string; motivo?: string; onRetry: () => void }> = ({ oQue, motivo, onRetry }) => (
+    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm px-4 py-6 text-sm text-gray-600 text-center">
+        Não foi possível carregar {oQue}.{motivo ? ` ${motivo}` : ''}{' '}
+        <button type="button" onClick={onRetry} className="text-blue-600 hover:text-blue-800 font-medium rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">Tentar de novo</button>
+    </div>
+);
+
+// ── Pendências ───────────────────────────────────────────────────────────────
+
+interface Pendencia {
+    chave: string;
+    count: number;
+    rotulo: string;
+    icon: React.ElementType;
+    /** `alerta` = já venceu / dinheiro ou obra em risco; `atencao` = prazo correndo. */
+    tom: 'alerta' | 'atencao';
+    acao: string;
+    onClick: () => void;
+    itens?: RhVencido[];
+}
+
+/** Uma linha por pendência que EXISTE (zerada não aparece — era 50% de opacidade no
+ *  meio da tela). A linha inteira é o botão; o texto da ação diz para onde vai. */
+const LinhaDePendencia: React.FC<{ p: Pendencia }> = ({ p }) => {
+    const Icon = p.icon;
+    const cor = p.tom === 'alerta'
+        ? { icone: 'text-red-600', numero: 'text-red-700' }
+        : { icone: 'text-amber-600', numero: 'text-amber-700' };
+    return (
+        <li>
+            <button
+                type="button"
+                onClick={p.onClick}
+                className="w-full flex items-start gap-3 px-4 py-3 text-left hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-600"
+            >
+                <Icon className={`w-4 h-4 mt-0.5 shrink-0 ${cor.icone}`} aria-hidden="true" />
+                <span className="flex-1 min-w-0">
+                    <span className="block text-sm font-medium text-gray-900">{p.rotulo}</span>
+                    {(p.itens ?? []).map((v, i) => (
+                        <span key={i} className="block text-sm text-gray-600 mt-0.5 [text-wrap:pretty]">
+                            {v.nome.replace(/\s+/g, ' ')} — venceu em {dataBr(v.data)}{v.detalhe ? ` · ${v.detalhe}` : ''}
+                        </span>
+                    ))}
+                    {p.itens && p.count > p.itens.length && p.itens.length > 0 && (
+                        <span className="block text-sm text-gray-600 mt-0.5">e mais {p.count - p.itens.length}</span>
+                    )}
+                    <span className="inline-flex items-center gap-1 mt-1 text-sm font-medium text-blue-600">
+                        {p.acao}
+                        <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+                    </span>
+                </span>
+                <span className={`text-lg font-semibold tabular-nums shrink-0 ${cor.numero}`}>{p.count}</span>
+                <ChevronRight className="w-4 h-4 text-gray-300 mt-1 shrink-0" aria-hidden="true" />
+            </button>
+        </li>
+    );
+};
+
+// ── Barras horizontais (§28.1: comparar itens nomeados) ──────────────────────
+
+const MAX_BARRAS = 8;
+
+/** Barras horizontais em HTML: o valor fica escrito na ponta de cada barra (nunca só
+ *  no tooltip, §28.3) e a lista é lida como lista pelo leitor de tela. Acima de 8
+ *  itens, o resto vira "Outros (N)" em vez de sumir calado. */
+const BarrasHorizontais: React.FC<{
+    titulo: string;
+    base: string;
+    dados: { label: string; value: number }[];
+    formato: (v: number) => string;
+    vazio: string;
+}> = ({ titulo, base, dados, formato, vazio }) => {
+    const linhas = dados.length > MAX_BARRAS
+        ? [...dados.slice(0, MAX_BARRAS - 1), {
+            label: `Outros (${dados.length - (MAX_BARRAS - 1)})`,
+            value: dados.slice(MAX_BARRAS - 1).reduce((s, d) => s + d.value, 0),
+        }]
+        : dados;
+    const max = Math.max(...linhas.map(d => d.value), 1);
+    return (
+        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+            <h3 className="text-sm font-semibold text-gray-700">{titulo}</h3>
+            <p className="text-xs text-gray-500 mt-0.5">{base}</p>
+            {linhas.length === 0 ? (
+                <p className="text-sm text-gray-500 mt-3 py-6 text-center">{vazio}</p>
+            ) : (
+                <ul className="mt-3 space-y-2.5">
+                    {linhas.map(d => (
+                        <li key={d.label} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3">
+                            <span className="text-sm text-gray-700 truncate" title={d.label}>{d.label}</span>
+                            <span className="h-2 rounded-r-[4px] bg-gray-50" aria-hidden="true">
+                                <span className="block h-full rounded-r-[4px] bg-blue-500" style={{ width: `${(d.value / max) * 100}%` }} />
+                            </span>
+                            <span className="text-xs text-gray-500 tabular-nums text-right">{formato(d.value)}</span>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </div>
+    );
+};
 
 // ── Componente principal ─────────────────────────────────────────────────────
 
@@ -146,12 +198,15 @@ interface LaborRHDashboardProps {
     organizations: Array<{ id: string; name: string }>;
 }
 
-const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, pontosPendentes = 0, onNavigate, organizations }) => {
+const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, pontosPendentes = 0, onNavigate }) => {
     // hojeLocal, não toISOString(): depois das 21h em Brasília o UTC já é amanhã — e no
     // último dia do mês o painel inteiro pulava para o mês seguinte.
     const today = hojeLocal();
     const [refDate] = useState(today);
     const anoRef = Number(refDate.slice(0, 4));
+    const ir = (view: string) => () => onNavigate?.(view);
+    // O alerta de férias abre direto em "Saldo de Férias" (LaborAbsences lê `?aba=saldos`).
+    const irParaSaldoDeFerias = () => { window.location.hash = '#/labor-absences?aba=saldos'; };
 
     const { data: kpis, isLoading, error, refetch } = useQuery<RhKpis>({
         queryKey: laborKeys.rhKpis(orgId, refDate),
@@ -164,6 +219,15 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
         queryKey: ['hr-target', orgId, anoRef],
         queryFn: () => hrAnalyticsService.getTarget(orgId, anoRef),
         staleTime: STALE.slow,
+    });
+
+    // Custo de mão de obra = FOLHA da última competência (a de outubro só existe em
+    // novembro), pela mesma conta do Custo por Obra. Antes vinha do apontamento
+    // (time_entries), vazio em produção — a tela afirmava "R$ 0".
+    const { data: folha, isLoading: carregandoFolha, refetch: refetchFolha } = useQuery({
+        queryKey: ['rh-custo-folha', orgId, refDate],
+        queryFn: () => payrollService.custoDaFolhaDaCompetencia(orgId, refDate),
+        staleTime: STALE.normal,
     });
 
     // Distribuição por função (dos colaboradores ativos locais). Conta cada um uma
@@ -183,190 +247,169 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
             .sort((a, b) => b.value - a.value);
     }, [employees, orgId]);
 
-    // Custo de mão de obra = FOLHA da última competência (a de outubro só existe em
-    // novembro), pela mesma conta do Custo por Obra. Antes vinha do apontamento
-    // (time_entries), vazio em produção — a tela afirmava "R$ 0".
-    const { data: folha, isLoading: carregandoFolha } = useQuery({
-        queryKey: ['rh-custo-folha', orgId, refDate],
-        queryFn: () => payrollService.custoDaFolhaDaCompetencia(orgId, refDate),
-        staleTime: STALE.normal,
-    });
-
     const byProject = React.useMemo(() => {
         if (!folha) return [];
-        const linhas = folha.porObra.map(p => ({ label: p.name, value: p.cost, color: 'bg-indigo-400' }));
-        if (folha.naoAlocado > 0) linhas.push({ label: 'Administrativo / sem obra', value: folha.naoAlocado, color: 'bg-slate-400' });
+        const linhas = folha.porObra.map(p => ({ label: p.name, value: p.cost }));
+        if (folha.naoAlocado > 0) linhas.push({ label: 'Administrativo / sem obra', value: folha.naoAlocado });
         return linhas;
     }, [folha]);
-
-    if (isLoading) {
-        return (
-            <div className="flex flex-col items-center justify-center py-24 gap-4">
-                <Loader2 className="w-10 h-10 text-indigo-500 animate-spin" />
-                <p className="text-slate-400 font-medium text-sm">Calculando KPIs do RH...</p>
-            </div>
-        );
-    }
-
-    if (error || !kpis) {
-        return (
-            <div className="flex flex-col items-center justify-center py-16 gap-4">
-                <AlertTriangle className="w-10 h-10 text-amber-400" />
-                <p className="text-slate-500 text-sm font-bold">Não foi possível carregar os números do RH.</p>
-                {/* rh_kpis recusa organização de que o usuário não é membro (migration
-                    20271028740000) — esse é o único motivo que a tela sabe dizer. */}
-                <p className="text-xs text-slate-500 max-w-sm text-center">
-                    {/Acesso negado/i.test((error as Error | null)?.message ?? '')
-                        ? 'Você não é membro da organização selecionada no topo. Escolha outra organização ou "Todas".'
-                        : 'Verifique a conexão e tente de novo. Se o erro continuar, avise o suporte.'}
-                </p>
-                <button onClick={() => refetch()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">
-                    <RefreshCw className="w-4 h-4" /> Tentar novamente
-                </button>
-            </div>
-        );
-    }
 
     // Do refDate (local) e só a 1ª letra maiúscula: o `capitalize` do CSS fazia "Outubro De 2026".
     const mesRef = new Date(`${refDate}T12:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
     const mesAtual = mesRef.charAt(0).toUpperCase() + mesRef.slice(1);
-    // O alerta de férias abre direto em "Saldo de Férias" (LaborAbsences lê `?aba=saldos`).
-    const irParaSaldoDeFerias = () => { window.location.hash = '#/labor-absences?aba=saldos'; };
-    const vTurnover = vereditoPelaMeta(kpis.periodo.turnover_pct, meta?.turnover_max_pct, !!orgId);
-    const vAbsenteismo = vereditoPelaMeta(kpis.qualidade.absenteismo_pct, meta?.absenteismo_max_pct, !!orgId);
+
+    const motivoDoErro = /Acesso negado/i.test((error as Error | null)?.message ?? '')
+        ? 'Você não é membro da organização selecionada no topo — escolha outra ou "Todas".'
+        : 'Verifique a conexão.';
+
+    // Pendências que EXISTEM, na ordem de urgência: o que já venceu primeiro.
+    const pendencias: Pendencia[] = kpis ? ([
+        { chave: 'ferias-vencidas', count: kpis.alertas.ferias_vencidas, rotulo: 'Férias vencidas — pagamento em dobro (CLT art. 137)',
+          icon: Umbrella, tom: 'alerta', acao: 'Ver saldo de férias', onClick: irParaSaldoDeFerias, itens: kpis.vencidos?.ferias },
+        { chave: 'docs-vencidos', count: kpis.alertas.docs_vencidos, rotulo: 'Documentos (ASO/NR) vencidos — o colaborador não pode subir na obra',
+          icon: FileText, tom: 'alerta', acao: 'Ver documentos', onClick: ir('labor-documents'), itens: kpis.vencidos?.documentos },
+        { chave: 'trein-vencidos', count: kpis.alertas.treinamentos_vencidos, rotulo: 'Treinamentos vencidos',
+          icon: BookOpen, tom: 'alerta', acao: 'Ver treinamentos', onClick: ir('labor-trainings'), itens: kpis.vencidos?.treinamentos },
+        { chave: 'pontos', count: pontosPendentes, rotulo: 'Pontos aguardando aprovação',
+          icon: Clock, tom: 'atencao', acao: 'Aprovar pontos', onClick: ir('labor-timetracking') },
+        { chave: 'epis', count: kpis.alertas.epis_estoque_baixo, rotulo: 'EPIs com estoque abaixo do mínimo',
+          icon: HardHat, tom: 'atencao', acao: 'Ver estoque de EPIs', onClick: ir('labor-epis') },
+        { chave: 'ferias-vencendo', count: kpis.alertas.ferias_vencendo, rotulo: 'Férias vencendo em 60 dias',
+          icon: Umbrella, tom: 'atencao', acao: 'Ver saldo de férias', onClick: irParaSaldoDeFerias },
+        { chave: 'docs-vencendo', count: kpis.alertas.docs_vencendo, rotulo: 'Documentos (ASO/NR) vencendo em 30 dias',
+          icon: FileText, tom: 'atencao', acao: 'Ver documentos', onClick: ir('labor-documents') },
+        { chave: 'trein-vencendo', count: kpis.alertas.treinamentos_vencendo, rotulo: 'Treinamentos vencendo em 30 dias',
+          icon: BookOpen, tom: 'atencao', acao: 'Ver treinamentos', onClick: ir('labor-trainings') },
+    ] as Pendencia[]).filter(p => p.count > 0) : [];
+
+    const vTurnover = kpis ? vereditoPelaMeta(kpis.periodo.turnover_pct, meta?.turnover_max_pct, !!orgId) : null;
+    const vAbsenteismo = kpis ? vereditoPelaMeta(kpis.qualidade.absenteismo_pct, meta?.absenteismo_max_pct, !!orgId) : null;
     // Meta de horas extras é % das horas trabalhadas (BI › Metas: "Ex: 10 das horas totais").
-    const pctHorasExtras = kpis.custos.horas_trabalhadas > 0
+    const pctHorasExtras = kpis && kpis.custos.horas_trabalhadas > 0
         ? Math.round(kpis.custos.horas_extras / kpis.custos.horas_trabalhadas * 1000) / 10 : 0;
-    const vHorasExtras = vereditoPelaMeta(pctHorasExtras, meta?.horas_extras_max_pct, !!orgId);
-    const irParaMetas = () => onNavigate?.('labor-bi-analytics');
+    const vHorasExtras = kpis ? vereditoPelaMeta(pctHorasExtras, meta?.horas_extras_max_pct, !!orgId) : null;
+    const tentarDeNovo = () => { refetch(); refetchFolha(); };
 
     return (
-        <div className="space-y-6">
-            {/* 1. Título */}
-            <div className="flex items-center justify-between">
+        <div className="space-y-6 pb-20">
+            <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard RH</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">KPIs executivos — {mesAtual}</p>
+                    <p className="text-gray-500 text-sm mt-1.5 font-medium">O que precisa de ação e como está o mês — {mesAtual}.</p>
                 </div>
-                <button onClick={() => refetch()} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition-all text-button font-bold">
-                    <RefreshCw className="w-3.5 h-3.5" /> Atualizar
+                <button
+                    type="button"
+                    onClick={tentarDeNovo}
+                    className="inline-flex items-center gap-2 h-9 px-3 rounded-[6px] border border-gray-200 bg-white text-sm font-medium text-gray-700 hover:bg-gray-50 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600"
+                >
+                    <RefreshCw className="w-3.5 h-3.5" aria-hidden="true" /> Atualizar
                 </button>
             </div>
 
-            {/* Headcount KPIs */}
-            <div>
-                <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Headcount</p>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    {/* Cada legenda diz o que o número ao lado ainda não disse (antes,
-                        "Total 10 · 10 ativos" repetia o cartão seguinte). */}
-                    <KpiCard label="Total de Colaboradores" value={kpis.headcount.total} icon={Users} color="indigo"
-                        sub="todos, menos os desligados" />
-                    <KpiCard label="Ativos" value={kpis.headcount.ativos} icon={UserCheck} color="emerald"
-                        sub="trabalhando hoje" />
-                    <KpiCard label="Férias no mês" value={kpis.headcount.em_ferias} icon={Umbrella} color="blue"
-                        sub="com algum dia de férias neste mês"
-                        onClick={() => onNavigate?.('labor-absences')} />
-                    <KpiCard label="Afastados" value={kpis.headcount.afastados} icon={Stethoscope} color="amber"
-                        sub="INSS / licença" />
-                </div>
-            </div>
+            {/* 1. Pendências */}
+            <section aria-labelledby="rh-pendencias" className="space-y-3">
+                <FaixaTitulo id="rh-pendencias" titulo="Pendências"
+                    resumo={kpis ? (pendencias.length === 0 ? 'nada pendente' : `${pendencias.length} tipo${pendencias.length > 1 ? 's' : ''}`) : undefined} />
+                {isLoading ? (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm h-24" aria-busy="true" aria-label="Carregando pendências">
+                        <div className="h-3 w-1/3 rounded bg-gray-100 animate-pulse m-4" />
+                        <div className="h-3 w-1/2 rounded bg-gray-100 animate-pulse mx-4" />
+                    </div>
+                ) : error || !kpis ? (
+                    <FalhaDaFaixa oQue="as pendências" motivo={motivoDoErro} onRetry={tentarDeNovo} />
+                ) : pendencias.length === 0 ? (
+                    <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm px-4 py-4 flex items-center gap-3 text-sm text-gray-700">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" aria-hidden="true" />
+                        Nada vencido nem vencendo: férias, ASO/NR, treinamentos, EPIs e pontos em dia.
+                    </div>
+                ) : (
+                    <ul className="bg-white rounded-[10px] border border-gray-100 shadow-sm divide-y divide-gray-100 overflow-hidden">
+                        {pendencias.map(p => <LinhaDePendencia key={p.chave} p={p} />)}
+                    </ul>
+                )}
+            </section>
 
-            {/* Movimentação + Custos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Movimentação no Mês</p>
-                    <div className="grid grid-cols-2 gap-4">
-                        {/* Sem dica: "Admissões 1 · +1" repetia o número. Sem seta: ▲/▼ só com
-                            comparação a um período, que esta tela ainda não tem. */}
-                        <KpiCard label="Admissões" value={kpis.periodo.admitidos} icon={UserCheck} color="emerald" />
-                        <KpiCard label="Desligamentos" value={kpis.periodo.desligados} icon={UserMinus} color="rose" />
-                        <div className="col-span-2">
-                            <KpiCard label="Turnover" value={`${kpis.periodo.turnover_pct}%`} icon={Activity} color="orange"
-                                sub="(admissões + desligamentos) ÷ 2 ÷ headcount médio"
-                                trend="neutral" trendLabel={vTurnover.texto}
-                                onClick={vTurnover.definirMeta ? irParaMetas : undefined} />
+            {/* 2. O mês */}
+            <section aria-labelledby="rh-mes" className="space-y-3">
+                <FaixaTitulo id="rh-mes" titulo={mesAtual}
+                    resumo={orgId ? undefined : 'todas as organizações — sem meta, sem veredito'} />
+                {isLoading ? (
+                    <CartoesCarregando quantos={4} grade="grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" rotulo="Carregando os números do mês" />
+                ) : error || !kpis || !vTurnover || !vAbsenteismo || !vHorasExtras ? (
+                    <FalhaDaFaixa oQue="os números do mês" motivo={motivoDoErro} onRetry={tentarDeNovo} />
+                ) : (
+                    <>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                            <KpiCard destaque label="Colaboradores" icon={<Users />}
+                                value={kpis.headcount.total}
+                                sub={`${kpis.headcount.ativos} ativos · ${kpis.headcount.afastados} afastados`}
+                                acao={kpis.headcount.afastados > 0 ? { label: 'Ver afastados', onClick: ir('labor-employees') } : undefined} />
+                            <KpiCard destaque label="Turnover" icon={<Activity />}
+                                value={pct(kpis.periodo.turnover_pct)}
+                                tom={vTurnover.tom}
+                                sub={[vTurnover.texto, '(admissões + desligamentos) ÷ 2 ÷ headcount médio'].filter(Boolean).join(' · ')}
+                                acao={vTurnover.definirMeta ? { label: 'Definir meta', onClick: ir('labor-bi-analytics') }
+                                    : kpis.periodo.desligados > 0 ? { label: 'Ver desligamentos', onClick: ir('labor-termination') } : undefined} />
+                            <KpiCard destaque label="Absenteísmo" icon={<Calendar />}
+                                value={pct(kpis.qualidade.absenteismo_pct)}
+                                tom={vAbsenteismo.tom}
+                                sub={[vAbsenteismo.texto, `faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`].filter(Boolean).join(' · ')}
+                                acao={vAbsenteismo.definirMeta ? { label: 'Definir meta', onClick: ir('labor-bi-analytics') }
+                                    : kpis.qualidade.absenteismo_pct > 0 ? { label: 'Ver faltas e atestados', onClick: ir('labor-absences') } : undefined} />
+                            <KpiCard destaque label="Custo da folha" icon={<DollarSign />}
+                                value={carregandoFolha ? '…' : folha ? brl(folha.total) : '—'}
+                                sub={carregandoFolha ? 'carregando a folha' : folha
+                                    ? [`folha de ${competenciaCurta(folha.competencia)}`,
+                                       folha.fechadas < folha.folhas ? 'em processamento' : 'fechada',
+                                       !orgId ? `${folha.folhas} organizaç${folha.folhas === 1 ? 'ão' : 'ões'}` : undefined,
+                                      ].filter(Boolean).join(' · ')
+                                    : 'nenhuma folha mensal calculada'}
+                                acao={carregandoFolha ? undefined : folha
+                                    ? { label: 'Ver custo por obra', onClick: ir('labor-cost-dashboard') }
+                                    : { label: 'Abrir a folha', onClick: ir('labor-payroll') }} />
                         </div>
-                    </div>
-                </div>
+                        {/* Faixa de apoio (§4.5): neutra, sem cor por KPI. */}
+                        <div className="grid grid-cols-2 sm:grid-cols-3 xl:grid-cols-5 gap-3">
+                            <KpiCard size="sm" color="gray" label="Admissões" value={kpis.periodo.admitidos} />
+                            <KpiCard size="sm" color="gray" label="Desligamentos" value={kpis.periodo.desligados} />
+                            <KpiCard size="sm" color="gray" label="Férias no mês" value={kpis.headcount.em_ferias}
+                                sub="com algum dia de férias" />
+                            <KpiCard size="sm" color="gray" label="Afastados" value={kpis.headcount.afastados}
+                                sub="INSS / licença" />
+                            {/* Horas vêm do APONTAMENTO (Diário de Obra / ponto). Sem apontamento
+                                aprovado no mês, "—" — não 0h, que afirmaria ninguém ter feito hora extra. */}
+                            <KpiCard size="sm" color="gray" label="Horas extras"
+                                value={kpis.custos.apontamentos > 0 ? `${kpis.custos.horas_extras.toFixed(0)}h` : '—'}
+                                sub={kpis.custos.apontamentos > 0
+                                    ? [`${pct(pctHorasExtras)} das horas`, vHorasExtras.texto].filter(Boolean).join(' · ')
+                                    : 'sem apontamento no mês'} />
+                        </div>
+                    </>
+                )}
+            </section>
 
-                <div>
-                    <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Custos e Horas</p>
-                    <div className="grid grid-cols-1 gap-4">
-                        <KpiCard label="Custo da folha" icon={DollarSign} color="indigo"
-                            value={carregandoFolha ? '…' : folha ? brl(folha.total) : '—'}
-                            sub={carregandoFolha ? 'carregando a folha' : folha
-                                ? [`folha de ${competenciaCurta(folha.competencia)}`,
-                                   folha.fechadas < folha.folhas ? 'em processamento' : 'fechada',
-                                   !orgId ? `${folha.folhas} organizaç${folha.folhas === 1 ? 'ão' : 'ões'}` : undefined,
-                                  ].filter(Boolean).join(' · ')
-                                : 'nenhuma folha mensal calculada'}
-                            onClick={() => onNavigate?.('labor-cost-dashboard')} />
-                        {/* Horas vêm do APONTAMENTO (Diário de Obra / ponto). Sem apontamento
-                            aprovado no mês, "—" — não 0h, que afirmaria ninguém ter feito hora extra. */}
-                        <KpiCard label="Horas Extras" icon={Clock} color="amber"
-                            value={kpis.custos.apontamentos > 0 ? `${kpis.custos.horas_extras.toFixed(0)}h` : '—'}
-                            sub={kpis.custos.apontamentos > 0
-                                ? `${pctHorasExtras.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% de ${kpis.custos.horas_trabalhadas.toFixed(0)}h trabalhadas`
-                                : 'sem apontamento aprovado no mês'}
-                            trend="neutral" trendLabel={kpis.custos.apontamentos > 0 ? vHorasExtras.texto : undefined}
-                            onClick={() => onNavigate?.(kpis.custos.apontamentos > 0 && vHorasExtras.definirMeta ? 'labor-bi-analytics' : 'labor-timetracking')} />
-                        <KpiCard label="Absenteísmo" value={`${kpis.qualidade.absenteismo_pct}%`} icon={Calendar} color="rose"
-                            sub={`faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`}
-                            trend="neutral" trendLabel={vAbsenteismo.texto}
-                            onClick={vAbsenteismo.definirMeta ? irParaMetas : undefined} />
-                    </div>
+            {/* 3. Distribuição */}
+            <section aria-labelledby="rh-distribuicao" className="space-y-3">
+                <FaixaTitulo id="rh-distribuicao" titulo="Distribuição">
+                    {folha && <LinkDeAcao onClick={ir('labor-cost-dashboard')}>Custo por obra completo</LinkDeAcao>}
+                </FaixaTitulo>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+                    <BarrasHorizontais
+                        titulo="Colaboradores por função"
+                        base="Ativos hoje, na organização em que são registrados."
+                        dados={byRole}
+                        formato={v => `${v} pessoa${v !== 1 ? 's' : ''}`}
+                        vazio="Nenhum colaborador ativo."
+                    />
+                    <BarrasHorizontais
+                        titulo={folha ? `Custo da folha por obra — ${competenciaCurta(folha.competencia)}` : 'Custo da folha por obra'}
+                        base="Salário e encargos (FGTS, CPP, RAT, terceiros), rateados pelas alocações da folha."
+                        dados={byProject}
+                        formato={brl}
+                        vazio={carregandoFolha ? 'Carregando a folha…' : 'Nenhuma folha mensal calculada.'}
+                    />
                 </div>
-            </div>
-
-            {/* Alertas */}
-            <div className="bg-white p-5 rounded-2xl border border-slate-100 shadow-sm">
-                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
-                    <AlertTriangle className="w-3.5 h-3.5 text-amber-500" /> Alertas Pendentes
-                </h3>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    {/* Vencido vem primeiro e só quando há: férias vencidas são pagas em
-                        dobro, NR/ASO vencido tira o colaborador da obra. */}
-                    {kpis.alertas.ferias_vencidas > 0 && (
-                        <AlertItem count={kpis.alertas.ferias_vencidas} label="Férias vencidas (pagamento em dobro)"
-                            icon={Umbrella} color="rose" onClick={irParaSaldoDeFerias} itens={kpis.vencidos?.ferias} />
-                    )}
-                    {kpis.alertas.docs_vencidos > 0 && (
-                        <AlertItem count={kpis.alertas.docs_vencidos} label="Documentos (ASO/NR) vencidos"
-                            icon={FileText} color="rose" onClick={() => onNavigate?.('labor-documents')} itens={kpis.vencidos?.documentos} />
-                    )}
-                    {kpis.alertas.treinamentos_vencidos > 0 && (
-                        <AlertItem count={kpis.alertas.treinamentos_vencidos} label="Treinamentos vencidos"
-                            icon={BookOpen} color="rose" onClick={() => onNavigate?.('labor-trainings')} itens={kpis.vencidos?.treinamentos} />
-                    )}
-                    {pontosPendentes > 0 && (
-                        <AlertItem count={pontosPendentes} label="Pontos aguardando aprovação"
-                            icon={Clock} color="amber" onClick={() => onNavigate?.('labor-timetracking')} />
-                    )}
-                    <AlertItem count={kpis.alertas.treinamentos_vencendo} label="Treinamentos vencendo em 30 dias"
-                        icon={BookOpen} color="amber" onClick={() => onNavigate?.('labor-trainings')} />
-                    <AlertItem count={kpis.alertas.docs_vencendo} label="Documentos (ASO/NR) vencendo em 30 dias"
-                        icon={FileText} color="rose" onClick={() => onNavigate?.('labor-documents')} />
-                    <AlertItem count={kpis.alertas.epis_estoque_baixo} label="EPIs com estoque abaixo do mínimo"
-                        icon={HardHat} color="orange" onClick={() => onNavigate?.('labor-epis')} />
-                    <AlertItem count={kpis.alertas.ferias_vencendo} label="Férias vencendo em 60 dias"
-                        icon={Umbrella} color="blue" onClick={irParaSaldoDeFerias} />
-                </div>
-            </div>
-
-            {/* Gráficos */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                <BarChart
-                    title="Colaboradores por Função"
-                    data={byRole.map(d => ({ ...d, color: 'bg-indigo-500' }))}
-                    valueFormat={v => `${v} pessoa${v !== 1 ? 's' : ''}`}
-                />
-                <BarChart
-                    title={folha ? `Custo da folha por obra — ${competenciaCurta(folha.competencia)}` : 'Custo da folha por obra'}
-                    data={byProject}
-                    valueFormat={brl}
-                    vazio={carregandoFolha ? 'Carregando a folha…' : 'Nenhuma folha mensal calculada'}
-                />
-            </div>
+            </section>
         </div>
     );
 };

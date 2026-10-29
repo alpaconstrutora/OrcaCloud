@@ -28,6 +28,10 @@ Depois do passo 2:
 
 > comece
 
+Depois do passo 3:
+
+> Seguir para o passo 4
+
 Respostas do passo 2 (shape), transcritas:
 
 > "O RH tem quatro painéis … Que papel cada um deve ter?"="3 painéis, cada um 1 pergunta (Recomendado)"
@@ -44,8 +48,8 @@ Respostas do passo 2 (shape), transcritas:
 |---|---|---|---|
 | 1 | harden | `rh_kpis`: "Todas", pertencimento, alertas vencidos, turnover, absenteísmo | ✅ PR #240 (`41e0ac9`), 28/10 |
 | 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | ✅ PR #243 (`813334c`), 28/10 |
-| 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + correção de fuso, 28/10 |
-| 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto) | pendente |
+| 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + #248 (`92fcb33`, fuso), 28/10 |
+| 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto; Custo por Obra em "Todas" mostra `[a2c4b292]` no lugar do nome da org) | em andamento |
 | 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | pendente |
 | 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | pendente |
 
@@ -257,4 +261,49 @@ cada uma (total, por obra, não alocado). Sem folha → `null`.
 
 **Como sei que terminou:**
 - [x] `tsc` 0; `check-ui-standard.sh` limpo nos 2 `.tsx`.
-- [ ] Produção: seletor do Custo por Obra começa em "setembro de 2026 (em processamento)".
+- [x] Produção (`92fcb33`): seletor do Custo por Obra começa em "setembro de 2026 (em
+      processamento)"; julho/26 da SPE (FECHADO) sem o rótulo.
+
+## Passo 4 — textos e estados
+
+### 4.1 Migration `20271029200000_rh_kpis_vencidos_com_nome.sql`
+
+**O que muda:** `rh_kpis_calcular` devolve `vencidos` — até 3 por alerta (férias,
+documentos, treinamentos), o mais atrasado primeiro, com nome, data e detalhe
+(dias a gozar / título do documento / nome do curso).
+
+**Como sei que terminou:**
+- [x] Ensaio e aplicada: Alpa → férias `Claudinei da Costa Vieira, 2026-10-15, 30
+      dias a gozar`; ACL fechada.
+
+### 4.2 Tela
+
+**O que muda:**
+- Dashboard RH:
+  - Alerta vencido mostra até 3 nomes ("Fulano — venceu em 15/10/2026 · 30 dias a
+    gozar") e "e mais N".
+  - Alertas de férias (vencidas e vencendo) abrem direto em **Saldo de Férias**
+    (`#/labor-absences?aba=saldos`, lido pelo `LaborAbsences` uma vez, padrão do
+    `RentalsModule`). Antes caíam em Solicitações.
+  - Erro: "Não foi possível carregar os números do RH" + motivo que a tela sabe
+    ("Você não é membro da organização selecionada…") ou "Verifique a conexão…" —
+    antes: "A função RPC pode ainda estar sendo criada… Execute a migration".
+  - "Outubro De 2026" → "Outubro de 2026" (o `capitalize` do CSS subia o "De").
+  - Legendas sem repetição: Total "todos, menos os desligados" (era "10 ativos", =
+    cartão seguinte); Ativos "trabalhando hoje"; "Em Férias · no mês atual" → "Férias
+    no mês · com algum dia de férias neste mês"; Admissões/Desligamentos sem o "+1"/"1".
+  - "Documentos (ASO/NR) vencendo" → "… vencendo em 30 dias" (como os outros).
+- BI Analytics RH: "Headcount atual"/"Turnover mês" → "Headcount — ago/26" /
+  "Turnover — ago/26" (é a ÚLTIMA FOTO, não hoje).
+- Custo por Obra em "Todas": nome da organização no seletor (era `[a2c4b292]`).
+
+Achado resolvido sem mudança: a crítica supôs que `employee_trainings` fosse fonte
+obsoleta (a gestão foi para a Academia). Não é — a tabela tem `origem`,
+`enrollment_id` e `academy_certificate_id`; a Academia grava nela.
+
+**Como sei que terminou:**
+- [x] `tsc` 0; `check-ui-standard.sh` limpo nos 4 `.tsx`; testes das telas de RH
+      (24 arquivos, 162 testes) verdes.
+- [ ] Produção, Alpa: alerta "Férias vencidas" com "Claudinei da Costa Vieira — venceu
+      em 15/10/2026 · 30 dias a gozar"; clique abre Férias e Ausências em Saldo de Férias.
+- [ ] Produção: BI "Headcount — ago/26"; Custo por Obra em "Todas" com nomes.

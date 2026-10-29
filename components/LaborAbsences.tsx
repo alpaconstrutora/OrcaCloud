@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
     CalendarDays, Plus, Check, X, Clock, AlertTriangle, ChevronDown,
     Loader2, Search, FileText, RotateCcw, Umbrella, Stethoscope,
@@ -534,6 +534,17 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
     const confirm = useConfirm();
     const { notify, Toast } = useToast();
     const [view, setView] = usePersistedState<AbsView>('laborAbsences:view', 'requests');
+    // Link `#/labor-absences?aba=saldos` (alertas de férias do Dashboard RH) manda
+    // sobre a aba salva. Lido UMA vez, no primeiro render (padrão do RentalsModule),
+    // e o endereço volta a ser só a vista — o roteador não olha a query.
+    const [linkSaldos] = useState(() =>
+        typeof window !== 'undefined'
+        && new URLSearchParams(window.location.hash.split('?')[1] ?? '').get('aba') === 'saldos');
+    useEffect(() => {
+        if (!linkSaldos) return;
+        setView('balances');
+        window.history.replaceState(null, '', '#/labor-absences');
+    }, [linkSaldos]);
     const [search, setSearch] = usePersistedState('laborAbsences:search', '');
     const [filterTipo, setFilterTipo] = usePersistedState<AbsenceTipo | ''>('laborAbsences:tipo', '');
     const [filterStatus, setFilterStatus] = usePersistedState<AbsenceStatus | ''>('laborAbsences:status', '');

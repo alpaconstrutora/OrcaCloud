@@ -376,6 +376,16 @@ export interface RhKpis {
         ferias_vencidas: number;
         ferias_vencendo: number;
     };
+    /** Até 3 por alerta, o mais atrasado primeiro (migration 20271029200000). */
+    vencidos: { ferias: RhVencido[]; documentos: RhVencido[]; treinamentos: RhVencido[] };
+}
+
+export interface RhVencido {
+    nome: string;
+    /** 'AAAA-MM-DD' */
+    data: string;
+    /** Dias a gozar / título do documento / nome do curso. */
+    detalhe: string | null;
 }
 
 export type EpiCategoria =

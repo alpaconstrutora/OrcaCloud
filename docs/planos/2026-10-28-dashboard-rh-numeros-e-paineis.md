@@ -32,6 +32,10 @@ Depois do passo 3:
 
 > Seguir para o passo 4
 
+Depois do passo 4, à pergunta "Quer que eu inclua também o bug de Férias e Ausências…?":
+
+> Sim
+
 Respostas do passo 2 (shape), transcritas:
 
 > "O RH tem quatro painéis … Que papel cada um deve ter?"="3 painéis, cada um 1 pergunta (Recomendado)"
@@ -49,7 +53,7 @@ Respostas do passo 2 (shape), transcritas:
 | 1 | harden | `rh_kpis`: "Todas", pertencimento, alertas vencidos, turnover, absenteísmo | ✅ PR #240 (`41e0ac9`), 28/10 |
 | 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | ✅ PR #243 (`813334c`), 28/10 |
 | 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + #248 (`92fcb33`, fuso), 28/10 |
-| 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto; Custo por Obra em "Todas" mostra `[a2c4b292]` no lugar do nome da org) | em andamento |
+| 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto; Custo por Obra em "Todas" mostra `[a2c4b292]` no lugar do nome da org) | ✅ PR #250 (`399ed33`), 29/10 |
 | 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | pendente |
 | 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | pendente |
 
@@ -304,6 +308,33 @@ obsoleta (a gestão foi para a Academia). Não é — a tabela tem `origem`,
 **Como sei que terminou:**
 - [x] `tsc` 0; `check-ui-standard.sh` limpo nos 4 `.tsx`; testes das telas de RH
       (24 arquivos, 162 testes) verdes.
-- [ ] Produção, Alpa: alerta "Férias vencidas" com "Claudinei da Costa Vieira — venceu
-      em 15/10/2026 · 30 dias a gozar"; clique abre Férias e Ausências em Saldo de Férias.
-- [ ] Produção: BI "Headcount — ago/26"; Custo por Obra em "Todas" com nomes.
+- [x] Produção (`399ed33`, em "Todas"): alerta "Férias vencidas" com "Claudinei da Costa
+      Vieira — venceu em 15/10/2026 · 30 dias a gozar"; clique abre Férias e Ausências em
+      Saldo de Férias (aba selecionada) e o endereço volta a `#/labor-absences`.
+- [x] Produção: BI "Headcount — ago/26" / "Turnover — ago/26"; Custo por Obra em
+      "Todas" com o nome de cada organização.
+
+**Achado ao conferir (fora do Dashboard RH, mesma classe do P1 da crítica):** Férias e
+Ausências tem cálculo PRÓPRIO no front e diz "1 período de férias vencendo em 60 dias —
+risco de pagamento em dobro — Claudinei da Costa Vieira (vence 2026-10-15)": o período
+já VENCEU, e a data sai em ISO.
+
+### 4.3 Férias e Ausências — vencido ≠ vencendo (pedido "Sim", 29/10)
+
+Feito como correção à parte, antes do passo 5 (é número, como o passo 1).
+
+**O que muda:**
+- `getVacationAlerts` traz, de propósito, as que vencem em 60 dias E as já vencidas
+  com saldo; a faixa chamava tudo de "vencendo". Agora duas faixas: **vencido —
+  pagamento em dobro (CLT art. 137)** em vermelho, e **vencendo em 60 dias — conceda
+  antes do vencimento** em âmbar.
+- Datas em dd/mm/aaaa (`formatDate`) na faixa, na tabela de saldos, no seletor de
+  período e nas mensagens de validação — antes ISO (`2026-10-15`).
+- "Hoje" e a janela de 60 dias pelo dia LOCAL (`hojeLocal`) na tela e no serviço
+  (`getVacationAlerts`/`getVacationReady`) — antes `toISOString()` (UTC).
+
+**Como sei que terminou:**
+- [x] `tsc` 0; `check-ui-standard.sh` limpo; testes de ausências/laborService (20
+      arquivos, 135 testes) verdes.
+- [ ] Produção (Todas): faixa vermelha "1 período de férias vencido — pagamento em
+      dobro — Claudinei da Costa Vieira (venceu em 15/10/2026)"; nenhuma faixa âmbar.

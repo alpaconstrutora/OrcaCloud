@@ -6,7 +6,7 @@ import { sanitizeFileName } from '../utils/storageUtils';
 import { renomearDocumentoDoBoleto, renomearDocumentosDosBoletos } from './boletoNomeDocumentoService';
 import { sha256File, extractFromPdfFile, buildExtractionFromLinhaDigitavel } from '../utils/boletoParser';
 import { colunasDaExtracao } from '../utils/boletoTexto';
-import { decidirLinhaManual, colunasParaGravar } from '../utils/boletoLinhaManual';
+import { decidirLinhaManual, colunasParaGravar, mensagemLinhaDuplicada, type BoletoComMesmaLinha } from '../utils/boletoLinhaManual';
 import { parseLinhaDigitavel, onlyDigits, nomeBanco, vencimentoPlausivel } from '../utils/febrabanRules';
 import { financialApprovalService } from './financialApprovalService';
 import { processService } from './processService';
@@ -339,9 +339,32 @@ export const boletoService = {
     },
 
     /**
-     * Aplica entrada manual de linha digitável a um boleto existente.
-     * Reprocessa validação FEBRABAN e atualiza os campos extraídos.
+     * Outro boleto que já tem esta linha — o mesmo predicado do índice único
+     * `boletos_org_linha_digitavel_uq` (mesma org, `duplicado_de` nulo). Serve ao
+     * aviso da tela logo ao ler o código de barras e à recusa de `aplicarLinhaDigitavelManual`.
      */
+    async boletoComMesmaLinha(organizationId: string, linha: string, excetoId?: string): Promise<BoletoComMesmaLinha | null> {
+        const limpa = onlyDigits(linha);
+        if (!organizationId || limpa.length < 44) return null;
+        let q = supabase
+            .from(TABLE)
+            .select('id, numero, status, valor, vencimento')
+            .eq('organization_id', organizationId)
+            .eq('linha_digitavel', limpa)
+            .is('duplicado_de', null);
+        if (excetoId) q = q.neq('id', excetoId);
+        const { data, error } = await q.limit(1).maybeSingle();
+        if (error) throw error;
+        if (!data) return null;
+        return {
+            id: data.id,
+            numero: data.numero ?? null,
+            status: data.status as BoletoStatus,
+            valor: data.valor == null ? null : Number(data.valor),
+            vencimento: data.vencimento ?? null,
+        };
+    },
+
     /**
      * Linha digitável digitada (ou lida do código de barras pelo botão do cadastro —
      * `metodo='ocr_local'`). Regra em `utils/boletoLinhaManual.ts` (18/10/2026): DV
@@ -360,7 +383,7 @@ export const boletoService = {
         const parsed = parseLinhaDigitavel(limpa);
 
         const { data: atual, error: erroAtual } = await supabase
-            .from(TABLE).select('status, valor, linha_digitavel').eq('id', boletoId).single();
+            .from(TABLE).select('status, valor, linha_digitavel, organization_id').eq('id', boletoId).single();
         if (erroAtual) throw erroAtual;
         const decisao = decidirLinhaManual({
             status: atual.status as BoletoStatus,
@@ -369,6 +392,11 @@ export const boletoService = {
             errosDaLinha: parsed.erros,
         });
         if ('recusa' in decisao) throw new Error(decisao.recusa);
+
+        // Linha de outro boleto: recusa dizendo QUAL (29/10/2026) — antes o update caía
+        // no índice único e a mensagem dizia só "outro boleto".
+        const outro = await this.boletoComMesmaLinha(atual.organization_id, limpa, boletoId);
+        if (outro) throw new Error(mensagemLinhaDuplicada(outro));
 
         const extraction = buildExtractionFromLinhaDigitavel(limpa, metodo);
         const updates = colunasParaGravar({
@@ -385,7 +413,9 @@ export const boletoService = {
 
         if (error) {
             if ((error as { code?: string }).code === '23505') {
-                throw new Error('Outro boleto desta organização já tem essa linha digitável.');
+                // Corrida: o outro boleto ganhou a linha entre a conferência e o update.
+                const ganhou = await this.boletoComMesmaLinha(atual.organization_id, limpa, boletoId).catch(() => null);
+                throw new Error(ganhou ? mensagemLinhaDuplicada(ganhou) : 'Outro boleto desta organização já tem essa linha digitável.');
             }
             throw error;
         }

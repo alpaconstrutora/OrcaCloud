@@ -12,6 +12,7 @@
  */
 
 import type { BoletoStatus } from '../types/boletos.ts';
+import { STATUS_LABELS } from './boletoStatus';
 
 export type DecisaoLinhaManual =
     | { modo: 'completar' }          // rascunho/revisão: a linha preenche o que trouxer
@@ -68,4 +69,32 @@ export function colunasParaGravar(
         }
     }
     return saida;
+}
+
+/** O boleto que já tem a linha — o que o aviso precisa para nomeá-lo. */
+export interface BoletoComMesmaLinha {
+    id: string;
+    numero: number | null;
+    status: BoletoStatus;
+    valor: number | null;
+    vencimento: string | null;
+}
+
+/** `#0377` — o número como a lista e o cabeçalho mostram; sem número, o começo do id. */
+export function rotuloDoBoleto(b: Pick<BoletoComMesmaLinha, 'id' | 'numero'>): string {
+    return b.numero != null ? `#${String(b.numero).padStart(4, '0')}` : `${b.id.slice(0, 8)}…`;
+}
+
+/**
+ * Aviso de linha repetida (29/10/2026, plano docs/planos/2026-10-29-boleto-linha-duplicada.md):
+ * a recusa antiga dizia só "outro boleto", e o usuário não tinha como achar qual era.
+ * Mesmo texto no aviso da tela (logo ao ler o código de barras) e na recusa do service.
+ */
+export function mensagemLinhaDuplicada(outro: BoletoComMesmaLinha): string {
+    const rotulo = rotuloDoBoleto(outro);
+    const partes = [STATUS_LABELS[outro.status] ?? outro.status];
+    if (outro.valor != null) partes.push(brl(outro.valor));
+    if (outro.vencimento) partes.push(`vence ${outro.vencimento.split('-').reverse().join('/')}`);
+    return `Essa linha digitável já é do boleto ${rotulo} (${partes.join(' · ')}). ` +
+        'Dois boletos com a mesma linha são o mesmo boleto — confira se este não é uma cópia daquele.';
 }

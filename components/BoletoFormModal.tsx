@@ -16,6 +16,7 @@ import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
 import { extractFromPdfFile, lerCodigoDeBarrasDoPdf, ehErroDeSenha } from '../utils/boletoParser';
 import { onlyDigits } from '../utils/febrabanRules';
+import { mensagemLinhaDuplicada, rotuloDoBoleto, type BoletoComMesmaLinha } from '../utils/boletoLinhaManual';
 import { formatMoney, formatDateTimeBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import { renomearDocumentoDeNovo } from '../services/boletoNomeDocumentoService';
@@ -36,6 +37,8 @@ interface BoletoFormModalProps {
     boleto?: Boleto;
     onClose: () => void;
     onSaved: (boleto: Boleto) => void;
+    /** Abre outro boleto no lugar deste — o aviso de linha repetida leva ao boleto que já a tem. */
+    onAbrirOutroBoleto?: (boletoId: string) => void;
 }
 
 // Delegado à primitiva compartilhada (ver components/ui/Format.tsx / PLANO_MODULO_TABELAS.md).
@@ -143,7 +146,7 @@ const VENCIMENTO_MAX = `${new Date().getFullYear() + 5}-12-31`;
 
 const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     organizationId: initialOrgId, organizations = [], onOrgChange,
-    userEmail, projectId, boleto: initial, onClose, onSaved,
+    userEmail, projectId, boleto: initial, onClose, onSaved, onAbrirOutroBoleto,
 }) => {
     const [organizationId, setOrganizationId] = React.useState(initialOrgId);
     // Orgs em que o usuário REALMENTE pode gravar. `useStore().organizations`
@@ -181,6 +184,24 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     /** A linha do campo veio do código de barras do PDF (botão), e não foi digitada. */
     const [linhaDoCodigo, setLinhaDoCodigo] = useState(false);
     const [lendoCodigo, setLendoCodigo] = useState(false);
+    /* Erro da linha digitável mora NA caixa dela, abaixo dos botões (29/10/2026): no topo
+       da tela, longe do botão, ficava fora da vista — #0380. */
+    const [erroLinha, setErroLinha] = useState<string | null>(null);
+    /** Outro boleto que já tem a linha do campo — "Validar" seria recusado. */
+    const [linhaDeOutro, setLinhaDeOutro] = useState<BoletoComMesmaLinha | null>(null);
+    const orgDoBoleto = boleto?.organization_id ?? organizationId;
+    useEffect(() => {
+        const digits = onlyDigits(linhaManual);
+        setLinhaDeOutro(null);
+        if (!boleto?.id || ![44, 47, 48].includes(digits.length)) return;
+        let vivo = true;
+        // Falha na conferência não trava nada: o "Validar" confere de novo no service.
+        Promise.resolve().then(() => boletoService.boletoComMesmaLinha(orgDoBoleto, digits, boleto.id))
+            // Com linha repetida, o "clique em Validar" do topo contradiria o aviso da caixa.
+            .then(outro => { if (!vivo) return; setLinhaDeOutro(outro); if (outro) setInfo(null); })
+            .catch(() => {});
+        return () => { vivo = false; };
+    }, [linhaManual, boleto?.id, orgDoBoleto]);
     // Captura por e-mail (15/10/2026): de onde veio, e o histórico do boleto.
     const [origemEmail, setOrigemEmail] = useState<MensagemCaptura | null>(null);
     const [auditoria, setAuditoria] = useState<BoletoAuditoria[] | null>(null);
@@ -502,10 +523,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         if (!boleto) return;
         const digits = onlyDigits(linhaManual);
         if (digits.length !== 44 && digits.length !== 47 && digits.length !== 48) {
-            setError('Linha digitável deve ter 44, 47 ou 48 dígitos.');
+            setErroLinha('Linha digitável deve ter 44, 47 ou 48 dígitos.');
             return;
         }
         setError(null);
+        setErroLinha(null);
         setBusy(true);
         try {
             const updated = await boletoService.aplicarLinhaDigitavelManual(
@@ -523,7 +545,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setInfo('Linha digitável processada com sucesso.');
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
-            setError(error.message || 'Falha ao processar linha digitável');
+            setErroLinha(error.message || 'Falha ao processar linha digitável');
         } finally {
             setBusy(false);
         }
@@ -537,6 +559,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     async function handleLerCodigoDeBarras() {
         if (!documentoUrl) return;
         setError(null);
+        setErroLinha(null);
         setInfo(null);
         setLendoCodigo(true);
         try {
@@ -544,7 +567,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             if (!resp.ok) throw new Error('Não foi possível baixar o PDF do boleto.');
             const lido = await lerCodigoDeBarrasDoPdf(await resp.arrayBuffer());
             if (lido.linha === null) {
-                setError(lido.motivo === 'mais_de_um_codigo'
+                setErroLinha(lido.motivo === 'mais_de_um_codigo'
                     ? 'O PDF tem mais de um código de barras — cole a linha digitável do boleto certo.'
                     : 'Não foi possível ler o código de barras deste PDF — cole a linha digitável.');
                 return;
@@ -553,7 +576,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setLinhaDoCodigo(true);
             setInfo('Linha lida do código de barras do PDF. Confira com o documento e clique em "Validar linha digitável".');
         } catch (err: unknown) {
-            setError(ehErroDeSenha(err)
+            setErroLinha(ehErroDeSenha(err)
                 ? 'PDF protegido por senha — não dá para ler o código de barras. Cole a linha digitável.'
                 : (err instanceof Error ? err.message : 'Falha ao ler o código de barras do PDF.'));
         } finally {
@@ -1255,15 +1278,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         <input
                                             type="text"
                                             value={linhaManual}
-                                            onChange={(e) => { setLinhaManual(e.target.value); setLinhaDoCodigo(false); }}
+                                            onChange={(e) => { setLinhaManual(e.target.value); setLinhaDoCodigo(false); setErroLinha(null); }}
                                             placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
                                             className="w-full px-3 h-9 rounded-[6px] border border-amber-300 bg-white text-sm font-mono outline-none focus:border-amber-500"
                                         />
                                         <div className="mt-2 flex flex-wrap items-center gap-2">
                                             <button
                                                 onClick={handleAplicarLinhaManual}
-                                                disabled={busy || !linhaManual}
-                                                title={!linhaManual ? 'Cole ou leia a linha digitável primeiro' : undefined}
+                                                disabled={busy || !linhaManual || !!linhaDeOutro}
+                                                title={!linhaManual ? 'Cole ou leia a linha digitável primeiro'
+                                                    : linhaDeOutro ? `Essa linha já é do boleto ${rotuloDoBoleto(linhaDeOutro)}` : undefined}
                                                 className="px-4 py-2 bg-amber-600 text-white rounded-[6px] text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
                                             >
                                                 Validar linha digitável
@@ -1281,6 +1305,23 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                                 </button>
                                             )}
                                         </div>
+                                        {(linhaDeOutro || erroLinha) && (
+                                            <div className="mt-3 flex items-start gap-2 p-3 rounded-[6px] bg-white border border-red-200 text-red-700 text-xs">
+                                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                                <div className="space-y-2">
+                                                    <p>{linhaDeOutro ? mensagemLinhaDuplicada(linhaDeOutro) : erroLinha}</p>
+                                                    {linhaDeOutro && onAbrirOutroBoleto && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onAbrirOutroBoleto(linhaDeOutro.id)}
+                                                            className="h-8 px-3 bg-white border border-red-300 text-red-700 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-colors"
+                                                        >
+                                                            Abrir boleto {rotuloDoBoleto(linhaDeOutro)}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
                                     </div>
                                 )}
                             </div>

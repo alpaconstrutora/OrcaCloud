@@ -17,6 +17,8 @@ interface RegistryItem {
     branch?: string;
     account_number?: string;
     organization_id?: string;
+    /** Conta de pagamento: empresa (CNPJ) da organização a que a conta pertence. */
+    empresa_id?: string | null;
     accounting_nature?: 'CREDORA' | 'DEVEDORA';
     // Conta de pagamento: "atende também" (ver docs/planos/2026-09-15-conta-atende-outras-organizacoes.md)
     serves_all_organizations?: boolean;
@@ -125,6 +127,13 @@ interface OrgOption {
     name: string;
 }
 
+/** Empresa (CNPJ) de uma organização — opção do campo "Empresa" da conta de pagamento. */
+export interface EmpresaOption {
+    id: string;
+    name: string;
+    orgId: string;
+}
+
 interface FinancialRegistryManagerProps {
     title: string;
     description: string;
@@ -154,6 +163,11 @@ interface FinancialRegistryManagerProps {
     /** Conta de pagamento: organizações que ela pode ATENDER além da dona (todas as do
      *  usuário). Com isso o drawer mostra o bloco "Atende também". */
     servedOrgOptions?: OrgOption[];
+    /** Conta de pagamento: empresas que podem ser a empresa da conta (as da organização dela
+     *  aparecem no campo "Empresa"). Sem esta prop o campo não aparece (Plano de Contas).
+     *  Até 29/10/2026 nenhuma tela editava `payment_accounts.empresa_id`, e o Dashboard da
+     *  Conciliação mostrava "Sem empresa" sem ter onde resolver. */
+    empresaOptions?: EmpresaOption[];
     /** Coluna Organização. Em "Todas as organizações" a lista junta registros
      *  de várias orgs, com códigos repetidos entre elas (toda org tem 1.1.1) —
      *  a coluna é o que os distingue, e a árvore passa a ser por org + código. */
@@ -191,8 +205,19 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     organizationNameById,
     sheetLabels = { create: 'Novo registro', edit: 'Editar registro' },
     servedOrgOptions,
+    empresaOptions,
     renderEditExtra,
 }) => {
+    // Empresa da conta: as da organização dela. Com UMA só (a matriz — toda PJ tem uma), o app
+    // já sabe a resposta e preenche; nunca troca uma empresa escolhida (só preenche o vazio).
+    const empresasDaOrg = useCallback(
+        (orgId?: string) => (empresaOptions ?? []).filter(e => e.orgId === orgId),
+        [empresaOptions],
+    );
+    const empresaSugerida = useCallback((orgId?: string): string | null => {
+        const lista = empresasDaOrg(orgId);
+        return lista.length === 1 ? lista[0].id : null;
+    }, [empresasDaOrg]);
     const orgNameOf = (item: RegistryItem) => (item.organization_id ? organizationNameById?.get(item.organization_id) : undefined);
     const [isEditing, setIsEditing] = useState<string | null>(null);
     const [isAdding, setIsAdding] = useState(false);
@@ -269,7 +294,9 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     const advancedFilters = useAdvancedFilters(advancedFilterFields, 'financialRegistryFilters:advanced');
 
     const handleEdit = (item: RegistryItem) => {
-        setFormData(item);
+        setFormData(empresaOptions && !item.empresa_id
+            ? { ...item, empresa_id: empresaSugerida(item.organization_id) }
+            : item);
         setAtendeModo(item.serves_all_organizations ? 'all' : (item.served_organization_ids?.length ? 'some' : 'own'));
         setIsEditing(item.id);
         setIsAdding(false);
@@ -277,7 +304,10 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
 
     const handleAdd = () => {
         setAtendeModo('own');
-        setFormData({ name: '', code: '', description: '', organization_id: defaultOrganizationId, accounting_nature: undefined });
+        setFormData({
+            name: '', code: '', description: '', organization_id: defaultOrganizationId, accounting_nature: undefined,
+            ...(empresaOptions ? { empresa_id: empresaSugerida(defaultOrganizationId) } : {}),
+        });
         setIsAdding(true);
         setIsEditing(null);
     };
@@ -771,7 +801,12 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         <label className="text-xs font-semibold text-slate-500">Organização</label>
                                         <select
                                             value={formData.organization_id || ''}
-                                            onChange={(e) => setFormData({ ...formData, organization_id: e.target.value })}
+                                            // Trocou a organização: a empresa da outra não vale mais.
+                                            onChange={(e) => setFormData({
+                                                ...formData,
+                                                organization_id: e.target.value,
+                                                ...(empresaOptions ? { empresa_id: empresaSugerida(e.target.value) } : {}),
+                                            })}
                                             className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         >
                                             <option value="">Selecione uma organização…</option>
@@ -781,6 +816,34 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         </select>
                                     </div>
                                 )}
+                                {empresaOptions && (() => {
+                                    const orgDaConta = formData.organization_id || defaultOrganizationId;
+                                    const empresas = empresasDaOrg(orgDaConta);
+                                    return (
+                                        <div>
+                                            <label htmlFor="conta-pagamento-empresa" className="text-xs font-semibold text-slate-500">Empresa</label>
+                                            {!orgDaConta ? (
+                                                <p className="mt-1.5 text-sm text-gray-600">Escolha a organização primeiro.</p>
+                                            ) : empresas.length === 0 ? (
+                                                // Pessoa física não tem empresa: não é pendência, e um select vazio
+                                                // desligado não diria por quê.
+                                                <p className="mt-1.5 text-sm text-gray-600">
+                                                    Esta organização não tem empresa cadastrada (pessoa física): a conta fica ligada só à organização.
+                                                </p>
+                                            ) : (
+                                                <select
+                                                    id="conta-pagamento-empresa"
+                                                    value={formData.empresa_id || ''}
+                                                    onChange={(e) => setFormData({ ...formData, empresa_id: e.target.value || null })}
+                                                    className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                >
+                                                    <option value="">Nenhuma</option>
+                                                    {empresas.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
+                                                </select>
+                                            )}
+                                        </div>
+                                    );
+                                })()}
                                 <div className="grid grid-cols-2 gap-4">
                                     <div>
                                         <label className="text-xs font-semibold text-slate-500">Agência</label>

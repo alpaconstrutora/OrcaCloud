@@ -254,7 +254,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
-    const { activeOrganizationId, setActiveOrganizationId } = useStore();
+    const { activeOrganizationId, setActiveOrganizationId, companies } = useStore();
+    // Campo "Empresa" de Contas de Pagamento: as empresas que o topo carregou (as da org
+    // selecionada, ou todas em "Todas"); o formulário filtra pela organização da conta.
+    const empresaOptions = React.useMemo(
+        () => companies.map(c => ({ id: c.id, orgId: c.org_id, name: c.nome_fantasia?.trim() || c.razao_social })),
+        [companies],
+    );
     // Organização efetiva do topo, com empresa herdando a dona (REGRA #5).
     const { orgId: contextOrgId } = useOrgContext();
 
@@ -757,6 +763,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         showBankDetails={activeTab === 'accounts'}
                         sheetLabels={activeTab === 'accounts' ? { create: 'Nova conta de pagamento', edit: 'Editar conta de pagamento' } : { create: 'Nova conta', edit: 'Editar conta' }}
                         servedOrgOptions={activeTab === 'accounts' ? registryOrgOptions : undefined}
+                        empresaOptions={activeTab === 'accounts' ? empresaOptions : undefined}
                         // Conta Asaas (Fase 2 — docs/planos/2026-10-16-asaas-pendencias-e-pix.md):
                         // só ao EDITAR uma conta de pagamento já gravada (precisa do id).
                         renderEditExtra={activeTab === 'accounts' ? (item, registrarAoSalvar) => <ContaAsaasSecao paymentAccountId={item.id} registrarAoSalvar={registrarAoSalvar} /> : undefined}
@@ -768,11 +775,13 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                             if (!currentOrgId) throw new Error('Selecione uma organização para vincular a conta.');
 
                             // Remover apenas campos gerados pelo servidor (id, created_at)
-                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string; accounting_nature?: 'CREDORA' | 'DEVEDORA'; serves_all_organizations?: boolean; served_organization_ids?: string[] };
+                            const { id: _id, created_at: _ca, ...rest } = item as { id?: string; created_at?: string; name: string; description?: string; bank?: string; branch?: string; account_number?: string; code?: string; organization_id?: string; empresa_id?: string | null; accounting_nature?: 'CREDORA' | 'DEVEDORA'; serves_all_organizations?: boolean; served_organization_ids?: string[] };
                             if (activeTab === 'accounts') {
                                 // code: em branco = auto-gerado pelo service (001/002/003...); preenchido = respeita a edição manual.
                                 const payload = {
                                     name: rest.name, description: rest.description, bank: rest.bank, branch: rest.branch, account_number: rest.account_number, code: rest.code || undefined,
+                                    // Empresa da conta (29/10/2026): até aqui nenhuma tela gravava.
+                                    empresa_id: rest.empresa_id || null,
                                     // "Atende também": todas (bool) ou lista específica (tabela payment_account_organizations)
                                     serves_all_organizations: !!rest.serves_all_organizations,
                                     served_organization_ids: rest.serves_all_organizations ? [] : (rest.served_organization_ids ?? []),

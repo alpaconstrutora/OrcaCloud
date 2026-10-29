@@ -1411,10 +1411,12 @@ export function enquadrarElevacao(
   // O TERRENO também é desenho (13/10/2026): o corte de um estudo só com lote e platô
   // era recusado como "vazio" — a mesma correção que a tela recebeu em 10/09/2026.
   const comTerreno = temPerfilDoTerreno(projecao);
+  // A MASSA também (29/10/2026): o estudo só de blocos era recusado como "vazio".
   const vazio =
     projecao.paredes.every((p) => p.degenerada) &&
     (!('cortados' in projecao) || projecao.cortados.length === 0) &&
-    !comTerreno;
+    !comTerreno &&
+    (projecao.massa ?? []).length === 0;
   const larguraRealMm = projecao.bbox.uMax - projecao.bbox.uMin;
   const alturaRealMm = projecao.bbox.vMax - projecao.bbox.vMin;
   // Com terreno, a faixa da cadeia de comprimentos fica reservada ABAIXO do desenho.
@@ -1454,6 +1456,9 @@ const COR_ELEV_ESTRUTURA = '#b8b8b8';
 const COR_ELEV_FUNDACAO = '#d8d0c4';
 /** Telhado: tom de telha, o único item que sai como polígono (é inclinado). */
 const COR_ELEV_TELHADO = '#d9b8a3';
+/** Bloco de massa (29/10/2026): em vista, claro; cortado pelo plano, o cinza do concreto cortado. */
+const COR_ELEV_MASSA = '#f1f1f1';
+const COR_ELEV_MASSA_CORTADA = '#c8c8c8';
 
 /**
  * Desenha uma elevação no papel: linha do solo e tudo o mais numa passada só,
@@ -1514,6 +1519,29 @@ export function desenharElevacao(
       ],
       cor,
     );
+
+  // A MASSA (29/10/2026), por baixo das peças: cada bloco um retângulo com as linhas dos pavimentos e o nome. O que o
+  // plano corta sai mais escuro e com o traço grosso; o subsolo, tracejado (à mão, 1,5/1 mm, como o símbolo do vão).
+  const tracejar = (x0: number, y0: number, x1: number, y1: number, estilo: EstiloTraco) => {
+    const L = Math.hypot(x1 - x0, y1 - y0);
+    for (let k = 0; k < L; k += 2.5) {
+      const e = Math.min(k + 1.5, L);
+      d.linha(x0 + ((x1 - x0) * k) / L, y0 + ((y1 - y0) * k) / L, x0 + ((x1 - x0) * e) / L, y0 + ((y1 - y0) * e) / L, estilo);
+    }
+  };
+  for (const b of projecao.massa ?? []) {
+    const c = caixa(b.uMin, b.uMax, b.vMin, b.vMax);
+    preencher(c, b.cortado ? COR_ELEV_MASSA_CORTADA : COR_ELEV_MASSA);
+    for (const v of b.pisos) d.linha(c.x, py(v), c.x + c.w, py(v), { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO });
+    const contorno = { espessuraMm: b.cortado ? 0.5 : 0.25, cor: COR_TRACO };
+    if (b.enterrado) {
+      tracejar(c.x, c.y, c.x + c.w, c.y, contorno);
+      tracejar(c.x + c.w, c.y, c.x + c.w, c.y + c.h, contorno);
+      tracejar(c.x + c.w, c.y + c.h, c.x, c.y + c.h, contorno);
+      tracejar(c.x, c.y + c.h, c.x, c.y, contorno);
+    } else d.retangulo(c.x, c.y, c.w, c.h, contorno);
+    if (c.w > 12 && c.h > 5) d.texto(c.x + c.w / 2, c.y + 3.2, b.nome, 2.2, COR_TRACO, { centralizar: true });
+  }
 
   for (const p of projecao.paredes) {
     if (p.degenerada) continue;

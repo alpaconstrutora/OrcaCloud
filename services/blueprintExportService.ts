@@ -63,6 +63,7 @@ import {
   type ProjecaoElevacao,
 } from '../utils/blueprintElevation';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../utils/blueprintCorte';
+import { comMassa } from '../utils/blueprintMassaNaVista';
 import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha, redesDoTemplate } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto, type ResultadoDeClimatizacaoIfc } from '../utils/blueprintIfc';
@@ -230,9 +231,10 @@ function projecaoDaPrancha(
     // Corte apagado com a marcação de pé: a prancha some em vez de explodir.
     // A aba Versões pode ter sido aberta antes da exclusão.
     if (!corte) return null;
-    return projetarCorte(model, { corte, levelIds, terreno: terreno ?? null });
+    // Com a massa (29/10/2026): o estudo de massa é só blocos, e a prancha saía vazia.
+    return comMassa(model, projetarCorte(model, { corte, levelIds, terreno: terreno ?? null }), corte.a, levelIds);
   }
-  return projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p]!, levelIds });
+  return comMassa(model, projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p]!, levelIds }), null, levelIds);
 }
 
 /**
@@ -741,7 +743,11 @@ export function desenharConjunto(
       case 'CORTE':
       case 'ELEVACAO': {
         const corte = p.corteId ? (model.sections ?? []).find((c) => c.id === p.corteId) : null;
-        const proj = corte ? projetarCorte(model, { corte, terreno: o.terrenoDoCorte ?? null }) : p.direcao ? projetarElevacao(model, { direcao: p.direcao }) : null;
+        const proj = corte
+          ? comMassa(model, projetarCorte(model, { corte, terreno: o.terrenoDoCorte ?? null }), corte.a)
+          : p.direcao
+            ? comMassa(model, projetarElevacao(model, { direcao: p.direcao }), null)
+            : null;
         if (!proj) {
           folhas.push({ prancha: p, denominador: 0 });
           break;

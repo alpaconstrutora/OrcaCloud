@@ -1199,8 +1199,26 @@ function useTexturaDoMapa(m: { plano: PlanoDaTexturaDoMapa; chave: string } | nu
 /**
  * Etiqueta de texto que sempre olha para a câmera. `alturaM` é a altura no mundo, em metros; `porCima` desenha sem
  * teste de profundidade — a etiqueta da unidade mora DENTRO do prisma dela e sumiria atrás da própria face.
+ * `fracaoDaTela` (29/10/2026): em vez de metros, a altura como fração da TELA — na Concepção a câmera fica longe (lente
+ * de 10°) e a etiqueta de 0,55 m da unidade sumia ("a cor da identificação das unidades está clara e não aparece").
  */
-function RotuloDeRede({ texto, cor, posicao, alturaM = 0.11, porCima = false, peso = 600 }: { texto: string; cor: string; posicao: [number, number, number]; alturaM?: number; porCima?: boolean; peso?: number }) {
+function RotuloDeRede({
+  texto,
+  cor,
+  posicao,
+  alturaM = 0.11,
+  porCima = false,
+  peso = 600,
+  fracaoDaTela,
+}: {
+  texto: string;
+  cor: string;
+  posicao: [number, number, number];
+  alturaM?: number;
+  porCima?: boolean;
+  peso?: number;
+  fracaoDaTela?: number;
+}) {
   const textura = useMemo(() => {
     if (typeof document === 'undefined') return null;
     const canvas = document.createElement('canvas');
@@ -1214,7 +1232,7 @@ function RotuloDeRede({ texto, cor, posicao, alturaM = 0.11, porCima = false, pe
     canvas.width = largura;
     canvas.height = altura;
     ctx.font = fonte; // redimensionar o canvas apaga o estado do contexto
-    ctx.fillStyle = 'rgba(255,255,255,0.88)';
+    ctx.fillStyle = fracaoDaTela ? '#ffffff' : 'rgba(255,255,255,0.88)';
     ctx.fillRect(0, 0, largura, altura);
     ctx.fillStyle = cor;
     ctx.textBaseline = 'middle';
@@ -1222,13 +1240,27 @@ function RotuloDeRede({ texto, cor, posicao, alturaM = 0.11, porCima = false, pe
     const t = new THREE.CanvasTexture(canvas);
     t.colorSpace = THREE.SRGBColorSpace;
     return { t, aspecto: largura / altura };
-  }, [texto, cor, peso]);
+  }, [texto, cor, peso, fracaoDaTela]);
   useEffect(() => () => textura?.t.dispose(), [textura]);
+  // Na tela: a escala acompanha a lente a cada quadro (ver `EtiquetaDeChamada`).
+  const ref = useRef<THREE.Sprite>(null);
+  useFrame(({ camera }) => {
+    const s = ref.current;
+    if (!s || !textura || !fracaoDaTela) return;
+    const k = 2 * Math.tan((((camera as THREE.PerspectiveCamera).fov ?? 45) * Math.PI) / 360);
+    s.scale.set(fracaoDaTela * k * textura.aspecto, fracaoDaTela * k, 1);
+  });
   if (!textura) return null;
   return (
     // Sem raycast: a etiqueta não rouba o clique da peça que está atrás dela.
-    <sprite position={posicao} scale={[alturaM * textura.aspecto, alturaM, 1]} renderOrder={porCima ? 30 : 20} raycast={() => null}>
-      <spriteMaterial map={textura.t} transparent depthTest={!porCima} depthWrite={false} />
+    <sprite
+      ref={ref}
+      position={posicao}
+      scale={fracaoDaTela ? undefined : [alturaM * textura.aspecto, alturaM, 1]}
+      renderOrder={porCima ? 30 : 20}
+      raycast={() => null}
+    >
+      <spriteMaterial map={textura.t} transparent depthTest={!porCima} depthWrite={false} sizeAttenuation={!fracaoDaTela} />
     </sprite>
   );
 }
@@ -2291,7 +2323,12 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
         r.tipo === 'BLOCO' ? (
           <RotuloDeRede key={r.chave} texto={r.texto} cor="#0f172a" posicao={r.posicao} alturaM={1.1} porCima peso={700} />
         ) : (
-          <RotuloDeRede key={r.chave} texto={r.texto} cor="#1e3a8a" posicao={r.posicao} alturaM={0.55} porCima />
+          // Na Concepção, do tamanho da TELA e escura: de longe, a de 0,55 m em azul claro não aparecia.
+          concepcao ? (
+            <RotuloDeRede key={r.chave} texto={r.texto} cor="#0f172a" posicao={r.posicao} porCima peso={700} fracaoDaTela={0.024} />
+          ) : (
+            <RotuloDeRede key={r.chave} texto={r.texto} cor="#1e3a8a" posicao={r.posicao} alturaM={0.55} porCima />
+          )
         ),
       )}
       {arestasDaConcepcao.map((a) => (

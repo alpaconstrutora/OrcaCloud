@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { decidirLinhaManual, colunasParaGravar, COLUNAS_DA_LINHA } from '../utils/boletoLinhaManual';
+import { decidirLinhaManual, colunasParaGravar, COLUNAS_DA_LINHA, mensagemLinhaDuplicada } from '../utils/boletoLinhaManual';
 
 const base = { valorBoleto: 61.65, valorDaLinha: 61.65, errosDaLinha: [] as string[] };
 
@@ -54,5 +54,21 @@ describe('colunasParaGravar', () => {
         expect('multa' in g).toBe(false);
         expect('vencimento' in g).toBe(false);
         expect('extracao_raw' in g).toBe(false);
+    });
+});
+
+describe('mensagemLinhaDuplicada', () => {
+    it('nomeia o outro boleto pelo número, com status, valor e vencimento', () => {
+        const m = mensagemLinhaDuplicada({ id: 'x', numero: 377, status: 'rascunho', valor: 1230, vencimento: '2020-02-27' });
+        expect(m).toMatch(/^Essa linha digitável já é do boleto #0377 /);
+        expect(m).toContain('Rascunho');
+        expect(m).toMatch(/R\$\s?1\.230,00/);
+        expect(m).toContain('27/02/2020');
+    });
+
+    it('sem número, valor ou vencimento: não inventa', () => {
+        const m = mensagemLinhaDuplicada({ id: 'abcdef12-3456', numero: null, status: 'aprovado', valor: null, vencimento: null });
+        expect(m).toMatch(/^Essa linha digitável já é do boleto abcdef12… \(Aprovado\)\./);
+        expect(m).not.toMatch(/R\$|vence/);
     });
 });

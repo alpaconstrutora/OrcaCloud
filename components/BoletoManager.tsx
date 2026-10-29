@@ -990,6 +990,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     if (isModalOpen) {
         return (
             <BoletoFormModal
+                // `key`: "Abrir boleto #…" do aviso de linha repetida troca o boleto com o
+                // formulário aberto — sem remontar, os campos seriam os do anterior.
+                key={editing?.id ?? 'novo'}
                 organizationId={editing?.organization_id ?? effectiveOrgId ?? ''}
                 organizations={organizations}
                 onOrgChange={(id) => onOrgChange?.(id || null)}
@@ -998,6 +1001,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 boleto={editing}
                 onClose={fecharModal}
                 onSaved={handleSaved}
+                onAbrirOutroBoleto={abrirBoletoPorId}
             />
         );
     }

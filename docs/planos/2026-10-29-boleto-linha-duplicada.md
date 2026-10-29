@@ -53,4 +53,14 @@ As três, como foram apresentadas:
 | 1 | `utils/boletoLinhaManual.ts`: `mensagemLinhaDuplicada` + teste em `__tests__/boletoLinhaManual.test.ts` | teste vermelho antes, verde depois | ✅ 2 vermelhos → 10/10 verdes (+ `rotuloDoBoleto`) |
 | 2 | `boletoService.boletoComMesmaLinha` + recusa nomeada em `aplicarLinhaDigitavelManual` (antes do update e no 23505) | typecheck 0; consulta real devolve #0377 para a linha do #0380 | ✅ tsc 0 erros; predicado no banco → #0377 (Rascunho, R$ 1.230,00, 27/02/2020) |
 | 3 | `BoletoFormModal`: aviso após ler o código, erro abaixo dos botões, Validar desligado com motivo, "Abrir boleto #…" (prop `onAbrirOutroBoleto`); `BoletoManager` passa `abrirBoletoPorId` e `key` | `check-ui-standard` exit 0 nos 2 arquivos; tela no navegador com o #0380 | ✅ exit 0 nos 2; app local (frente, porta 3100): ler o código no #0380 → aviso com #0377 abaixo dos botões, Validar desligado; "Abrir boleto #0377" abre o #0377 (doc BOL-002-000-0037.pdf). Nada gravado (updated_at dos dois igual ao de 28/10). Suíte de boletos 192/192 |
-| 4 | Publicação + conferência no domínio | CI verde; `conferir-producao.sh "já é do boleto"` | ⏳ |
+| 4 | Publicação + conferência no domínio | CI verde; `conferir-producao.sh "já é do boleto"` | ✅ PR #255, CI verde, domínio serve `ae9694b` com o texto |
+
+## Pedido posterior — 29/10/2026
+
+Com print da caixa no boleto BOL-004-0061.pdf, literal:
+
+> mover a sessao Extração com baixa confiança para o painel lateral direito
+
+| # | O que muda | Como sei que terminou | Estado |
+|---|---|---|---|
+| 5 | A caixa "Extração com baixa confiança" sai de baixo do documento e vai para a coluna direita, logo acima de "Cobrança" (onde a linha preenchida aparece). Só move o bloco; o comportamento é o mesmo | diff só com linhas movidas (+ comentário); `check-ui-standard` exit 0; tela local mostra a caixa à direita, acima de Cobrança | ✅ diff conferido; tsc 0 erros; exit 0; testes do boleto 202/202; tela local (#0884) com a caixa entre "Documento" e "Cobrança" |

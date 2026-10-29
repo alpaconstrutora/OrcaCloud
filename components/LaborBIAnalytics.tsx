@@ -513,6 +513,11 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
     // ficam em branco, com a leitura por organização na tabela abaixo.
     const mesMaisRecente = snapshots[0]?.ano_mes;
     const doMesAtual = snapshots.filter(s => s.ano_mes === mesMaisRecente);
+    // Os KPIs são da ÚLTIMA FOTO, não de hoje: "Headcount atual 9" era agosto com 10
+    // colaboradores hoje. O rótulo diz de que mês é a foto.
+    const mesDaFoto = mesMaisRecente
+        ? new Date(`${mesMaisRecente.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }).replace('. de ', '/').replace('.', '')
+        : null;
     const soma = (rows: HrMonthlySnapshot[], campo: 'headcount_fim' | 'admissoes' | 'demissoes') =>
         rows.reduce((acc, r) => acc + (r[campo] ?? 0), 0);
 
@@ -548,12 +553,12 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
 
             {/* KPIs executivos */}
             <div className="grid grid-cols-4 gap-4">
-                <KpiCard label="Headcount atual" value={fmt.num(headcountConsolidado)} icon={Users} color="sky"
+                <KpiCard label={mesDaFoto ? `Headcount — ${mesDaFoto}` : 'Headcount'} value={fmt.num(headcountConsolidado)} icon={Users} color="sky"
                     sub={isAllOrgs
                         ? `${fmt.num(admissoesConsolidadas)} adm • ${fmt.num(demissoesConsolidadas)} dem • ${doMesAtual.length} org.`
                         : `${fmt.num(latest?.admissoes)} adm • ${fmt.num(latest?.demissoes)} dem`}
                     delta={isAllOrgs ? undefined : headcountDelta} />
-                <KpiCard label="Turnover mês" value={isAllOrgs ? '—' : fmt.pct(latest?.turnover_rate)} icon={TrendingDown} color="amber"
+                <KpiCard label={mesDaFoto ? `Turnover — ${mesDaFoto}` : 'Turnover'} value={isAllOrgs ? '—' : fmt.pct(latest?.turnover_rate)} icon={TrendingDown} color="amber"
                     sub={isAllOrgs ? 'Taxa por organização — ver tabela' : `Média 3m: ${fmt.pct(latest?.turnover_media_3m)}`}
                     delta={isAllOrgs ? undefined : turnoverDelta} deltaInvert />
                 <KpiCard label="Absenteísmo" value={isAllOrgs ? '—' : fmt.pct(latest?.absenteismo_rate)} icon={Clock} color="rose"

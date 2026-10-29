@@ -6,7 +6,7 @@ import {
 } from 'lucide-react';
 import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import { useQuery } from '@tanstack/react-query';
-import { laborService, RhKpis, Employee } from '../services/laborService';
+import { laborService, RhKpis, RhVencido, Employee } from '../services/laborService';
 import { payrollService } from '../services/payrollService';
 import { hojeLocal } from '../utils/baixaRecebivel';
 import { hrAnalyticsService } from '../services/hrAnalyticsService';
@@ -37,13 +37,18 @@ const KpiCard: React.FC<{
 
 // ── Alert Item ────────────────────────────────────────────────────────────────
 
+/** 'AAAA-MM-DD' → 'dd/mm/aaaa' por split (new Date(str) volta um dia em Brasília). */
+const dataBr = (iso: string) => iso.slice(0, 10).split('-').reverse().join('/');
+
 const AlertItem: React.FC<{
     count: number;
     label: string;
     icon: React.ElementType;
     color: string;
     onClick?: () => void;
-}> = ({ count, label, icon: Icon, color, onClick }) => (
+    /** Quem venceu: nome e data na própria tela, sem abrir outra para saber "quem". */
+    itens?: RhVencido[];
+}> = ({ count, label, icon: Icon, color, onClick, itens = [] }) => (
     <button
         onClick={onClick}
         disabled={count === 0}
@@ -58,6 +63,14 @@ const AlertItem: React.FC<{
         </div>
         <div className="flex-1 min-w-0">
             <p className={`text-xs font-black ${count > 0 ? `text-${color}-900` : 'text-slate-500'}`}>{label}</p>
+            {itens.map((v, i) => (
+                <p key={i} className={`text-xs text-${color}-800 mt-0.5 truncate`}>
+                    {v.nome.replace(/\s+/g, ' ')} — venceu em {dataBr(v.data)}{v.detalhe ? ` · ${v.detalhe}` : ''}
+                </p>
+            ))}
+            {count > itens.length && itens.length > 0 && (
+                <p className={`text-xs text-${color}-800 mt-0.5`}>e mais {count - itens.length}</p>
+            )}
         </div>
         <span className={`text-lg font-black px-2.5 py-1 rounded-xl ${
             count > 0 ? `bg-${color}-100 text-${color}-700` : 'bg-slate-100 text-slate-400'
@@ -199,8 +212,14 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
         return (
             <div className="flex flex-col items-center justify-center py-16 gap-4">
                 <AlertTriangle className="w-10 h-10 text-amber-400" />
-                <p className="text-slate-500 text-sm font-bold">Não foi possível carregar os KPIs.</p>
-                <p className="text-xs text-slate-400">A função RPC pode ainda estar sendo criada no banco. Execute a migration e tente novamente.</p>
+                <p className="text-slate-500 text-sm font-bold">Não foi possível carregar os números do RH.</p>
+                {/* rh_kpis recusa organização de que o usuário não é membro (migration
+                    20271028740000) — esse é o único motivo que a tela sabe dizer. */}
+                <p className="text-xs text-slate-500 max-w-sm text-center">
+                    {/Acesso negado/i.test((error as Error | null)?.message ?? '')
+                        ? 'Você não é membro da organização selecionada no topo. Escolha outra organização ou "Todas".'
+                        : 'Verifique a conexão e tente de novo. Se o erro continuar, avise o suporte.'}
+                </p>
                 <button onClick={() => refetch()} className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl text-sm font-bold hover:bg-indigo-700">
                     <RefreshCw className="w-4 h-4" /> Tentar novamente
                 </button>
@@ -208,7 +227,11 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
         );
     }
 
-    const mesAtual = new Date().toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    // Do refDate (local) e só a 1ª letra maiúscula: o `capitalize` do CSS fazia "Outubro De 2026".
+    const mesRef = new Date(`${refDate}T12:00:00`).toLocaleString('pt-BR', { month: 'long', year: 'numeric' });
+    const mesAtual = mesRef.charAt(0).toUpperCase() + mesRef.slice(1);
+    // O alerta de férias abre direto em "Saldo de Férias" (LaborAbsences lê `?aba=saldos`).
+    const irParaSaldoDeFerias = () => { window.location.hash = '#/labor-absences?aba=saldos'; };
     const vTurnover = vereditoPelaMeta(kpis.periodo.turnover_pct, meta?.turnover_max_pct, !!orgId);
     const vAbsenteismo = vereditoPelaMeta(kpis.qualidade.absenteismo_pct, meta?.absenteismo_max_pct, !!orgId);
     // Meta de horas extras é % das horas trabalhadas (BI › Metas: "Ex: 10 das horas totais").
@@ -223,7 +246,7 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard RH</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium capitalize">KPIs executivos — {mesAtual}</p>
+                    <p className="text-gray-400 text-sm mt-1.5 font-medium">KPIs executivos — {mesAtual}</p>
                 </div>
                 <button onClick={() => refetch()} className="flex items-center gap-2 px-3 py-2 bg-slate-50 border border-slate-200 text-slate-600 rounded-xl hover:bg-slate-100 transition-all text-button font-bold">
                     <RefreshCw className="w-3.5 h-3.5" /> Atualizar
@@ -234,12 +257,14 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
             <div>
                 <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Headcount</p>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                    {/* Cada legenda diz o que o número ao lado ainda não disse (antes,
+                        "Total 10 · 10 ativos" repetia o cartão seguinte). */}
                     <KpiCard label="Total de Colaboradores" value={kpis.headcount.total} icon={Users} color="indigo"
-                        sub={`${kpis.headcount.ativos} ativos`} />
+                        sub="todos, menos os desligados" />
                     <KpiCard label="Ativos" value={kpis.headcount.ativos} icon={UserCheck} color="emerald"
-                        sub={`${kpis.headcount.afastados} afastados`} />
-                    <KpiCard label="Em Férias" value={kpis.headcount.em_ferias} icon={Umbrella} color="blue"
-                        sub="no mês atual"
+                        sub="trabalhando hoje" />
+                    <KpiCard label="Férias no mês" value={kpis.headcount.em_ferias} icon={Umbrella} color="blue"
+                        sub="com algum dia de férias neste mês"
                         onClick={() => onNavigate?.('labor-absences')} />
                     <KpiCard label="Afastados" value={kpis.headcount.afastados} icon={Stethoscope} color="amber"
                         sub="INSS / licença" />
@@ -251,12 +276,10 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
                 <div>
                     <p className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Movimentação no Mês</p>
                     <div className="grid grid-cols-2 gap-4">
-                        <KpiCard label="Admissões" value={kpis.periodo.admitidos} icon={UserCheck} color="emerald"
-                            trendLabel={kpis.periodo.admitidos > 0 ? '+' + kpis.periodo.admitidos : undefined} trend="neutral" />
-                        {/* Sem seta: ▲/▼ só com comparação a um período, que esta tela ainda não tem. */}
-                        <KpiCard label="Desligamentos" value={kpis.periodo.desligados} icon={UserMinus} color="rose"
-                            trendLabel={kpis.periodo.desligados > 0 ? String(kpis.periodo.desligados) : undefined}
-                            trend="neutral" />
+                        {/* Sem dica: "Admissões 1 · +1" repetia o número. Sem seta: ▲/▼ só com
+                            comparação a um período, que esta tela ainda não tem. */}
+                        <KpiCard label="Admissões" value={kpis.periodo.admitidos} icon={UserCheck} color="emerald" />
+                        <KpiCard label="Desligamentos" value={kpis.periodo.desligados} icon={UserMinus} color="rose" />
                         <div className="col-span-2">
                             <KpiCard label="Turnover" value={`${kpis.periodo.turnover_pct}%`} icon={Activity} color="orange"
                                 sub="(admissões + desligamentos) ÷ 2 ÷ headcount médio"
@@ -305,15 +328,15 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
                         dobro, NR/ASO vencido tira o colaborador da obra. */}
                     {kpis.alertas.ferias_vencidas > 0 && (
                         <AlertItem count={kpis.alertas.ferias_vencidas} label="Férias vencidas (pagamento em dobro)"
-                            icon={Umbrella} color="rose" onClick={() => onNavigate?.('labor-absences')} />
+                            icon={Umbrella} color="rose" onClick={irParaSaldoDeFerias} itens={kpis.vencidos?.ferias} />
                     )}
                     {kpis.alertas.docs_vencidos > 0 && (
                         <AlertItem count={kpis.alertas.docs_vencidos} label="Documentos (ASO/NR) vencidos"
-                            icon={FileText} color="rose" onClick={() => onNavigate?.('labor-documents')} />
+                            icon={FileText} color="rose" onClick={() => onNavigate?.('labor-documents')} itens={kpis.vencidos?.documentos} />
                     )}
                     {kpis.alertas.treinamentos_vencidos > 0 && (
                         <AlertItem count={kpis.alertas.treinamentos_vencidos} label="Treinamentos vencidos"
-                            icon={BookOpen} color="rose" onClick={() => onNavigate?.('labor-trainings')} />
+                            icon={BookOpen} color="rose" onClick={() => onNavigate?.('labor-trainings')} itens={kpis.vencidos?.treinamentos} />
                     )}
                     {pontosPendentes > 0 && (
                         <AlertItem count={pontosPendentes} label="Pontos aguardando aprovação"
@@ -321,12 +344,12 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
                     )}
                     <AlertItem count={kpis.alertas.treinamentos_vencendo} label="Treinamentos vencendo em 30 dias"
                         icon={BookOpen} color="amber" onClick={() => onNavigate?.('labor-trainings')} />
-                    <AlertItem count={kpis.alertas.docs_vencendo} label="Documentos (ASO/NR) vencendo"
+                    <AlertItem count={kpis.alertas.docs_vencendo} label="Documentos (ASO/NR) vencendo em 30 dias"
                         icon={FileText} color="rose" onClick={() => onNavigate?.('labor-documents')} />
                     <AlertItem count={kpis.alertas.epis_estoque_baixo} label="EPIs com estoque abaixo do mínimo"
                         icon={HardHat} color="orange" onClick={() => onNavigate?.('labor-epis')} />
                     <AlertItem count={kpis.alertas.ferias_vencendo} label="Férias vencendo em 60 dias"
-                        icon={Umbrella} color="blue" onClick={() => onNavigate?.('labor-absences')} />
+                        icon={Umbrella} color="blue" onClick={irParaSaldoDeFerias} />
                 </div>
             </div>
 

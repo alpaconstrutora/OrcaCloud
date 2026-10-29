@@ -115,7 +115,8 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                                     Brasília, e o seletor mostrava cada folha com o mês anterior. */}
                                 {new Date(`${r.start_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                                 {r.status !== 'FECHADO' && ' (em processamento)'}
-                                {!orgId && ` - [${r.org_id?.substring(0, 8)}]`}
+                                {/* Em "Todas", o NOME da organização (antes: `[a2c4b292]`, pedaço do UUID). */}
+                                {!orgId && ` — ${organizations.find(o => o.id === r.org_id)?.name ?? 'organização sem nome'}`}
                             </option>
                         ))}
                     </select>

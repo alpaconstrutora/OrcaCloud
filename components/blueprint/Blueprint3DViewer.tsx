@@ -15,7 +15,7 @@
 import React, { Suspense, useEffect, useMemo, useRef, useState } from 'react';
 import * as THREE from 'three';
 import { Canvas, useFrame, useThree } from '@react-three/fiber';
-import { OrbitControls, PointerLockControls, Grid, Edges, PivotControls, useGLTF } from '@react-three/drei';
+import { OrbitControls, PointerLockControls, Grid, Edges, PivotControls, useGLTF, Line } from '@react-three/drei';
 import { RotateCcw, Maximize, Minimize, Footprints, BoxSelect } from 'lucide-react';
 import type { Agua, BlueprintModel, Escada, FatiaDaEscada, Structural } from '../../utils/blueprintKernel';
 import {
@@ -73,6 +73,7 @@ import { perfilDaParedeComVaos } from '../../utils/blueprintElevation';
 import { embutimentoEletrico } from '../../utils/blueprintEletricaEmbutida';
 import { CAIXA_OCTOGONAL_MM, caminhosDosEletrodutos } from '../../utils/blueprintEletrodutoFlexivel3D';
 import { rotulosDaMassa } from '../../utils/blueprintRotulosDaMassa';
+import { blocosDaConcepcao, chamadasDaConcepcao, COR_DO_LOTE_NA_CONCEPCAO, CONTORNO_DO_LOTE_NA_CONCEPCAO } from '../../utils/blueprintConcepcao';
 import { apoioDaCaixaDagua, centroDoTerminal3D, corpoDaCaixa3D, pecasDasConexoes3D, rotulosDaRede3D } from '../../utils/blueprintIsometrico';
 import { contornoDaSecaoT, secaoTValida } from '../../utils/blueprintKernel/secaoT';
 import { medirTerreno } from '../../utils/blueprintTerreno';
@@ -126,7 +127,8 @@ interface Props {
   /** RÓTULOS "ø100 mm" das redes hidráulicas (27/09/2026). Ausente = ligado. */
   mostrarRotulosDeRede?: boolean;
   /** ESTILO (E8.2): sombreado (padrão), linha oculta (branco + arestas) ou transparente (paredes/lajes a 35 %). */
-  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
+  /** CONCEPÇÃO (29/10/2026): o 3D para mostrar ao cliente — ver `utils/blueprintConcepcao`. */
+  estilo?: 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE' | 'CONCEPCAO';
   /** O polígono do lote (divisas `TERRENO`) como um plano de chão. */
   mostrarTerreno?: boolean;
   /** ENVELOPE 3D (E3.3): um prisma translúcido por pavimento — âmbar; vermelho acima do gabarito. */
@@ -137,7 +139,7 @@ interface Props {
    * Sólido (não translúcido como o envelope): é a massa, não a referência.
    * Clicar seleciona o bloco (`id`), como as demais peças.
    */
-  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number; piso?: string; unidade?: string; bloco?: string; rotuloDaUnidade?: string }[];
+  massa?: { id: string; chave: string; nome: string; anel: { x: number; y: number }[]; baseMm: number; topoMm: number; cor: string; problema: boolean; indice?: number; piso?: string; unidade?: string; bloco?: string; rotuloDaUnidade?: string; uso?: string; contornoDoBloco?: { x: number; y: number }[] }[];
   /**
    * NOMES NO 3D (28/10/2026): a etiqueta de cada bloco (`bloco`, acima dele) e de cada unidade (`rotuloDaUnidade`, no
    * meio da fatia) — ligadas no Exibir. Ausente = nenhuma.
@@ -1231,9 +1233,75 @@ function RotuloDeRede({ texto, cor, posicao, alturaM = 0.11, porCima = false, pe
   );
 }
 
+/**
+ * A CHAMADA DA CONCEPÇÃO: caixa na cor do uso com o nome do bloco e "uso · N pav", sempre virada para a câmera e do
+ * mesmo tamanho na tela (`sizeAttenuation` desligado) — no zoom de apresentação, a caixa não some nem cobre a massa.
+ */
+function EtiquetaDeChamada({ titulo, subtitulo, cor, posicao }: { titulo: string; subtitulo: string; cor: string; posicao: [number, number, number] }) {
+  const textura = useMemo(() => {
+    if (typeof document === 'undefined') return null;
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext?.('2d');
+    if (!ctx) return null;
+    const fonteTitulo = '700 40px system-ui, sans-serif';
+    const fonteSub = '500 28px system-ui, sans-serif';
+    ctx.font = fonteTitulo;
+    const lt = ctx.measureText(titulo).width;
+    ctx.font = fonteSub;
+    const ls = subtitulo ? ctx.measureText(subtitulo).width : 0;
+    const largura = Math.ceil(Math.max(lt, ls)) + 48;
+    const altura = subtitulo ? 112 : 72;
+    canvas.width = largura;
+    canvas.height = altura;
+    ctx.fillStyle = cor;
+    const r = 14;
+    ctx.beginPath();
+    ctx.moveTo(r, 0);
+    ctx.arcTo(largura, 0, largura, altura, r);
+    ctx.arcTo(largura, altura, 0, altura, r);
+    ctx.arcTo(0, altura, 0, 0, r);
+    ctx.arcTo(0, 0, largura, 0, r);
+    ctx.closePath();
+    ctx.fill();
+    ctx.fillStyle = '#ffffff';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.font = fonteTitulo;
+    ctx.fillText(titulo, largura / 2, subtitulo ? 40 : altura / 2 + 2);
+    if (subtitulo) {
+      ctx.font = fonteSub;
+      ctx.fillText(subtitulo, largura / 2, 80);
+    }
+    const t = new THREE.CanvasTexture(canvas);
+    t.colorSpace = THREE.SRGBColorSpace;
+    return { t, aspecto: largura / altura };
+  }, [titulo, subtitulo, cor]);
+  useEffect(() => () => textura?.t.dispose(), [textura]);
+  // Sem `sizeAttenuation`, a escala do sprite vale em "tangente da lente": a fração da altura da tela é
+  // escala / (2·tan(fov/2)). A lente muda (10° na Concepção, 45° nos outros): a escala acompanha a cada quadro.
+  const ref = useRef<THREE.Sprite>(null);
+  const fracao = subtitulo ? 0.06 : 0.04;
+  useFrame(({ camera }) => {
+    const s = ref.current;
+    if (!s || !textura) return;
+    const k = 2 * Math.tan((((camera as THREE.PerspectiveCamera).fov ?? 45) * Math.PI) / 360);
+    s.scale.set(fracao * k * textura.aspecto, fracao * k, 1);
+  });
+  if (!textura) return null;
+  return (
+    <sprite ref={ref} position={posicao} renderOrder={40} raycast={() => null}>
+      <spriteMaterial map={textura.t} transparent depthTest={false} depthWrite={false} sizeAttenuation={false} />
+    </sprite>
+  );
+}
+
 function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRede = true, mostrarTerreno, envelope, massa, rotulosDaMassa: mostrarRotulosDaMassa, pisoDaMassa, unidadeDaMassa, onPisoDaMassa, entorno, relevo, relevoChave, extrasDoRelevo, extrasChave, mapaNoRelevo, ocultos, coresPorUid, selecionados, onSelecionar, onAgarrar, armadura, estilo = 'SOMBREADO' }: Props) {
   const niveis = model.levels.filter((l) => !levelIds || levelIds.includes(l.id));
   const idsVisiveis = new Set(niveis.map((l) => l.id));
+  // CONCEPÇÃO (29/10/2026): as peças do modelo saem brancas com aresta, como na Linha oculta; a massa ganha o tom e o
+  // contorno forte do uso, as chamadas e o lote em cor sólida (mais abaixo).
+  const concepcao = estilo === 'CONCEPCAO';
+  const linhaOculta = estilo === 'LINHA_OCULTA' || concepcao;
 
   // `Set` tem identidade nova a cada alternância, então a dep é o CONTEÚDO — o
   // mesmo idioma do `levelIds?.join(',')` que os memos daqui já usam.
@@ -1714,9 +1782,40 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
   }, [massa]);
   /** NOMES DOS BLOCOS E DAS UNIDADES (28/10/2026), cada um ligado no Exibir. */
   const etiquetasDaMassa = useMemo(
-    () => (massa && mostrarRotulosDaMassa ? rotulosDaMassa(massa, mostrarRotulosDaMassa) : []),
-    [massa, mostrarRotulosDaMassa?.blocos, mostrarRotulosDaMassa?.unidades],
+    () => (massa && mostrarRotulosDaMassa ? rotulosDaMassa(massa, concepcao ? { blocos: false, unidades: mostrarRotulosDaMassa.unidades } : mostrarRotulosDaMassa) : []),
+    [massa, mostrarRotulosDaMassa?.blocos, mostrarRotulosDaMassa?.unidades, concepcao],
   );
+  /**
+   * CONCEPÇÃO: um volume por bloco (o contorno forte é do BLOCO, não de cada pavimento), as arestas dele em pares de
+   * pontos para a linha grossa, e as chamadas (caixa na cor do uso + linha tracejada) quando "Nomes dos blocos" está
+   * ligado.
+   */
+  const blocosNaConcepcao = useMemo(() => (concepcao && massa ? blocosDaConcepcao(massa) : []), [concepcao, massa]);
+  const tomDoBloco = useMemo(() => new Map(blocosNaConcepcao.map((b) => [b.id, b.corClara])), [blocosNaConcepcao]);
+  const arestasDaConcepcao = useMemo(
+    () =>
+      blocosNaConcepcao.map((b) => {
+        const geom = new THREE.ExtrudeGeometry(shapeDoAnel(b.contorno), { depth: (b.topoMm - b.baseMm) * S, bevelEnabled: false });
+        geom.rotateX(-Math.PI / 2);
+        geom.translate(0, b.baseMm * S, 0);
+        const arestas = new THREE.EdgesGeometry(geom, 20);
+        const pos = arestas.getAttribute('position');
+        const pontos: [number, number, number][] = [];
+        for (let i = 0; i < pos.count; i++) pontos.push([pos.getX(i), pos.getY(i), pos.getZ(i)]);
+        geom.dispose();
+        arestas.dispose();
+        return { id: b.id, cor: b.cor, pontos };
+      }),
+    [blocosNaConcepcao],
+  );
+  const chamadas = useMemo(() => (concepcao && mostrarRotulosDaMassa?.blocos ? chamadasDaConcepcao(blocosNaConcepcao) : []), [concepcao, mostrarRotulosDaMassa?.blocos, blocosNaConcepcao]);
+  const contornoDoLote = useMemo(() => {
+    if (!concepcao || !mostrarTerreno) return null;
+    const t = medirTerreno(model.boundaries);
+    if (!t || t.anel.length < 3) return null;
+    return [...t.anel, t.anel[0]].map((p) => [p.x * S, COTA_TERRENO_Y + 0.03, p.y * S] as [number, number, number]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [concepcao, mostrarTerreno, model.boundaries]);
 
   /** COMPONENTES (E7.1): caixas no piso do pavimento — mobiliário cinza-quente, louça branca. */
   const caixasDeComponentes = useMemo(() => {
@@ -1917,9 +2016,20 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             {...cliqueDe(p.id, false, p.indice !== undefined && onPisoDaMassa ? () => onPisoDaMassa(p.id, p.indice!, p.unidade) : undefined)}
           >
             {/* A face recua um pouco na profundidade para a linha do piso, no mesmo plano, ganhar. */}
-            <meshStandardMaterial color={unidadeSel ? '#f59e0b' : pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : p.problema ? '#f87171' : p.cor} roughness={0.85} polygonOffset polygonOffsetFactor={1} polygonOffsetUnits={1} />
+            {/* Na Concepção, o tom quase branco do uso e as linhas dos pavimentos mais leves; o vermelho do problema
+                fica para os outros estilos (é aviso de projeto, não do cliente). */}
+            <meshStandardMaterial
+              color={unidadeSel ? '#f59e0b' : pisoSel ? '#1d4ed8' : sel ? '#60a5fa' : concepcao ? (tomDoBloco.get(p.id) ?? '#ffffff') : p.problema ? '#f87171' : p.cor}
+              roughness={concepcao ? 1 : 0.85}
+              // Na Concepção, o volume quase branco das referências: com só a luz, o tom claro saía cinza.
+              emissive={concepcao && !sel ? (tomDoBloco.get(p.id) ?? '#ffffff') : '#000000'}
+              emissiveIntensity={concepcao && !sel ? 0.55 : 0}
+              polygonOffset
+              polygonOffsetFactor={1}
+              polygonOffsetUnits={1}
+            />
             <lineSegments geometry={p.arestas} raycast={() => null}>
-              <lineBasicMaterial color={unidadeSel ? '#78350f' : pisoSel ? '#172554' : sel ? '#1d4ed8' : p.problema ? '#b91c1c' : '#1e293b'} />
+              <lineBasicMaterial color={unidadeSel ? '#78350f' : pisoSel ? '#172554' : sel ? '#1d4ed8' : concepcao ? '#64748b' : p.problema ? '#b91c1c' : '#1e293b'} />
             </lineSegments>
           </mesh>
         );
@@ -1967,7 +2077,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             // material ao ligar/desligar o mapa — trocar `map` de nulo para
             // textura num material já compilado não refaz o shader.
             key={texturaDoMapa ? 'com-mapa' : 'sem-mapa'}
-            color={texturaDoMapa ? '#ffffff' : COR_DO_CHAO}
+            color={texturaDoMapa ? '#ffffff' : concepcao ? COR_DO_LOTE_NA_CONCEPCAO : COR_DO_CHAO}
             map={texturaDoMapa ?? null}
             roughness={1}
             side={THREE.DoubleSide}
@@ -1997,20 +2107,20 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             color={
               selecionados?.has(p.id)
                 ? COR_SELECIONADA
-                : estilo === 'LINHA_OCULTA'
+                : linhaOculta
                   ? '#ffffff'
                   : p.cortina
                     ? '#7dd3fc'
                     : (coresPorUid?.get(p.uid) ?? ((p.funcao && COR_CAMADA_3D[p.funcao]) || '#e2e8f0'))
             }
-            roughness={estilo === 'LINHA_OCULTA' ? 1 : p.cortina ? 0.15 : 0.85}
+            roughness={linhaOculta ? 1 : p.cortina ? 0.15 : 0.85}
             side={THREE.DoubleSide}
             // CORTINA DE VIDRO (P2.20): translúcida em qualquer estilo — é vidro.
             transparent={estilo === 'TRANSPARENTE' || p.cortina}
             opacity={estilo === 'TRANSPARENTE' ? 0.35 : p.cortina ? 0.45 : 1}
             depthWrite={estilo !== 'TRANSPARENTE' && !p.cortina}
           />
-          {(mostrarArestas || estilo === 'LINHA_OCULTA') && <Edges color={estilo === 'LINHA_OCULTA' ? '#0f172a' : '#475569'} threshold={20} />}
+          {(mostrarArestas || linhaOculta) && <Edges color={linhaOculta ? '#0f172a' : '#475569'} threshold={20} />}
         </mesh>
       ))}
       {/* O miolo da junção usa a MESMA cor e o mesmo material da parede sem
@@ -2046,7 +2156,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             color={
               selecionados?.has(s.id)
                 ? COR_SELECIONADA
-                : estilo === 'LINHA_OCULTA'
+                : linhaOculta
                   ? '#ffffff'
                   : (coresPorUid?.get(s.uid) ?? (s.enterrada ? '#a8a29e' : '#94a3b8'))
             }
@@ -2060,7 +2170,7 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
             opacity={armadura ? 0.28 : estilo === 'TRANSPARENTE' ? 0.35 : 1}
             depthWrite={!armadura && estilo !== 'TRANSPARENTE'}
           />
-          {(mostrarArestas || estilo === 'LINHA_OCULTA') && <Edges color={estilo === 'LINHA_OCULTA' ? '#0f172a' : '#334155'} threshold={20} />}
+          {(mostrarArestas || linhaOculta) && <Edges color={linhaOculta ? '#0f172a' : '#334155'} threshold={20} />}
         </mesh>
       ))}
       {barras && (
@@ -2184,6 +2294,16 @@ function Cena({ model, levelIds, mostrarLaje, mostrarArestas, mostrarRotulosDeRe
           <RotuloDeRede key={r.chave} texto={r.texto} cor="#1e3a8a" posicao={r.posicao} alturaM={0.55} porCima />
         ),
       )}
+      {arestasDaConcepcao.map((a) => (
+        <Line key={`contorno-${a.id}`} points={a.pontos} segments color={a.cor} lineWidth={3.2} side={THREE.DoubleSide} raycast={() => null} />
+      ))}
+      {chamadas.map((c) => (
+        <group key={c.chave}>
+          <Line points={[c.ancora, c.rotulo]} color={c.cor} lineWidth={1.4} dashed dashSize={0.6} gapSize={0.35} side={THREE.DoubleSide} raycast={() => null} />
+          <EtiquetaDeChamada titulo={c.titulo} subtitulo={c.subtitulo} cor={c.cor} posicao={c.rotulo} />
+        </group>
+      ))}
+      {contornoDoLote && <Line points={contornoDoLote} color={CONTORNO_DO_LOTE_NA_CONCEPCAO} lineWidth={2} side={THREE.DoubleSide} raycast={() => null} />}
       {quadros3d.map((q) => (
         <mesh
           key={`quadro-${q.id}`}
@@ -2288,6 +2408,53 @@ function Enquadrar({
   return null;
 }
 
+/** A lente quase paralela da Concepção (vista axonométrica) e a lente de sempre. */
+const FOV_DA_CONCEPCAO = 10;
+const FOV_PADRAO = 45;
+/** A diagonal isométrica: 45° em planta, ~35° acima do chão. */
+const DIRECAO_ISOMETRICA: [number, number, number] = [1 / Math.sqrt(3), 1 / Math.sqrt(3), 1 / Math.sqrt(3)];
+
+/**
+ * A VISTA DA CONCEPÇÃO (29/10/2026): ao entrar no estilo, a lente fecha para 10° e a câmera vai para longe, na
+ * diagonal isométrica — de perto da perspectiva para quase a axonometria das referências, sem trocar de câmera (o
+ * Enquadrar, o ponto de vista e o Exportar imagem continuam com a mesma). Ao sair, volta para 45° na direção de
+ * sempre. A órbita continua livre.
+ */
+function CameraDaConcepcao({
+  ativo,
+  centro,
+  raio,
+  controlsRef,
+}: {
+  ativo: boolean;
+  centro: [number, number, number];
+  raio: [number, number, number];
+  controlsRef: React.MutableRefObject<{ target?: THREE.Vector3; update?: () => void } | null>;
+}) {
+  const camera = useThree((e) => e.camera);
+  const tamanho = useThree((e) => e.size);
+  const antes = useRef<boolean | null>(null);
+  useEffect(() => {
+    const primeira = antes.current === null;
+    if (antes.current === ativo) return;
+    antes.current = ativo;
+    if (primeira && !ativo) return;
+    const c = camera as THREE.PerspectiveCamera;
+    const aspecto = tamanho.height > 0 ? tamanho.width / tamanho.height : 1.6;
+    c.fov = ativo ? FOV_DA_CONCEPCAO : FOV_PADRAO;
+    const dir = ativo ? DIRECAO_ISOMETRICA : DIRECAO_DA_CAMERA;
+    // Na Concepção, folga para as chamadas, que ficam do lado de fora dos blocos.
+    const d = distanciaParaCaber(raio, c.fov, aspecto) * (ativo ? 1.3 : 1);
+    c.position.set(centro[0] + dir[0] * d, centro[1] + dir[1] * d, centro[2] + dir[2] * d);
+    c.near = Math.max(0.01, d / 1000);
+    c.far = d * 8;
+    c.updateProjectionMatrix();
+    controlsRef.current?.target?.set(centro[0], centro[1], centro[2]);
+    controlsRef.current?.update?.();
+  }, [ativo, centro, raio, camera, tamanho, controlsRef]);
+  return null;
+}
+
 /**
  * PONTO DE VISTA (F12): leva a câmera do 3D ao olho de uma câmera SALVA, com a órbita em torno do alvo e
  * o ângulo da lente (vertical, para o formato desta tela — o horizontal é o da lente). Volta à lente
@@ -2297,9 +2464,12 @@ function Enquadrar({
 function PontoDeVista({
   vista,
   controlsRef,
+  fovPadrao = FOV_PADRAO,
 }: {
   vista: { chave: string; posicao: [number, number, number]; alvo: [number, number, number]; focalMm: number } | null;
   controlsRef: React.MutableRefObject<{ target?: THREE.Vector3; update?: () => void } | null>;
+  /** A lente sem câmera salva: 45°, ou a da Concepção — sem isso, redimensionar a tela desfazia a vista isométrica. */
+  fovPadrao?: number;
 }) {
   const camera = useThree((e) => e.camera);
   const tamanho = useThree((e) => e.size);
@@ -2307,8 +2477,8 @@ function PontoDeVista({
   useEffect(() => {
     const c = camera as THREE.PerspectiveCamera;
     if (!vista) {
-      if (c.fov !== 45) {
-        c.fov = 45;
+      if (c.fov !== fovPadrao) {
+        c.fov = fovPadrao;
         c.updateProjectionMatrix();
       }
       return;
@@ -2325,7 +2495,7 @@ function PontoDeVista({
     controlsRef.current?.update?.();
     // A CHAVE (e não o objeto) decide: o objeto é recriado a cada render do editor.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [chave, camera, tamanho.width, tamanho.height, controlsRef]);
+  }, [chave, camera, tamanho.width, tamanho.height, controlsRef, fovPadrao]);
   return null;
 }
 
@@ -2770,6 +2940,7 @@ export default function Blueprint3DViewer(props: Props) {
   // que é como o enquadramento chegou a ignorar duas famílias inteiras.
   const { passo: passoDaGrade, alcance: alcanceDaGrade } = gradeDaCena(spread);
   const sombra = sombraDaCena(spread);
+  const solDaLuz = props.estilo === 'CONCEPCAO' ? null : props.sol;
 
   /** Sobe a cada clique em "Centralizar" — é o que reenquadra sob demanda. */
   const [tokenDeEnquadrar, setTokenDeEnquadrar] = useState(0);
@@ -2938,7 +3109,7 @@ export default function Blueprint3DViewer(props: Props) {
           far: spread * 20,
         }}
       >
-        <color attach="background" args={['#f8fafc']} />
+        <color attach="background" args={[props.estilo === 'CONCEPCAO' ? '#ffffff' : '#f8fafc']} />
         <ambientLight intensity={0.75} />
         {/* A câmera de sombra acompanha a CENA (`sombraDaCena`): a padrão cobre
             ±5 m, e num lote de 60 m com relevo a sombra simplesmente não
@@ -2948,13 +3119,14 @@ export default function Blueprint3DViewer(props: Props) {
             e o sol ficava do lado oposto: as sombras saíam trocadas. Sol baixo, luz
             mais fraca e quente. */}
         <directionalLight
+          // Na Concepção, a luz de apresentação (a padrão), não o sol do estudo: a sombra é para dar volume.
           position={
-            props.sol
-              ? [centroNoMundo[0] + props.sol.x * spread * 2, Math.max(0.5, props.sol.z * spread * 2), centroNoMundo[2] - props.sol.y * spread * 2]
+            solDaLuz
+              ? [centroNoMundo[0] + solDaLuz.x * spread * 2, Math.max(0.5, solDaLuz.z * spread * 2), centroNoMundo[2] - solDaLuz.y * spread * 2]
               : [spread, alturaTopo + spread, spread * 0.6]
           }
-          intensity={props.sol ? (props.sol.z <= 0 ? 0.15 : 0.6 + 0.7 * Math.min(1, props.sol.z * 1.5)) : 1.1}
-          color={props.sol && props.sol.z < 0.35 ? '#ffe4b5' : '#ffffff'}
+          intensity={solDaLuz ? (solDaLuz.z <= 0 ? 0.15 : 0.6 + 0.7 * Math.min(1, solDaLuz.z * 1.5)) : 1.1}
+          color={solDaLuz && solDaLuz.z < 0.35 ? '#ffe4b5' : '#ffffff'}
           castShadow
           shadow-mapSize-width={sombra.mapa}
           shadow-mapSize-height={sombra.mapa}
@@ -2967,6 +3139,7 @@ export default function Blueprint3DViewer(props: Props) {
           shadow-bias={-0.0005}
         />
         <directionalLight position={[-spread, spread, -spread]} intensity={0.3} />
+        {props.estilo !== 'CONCEPCAO' && (
         <Grid
           args={[spread * 6, spread * 6]}
           cellSize={passoDaGrade}
@@ -2980,6 +3153,7 @@ export default function Blueprint3DViewer(props: Props) {
           infiniteGrid
           userData={{ naoCapturar: true }}
         />
+        )}
         {/* SEM ESPELHO (12/10/2026): tudo o que está no espaço do DESENHO (norte em +Z) — a
             cena, as referências IFC, o contorno da caixa e a alça de mover — entra neste grupo,
             que leva ao mundo (norte em −Z). Ver `utils/blueprint3dEspelho.ts`. A alça dentro dele
@@ -3074,9 +3248,10 @@ export default function Blueprint3DViewer(props: Props) {
           token={tokenDeEnquadrar}
           controlsRef={controlsRef}
         />
+        <CameraDaConcepcao ativo={props.estilo === 'CONCEPCAO'} centro={centroNoMundo} raio={raio} controlsRef={controlsRef} />
         {/* F12: DEPOIS do Enquadrar — efeitos de irmãos rodam na ordem da árvore, e o enquadramento
             automático da montagem passava por cima do ponto de vista (o 3D abria de fora, não do olho). */}
-        {!andando && <PontoDeVista vista={props.pontoDeVista ?? null} controlsRef={controlsRef} />}
+        {!andando && <PontoDeVista vista={props.pontoDeVista ?? null} controlsRef={controlsRef} fovPadrao={props.estilo === 'CONCEPCAO' ? FOV_DA_CONCEPCAO : FOV_PADRAO} />}
         <Captura alvo={props.capturaRef} />
       </Canvas>
     </div>

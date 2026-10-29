@@ -217,14 +217,27 @@ Desvios do sistema que sobraram no componente, corrigidos aqui:
   abaixo de AA (o que sobra é "Sincronizando Opura…", carregamento global fora da tela); h1 → h2;
   3 tabelas com nome e `scope` 8/8, 6/6, 4/4; aba ativa com `aria-current`; 4 textos para leitor de
   tela. Os 3 `select` sem rótulo que restam estão na gaveta "Importar extrato", fechada e `inert`.
-- [ ] Passo 7 — 4 de 4 no código; falta conferir em produção (desktop e celular).
+- [x] Passo 7 — 5 de 5. PR #244 (`f228b39`). Conferido em produção (28/10): computador — células
+  `px-6` com divisória, cards raio 10 px, total peso 500; celular (moldura de 390 px, mesma origem)
+  — sem rolagem lateral, cartões empilhados, barra e abas quebram linha.
+  - **7.5, achado na conferência do celular:** a legenda do `KpiCard destaque` cortava em uma
+    linha e escondia os nomes das contas que não batem (o `title` não existe no toque). Agora ela
+    quebra linha (`components/ui/KpiCard.tsx`, vale também para Locações › Análise, cujas legendas
+    são curtas). PR seguinte.
+
+**Plano concluído: 7 de 7 passos.**
 
 ## Fora deste plano (observado na crítica, conferir antes de mexer)
 
-- Conta "Asaas Sandbox" aparece no dashboard de produção.
+- Conta "Asaas Sandbox" aparece no dashboard de produção (e conta como "não bate": banco R$ 56,03 ×
+  app R$ 0,00).
 - "Caixa Realizado por Obra" mostra Entradas R$ 0,00 em todas as obras.
-- As 5 contas estão com saldo inicial zero.
-- Na aba Dashboard, `loadTransactions` ainda busca o extrato `MATCHED` da conta do seletor
-  (servia só à fileira removida em 1.1) — custo de rede sem uso; avaliar no passo 3.
+- As 5 contas estão com saldo inicial zero; o Itaú tem extrato de 2014 a 08/2026 e está R$ 10,9 mi
+  fora do saldo do OFX — a gaveta "Ajustar" oferece as duas saídas, a decisão é do financeiro.
+- ~~Na aba Dashboard, `loadTransactions` ainda busca o extrato `MATCHED`~~ — resolvido no passo 3 (3.4).
 - `stats` (`BankReconciliation.tsx`) ficou sem leitor depois de 1.1, mas `loadStats` é
   chamado em ~20 pontos (duas contagens por chamada). Remover é limpeza à parte.
+- "Sem empresa" sem link: nenhuma tela edita `payment_accounts.empresa_id`.
+- Busca "ener" do lado Lançamentos de Pendentes não é limpa pelo recorte do Dashboard (só o lado do
+  extrato).
+- Os 3 `select` da gaveta "Importar extrato" sem rótulo; anel de foco do seletor de conta (§5.3).

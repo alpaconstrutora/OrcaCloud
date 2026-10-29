@@ -62,6 +62,9 @@ const ROTULO_DO_SOL: Record<string, string> = { NORTE: 'Norte', SUL: 'Sul', LEST
  * (uma para cada lado, alternando); Norte/Sul/Leste/Oeste pelo norte do desenho. Com as duas, a soma — opostas
  * se anulam e viram aviso. null = a unidade não diz.
  */
+/** Quanto o sol pesa ao lado da posição: só desempata, nunca vira nem anula a posição. */
+const PESO_DO_SOL_COM_POSICAO = 0.3;
+
 export function direcoesDasUnidades(unidades: readonly UnidadeComLado[], ref: ReferenciasDaPlanta): { direcoes: (Point | null)[]; avisos: string[] } {
   const avisos: string[] = [];
   const th = ((ref.rotacaoNorteDeg ?? 0) * Math.PI) / 180;
@@ -88,10 +91,17 @@ export function direcoesDasUnidades(unidades: readonly UnidadeComLado[], ref: Re
       }
     }
     if (pos && sol && pos.x * sol.x + pos.y * sol.y < -0.5) {
-      avisos.push(`Unidade ${u.nome}: posição ${ROTULO_DA_POSICAO[u.posicao!]} e sol ${ROTULO_DO_SOL[u.orientacao!]} apontam para lados opostos nesta planta — confira o cadastro.`);
+      avisos.push(
+        `Unidade ${u.nome}: posição ${ROTULO_DA_POSICAO[u.posicao!]} e sol ${ROTULO_DO_SOL[u.orientacao!]} apontam para lados opostos nesta planta — confira o cadastro${
+          ref.rotacaoNorteDeg == null ? ' ou marque o norte da planta (sem ele, o norte é o alto do desenho)' : ''
+        }. Vale a posição.`,
+      );
     }
     if (!pos && !sol) return null;
-    const d = { x: (pos?.x ?? 0) + (sol?.x ?? 0), y: (pos?.y ?? 0) + (sol?.y ?? 0) };
+    // A POSIÇÃO MANDA (28/10/2026): o sol só desempata entre as vagas do lado certo. Somados com o mesmo peso, "Fundos"
+    // + "Sul" numa planta com a frente ao sul se anulavam — a 107 do Garden ficava sem direção e caía na frente.
+    const pesoDoSol = pos ? PESO_DO_SOL_COM_POSICAO : 1;
+    const d = { x: (pos?.x ?? 0) + (sol?.x ?? 0) * pesoDoSol, y: (pos?.y ?? 0) + (sol?.y ?? 0) * pesoDoSol };
     const len = Math.hypot(d.x, d.y);
     return len < 1e-9 ? null : { x: d.x / len, y: d.y / len };
   });
@@ -252,10 +262,66 @@ export function fatiasPorArea(
 /**
  * O contorno fatiado com cada unidade na vaga que dá para a sua direção (`direcoesDasUnidades`). As vagas são as
  * mesmas de `fatiasPorArea` (uma ou duas fileiras ao longo do lado maior); cada uma dá para o lado da fileira (−v na
- * 1ª, +v na 2ª; nenhum com uma fileira só) somado à ponta (−u na primeira, +u na última). As unidades com direção, na
- * ordem recebida, ficam com a vaga livre que mais combina; as sem direção ocupam as que sobram, na ordem. A fatia k
- * continua sendo a unidade k, na proporção da área.
+ * 1ª, +v na 2ª; nenhum com uma fileira só) somado à ponta (−u na primeira, +u na última), normalizado. As unidades
+ * com direção ficam com a combinação de vagas que MAIS combina no andar inteiro (`melhorAtribuicao`) — 28/10/2026:
+ * na escolha gulosa, na ordem do número, a 105 "Lateral" pegava o canto dos fundos antes da 107 "Fundos". As sem
+ * direção ocupam as que sobram, na ordem. A fatia k continua sendo a unidade k, na proporção da área.
  */
+/**
+ * Atribuição de maior soma (método húngaro): `notas[i][k]` é quanto a linha i combina com a coluna k (linhas ≤ colunas).
+ * Devolve a coluna de cada linha. O andar tem poucas unidades — O(n³) sobra.
+ */
+export function melhorAtribuicao(notas: readonly (readonly number[])[]): number[] {
+  const m = notas.length;
+  if (m === 0) return [];
+  const n = notas[0].length;
+  // Quadrada (n × n), com linhas vazias de nota 0; custo = −nota. Índices de 1, como no algoritmo clássico.
+  const custo = (i: number, j: number) => (i <= m ? -notas[i - 1][j - 1] : 0);
+  const uu = new Array(n + 1).fill(0);
+  const vv = new Array(n + 1).fill(0);
+  const p = new Array(n + 1).fill(0);
+  const caminho = new Array(n + 1).fill(0);
+  for (let i = 1; i <= n; i++) {
+    p[0] = i;
+    let j0 = 0;
+    const minv = new Array(n + 1).fill(Infinity);
+    const usado = new Array(n + 1).fill(false);
+    do {
+      usado[j0] = true;
+      const i0 = p[j0];
+      let delta = Infinity;
+      let j1 = 0;
+      for (let j = 1; j <= n; j++) {
+        if (usado[j]) continue;
+        const cur = custo(i0, j) - uu[i0] - vv[j];
+        if (cur < minv[j]) {
+          minv[j] = cur;
+          caminho[j] = j0;
+        }
+        if (minv[j] < delta) {
+          delta = minv[j];
+          j1 = j;
+        }
+      }
+      for (let j = 0; j <= n; j++) {
+        if (usado[j]) {
+          uu[p[j]] += delta;
+          vv[j] -= delta;
+        } else minv[j] -= delta;
+      }
+      j0 = j1;
+    } while (p[j0] !== 0);
+    do {
+      const j1 = caminho[j0];
+      p[j0] = p[j1];
+      j0 = j1;
+    } while (j0);
+  }
+  const out = new Array<number>(m).fill(-1);
+  for (let j = 1; j <= n; j++) if (p[j] >= 1 && p[j] <= m) out[p[j] - 1] = j - 1;
+  return out;
+}
+
 export function fatiasPorDirecao(anel: readonly Point[], pesos: readonly (number | null | undefined)[], direcoes: readonly (Point | null)[]): Point[][] {
   if (pesos.length === 0 || anel.length < 3) return [];
   const ps = pesosValidos(pesos);
@@ -268,21 +334,20 @@ export function fatiasPorDirecao(anel: readonly Point[], pesos: readonly (number
     const lado = duasFileiras ? (r === 0 ? -1 : 1) : 0;
     for (let k = 0; k < t; k++) {
       const ponta = t === 1 ? 0 : k === 0 ? -1 : k === t - 1 ? 1 : 0;
-      vagas.push({ fileira: r, pos: k, dir: { x: v.x * lado + u.x * ponta, y: v.y * lado + u.y * ponta } });
+      const dir = { x: v.x * lado + u.x * ponta, y: v.y * lado + u.y * ponta };
+      const len = Math.hypot(dir.x, dir.y) || 1;
+      vagas.push({ fileira: r, pos: k, dir: { x: dir.x / len, y: dir.y / len } });
     }
   });
   const dono: number[] = new Array(vagas.length).fill(-1);
-  const colocar = (i: number, nota: (vaga: (typeof vagas)[number]) => number) => {
-    let melhor = -1;
-    for (let k = 0; k < vagas.length; k++) if (dono[k] < 0 && (melhor < 0 || nota(vagas[k]) > nota(vagas[melhor]) + 1e-9)) melhor = k;
-    dono[melhor] = i;
-  };
+  const comDirecao = ps.map((_, i) => i).filter((i) => direcoes[i]);
+  // Um pouquinho a favor da vaga de índice menor: empate resolvido sempre igual.
+  const notas = comDirecao.map((i) => vagas.map((vg, k) => direcoes[i]!.x * vg.dir.x + direcoes[i]!.y * vg.dir.y - k * 1e-6));
+  melhorAtribuicao(notas).forEach((k, linha) => (dono[k] = comDirecao[linha]));
   ps.forEach((_, i) => {
-    const d = direcoes[i];
-    if (d) colocar(i, (vg) => d.x * vg.dir.x + d.y * vg.dir.y);
-  });
-  ps.forEach((_, i) => {
-    if (!direcoes[i]) colocar(i, () => 0);
+    if (direcoes[i]) return;
+    const livre = dono.indexOf(-1);
+    dono[livre] = i;
   });
   const fileiras = tamanhos.map((_, r) =>
     vagas

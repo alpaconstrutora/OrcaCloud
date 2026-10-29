@@ -4,7 +4,7 @@
  * Empreendimento — identificação, não projeto. Puro.
  */
 import { describe, expect, it } from 'vitest';
-import { arrumacaoEfetiva, arrumarUnidades, direcoesDasUnidades, fatiasPorArea, fatiasPorDirecao } from '../utils/blueprintUnidadesNoPavimento';
+import { arrumacaoEfetiva, arrumarUnidades, direcoesDasUnidades, fatiasPorArea, fatiasPorDirecao, melhorAtribuicao } from '../utils/blueprintUnidadesNoPavimento';
 
 const area = (anel: { x: number; y: number }[]) => Math.abs(anel.reduce((s, p, i) => { const q = anel[(i + 1) % anel.length]; return s + p.x * q.y - q.x * p.y; }, 0) / 2) / 1e6;
 /** Torre A do Garden: 11 × 16 m. */
@@ -113,7 +113,11 @@ describe('posição e orientação do Empreendimento (28/10/2026)', () => {
 
   it('posição e sol opostos: avisa a unidade', () => {
     const r = direcoesDasUnidades([und('101', 'FRENTE', 'NORTE')], RUA_EM_Y_NEGATIVO);
-    expect(r.avisos).toEqual(['Unidade 101: posição Frente e sol Norte apontam para lados opostos nesta planta — confira o cadastro.']);
+    expect(r.avisos).toEqual([
+      'Unidade 101: posição Frente e sol Norte apontam para lados opostos nesta planta — confira o cadastro ou marque o norte da planta (sem ele, o norte é o alto do desenho). Vale a posição.',
+    ]);
+    // A posição manda: a direção continua sendo a da rua.
+    expect(Math.round(r.direcoes[0]!.y)).toBe(-1);
   });
 
   it('sem frente do lote: a posição não vale (aviso), o sol continua', () => {
@@ -194,5 +198,48 @@ describe('arrumacaoEfetiva — a escolha do usuário × a da torre (28/10/2026)'
   it('"Pela posição" e "Pelas setas" valem por cima da torre', () => {
     expect(arrumacaoEfetiva('AUTOMATICA', 'SETAS')).toBe('AUTOMATICA');
     expect(arrumacaoEfetiva('EMPREENDIMENTO', 'POSICAO')).toBe('EMPREENDIMENTO');
+  });
+});
+
+describe('Fundos com sol (a Torre B do Garden, 28/10/2026)', () => {
+  // "todas as unidades com final 7 e 8 estão com posição fundos, porém somente as com final 8 estão nos fundos".
+  // O bloco real da Planta 26/10/2026: 13,5 × 26 m, a frente do lote ao sul do desenho (para fora = −y), sem norte
+  // marcado — Fundos = +y = Norte do desenho.
+  const BLOCO_B = [{ x: 2281, y: 32342 }, { x: 2281, y: 58342 }, { x: 15781, y: 58342 }, { x: 15781, y: 32342 }];
+  const REF = { frenteParaFora: { x: 0, y: -1 }, rotacaoNorteDeg: null };
+  const ANDAR = [
+    { nome: '105', posicao: 'LATERAL', orientacao: 'NORTE' },
+    { nome: '106', posicao: 'LATERAL', orientacao: 'SUL' },
+    { nome: '107', posicao: 'FUNDOS', orientacao: 'SUL' },
+    { nome: '108', posicao: 'FUNDOS', orientacao: 'NORTE' },
+  ];
+
+  it('Fundos + sol oposto: a posição manda (antes, as duas se anulavam e a 107 ficava sem direção)', () => {
+    const r = direcoesDasUnidades(ANDAR, REF);
+    expect(r.direcoes[2]).not.toBeNull();
+    expect(r.direcoes[2]!.y).toBeGreaterThan(0.99);
+  });
+
+  it('a 107 e a 108 nos fundos, a 105 e a 106 na frente — a 105 "Lateral/Norte" não toma o canto dos fundos', () => {
+    const a = arrumarUnidades(ANDAR, 'AUTOMATICA', REF);
+    const f = fatiasPorDirecao(BLOCO_B, [104, 108, 113, 111], a.direcoes!);
+    const meio = 45342;
+    const nosFundos = a.unidades.filter((_, k) => centro(f[k]).y > meio).map((u) => u.nome);
+    expect(nosFundos.sort()).toEqual(['107', '108']);
+    // As laterais em lados opostos do corredor.
+    expect(centro(f[0]).x < 9031).not.toBe(centro(f[1]).x < 9031);
+  });
+});
+
+describe('melhorAtribuicao', () => {
+  it('a maior soma, não a gulosa na ordem das linhas', () => {
+    // Gulosa: a linha 0 pegaria a coluna 0 (0,9) e a linha 1 ficaria com 0,1 — soma 1,0. A melhor: 0,8 + 0,9 = 1,7.
+    expect(melhorAtribuicao([[0.9, 0.8], [0.9, 0.1]])).toEqual([1, 0]);
+  });
+
+  it('menos linhas que colunas: cada linha numa coluna diferente', () => {
+    const r = melhorAtribuicao([[0, 1, 0], [0, 1, 0.5]]);
+    expect(new Set(r).size).toBe(2);
+    expect(r).toEqual([1, 2]);
   });
 });

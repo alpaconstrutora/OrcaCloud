@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:35d34d1e93156f196d4d19cead439d6892341202c1130caccc28c54a0624ac50",
+  "claims": [
+    {
+      "id": "claim_a0f001866cc9434daa6c5faed46c7dac",
+      "statement": "exigirMembro valida o JWT com um cliente anon, confirma com a service_role que o e-mail tem linha em organization_members para a organização pedida e devolve 400/401/403 nas falhas.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/_shared/auth.ts#L71-L119",
+          "version": "repo-lines-v1:sha256:546c9d66b2179bfcd1c322c063173142403e3d999a245affc261784d6b4fe077:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYTE3NTNmNDA1MGU3MjA1ZDFlMzJiYjNhYTEwZDc2MmRmMzBlYWU3ODY5M2QzOWU2NTU3NmYzMzdhNTgxYzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU5ODQ1OTAyMjAxOTNjN2VlZjg1MTYyNWQ3MGFkMGY1N2I3OTNjMzBiNjUwYjhkZTgzMDBiNGIwYzlkMzhiNDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3c97ae729938448daf7b71648c65504d",
+      "statement": "O módulo _shared/auth.ts existe para separar autenticação de autorização: o padrão antigo usava service_role com organization_id vindo do corpo e permitia agir sobre outro tenant.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/_shared/auth.ts#L6-L43",
+          "version": "repo-lines-v1:sha256:41e8596ca446f0ade2a09ffd79a7d3cf58d980ea7bad766c71e61f00b2241a20:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYjU0NGE1ODg2MzQzNTBjMTkxNjlhODI0M2I1MzFiZjMwOTVlYjU3YzhmYjAzZTQ0ODM2OTQzZjA4MTY4ODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFmZWZmZWM2N2NkMDFhZjA3N2FmOTM2NmNmYzVhZTlmNzRlOTU1NTE1YmQ0OGZiMDU2Njk1YzQ1NGRmMzVkMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjViYzQ2N2Q3ZjhmMzc2ZDEyZWI3ZjJlYWI2NjkwZDc0ZGI2ZGE1NDgzOTJhNTQ1Zjg2NGViZjlkNzExZGU3ZmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_73fdbfdf97094a749c1b09905949462e",
+      "statement": "chamadaDeCron compara o header Authorization com Bearer CRON_SECRET em tempo constante e recusa quando o segredo tem menos de 32 caracteres, para que segredo ausente não aceite 'Bearer '.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/_shared/auth.ts#L195-L230",
+          "version": "repo-lines-v1:sha256:cd43a48fbed28569d669fd4f4759addcd6d0edb372d9366f815e989cae2ddc43:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijk3YzdkMGI5N2JiZDFkMmIyNDc1N2VjZTE1ZTg1YzM2OTRiZTA2MzE3NzJhOTQwM2Q0MTQwNGVhMDRlN2QzMjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_615df4868a5d49e2a26cd46825c5430b",
+      "statement": "Funções chamadas por cron ou webhook (asaas-webhook, asaas-status-sync, asaas-conta, email-capture-sync, planta-api, planta-webhooks etc.) são configuradas com verify_jwt = false e fazem a autorização no próprio código.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/config.toml#L412-L461",
+          "version": "repo-lines-v1:sha256:a40d1f59331c7304300fed9f0ff4a6e9b840aa862459612e7a2ad0070ee87368:eyJzZWxlY3RlZExpbmVDb3VudCI6NTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3NzdlN2EzYjc4MTFiNDAxODQyY2ExY2QzZThlYTA3NWYxMzIxOGRmZDJkYWI0ZjQ1ZjVhMGYzNmJmNGUxZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0NjY0YTk4MGMxNDlkMzZiZDgyMDViYTlkNDIwOWJhZDU1NzJmMmQyNmY2ZTk3YTlkMjU5MzE4ODNlMzFiNmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkxMzMwODgwYWExNDg1NDBjYjc1MjAwNGE4MTM2OTgzZTZiYjM5YjdlOGZmNDFjNzQyZTkxZjI0OGFhNzRhYTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5a86491598004f6db911b9aa554f985e",
+      "statement": "Jobs pg_cron chamam Edge Functions via net.http_post com Authorization Bearer fn_cron_secret() e timeout de 150 s; email-capture-sync roda a cada 15 minutos só quando há caixa ativa.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/aplicar_20271015110200_email_capture_cron.sql",
+          "version": "repo-file-v1:sha256:71e923eab41be65e1fecfdbb348906eba1e3b9d7a877ccf74862f96118d3458e"
+        }
+      ]
+    },
+    {
+      "id": "claim_9ef45cab883d4aeda32c2d217577308e",
+      "statement": "asaas-webhook autentica a chamada da Asaas pelo header asaas-access-token comparado com ASAAS_WEBHOOK_TOKEN, recusando tudo se o segredo não estiver configurado.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/asaas-webhook/index.ts#L32-L60",
+          "version": "repo-lines-v1:sha256:ed9e286f534e27ddc16a10c7842af8cb066331458704cc55890ec99b4148be31:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc1YmRlODZjN2MyOGVlNjgyN2VjYmQwYTcwNmI4NWNiYzUyMTRhMDNiOTUyNTJjMDdlMDljNjAyYThmYWZhNjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY2OTY0M2E5N2M0ZWVmZDI2NTg2ZGMwNzhlNzBjZjZkZTJlMmNlNWVmZjQ2MGU0YTYwZWZkZmNmM2NjM2MwYzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwYzZmZTQ3NDkwMGJmOTUyYWYxYjE0NDJiNDY2NzM3M2IzNmY2MjE3NjI1NWJlM2MyYTM1NmEyYWNmM2YxMmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzZWU0Y2MwMzRkODdkZjdjNTk3YzM4Y2I1MzQ2ZTIzNmQ2NjE3YjU4ZTNmMjNlZGZjMTk2ZTI2NjIyZGNiYTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_60b483a0f7274809b1260e39f2da0198",
+      "statement": "As funções de download de portal validam o token na tabela de tokens do portal com a service_role porque o portador do link é anon e as policies do Storage só valem para authenticated.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/portal-ged-download/index.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:38bfb30afeb5f8647612f60f64f56871c5e394691e8bf68dccab70a6bbb5a549:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3MjQwOWRkMTJhNmZmYWNkYzA5YmYwZjNiZDI4ZDJmZTUzMDNiYzQ1MmFiMDQ5NDE5NzgxNmUyYzljODFjNWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI2NTk1ZWJhNTcyM2YxZWMwN2MwNWI1NmEzYWQ1ODlhMjBlYzY3YzAwODkxOWUwOTc5NDQ5ZTU4NTZmZGY4M2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7daeb71dc7bb4afeafc958a84de3f9ca",
+      "statement": "dwg-converter converte DWG em DXF no servidor usando libredwg em WebAssembly, só exige login e não lê nem grava no banco.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/dwg-converter/index.ts#L1-L25",
+          "version": "repo-lines-v1:sha256:69322416983747dca73d58e8189bab0f0ed1e8b3648724bcf1f92b909da6a7fb:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjMzUxYTI0MzgwODJhNDAxZWI5ZDJlZDY2MjlhY2JjYzI2OWQ4MTFmNWQzNjQ2ZGYwY2FjNDhmZjA2ZTIxNTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMGMyOTJiMThiZGZmOGI3ZTkwNzY0YjE5YWNkNWFkZTAzNDhhNzM4MTI5YTAwZmEwMzUyNDEyZjcwNjU0MGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyNzU0Zjk4ZmNiODRhN2VmY2Y2ZTQwNDNlNGEyOGM0N2JlMzA1MmJmYmFiZmI0NDhiY2I0MmVmYzVjYzFhZTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b7b770ead3b7421da81cc89e8be38abd",
+      "statement": "quality-sla-enforcement e notify-broker-proposal autorizam comparando o header Authorization com a service_role key, em vez de usar chamadaDeCron.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/notify-broker-proposal/index.ts#L25-L46",
+          "version": "repo-lines-v1:sha256:78c5d273686a788b5954c5e614bf533b77fa5671a912ba0e5f5449152b997585:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyYjQyNGIzOGE2ZWEwMjgwN2QwOTBiMmY3Y2NmMDc4MzAwYzYzYTBjMTk4NTJiNzg1OTM4NDFmZWE3MzYzNjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFkMGZkNjkwYzJlOTU4MDQ1ZWJlMjliODVjNTgwMjcwMDVlZjgwNzZjNDYxOTFlZDZlOTVhZmNkOTYyZDNlNDIifQ"
+        },
+        {
+          "resource": "repo://supabase/functions/quality-sla-enforcement/index.ts#L20-L32",
+          "version": "repo-lines-v1:sha256:3e22c9ebffa619ddf3dd934c3e068f30b2fb8ef5a4f58895e08957856751537b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU0MDhlZDkyM2I1YmJjYTg2NzdjYWUzM2ZlNDE4NzY2M2FlMjA2M2I0YzNjYmZmZDFjODMyNTdhM2ExOTRlMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExYjYxOTU5OWQzYjQ2OTAyNDZjNTU2Yjc3ZDdhNDY3ODBmMjBkYzRkYWUxYTM1MDA4Mzg4YTA1OWE0N2U0YTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhlNzhlOGExOTA2MmE0Yjk4MmUyZDg2NGY0ZWE1NzE3MTYxZTg4ZGJjMDBhNzMxYmFkMzZiNGY3NmI1NTAyY2IiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE0NTcxYTRkYTQ1NjFkNDFjM2QwZDI2MTMyMjMwYzkzZGNjZDY2YTMzOWEwODEyNzI4MTgwY2VkMGE3Y2UxZjgifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

@@ -1,0 +1,4 @@
+# Arquivos
+
+- [Banco de dados e migrations](banco-e-migrations.md) - O banco é um Postgres 17 do Supabase (projeto já linkado). O histórico de migrations tem buracos — boa parte foi aplicada por SQL direto, fora de schema_migrations — então supabase db push é proibido. Esta página explica a convenção de nomes (aplicar_*), como aplicar e consultar SQL com db query --linked, o teste que impede prefixo duplicado e as armadilhas de publicar código antes da migration.
+- [Frentes de trabalho, publicação e conferência de produção](publicacao-e-frentes.md) - Como se trabalha e publica neste repositório — cada frente numa worktree própria a partir de origin/main (nova-frente/fechar-frente), hooks versionados que recusam commit no checkout de integração, push/merge em main como única forma de publicar no Vercel, o portão do build que recusa produção fora do topo de main e a conferência de fora que compara o domínio com origin/main a cada 15 minutos.

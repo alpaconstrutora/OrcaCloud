@@ -1,0 +1,5 @@
+# Arquivos
+
+- [Estado global e acesso a dados](estado-e-dados.md) - Como o front-end guarda sessão, contexto e dados do servidor — Zustand para sessão/contexto/UI, TanStack Query para cache de servidor, services como única camada que fala com o Supabase, e o cliente Supabase com corte de tempo por tipo de chamada.
+- [Navegação, roteamento por abas e casca da aplicação](navegacao-e-telas.md) - Como a aplicação decide o que renderizar — rotas por pathname para portais e páginas públicas no App.tsx, "view" por hash (#/view) no store, o switch do AppRouter com componentes lazy, a trava de rota por permissão, o Layout com menu e seletor de contexto, e a recuperação de chunk ausente após deploy.
+- [Visão geral da arquitetura](visao-geral.md) - Mapa de alto nível do OrçaCloud/ÒPURA — SPA React 19 + Vite servida pelo Vercel sobre Supabase (Postgres com RLS, Auth, Storage, Edge Functions), as camadas componente → store/React Query → service → Supabase, pontos de entrada e como os módulos de produto se distribuem no código.

@@ -1,0 +1,118 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:021bad1b354f83651e1130708daea5b08efacd610a88ae83e87651d7c788acee",
+  "claims": [
+    {
+      "id": "claim_a57b1515c04c424eb1b7aedf6399eab5",
+      "statement": "O fluxo de negociação tem os status IN_NEGOTIATION, PENDING, RESERVA, CONTRATO, ASSINATURA, COMPLETED e CANCELLED, com WAITING_PAYMENT legado normalizado para RESERVA e transições permitidas definidas em ALLOWED_TRANSITIONS.",
+      "evidence": [
+        {
+          "resource": "repo://lib/dealWorkflow.ts#L1-L90",
+          "version": "repo-lines-v1:sha256:5486f961e109959aefd354ab9950098da5168d881e558c41687be516a9bc659e:eyJzZWxlY3RlZExpbmVDb3VudCI6OTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4NjJjNjVhOWM0Njg4MzA1MmMxM2ZlYzc0M2EyOGQ3YzliODczNTBhMjVhODE4YzBiMzUyOWVjM2MyMWM0NDgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFhOTg3NjE0OGFiYTgyZTgyZmE5Njk5ZGFhMzUxYzNjMWYyNjRiMWNmYWUwNDU0ZTE4N2IyNWQ0ZmZjOTU4NWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_751db4a60ba94cc99c83b0df172d8f0e",
+      "statement": "assertUnitsAvailable recusa unidades já ligadas a outro deal não cancelado, tanto pela unidade principal quanto por commercial_deal_units, e ao avançar para reserva exige estoque AVAILABLE ou RESERVED.",
+      "evidence": [
+        {
+          "resource": "repo://services/commercialService.ts#L560-L630",
+          "version": "repo-lines-v1:sha256:f7e087c02b0685168e4655435b51b8b32fcfe4389f46b9c380f660402c98ac95:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNlZGU5NGRhYmM0MTM0ODQ1YTJmZmJmZTRmZTY4MzMwNDViMjJiY2UxODQ3NDAwNTE5OGM1Y2VkNTkxZDYyNWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQwM2UzZDJkYTNiNTUwNDc4ODYxOGFhYmExZThkNWM1MTg3ZjE3NDkyYTRlZDVkMGM1ODE0ZGJhZmEzZTgwZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiYzk0Yjk1ODUxNmE0N2E1YWQ4ZTllMjAzODZmMzk2NjE1NTMwMWQyOGExZmViZWExYjUwZTRlMTg5ZjAxZTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_21f61c434f3f4e3f8b87a9c4bc4748c9",
+      "statement": "As unidades e compradores de um deal vivem em commercial_deal_units e commercial_deal_buyers; saveDeal os separa do payload e grava property_id como a unidade principal e value como a soma.",
+      "evidence": [
+        {
+          "resource": "repo://services/commercialService.ts#L632-L660",
+          "version": "repo-lines-v1:sha256:c684f12b743abcc33e9dd3b99cebc2263ca526263322322fb7d93541525fd0b7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxY2RlOGQ3NDdhMjZmN2U4ZWRlYmJlMTE2MzUzNGUzYzZiYmY1MTIxMmZmZjYzOGE2ZTUzMDE2ZWZmOGRmOWQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY0ZmJhOTY0NzYwNjU0YzgyZDFjYTc5NmUyNThhNGM2NzM3MDk5ZWZjNjAyMDEzZWY3M2FkMjkwYzQ4ZjM3OTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiOTE0NjRjYjUwZTcyZGUxMWM0NGE5YTFhOTRlY2I1M2M4OWRkYmRlOGFmM2RmOTVlMGI2YWExM2Y5ZmExYjIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxODhmNzA2MTJiZmVmNjYzMTRmMDhkOTZkMjgxMDliYTJiYWMwZTQ4ODI5NTlmNjM4MjU1MGU0ODM0M2Y3YzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2bd3c8509997455ca364365575a60ffc",
+      "statement": "syncDealToFinance está aposentada e não gera parcelas; parcela comercial só existe quando está em internal_transactions, criada por ação explícita.",
+      "evidence": [
+        {
+          "resource": "repo://services/commercialFinanceService.ts#L48-L73",
+          "version": "repo-lines-v1:sha256:80ad7f43af4936fcf58b3c04af14fe3f729393630410e45256e7f63c488bc67c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5NGI3MGFlY2I4ZmIwMzNiMDQwMTUwZjNmYzBmNDQ1YWI1OWEzZDgyOGQ2MjZlMDA1ZTA5YTAwNzBjMzVjYTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM0ODQ3MzUyZmNkNzhjMWU4MzgzMzU3ZjM2YTI5YjRjMWVkMmQ4Yjg0Yjc4NmY2MjJlODdlNDY5NGRlOTRlNzciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE1ZmZjZTgzYWQyMjhkNjZjNmJjNGVhMzMxYzkzNDEyNGY2OWYzYzVmZGY5ZmEzMGRmZjY3MTE4OTNmYzE1MTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_28fab4f46aa14671bd1b6a80ef96c994",
+      "statement": "O lançamento de venda no financeiro escreve o plano no payment_schedule do contrato e reutiliza a sincronização do contrato; locação é faturada pela série recorrente e syncContractToFinance recusa contrato de locação original.",
+      "evidence": [
+        {
+          "resource": "repo://components/DealModal.tsx#L987-L1004",
+          "version": "repo-lines-v1:sha256:1677a92a5a599aa849aa87f6fee86a86549869565c653da48201cadfac7e05de:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhMmQ4ZjQ5ZTBkNDZkMGIxOGE1MjliNTY4Zjk4M2ViMWQxNjA3YmY3YzY4ZmEwM2EwNDM3YTA3NGM4MTA5ZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgwY2ExOTQ4ODIyNTlhZDUwZjNiNmMzMDQxM2IzNzM4N2NhYWM5ZTdlOTZiOTY2MTZjN2NjMzBhZjFjNWRiM2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjAyYmY4NzRiNjBhYTlhNmFjM2YyNmM4NjBmNmI4NWUzMmMzYmU2YTQzM2FmYWE0Zjg4YzUzOGNhYTJhNjFhOTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg3NzQ4YjMzOGJmMDNhOTI1NmZmMTcyMTkxMTg0Y2NlZTczOTE4OTM5MmNkZGU1OWRlOWM2OThmZjI5ZjEyMzYifQ"
+        },
+        {
+          "resource": "repo://services/contractService.ts#L2020-L2020",
+          "version": "repo-lines-v1:sha256:dca8518bbd53cbdb04735792939751510cb90ef37bc68e83fa9069f9cd4b77eb:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGNhODUxOGJiZDUzY2JkYjA0NzM1NzkyOTM5NzUxNTEwY2I5MGVmMzdiYzY4ZTgzZmE5MDY5ZjljZDRiNzdlYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGNhODUxOGJiZDUzY2JkYjA0NzM1NzkyOTM5NzUxNTEwY2I5MGVmMzdiYzY4ZTgzZmE5MDY5ZjljZDRiNzdlYiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTQxZTA5MTZiYzY0OWM1ZWQ0M2Y1NjdkOTVmYjM3Y2VlOTcwMzBlOWRlYTA1YTEwNWI0YTQ5YzBiMDQxZTMwMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOTdiMDljYTE1MDc1OTQ5YmRjNDI3ZGM3MzMzYjMyZDZjNmY1MDRiOWViYzQyMjg3OWNjMmY4MWRlZGJhMjAzMiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_746e7f122811400095ddcb391bd756b0",
+      "statement": "getConsolidatedVault monta, para 'Todas', um projeto virtual só de leitura mesclando os projetos Gestão Comercial apenas das organizações do usuário.",
+      "evidence": [
+        {
+          "resource": "repo://services/commercialFinanceService.ts#L160-L200",
+          "version": "repo-lines-v1:sha256:16f34e9e324d3e3102e4bc529e259ed919a23492afb26ffffe620721e8d65652:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhMmQ4ZjQ5ZTBkNDZkMGIxOGE1MjliNTY4Zjk4M2ViMWQxNjA3YmY3YzY4ZmEwM2EwNDM3YTA3NGM4MTA5ZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBkMGU3ODYyYTEyMDk0M2ZhNGE5NDlhOTg4MzlkNzc2OGJhMzg2NDZiODBlZjUwMWM0MmMyZmY3ZmQ2M2ZjZWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImM2NDVlODIzZjEzODYzMTI4MDUyM2NjMGVlZDU5YjIyZmZhNWEyZmNjYmEwM2Q2ZjQ1ZDA1MmJmYzg3YWQwYWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM2NTJlZGZkZmZjNjNkMzM1NWNkODVlZTlhY2YzYjlhMjYzNDk4YmMxMDdjY2UzZmJkMmNjNDg2ZDY5NDM2YWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_198a928ceb734a03bb61aa20426c97ce",
+      "statement": "A comissão do corretor é um título a pagar em internal_transactions com reference_id brk-{deal_id}, mantido por gatilho, e listCommissions lê pela RPC fn_broker_comissoes_gestor.",
+      "evidence": [
+        {
+          "resource": "repo://services/brokerService.ts#L614-L632",
+          "version": "repo-lines-v1:sha256:98f805aead288d568dc7ef93992a03dfc92d85a2e69e61cb0edbac15f009506e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIyNDgyZWU0ODBlYzM4ZWQyMmQxNWZkMDYzYmI5ZDRhZmE2NDRhMTMyMTBkY2ZkNGM3MWVkYjM5ZDAxMjFlYTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYzOGFiNzI5NzRkM2M0NjJiNDI1MTVlYjczMWQyMmIwNTkxMjdjZjRlNjg3ZTFmNTUxMjYzZmU0NGQxODE1Y2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmZTExYTcxMmI4YzczYzA5N2U4YTFmMGFjYmE5YzQyMjYxNWMzYjllZTc3ZjdhNzBiMTZhZGYxMTk3MTNlMGQifQ"
+        },
+        {
+          "resource": "repo://supabase/migrations/20271017500000_comissao_corretor_titulo_e_portal.sql",
+          "version": "repo-file-v1:sha256:38153a325f80d0a30c59d0754e52c4b2c3cf08df2b28cc443168c9267d07bf0c"
+        }
+      ]
+    },
+    {
+      "id": "claim_472a40a4029c4850bfc4308ad8ffc499",
+      "statement": "negotiationService trata contrapropostas de pedido de compra entre comprador e fornecedor, não negociações imobiliárias.",
+      "evidence": [
+        {
+          "resource": "repo://services/negotiationService.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:721f090920e94d855ba2cc0362442e06b04424508e119283908d80680e36a8ad:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1YWIyOGI2M2NmZDgzODM4Y2RmMDA0MTU1N2E1YWJkMDRiYTU1Yzc5OTEzOTRmNDUwODRjOWQ1MTViODgzMjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY1ZTQ1ZjkyMTIwZmUyYTdkZTM4YmIyMmQxMDliZDYyNDk3NWI2NzRhYTM2NzE1YmJhMTgzMjU0NTdjNjcyMDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8efee464a61d4e20bc8228f901ff242d",
+      "statement": "O Imovib deriva a estrutura de torres e unidades do empreendimento vinculado via derivarEstruturaDoEmpreendimento.",
+      "evidence": [
+        {
+          "resource": "repo://services/imovibService.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:3a2e2489553d488c5ac1d0413ce514c26ffec66de8e8386be650be372325d72f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFmNzUzNTZhMTRhOGU5YzJhYTU2ZDcwYTk0ZWFjMjk4MTQwYjQ0NGQ3MzhmZTg1NTAzNWUwYjRhZDFkMDE3ODAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a88c8c390fb84c60b1efd5171f3c26be",
+      "statement": "empreendimentoService gerencia empreendimentos, torres, pavimentos, unidades, áreas comuns e zonas regulatórias.",
+      "evidence": [
+        {
+          "resource": "repo://services/empreendimentoService.ts",
+          "version": "repo-file-v1:sha256:7025e28fccb6fac0f3dd91997580a96f4f9dbaf3767be5eb7760250990344c42"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

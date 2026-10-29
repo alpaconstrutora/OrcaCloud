@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:b22170fe8427a16d9acdb9e0c007d8469d87bc5f7596a4d04dd19e5292c0eae8",
+  "claims": [
+    {
+      "id": "claim_67741b27104d4c9c805b20ebb6c63181",
+      "statement": "O status do boleto (rascunho, revisao, aprovado, programado, pago, cancelado) segue o fluxo: cada transição tem um efeito no financeiro (aprovar cria título, pagar dá baixa, estornar apaga título e nota, cancelar cancela) definido por transicoesDoBoleto.",
+      "evidence": [
+        {
+          "resource": "repo://utils/boletoStatus.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:6b35cf5160b5996b437666ff52bb295919ed85f58e36eb5560fa34f42800c344:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJlODQ5OTNjMzQ1NWJkOGVhYmYyZTE1YjIwYTI1NjA3OWYzNGQyY2Q1YjY3NDRlZmYwOTc0MzE0MzY1OWZhM2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3MTFiNTNmNjY3YjIxYTU3NWI2ZmNmZTUxZTZhZjFhOGY1MDBmZmJkNDAxNjc5ODYwODRiYjIwZWQyNzg0OTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQyOTljMWQwMzQwMjliMjFmZjEwMzZjOTc2ZWIxMjQyMDJhZWVmNzM1NjIxN2JjNTQ4YzFlNTAxNjkwOWEyNjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_08bba4a5266c49a19b7cdf46a59dc3bc",
+      "statement": "aprovarECriarInvoice recusa aprovar boleto sem fornecedor, sem valor positivo ou sem vencimento, e cria a nota de forma idempotente.",
+      "evidence": [
+        {
+          "resource": "repo://services/boletoService.ts#L560-L600",
+          "version": "repo-lines-v1:sha256:67f6998d46cf776aa3dc431be2e407511b63c796461ef487f3c4ce004ff6218d:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBlODUwZDU2YjdjMTM1ZjgzZWRmZTY2YzlhYjM3YjM5ODIyOTUwMzZiY2JmZTk3NWVkZjE3NmNiOWQyNmRmYWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzMzdjOGExNjU1MGJhOWI1Njc3ODljMDRiZWJlMmNmMGZiZjFiNmQ5ZDNjOWJhZmYwMjA4YzJhOGVhMGQ5MjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjViNDI1M2MxZTViMDIxODU4MGJkM2U4ZmQ1ZTkwN2UxMjhkZDk1ZDFiZGQ3ZTdmNjliMjEwZDU5ZjA0NTJkNzIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY3YmI2YTE5MDBmN2Q3NzBlMzQ4OTlkOTI5ZmU4MjBmZDU3ZTIxYmRmNjExZGVlYmYxOWVlMmY0OWQ2MDVhMzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_15a9fb18c43c4673bc8179d1f639f8d9",
+      "statement": "O gatilho fn_sync_boleto_baixa leva o boleto a pago e a nota a paid quando o título é baixado por qualquer caminho, escrevendo só em boletos e invoices.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/20270909000001_trg_boleto_baixa.sql#L1-L60",
+          "version": "repo-lines-v1:sha256:75913ad438328753b42c01e6c78e6722df7b5cbd5f3bec0dfd3af5972f2560ec:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyYzMxYzc5YWJmMzZiOWYyYThlZTU5Yzk3Zjc0MTE4YTU2NmQyOWE3NDhlNzEwODRiZjI2ZWFkYmNjNDg4ODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIzMjM2MTk4MTAxMTI0ZTZjYzcxMDk0NzA0MGQxYWUyZTk0MDQ2ZTQwNmI4ZTdlYjI4MDNiMjc2NTNmODY0YmEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ4ZGNiY2UwMzhiOGE3YzZhYWU1ZTYyNzZlM2M5NTc4MGY4NzY4ZGMxZDZmYTg3NGE4YWJlZTIxNWU0NjljNjQifQ"
+        },
+        {
+          "resource": "repo://supabase/migrations/20270909000003_trg_boleto_baixa_reversivel.sql",
+          "version": "repo-file-v1:sha256:f95516a2771e9038d8ef9c8fc3f8552988ace30cdf47c270d238bef890c5fec3"
+        }
+      ]
+    },
+    {
+      "id": "claim_967992911f704b7aa6f94e1ea53edf65",
+      "statement": "asaas-charge exige membro da organização, mantém uma cobrança viva por recebível (índice uq_client_charges_tx_ativa), resolve o cliente dentro da organização e só envia segunda via para e-mail já cadastrado.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/asaas-charge/index.ts#L29-L330",
+          "version": "repo-lines-v1:sha256:a8f5de030a62e35cbcabb9621688f6996812d61447b69b1f460621c7a9795393:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyYzEyMjlmMjg4YWQ5ZmEzNDc2ZTJiNjE4ZDYzMTQ0MzkzNjJiZDUxN2M4NmNkYzVjMmViYjU3MzVmYmU5NTJiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ZWI3MDI1NzU5M2RhMDZmNjgyYTNkZGRhNTRhOWQyNjBkNGZjNTE0ZjY0NTIzN2Y1Y2E3NGIwOGY4ZGE2MWE2IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJkYTIyOWYxZmY3MWM4Y2NkNDBhMmYwOTE0ZTg3NTc2YjNiMTRmMmE5MmU4ZWEyNTkwMTZhMmZlYTJjZWQxMTY1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlMzk1MGYyYmY3NDIwNzY4NTI1MGY3YjU4Y2IzZjkyMjBjM2NhOTQwNDQ4NWZjMzcwZGMzZTYzZDgwMTFiMjMzIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_05f2205310654ddf8da30e254c9a7eef",
+      "statement": "processarEventoAsaas é o único caminho que muda estado por evento Asaas, usado pelo webhook e pelo sync de fallback, com idempotência por UPDATE condicionado ao estado de origem e lançando erro para que o webhook responda 500 e a Asaas reenvie.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/_shared/asaasProcessar.ts#L1-L71",
+          "version": "repo-lines-v1:sha256:76f160f749afad78d2f06d4ddcb44dfdb1e74d15fac4f141d1cbf8ab80b94d98:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEwNDEzYWU1NDVlZTQ4NzJkMTRmYWQ2MTBmNGU2YjgyYWI0NDIwMTA0ZGFhZmNjMDJiZDZhOTdkYzQ5YmY2MTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmZjRhYjNjMGExNTMxNjIyOGI4YTZlZjE1OTRiN2QyN2UzODBlOWJhNWRlMjUyM2NlZWQxZmZhNTE3ODU0NTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMwZTQ1OWJkOWRjZWUyMjNlZTExMmJkYjFjNjk2MzkzNmM2ZWZiYThhNzNlNDVmMmQxYmE2ZGFmNTViNTQ5OTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_14f9eabb76dc4f7e801f71fe4a21f365",
+      "statement": "Boleto e PIX de saída pela Asaas passam por um único portão de disparo (avaliarDisparo) que aplica bloqueiosDoDisparo de utils/asaasGovernanca.ts.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/_shared/asaasDisparo.ts#L1-L45",
+          "version": "repo-lines-v1:sha256:20f322121f07798ca77b7a976b4a43d95cc87fc1c5d1a83e27ce181f189e17a3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhMDY3YmVlNWQyYjU1YWFkODMwOTE4MjRmODM0ZDFlM2Y5OGZiODMxMmU5YWIxYTdjNjViYTY4YjJmMTBlOTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ0NTRkYzM5OTJiZmY4ZmFlYjM2ZmY2ZDAyYjMzNzc5NWZjOTYwMWU3NDYyZGQxZTk2OWE3YjkzMmM3NGRhOWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyNDM1YTUxMWNkM2UzNWQ1M2M2ZDg0ZGQ4ZWZkY2U5OTIxODhmYzgzN2RlYzMxNjkzMjU3MmEyMTRjY2Y1NzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ebb7b947900a466e8fa487e4940920e5",
+      "statement": "As regras de Dunning têm days_offset relativo ao vencimento, hora de disparo, canal e-mail e templates com variáveis; os eventos registram sent/failed/skipped por título e regra.",
+      "evidence": [
+        {
+          "resource": "repo://services/dunningService.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:5958abd13415da6752ba13aacfdb51b9da9f5b17d8f8525d6b365b39d2237ba2:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3YjUyZmM4YWMwMjhjODIwM2VkMGQ4M2MxMDlkMGQ0NWJmNjk2NzBmODUxZDlhOTg0NDRjYjVkMzNiNmQwNDkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5YzA5NjJkNDM2MWNlZGY3ZjA0OGEwNzFlMDJmZWYxMTQ1YTFmNGFhMmEzNzg3ODI3YTk3ZmI0ZjUyNzNjMTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_35a69bb96a10479686a96655f57ae8b5",
+      "statement": "dunning-notifier envia por Resend e aceita tanto chamada de cron (chamadaDeCron) quanto disparo manual com JWT do usuário.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/dunning-notifier/index.ts#L30-L60",
+          "version": "repo-lines-v1:sha256:843ca66c1b79b1b9da158dfe9ce5bb978715660ad22d04edabf9a5dacdc31ff8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiOWZkZjg0MWI5ZDRlMjYxY2IyMjQ2ZjU3NzZhZTdhNTFlYzJhMjEyZjI4MGFhMWY2ODRhNGZjMTQ1NmFmOGMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjMWIyNjk4NTJiMzlhMGVhZjkyNDkzM2U4MDJhMWM2Yjc3MDRmNDk2NTcxOGEzMDc2YzJkNzc1YjRkMTk2OWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjE2YmM4YzA0NWQxMmFjZTIxZDNjMTViNjU1YjU0MjA1MmNlYWY5ZmNhN2Y3MzhkNmIyOGY4NmFhNmU0MTZjZDQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkzNzIyOGM1ZDU1ZmZkOTYxZGM4NmMwOWFiOTk4ZTdmZjNlNGYyNjU4ZDlhYWFhYTY3ZDA4NmE4M2E0NTYwZGQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_305144073cee4b27ad6f208da18c299c",
+      "statement": "A captura de boletos por e-mail conecta caixas IMAP, sincroniza por agendamento ou sob demanda e permite busca por período e regras por remetente.",
+      "evidence": [
+        {
+          "resource": "repo://services/emailCaptureService.ts#L211-L400",
+          "version": "repo-lines-v1:sha256:401d37fa9c4f8e8c5b49e10fadec5d4343567faaba4deb6c1676dc6a9ba897fc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTkwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJjMDBmNDE5MDI5NTJiZGQwZjE1ZDUwNTA0NGUxYjM5YmIwODJkNWViMzI3YTJmNDUyNWQzNmQ4OTc3ZDE5Mzg1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhYTNlYjJmMDcxNzQ5NjVmNTEyZDEzOWY3MjQ1NjAxNzAzYzVjM2VhNTk4ZmU2YzExNGFhYTdmODkwZjcyNGY3IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJjMGMyMzk3NzQyZDE1ZDhkOTA2MWFiYTA2ZWE2MTY5ZTI5YTY2NTk5M2I3MjEzM2Q2MzM5NzVkN2E5YTNjNDRlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJkOGI4YmJhNTJmNGU0MjJiYTFiNGU2ZGRkZDFkMTNlODdmYjYxMWFlNzY3YmEwMDdlYWMyYzlhMDcwMzU2Y2MyIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

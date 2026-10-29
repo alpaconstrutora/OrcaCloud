@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:16179649efbcef22ab5490f57930b03439566599bd0c6f040be6896a7e2713a5",
+  "claims": [
+    {
+      "id": "claim_2a50d6a99a714dd390fda89eae0358b4",
+      "statement": "utils/blueprintKernel/index.ts é a superfície pública do kernel; código de fora não deve importar os módulos internos diretamente.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintKernel/index.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:39d2afe44234eb10657de939cffa344540bb27b30d5280e5d5a8f1f92f6193bb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzZWIxM2VlYjM2NmFhZmQ4ODJmN2NiNjM2OGUxMjIxYmUwM2I1YjlhNjU2N2QxYzFiNjQ0OWNmMmZkMTQ0ZTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c039ff7c0c8640b29cfbe4f69d96b16e",
+      "statement": "O kernel persiste comprimentos em milímetros inteiros e só usa ponto flutuante dentro de cálculos intermediários, para que o payload canônico seja idêntico bit a bit entre navegador e servidor.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintKernel/units.ts#L1-L20",
+          "version": "repo-lines-v1:sha256:f0a29e4c51eea4e72b789b2d7e6c3461a5e0cb7fd2b9c019a000e2ae383cf657:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyMGJlYTgzY2I1YTdlYmQ4MDYzMmYzYTBkYjE0MTIxNDNkYzgwZjllMTcyMDFlNmE2ODNlM2Y4NTg4NjFlM2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZmZTI3NDkyZjU5ZWFhOWE1MzY0YWFlNTUzZjlkMmI3NDQ1MTBlNTNlZjc5ZWE4NzQ5ZTJiNzI3ZjVmYTIxYTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ab37c1b8cf424472b7509bae3f6de317",
+      "statement": "Os ids do modelo são atribuídos por contador determinístico, enquanto o uid é uma identidade externa aleatória que fica fora do hash do snapshot; cópias recebem uid novo e uid duplicado viola os invariantes.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintKernel/model.ts#L1-L25",
+          "version": "repo-lines-v1:sha256:5f5473defa8ebcef66fdc5c558a5765d7f062f7ab0cef63f9a3925e4ee09b1ab:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY1MGQ5MjdkZmU2NDQ3Y2I4NmM3MjliNGRmYzJjMzM2NDBjODMzMDUwMzkzMTJjM2QzMzk1YmI0ZGM1MzlhYmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVkNThhNWZiZmI3MzJhMjgwYmUyMTgwNTZjOTA3MWI5NjFhYWNiZDg1MDg0ZWEyNjhjNTc1OTQ3MWQxZDRiNjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c2c59f483969415ea605280c2d7f7092",
+      "statement": "A serialização canônica ordena tudo por chave explícita e usa SHA-256 próprio; só a parte de geometria entra em snapshotHash.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintKernel/canonical.ts#L1-L35",
+          "version": "repo-lines-v1:sha256:13674f8e91b14e298ab671fa716471181d22a0087938247ecbdfa105220a5add:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRiMjExZmI1MDA5ZjEyNTM4ZTExMDVjMjBjYTViOWFjNzEzMzY3YzNmNDk1OGUyOGYyZGE2NTI4NzVjZWYwNzciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlMTQ0NzQ3ZDUyMWNhYjlkNjJmYzI5OGI5MTcyNGZlMDQ1YzdmNzhiYmE1YWExZTJkZTRlZDA3MDhkNGE1MDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_41d3fcb4c7284aa08da39daff3b8d749",
+      "statement": "applyCommand devolve o novo modelo com o hash do snapshot, e ModelHistory guarda estados inteiros para desfazer e refazer.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintKernel/commands.ts#L6365-L6440",
+          "version": "repo-lines-v1:sha256:98fff345858f84adeb8fbd329f056b8a758ae0cecba808e76668d3664f9b5ec5:eyJzZWxlY3RlZExpbmVDb3VudCI6NzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNmNjE5ODQzYTU4ZjJjYjU2ZjNiNDIyZDNiNTZiMWRhMmE4MzliZjRhZWQ1MWRiMmFlYjFlN2Y1YWRkOTk1MTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwOGY0Mzk5NDZlOWUyMmY2MzQ0MGEyZTRkZmNlZWU5MjFkN2FjNDk4ZWZkODNmY2U0ODZlYTgzOTVkNDFlNmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjUyYWQxMGY2ZGNjOTMxZjQwNmM1ZTliMTgxNGE0Y2NhODM4M2M1YjUzNTZhNDZhNjYzMDA5YjliNWY4N2Y4NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlY2M4ZWJkM2U3MjJmNDgyOWFmYzA2NDgxNTQ4NjU5ZmUyMTI1MTczZmU1ZTc4NTkyODVlYzkxNTJiY2Q5MTkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_35918aa3351c432dba1dbfd6877cbb9c",
+      "statement": "useBlueprintEditor separa modelo (só o kernel altera, por comando), histórico e rascunho gravado com autosave debounced; o canvas emite intenção e o kernel valida.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useBlueprintEditor.ts#L1-L20",
+          "version": "repo-lines-v1:sha256:85e002178b97c8eae4127c5f297f5605c1a742bde95350f0952eb673cf9159dd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJmOWJiZThlMWJmZTlhNGJlMWQ4NjY0OTYzYjIzYTMxNTZmMTdlOTJmYjI5YTI0ZGQ5ZjU4ZDZmZDI5MWI5N2IiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2MzZjZDI2ZjNhNWRiYzhjYWZkOTgxM2Y4NDA3NDNkNGJlNzJlYjRiN2YzZjI4NmRiNDAyNDQxOTYxZTNhMTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE2M2IxMDg4NGFiOTVmNTcxYTlmMTEwOWRiYmRiMGRjNDc5MmE0NDJmZmEwYjRmMmI0MTk0MzE0ZTVlM2QzZWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_65ae17ed2717465c8a710eac21fc1256",
+      "statement": "publishSnapshot publica pela RPC fn_blueprint_publish_snapshot com o hash calculado no cliente e trata o erro 23001 quando o ramo andou, evitando 40001 que o PostgREST repete em laço.",
+      "evidence": [
+        {
+          "resource": "repo://services/blueprintService.ts#L389-L437",
+          "version": "repo-lines-v1:sha256:c53addac7691c2ba501096026a762c581b7cdac0497e8727a1352b770b5dd37b:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJhODllMDNjMTFhNzgwNGQ1ZTk5ZWQ3OGUwYzUyYmExMGI5NzBiYWExMTQwYzQ3MzljOGNjNTM3Njc3MmNjZGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRlZDBlNjllZTA4NThiYjYxZWZjMDAyOGFjMTBhMWFmZWRhNTI2NjYzYjI2NTQyZGIyNDI4MjVhYjYzMDI5MmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4NDg5MDBhOGFiNDQwNzc0YWU0MzZkMjdlMTFhNjFhNDU3ZGQzZDFkMmYyY2FhMGU3OThhZjlhZDgxYTY4N2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE2MTgxNjUwM2QzNTBkZDhkNzY4ZjBlYmRkYzQ5YjY1NmJiMGNmNGFkZTY0Nzk2Y2RmNDdjNTg0ZjVhNDJmOTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_04971bf47c43430ebce87dc099e0aac7",
+      "statement": "A colaboração em tempo real difunde o comando e o hash esperado em vez de usar CRDT, com trava por elemento selecionado, presença, papéis por estudo e menções.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintColaboracao.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:b1078170605f857f42fb6d117296a182d58e1d13e3600cdf169ce9a9b4126269:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNhNDQyYjExNzEzMjdmNThjMmQ1Zjk2YTNiMTM4NTBhZmM5ZDY2ODE2OWEzN2NlZTgwNjdhZmZkNjNkMmZjYzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjNTM0MDlmNWQ3OGE1MGRiYjA3MjUzN2UxNGQ5Njg4OGUwOWE4Y2NmMjhjMjUzOGFjMWUzNWM4MmY2YzQ4YjAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fbe584a657cb40bbabc5861a8fde926e",
+      "statement": "Estudos têm ramos (alternativas) com rascunho e snapshots publicados cuja integridade pode ser verificada recalculando o hash.",
+      "evidence": [
+        {
+          "resource": "repo://services/blueprintService.ts#L67-L510",
+          "version": "repo-lines-v1:sha256:2dbf053890a233217888ee37d877582dd025322fbf29f494c5e9d1a2c5ac6e27:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQ0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI5MWY0NGVlZTExMDEyODUzZmQyZjJjYjFjNTEwOTc0MmY0NjAxMzFlMmE0ZjBiM2E5ZTk3MjY2MGRkYzQ1MTI5IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlZGI1NDRhNTg4NjM0MzUwYzE5MTY5YTgyNDNiNTMxYmYzMDk1ZWI1N2M4ZmIwM2U0NDgzNjk0M2YwODE2ODgxIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJhNDlhNDY0MjNmMjYwYTExZWY2ZmU0NTViNGNlOWExM2IyMjhkOTRmYWQyOWEyMzRlMjg3YjM5NjNkMWQyZTU2IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIxMmUwMWExMDkyMjUyNDQ1ZGUzMTYzYjdkNWY2M2Y1YmE0YTY5NWViZGE4ZGEwZGZjMjhlMjI5NDlhOGExNTAxIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_b8b083c1b0324a0bb8b2aafc2dca7c33",
+      "statement": "A exportação IFC só é feita com declaração de cobertura semântica, e a exportação de folhas preserva a escala real com legenda, versão e aviso de finalidade.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintExport.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:b7414b2729d8fc21334d0f4d008b806b45a0ce8c0a6d9a6dc59a11a2eec953c4:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhNjgxMzdiYzEwNGEzMDdjNTBiZGY2MjUxMTUzNzE5N2VlZDFmOWRlNGJhYTM3NGMxYWExNDdmODg5MDNkYTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIwYWU2OTRiYTM0Njg4ZjFmYTJmMjM4MjRjOTE1MGM4NWY3YWIxNjU1MmY2MjFlZmI4YjI0NzBhNWZmMmU1MGMifQ"
+        },
+        {
+          "resource": "repo://utils/blueprintIfc.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:ccd4f614bd8bec687ece74ea4700e4965faf7151afa3799a2956f3a9feb8a84e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEzOTU0ODQzYTQ4YWQxYTYwOTc1ODY1ZmE3NDNjZTc1Y2ExY2JjNmE3MjEwYTc4N2FlNDIzY2YxZTFhNjI0MTciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImFmNTdjMmEzNjk3MWQ4YzQ3MjZiZTE2NmE5MjMyODAyNDM4NjlmYTY5NjBmYzU1OGIzZGJhZjNiNGY1OWI0MDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7d74c70c9eae483eaa02ed8a42beb40a",
+      "statement": "A importação de IFC traduz peças paramétricas lidas por ifcParametricoService em comandos do kernel aplicados por applyBatch, e SketchUp entra via Collada.",
+      "evidence": [
+        {
+          "resource": "repo://utils/colladaParaKernel.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:2ea6b3c0b1ec502e9e6937b2c22829ef7ee4232d57e02b39f1206c4f458413c8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU1MTU5ZTFlMjQ2OWM2ZGU5NmI0MjRiN2JmZWZlMmZmMjY5Y2ZlY2FiY2JmMDY0MTUyYjMyMzBjYzZiNzI4OTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZhMTVhN2UzM2FiOTczZjQ3M2ZhYzlmNjk2MWU3OTg1NzljOGY5ZDZkZTFjMTk0ZjljYTVjZDM3NDMzMDc0MDMifQ"
+        },
+        {
+          "resource": "repo://utils/ifcParaKernel.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:6b293d6fc92441e137dee20b41395082a352eb135a317957317cfe184c5c6ea8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2MjNmZTQzNWIwNWY2ZTYyMDE1NzVlZWI0ZWUyZWQ1N2Y0YmFmYmIwMTE2ODk5Y2ZlMjEzMTYwYzEyNzYxNTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFhMGMyOTJiMThiZGZmOGI3ZTkwNzY0YjE5YWNkNWFkZTAzNDhhNzM4MTI5YTAwZmEwMzUyNDEyZjcwNjU0MGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5ZjNmZGRlZTc5ZWY4MzMyMWMyMjA0ZmY0OGIzNjFkNzdmOWUwOTQwZjgzZWM1ODA1YzMxNzVmMWIxMThiYjAifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

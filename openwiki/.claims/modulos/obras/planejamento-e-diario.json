@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:91a46ff68bfd1ae8a090443fad8b948dd4a686820a0d9f39fb4aa78da46742e8",
+  "claims": [
+    {
+      "id": "claim_28cb9d2c12284cc18e738414485041cf",
+      "statement": "O motor de cronograma implementa CPM com ordenação topológica de Kahn, passe de ida (ES/EF), passe de volta (LS/LF) e folga total TF = LS − ES, sendo crítica a tarefa com TF zero, além de calendário de dias úteis/feriados e comparação com linha de base.",
+      "evidence": [
+        {
+          "resource": "repo://utils/schedulingEngine.ts#L117-L410",
+          "version": "repo-lines-v1:sha256:4cacd59f95c7d951832200d89463f06dcac205e1f409d83a1cb7b9cd7409845c:eyJzZWxlY3RlZExpbmVDb3VudCI6Mjk0LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJkNWYxODA2ZTU4MjQwNDAyMDIxNmIxODQ4ZGEwMGJjYTc5NzRhMzllYjM1ZTdlNWYyY2YwOTk4YzBhMDQ2NzIwIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJkMGNhODAyZjU3ZDk3YTdjMjU2OWEyMjJiMzYxODMzNWYxODUyMDAwY2M1MzA4MmMzNmZiMTVhZWFjZGQzYzUzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0YWI1MmI1ZmU0ZWI3ZDcxZTkwNDhjMjgzMjQwZWJlYmU3ZTdmZGI1YmMxNTdlMmU3ZjMwMzViNDQyODJmMDQxIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlMDQ0ZjUwMTU4Y2MyZWUyNTY4YzFmYjIwMzk4OGExYzQ1ODEzYjBjMWQ1OGU5NGJkY2NhNDAwZDhmMWYwODEyIn0"
+        },
+        {
+          "resource": "repo://utils/schedulingEngine.ts#L15-L50",
+          "version": "repo-lines-v1:sha256:4093ccf75825c85a696ae329c063224acdfc429e8714afe4df1bda3959b7b689:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMwYTllNzE4NzMzOTkzNzI5Y2IwMTcyZDEwYzQ5NWJhM2UxOWQ4NDJiYzUzM2FlNGY0ZGRjMTg5MTQzZjYyYjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZiNDlhYWMwNzcwM2I3YzRlYTIxMzIyOTRlOTI2ZDcxYjNmN2YyYWQyNTlkYTc1MTMzZmUzOTNjZTIwMGZkNzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6d0b1bac17374e5290909f0e8c210a66",
+      "statement": "SchedulingEngine.calculate recebe tarefas, data de início, linha de base, modo de replanejamento, recursos, dias da semana de trabalho e feriados e devolve as tarefas com datas calculadas.",
+      "evidence": [
+        {
+          "resource": "repo://utils/schedulingEngine.ts#L812-L830",
+          "version": "repo-lines-v1:sha256:867e3b285ac3340a46c6127c8f8a6d1df91e260af6063977803396b7fb763dba:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlkMDJlYmM3MjJhMmNkODlmYzM1MjJkNGVhOTMxMjQxZjdjNjY2MjJlMmZjZTU3ZjI1ZmNlMGI4OTUzZDViMWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUzMjk5M2Q4ZDNlMzlmNjU1YjdhY2NhY2NhYjIwMWM4ZGVmMjA0YTJkZTk5MzAwNTA2NTIzOGMzNzUxMDM1NWQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjRkM2QzZTVhMTE4ODhjNGJjOTJlMjM4NDc2OWNmMTMzMjE4YzFhYzE4OGU5Njc5YjcyMmNiNGZiMTgzNGEwODYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4MTJhNjEyMGY4MTQzZWQxYjNjNGU4YzQ0ZjVlYjBkYTE1ZWViYmNkZTlkYzIwYjQ5MWE4ZTNiZGUzYjM0OGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_236dc9534c1148ecaf977a04ed7a20a0",
+      "statement": "O motor deriva esforço e duração das composições do orçamento a partir dos componentes de mão de obra.",
+      "evidence": [
+        {
+          "resource": "repo://utils/schedulingEngine.ts#L485-L800",
+          "version": "repo-lines-v1:sha256:d4f80ff394b1eaa533cd45a94b399bd52cce8373d5ca1c4da7af638844dbda1a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzE2LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJiZjZmZmU0NjIzOWVkNzQ3MDdjNmM1NDhmYzE5YjZjZWZmMDYwZjkwMTZmM2M0NTc1NjgzNjk5OWM4NTc0NWRmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ODJiZjYxODRkZmI1N2Q1ZmU5ZWM1ZTlhOWJiM2MzNDg0OTAwMjZjOTQ4NTk0Yzg4YjNmMjEyMjY5MjI1YTAzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5MDAwNGNiNWUwMjg0NWU1YjNjMDcwODU3MzZmNDZiNjJhNWVhN2YzMWU1MmU3MDA5ZDFjOGViMTcwNzQ0YWM0IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI5MWM4Y2ExMTFlOTJkZjk0ZWUzNDZiYjU1NzJlOWViMmIwNDRhZTdjYzMzZTYzYWZlMjgwYjQ1ZDY0NTg5ZmQ2In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_52ca01014cd244219dc3cc6f84e2511e",
+      "statement": "Em tarefa dividida, effectiveSpan inclui os intervalos entre trechos, enquanto duration continua representando o trabalho e nunca muda.",
+      "evidence": [
+        {
+          "resource": "repo://utils/schedulingEngine.ts#L1-L12",
+          "version": "repo-lines-v1:sha256:cf6df568fd1ddc2ac7e7287c38bb051c0753b6177d6ad6605943e367b6c77dd8:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFkM2ZlMzE3NDhlNjI5YWJjZDU0Nzg3YmRkOTE1YWMyNzIyMDM3MzA3M2FiMTQ1NTgxODIyNDYwMTNiNzc1OTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIwYWY2NmM2Y2IxNmNmOTNkMTIyMzJhODhhOGVjMTcxMzU2MDAxMGY0YzkyZDVjMDFkOTM0MzE5ODBkMTY4OGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ce1a9192301345b79c109557421acb93",
+      "statement": "A grade da timeline do Gantt é uma camada única atrás das linhas, porque uma grade por linha gerava dezenas de milhares de nós e travava a rolagem.",
+      "evidence": [
+        {
+          "resource": "repo://components/schedule/ScheduleGantt.tsx#L345-L360",
+          "version": "repo-lines-v1:sha256:afb62b79ad2f4cac2380d16379e10b0a00bd2cdb1c31f8cf920fc46f7457831c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM3NDM5ODI3NWYxZDhjYzQxNDFiY2QwNzlkZWYzM2Q0YzU1MjA1ZmMwZGJlYTliNzM4NTQyZmVhYzFkYTZiOTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFjOTEwNTJmNDJiMDc1MDU2NDM1NTdlODZlMjhiMjVkNDk3OGNhZjRhMWJjNzc0MzI3ZTE1ODAwZmEyOGVmZGIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZkZGRhZWYwMjNlMTRlNzJhZmI1MmQ3NDEzZTVlMTJjMzQ5MDlmNTk4ZDYwODFiYzY2YjNiODQ4YzhmOWIxODUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxMjdmNmQxZGFiZDRhMzNkNWZkNGIzN2E1ZTRhNTQ0Nzc2NGI1Zjg1NzgxYzJjMjQ5OGU4YmVjYTQ1MjdjMDYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7dcf413791fa4857bb8e65103f26d70b",
+      "statement": "Registros do diário são gravados um por vez pelas RPCs diary_upsert_entry e diary_delete_entry, que travam a linha, trocam só o registro do id e devolvem a lista já gravada; um gatilho impede que o saveProject altere diaryEntries.",
+      "evidence": [
+        {
+          "resource": "repo://services/diaryEntryService.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:535d9a0ea34769939bf9dbdbf09a500ebc4a2d930a167eeee621c5b199e31956:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg4MzNiNzFiN2ZhMDcwM2Q5MTA2ZTgxZTE4OGYyMzNlNWY4MmEyY2U5NmJkZjg1NTIxYmVhOWUyMGY2MDc0NWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_433294fc986147f19ce09792d4798b0d",
+      "statement": "A permissão de aprovar registro do diário é decidida no banco por fn_pode_aprovar_diario; utils/diaryAprovacao.ts replica a regra (admin/owner aprova, canApproveDiary decide, sem a chave não aprova) só para explicar o motivo na tela.",
+      "evidence": [
+        {
+          "resource": "repo://utils/diaryAprovacao.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:bd35737cf6f5abcbdc49d91bc165ac8f06f453e464a0ac5e9e628da76019f0f3:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4NDZlNTc4YjQxY2Y3ZDlhY2ViMjg3ZjhhNDcyZTg5NTVmMzc5YzAzNWUzMGQxODg2ZDNmMGU0MzU3YTg4YmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1MzQ0MTY0MTdhYjZkNzE1NzVlOGNmMWQ0N2JjY2Q3MTJhZDE1MDgwMDdlMjU2YzdkNDRlYzdhNWRlNTY1NjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwYzhkYThhOWY2MjczY2NhYjZkOTE2YWI0MDNlYTlkOWNjNGJiZDMyZTdlODA4NTk3ODExNjZjYjA2YjViYTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_bf2458d8a6e44850b6ddfef3a12a754b",
+      "statement": "As regras de vínculo entre diário e cronograma são puras e compartilhadas entre desktop e celular; resolverPlanejamentoDoDiario encontra o planejamento que aponta para o vínculo do diário.",
+      "evidence": [
+        {
+          "resource": "repo://utils/diaryPlanningLink.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:912b683c77dcb47facc7d35bab6190eb37f4ae789fd04e8df700ced06069ea63:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2ZTgwYjE2ODA3ODBjNTc1MDEzOWYzNDViODk0OWU3NmQwYWZmNzIwZGEzNTAzNGVhZmI5MzcyZTIzNzAwY2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE2ODNhYmViODEwMjcwM2ZiOGQ0YzRiNmE2ODg2MGZlMDc4OWFhMzQ2NjdkM2M2OTFiN2VjNjgxMTY5MWQ3NGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmYTQ5ZDA0MzAwMmI0ODAzNjkyM2NjNjE2Zjc2Y2M3ZTEyNTJiMmY4ZGZlMzNmODczOTNjYWYyZjJjYWE4M2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_07e242b363bd42feb73a4a7f962b2b33",
+      "statement": "As dependências do Gantt suportam FS, SS, FF e SF e são traçadas a partir das bordas das barras como desenhadas, no padrão MS Project.",
+      "evidence": [
+        {
+          "resource": "repo://utils/ganttDependencias.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:ddfd1f81d3ad24b88d7d244bf8a8631884d6b457a1637102b7b77d2aac6292b6:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM4MzJkMDQ1MTY2NjY5ZmQzMjUxNDc4NDEyNjY5NWM1MTkxMGE1ZTllMmQwMDViMGNiZjBiYzZlMmQ5YTljNGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2Y2FjZGQzOWExZjMwOWQxMWU5MzY1ZmE0YzAxNDU0NzU0M2Y0NmY2OWE1NzlhNjMxMWNmMGQ5MDA2MTQ4NjkifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

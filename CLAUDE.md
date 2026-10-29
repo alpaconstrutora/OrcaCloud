@@ -585,3 +585,11 @@ Detalhes e exceções: `RUNBOOK_DEPLOY.md`.
 - `RUNBOOK_DEPLOY.md` — processo de deploy
 - `PLANO_MODULO_*.md` — PRDs de módulos em desenvolvimento (não implica que já
   estejam implementados — conferir estado real no código antes de assumir)
+
+<!-- OPENWIKI:START -->
+
+## OpenWiki
+
+@AGENTS.md
+
+<!-- OPENWIKI:END -->

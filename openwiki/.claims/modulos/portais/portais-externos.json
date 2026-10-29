@@ -1,0 +1,114 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:37b433516a608049ff955c4c80749fe2771845c0f95cb7fae14403e44065e71f",
+  "claims": [
+    {
+      "id": "claim_bdcda2256d194137a6fe1c7a45a83be2",
+      "statement": "O Portal do Cliente lê e age por RPCs (client_portal_validate_token, client_portal_get_data, fn_portal_get_receivables, fn_portal_get_contracts, fn_portal_get_ged_documents etc.), e a aba Condomínio reaproveita o fato de o condômino já ser um client.",
+      "evidence": [
+        {
+          "resource": "repo://services/clientPortalService.ts",
+          "version": "repo-file-v1:sha256:eaede247c438cebd868a4fb50460373160a1e002a5cfb688fdb0aef79edc36b8"
+        }
+      ]
+    },
+    {
+      "id": "claim_216a266d71c44ee58784bb48323c9864",
+      "statement": "Os portais de fornecedor, parceiro, investidor e corretor usam famílias próprias de RPCs (supplier_portal_*, partner_portal_*, fn_investor_portal_*, broker_portal_*), incluindo a geração do token pelo admin.",
+      "evidence": [
+        {
+          "resource": "repo://services/brokerPortalService.ts",
+          "version": "repo-file-v1:sha256:c6ad094ae6290200f1d2ae6c936a0426aabc53d47a493bb8ee72fec1ddad48e8"
+        },
+        {
+          "resource": "repo://services/investorPortalTokenService.ts",
+          "version": "repo-file-v1:sha256:15af1617e64a5112d57a23d8592ee8e3cca0bdefbe78c801ebddb4adad599062"
+        },
+        {
+          "resource": "repo://services/partnerPortalTokenService.ts",
+          "version": "repo-file-v1:sha256:b4b0fd0feb6051048cdf527ff91c519d861b42a43b951ae2710fe8216dfcddd6"
+        },
+        {
+          "resource": "repo://services/supplierPortalTokenService.ts",
+          "version": "repo-file-v1:sha256:003d05f576cb49caa437c3381352b3049f1f5a3c9390da6c293f6155c4b79b6c"
+        }
+      ]
+    },
+    {
+      "id": "claim_68efde1b12294866ac7ec84766a4a492",
+      "statement": "O Portal do Síndico faz tudo por RPCs sindico_portal_* SECURITY DEFINER, porque o síndico não é membro da organização e leitura direta devolveria vazio; a identidade vai por token ou clientId e é decidida por fn_sindico_resolver.",
+      "evidence": [
+        {
+          "resource": "repo://services/sindicoPortalService.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:ebbd4e61454d8cb02d18b5180bcbcc121e97e04993f5f494974b574d393ce18a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFhNWUwNzk1MmE4Yzc5ZTI4MjU5ODcxZTBmNDY0YmRhYjRkNTQ1OTYzZjU5YzJiNGEzNWFkMmU2ZjUyZGUxNzAifQ"
+        },
+        {
+          "resource": "repo://services/sindicoPortalService.ts#L194-L194",
+          "version": "repo-lines-v1:sha256:feafeb52f5ce4a44081281a4593031737a4db2889441eecc7a2f83d5606904e0:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZmVhZmViNTJmNWNlNGE0NDA4MTI4MWE0NTkzMDMxNzM3YTRkYjI4ODk0NDFlZWNjN2EyZjgzZDU2MDY5MDRlMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZmVhZmViNTJmNWNlNGE0NDA4MTI4MWE0NTkzMDMxNzM3YTRkYjI4ODk0NDFlZWNjN2EyZjgzZDU2MDY5MDRlMCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjE2NDQ1ZjMwYTZkMDc1NzcxNDI1ZWY0MzhmNDhlZWM0ODY1NjU2Yjg4NmFhMjg0MDQzZTc1MTY3MTg0OTM3NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYjQyMTQ2MDA1OThkOTM5NDk1MTUzYWZlZWZhOWQzNmI0ZGY5ZWEzMDg3ZTI4M2QxYmFjNGU1MzNkMGU5MGYxOCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3680c985544c4918b617e09e670c5fa0",
+      "statement": "portalInviteService chama a Edge Function portal-invite-user, que confere que o chamador é membro da organização do cadastro, garante o token, gera link de criar ou redefinir senha, envia por Resend e grava portal_invited_at.",
+      "evidence": [
+        {
+          "resource": "repo://services/portalInviteService.ts#L1-L20",
+          "version": "repo-lines-v1:sha256:be23781df63c45ff821b3c9f5b92d7b087cb8071c5a640d3c460c40dfdf8e9d7:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM2ZGM4MmJjNjg5MjkyYzFlNTg0NzZkYTViMzkwOWZkZDQ0ZTI2NGU4YTUyMzFiZTM1YWUyMzM0OWFkNWVmZDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5Njg3ZTM2YTkyNjY3YjMxZjQ1NWFhNjI4MjAwMzkzYzgwN2U1N2RiMWZjNTAwZDUzYTk3MDk1MDUzZGYyYjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2a4e42ff27a34e6da9e1ebf3ec34d730",
+      "statement": "lib/linkDeAcesso.ts captura o tipo do link de convite/recuperação na carga do módulo, antes de o cliente Supabase apagar o hash, e guarda o e-mail identificado pelo link.",
+      "evidence": [
+        {
+          "resource": "repo://lib/linkDeAcesso.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:e767f2b2606381c0df97968007bc7dc25f7a4ef37a92c2e3d347304285652312:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk3ZDg1NjI0MWE5ODRhZmJmODI0MWIzOWEzZGI0NmI0MzE4OThkYjcyMTlhNmE3M2IxMjBlMTE0ZGUzMGYyNjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyMjgwMzk5OThkMmMzNzBlZTRlZmJjYjA4NmM1NDRmMmVlZjQ2NzlhZDlkMGNlZGVkMGU1MjM5NmFhODAyYzgifQ"
+        },
+        {
+          "resource": "repo://lib/supabase.ts#L1-L5",
+          "version": "repo-lines-v1:sha256:3f8f62d04548246ced905cd4aad5385f8a75c0b5633aa983844722d233b434ab:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMzdlYzBmZWZhYzAxODk0MzQ3YTMyY2FiNjI2NzYyZTdjNTk2N2NlNDgyYTE5ZTBkOGIxYTA2ZmNjYTI1NWIyNSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZDM5NTkyNTk4MzhkOTMyYzNhNmE3ODEwYjQ5ZDA5Zjg4NDVhNTg3OTdjN2RjNDVhYTYzYjFhZjY3NWI5OTFiNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjAsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNGUyN2VmZDBmNDUxNWVkY2VjNjQxZDYyNjYyMjhiZTQzMzljNGU0NTI1YTcyMjRmNDliZTg2ZTRlNzE4MGUwYyJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_cee9719d94c64d76933f318b0b0446fb",
+      "statement": "As abas do Portal do Cliente têm fonte única em utils/clientPortalTabs.ts, compartilhada com a ajuda e o tour e travada por teste.",
+      "evidence": [
+        {
+          "resource": "repo://utils/clientPortalTabs.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:2fbec1a32b3576aaceeef14badad476d74c1388414684410c2ac022c2c2e2c4a:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0YjQ0Zjc2MWE5ZGM5NzRiNzYzNmJjNGY4MjY4NDgwMzYxMzBlZmJhNWJmMzMyOGNhZjA0Mzc0NTUyNzE2NGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5MDc4YzBkNWQxYWM1ZjExMWM5M2Y4YzZiOGQzM2QxYjgxNGY4MWY5YjdlMDUxMGJjNTE3ZDFlMTVmMWM3YmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fb494c899b4c44f58c8313df430629b9",
+      "statement": "PortalKit define o vocabulário visual dos portais externos como exceção autorizada ao guia de UI, aplicada aos portais do investidor, fornecedor, parceiro e corretor.",
+      "evidence": [
+        {
+          "resource": "repo://components/portal/PortalKit.tsx#L1-L30",
+          "version": "repo-lines-v1:sha256:7b5f4b30a69987fe3aabcee196e2ef8a64a93abec93eddb9ed6c63d976993bf4:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViNGZiMDI5MDNiYzA1N2Q5NDg4OGU4NTBiYWYwZWExNTY1NzIyOWVlZTVkY2UyZDZmMjg4NjkwNThlMjc5MDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmZTc3NDEyMjk2ZDk1NmU5YTY1OWY3ZTRlMmRiOGI2MGZhZjM3MzA0ZmQ4M2I2ZGM1Yzg5MWUzZDJlNDdhM2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEyZTdiYmNkYTliY2ExMTMzNDgwMDdhN2FhMzQzMDUxNDc1MWI1ZjYyNjkzYmMzZWRhZDU0ZWFhZGI1NzVjMDMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1194141e46224b4d99ae9df420d5757d",
+      "statement": "Os tokens dos portais ficam em tabelas próprias como client_portal_tokens e supplier_portal_tokens.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/20261128000001_client_portal_tokens.sql",
+          "version": "repo-file-v1:sha256:d57dcbf16a4be50328052128cce435aadd01a3651c3ba72e193b0ccfc22c6f2b"
+        },
+        {
+          "resource": "repo://supabase/migrations/20270822000017_supplier_portal_tokens.sql",
+          "version": "repo-file-v1:sha256:dc01eaeb6b556e0f119221a74ce4ce9aabcc38796f3228e241076d4743424fb2"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

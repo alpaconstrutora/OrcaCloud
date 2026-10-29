@@ -1,0 +1,4 @@
+# Arquivos
+
+- [Obras: orçamentação, SINAPI e estimativa paramétrica](orcamento-e-sinapi.md) - Como o orçamento é guardado (budget e EAP dentro do projeto ORCAMENTO, versões em settings.versions), como outros projetos resolvem "o orçamento efetivo" (budgetResolver), a base SINAPI versionada por competência (importação em lotes e rebase), a reconstrução da EAP quando ela se perde, o CUB por padrão/UF e o motor puro de áreas NBR 12721.
+- [Obras: planejamento, cronograma e diário de obra](planejamento-e-diario.md) - O planejamento é um projeto PLANEJAMENTO com cronograma em settings, calculado por um motor CPM puro (calendário, grafo, passes de ida e volta, folga, linha de base) e exibido num Gantt com grade em camada única. O diário de obra é gravado registro a registro por RPCs com trava de linha, aprovado conforme regra do banco e ligado ao cronograma pelas mesmas regras no desktop e no celular.

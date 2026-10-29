@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:ac279a25b16d17fce81da5604184ff9eee7d604d02ef5d89c8947b1920f7a0c9",
+  "claims": [
+    {
+      "id": "claim_5674657396c14a9e965aeb4396fbba7e",
+      "statement": "O fluxo P2P é modelado em três grupos: suprimentos (solicitação, cotação, pedido), estoque e fiscal (recebimento, estoque, fiscal) e financeiro (financeiro, pagamento), e cada nó emite eventos do Motor de Processos.",
+      "evidence": [
+        {
+          "resource": "repo://services/p2pFlowService.ts#L1-L130",
+          "version": "repo-lines-v1:sha256:56245a97e30144c1358a18489583fe618415a924cdfaf2990a141018b3551053:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI1NDg2NGJiMjRiMzVkNDc3ODRmYmQ4MzZmNGJkYjY1YmJmZTA1YWE5NDJhMThmZDI0OGMyOGYxODk1MGFlNTFjIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJhMmQ3MWI1Y2Y5MDE5ZTZlYTI0YjI1M2I3OWJkNGQ4ZTk5OTBkMzM5MjUwMDk3MzQwMmI5ZWIyODM5MmQ4YTZlIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiNWEyNDJhYjhmMDAxYjg0NGIwNjMzMjIxZmNiMThhYjlmN2M2ZmRhOThmNjA3YTFmYmQ2NmRkOTUwMDkyZjUxIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_92af4183aa8947afbe46722956ce3bd3",
+      "statement": "A solicitação de compra não tem coluna de status: o status exibido é derivado por statusDaSolicitacao com precedência cancelada > rascunho > em aprovação > reprovada > aprovada > em atendimento > atendida.",
+      "evidence": [
+        {
+          "resource": "repo://types/purchaseRequest.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:20264811333326f49d560983110f96d877f2cd48797bab747c5d50cda250da6f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE1N2M5YmM3ZGFkOTFlMjdjMzdiYTEzMTM4MDI3YjE2M2Q4OGFkOTU4NDBlZGY5YmEwNzQ5NjIxM2U0NzM5NDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4N2EzNzFlYWI4MzZmMjcxOGViMGRlMDExMDUxODRlMzEyMzgyMDMxYmY2ZGNlMjEzMjI4MGQ3OTZiZWI4YzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJmZDUzMmFhYzk1ZTI0NmI2Zjg0Y2ZlYTRmMDVhYWU4NDRkZmI3ZWY0Y2U0NjgzMTA2NzQ3MTc5OGIzMmJlM2YifQ"
+        },
+        {
+          "resource": "repo://utils/solicitacaoCompra.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:83970264def9f6922094d035acad1e1c0dc109fde80e3a4f596b260fe5943b59:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjEyY2IwZThhZjNiYWMyMzBhYWQxYmU3ODhjZGI3NGEzYmQ1Y2Q5NTM0MWIyYTlkMjJjMzExZDJhNjhmNzE0MzUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYThhYjI1YTg4MGM5ZDM0YzI3ZGEwYmYwODJiNjVlMThjOTI2M2U1NTJlOGMxOTkzN2QxMmI1NGQwNDU0YTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEzNjgxZTA1MDkxNjlhOWJjMzg5NGRjMDhhZjNiMDM5MzExODY2ZGJlNzY0N2UwYTg5YWNiY2FkYjgxZWEwYzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fd81ad29e9af49d4bfc00797e98e6ff2",
+      "statement": "purchaseRequestService é a única camada que acessa purchase_requests e purchase_request_items; as regras de edição vêm de utils/solicitacaoCompra.ts e a trava definitiva é fn_purchase_requests_guard no banco.",
+      "evidence": [
+        {
+          "resource": "repo://services/purchaseRequestService.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:3861d1e3d97034927378b1eee87a66e00a73ded811022fae79efb99b590254e9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVjM2FlYTdlNmMyMGUzYzlhOWI4YTczMGVmNzFmOTMwYjQxODU1YTU0MTU1NzQyNzdmNTE2YzdkY2M0ZDc5ZDIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc5MTRjYWYyZDM0NWJmOWZiMjQ1ZjBiOTkxNzg3OTJkOWJjMGNiNDJhYTI0MGU5MzJhNDJmNGYyZTZlY2ZiNDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_812b6e8f4f944e9ca2ab0cc2dea95670",
+      "statement": "quotationService cobre pedido de cotação, respostas (inclusive pelo fornecedor), contraproposta e seleção do vencedor.",
+      "evidence": [
+        {
+          "resource": "repo://services/quotationService.ts",
+          "version": "repo-file-v1:sha256:26b8d086e076571db717ef9d348d86da93875cd3dcc7ec2e8e59c93faee9568e"
+        }
+      ]
+    },
+    {
+      "id": "claim_c272578437ac447082cd5475498a7b81",
+      "statement": "O recebimento do pedido grava purchase_receipts, purchase_receipt_items e as divergências com fluxo de tratamento.",
+      "evidence": [
+        {
+          "resource": "repo://services/orderService.ts#L530-L560",
+          "version": "repo-lines-v1:sha256:da826f1a78c8417ca4ff7fa6cf91f273412269a3c62d7d0fc74ee22e4b02ebad:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhmOWRiNTA2ZTk1OTUyNmQ1NzIxZWQ0YTdiNDZmYTZmNGEyM2UwZjU3OTFiNTFlZjg0NmQyOGJlYjkzNDY3Y2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmZTdkYWUyNDBmNGIzOWFiYTUxZGE3Zjg1N2NlNzNjMTgyNjc5NTkwZWNjZTBjZGQ1OGFiMTFmOGE3NmNiN2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBlNmQ0OTg4ODMwNDMyOTk2MGM2YmMyYTIwYWEyMWQ5ZjI2ZmNkYWQ5MjBhZTI0ZDY1ODQxY2JhNzhiYWQxYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdlNjZjNDgzZTQ2YjZiYzBiZTgxMGQ3ZDM1ODZhNjM5YmE0MzBiMGIyOTNkMTExM2NkODI4NmYzN2VlMjJhMzkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_369750cdfaaf40f7be696b5cd0a002ca",
+      "statement": "A numeração de documentos é um motor genérico por slots configurável por organização e persistido em document_numbering_settings, com adaptadores de domínio como orderNumberingService que resolvem a organização a partir da obra.",
+      "evidence": [
+        {
+          "resource": "repo://services/orderNumberingService.ts#L1-L20",
+          "version": "repo-lines-v1:sha256:ef097ce5440d5782f01d9c8cb2b9337301d84b4b9a059ea012bcace5a1d99ab9:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY5NTE2NThjMzNiZmIzZmU0YzBkYjdlYTc1YzFlNTFjZDY1Yjc2ODEzNTJmNTVkZmJmYTEwMmIzYjdhNGE2NmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6ed186783b354c639780f5c4ff2dd675",
+      "statement": "contractService cobre aprovação, minutas e assinatura, itens, aditivos, medições, reajuste, retenções, condições precedentes, exigências documentais e sincronização com o financeiro.",
+      "evidence": [
+        {
+          "resource": "repo://services/contractService.ts",
+          "version": "repo-file-v1:sha256:d861bb47687ccf9385eaa49140c59d8f4775ff142ec4b40d5b9c0eb4a597076a"
+        }
+      ]
+    },
+    {
+      "id": "claim_5b5719c3336b458ba47a9ed6e8e9c749",
+      "statement": "almoxarifadoService gerencia requisições de material, movimentos de estoque e transferências entre almoxarifados.",
+      "evidence": [
+        {
+          "resource": "repo://services/almoxarifadoService.ts",
+          "version": "repo-file-v1:sha256:c6e3e9d3c4261453751647abad7d7b6497c7b84299b2b26463ac52862427261f"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

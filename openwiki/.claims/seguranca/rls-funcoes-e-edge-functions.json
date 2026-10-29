@@ -1,0 +1,88 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:3a0e098c088c06d39dedd4dce63ccd381f1189cc7be3a50319a21b0c543f876c",
+  "claims": [
+    {
+      "id": "claim_e0d6de2da9134e269c1ae6ded1915b8a",
+      "statement": "segurancaMigrations.test.ts falha no CI quando uma migration a partir do prefixo 20270918000000 cria policy que libera sem condição, policy anon com true, SECURITY DEFINER sem REVOKE de PUBLIC ou carrega placeholder de segredo.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/segurancaMigrations.test.ts",
+          "version": "repo-file-v1:sha256:3c8c29f94a64160769333d1c0b36afec81bc54d5180512dcb811046992a46f95"
+        }
+      ]
+    },
+    {
+      "id": "claim_c58546cf7ba1493495c393ba65368359",
+      "statement": "check-rls-postura.sh confere contra o banco remoto nove verificações: policies anon sem recorte, policies de escrita sem condição, SECURITY DEFINER executável por anon, tabelas de tenant sem recorte, placeholder de segredo, cron falhando, cron sem HTTP, função de cron alcançável pela chave pública e tabela de credencial legível pela chave pública.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/check-rls-postura.sh",
+          "version": "repo-file-v1:sha256:8eb5b659cf752423f67443bf5d4a6f14fc5a556d756a6066da63fbb99de6e4de"
+        }
+      ]
+    },
+    {
+      "id": "claim_85228788e9924bedaec407489d82f18c",
+      "statement": "check-xss-sinks.sh falha quando HTML entra no DOM sem passar por sanitizeHtml e roda no CI e no verificar:build do Vercel.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/ci.yml",
+          "version": "repo-file-v1:sha256:a7ee18133656822a314dbc2a0e93cd99ae3070a954737189325661dd6beb5fb3"
+        },
+        {
+          "resource": "repo://package.json#L13-L13",
+          "version": "repo-lines-v1:sha256:f12156518766dafcabac4ff9d092870b65e05eb8ee307899a01b65d87b56e198:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZjEyMTU2NTE4NzY2ZGFmY2FiYWM0ZmY5ZDA5Mjg3MGI2NWUwNWViOGVlMzA3ODk5YTAxYjY1ZDg3YjU2ZTE5OCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZjEyMTU2NTE4NzY2ZGFmY2FiYWM0ZmY5ZDA5Mjg3MGI2NWUwNWViOGVlMzA3ODk5YTAxYjY1ZDg3YjU2ZTE5OCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMmFjMzVkNWU0ZTcyZjg1NDc0ZjczOTczYTY3YzczYTMyMGRhMzk1MjM0MmY3ZjNmODhiNWVjZWEzOWQyNjQyZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTJkOTZiMzRkZWM0MjVjNjNkNTEzMmMxZGRkM2QzMzlkZTg1NmQ4Y2U0NjllZTQ5OWM2NDk1MjY1ZTJkYmE1MyJ9"
+        },
+        {
+          "resource": "repo://scripts/check-xss-sinks.sh",
+          "version": "repo-file-v1:sha256:2447ed225b772fe9d26da23b6c89d169248acb9932db6c634e534dd97b6ebef9"
+        }
+      ]
+    },
+    {
+      "id": "claim_1f2c9ef7cde94e228875595c0b903059",
+      "statement": "sanitizeHtml usa DOMPurify com desembrulho do módulo para funcionar igualmente no Vite e no Vitest.",
+      "evidence": [
+        {
+          "resource": "repo://utils/sanitizeHtml.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:981dba5d9a28ef5cfdaf950ff11183579980acee783ec952b1a2655786fe210f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJjYWZkY2Y5ZTFhN2Y3ZDJmMDQ5NmE4OTAxYzlkMjc1ZTc4NDAwMTEzMTU4N2Q1NDA0OTc1MmRmZGE4YTVjMTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjliZDAwODlkY2Q4OThiMmQ5YTc1MzQ5Y2E5MTJmYjhjMjYzNzg4MDVlZjllOTlkZjI4ODY5ZGYzNmMwODIzZjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjExNmMwNTMyZWExNjMyM2ZhYjdhMTMzMjc0MmQ4ZjI0ZjkxYjhkOTRiYjAzZWZkNDVjYzhiODgwOTRjZDk0NzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_637b6cda097c4713adf8d787ae70851d",
+      "statement": "check-rls-delete-gap.mjs procura exclusões que a RLS ignora silenciosamente por falta de policy de DELETE.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/check-rls-delete-gap.mjs",
+          "version": "repo-file-v1:sha256:c653f74f8883d09b037338f9ddf64ed0e0ef2e60ca3b8cb9d07d14361947fd50"
+        }
+      ]
+    },
+    {
+      "id": "claim_547c876af761444db233930eefae0551",
+      "statement": "verificar-views-anon.sh exige que as views expostas respondam 42501 sem sessão.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/verificar-views-anon.sh",
+          "version": "repo-file-v1:sha256:0d7670b76d2c92dc61890e67487c8c54041bfcc42146c4ff1d7750275f245404"
+        }
+      ]
+    },
+    {
+      "id": "claim_393c0fdffad14431b979efa3f7aee4fc",
+      "statement": "A autorização compartilhada das Edge Functions separa autenticação de autorização e usa CRON_SECRET, não a service_role, para chamadas de cron.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/_shared/auth.ts",
+          "version": "repo-file-v1:sha256:948760eae634ae06b9aebffc8427c498f26592cb889ecc3b633a446e5ab8591b"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

@@ -1,0 +1,124 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:a13c34dd9e9a32ba21f7b36b4fa3714c8ed83b53f978fe435c2d321cc6c428cc",
+  "claims": [
+    {
+      "id": "claim_c9502fefeebd4915a8f87863ddb277d1",
+      "statement": "A Conferência NBR 5410 é um conferidor: lê ambiente, tipo de ponto, potência, circuito e tensão declarados e aponta violações, sem atribuir potência, dividir circuitos ou escolher disjuntor.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintNbr5410.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:310abbecde5423a2d76b152a08d450def527d6bdd3ee2641ea547af9835d46d4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyMjNlNGM4MmFmZjY1OGU0N2Q2ZmVjZjRhYjdjZTdmNWVkMGExZDA5MWI5M2UxNTQyNmVhMjdmZDI2ZjM1YTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg0ODNlYjM5ZGQxNGRlNzFlN2I2NGNhMjUwYzEyMmUxMTEzY2ExNjc5Njg1ODcxZGM0NGMwMjdlYjRhODZjN2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b9e83cc10d10405b85b75e69e2f7b235",
+      "statement": "A ficha hidráulica é uma tabela única por tipo de ponto que alimenta menu, símbolo, inventário, quantitativo, painel e lançamento automático, com números de pré-dimensionamento da NBR 5626 e NBR 8160.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintHidraulica.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:19341e568b37e691fc86e7b06aca8f31a59669c6fed6ab6b5c0d9e8584109629:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4NzYzNzQzZTA0ZDRkNWJkODllMzhhY2Q5NDA1NThhM2I3OTU3YjU2NGRkMGRhMWMwYmE0OGY5OTQyOGRlZmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM4NzkwYWQzNThkOTMzZDZiNmZjYzU5NDgxOTM0ZjUwZTA4MDliZThmZGVkOGI0ZTY4OTZiMjM5MmNmZWU0OTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_227a5eec149f495a9a61d33dd924c8d6",
+      "statement": "A classificação de incêndio usa o preset de Minas Gerais baseado no texto das ITs do CBMMG e deriva as medidas de segurança exigidas de ocupação, altura, área e carga de incêndio.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintIncendioClassificacao.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:165bf4827f7f182a308cf6f21284a0455250ba6f2b096c968e4b5f891156cde2:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM5OTg0MjEyZGMzYTU5MTczMjY3MzMxZjJlYjNhNGQxNDIzNmU2MWFjODZkNDBmMDU5MDgyZjQwNTRiZTIxMmYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_94853dcb02084900a4976ea2dcceea00",
+      "statement": "As premissas de climatização guardam só o que o projetista decide (conforto, clima, insolação), com JSON parcial completado com o padrão na leitura e condições externas derivadas quando não declaradas.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintClimatizacao.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:528290f3740102faf9d674c2cc6bf6765417848185e2013ee9db22a1131867e4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU2YWJkOGIzNDYzZmEyZTk1MzYyYThiYWEyYjliNmExMjllYjk4NzU4ZDZhZmEwZTc4Y2NlMGU4ZWE1YWE4YjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ3YTM3NDNjMjc4ODgyMjIwYzQ0ZWZmYTUzZmUyZjgxNGJiNGY4Y2FlMDAwZjMwY2MwY2VjMjEyNDRhZWQ2N2EifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_49b745c18a5b4c87bc009d2679e04554",
+      "statement": "O gerador de estudo de massa é puro e determinístico, combina grade exaustiva com recozimento simulado guiado por semente sobre uma biblioteca paramétrica de implantações e mede cada cenário com a régua do comparador.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintGeradorDeMassa.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:c043080f823e1cf4cf5b15b7def507b8ab28c4a08d5eb588c0371c976cf8d512:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyMGJlYTgzY2I1YTdlYmQ4MDYzMmYzYTBkYjE0MTIxNDNkYzgwZjllMTcyMDFlNmE2ODNlM2Y4NTg4NjFlM2UiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJhMzg2N2YwZDI2ZTZjNDc3MzYyMzI5ZWU3MjljYzY1MzQ0NDkzNTZiMmQ4YzdiY2Y0YzFkMmMzMDU0M2I3YTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_252507433d4e480da784f159ea354d55",
+      "statement": "O gerador de massa roda em Web Worker e, sem Worker disponível, executa o mesmo código no fio principal com resultado idêntico.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useGeradorDeMassa.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:1de8a059fe0edbefefa93b9d82bf236a63158dd79632fdea62ca8824a67be688:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZjU3MzQ4MGNjMjNlNmRkZTliOWFkMTU2N2E4NjEyNjczY2VjNjliZGI2MWMzNzZmMzc4MGYxNjg1ZGRjNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJiYmM0MjJkNTc0OTZkYWIwMDc5YWJmNjgyY2Q3NDY1ZDMyYTc1MTI4OTZiYjRkODY0ODZjNTAxM2YwMGU0NDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ5N2I5ZDBhODY1OWNjODllOGY2NmY2OTM5YWJhM2ZhYWIyMjM4ODU5ODM2NDk5ZjNlNDdiOGQ0NzE5ODI2OTkifQ"
+        },
+        {
+          "resource": "repo://utils/blueprintGeradorDeMassa.worker.ts",
+          "version": "repo-file-v1:sha256:4451f712e35f1d59ad5caff33723e2698fff1f7c5afc07125e628e17310b2c1c"
+        }
+      ]
+    },
+    {
+      "id": "claim_586dde7c0d184259a75a9c28711007a4",
+      "statement": "A casa automática escolhe a implantação limitada pelos parâmetros legais antes de gerar o layout, para a casa não ocupar o envelope inteiro e estourar a taxa de ocupação.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintCasaAutomatica.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:8c69b64a81d16eb45a44c929fd8149db58a04426a4f74a946f67a1946c99bab1:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjNjMjVlODUzYTAzNzIxMmE1NDliNjRhOTIxNmEyYzIxM2MwNWJkNzgxMDlmZTkyMmQ1OTI2MjBhODAxNTUwZTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQyZDBlODc2MDNmYTlmMWZjMTdkOWJjNTNiNzYxMTM2NDBjZWNiNjhlMmMzMzQ5NDU1ZmVkNWFlODZjYTYyNTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_6f6e647fbdc546ff8b4ab765f409f966",
+      "statement": "O de-para da planta para o orçamento recusa mapeamentos com unidade incompatível, grava calculationMemory com fórmula, variáveis e versão publicada, e usa ids determinísticos prefixados pelo estudo para que regerar substitua em vez de duplicar.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintBudget.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:ef018164d623bdea68ff00b84efd59acf6623db67fe3f2688186928e767b51af:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkOGRlOTYwODMwMjVhYWEzN2M1MzQ0NDdkMGZjMDMyMzU2NGM3Yjg1Yzk3MTBiNjMxM2NmNGYxYmU2NzYxOTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNlNWRkODI4N2VkZTVjODFmYWNjNmQwMjExZmI5ZGQ3YjY3ZmU4NzkyN2Q5YWM5NTZjZWFmMzI1YTljMDI2YjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e029af1805094d86b84b357d2a484f79",
+      "statement": "A emissão executiva elétrica só grava o registro imutável após todas as verificações, amarrado ao hash canônico do desenho e ao hash das hipóteses, perdendo validade se qualquer um mudar.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintEletricaExecutivo.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:9ba0df26665baed94da040786bbfe107c1babaa83db4f6e81c59941c1ae48b29:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMwMjk0MDIxNmMyZmUxNWRjNTM0N2U5OTE1MGRmMGU3NDIwZGM2NzI1MjM4NDI0NjY1MTUyZWZhZTg1MWRkYWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdkYzAwMTA2MTgwZWRkN2JjM2E1M2ExN2U1MmQzNWEyODEyYjQyYzk0NDMzNTk3MGYwNzg0ZmQ0MTQwYjVhOTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_38d3d72e74e8468c9608973da4329ce8",
+      "statement": "As premissas elétricas do estudo são persistidas no estudo (não no localStorage), com estado local imediato, gravação com respiro e degradação para a sessão sem a migration.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useBlueprintEletrica.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:bae9baeec868f1d8f1b16f1ed2a46b00e80cc46057773368a0227c3aa58240e9:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhZjU3MzQ4MGNjMjNlNmRkZTliOWFkMTU2N2E4NjEyNjczY2VjNjliZGI2MWMzNzZmMzc4MGYxNjg1ZGRjNmYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljOWJlNzI5OTAwOTBiMzY0NDE1NTJlZDdkZDRmNmY4NWQwOTdmYTk4NzJmNmUxY2Q4NWI1ODEyN2QzNjBjODkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyNWMyYzgzNjJkYzZmYzFmZWExMmQ3NGUzODAzZTI4Nzk4ODFmYzFjMTE5OGYwNTkxMmU1ZDRlODFjNTZlODQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5c86bb93c88e4025b90e18a451eac669",
+      "statement": "O conjunto de pranchas é derivado do modelo publicado e do template de prancha da organização, sem entrar no payload do desenho.",
+      "evidence": [
+        {
+          "resource": "repo://utils/blueprintPranchas.ts#L1-L20",
+          "version": "repo-lines-v1:sha256:fe53edbf457aedf2c94a0716850b6dfcad017a121a5046ac5fa7828cc9aa603a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZkNThhYzczNDk3ZTNkNGU5MDAxZmUyZWRjMWNkYWNlNWQ1Yjg5Mzg0NTRkOWUxYzMwZWQ4ZWVmMzA1M2IwY2QifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

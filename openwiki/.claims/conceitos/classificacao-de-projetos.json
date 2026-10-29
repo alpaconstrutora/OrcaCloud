@@ -1,0 +1,108 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:319a14e191237473a01a2f8e3dd86b2f691c915b118e02c818ca79adfd5c10b6",
+  "claims": [
+    {
+      "id": "claim_7289c198cf914092bf1deb644bf49adf",
+      "statement": "A tabela projects guarda OBRA, ORCAMENTO, PLANEJAMENTO e DIARIO distinguidos apenas por settings.classification; o valor legado COST_ESTIMATION é reconhecido e nunca conta como obra.",
+      "evidence": [
+        {
+          "resource": "repo://utils/projectClassification.ts#L1-L102",
+          "version": "repo-lines-v1:sha256:ec9cf51ac859fe2d1516bf0f448cbe12cfef5fc8c1781ba9b8dd7ee5e2f63c6f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0NWQ1YWJhY2EyMjY4MGFlOTUzMzY3MDBkZjc2NjM2MTk3YTdjYjZjMDA0ZjRjZDc5YWMxYjFmZDJmMGFjNGE1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlMjJmYWE1MzViZDJlYTNkNTJlNzQxZWQ0NTQ0MzViN2ZlNDllODM1ODZlOTQzZDk4ZDgyYmJmYjI0ZDFmNWM1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIzOTgwMjM1MGIwNTBhODdhODFmZDMxM2ZlYjU1NjFhMjk5MDA0ZDFkMDIxYzc3NDk0ZGRhNzcxNzFmMzhlYTA5In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_effbf7e9f90a4303b376b501e6fb8a20",
+      "statement": "TRATAR_SEM_CLASSIFICACAO_COMO_OBRA = false é a única decisão sobre projeto sem classificação: isObra devolve false para ele.",
+      "evidence": [
+        {
+          "resource": "repo://utils/projectClassification.ts#L52-L109",
+          "version": "repo-lines-v1:sha256:f2ae7f258445e9ba7b6768657942dc06ef21f868e5723ccbc665253b97a87b36:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI2NDdmODk0YmYwMGQyYmE0NzFmZDIzOWM4NjNjMzMyNGI0MzU3Y2U4YTY4MjQ2YjU4YzM2MDBkNTY3NmU3ODAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjliMTIxZWNkNmY4NmQyNGRmYTc4ODE2MWNiNjI3NTQ4NDdlNzE5MGY4NjU2YmU3NzA3NTBiMmE1YjkwMzMzZjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ca7ec54947b948128bb378bc9c936e6d",
+      "statement": "isSystemProject considera projeto de sistema quem tem settings.isSystemProject true ou nome em SYSTEM_PROJECT_NAMES (hoje só 'Gestão Comercial'); SYSTEM_PROJECT_NAMES_SQL corta por nome para consultas diretas porque filtrar por chave JSON ausente descartaria linhas.",
+      "evidence": [
+        {
+          "resource": "repo://utils/systemProjects.ts#L40-L94",
+          "version": "repo-lines-v1:sha256:42467dc601fd1278a84597490e2c301b4e04f68b27a465c89b3ae911a92fe47a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQwYjRlNjdlNTI2ZmI1ODhiYWViYTdiNDdmZjlkYjAxMjUyMjZkMzEwODlmNTk5ZGJkNmU4N2NkNGRiODQyYjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0YWFmMzMzYWZkMTcwYjUzMDNlOTM1YmYwZjBkZWFiNzczYzU0MTk3NDRiODYxM2NkYzliMjNmMGE3NTc2NTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNkNDExNzlhNDZkMWZmMjRlMWM4NTBjNTcyNThjMmRkZjk2NzViNTUzOWExMGFhZTg2ZGY1NDk1OTY3NWM3NTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cf7fd035be95422e8f51a78247cd1498",
+      "statement": "listProjects recebe um objeto de opções com classifications padrão ['OBRA'] e includeSystemProjects padrão false, e aplica os filtros de classificação e de projeto de sistema em memória.",
+      "evidence": [
+        {
+          "resource": "repo://services/projectService.ts#L233-L303",
+          "version": "repo-lines-v1:sha256:5f3e0cac85b62006b7475c86c0798bcf99c47591da148edd1a911c56405a0c4a:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg0ODJiN2NlNjM4M2M1ZTY2MGVkMTk4OTE0OGQwYTA0YTA1NjkyMmY2ZGQwZTkyODc5OWNlYTc5MGE1YjQ4N2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVhMzNjMmUyYTFlODc5MzQ0YmExZDgzM2RlMTlkYTcyY2JlZTM1MTUxZGFhNDU2MDQ5ZjQwNTk5NDFkOTk4ZmMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY5OTlkZTRlMjMxNWFmNWViMzMzYTMxYzk3NzQ1NTFlYzRjYWUzNGMwZTRmN2Q4YTc3ZmM4MGU2Yzg5NjlhNWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmNjY2NTg2ZGI3MWEzNmQyZTg1ZmU4YzZjZjY1M2M3YzhlY2M0ZTM5YWMyOGVhZDk4Y2E1ZjJjYWVhMzMxMWIifQ"
+        },
+        {
+          "resource": "repo://services/projectService.ts#L8-L62",
+          "version": "repo-lines-v1:sha256:5eabd761bf7b7cfb6df8be420474c8bc0897961db2e7693d28c246204c4b5abf:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3MDE2MjNkMTFkNWU5MzAxYzcxNjJiMGZiMWYxNDg3NzRiNzUxYmQxZTY5YTM5MTFkZjE0ZDcxZjQ1ZmZiZTMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZiZDMzNDMyNWMwZjMzNThkMmY2NzUyOTdhYzQzZmE5NWI0NTRjYTdmODIxOTI5ODk1ZDU3OTBlMGU1NDNhYjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE2ZDU0MzEwNjU0ODMzZjkxNWM4MmIwYjMwZWIxNmRmMTkxZTk2YmI5YWQ0NWEyZWM2ZWM0MmViZGI1Y2M4NGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c8bdc77851f7433ba412f1931b7a9da5",
+      "statement": "O modo lean de listProjects busca apenas cinco chaves escalares de settings e devolve um settings parcial, inadequado para quem lê cronograma, WBS ou financeiro.",
+      "evidence": [
+        {
+          "resource": "repo://services/projectService.ts#L23-L39",
+          "version": "repo-lines-v1:sha256:dc725b71c842d1bff0aeb0af2ebb91614441992fd51676c103f6fc34ab4a4e72:eyJzZWxlY3RlZExpbmVDb3VudCI6MTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhMmQ4ZjQ5ZTBkNDZkMGIxOGE1MjliNTY4Zjk4M2ViMWQxNjA3YmY3YzY4ZmEwM2EwNDM3YTA3NGM4MTA5ZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVkZmExNWY4YjgwYzA5NmM0ZTAxMGRiNDBjODk3MjgzMDU4YTk3Zjk3OGVmN2Q1ZGZhODVhNGRiZWNjZGNiMjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxYTJjNmMyNWIzMDdmYjA0ZGU3OWE5YWUyMGIxZmNmNTM2MjQyOGE1NmQ1ZjZiNjdmNjU2OWJmMDVkYmRlMWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZlZTAxMzUwNmJlYTZmNzRkMWEwNWMwZDIyYzkxYWI5YzhiYzE1NzcwNDExOTU0ZDc1Y2JlOWM4MTljZjU2ZjQifQ"
+        },
+        {
+          "resource": "repo://services/projectService.ts#L244-L298",
+          "version": "repo-lines-v1:sha256:d4b1888dcfb0e6d052ed0a3f74e9c846e52001bb147ad87096a5c6eee5e5bb3e:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQyOTdjZDZjZWUyNWQxMGRiMzBlNTlmNzM1ZDQ1YWQ3NzNkNDljMTM5YWZjMmE4ZDZjMjAxZTY2NTJkOWExYzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmNWFiYjYwMTRjOTdiYTJlYjkzNDg3OGUzNDU0NjQyM2JmMzhlOTU0YjlmY2UzY2U0MDQ0MDNhYTM5MGU4MGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhkNjEzOTg1NGUzMjUwZjcxNDkzYTE4YWVkY2Y2NzkyNzE2ODM5NDYxNDc2YTNhYmI2YmZhZmI4Yzk4YzBlMDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE4YzYzNjY2ZjI3YWFmMTI1YWZlZDgxYTJmODhiMjk1OWQ0ODhiYjJhYzJjMGU0ZDVjOTU3NTFmZWM0NWI0NjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_739a011b709d4a5d86367b7cbfd1fc15",
+      "statement": "O projeto 'Gestão Comercial' é criado pelo commercialFinanceService com classification OBRA e isSystemProject true, isolado por organização.",
+      "evidence": [
+        {
+          "resource": "repo://services/commercialFinanceService.ts#L75-L155",
+          "version": "repo-lines-v1:sha256:8b3e11a088239f53eae17bda91b0c1893266f37d5079bce1cd0496fb00240e85:eyJzZWxlY3RlZExpbmVDb3VudCI6ODEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjllNzkzZWJkODI2MWMyZjMwMjdmZTg4MzgwNTEyZmE1OGU3M2FlMzgxY2I2NjYwNmM1MTJiNzgxZjE0YzYxYzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjI2NzhiYWU3MjU2OGYzNTI0YmZmNmNlMTZiMjMzZjdjMTZlMDYwZDg3ZTY4YzYxYjYxMmYxNjY0YjkyZDZjNmIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImZiNjExOWNlZTEwNDlkNjJmY2ZmMmUzMTE4NzhhMjllNTgzODEzYmVmODI4OTQ1YmFhM2M2Y2Q4Mzg4N2RkZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI4YmJiNWE2ZDY1NDQ0ZTRmYmFhZDFmNDgwMjUwNDJlZTZkZmIyODBkOWFhNmJlNmE2NDYyYzg5YjM2NWFhZmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_023fef4225a24292b6988bf86415f376",
+      "statement": "deleteProject recusa excluir um projeto de sistema.",
+      "evidence": [
+        {
+          "resource": "repo://services/projectService.ts#L313-L320",
+          "version": "repo-lines-v1:sha256:996998153095596fb7fcfd7446c7ca69cea6234b3b4035bd46f9de98ebca0d64:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2ViNzAyNTc1OTNkYTA2ZjY4MmEzZGRkYTU0YTlkMjYwZDRmYzUxNGY2NDUyMzdmNWNhNzRiMDhmOGRhNjFhNiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiN2ViNzAyNTc1OTNkYTA2ZjY4MmEzZGRkYTU0YTlkMjYwZDRmYzUxNGY2NDUyMzdmNWNhNzRiMDhmOGRhNjFhNiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMDcyMmM5NzY0OTE3Njk0MjkxODI4Y2JmYzk1MTllNThkODkyOWZhYzVmYzhjMmYyZDY4YTE2MzFiNWQzM2UyNCIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTc4ZmQzZThhNDUwZTY5NzhkYWZiYjVmNTU5ZmI1MWFkMTMwYTU3YTI1ODFiYjRlNWE2NGVkYWFhMDI0Y2I3ZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3db5e4ef85c14b96bd0027b657e6633b",
+      "statement": "A trigger fn_strip_system_project_from_internal_tx, SECURITY DEFINER, impede que internal_transactions guarde project_id apontando para projeto de sistema, como rede de segurança para a escrita.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/20270819000004_trigger_strip_system_project.sql",
+          "version": "repo-file-v1:sha256:1a638dbc7403297328f46cb031c564fd00975af5e07953d1dc2b770f77199b42"
+        }
+      ]
+    },
+    {
+      "id": "claim_33bef4006b0c40e58eae19ed256ddaab",
+      "statement": "check-system-projects.sh sai com erro ao encontrar comparação literal com o nome 'Gestão Comercial' fora de uma allowlist de arquivos.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/check-system-projects.sh#L1-L40",
+          "version": "repo-lines-v1:sha256:19dd813bb36876dc828878f05b8578ea86fb6da52ee557b34ffca149dfec6e4f:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJiOWQwOGMwY2ZiOGZjMGNlNDE5MmNhZGVmMDUwNjY2ZDQyM2EwZjk3ZTZlNjk2ZDBkYTQ5NjJjN2I4OGE2ZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE5MTI4ZWZiYTUxMDM3OGRmZGVmZjM4ZjY1ZTQ4NjMxY2QzMzAyMzkyNTFhZTg0YjkzN2FmM2JiOTg3Y2M3NmMifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

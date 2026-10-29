@@ -111,7 +111,9 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                     >
                         {runs.map(r => (
                             <option key={r.id} value={r.id}>
-                                {new Date(r.start_date).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
+                                {/* Meio-dia local: new Date('2026-09-01') é meia-noite UTC = 31/08 em
+                                    Brasília, e o seletor mostrava cada folha com o mês anterior. */}
+                                {new Date(`${r.start_date.slice(0, 10)}T12:00:00`).toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}
                                 {r.status !== 'FECHADO' && ' (em processamento)'}
                                 {!orgId && ` - [${r.org_id?.substring(0, 8)}]`}
                             </option>

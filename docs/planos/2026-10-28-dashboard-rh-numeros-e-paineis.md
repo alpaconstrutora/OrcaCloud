@@ -44,7 +44,7 @@ Respostas do passo 2 (shape), transcritas:
 |---|---|---|---|
 | 1 | harden | `rh_kpis`: "Todas", pertencimento, alertas vencidos, turnover, absenteísmo | ✅ PR #240 (`41e0ac9`), 28/10 |
 | 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | ✅ PR #243 (`813334c`), 28/10 |
-| 3 | harden | custo do mês = folha da competência + apontamento | em andamento |
+| 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + correção de fuso, 28/10 |
 | 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto) | pendente |
 | 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | pendente |
 | 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | pendente |
@@ -215,7 +215,7 @@ cada uma (total, por obra, não alocado). Sem folha → `null`.
 
 **Como sei que terminou:**
 - [x] Testes da folha (22 arquivos, 179 testes) verdes.
-- [ ] Em produção, Alpa: "Custo da folha" = total do Custo por Obra de set/26.
+- [x] Em produção, Alpa: "Custo da folha" R$ 11.544 = Custo por Obra set/26 R$ 11.544,14.
 
 ### 3.3 Migration `20271028790000_rh_kpis_horas_do_apontamento.sql`
 
@@ -237,7 +237,24 @@ cada uma (total, por obra, não alocado). Sem folha → `null`.
   "(em processamento)" no seletor.
 
 **Como sei que terminou:**
-- [ ] Produção, Alpa: Custo da folha ≠ R$ 0, rótulo "folha de set/26 · em
-      processamento"; Horas extras "—"; gráfico com as obras da folha.
-- [ ] Produção: Custo por Obra lista set/26 da Alpa.
+- [x] Produção: "Todas" R$ 14.309 "folha de set/26 · em processamento · 2
+      organizações"; Alpa R$ 11.544; Horas extras "—" "sem apontamento aprovado no
+      mês"; gráfico só "Administrativo / sem obra" (a folha de set/26 não tem
+      alocação em obra).
+- [x] Produção: Custo por Obra lista as folhas em processamento da Alpa — mas com o
+      MÊS ERRADO (ver 3.5).
 - [x] `tsc` 0; `check-ui-standard.sh` limpo nos 3 `.tsx`.
+
+### 3.5 Fuso horário (achado ao conferir em produção)
+
+**O que muda:**
+- Custo por Obra: o seletor mostrava cada folha com o **mês anterior**
+  (`new Date('2026-09-01')` = meia-noite UTC = 31/08 em Brasília) — já era assim
+  antes deste plano. Agora meio-dia local.
+- Dashboard RH: data de referência era `toISOString()` (UTC) — depois das 21h já é
+  amanhã (a tela mostrou "21 dias úteis" na noite de 28/10); no último dia do mês, à
+  noite, o painel inteiro pulava para o mês seguinte. Agora `hojeLocal()`.
+
+**Como sei que terminou:**
+- [x] `tsc` 0; `check-ui-standard.sh` limpo nos 2 `.tsx`.
+- [ ] Produção: seletor do Custo por Obra começa em "setembro de 2026 (em processamento)".

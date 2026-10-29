@@ -8,6 +8,7 @@ import { KpiCard as KpiCardBase, type KpiColor } from './ui/KpiCard';
 import { useQuery } from '@tanstack/react-query';
 import { laborService, RhKpis, Employee } from '../services/laborService';
 import { payrollService } from '../services/payrollService';
+import { hojeLocal } from '../utils/baixaRecebivel';
 import { hrAnalyticsService } from '../services/hrAnalyticsService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
@@ -133,7 +134,9 @@ interface LaborRHDashboardProps {
 }
 
 const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, pontosPendentes = 0, onNavigate, organizations }) => {
-    const today = new Date().toISOString().split('T')[0];
+    // hojeLocal, não toISOString(): depois das 21h em Brasília o UTC já é amanhã — e no
+    // último dia do mês o painel inteiro pulava para o mês seguinte.
+    const today = hojeLocal();
     const [refDate] = useState(today);
     const anoRef = Number(refDate.slice(0, 4));
 

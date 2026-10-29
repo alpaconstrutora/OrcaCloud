@@ -40,6 +40,10 @@ Depois da correção de Férias e Ausências:
 
 > pode comecar
 
+Depois do passo 5:
+
+> pode comecar
+
 Respostas do passo 2 (shape), transcritas:
 
 > "O RH tem quatro painéis … Que papel cada um deve ter?"="3 painéis, cada um 1 pergunta (Recomendado)"
@@ -58,8 +62,8 @@ Respostas do passo 2 (shape), transcritas:
 | 2 | shape | consolidar os 4 painéis de RH; limiar único de turnover | ✅ PR #243 (`813334c`), 28/10 |
 | 3 | harden | custo do mês = folha da competência + apontamento | ✅ PR #245 (`44b9ab6`) + #248 (`92fcb33`, fuso), 28/10 |
 | 4 | clarify | textos e estados (não medido, vencidos com nomes, link na sub-aba; BI "Headcount atual" = última foto; Custo por Obra em "Todas" mostra `[a2c4b292]` no lugar do nome da org) | ✅ PR #250 (`399ed33`), 29/10 |
-| 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | em andamento |
-| 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | pendente |
+| 5 | layout | KpiCard destaque + ação, `<h2>`, alertas zerados fora da grade | ✅ PR #253 (`280c128`), 29/10 |
+| 6 | polish | teclado, contraste, `role="img"`, função por `role_id`, esqueleto | em andamento |
 
 ## Passo 1 — números da `rh_kpis`
 
@@ -374,7 +378,40 @@ Tese: a entrada do RH responde "o que exige ação e como está o mês". Modelo:
 
 **Como sei que terminou:**
 - [x] `tsc` 0; `check-ui-standard.sh` limpo; `impeccable detect` 0 achados nos 2 `.tsx`.
-- [ ] Produção, "Todas" e Alpa: 3 faixas na ordem; Pendências com a férias vencida
-      (nome) e EPIs; zerados ausentes; Turnover da Alpa com "Definir meta".
-- [ ] Produção: Tab percorre Atualizar → linhas de pendência → ações dos cartões, com
-      foco visível; largura de celular (390px) sem rolagem horizontal.
+- [x] Produção (`ca54a77`, contém `280c128`): "Todas" → h2 Pendências · 2 tipos /
+      Outubro de 2026 / Distribuição; pendências = férias vencida (Claudinei, 15/10) e EPIs,
+      zerados ausentes. Alpa → Turnover 5,3% "sem meta definida" + "Definir meta";
+      Absenteísmo idem; Custo da folha R$ 11.544 + "Ver custo por obra".
+- [x] Produção: Tab = Atualizar → 2 pendências → "Ver custo por obra" → "Custo por obra
+      completo"; anel de foco azul visível com a tecla Tab; iframe de 390px: scrollWidth
+      390 = clientWidth (sem rolagem horizontal).
+
+Vistos no print, para o passo 6: rótulo "Administrativo / sem obra" cortado (coluna de
+9rem no gráfico) e "Outubro de 2026" repetido no subtítulo e no `h2` da faixa.
+
+## Passo 6 — acabamento
+
+Itens da crítica já resolvidos nos passos 4–5 (conferidos, sem mudança aqui): teclado
+nos cartões clicáveis (agora `acao` = `<button>`), foco visível, `<h2>` por faixa,
+esqueleto por faixa, setas ▲/▼, `sort` no lugar do cache, classes por interpolação.
+
+**O que muda:**
+- **Função pelo cargo**: o gráfico usava o texto livre `employees.role`. Trocar só
+  por `role_id` pioraria (7 dos 12 ativos sem vínculo → "sem cargo"), e o texto
+  diverge do cargo vinculado (um "Pedreiro" está no cargo **"Pedreiro 3"**). Regra:
+  nome do cargo (`org_roles.nome`, via `laborService.nomesDosCargos`) quando há
+  `role_id`; o texto livre só sem vínculo; "Sem função informada" sem nenhum.
+- **Rótulo do gráfico quebra** em vez de cortar (coluna 9 → 11rem,
+  `overflow-wrap:anywhere`): "Administrativo / sem obra" saía "Administrativo / sem …".
+- **Mês uma vez só**: o subtítulo não repete "Outubro de 2026" (está no `h2` da faixa).
+- **Barras**: a lista ganhou `aria-label` = título do gráfico. Não `role="img"`: é uma
+  lista com os valores escritos, e `role="img"` a esconderia do leitor de tela.
+- Contraste: nenhum texto em gray/slate-400 sobrou na tela (só a seta decorativa
+  `aria-hidden`).
+- Prop `organizations` sem uso removida do Dashboard RH e do `LaborModule`.
+
+**Como sei que terminou:**
+- [x] `tsc` 0; `check-ui-standard.sh` limpo; `impeccable detect` 0; testes do RH (21
+      arquivos, 149 testes) verdes.
+- [ ] Produção (Todas): gráfico por função com "Pedreiro 3" (não "Pedreiro");
+      "Administrativo / sem obra" inteiro; subtítulo sem o mês.

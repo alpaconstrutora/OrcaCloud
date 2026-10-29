@@ -1927,6 +1927,18 @@ export const laborService = {
 
     // ── RH KPIS (Sprint 5) ─────────────────────────────────
 
+    /**
+     * Nome dos cargos (Cargos & Funções, `org_roles`) por id. O texto livre
+     * `employees.role` fica desatualizado quando o vínculo muda (28/10/2026: "Pedreiro"
+     * vinculado ao cargo "Pedreiro 3") — quem tem `role_id` aparece pelo cargo.
+     */
+    async nomesDosCargos(ids: string[]): Promise<Record<string, string>> {
+        if (ids.length === 0) return {};
+        const { data, error } = await supabase.from('org_roles').select('id, nome').in('id', ids);
+        if (error) throw error;
+        return Object.fromEntries((data ?? []).map((r: { id: string; nome: string }) => [r.id, r.nome]));
+    },
+
     async getRhKpis(orgId: string | null, refDate?: string): Promise<RhKpis> {
         const { data, error } = await supabase.rpc('rh_kpis', {
             p_org_id: orgId,

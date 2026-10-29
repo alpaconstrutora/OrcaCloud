@@ -160,7 +160,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                                             </div>
                                             <div className="h-4 bg-slate-50 rounded-lg overflow-hidden flex border border-slate-100">
                                                 <div 
-                                                    className="h-full bg-gradient-to-r from-indigo-500 to-indigo-600 transition-all duration-1000" 
+                                                    className="h-full bg-blue-500 transition-all duration-1000"
                                                     style={{ width: `${pct}%` }} 
                                                 />
                                             </div>

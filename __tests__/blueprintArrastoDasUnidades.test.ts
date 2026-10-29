@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { finalDaUnidade, gravacoesDoArrasto, trocarVagas } from '../utils/blueprintArrastoDasUnidades';
 import { arranjarAndar, arrumacaoEfetiva, arrumarUnidades } from '../utils/blueprintUnidadesNoPavimento';
+import { estruturaDaTorre } from '../utils/blueprintEstruturaDaTorre';
 
 const ANDAR_1 = [
   { id: 'u105', nome: '105', vaga: 0 },
@@ -99,5 +100,20 @@ describe('o modo arrastado na arrumação', () => {
     const r = arranjarAndar(BLOCO, [1, 1, 1], a);
     expect(r.vagas[0]).toBe(1);
     expect(new Set(r.vagas).size).toBe(3);
+  });
+});
+
+describe('da torre gravada à fatia desenhada (29/10/2026)', () => {
+  // "estou arrastando uma unidade para a posição que quero mas não está permanecendo": o banco tinha as vagas e a torre
+  // em ARRASTO, mas a estrutura lia a torre como POSICAO e a Planta redesenhava pela posição. A Torre A do Garden,
+  // andar 1, como ficou gravada: 102→0, 103→1, 101→2, 104→3.
+  it('em "Do Empreendimento", a torre arrastada desenha cada unidade na vaga gravada', () => {
+    const und = (id: string, name: string, vaga: number) => ({ id, name, floor: 1, floor_tipo: 'TIPO' as never, private_area: 100, position_type: 'FUNDOS' as never, vaga_na_planta: vaga });
+    const torre = { id: 'tA', name: 'Torre A', ordem_das_unidades_na_planta: 'ARRASTO' as const, units: [und('a', '101', 2), und('b', '102', 0), und('c', '103', 1), und('d', '104', 3)] };
+    const e = estruturaDaTorre(torre, []);
+    const piso = e.acima.find((p) => p.numero === 1)!;
+    const arrumadas = arrumarUnidades(piso.unidades, arrumacaoEfetiva('DO_EMPREENDIMENTO', e.ordemDasUnidades), { frenteParaFora: { x: 0, y: -1 }, rotacaoNorteDeg: null });
+    const r = arranjarAndar([{ x: 0, y: 0 }, { x: 13500, y: 0 }, { x: 13500, y: 26000 }, { x: 0, y: 26000 }], arrumadas.unidades.map((u) => u.areaPrivativaM2), arrumadas);
+    expect(Object.fromEntries(arrumadas.unidades.map((u, k) => [u.nome, r.vagas[k]]))).toEqual({ '101': 2, '102': 0, '103': 1, '104': 3 });
   });
 });

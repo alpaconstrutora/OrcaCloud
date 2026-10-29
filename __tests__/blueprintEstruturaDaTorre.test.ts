@@ -230,5 +230,18 @@ describe('como a Planta arruma as unidades da torre (28/10/2026)', () => {
   it('leva a escolha da torre; sem nada gravado, pela posição', () => {
     expect(estruturaDaTorre({ ...TORRE_A, ordem_das_unidades_na_planta: 'SETAS' }, []).ordemDasUnidades).toBe('SETAS');
     expect(estruturaDaTorre(TORRE_A, []).ordemDasUnidades).toBe('POSICAO');
+    // 29/10/2026: "estou arrastando uma unidade para a posição que quero mas não está permanecendo" — a torre em
+    // ARRASTO era lida como POSICAO, e a Planta redesenhava pela posição depois de gravar o arrasto.
+    expect(estruturaDaTorre({ ...TORRE_A, ordem_das_unidades_na_planta: 'ARRASTO' }, []).ordemDasUnidades).toBe('ARRASTO');
+  });
+
+  it('a vaga arrastada de cada unidade chega ao piso (29/10/2026)', () => {
+    const torre = { id: 't', name: 'T', ordem_das_unidades_na_planta: 'ARRASTO' as const, units: [
+      { id: 'a', name: '101', floor: 1, floor_tipo: 'TIPO' as never, vaga_na_planta: 2 },
+      { id: 'b', name: '102', floor: 1, floor_tipo: 'TIPO' as never, vaga_na_planta: 0 },
+    ] };
+    const e = estruturaDaTorre(torre, []);
+    const piso = e.acima.find((p) => p.numero === 1)!;
+    expect(piso.unidades.map((u) => [u.nome, u.vaga])).toEqual([['101', 2], ['102', 0]]);
   });
 });

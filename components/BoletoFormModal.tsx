@@ -1262,68 +1262,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </div>
                                 </Painel>
 
-                                {/* Linha digitável manual (quando confidence baixo). Some em
-                                    boleto programado/pago/cancelado: ali a linha não muda
-                                    (utils/boletoLinhaManual.ts). */}
-                                {boleto.confidence_score !== undefined && boleto.confidence_score < 80
-                                    && !['programado', 'pago', 'cancelado'].includes(boleto.status) && (
-                                    <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-4">
-                                        <p className="text-xs font-semibold text-amber-700 mb-2">
-                                            Extração com baixa confiança
-                                        </p>
-                                        <p className="text-xs text-amber-700 mb-3">
-                                            Cole abaixo a linha digitável (47 ou 48 dígitos) impressa no boleto
-                                            {boleto.documento_mime === 'application/pdf' ? ' — ou leia do código de barras do PDF' : ''}:
-                                        </p>
-                                        <input
-                                            type="text"
-                                            value={linhaManual}
-                                            onChange={(e) => { setLinhaManual(e.target.value); setLinhaDoCodigo(false); setErroLinha(null); }}
-                                            placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
-                                            className="w-full px-3 h-9 rounded-[6px] border border-amber-300 bg-white text-sm font-mono outline-none focus:border-amber-500"
-                                        />
-                                        <div className="mt-2 flex flex-wrap items-center gap-2">
-                                            <button
-                                                onClick={handleAplicarLinhaManual}
-                                                disabled={busy || !linhaManual || !!linhaDeOutro}
-                                                title={!linhaManual ? 'Cole ou leia a linha digitável primeiro'
-                                                    : linhaDeOutro ? `Essa linha já é do boleto ${rotuloDoBoleto(linhaDeOutro)}` : undefined}
-                                                className="px-4 py-2 bg-amber-600 text-white rounded-[6px] text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
-                                            >
-                                                Validar linha digitável
-                                            </button>
-                                            {boleto.documento_mime === 'application/pdf' && (
-                                                <button
-                                                    type="button"
-                                                    onClick={handleLerCodigoDeBarras}
-                                                    disabled={busy || lendoCodigo || !documentoUrl}
-                                                    title={!documentoUrl ? 'Carregando o PDF do boleto…' : 'Lê as barras desenhadas no PDF e preenche o campo para você conferir'}
-                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-amber-300 text-amber-700 rounded-[6px] hover:bg-amber-100 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                                                >
-                                                    {lendoCodigo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ScanLine className="w-[15px] h-[15px]" />}
-                                                    Ler do código de barras do PDF
-                                                </button>
-                                            )}
-                                        </div>
-                                        {(linhaDeOutro || erroLinha) && (
-                                            <div className="mt-3 flex items-start gap-2 p-3 rounded-[6px] bg-white border border-red-200 text-red-700 text-xs">
-                                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
-                                                <div className="space-y-2">
-                                                    <p>{linhaDeOutro ? mensagemLinhaDuplicada(linhaDeOutro) : erroLinha}</p>
-                                                    {linhaDeOutro && onAbrirOutroBoleto && (
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => onAbrirOutroBoleto(linhaDeOutro.id)}
-                                                            className="h-8 px-3 bg-white border border-red-300 text-red-700 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-colors"
-                                                        >
-                                                            Abrir boleto {rotuloDoBoleto(linhaDeOutro)}
-                                                        </button>
-                                                    )}
-                                                </div>
-                                            </div>
-                                        )}
-                                    </div>
-                                )}
                             </div>
 
                             {/* Coluna direita: um CARD por seção (13/10/2026). O que o
@@ -1414,6 +1352,71 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         </p>
                                     </div>
                                 </Secao>
+
+                                {/* Linha digitável manual (quando confidence baixo). Some em
+                                    boleto programado/pago/cancelado: ali a linha não muda
+                                    (utils/boletoLinhaManual.ts). Na coluna direita, logo acima de
+                                    "Cobrança", onde a linha preenchida aparece (29/10/2026, pedido
+                                    do usuário — antes ficava sob o documento). */}
+                                {boleto.confidence_score !== undefined && boleto.confidence_score < 80
+                                    && !['programado', 'pago', 'cancelado'].includes(boleto.status) && (
+                                    <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-4">
+                                        <p className="text-xs font-semibold text-amber-700 mb-2">
+                                            Extração com baixa confiança
+                                        </p>
+                                        <p className="text-xs text-amber-700 mb-3">
+                                            Cole abaixo a linha digitável (47 ou 48 dígitos) impressa no boleto
+                                            {boleto.documento_mime === 'application/pdf' ? ' — ou leia do código de barras do PDF' : ''}:
+                                        </p>
+                                        <input
+                                            type="text"
+                                            value={linhaManual}
+                                            onChange={(e) => { setLinhaManual(e.target.value); setLinhaDoCodigo(false); setErroLinha(null); }}
+                                            placeholder="00000.00000 00000.000000 00000.000000 0 00000000000000"
+                                            className="w-full px-3 h-9 rounded-[6px] border border-amber-300 bg-white text-sm font-mono outline-none focus:border-amber-500"
+                                        />
+                                        <div className="mt-2 flex flex-wrap items-center gap-2">
+                                            <button
+                                                onClick={handleAplicarLinhaManual}
+                                                disabled={busy || !linhaManual || !!linhaDeOutro}
+                                                title={!linhaManual ? 'Cole ou leia a linha digitável primeiro'
+                                                    : linhaDeOutro ? `Essa linha já é do boleto ${rotuloDoBoleto(linhaDeOutro)}` : undefined}
+                                                className="px-4 py-2 bg-amber-600 text-white rounded-[6px] text-sm font-medium hover:bg-amber-700 disabled:opacity-50"
+                                            >
+                                                Validar linha digitável
+                                            </button>
+                                            {boleto.documento_mime === 'application/pdf' && (
+                                                <button
+                                                    type="button"
+                                                    onClick={handleLerCodigoDeBarras}
+                                                    disabled={busy || lendoCodigo || !documentoUrl}
+                                                    title={!documentoUrl ? 'Carregando o PDF do boleto…' : 'Lê as barras desenhadas no PDF e preenche o campo para você conferir'}
+                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-amber-300 text-amber-700 rounded-[6px] hover:bg-amber-100 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                                >
+                                                    {lendoCodigo ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <ScanLine className="w-[15px] h-[15px]" />}
+                                                    Ler do código de barras do PDF
+                                                </button>
+                                            )}
+                                        </div>
+                                        {(linhaDeOutro || erroLinha) && (
+                                            <div className="mt-3 flex items-start gap-2 p-3 rounded-[6px] bg-white border border-red-200 text-red-700 text-xs">
+                                                <AlertCircle className="w-4 h-4 flex-shrink-0" />
+                                                <div className="space-y-2">
+                                                    <p>{linhaDeOutro ? mensagemLinhaDuplicada(linhaDeOutro) : erroLinha}</p>
+                                                    {linhaDeOutro && onAbrirOutroBoleto && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => onAbrirOutroBoleto(linhaDeOutro.id)}
+                                                            className="h-8 px-3 bg-white border border-red-300 text-red-700 rounded-[6px] hover:bg-red-50 font-medium text-[13px] transition-colors"
+                                                        >
+                                                            Abrir boleto {rotuloDoBoleto(linhaDeOutro)}
+                                                        </button>
+                                                    )}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
 
                                 <Secao titulo="Cobrança" icone={Receipt}>
                                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">

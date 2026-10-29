@@ -234,12 +234,17 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col overflow-hidden">
-                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-700">
+                {/* Cabeçalho do guia §21 (branco, h3 slate-800). Era gradiente índigo com
+                    subtítulo indigo-200 sobre indigo-600 — apontado pelo hook de design. */}
+                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between">
                     <div>
-                        <h3 className="text-lg font-black text-white">Nova ausência / afastamento</h3>
-                        <p className="text-indigo-200 text-xs mt-0.5">Férias, atestados, licenças e outros</p>
+                        <h3 className="font-black text-slate-800 text-lg">Nova ausência / afastamento</h3>
+                        <p className="text-slate-500 text-xs mt-0.5">Férias, atestados, licenças e outros</p>
                     </div>
-                    <button onClick={onClose} className="p-2 bg-white/10 hover:bg-white/20 rounded-[6px] text-white transition-colors"><X className="w-5 h-5" /></button>
+                    <button type="button" onClick={onClose} aria-label="Fechar"
+                        className="p-2 rounded-[6px] text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                        <X className="w-5 h-5" />
+                    </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-6 space-y-4">
@@ -430,9 +435,13 @@ const NewPeriodForm: React.FC<NewPeriodFormProps> = ({ orgId, employees, onClose
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-[10px] shadow-xl w-full max-w-sm flex flex-col overflow-hidden">
-                <div className="px-6 py-4 border-b flex items-center justify-between bg-gradient-to-r from-emerald-600 to-emerald-700">
-                    <h3 className="text-base font-black text-white">Novo período aquisitivo</h3>
-                    <button onClick={onClose} className="p-1.5 bg-white/10 hover:bg-white/20 rounded-[6px] text-white"><X className="w-4 h-4" /></button>
+                {/* Cabeçalho do guia §21 — mesmo do modal "Nova ausência" (era gradiente esmeralda). */}
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between">
+                    <h3 className="font-black text-slate-800 text-lg">Novo período aquisitivo</h3>
+                    <button type="button" onClick={onClose} aria-label="Fechar"
+                        className="p-1.5 rounded-[6px] text-slate-500 hover:bg-slate-100 hover:text-slate-700 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-600">
+                        <X className="w-4 h-4" />
+                    </button>
                 </div>
                 <div className="p-6 space-y-4">
                     <InputGroup label="Colaborador *">

@@ -432,3 +432,30 @@ Fica para depois (não pedido neste plano):
 - Cabeçalho do modal "Nova ausência" em gradiente índigo (apontado pelo hook de
   design; fora do Dashboard RH).
 - Nova `/impeccable critique` do Dashboard RH para medir contra os 13/40 iniciais.
+
+## Depois do fechamento — 29/10/2026
+
+Pedido do usuário, transcrito:
+
+> Ficou anotado no plano, sem fazer, porque não foi pedido:
+> 1. O fn_bi_executive continua executável por usuário anônimo. … Resposta: Corrigir
+> 2. O cabeçalho do modal "Nova ausência" continua com o gradiente índigo … Resposta: Corrigir
+> Três coisas que posso fazer agora:
+> 1. Rodar /impeccable critique de novo … Resposta: sim
+> 2. Fechar as frentes. … Resposta: sim
+> 3. Cadastrar uma meta de turnover para a Alpa … Resposta: sim
+
+Metas escolhidas pelo usuário: turnover 8% ao mês, absenteísmo 5%, horas extras 10%.
+
+- [x] **Metas da Alpa 2026** gravadas em `hr_targets` (8 / 5 / 10).
+- [x] **`fn_bi_executive` e `fn_bi_trend` sem anon** — migration `20271030100000`
+      aplicada; ACL `{postgres, authenticated, service_role}`; sonda com a chave anon em
+      `/rest/v1/rpc/fn_bi_trend` → **401** `permission denied for function fn_bi_trend`.
+      A `fn_bi_trend` tinha o mesmo defeito (mesma migration de origem) e entrou junto.
+- [x] **Modais de Férias e Ausências**: cabeçalho do guia §21 (branco, `h3` slate-800,
+      fechar com `aria-label` e foco visível) no "Nova ausência" (era gradiente índigo) e
+      no "Novo período aquisitivo" (era gradiente esmeralda, mesmo arquivo).
+- [ ] Produção: modal "Nova ausência" com cabeçalho branco; Dashboard RH (Alpa) com
+      "dentro da meta (8%)" no Turnover.
+- [ ] Nova `/impeccable critique` do Dashboard RH (comparar com 13/40).
+- [ ] Frentes `rh-kpis-numeros` e `critica-dashboard-rh` fechadas.

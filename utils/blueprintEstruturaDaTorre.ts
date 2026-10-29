@@ -255,6 +255,9 @@ function comElevacoes(torre: string, pisos: PisoSemUnidades[], terreoMm: number,
   return pisos.map(({ elevacaoDigitadaMm, ...p }, i) => ({ ...p, elevacaoMm: elev[i], elevacaoDigitada: elevacaoDigitadaMm != null, alturaMm: altura[i] }));
 }
 
+/** As escolhas válidas da torre; outra coisa (ou nada) vale POSICAO. 29/10/2026: ARRASTO ficava de fora e virava POSICAO. */
+const ORDENS_DA_TORRE: readonly OrdemDasUnidadesNaPlanta[] = ['POSICAO', 'SETAS', 'ARRASTO'];
+
 export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: EmpreendimentoFloor[]): EstruturaDaTorre {
   const avisos: string[] = [];
   let fonte: FonteDaEstrutura = 'NENHUMA';
@@ -317,7 +320,7 @@ export function estruturaDaTorre(t: TorreParaEstrutura, pavimentos: Empreendimen
       break;
     }
   }
-  return { torreId: t.id, nome: t.name, acima, garagens, fonte, avisos, ordemDasUnidades: t.ordem_das_unidades_na_planta === 'SETAS' ? 'SETAS' : 'POSICAO' };
+  return { torreId: t.id, nome: t.name, acima, garagens, fonte, avisos, ordemDasUnidades: ORDENS_DA_TORRE.includes(t.ordem_das_unidades_na_planta as OrdemDasUnidadesNaPlanta) ? (t.ordem_das_unidades_na_planta as OrdemDasUnidadesNaPlanta) : 'POSICAO' };
 }
 
 /**

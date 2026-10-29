@@ -164,8 +164,11 @@ export interface EmpreendimentoTower {
     units?: EmpreendimentoUnit[];
 }
 
-/** 'POSICAO' = Posição/Orientação (sem elas, o número); 'SETAS' = a ordem das setas (sort_order). */
-export type OrdemDasUnidadesNaPlanta = 'POSICAO' | 'SETAS';
+/**
+ * 'POSICAO' = Posição/Orientação (sem elas, o número); 'SETAS' = a ordem das setas (sort_order); 'ARRASTO' (28/10/2026)
+ * = a vaga arrastada na planta baixa (`EmpreendimentoUnit.vaga_na_planta`).
+ */
+export type OrdemDasUnidadesNaPlanta = 'POSICAO' | 'SETAS' | 'ARRASTO';
 
 export type EmpreendimentoTowerInsert = Omit<EmpreendimentoTower, 'id' | 'created_at' | 'updated_at' | 'units'>;
 export type EmpreendimentoTowerUpdate = Partial<EmpreendimentoTowerInsert>;
@@ -230,6 +233,8 @@ export interface EmpreendimentoUnit {
     is_vendavel?: boolean;
     commercial_property_id?: string | null;   // ponte p/ Venda de Ativos (purpose='SALE')
     rental_property_id?: string | null;        // ponte p/ Locações (purpose='RENTAL') — eixo independente
+    /** A vaga da unidade no pavimento da massa da Planta, arrastada na planta baixa (28/10/2026); null = sem vaga. */
+    vaga_na_planta?: number | null;
     sort_order?: number;
     // Escrita reversa do motor de Areas NBR 12721 (F4) — so-leitura no Comercial,
     // alimentados exclusivamente pela versao calculada/aprovada/travada do motor.

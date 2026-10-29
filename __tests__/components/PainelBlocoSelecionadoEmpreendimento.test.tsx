@@ -29,7 +29,7 @@ const un = (id: string, nome: string, tipologia: string, area: number, extra: Pa
 const DO_1O = [un('u101', '101', 'Tipo 3', 127, { dormitorios: 3, vagas: 2, orientacao: 'NORTE', posicao: 'FRENTE', status: 'DISPONIVEL' }), un('u102', '102', 'Tipo 4', 127)];
 
 const montar = (
-  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: EscolhaDaArrumacao; onModo: (m: EscolhaDaArrumacao) => void; torre?: string | null; daTorre?: 'POSICAO' | 'SETAS' | null }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[]; avisosDasUnidades?: string[] } = {},
+  extra: { pendentes?: number; onAjustar?: () => Promise<string | void>; piso?: number | null; unidades?: UnidadeDoPiso[]; unidade?: string | null; onUnidade?: (c: string | null) => void; arrumacao?: { modo: EscolhaDaArrumacao; onModo: (m: EscolhaDaArrumacao) => void; torre?: string | null; daTorre?: 'POSICAO' | 'SETAS' | 'ARRASTO' | null; alcance?: { valor: 'PAVIMENTO' | 'COLUNA'; onValor: (v: 'PAVIMENTO' | 'COLUNA') => void }; mensagem?: { texto: string; erro: boolean } | null }; papel?: typeof PAPEL; distancias?: { torreA: string; torreB: string; medidaMm: number; exigidaMm: number; ok: boolean }[]; avisosDasUnidades?: string[] } = {},
 ) =>
   render(
     <PainelBlocoSelecionado
@@ -136,6 +136,20 @@ describe('painel do bloco › Empreendimento', () => {
     expect(onModo).toHaveBeenLastCalledWith('AUTOMATICA');
     await userEvent.click(screen.getByRole('button', { name: 'Pelas setas' }));
     expect(onModo).toHaveBeenLastCalledWith('EMPREENDIMENTO');
+  });
+
+  it('"Arrastado na planta": a 4ª opção, o alcance do arrasto e o que a última troca fez (28/10/2026)', async () => {
+    const onModo = vi.fn();
+    const onValor = vi.fn();
+    montar({ piso: 2, unidades: DO_1O, arrumacao: { modo: 'DO_EMPREENDIMENTO', onModo, torre: 'Torre B', daTorre: 'ARRASTO', alcance: { valor: 'COLUNA', onValor }, mensagem: { texto: '105 ↔ 108 — e a coluna em mais 3 pavimento(s).', erro: false } } });
+    const a = screen.getByTestId('arrumacao-das-unidades');
+    expect(a).toHaveTextContent('Como a Torre B está em Torres e Unidades › Unidades: arrastado na planta.');
+    expect(screen.getByRole('button', { name: 'A coluna inteira' })).toHaveAttribute('aria-pressed', 'true');
+    await userEvent.click(screen.getByRole('button', { name: 'Este pavimento' }));
+    expect(onValor).toHaveBeenLastCalledWith('PAVIMENTO');
+    await userEvent.click(screen.getByRole('button', { name: 'Arrastado na planta' }));
+    expect(onModo).toHaveBeenLastCalledWith('ARRASTO');
+    expect(screen.getByTestId('mensagem-do-arrasto')).toHaveTextContent('105 ↔ 108 — e a coluna em mais 3 pavimento(s).');
   });
 
   it('fora de "Do Empreendimento", a escolha vale só para quem olha — e diz o que a torre usa (28/10/2026)', () => {

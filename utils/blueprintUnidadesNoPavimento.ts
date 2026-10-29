@@ -23,9 +23,11 @@ import type { OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 /**
  * Como as unidades se arrumam no andar (27/10/2026, *"ordenação de duas maneiras, automática … e manual"*):
  *  - AUTOMATICA: pelo número (101 sobre 201 sobre 301) e as duas fileiras com áreas parecidas;
- *  - EMPREENDIMENTO: a ordem da aba Torres e Unidades, a 1ª metade numa fileira e a 2ª na outra.
+ *  - EMPREENDIMENTO: a ordem da aba Torres e Unidades, a 1ª metade numa fileira e a 2ª na outra;
+ *  - ARRASTO (28/10/2026): a vaga que cada unidade ganhou ao ser arrastada na planta baixa (`vaga`); andar sem
+ *    nenhuma vaga arrastada sai como na AUTOMATICA.
  */
-export type ArrumacaoDasUnidades = 'AUTOMATICA' | 'EMPREENDIMENTO';
+export type ArrumacaoDasUnidades = 'AUTOMATICA' | 'EMPREENDIMENTO' | 'ARRASTO';
 
 /**
  * A escolha de quem olha a Planta (28/10/2026, *"opção de ordenação de duas maneiras pelas setas ou pela posição. O
@@ -36,8 +38,8 @@ export type EscolhaDaArrumacao = 'DO_EMPREENDIMENTO' | ArrumacaoDasUnidades;
 
 /** A arrumação que vale para o bloco: a escolha do usuário, ou — em "Do Empreendimento" — a da torre dele. */
 export function arrumacaoEfetiva(escolha: EscolhaDaArrumacao | null | undefined, daTorre: OrdemDasUnidadesNaPlanta | null | undefined): ArrumacaoDasUnidades {
-  if (escolha === 'AUTOMATICA' || escolha === 'EMPREENDIMENTO') return escolha;
-  return daTorre === 'SETAS' ? 'EMPREENDIMENTO' : 'AUTOMATICA';
+  if (escolha === 'AUTOMATICA' || escolha === 'EMPREENDIMENTO' || escolha === 'ARRASTO') return escolha;
+  return daTorre === 'SETAS' ? 'EMPREENDIMENTO' : daTorre === 'ARRASTO' ? 'ARRASTO' : 'AUTOMATICA';
 }
 
 /** Onde a planta está: a frente do lote (para FORA, para a rua) e o norte do desenho (`georreferencia.rotacaoNorteDeg`). */
@@ -52,6 +54,8 @@ interface UnidadeComLado {
   nome: string;
   posicao?: string | null;
   orientacao?: string | null;
+  /** A vaga arrastada na planta (ARRASTO). */
+  vaga?: number | null;
 }
 
 const ROTULO_DA_POSICAO: Record<string, string> = { FRENTE: 'Frente', FUNDOS: 'Fundos', LATERAL: 'Lateral' };
@@ -109,6 +113,16 @@ export function direcoesDasUnidades(unidades: readonly UnidadeComLado[], ref: Re
   return { direcoes, avisos };
 }
 
+/** O que `arrumarUnidades` devolve: a ordem das fatias e o que decide a vaga de cada uma. */
+export interface ArrumacaoDoAndar<T> {
+  unidades: T[];
+  fileiras: 'ORDEM' | 'EQUILIBRADAS';
+  direcoes?: (Point | null)[];
+  /** ARRASTO: a vaga gravada de cada unidade (null = sem vaga válida — fica com a que sobrar). */
+  vagas?: (number | null)[];
+  avisos?: string[];
+}
+
 /**
  * As unidades do andar na ordem em que a massa as fatia, e como escolher as fileiras (`fatiasPorArea`). Na Automática,
  * com `ref` e alguma unidade com Posição ou Orientação, também as direções (`fatiasPorDirecao`) e os avisos.
@@ -117,9 +131,15 @@ export function arrumarUnidades<T extends UnidadeComLado>(
   unidades: readonly T[],
   modo: ArrumacaoDasUnidades,
   ref?: ReferenciasDaPlanta,
-): { unidades: T[]; fileiras: 'ORDEM' | 'EQUILIBRADAS'; direcoes?: (Point | null)[]; avisos?: string[] } {
+): ArrumacaoDoAndar<T> {
   if (modo === 'EMPREENDIMENTO') return { unidades: [...unidades], fileiras: 'ORDEM' };
   const ordem = [...unidades].sort((a, b) => compararNomesPorNumero(a.nome, b.nome));
+  if (modo === 'ARRASTO') {
+    const vagas = ordem.map((u) => (typeof u.vaga === 'number' && Number.isInteger(u.vaga) && u.vaga >= 0 && u.vaga < ordem.length ? u.vaga : null));
+    if (vagas.some((v) => v !== null)) return { unidades: ordem, fileiras: 'EQUILIBRADAS', vagas };
+    // Andar nunca arrastado: como na Automática (a posição), que é de onde o primeiro arrasto parte.
+    return arrumarUnidades(unidades, 'AUTOMATICA', ref);
+  }
   if (ref && ordem.some((u) => u.posicao || u.orientacao)) {
     const { direcoes, avisos } = direcoesDasUnidades(ordem, ref);
     if (direcoes.some((d) => d)) return { unidades: ordem, fileiras: 'EQUILIBRADAS', direcoes, avisos };
@@ -239,24 +259,87 @@ export function fatiasPorArea(
    */
   fileiras: 'ORDEM' | 'EQUILIBRADAS' = 'ORDEM',
 ): Point[][] {
-  if (pesos.length === 0 || anel.length < 3) return [];
-  const ps = pesosValidos(pesos);
-  if (ps.length === 1) return [arredondar([...anel])];
-  const { u, v, duasFileiras } = eixosDoAnel(anel, ps.length);
+  return arranjarAndar(anel, pesos, { fileiras }).fatias;
+}
 
-  if (duasFileiras) {
-    const n1 = Math.ceil(ps.length / 2);
-    const vagas = [n1, ps.length - n1];
+/** A grade de vagas do andar: as fileiras ao longo do lado maior e quantas vagas cada uma tem. */
+function gradeDoAndar(anel: readonly Point[], n: number) {
+  const { u, v, duasFileiras } = eixosDoAnel(anel, n);
+  const n1 = duasFileiras ? Math.ceil(n / 2) : n;
+  return { u, v, duasFileiras, tamanhos: duasFileiras ? [n1, n - n1] : [n] };
+}
+
+/** A vaga (0..n−1: a 1ª fileira, depois a 2ª) → a unidade dela; as fatias saem na ordem das unidades. */
+function fatiasPelosDonos(anel: readonly Point[], ps: readonly number[], grade: ReturnType<typeof gradeDoAndar>, dono: readonly number[]): Point[][] {
+  let inicio = 0;
+  const fileiras = grade.tamanhos.map((t) => {
+    const f = dono.slice(inicio, inicio + t);
+    inicio += t;
+    return f;
+  });
+  return fatiarEmFileiras(anel, ps, grade.u, grade.v, fileiras);
+}
+
+/**
+ * O andar arrumado: as fatias (a fatia k é a unidade k, na proporção da área) e a VAGA de cada unidade (28/10/2026 —
+ * o arrasto na planta parte de onde cada uma está). Quem decide a vaga, em ordem: `vagas` (ARRASTO), `direcoes`
+ * (posição/orientação, a melhor combinação do andar) ou `fileiras` (ORDEM: a 1ª metade numa fileira; EQUILIBRADAS:
+ * cada unidade na fileira com menos área até agora).
+ */
+export function arranjarAndar(
+  anel: readonly Point[],
+  pesos: readonly (number | null | undefined)[],
+  como: { fileiras?: 'ORDEM' | 'EQUILIBRADAS'; direcoes?: readonly (Point | null)[]; vagas?: readonly (number | null)[] },
+): { fatias: Point[][]; vagas: number[] } {
+  if (pesos.length === 0 || anel.length < 3) return { fatias: [], vagas: [] };
+  const ps = pesosValidos(pesos);
+  if (ps.length === 1) return { fatias: [arredondar([...anel])], vagas: [0] };
+  const grade = gradeDoAndar(anel, ps.length);
+  const dono: number[] = new Array(ps.length).fill(-1);
+  const sobrasNaOrdem = () =>
+    ps.forEach((_, i) => {
+      if (dono.includes(i)) return;
+      dono[dono.indexOf(-1)] = i;
+    });
+
+  if (como.vagas) {
+    como.vagas.forEach((vg, i) => {
+      if (vg != null && vg >= 0 && vg < ps.length && dono[vg] < 0) dono[vg] = i;
+    });
+    sobrasNaOrdem();
+  } else if (como.direcoes && como.direcoes.some((d) => d)) {
+    const vagas: Point[] = [];
+    grade.tamanhos.forEach((t, r) => {
+      const lado = grade.duasFileiras ? (r === 0 ? -1 : 1) : 0;
+      for (let k = 0; k < t; k++) {
+        const ponta = t === 1 ? 0 : k === 0 ? -1 : k === t - 1 ? 1 : 0;
+        const dir = { x: grade.v.x * lado + grade.u.x * ponta, y: grade.v.y * lado + grade.u.y * ponta };
+        const len = Math.hypot(dir.x, dir.y) || 1;
+        vagas.push({ x: dir.x / len, y: dir.y / len });
+      }
+    });
+    const comDirecao = ps.map((_, i) => i).filter((i) => como.direcoes![i]);
+    // Um pouquinho a favor da vaga de índice menor: empate resolvido sempre igual.
+    const notas = comDirecao.map((i) => vagas.map((vg, k) => como.direcoes![i]!.x * vg.x + como.direcoes![i]!.y * vg.y - k * 1e-6));
+    melhorAtribuicao(notas).forEach((k, linha) => (dono[k] = comDirecao[linha]));
+    sobrasNaOrdem();
+  } else if (grade.duasFileiras) {
+    const [n1, n2] = grade.tamanhos;
     const quem: [number[], number[]] = [[], []];
     const somas = [0, 0];
     ps.forEach((p, i) => {
-      const lado = fileiras === 'ORDEM' ? (i < n1 ? 0 : 1) : quem[0].length >= vagas[0] ? 1 : quem[1].length >= vagas[1] ? 0 : somas[1] < somas[0] ? 1 : 0;
+      const lado = (como.fileiras ?? 'ORDEM') === 'ORDEM' ? (i < n1 ? 0 : 1) : quem[0].length >= n1 ? 1 : quem[1].length >= n2 ? 0 : somas[1] < somas[0] ? 1 : 0;
       quem[lado].push(i);
       somas[lado] += p;
     });
-    return fatiarEmFileiras(anel, ps, u, v, quem);
+    [...quem[0], ...quem[1]].forEach((i, k) => (dono[k] = i));
+  } else {
+    ps.forEach((_, i) => (dono[i] = i));
   }
-  return fatiar(anel, u, ps).map(arredondar);
+
+  const vagaDe = new Array<number>(ps.length);
+  dono.forEach((i, k) => (vagaDe[i] = k));
+  return { fatias: fatiasPelosDonos(anel, ps, grade, dono), vagas: vagaDe };
 }
 
 /**
@@ -323,38 +406,5 @@ export function melhorAtribuicao(notas: readonly (readonly number[])[]): number[
 }
 
 export function fatiasPorDirecao(anel: readonly Point[], pesos: readonly (number | null | undefined)[], direcoes: readonly (Point | null)[]): Point[][] {
-  if (pesos.length === 0 || anel.length < 3) return [];
-  const ps = pesosValidos(pesos);
-  if (ps.length === 1) return [arredondar([...anel])];
-  const { u, v, duasFileiras } = eixosDoAnel(anel, ps.length);
-  const n1 = duasFileiras ? Math.ceil(ps.length / 2) : ps.length;
-  const tamanhos = duasFileiras ? [n1, ps.length - n1] : [ps.length];
-  const vagas: { fileira: number; pos: number; dir: Point }[] = [];
-  tamanhos.forEach((t, r) => {
-    const lado = duasFileiras ? (r === 0 ? -1 : 1) : 0;
-    for (let k = 0; k < t; k++) {
-      const ponta = t === 1 ? 0 : k === 0 ? -1 : k === t - 1 ? 1 : 0;
-      const dir = { x: v.x * lado + u.x * ponta, y: v.y * lado + u.y * ponta };
-      const len = Math.hypot(dir.x, dir.y) || 1;
-      vagas.push({ fileira: r, pos: k, dir: { x: dir.x / len, y: dir.y / len } });
-    }
-  });
-  const dono: number[] = new Array(vagas.length).fill(-1);
-  const comDirecao = ps.map((_, i) => i).filter((i) => direcoes[i]);
-  // Um pouquinho a favor da vaga de índice menor: empate resolvido sempre igual.
-  const notas = comDirecao.map((i) => vagas.map((vg, k) => direcoes[i]!.x * vg.dir.x + direcoes[i]!.y * vg.dir.y - k * 1e-6));
-  melhorAtribuicao(notas).forEach((k, linha) => (dono[k] = comDirecao[linha]));
-  ps.forEach((_, i) => {
-    if (direcoes[i]) return;
-    const livre = dono.indexOf(-1);
-    dono[livre] = i;
-  });
-  const fileiras = tamanhos.map((_, r) =>
-    vagas
-      .map((vg, k) => ({ vg, k }))
-      .filter(({ vg }) => vg.fileira === r)
-      .sort((a, b) => a.vg.pos - b.vg.pos)
-      .map(({ k }) => dono[k]),
-  );
-  return duasFileiras ? fatiarEmFileiras(anel, ps, u, v, fileiras) : fatiarEmFileiras(anel, ps, u, v, [fileiras[0]]);
+  return arranjarAndar(anel, pesos, { direcoes }).fatias;
 }

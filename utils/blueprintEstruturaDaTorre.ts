@@ -24,7 +24,7 @@ import type { EmpreendimentoFloor, EmpreendimentoTower, EmpreendimentoUnit, Floo
 export type TorreParaEstrutura = Pick<EmpreendimentoTower, 'id' | 'name'> &
   Partial<Pick<EmpreendimentoTower, 'floors_count' | 'blueprint_quadra_uid' | 'sort_order' | 'pe_direito_padrao_m' | 'elevacao_terreo_m' | 'ordem_das_unidades_na_planta'>> & {
     units?: (Pick<EmpreendimentoUnit, 'floor' | 'floor_tipo'> &
-      Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order'>>)[];
+      Partial<Pick<EmpreendimentoUnit, 'id' | 'name' | 'typology' | 'private_area' | 'bedrooms' | 'parking_spaces' | 'sun_orientation' | 'position_type' | 'status' | 'sort_order' | 'vaga_na_planta'>>)[];
   };
 
 export interface PisoDaTorre {
@@ -58,6 +58,8 @@ export interface UnidadeDoPiso {
   orientacao: string | null;
   posicao: string | null;
   status: string | null;
+  /** A vaga arrastada na planta (28/10/2026); null = sem vaga. */
+  vaga?: number | null;
 }
 
 type PisoSemUnidades = Omit<PisoDaTorre, 'unidades' | 'elevacaoMm' | 'elevacaoDigitada' | 'alturaMm'> & { elevacaoDigitadaMm: number | null };
@@ -175,6 +177,7 @@ function unidadesDoAndar(t: TorreParaEstrutura, andar: number): UnidadeDoPiso[] 
       orientacao: u.sun_orientation ?? null,
       posicao: u.position_type ?? null,
       status: u.status ?? null,
+      vaga: typeof u.vaga_na_planta === 'number' ? u.vaga_na_planta : null,
     }));
 }
 

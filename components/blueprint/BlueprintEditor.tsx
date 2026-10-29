@@ -406,7 +406,7 @@ import { conferirLote, conferirTipologias, ordinalDoPavimento, recuosEfetivos, t
 import { envelopePorPavimentoParaRegras, envelopeVertical } from '../../utils/blueprintEnvelope3d';
 import { contornosParaTelhado } from '../../utils/blueprintTelhadoContorno';
 import { useBlueprintEditor, type BlueprintTool } from '../../hooks/useBlueprintEditor';
-import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao } from './BlueprintCanvas';
+import BlueprintCanvas, { rotuloPasso, type AjustePonta, type AcaoDeNavegacao, type UnidadesDoBlocoNaPlanta } from './BlueprintCanvas';
 import ElevationCanvas from './ElevationCanvas';
 import Blueprint3DTab from './Blueprint3DTab';
 import PainelPavimentos from './PainelPavimentos';
@@ -626,9 +626,11 @@ import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendi
 import { massaDoEmpreendimento } from '../../utils/blueprintMassaDoEmpreendimento';
 import { estruturasDoEmpreendimento } from '../../utils/blueprintEstruturaDaTorre';
 import { comandosDoAjuste, vestirBlocosPropostos } from '../../utils/blueprintAjusteAoEmpreendimento';
-import { arrumacaoEfetiva, arrumarUnidades, fatiasPorArea, fatiasPorDirecao, type EscolhaDaArrumacao, type ReferenciasDaPlanta } from '../../utils/blueprintUnidadesNoPavimento';
+import { arranjarAndar, arrumacaoEfetiva, arrumarUnidades, type EscolhaDaArrumacao, type ReferenciasDaPlanta } from '../../utils/blueprintUnidadesNoPavimento';
 import { frenteDoLote } from '../../utils/blueprintAncorasHidro';
 import { chaveDaUnidade } from '../../utils/blueprintEstruturaDaTorre';
+import { gravacoesDoArrasto, type AlcanceDoArrasto } from '../../utils/blueprintArrastoDasUnidades';
+import type { PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
 import type { EmpreendimentoUnit } from '../../types/empreendimento';
@@ -2469,6 +2471,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * cima mesmo com tudo desligado.
    */
   const [mostrarEnvelope, setMostrarEnvelope] = usePreferenciaDaPlanta<boolean>('mostrarEnvelope');
+  const [mostrarUnidadesNaPlanta, setMostrarUnidadesNaPlanta] = usePreferenciaDaPlanta<boolean>('mostrarUnidadesDaMassa');
   /** COLORIR POR (E8.2): a paleta dos ambientes ("Uma cor por ambiente" = modo AMBIENTE). Preferência do usuário. */
   const [modoDeCor, setModoDeCor] = usePreferenciaDaPlanta<ModoDeCor>('modoDeCor');
   /** ESTILO DO 3D (E8.2): sombreado, linha oculta ou transparente. */
@@ -4664,6 +4667,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * sem efeito nenhum. Estado de sessão: é ponteiro de leitura, não dado do estudo.
    */
   const [pisoDaMassa, setPisoDaMassa] = useState<{ blocoId: string; indice: number; unidade?: string | null } | null>(null);
+  // ARRASTAR AS UNIDADES NA PLANTA (28/10/2026): vale para o pavimento ou para a coluna (quem arrasta escolhe); o
+  // resultado aparece no painel do bloco; gravar relê as unidades do Empreendimento.
+  const [alcanceDoArrasto, setAlcanceDoArrasto] = usePersistedState<AlcanceDoArrasto>('blueprint:alcanceDoArrastoDasUnidades', 'COLUNA');
+  const [mensagemDoArrasto, setMensagemDoArrasto] = useState<{ texto: string; erro: boolean } | null>(null);
+  const [recargaDasUnidades, setRecargaDasUnidades] = useState(0);
   const pisoDoBlocoSel = blocoSel && pisoDaMassa?.blocoId === blocoSel.id ? pisoDaMassa.indice : null;
   /** A UNIDADE do pavimento escolhida (27/10/2026): o id da unidade do Empreendimento (ou o nome, sem id). */
   const unidadeDoBlocoSel = pisoDoBlocoSel !== null ? (pisoDaMassa?.unidade ?? null) : null;
@@ -9160,7 +9168,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   const unidadesDoEmpreendimento = useUnidadesDoEmpreendimento(
     empreendimentoDaCasa,
     telaAberta === 'casa' || telaAberta === 'produto' || telaAberta === 'gerar-massa' || telaAberta === 'casas-lotes' || !!blocoSel || (editor.model.blocos ?? []).length > 0,
-    telaAberta,
+    `${telaAberta}|${recargaDasUnidades}`,
   );
   const torresDoEmpreendimento = unidadesDoEmpreendimento.carregadoDe === empreendimentoDaCasa ? unidadesDoEmpreendimento.torres : null;
   /**
@@ -9204,18 +9212,111 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     }
     return m;
   }, [editor.model, norteDoDesenho]);
+  /**
+   * O PAVIMENTO `indice` (1 = o de baixo) do bloco, arrumado: as unidades, as fatias (a k é a unidade k) e a vaga de
+   * cada uma. O 3D, a planta baixa e o arrasto usam o mesmo — o que se arrasta é o que se vê.
+   */
+  const arranjoDoPiso = useCallback(
+    (blocoId: string, indice: number) => {
+      const papel = ajusteAoEmpreendimento?.papeis.get(blocoId);
+      const b = (editor.model.blocos ?? []).find((x) => x.id === blocoId);
+      const piso = papel?.pisos[indice - 1];
+      if (!papel || !b || !piso || piso.unidades.length === 0) return null;
+      const arrumadas = arrumarUnidades(piso.unidades, arrumacaoEfetiva(arrumacaoDasUnidades, papel.ordemDasUnidades), referenciasDosBlocos.get(blocoId));
+      const arranjo = arranjarAndar(b.pontos, arrumadas.unidades.map((u) => u.areaPrivativaM2), arrumadas);
+      return { papel, piso, unidades: arrumadas.unidades, ...arranjo };
+    },
+    [ajusteAoEmpreendimento, editor.model.blocos, arrumacaoDasUnidades, referenciasDosBlocos],
+  );
   const massa3dPorUnidade = useMemo(() => {
     if (!ajusteAoEmpreendimento) return massa3d;
     return massa3d.flatMap((p) => {
-      const papel = ajusteAoEmpreendimento.papeis.get(p.id);
-      const arrumadas = arrumarUnidades(papel?.pisos[p.indice - 1]?.unidades ?? [], arrumacaoEfetiva(arrumacaoDasUnidades, papel?.ordemDasUnidades), referenciasDosBlocos.get(p.id));
-      const unidades = arrumadas.unidades;
-      if (unidades.length === 0) return [p];
-      const pesos = unidades.map((u) => u.areaPrivativaM2);
-      const fatias = arrumadas.direcoes ? fatiasPorDirecao(p.anel, pesos, arrumadas.direcoes) : fatiasPorArea(p.anel, pesos, arrumadas.fileiras);
-      return fatias.map((anel, k) => ({ ...p, chave: `${p.chave}-u${k}`, anel, nome: `${p.nome} · ${unidades[k].nome}`, piso: p.chave, unidade: chaveDaUnidade(unidades[k]), rotuloDaUnidade: unidades[k].nome }));
+      const a = arranjoDoPiso(p.id, p.indice);
+      if (!a || a.fatias.length !== a.unidades.length) return [p];
+      return a.fatias.map((anel, k) => ({ ...p, chave: `${p.chave}-u${k}`, anel, nome: `${p.nome} · ${a.unidades[k].nome}`, piso: p.chave, unidade: chaveDaUnidade(a.unidades[k]), rotuloDaUnidade: a.unidades[k].nome }));
     });
-  }, [massa3d, ajusteAoEmpreendimento, arrumacaoDasUnidades, referenciasDosBlocos]);
+  }, [massa3d, ajusteAoEmpreendimento, arranjoDoPiso]);
+  /** O pavimento que a planta baixa mostra num bloco: o escolhido no painel; sem escolha, o 1º acima do térreo. */
+  const pisoMostradoNaPlanta = useCallback(
+    (blocoId: string, papel: PapelDoBloco): number | null => {
+      if (pisoDaMassa?.blocoId === blocoId) return pisoDaMassa.indice;
+      const i = papel.pisos.findIndex((p) => p.numero >= 1 && p.unidades.length > 0);
+      if (i >= 0) return i + 1;
+      const j = papel.pisos.findIndex((p) => p.unidades.length > 0);
+      return j >= 0 ? j + 1 : null;
+    },
+    [pisoDaMassa],
+  );
+  /**
+   * AS UNIDADES NA PLANTA BAIXA (28/10/2026, *"mostrar também na planta o posicionamento das unidades"*): as fatias
+   * do pavimento mostrado de cada bloco. Blocos de mesmo contorno (a torre e o seu subsolo) mostram um só: o
+   * selecionado, senão o acima do chão.
+   */
+  const unidadesNaPlanta = useMemo((): UnidadesDoBlocoNaPlanta[] | null => {
+    if (!mostrarUnidadesNaPlanta || !ajusteAoEmpreendimento) return null;
+    const porContorno = new Map<string, { prioridade: number; grupo: UnidadesDoBlocoNaPlanta }>();
+    for (const b of editor.model.blocos ?? []) {
+      const papel = ajusteAoEmpreendimento.papeis.get(b.id);
+      const indice = papel ? pisoMostradoNaPlanta(b.id, papel) : null;
+      const a = indice !== null ? arranjoDoPiso(b.id, indice) : null;
+      if (!a || indice === null || a.fatias.length !== a.unidades.length) continue;
+      const prioridade = b.id === editor.selectedId ? 2 : b.cotaBaseMm >= 0 ? 1 : 0;
+      const contorno = `${b.levelId}|${b.pontos.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(';')}`;
+      if ((porContorno.get(contorno)?.prioridade ?? -1) >= prioridade) continue;
+      const unidadeSel = pisoDaMassa?.blocoId === b.id && pisoDaMassa.indice === indice ? (pisoDaMassa.unidade ?? null) : null;
+      porContorno.set(contorno, {
+        prioridade,
+        grupo: {
+          blocoId: b.id,
+          levelId: b.levelId,
+          pavimento: `${indice}º pavimento — ${a.piso.nome}`,
+          fatias: a.fatias.map((anel, k) => ({ chave: chaveDaUnidade(a.unidades[k]), nome: a.unidades[k].nome, anel, selecionada: unidadeSel === chaveDaUnidade(a.unidades[k]) })),
+        },
+      });
+    }
+    return [...porContorno.values()].map((x) => x.grupo);
+  }, [mostrarUnidadesNaPlanta, ajusteAoEmpreendimento, editor.model.blocos, editor.selectedId, pisoMostradoNaPlanta, arranjoDoPiso, pisoDaMassa]);
+  /**
+   * SOLTAR UMA UNIDADE SOBRE OUTRA na planta baixa (28/10/2026): as duas trocam de vaga — no pavimento ou na coluna
+   * inteira (`alcanceDoArrasto`). Grava no Empreendimento (`vaga_na_planta` de cada unidade que muda) e a torre passa
+   * a "Arrastado na planta"; quem olhava por outra arrumação volta para "Do Empreendimento" para ver o que arrastou.
+   */
+  const arrastarUnidade = async (blocoId: string, de: string, para: string) => {
+    const papel = ajusteAoEmpreendimento?.papeis.get(blocoId);
+    const indice = papel ? pisoMostradoNaPlanta(blocoId, papel) : null;
+    const a = indice !== null ? arranjoDoPiso(blocoId, indice) : null;
+    if (!papel || !a || indice === null) return;
+    selecionarEAbrir([blocoId]);
+    setPisoDaMassa({ blocoId, indice, unidade: de });
+    if (!papel.torreId) {
+      setMensagemDoArrasto({ texto: 'Este bloco não está ligado a uma torre do Empreendimento — não há onde gravar.', erro: true });
+      return;
+    }
+    const andar = a.unidades.map((u, k) => ({ id: u.id, nome: u.nome, vaga: a.vagas[k], vagaGravada: u.vaga ?? null }));
+    const estrutura = estruturasDaCasa?.find((e) => e.torreId === papel.torreId);
+    const outrosPisos = [...(estrutura?.acima ?? []), ...(estrutura?.garagens ?? [])].filter((p) => p.numero !== a.piso.numero);
+    const gravacoes = gravacoesDoArrasto(andar, de, para, alcanceDoArrasto, outrosPisos.map((p) => p.unidades.map((u) => ({ id: u.id, nome: u.nome, vagaGravada: u.vaga ?? null }))));
+    const nome = (chave: string) => a.unidades.find((u) => chaveDaUnidade(u) === chave)?.nome ?? chave;
+    const andarDe = new Map(outrosPisos.flatMap((p) => p.unidades.map((u) => [u.id, p.numero] as const)));
+    const outrosAndares = new Set(gravacoes.map((g) => andarDe.get(g.id)).filter((n) => n !== undefined)).size;
+    setMensagemDoArrasto(null);
+    try {
+      await Promise.all(gravacoes.map((g) => empreendimentoService.updateUnit(g.id, { vaga_na_planta: g.vaga })));
+      const virouArrasto = papel.ordemDasUnidades !== 'ARRASTO';
+      if (virouArrasto) await empreendimentoService.updateTower(papel.torreId, { ordem_das_unidades_na_planta: 'ARRASTO' });
+      if (arrumacaoDasUnidades !== 'DO_EMPREENDIMENTO' && arrumacaoDasUnidades !== 'ARRASTO') setArrumacaoDasUnidades('DO_EMPREENDIMENTO');
+      setMensagemDoArrasto({
+        texto: `${nome(de)} ↔ ${nome(para)}${alcanceDoArrasto === 'COLUNA' ? (outrosAndares > 0 ? ` — e a coluna em mais ${outrosAndares} pavimento(s)` : ' — nenhum outro pavimento tem as mesmas unidades') : ' — só neste pavimento'}.${
+          virouArrasto ? ` A ${papel.torre} passou a "Arrastado na planta" (Torres e Unidades › Unidades).` : ''
+        } Para desfazer, arraste de volta.`,
+        erro: false,
+      });
+    } catch (err) {
+      setMensagemDoArrasto({ texto: `Não gravou a troca: ${err instanceof Error ? err.message : String(err)}`, erro: true });
+    } finally {
+      setRecargaDasUnidades((n) => n + 1);
+    }
+  };
   /** A massa está dividida nas unidades do Empreendimento? Sem isso, não há nome de unidade para mostrar no 3D. */
   const massaTemUnidades = useMemo(() => massa3dPorUnidade.some((p) => 'rotuloDaUnidade' in p && !!p.rotuloDaUnidade), [massa3dPorUnidade]);
   const unidadesDaCasa = useMemo(() => {
@@ -11421,6 +11522,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           onModo: setArrumacaoDasUnidades,
           torre: blocoSel ? (ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.torre ?? null) : null,
           daTorre: blocoSel ? (ajusteAoEmpreendimento?.papeis.get(blocoSel.id)?.ordemDasUnidades ?? null) : null,
+          alcance: mostrarUnidadesNaPlanta ? { valor: alcanceDoArrasto, onValor: setAlcanceDoArrasto } : undefined,
+          mensagem: mensagemDoArrasto,
         }}
         unidadeSelecionada={unidadeDoBlocoSel}
         onUnidade={(chave) => blocoSel && pisoDoBlocoSel !== null && setPisoDaMassa({ blocoId: blocoSel.id, indice: pisoDoBlocoSel, unidade: chave })}
@@ -15741,6 +15844,18 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                         'A hachura diagonal da área construível — o terreno já descontado os recuos. É uma restrição calculada, separada do preenchimento do lote.',
                     },
                     {
+                      // 28/10/2026: as unidades do Empreendimento no bloco de massa — e arrastá-las de vaga.
+                      chave: 'unidades-na-planta',
+                      rotulo: 'Unidades na planta',
+                      icone: Hash,
+                      ligado: mostrarUnidadesNaPlanta,
+                      alternar: () => setMostrarUnidadesNaPlanta((v) => !v),
+                      desabilitado: !ajusteAoEmpreendimento,
+                      ajuda: ajusteAoEmpreendimento
+                        ? 'As unidades do pavimento escolhido no painel do bloco (sem escolha, o 1º acima do térreo). Arraste uma unidade sobre outra para trocar as duas de lugar. Desligue para mover o bloco inteiro arrastando por dentro.'
+                        : 'A planta não está ligada a um Empreendimento com torres e unidades.',
+                    },
+                    {
                       chave: 'cores',
                       rotulo: 'Uma cor por ambiente',
                       icone: Palette,
@@ -16911,6 +17026,13 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   onAddAreaDeOperacao={adicionarAreaDeOperacao}
                   onAddBloco={adicionarBloco}
                   blocosComProblema={blocosComProblema}
+                  unidadesNaPlanta={unidadesNaPlanta}
+                  onArrastarUnidade={arrastarUnidade}
+                  onClicarUnidade={(blocoId, chave) => {
+                    const papel = ajusteAoEmpreendimento?.papeis.get(blocoId);
+                    const indice = papel ? pisoMostradoNaPlanta(blocoId, papel) : null;
+                    if (indice !== null) setPisoDaMassa({ blocoId, indice, unidade: chave });
+                  }}
                   rotasDeFuga={tarefaAberta === 'incendio' ? rotasDeFugaDoCanvas : null}
                   vagas={vagasDoNivelAtivo}
                   tipoDeVaga={tipoDeVaga}

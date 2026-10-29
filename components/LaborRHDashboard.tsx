@@ -171,10 +171,12 @@ const BarrasHorizontais: React.FC<{
             {linhas.length === 0 ? (
                 <p className="text-sm text-gray-500 mt-3 py-6 text-center">{vazio}</p>
             ) : (
-                <ul className="mt-3 space-y-2.5">
+                <ul className="mt-3 space-y-2.5" aria-label={titulo}>
+                    {/* Rótulo QUEBRA em vez de cortar: "Administrativo / sem obra" saía
+                        "Administrativo / sem …" na coluna de 9rem, e o `title` não existe no toque. */}
                     {linhas.map(d => (
-                        <li key={d.label} className="grid grid-cols-[minmax(0,9rem)_1fr_auto] items-center gap-3">
-                            <span className="text-sm text-gray-700 truncate" title={d.label}>{d.label}</span>
+                        <li key={d.label} className="grid grid-cols-[minmax(0,11rem)_1fr_auto] items-center gap-3">
+                            <span className="text-sm text-gray-700 leading-snug [overflow-wrap:anywhere]">{d.label}</span>
                             <span className="h-2 rounded-r-[4px] bg-gray-50" aria-hidden="true">
                                 <span className="block h-full rounded-r-[4px] bg-blue-500" style={{ width: `${(d.value / max) * 100}%` }} />
                             </span>
@@ -195,7 +197,6 @@ interface LaborRHDashboardProps {
     /** Pontos aguardando aprovação (veio do antigo "Dashboard" do RH). */
     pontosPendentes?: number;
     onNavigate?: (tab: string) => void;
-    organizations: Array<{ id: string; name: string }>;
 }
 
 const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, pontosPendentes = 0, onNavigate }) => {
@@ -233,19 +234,35 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
     // Distribuição por função (dos colaboradores ativos locais). Conta cada um uma
     // vez e na organização em que é REGISTRADO, como rh_kpis: a lista traz também
     // compartilhados de outra org (employee_org_shares), que somavam 12 × 10 ativos.
-    const byRole = React.useMemo(() => {
+    const ativos = React.useMemo(() => {
         const unicos = new Map<string, Employee>();
         employees
             .filter(e => e.status === 'ATIVO' && (!orgId || e.org_id === orgId))
             .forEach(e => unicos.set(e.id, e));
+        return [...unicos.values()];
+    }, [employees, orgId]);
+
+    // Função = o CARGO vinculado (Cargos & Funções) quando há; o texto livre só sem
+    // vínculo. O texto fica velho quando o cargo muda ("Pedreiro" × cargo "Pedreiro 3").
+    const idsDeCargo = React.useMemo(
+        () => [...new Set(ativos.map(e => e.role_id).filter((id): id is string => !!id))].sort(),
+        [ativos]);
+    const { data: nomeDoCargo = {} } = useQuery({
+        queryKey: ['rh-nomes-dos-cargos', idsDeCargo],
+        queryFn: () => laborService.nomesDosCargos(idsDeCargo),
+        staleTime: STALE.slow,
+    });
+
+    const byRole = React.useMemo(() => {
         const map = new Map<string, number>();
-        unicos.forEach(e => {
-            map.set(e.role, (map.get(e.role) || 0) + 1);
+        ativos.forEach(e => {
+            const funcao = (e.role_id && nomeDoCargo[e.role_id]) || e.role?.trim() || 'Sem função informada';
+            map.set(funcao, (map.get(funcao) || 0) + 1);
         });
         return Array.from(map.entries())
             .map(([label, value]) => ({ label, value }))
             .sort((a, b) => b.value - a.value);
-    }, [employees, orgId]);
+    }, [ativos, nomeDoCargo]);
 
     const byProject = React.useMemo(() => {
         if (!folha) return [];
@@ -295,7 +312,8 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
             <div className="flex flex-wrap items-start justify-between gap-4">
                 <div>
                     <h1 className="text-3xl font-black text-gray-900 tracking-tight">Dashboard RH</h1>
-                    <p className="text-gray-500 text-sm mt-1.5 font-medium">O que precisa de ação e como está o mês — {mesAtual}.</p>
+                    {/* Sem o mês: a faixa "Outubro de 2026" logo abaixo já o diz. */}
+                    <p className="text-gray-500 text-sm mt-1.5 font-medium">O que precisa de ação, como está o mês e onde está a mão de obra.</p>
                 </div>
                 <button
                     type="button"

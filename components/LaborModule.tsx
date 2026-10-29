@@ -351,7 +351,6 @@ const LaborModule: React.FC<LaborModuleProps> = ({ projects = [], activeSection,
                             employees={employees}
                             pontosPendentes={pendingEntries.length}
                             onNavigate={onChangeView}
-                            organizations={organizations}
                         />
                     )}
                     {activeTab === 'termination' && (

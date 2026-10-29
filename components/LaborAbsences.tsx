@@ -18,6 +18,8 @@ import {
 } from '../services/laborService';
 import { laborKeys } from '../lib/queryKeys';
 import { STALE } from '../lib/queryClient';
+import { formatDate } from '../lib/payrollUIHelpers';
+import { hojeLocal } from '../utils/baixaRecebivel';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -127,11 +129,11 @@ function computeCltIssues(
 
     // Período concessivo — deve iniciar antes do vencimento (art. 135)
     if (selectedBalance.vencimento && form.data_inicio > selectedBalance.vencimento) {
-        issues.push({ severity: 'error', msg: `CLT art. 135: as férias devem ser iniciadas antes do vencimento do período concessivo (${selectedBalance.vencimento}). Risco de pagamento em dobro.` });
+        issues.push({ severity: 'error', msg: `CLT art. 135: as férias devem ser iniciadas antes do vencimento do período concessivo (${formatDate(selectedBalance.vencimento)}). Risco de pagamento em dobro.` });
     } else if (selectedBalance.vencimento) {
         const daysUntilExpiry = Math.ceil((new Date(selectedBalance.vencimento).getTime() - Date.now()) / 86400000);
         if (daysUntilExpiry <= 30 && daysUntilExpiry > 0) {
-            issues.push({ severity: 'warning', msg: `Período concessivo vence em ${daysUntilExpiry} dia(s) (${selectedBalance.vencimento}). Conceda as férias antes dessa data para evitar pagamento em dobro.` });
+            issues.push({ severity: 'warning', msg: `Período concessivo vence em ${daysUntilExpiry} dia(s) (${formatDate(selectedBalance.vencimento)}). Conceda as férias antes dessa data para evitar pagamento em dobro.` });
         }
     }
 
@@ -281,7 +283,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                                         <option value="">Selecione o período...</option>
                                         {employeeBalances.map(b => (
                                             <option key={b.id} value={b.periodo_inicio}>
-                                                {b.periodo_inicio} → {b.periodo_fim} · {b.dias_restantes}d restantes · vence {b.vencimento}
+                                                {formatDate(b.periodo_inicio)} → {formatDate(b.periodo_fim)} · {b.dias_restantes}d restantes · vence {formatDate(b.vencimento ?? "")}
                                             </option>
                                         ))}
                                     </select>
@@ -487,10 +489,11 @@ function renderBalanceCell(key: string, bal: VacationBalance): React.ReactNode {
         case 'employee':
             return <span className="text-sm font-normal text-gray-900">{bal.employee_name}</span>;
         case 'periodo':
-            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{bal.periodo_inicio} → {bal.periodo_fim}</span>;
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{formatDate(bal.periodo_inicio)} → {formatDate(bal.periodo_fim)}</span>;
         case 'prazo': {
-            const today = new Date().toISOString().split('T')[0];
-            const vencendo = bal.vencimento && bal.vencimento <= new Date(Date.now() + 60 * 86400000).toISOString().split('T')[0];
+            // Datas LOCAIS: toISOString() é UTC e, depois das 21h em Brasília, já é amanhã.
+            const today = hojeLocal();
+            const vencendo = bal.vencimento && bal.vencimento <= hojeLocal(new Date(Date.now() + 60 * 86400000));
             const vencido = bal.vencimento && bal.vencimento < today;
             // Barra de progresso do período concessivo
             // concessivo = periodo_fim → vencimento (12 meses)
@@ -506,7 +509,7 @@ function renderBalanceCell(key: string, bal: VacationBalance): React.ReactNode {
                         <span className={`text-xs font-medium ${vencido ? 'text-rose-700' : vencendo ? 'text-amber-700' : 'text-gray-600'}`}>
                             {vencido ? '⚠ Vencido' : vencendo ? `⏰ ${daysLeft}d restantes` : `${daysLeft}d restantes`}
                         </span>
-                        <span className="text-xs text-gray-400">{bal.vencimento}</span>
+                        <span className="text-xs text-gray-400">{formatDate(bal.vencimento ?? '')}</span>
                     </div>
                     <div className="w-full h-1.5 bg-gray-100 rounded-full overflow-hidden">
                         <div className={`h-full rounded-full transition-all ${barColor}`} style={{ width: `${pct}%` }} />
@@ -660,7 +663,7 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                             {vacationReady.length} colaborador{vacationReady.length > 1 ? 'es' : ''} com férias disponíveis para agendar
                         </p>
                         <p className="text-xs text-emerald-700 mt-1">
-                            {vacationReady.slice(0, 3).map(v => `${v.employee_name} (${v.dias_restantes}d disponíveis · vence ${v.vencimento})`).join(' · ')}
+                            {vacationReady.slice(0, 3).map(v => `${v.employee_name} (${v.dias_restantes}d disponíveis · vence ${formatDate(v.vencimento ?? '')})`).join(' · ')}
                             {vacationReady.length > 3 && ` e mais ${vacationReady.length - 3}…`}
                         </p>
                         <button
@@ -673,21 +676,46 @@ const LaborAbsences: React.FC<LaborAbsencesProps> = ({ orgId, employees, onRefre
                 </div>
             )}
 
-            {/* Alerta de férias vencendo */}
-            {vacationAlerts.length > 0 && (
-                <div className="p-4 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3">
-                    <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
-                    <div>
-                        <p className="text-xs font-semibold text-amber-900">
-                            {vacationAlerts.length} período{vacationAlerts.length > 1 ? 's' : ''} de férias vencendo em 60 dias — risco de pagamento em dobro
-                        </p>
-                        <p className="text-xs text-amber-700 mt-1">
-                            {vacationAlerts.slice(0, 3).map(a => `${a.employee_name} (vence ${a.vencimento})`).join(' · ')}
-                            {vacationAlerts.length > 3 && ` e mais ${vacationAlerts.length - 3}…`}
-                        </p>
-                    </div>
-                </div>
-            )}
+            {/* Alertas de vencimento. getVacationAlerts traz as que vencem em 60 dias E as
+                JÁ vencidas com saldo — a faixa chamava tudo de "vencendo em 60 dias", e o
+                período vencido (pagamento em dobro já devido) aparecia como aviso. */}
+            {(() => {
+                const hoje = hojeLocal();
+                const vencidas = vacationAlerts.filter(a => !!a.vencimento && a.vencimento < hoje);
+                const aVencer = vacationAlerts.filter(a => !a.vencimento || a.vencimento >= hoje);
+                const nomes = (lista: typeof vacationAlerts, verbo: string) => (
+                    <p className="text-xs mt-1">
+                        {lista.slice(0, 3).map(a => `${a.employee_name} (${verbo} ${formatDate(a.vencimento ?? '')})`).join(' · ')}
+                        {lista.length > 3 && ` e mais ${lista.length - 3}…`}
+                    </p>
+                );
+                return (
+                    <>
+                        {vencidas.length > 0 && (
+                            <div className="p-4 bg-rose-50 border border-rose-200 rounded-[10px] flex items-start gap-3 text-rose-800">
+                                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-xs font-semibold text-rose-900">
+                                        {vencidas.length} período{vencidas.length > 1 ? 's' : ''} de férias vencido{vencidas.length > 1 ? 's' : ''} — pagamento em dobro (CLT art. 137)
+                                    </p>
+                                    {nomes(vencidas, 'venceu em')}
+                                </div>
+                            </div>
+                        )}
+                        {aVencer.length > 0 && (
+                            <div className="p-4 bg-amber-50 border border-amber-200 rounded-[10px] flex items-start gap-3 text-amber-700">
+                                <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <p className="text-xs font-semibold text-amber-900">
+                                        {aVencer.length} período{aVencer.length > 1 ? 's' : ''} de férias vencendo em 60 dias — conceda antes do vencimento para evitar pagamento em dobro
+                                    </p>
+                                    {nomes(aVencer, 'vence')}
+                                </div>
+                            </div>
+                        )}
+                    </>
+                );
+            })()}
 
             {/* KPIs */}
             <div className="grid grid-cols-2 md:grid-cols-5 gap-4">

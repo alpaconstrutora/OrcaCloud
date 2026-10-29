@@ -1,4 +1,5 @@
 import { supabase } from '../lib/supabase';
+import { hojeLocal } from '../utils/baixaRecebivel';
 import { validateDocumentFile, validateImageFile } from '../lib/mimeValidation';
 import { trainingsService } from './trainingsService';
 import type { TrainingCategoria, TrainingCourse, EmployeeTraining } from '../types/academy';
@@ -2078,7 +2079,7 @@ export const laborService = {
         const today = new Date().toISOString().split('T')[0];
         const in60 = new Date();
         in60.setDate(in60.getDate() + 60);
-        const in60Str = in60.toISOString().split('T')[0];
+        const in60Str = hojeLocal(in60);   // local: toISOString() é UTC (após 21h já é amanhã)
 
         let q = supabase
             .from('vacation_balance')
@@ -2097,10 +2098,10 @@ export const laborService = {
     // Colaboradores que completaram o período aquisitivo e têm saldo disponível
     // mas NÃO estão na janela de urgência dos 60 dias (esses ficam em getVacationAlerts)
     async getVacationReady(orgId: string | null): Promise<VacationBalance[]> {
-        const today = new Date().toISOString().split('T')[0];
+        const today = hojeLocal();
         const in60 = new Date();
         in60.setDate(in60.getDate() + 60);
-        const in60Str = in60.toISOString().split('T')[0];
+        const in60Str = hojeLocal(in60);   // local: toISOString() é UTC (após 21h já é amanhã)
 
         let q = supabase
             .from('vacation_balance')

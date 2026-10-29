@@ -85,6 +85,8 @@ const OPCOES_ESTILO_3D: readonly OpcaoDeExibicao[] = [
   { valor: 'SOMBREADO', rotulo: 'Sombreado' },
   { valor: 'LINHA_OCULTA', rotulo: 'Linha oculta' },
   { valor: 'TRANSPARENTE', rotulo: 'Transparente' },
+  // 29/10/2026: o 3D para mostrar ao cliente (utils/blueprintConcepcao).
+  { valor: 'CONCEPCAO', rotulo: 'Concepção' },
 ];
 const OPCOES_MODO_DE_COR: readonly OpcaoDeExibicao[] = [
   { valor: 'NENHUM', rotulo: 'Sem cor (cinza)' },

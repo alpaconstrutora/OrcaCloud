@@ -124,6 +124,7 @@ describe('SecaoExibicaoDaPlanta', () => {
       'Sombreado',
       'Linha oculta',
       'Transparente',
+      'Concepção',
     ]);
   });
 

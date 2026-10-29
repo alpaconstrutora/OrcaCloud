@@ -11,9 +11,9 @@ import { MODOS_DE_COR, type ModoDeCor } from './blueprintPaletas';
 import { FILTROS_DE_FASE, ROTULO_DO_FILTRO_DE_FASE, type FiltroDeFase } from './blueprintFases';
 import { CAMADAS, ESTADOS_PADRAO, ROTULO_DA_CAMADA, estadosDasChavesAntigas, sanearEstados, type EstadoDaCamada, type EstadosDasCamadas } from './blueprintCamadasPorDisciplina';
 
-export type Estilo3d = 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE';
-export const ESTILOS_3D: readonly Estilo3d[] = ['SOMBREADO', 'LINHA_OCULTA', 'TRANSPARENTE'];
-export const ROTULO_DO_ESTILO_3D: Record<Estilo3d, string> = { SOMBREADO: 'Sombreado', LINHA_OCULTA: 'Linha oculta', TRANSPARENTE: 'Transparente' };
+export type Estilo3d = 'SOMBREADO' | 'LINHA_OCULTA' | 'TRANSPARENTE' | 'CONCEPCAO';
+export const ESTILOS_3D: readonly Estilo3d[] = ['SOMBREADO', 'LINHA_OCULTA', 'TRANSPARENTE', 'CONCEPCAO'];
+export const ROTULO_DO_ESTILO_3D: Record<Estilo3d, string> = { SOMBREADO: 'Sombreado', LINHA_OCULTA: 'Linha oculta', TRANSPARENTE: 'Transparente', CONCEPCAO: 'Concepção' };
 /** ESTILO DA PLANTA (E8.4): técnica (paredes vazadas, fundo neutro) ou humanizada (pisos por material, sombra, mobiliário colorido, vegetação). */
 export type EstiloDaPlanta = 'TECNICA' | 'HUMANIZADA';
 export const ESTILOS_DA_PLANTA: readonly EstiloDaPlanta[] = ['TECNICA', 'HUMANIZADA'];

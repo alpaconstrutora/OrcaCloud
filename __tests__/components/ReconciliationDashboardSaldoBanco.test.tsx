@@ -173,3 +173,29 @@ describe('Dashboard — ação em cada número', () => {
         expect(screen.queryByRole('button', { name: /Conciliar Sicredi/ })).toBeNull();
     });
 });
+
+describe('Dashboard — empresa da conta (29/10)', () => {
+    const linhaEmpresa = (nome: string, extra: Record<string, unknown> = {}) => ({
+        empresa_id: null, empresa_name: nome, account_count: 1, bank_balance: 0, reconciled_balance: 0,
+        difference: 0, pending_value: 0, pending_count: 0, ...extra,
+    });
+
+    it('"Sem empresa" (conta de PJ não ligada) leva a Contas de Pagamento; a pessoa física não é pendência', async () => {
+        servico.getConsolidated.mockResolvedValue({
+            as_of: '2026-10-29',
+            totals: { bank_balance: 0, reconciled_balance: 0, pending_value: 0, account_count: 2, empresa_count: 0 },
+            by_empresa: [
+                linhaEmpresa('Sem empresa', { sem_empresa: true, organization_id: 'org-alpa' }),
+                linhaEmpresa('Altair Pereira da Rosa (pessoa física)', { sem_empresa: false, organization_id: 'org-pf' }),
+            ],
+            by_project: [],
+        });
+        const onIrPara = vi.fn();
+        render(<ReconciliationDashboardView organizationId={null} asOf="2026-10-29" onIrPara={onIrPara} />);
+        const tabela = await screen.findByRole('table', { name: 'Por empresa' });
+        const linhaPF = within(tabela).getByText(/Altair Pereira da Rosa \(pessoa física\)/).closest('tr') as HTMLElement;
+        expect(within(linhaPF).queryByRole('button')).toBeNull();
+        fireEvent.click(within(tabela).getByRole('button', { name: /Ligar à empresa em Contas de Pagamento/ }));
+        expect(onIrPara).toHaveBeenCalledWith({ aba: 'contas-de-pagamento' });
+    });
+});

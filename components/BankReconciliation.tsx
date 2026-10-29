@@ -411,6 +411,13 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
 
     /** Um número do Dashboard leva à aba onde ele se resolve, já na conta certa. */
     const irPara = (d: DestinoConciliacao) => {
+        if (d.aba === 'contas-de-pagamento') {
+            // Fora da Conciliação: Minha Organização › Contas de Pagamento, onde se liga a conta à
+            // empresa. Mesmo caminho do item "Contas" do menu (aba do store + tela pelo hash).
+            useStore.getState().setManagementTab('accounts');
+            window.location.hash = '#/organization';
+            return;
+        }
         if (d.contaId) setSelectedAccountId(d.contaId);
         setRegraInicial(d.regra === 'tarifas' ? {
             name: 'Tarifas bancárias', contem: 'TARIFA', category: '', counterparty: '', direcao: 'DEBIT',

@@ -125,7 +125,8 @@ export interface PaymentAccount {
     id: string;
     code?: string;
     organization_id: string;
-    empresa_id?: string;
+    /** Empresa (CNPJ) da organização dona. `null` = sem empresa (pessoa física, ou ainda não ligada). */
+    empresa_id?: string | null;
     name: string;
     description?: string;
     bank?: string;
@@ -391,7 +392,12 @@ export interface ReconciliationDashboard {
 
 export interface ConsolidatedEmpresa {
     empresa_id: string | null;
+    /** Só na linha sem empresa: a organização das contas agrupadas ali. */
+    organization_id?: string | null;
     empresa_name: string;
+    /** Conta(s) de PJ ainda não ligada(s) à empresa — pendência com link. A pessoa física
+     *  (organização sem empresa) vem `false`, com o nome dela + "(pessoa física)". */
+    sem_empresa?: boolean;
     account_count: number;
     bank_balance: number;
     reconciled_balance: number;

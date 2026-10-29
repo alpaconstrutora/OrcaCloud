@@ -26,7 +26,8 @@ const EPS = 0.01;
 
 /** Para onde um número do dashboard leva (passo 2 do plano: "todo número leva à ação"). */
 export interface DestinoConciliacao {
-    aba: 'center' | 'pending' | 'divergences' | 'anomalies';
+    /** `contas-de-pagamento` sai da Conciliação: Minha Organização › Contas de Pagamento. */
+    aba: 'center' | 'pending' | 'divergences' | 'anomalies' | 'contas-de-pagamento';
     contaId?: string;
     /** Recorte de Pendentes vindo daqui — as MESMAS linhas que o alerta contou. */
     recorte?: 'tarifas' | 'sem-classificacao';
@@ -659,7 +660,14 @@ const ReconciliationDashboardView: React.FC<ReconciliationDashboardProps> = ({ o
                             <tbody className="divide-y divide-gray-50">
                                 {consolidated.by_empresa.map(e => (
                                     <tr key={e.empresa_id ?? 'none'} className="hover:bg-gray-50/50">
-                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{e.empresa_name}</td>
+                                        <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">
+                                            {e.empresa_name}
+                                            {e.sem_empresa && onIrPara && (
+                                                <span className="ml-3">
+                                                    <LinkDeAcao onClick={() => onIrPara({ aba: 'contas-de-pagamento' })}>Ligar à empresa em Contas de Pagamento</LinkDeAcao>
+                                                </span>
+                                            )}
+                                        </td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-gray-500">{e.account_count}</td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.bank_balance)}</td>
                                         <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right tabular-nums text-sm font-medium text-gray-800">{formatBRL(e.reconciled_balance)}</td>

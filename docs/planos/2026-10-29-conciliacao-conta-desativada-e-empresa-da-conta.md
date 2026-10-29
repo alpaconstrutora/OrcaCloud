@@ -67,3 +67,11 @@ Sandbox já eram `IGNORED` e de menos de R$ 100.
 
 - [x] 1. Conta desativada fora da Conciliação — 1.1 a 1.3
 - [ ] 2. Empresa da conta — 2.1 e 2.2 conferidos no banco; 2.3 e 2.4 com teste, falta conferir na tela em produção
+
+### Achado na conferência em produção (PR #252, 29/10)
+
+O Dashboard ficou certo (4 contas; "1 de 4 contas"; "Altair Pereira da Rosa (pessoa física)"), mas a
+"Asaas Sandbox" seguia como opção na gaveta "Importar extrato" — e, pela mesma consulta, no seletor
+de conta das abas Extrato/Pendentes/Central: `loadAccounts` (`BankReconciliation.tsx`) não filtrava
+`is_active`. Corrigido (PR seguinte): a consulta deixa de fora conta desativada, e a conta escolhida
+que saiu da lista cai na primeira (antes a tela seguia carregando o extrato dela).

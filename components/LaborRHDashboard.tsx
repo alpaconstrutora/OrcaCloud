@@ -301,6 +301,8 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
 
     const vTurnover = kpis ? vereditoPelaMeta(kpis.periodo.turnover_pct, meta?.turnover_max_pct, !!orgId) : null;
     const vAbsenteismo = kpis ? vereditoPelaMeta(kpis.qualidade.absenteismo_pct, meta?.absenteismo_max_pct, !!orgId) : null;
+    // Medido = falta/atestado/licença médica válida lançada nos últimos 90 dias (rh_kpis_calcular).
+    const absenteismoMedido = (kpis?.qualidade.lancamentos_90d ?? 0) > 0;
     // Meta de horas extras é % das horas trabalhadas (BI › Metas: "Ex: 10 das horas totais").
     const pctHorasExtras = kpis && kpis.custos.horas_trabalhadas > 0
         ? Math.round(kpis.custos.horas_extras / kpis.custos.horas_trabalhadas * 1000) / 10 : 0;
@@ -368,12 +370,24 @@ const LaborRHDashboard: React.FC<LaborRHDashboardProps> = ({ orgId, employees, p
                                 sub={[vTurnover.texto, '(admissões + desligamentos) ÷ 2 ÷ headcount médio'].filter(Boolean).join(' · ')}
                                 acao={vTurnover.definirMeta ? { label: 'Definir meta', onClick: ir('labor-bi-analytics') }
                                     : kpis.periodo.desligados > 0 ? { label: 'Ver desligamentos', onClick: ir('labor-termination') } : undefined} />
-                            <KpiCard destaque label="Absenteísmo" icon={<Calendar />}
-                                value={pct(kpis.qualidade.absenteismo_pct)}
-                                tom={vAbsenteismo.tom}
-                                sub={[vAbsenteismo.texto, `faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`].filter(Boolean).join(' · ')}
-                                acao={vAbsenteismo.definirMeta ? { label: 'Definir meta', onClick: ir('labor-bi-analytics') }
-                                    : kpis.qualidade.absenteismo_pct > 0 ? { label: 'Ver faltas e atestados', onClick: ir('labor-absences') } : undefined} />
+                            {/* Sem falta/atestado lançado em 90 dias o absenteísmo NÃO foi medido:
+                                "—" e sem veredito (§28.5), como as horas extras sem apontamento.
+                                Antes: "0% · dentro da meta" na Alpa, que nunca lançou uma falta. */}
+                            {absenteismoMedido ? (
+                                <KpiCard destaque label="Absenteísmo" icon={<Calendar />}
+                                    value={pct(kpis.qualidade.absenteismo_pct)}
+                                    tom={vAbsenteismo.tom}
+                                    sub={[vAbsenteismo.texto, `faltas e atestados ÷ ${kpis.qualidade.dias_uteis} dias úteis`].filter(Boolean).join(' · ')}
+                                    acao={vAbsenteismo.definirMeta ? { label: 'Definir meta', onClick: ir('labor-bi-analytics') }
+                                        : kpis.qualidade.absenteismo_pct > 0 ? { label: 'Ver faltas e atestados', onClick: ir('labor-absences') } : undefined} />
+                            ) : (
+                                <KpiCard destaque label="Absenteísmo" icon={<Calendar />}
+                                    value="—"
+                                    sub={kpis.qualidade.ultimo_lancamento
+                                        ? `não medido · nenhuma falta ou atestado lançado desde ${competenciaCurta(kpis.qualidade.ultimo_lancamento.slice(0, 7))}`
+                                        : 'não medido · nenhuma falta ou atestado lançado ainda'}
+                                    acao={{ label: 'Lançar ausências', onClick: ir('labor-absences') }} />
+                            )}
                             <KpiCard destaque label="Custo da folha" icon={<DollarSign />}
                                 value={carregandoFolha ? '…' : folha ? brl(folha.total) : '—'}
                                 sub={carregandoFolha ? 'carregando a folha' : folha

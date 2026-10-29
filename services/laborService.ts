@@ -366,7 +366,13 @@ export interface RhKpis {
      *  o apontamento. `apontamentos` = 0 → horas "não medidas", não 0h. */
     custos: { custo_mes: number; horas_extras: number; horas_trabalhadas: number; apontamentos: number };
     /** Dias úteis de 1º do mês até a data de referência. */
-    qualidade: { absenteismo_pct: number; dias_uteis: number };
+    qualidade: {
+        absenteismo_pct: number; dias_uteis: number;
+        /** Falta/atestado/licença médica válida com início nos últimos 90 dias (0 = não medido). */
+        lancamentos_90d: number;
+        /** 'AAAA-MM-DD' do lançamento válido mais recente, de qualquer época (null = nunca). */
+        ultimo_lancamento: string | null;
+    };
     /** `*_vencidos` = data já passou; `*_vencendo` = de hoje até +30 (férias +60). */
     alertas: {
         treinamentos_vencidos: number;

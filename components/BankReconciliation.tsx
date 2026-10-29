@@ -1148,6 +1148,9 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             const { data, error } = await supabase
                 .from('payment_accounts')
                 .select('id, organization_id, empresa_id, bank, branch, account_number, name, description, serves_all_organizations, payment_account_organizations(organization_id)')
+                // Conta desativada sai de toda a Conciliação (29/10/2026): o seletor de conta e a
+                // gaveta "Importar extrato" ofereciam a "Asaas Sandbox", desativada em 17/10.
+                .not('is_active', 'is', false)
                 .order('name');
 
             if (error) throw error;
@@ -1157,7 +1160,10 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                 ...acc,
                 served_organization_ids: (payment_account_organizations ?? []).map(r => r.organization_id),
             })));
-            if (data && data.length > 0 && (!selectedAccountId || selectedAccountId === 'mock-acc-1')) {
+            // Conta escolhida que saiu da lista (desativada) também cai na primeira — senão a tela
+            // seguia carregando o extrato de uma conta que o seletor não mostra mais.
+            const naLista = !!selectedAccountId && (data ?? []).some(a => a.id === selectedAccountId);
+            if (data && data.length > 0 && !naLista) {
                 setSelectedAccountId(data[0].id);
             }
         } catch (error) {

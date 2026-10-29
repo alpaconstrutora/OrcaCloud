@@ -341,10 +341,11 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
   // ── Como a Planta arruma as unidades desta torre (28/10/2026) ───────────────
   // "implemente opção de ordenação de duas maneiras pelas setas ou pela posição. O usuário escolhe" — decisão: "Nos
   // dois". Aqui é o padrão da torre (`ordem_das_unidades_na_planta`); na Planta, cada usuário pode trocar só para si.
-  const [ordemNaPlanta, setOrdemNaPlanta] = React.useState<OrdemDasUnidadesNaPlanta>(tower.ordem_das_unidades_na_planta === 'SETAS' ? 'SETAS' : 'POSICAO');
+  const ordemGravada: OrdemDasUnidadesNaPlanta = tower.ordem_das_unidades_na_planta === 'SETAS' || tower.ordem_das_unidades_na_planta === 'ARRASTO' ? tower.ordem_das_unidades_na_planta : 'POSICAO';
+  const [ordemNaPlanta, setOrdemNaPlanta] = React.useState<OrdemDasUnidadesNaPlanta>(ordemGravada);
   React.useEffect(() => {
-    setOrdemNaPlanta(tower.ordem_das_unidades_na_planta === 'SETAS' ? 'SETAS' : 'POSICAO');
-  }, [tower.ordem_das_unidades_na_planta]);
+    setOrdemNaPlanta(ordemGravada);
+  }, [ordemGravada]);
   const [gravandoOrdemNaPlanta, setGravandoOrdemNaPlanta] = React.useState(false);
   const escolherOrdemNaPlanta = async (ordem: OrdemDasUnidadesNaPlanta) => {
     if (ordem === ordemNaPlanta) return;
@@ -354,7 +355,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
     try {
       await empreendimentoService.updateTower(tower.id, { ordem_das_unidades_na_planta: ordem });
       onTowerChange?.(tower.id, { ordem_das_unidades_na_planta: ordem });
-      notify(`${tower.name}: a Planta arruma as unidades ${ordem === 'SETAS' ? 'pelas setas' : 'pela posição'}.`);
+      notify(`${tower.name}: a Planta arruma as unidades ${ordem === 'SETAS' ? 'pelas setas' : ordem === 'ARRASTO' ? 'como foram arrastadas na planta' : 'pela posição'}.`);
     } catch (err: any) {
       setOrdemNaPlanta(antes);
       notify(`Erro ao gravar a escolha: ${err.message}`, 'error');
@@ -567,7 +568,7 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs" data-testid="ordem-na-planta">
         <span className="font-semibold text-slate-600">Na Planta Inteligente, arrumar as unidades:</span>
         <div className="flex gap-1" role="group" aria-label="Como a Planta arruma as unidades desta torre">
-          {([['POSICAO', 'Pela posição'], ['SETAS', 'Pelas setas']] as const).map(([ordem, rotulo]) => (
+          {([['POSICAO', 'Pela posição'], ['SETAS', 'Pelas setas'], ['ARRASTO', 'Arrastado na planta']] as const).map(([ordem, rotulo]) => (
             <span key={ordem} title={gravandoOrdemNaPlanta ? 'Gravando a escolha…' : undefined}>
               <button
                 type="button"
@@ -586,7 +587,9 @@ export const UnitEditor: React.FC<Props> = ({ tower, floors = SEM_PAVIMENTOS, on
         <span className="text-slate-500">
           {ordemNaPlanta === 'SETAS'
             ? 'Na ordem das setas ↑↓ de cada pavimento: a 1ª metade numa fileira, a 2ª na outra. Posição e Orientação não mudam a Planta.'
-            : 'Pela Posição e a Orientação de cada unidade; sem elas, pelo número (101, 102…). As setas ↑↓ não mudam a Planta.'}
+            : ordemNaPlanta === 'ARRASTO'
+              ? 'Onde cada unidade foi arrastada na planta baixa da Planta Inteligente; pavimento nunca arrastado, pela posição.'
+              : 'Pela Posição e a Orientação de cada unidade; sem elas, pelo número (101, 102…). As setas ↑↓ não mudam a Planta.'}
           {' '}Cada usuário pode trocar só para si, na Planta.
         </span>
       </div>

@@ -51,7 +51,15 @@ interface Props {
    * Empreendimento" segue a torre (`daTorre`, de Torres e Unidades); "Pela posição" e "Pelas setas" valem só para quem
    * escolheu.
    */
-  arrumacaoDasUnidades?: { modo: EscolhaDaArrumacao; onModo: (modo: EscolhaDaArrumacao) => void; torre?: string | null; daTorre?: OrdemDasUnidadesNaPlanta | null };
+  arrumacaoDasUnidades?: {
+    modo: EscolhaDaArrumacao;
+    onModo: (modo: EscolhaDaArrumacao) => void;
+    torre?: string | null;
+    daTorre?: OrdemDasUnidadesNaPlanta | null;
+    /** Arrastar na planta baixa (28/10/2026): vale para o pavimento ou para a coluna inteira; e o que a última troca fez. */
+    alcance?: { valor: 'PAVIMENTO' | 'COLUNA'; onValor: (v: 'PAVIMENTO' | 'COLUNA') => void };
+    mensagem?: { texto: string; erro: boolean } | null;
+  };
   /** O que a posição/orientação do cadastro não deixou fazer neste pavimento (28/10/2026). */
   avisosDasUnidades?: string[];
   /** A torre do Empreendimento casada com o bloco (pelo nome), a comparação e o ajuste de todos os blocos. */
@@ -89,17 +97,23 @@ interface Props {
 
 const DICA_DA_POSICAO = 'Pela Posição (frente, fundos, lateral) e a Orientação do cadastro; sem elas, pelo número (101 sobre 201), com as fileiras de áreas parecidas.';
 const DICA_DAS_SETAS = 'Na ordem das setas ↑↓ da aba Torres e Unidades: a 1ª metade numa fileira, a 2ª na outra.';
+const DICA_DO_ARRASTO = 'Onde cada unidade foi arrastada na planta baixa (arraste uma sobre a outra para trocar); andar nunca arrastado, pela posição.';
 const ARRUMACOES: { modo: EscolhaDaArrumacao; rotulo: string; dica: string }[] = [
   { modo: 'DO_EMPREENDIMENTO', rotulo: 'Do Empreendimento', dica: 'Como cada torre está em Torres e Unidades › Unidades.' },
   { modo: 'AUTOMATICA', rotulo: 'Pela posição', dica: DICA_DA_POSICAO },
   { modo: 'EMPREENDIMENTO', rotulo: 'Pelas setas', dica: DICA_DAS_SETAS },
+  { modo: 'ARRASTO', rotulo: 'Arrastado na planta', dica: DICA_DO_ARRASTO },
 ];
+const DICA_DE: Record<OrdemDasUnidadesNaPlanta, string> = { POSICAO: DICA_DA_POSICAO, SETAS: DICA_DAS_SETAS, ARRASTO: DICA_DO_ARRASTO };
+const COMO_NO_EMPREENDIMENTO: Record<OrdemDasUnidadesNaPlanta, string> = { POSICAO: 'pela posição', SETAS: 'pelas setas', ARRASTO: 'arrastado na planta' };
 /** O texto sob os botões: o que a escolha faz e, fora de "Do Empreendimento", que vale só para quem escolheu. */
 function dicaDaArrumacao(modo: EscolhaDaArrumacao, torre: string | null | undefined, daTorre: OrdemDasUnidadesNaPlanta | null | undefined): string {
-  const doEmpreendimento = daTorre === 'SETAS' ? 'pelas setas' : 'pela posição';
+  const daTorreOuPosicao: OrdemDasUnidadesNaPlanta = daTorre ?? 'POSICAO';
+  const doEmpreendimento = COMO_NO_EMPREENDIMENTO[daTorreOuPosicao];
   const quem = torre ? `a ${torre}` : 'a torre';
-  if (modo === 'DO_EMPREENDIMENTO') return `Como ${quem} está em Torres e Unidades › Unidades: ${doEmpreendimento}. ${daTorre === 'SETAS' ? DICA_DAS_SETAS : DICA_DA_POSICAO}`;
-  return `${modo === 'EMPREENDIMENTO' ? DICA_DAS_SETAS : DICA_DA_POSICAO} Só na sua visualização — no Empreendimento, ${quem} está ${doEmpreendimento}.`;
+  if (modo === 'DO_EMPREENDIMENTO') return `Como ${quem} está em Torres e Unidades › Unidades: ${doEmpreendimento}. ${DICA_DE[daTorreOuPosicao]}`;
+  const dica = modo === 'EMPREENDIMENTO' ? DICA_DAS_SETAS : modo === 'ARRASTO' ? DICA_DO_ARRASTO : DICA_DA_POSICAO;
+  return `${dica} Só na sua visualização — no Empreendimento, ${quem} está ${doEmpreendimento}.`;
 }
 
 const fmtElevacao = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -300,7 +314,7 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
               <p className="font-semibold text-slate-700">Unidades deste pavimento ({unidadesDoPiso.length})</p>
               {arrumacaoDasUnidades && (
                 <div className="space-y-0.5" data-testid="arrumacao-das-unidades">
-                  <div className="flex gap-1" role="group" aria-label="Arrumação das unidades no pavimento">
+                  <div className="flex flex-wrap gap-1" role="group" aria-label="Arrumação das unidades no pavimento">
                     {ARRUMACOES.map((a) => (
                       <button
                         key={a.modo}
@@ -317,6 +331,40 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
                     ))}
                   </div>
                   <p className="text-slate-500">{dicaDaArrumacao(arrumacaoDasUnidades.modo, arrumacaoDasUnidades.torre, arrumacaoDasUnidades.daTorre)}</p>
+                  {arrumacaoDasUnidades.alcance && (
+                    <div className="flex flex-wrap items-center gap-1" data-testid="alcance-do-arrasto">
+                      <span className="text-slate-600">Arrastar na planta vale para:</span>
+                      <div className="flex gap-1" role="group" aria-label="Alcance do arrasto na planta">
+                        {(
+                          [
+                            ['PAVIMENTO', 'Este pavimento', 'Só as unidades deste pavimento trocam de lugar.'],
+                            ['COLUNA', 'A coluna inteira', 'Leva junto as unidades de mesmo final nos pavimentos com as mesmas unidades (107 com 207, 307…).'],
+                          ] as const
+                        ).map(([valor, rotulo, dica]) => (
+                          <button
+                            key={valor}
+                            type="button"
+                            aria-pressed={arrumacaoDasUnidades.alcance!.valor === valor}
+                            onClick={() => arrumacaoDasUnidades.alcance!.onValor(valor)}
+                            title={dica}
+                            className={`rounded-md border px-1.5 py-0.5 font-medium transition-colors ${
+                              arrumacaoDasUnidades.alcance!.valor === valor ? 'border-blue-600 bg-blue-600 text-white' : 'border-slate-300 text-slate-700 hover:bg-slate-50'
+                            }`}
+                          >
+                            {rotulo}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {arrumacaoDasUnidades.mensagem && (
+                    <p
+                      className={`rounded-md border px-2 py-1 ${arrumacaoDasUnidades.mensagem.erro ? 'border-red-200 bg-red-50 text-red-700' : 'border-emerald-200 bg-emerald-50 text-emerald-800'}`}
+                      data-testid="mensagem-do-arrasto"
+                    >
+                      {arrumacaoDasUnidades.mensagem.texto}
+                    </p>
+                  )}
                   {avisosDasUnidades.length > 0 && (
                     <ul className="space-y-0.5 rounded-md border border-amber-200 bg-amber-50 px-2 py-1 text-amber-800" data-testid="avisos-das-unidades">
                       {avisosDasUnidades.map((a) => (

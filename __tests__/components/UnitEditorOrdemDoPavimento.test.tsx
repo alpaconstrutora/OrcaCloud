@@ -96,6 +96,14 @@ describe('Torres e Unidades › como a Planta arruma as unidades da torre (28/10
     expect(caixa).toHaveTextContent('Posição e Orientação não mudam a Planta.');
   });
 
+  it('a 3ª opção, "Arrastado na planta", grava na torre e diz o que faz', async () => {
+    render(<UnitEditor tower={TORRE as never} />);
+    const caixa = screen.getByTestId('ordem-na-planta');
+    await userEvent.click(within(caixa).getByRole('button', { name: 'Arrastado na planta' }));
+    await waitFor(() => expect(svc.updateTower).toHaveBeenCalledWith('t1', { ordem_das_unidades_na_planta: 'ARRASTO' }));
+    expect(caixa).toHaveTextContent('Onde cada unidade foi arrastada na planta baixa da Planta Inteligente');
+  });
+
   it('erro ao gravar volta a escolha de antes', async () => {
     svc.updateTower.mockRejectedValue(new Error('sem permissão'));
     render(<UnitEditor tower={{ ...TORRE, ordem_das_unidades_na_planta: 'SETAS' } as never} />);

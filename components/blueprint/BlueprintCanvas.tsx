@@ -562,6 +562,15 @@ const HIT_PX = 8;
  * partir do zoom de trabalho (`ESCALA_DE_ANOTACAO_PX_MM`), até 3×; abaixo dele
  * ficam no tamanho de sempre, para não encolher até sumir no zoom de conjunto.
  */
+/** As unidades de um bloco na planta: as fatias do pavimento mostrado (ver `unidadesNaPlanta`). */
+export interface UnidadesDoBlocoNaPlanta {
+  blocoId: string;
+  levelId: string;
+  /** "2º pavimento — Pavimento 1": qual pavimento a planta mostra. */
+  pavimento: string;
+  fatias: { chave: string; nome: string; anel: Point[]; selecionada: boolean }[];
+}
+
 const ESCALA_DE_ANOTACAO_PX_MM = 0.08;
 function fatorDeAnotacao(escalaPxPorMm: number): number {
   return Math.min(3, Math.max(1, escalaPxPorMm / ESCALA_DE_ANOTACAO_PX_MM));
@@ -1555,6 +1564,15 @@ interface Props {
   onAddBloco?: (pontos: Point[]) => void;
   /** Blocos com pavimento fora do envelope ou acima do gabarito — contorno vermelho. */
   blocosComProblema?: ReadonlySet<string>;
+  /**
+   * AS UNIDADES NA PLANTA (28/10/2026, *"mostrar também na planta o posicionamento das unidades"* e *"clicar, segurar e
+   * arrastar para a posição desejada"*): por bloco, as fatias do pavimento mostrado (o escolhido no painel; sem
+   * escolha, o 1º acima do térreo). Soltar uma fatia sobre outra do mesmo bloco chama `onArrastarUnidade`; clicar
+   * sem arrastar, `onClicarUnidade`.
+   */
+  unidadesNaPlanta?: readonly UnidadesDoBlocoNaPlanta[] | null;
+  onArrastarUnidade?: (blocoId: string, de: string, para: string) => void;
+  onClicarUnidade?: (blocoId: string, chave: string) => void;
   /** INCÊNDIO (E6.3): as rotas de fuga DERIVADAS, um pedaço por pavimento; vermelho = acima do percurso máximo. */
   rotasDeFuga?: readonly { levelId: string; pontos: Point[]; falta: boolean }[] | null;
   onAddVia?: (eixo: Point[]) => void;
@@ -1756,6 +1774,9 @@ export default function BlueprintCanvas({
   onAddAreaDeOperacao,
   onAddBloco,
   blocosComProblema = SEM_BLOCOS_COM_PROBLEMA,
+  unidadesNaPlanta = null,
+  onArrastarUnidade,
+  onClicarUnidade,
   rotasDeFuga,
   onAddVia,
   onMoveBoundaryVertex,
@@ -1956,6 +1977,8 @@ export default function BlueprintCanvas({
   const [movendoSelecao, setMovendoSelecao] = useState<
     { origem: Point; delta: Point } | null
   >(null);
+  /** ARRASTAR UMA UNIDADE (28/10/2026): a fatia de origem, a fatia sob o ponteiro e se já saiu do lugar. */
+  const [arrastandoUnidade, setArrastandoUnidade] = useState<{ blocoId: string; de: string; nome: string; sobre: string | null; inicio: { px: number; py: number }; ponteiro: { px: number; py: number }; moveu: boolean } | null>(null);
   const [previaAbertura, setPreviaAbertura] = useState<{ wallId: string; offsetMm: number } | null>(null);
   /** Ponta em arraste, e para onde ela iria se soltasse agora. */
   const [movendo, setMovendo] = useState<{ wallId: string; end: 'a' | 'b' } | null>(null);
@@ -5346,6 +5369,11 @@ export default function BlueprintCanvas({
       // "nome · N pav · altura". Contorno vermelho tracejado quando algum
       // pavimento dele sai do envelope ou passa do gabarito: é o que o estudo
       // quer ver sem abrir relatório. Arrastado com a seleção, anda na prévia.
+      // 28/10/2026: o subsolo "Torre B · Garagem" tem o MESMO contorno da torre — os dois nomes saíam um em cima do
+      // outro. O contorno de cada bloco acima do chão, para o de baixo escrever o seu sob o contorno.
+      const contornoDe = (pts: readonly Point[]) => pts.map((p) => `${Math.round(p.x)},${Math.round(p.y)}`).join(';');
+      const contornosAcimaDoChao = new Set((model.blocos ?? []).filter((x) => x.cotaBaseMm >= 0).map((x) => `${x.levelId}|${contornoDe(x.pontos)}`));
+      const blocosComUnidades = new Set((unidadesNaPlanta ?? []).map((g) => g.blocoId));
       for (const b of model.blocos ?? []) {
         meioTom(atenuados.has(b.id));
         if (b.pontos.length < 3 || ocultos.has(b.id) || (levelId && b.levelId !== levelId)) continue;
@@ -5369,12 +5397,61 @@ export default function BlueprintCanvas({
         ctx.stroke();
         ctx.restore();
         if (mostrarRotulos) {
-          const t = paraTela(interiorPoint(pontosDoBloco));
+          // O nome no meio do bloco — a não ser que o meio esteja ocupado: pelas unidades (vai para cima do contorno)
+          // ou pela torre de mesmo contorno, no subsolo (vai para baixo).
+          const xs = pts.map((q) => q.x);
+          const ys = pts.map((q) => q.y);
+          const meioX = (Math.min(...xs) + Math.max(...xs)) / 2;
+          const deSubsolo = b.cotaBaseMm < 0 && contornosAcimaDoChao.has(`${b.levelId}|${contornoDe(b.pontos)}`);
+          const t = deSubsolo
+            ? { x: meioX, y: Math.max(...ys) + 16 * fz }
+            : blocosComUnidades.has(b.id)
+              ? { x: meioX, y: Math.min(...ys) - 30 * fz }
+              : paraTela(interiorPoint(pontosDoBloco));
           escreverRotulo(ctx, rotuloDoBloco(b), t.x, t.y - 7, problema ? '#b91c1c' : '#0f172a', Math.round(11 * fz));
           escreverRotulo(ctx, `${areaEmM2(pontosDoBloco).toFixed(1).replace('.', ',')} m² de projeção`, t.x, t.y + 7, '#475569', Math.round(10 * fz));
         }
       }
       meioTom(false);
+
+      // AS UNIDADES NA PLANTA (28/10/2026): as fatias do pavimento mostrado, com o nome; a que está sendo arrastada em
+      // âmbar e a que vai receber em azul.
+      for (const g of unidadesNaPlanta ?? []) {
+        if (ocultos.has(g.blocoId) || (levelId && g.levelId !== levelId)) continue;
+        const doArrasto = arrastandoUnidade?.blocoId === g.blocoId ? arrastandoUnidade : null;
+        for (const f of g.fatias) {
+          if (f.anel.length < 3) continue;
+          const pts = f.anel.map(paraTela);
+          const origem = doArrasto?.moveu && doArrasto.de === f.chave;
+          const alvo = doArrasto?.moveu && doArrasto.sobre === f.chave && doArrasto.de !== f.chave;
+          ctx.save();
+          ctx.beginPath();
+          ctx.moveTo(pts[0].x, pts[0].y);
+          for (const q of pts.slice(1)) ctx.lineTo(q.x, q.y);
+          ctx.closePath();
+          ctx.fillStyle = origem ? '#fde68a' : alvo ? '#93c5fd' : f.selecionada ? '#fef3c7' : '#ffffff';
+          ctx.globalAlpha = origem || alvo ? 0.8 : 0.55;
+          ctx.fill();
+          ctx.globalAlpha = 1;
+          ctx.strokeStyle = alvo ? '#1d4ed8' : '#1e40af';
+          ctx.lineWidth = alvo ? 2 : 1;
+          if (!alvo) ctx.setLineDash([4, 3]);
+          ctx.stroke();
+          ctx.restore();
+          if (mostrarRotulos) {
+            const c = paraTela(interiorPoint(f.anel));
+            escreverRotulo(ctx, f.nome, c.x, c.y, origem ? '#92400e' : '#1e3a8a', Math.round(11 * fz));
+          }
+        }
+        if (mostrarRotulos && g.fatias.length > 0) {
+          const todos = g.fatias.flatMap((f) => f.anel.map(paraTela));
+          const xs = todos.map((q) => q.x);
+          escreverRotulo(ctx, g.pavimento, (Math.min(...xs) + Math.max(...xs)) / 2, Math.min(...todos.map((q) => q.y)) - 10 * fz, '#1e40af', Math.round(10 * fz));
+        }
+      }
+      if (arrastandoUnidade?.moveu) {
+        escreverRotulo(ctx, arrastandoUnidade.nome, arrastandoUnidade.ponteiro.px, arrastandoUnidade.ponteiro.py - 16, '#92400e', 12);
+      }
 
       // INCÊNDIO (E6.3): as rotas de fuga — tracejadas, com a seta no fim (o sentido da fuga). As que
       // estouram o limite vão POR CIMA: o pedaço do térreo de uma rota vermelha que vem de cima corre
@@ -10078,6 +10155,8 @@ export default function BlueprintCanvas({
     terrenoEmMeioTom,
     model,
     blocosComProblema,
+    unidadesNaPlanta,
+    arrastandoUnidade,
     simbolosConexoes2d,
     marcasDaRede2d,
     tamanho,
@@ -10423,6 +10502,13 @@ export default function BlueprintCanvas({
 
     if (arrastando) {
       setVista((v) => ({ ...v, dx: v.dx + e.movementX, dy: v.dy + e.movementY }));
+      return;
+    }
+
+    if (arrastandoUnidade) {
+      const moveu = arrastandoUnidade.moveu || Math.hypot(px - arrastandoUnidade.inicio.px, py - arrastandoUnidade.inicio.py) > FOLGA_CLIQUE_PX;
+      const sob = unidadeSob(paraMundo(px, py), arrastandoUnidade.blocoId);
+      setArrastandoUnidade({ ...arrastandoUnidade, moveu, sobre: sob?.chave ?? null, ponteiro: { px, py } });
       return;
     }
 
@@ -11455,6 +11541,18 @@ export default function BlueprintCanvas({
         null;
       const acumular = e.ctrlKey || e.metaKey || e.shiftKey;
 
+      // ARRASTAR UMA UNIDADE (28/10/2026): apertar sobre a fatia de uma unidade do bloco pega a UNIDADE — soltar
+      // sobre outra troca as duas de lugar; clicar sem arrastar seleciona o bloco e a unidade. Para mover o bloco
+      // inteiro, desligue "Unidades na planta" no Exibir.
+      if (!acumular && e.button === 0 && clicado && unidadesNaPlanta) {
+        const sob = unidadeSob(mundo);
+        if (sob && sob.blocoId === clicado) {
+          setArrastandoUnidade({ blocoId: sob.blocoId, de: sob.chave, nome: sob.nome, sobre: sob.chave, inicio: { px, py }, ponteiro: { px, py }, moveu: false });
+          canvasRef.current?.setPointerCapture(e.pointerId);
+          return;
+        }
+      }
+
       // ARRASTAR O QUE JÁ ESTÁ SELECIONADO. Apertar sobre um item do conjunto
       // pega o conjunto INTEIRO — é o MOVE do CAD. Vem depois dos dois testes
       // de alça acima, e antes da seleção: sem essa ordem, pegar o bloco
@@ -11747,7 +11845,27 @@ export default function BlueprintCanvas({
     }
   }
 
+  /** A fatia de unidade sob o ponto (no bloco `blocoId`, se dado) — ver `unidadesNaPlanta`. */
+  function unidadeSob(mundo: Point, blocoId?: string): { blocoId: string; chave: string; nome: string } | null {
+    for (const g of unidadesNaPlanta ?? []) {
+      if ((blocoId && g.blocoId !== blocoId) || ocultos.has(g.blocoId) || (levelId && g.levelId !== levelId)) continue;
+      for (const f of g.fatias) if (f.anel.length >= 3 && pointInPolygon(f.anel, mundo)) return { blocoId: g.blocoId, chave: f.chave, nome: f.nome };
+    }
+    return null;
+  }
+
   function aoSoltar(e: React.PointerEvent) {
+    if (arrastandoUnidade) {
+      const a = arrastandoUnidade;
+      setArrastandoUnidade(null);
+      canvasRef.current?.releasePointerCapture(e.pointerId);
+      if (a.moveu && a.sobre && a.sobre !== a.de) onArrastarUnidade?.(a.blocoId, a.de, a.sobre);
+      else if (!a.moveu) {
+        onSelecionar([a.blocoId]);
+        onClicarUnidade?.(a.blocoId, a.de);
+      }
+      return;
+    }
     if (arrastando) {
       setArrastando(false);
       canvasRef.current?.releasePointerCapture(e.pointerId);
@@ -12007,6 +12125,7 @@ export default function BlueprintCanvas({
       setMovendoEstrutura(null);
       setDestinoPonta(null);
       setMovendoSelecao(null);
+      setArrastandoUnidade(null);
       setLaco(null);
       // Desiste da peça estrutural em curso — a viga com um clique só e o
       // contorno de laje ainda aberto. Sem isto, Escape limparia o traçado de
@@ -12067,7 +12186,8 @@ export default function BlueprintCanvas({
             movendoLimite ||
             movendoEstrutura ||
             movendoAbertura ||
-            movendoSelecao
+            movendoSelecao ||
+            arrastandoUnidade?.moveu
             ? 'grabbing'
             : tool === 'mover'
               ? 'grab'

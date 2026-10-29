@@ -104,6 +104,7 @@ export const OPCOES_UNIDADES_NO_PAVIMENTO: readonly OpcaoDeExibicao[] = [
   { valor: 'DO_EMPREENDIMENTO', rotulo: 'Do Empreendimento' },
   { valor: 'AUTOMATICA', rotulo: 'Pela posição' },
   { valor: 'EMPREENDIMENTO', rotulo: 'Pelas setas' },
+  { valor: 'ARRASTO', rotulo: 'Arrastado na planta' },
 ];
 
 /** A ORDEM do array é a ordem das linhas na tela (a do menu Exibir, grupo a grupo). */
@@ -128,6 +129,8 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
   bool('nosDaGrade', 'Nós da grade', 'PLANTA', false),
   bool('mostrarTerraplenagem', 'Corte e aterro', 'PLANTA', true),
   bool('mostrarEnvelope', 'Envelope construtivo', 'PLANTA', true),
+  // 28/10/2026: as unidades do Empreendimento no bloco de massa, na planta baixa (e o arrasto delas).
+  bool('mostrarUnidadesDaMassa', 'Unidades na planta', 'PLANTA', true),
   bool('cotaAltoContraste', 'Cota em alto contraste', 'PLANTA', false),
 
   // ── Vistas (corte e elevação) ─────────────────────────────────────────────────────────

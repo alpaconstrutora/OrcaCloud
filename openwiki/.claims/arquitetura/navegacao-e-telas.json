@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:7df9e384205b0fd0004f2fe9a7aa65856e8fd5fefec1ad7d24e7ac408c1d2f64",
+  "claims": [
+    {
+      "id": "claim_1983deff79f14ee3b44f0b42c6ddf484",
+      "statement": "A view interna do app vem do hash #/<view>: getInitialView lê o hash, depois orca_activeView do localStorage, depois 'central'; syncViewToUrl só reescreve o hash quando a view muda, para não apagar a query string de links diretos.",
+      "evidence": [
+        {
+          "resource": "repo://lib/tabRouter.ts#L1-L33",
+          "version": "repo-lines-v1:sha256:0d40c8a4b0ae5d30b5d866dd45d43c1b6a8984cbd09b81f30b63d895e975eb3c:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjEyZWMzMTkyZjc2MDJmMDIyOGUwYzQ2OTJlZDM4OTY5NDIyMTAxOWVmNTAxODJlMDM4OGM4ZDJjOWNhMjg2ZTAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_96b58c82b29b485ab2c75dadaa2be3a0",
+      "statement": "useTabRouter aplica mudanças de hash ao store, pergunta antes de sair com edição pendente restaurando o hash se o usuário ficar, e propaga logout para todas as abas via BroadcastChannel orca_auth_sync.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useTabRouter.ts#L10-L48",
+          "version": "repo-lines-v1:sha256:154e8cc95e0b83522487519be3d5e659f59fc094d808ceea87aa8c1b79149fe7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQxNzMzNzQzOTJjOWEwOTRlMTg1YmU2N2ViNDgzNWUzZTlhNjg4ZDFiNTI1ZTVhYjZhMjBmMzNhNzQ4ZTc1NDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc4ZjY1ZGYzMzY1NTIzOGM3NmQxNTVkYjYwODc0MzI2NzFkNDlmOTE2ZWM3M2YwZjYyNWQ1MjJlZDA1NjI2MGQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        },
+        {
+          "resource": "repo://lib/tabRouter.ts#L41-L47",
+          "version": "repo-lines-v1:sha256:173c31f61e6b0578d644304f737c2e6271f7805955af15a2fd8c095a146bae6b:eyJzZWxlY3RlZExpbmVDb3VudCI6NywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmQ2NzQ1MmQ1ODE2YjJjMWFjYTJiMmY4MjU5MWU1NGJjYWE3MjU5ZDJjN2E4YzVmNDNlMmMwM2Q5ODcxZmYxMyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTIyZmFhNTM1YmQyZWEzZDUyZTc0MWVkNDU0NDM1YjdmZTQ5ZTgzNTg2ZTk0M2Q5OGQ4MmJiZmIyNGQxZjVjNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYzE3OTI4MWZjZTY1MjhjNDM4ZTMxOWE3OGM3ZGI3NTY1ZmNkYzQ3MzFhODEzZGNhZDNjY2U0ZGM0ODM1M2VmMiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_ebe16750553c48a089dc6ef08f1d6186",
+      "statement": "App.tsx deriva tokens de portal e IDs de páginas públicas do pathname (/portal-cliente, /portal-fornecedor, /pedido/<uuid>, /publico/validar-*, etc.) e todos esses hooks rodam antes de qualquer return de guarda para evitar o erro React #300.",
+      "evidence": [
+        {
+          "resource": "repo://App.tsx#L603-L709",
+          "version": "repo-lines-v1:sha256:6fbb9b2b751dc6b7cd931a2601b562c07d53f30e0d0e7b3ba990be522a98f555:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI3ZWI3MDI1NzU5M2RhMDZmNjgyYTNkZGRhNTRhOWQyNjBkNGZjNTE0ZjY0NTIzN2Y1Y2E3NGIwOGY4ZGE2MWE2IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ZWI3MDI1NzU5M2RhMDZmNjgyYTNkZGRhNTRhOWQyNjBkNGZjNTE0ZjY0NTIzN2Y1Y2E3NGIwOGY4ZGE2MWE2IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiIxNmZjM2MwMTQyZWQwYzJmZDkxOTJlZjZkMTg2N2E4OGJmODEzODE4MTliMTI0ZWVlM2FhNjUzNWNiZGEzMDM4IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiNWY2ZDMwNGNjODczNmE3Y2Y4M2MyNzljNGMxZGViMTFkYzM4ODM4ZWE5ODQ3MTIzYmNlNGRlZmM5ODQ1ZjlkIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_61c669ffb1964cdc97723b453859a2b5",
+      "statement": "O overlay de carregamento vira tela de erro com 'Tentar novamente' se ficar ativo mais de 15 s.",
+      "evidence": [
+        {
+          "resource": "repo://App.tsx#L711-L723",
+          "version": "repo-lines-v1:sha256:42cb1a5cb42d1d1ba797ecb6bc1a593e99a55682d68d7e31653663bfe66065cb:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmYzMwMzM0OWE5NDE2MTVjNWJjMGQ3YzRjZTk2ZDEyMmIwYmRkN2UzZDJlMmRkM2FmZjBjMDBmZDg2NTY0NWEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlZmEyMjgyZGRkY2UyOWViM2Y5ODU5MTMxNzllZDNjZjI0MWRmMjEyMTc4ZTlhYTlkOTFmNGRlNDdlODc3ZDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYxMGM2Mjc3MGVmNjgzZTQwOGM4ZDQwYWYyMWUxYjZlZTgxOGQxZWVlNjhiMTE5Y2YzYWU5MDUyN2QxZDhhMWYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5779587b3eb843da947c973505570a15",
+      "statement": "Cada módulo do AppRouter é carregado com React.lazy e renderizado dentro de React.Suspense; o default mostra ProjectOverview para obra e Dashboard nos demais casos.",
+      "evidence": [
+        {
+          "resource": "repo://components/AppRouter.tsx#L1581-L1601",
+          "version": "repo-lines-v1:sha256:93b8dd9803976f9ec990bb917097e21d6171dbadef23c9bcd4f1734cd72ec5f8:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ4MWZmNWMzNWMxNjg2N2E1ZTVlMTg5NTkwMzc1NTFhYmQxZmU0NzQwZTBiODg5NmExZDEzNDUxMjA5NzcxNGIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjYwMTkwNzMyMWM4NGIyYjhhNjc4YTA3OTE3MzdhMmYxZWQwY2M5YzMzZDc0NWJkMWZmZTQ4MTU0N2VjODQwZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImMwOGE0YjE1Y2I3MzdlZWY1MWY2M2ViMDRlMmNjYzNjN2MxY2YxZGI5ZjAyYjZjNjI4NGRkOWNlMjcwZTMzYzgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVlYjJjMWEzYWI0YmExMzFiNTk1OGI1MThjNTY5MjJkZjg1M2EwY2U5ODU0NmZjNjYzNmU5MmE5NGFiMDQzYTYifQ"
+        },
+        {
+          "resource": "repo://components/AppRouter.tsx#L17-L70",
+          "version": "repo-lines-v1:sha256:dbfd27397d273add076c963b13dab4c1e4083d86fd84db1401b667bcd7d771e9:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE5YWQ1YWYwY2NjOTIxYzBiMGRhNDcyMjg3NTVjYzY2YWQ4NWY3NTkyZGIwN2Q1YzNkYzE2NjQxYzE3NGM2ZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjNGRhYTg4ZDAwYTkxZmI1MDIxMzY0NTYwYjFiZWZmMTA2MzRlZTUzOTBjMWJiZDgwNDBiNjQzMjliNzdkMjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1ZGU3ZDAxMjc4ODEyMjFmNDcyODg2N2I1ODI3ODM2YmQ2MTljMmM2MDZkNTEzMGZhNWI2ZTQ5ODkzMDI4YWEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0YzdjYjBiYTRlMzBmMjI0M2M4ODljNGYxN2U2MDQzYzczZWIyOTNkNjliZjcwZjNlMTFhOGU1Njg0NGRiNTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5d56f048fb4d4494ba793db8c188dbae",
+      "statement": "isModuleAllowed libera tudo para DESENVOLVEDOR, acesso total, contexto 'Todas', membro ausente ou admin; senão a permissão do membro vence a matriz module_visibility por papel/produto, e sem nada gravado libera ou herda de outro módulo.",
+      "evidence": [
+        {
+          "resource": "repo://components/AppRouter.tsx#L251-L297",
+          "version": "repo-lines-v1:sha256:972d9f293389c69502e83478ce2f5854cf1b1bd51fd3427349491b65b009af40:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY2Y2YxMzU2N2UzNmY3MDg2NGVlYWNlYWRmOTdjMTk3NjA4YWFhODI3YzQ5ZTM1NzAxN2U2ZTA3NTM0OTMzZjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjVmMjYwOWQ4YzU1NWFiZjIzN2I4OTBiMjhlNjE2OTU1NjA0OWFhMWM5NWRjMjk1MmNhNzhkYTZiMmQ5MTBlOWYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY0YjJlNjIyNmI2ZGVlM2JmNzUyMzgwZGJiN2U0MTYwNWQ4M2MyOTg0ZjE4OTFkMTk4NGJkZTYwMDczZDA0YTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjNiMzA1YThkNjE1ZGZhYWRlNjFiYWMzNjYzYmIyMGMwZTliOTM0ZjFlNDUxN2IyZGMwNWIwMDBkODc1MzVkMTYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9de87bb9c32744acb552b0cb66168450",
+      "statement": "Um efeito do AppRouter mapeia views para chaves de permissão e redireciona para dashboard quando bloqueado; o ÒPURA Market é travado pelo perfil e views antigas (regulatory-maps, area-engine, labor-trainings, labor-dashboard) são redirecionadas para as novas.",
+      "evidence": [
+        {
+          "resource": "repo://components/AppRouter.tsx#L298-L396",
+          "version": "repo-lines-v1:sha256:66674bde3ec89fa34186431fe7613ad25348e1b80640bc8c3ee063fe269d2d1e:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI3MWM3OWQ2NTdlYzFmMTRlNWM0NDgxNzcxZDM3ZmU0NDE1MDdiYzQ2ZjlhNTM0YjZhNTY5YzE3YzE1YzNjODgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNjYzNkYjE3NjQ5ODNmNWRkNWIxNDgxYTk5NzA0MmVjM2FkNWRhMTE0OTY3OTY1ZDI5NmVmNzlhOTc5ZjFiNTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_aa60588dbbee4adab3b03c00a3a56308",
+      "statement": "Os ramos do AppRouter para os grupos CLIENT, SUPPLIER, BROKER e PARTNER são inalcançáveis pelo login por e-mail, porque o App.tsx renderiza a casca de cada portal antes do Layout.",
+      "evidence": [
+        {
+          "resource": "repo://components/AppRouter.tsx#L398-L452",
+          "version": "repo-lines-v1:sha256:5d3ef6d4e0c066e2ee3f430e2b474fe4d2d236339c3cd204acfcdd6c47e40054:eyJzZWxlY3RlZExpbmVDb3VudCI6NTUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiZDY0YzI4NmExYzg5ZjU5ZWQzYWRiOWU4MzY0OTBiOWU5MzEyMDViOTU4NDEzMjFmODNhZjIxNjM1YTUxNDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ4NjQyZjhlYzEyNmZjNTkzYTE0YTgwNGM1Mjc5NzcxNDJhNWZjODE0MjYyNzQxMjQ3YTNhNTE0NDM0ZmJiNGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYwNGUzNmJmYjMwYzIwNTQ5YmUwNDgzZDYyMDhjOTgxYzQ4ZmFkYWMwYmYyMDg0NzcxMzBjZmZlY2NhYmI2NzEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a276888d2f634122acd59ab308e42c39",
+      "statement": "reloadOnceForChunkError recarrega a página no máximo uma vez a cada 2 minutos quando um chunk dinâmico falha, e é acionado tanto pelo ErrorBoundary quanto pelo evento vite:preloadError.",
+      "evidence": [
+        {
+          "resource": "repo://components/ErrorBoundary.tsx#L25-L40",
+          "version": "repo-lines-v1:sha256:044231990feeb7296f52b4541faf30442af483c75244f995173e5d96739771a7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjBmNDBmMzhiOGU5YjY4N2FjZGRlYzVmNDJiMDRiZmM5ZjliNjc0YmY5MDY1MjQ2NDU4OGFhNGJlNjFmZGY2OTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3MDllZmIzMmMxZWFkZjY2NjI4MzBjYmY1ZGEzYTkwMWEzZDVjMWVkYzVhODdiZGY3ZjJlMGRhZjdjY2E0ZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImFhYWQ0YWFlNjI2ZDc3YzNiNzg0NDg2YzI2NjBkODEzYTMwYjY0Y2FjOWM2M2JjYzI3NTZmM2Q0YWMzZmVhYTIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjcyNzc0OTc3NzhkOWFkYTA3OWQ4MzM3ODhmMTM0ZGNhODZjN2VkN2NiMjUyMThmOGVmM2FhNmI1NWMzOTViNDAifQ"
+        },
+        {
+          "resource": "repo://index.tsx#L13-L21",
+          "version": "repo-lines-v1:sha256:ed89b11a07aa6e3387de66312509dd4798bf5a864b46c685d5c88c16a0fd6758:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNmQ4NGJhOTNkYmFkNGIzOTE4ZjA4OTY1N2YzYzkxYjExODM0YjA5NWViZmU3ZGE2YWNkOTdlODBmYzIwZGUxYiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiYTNkZGVmNzI0Nzg2YjRhZjQ1YWI3Y2FkODFkMzc3YWU1NDNiYjc4NDEyOTY1NjhmYjUyMjY5OThhZWMyMTYzNCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTE3MTc4YTA4NTFmNDJkM2NiZmE4Mzc1ODM3ODYwZTYwYTAxN2I5NGJmYTgyNjEzODVmNjdkNmRhZDVhMTNhNSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNTQ1MDZlOGI5YjY3ZmYwYjEzYzQzM2Y3MzM0ZTkzMWI0MzNiZWU1MzM3OGY5MTBkYjE1NWQyZTI2Yjk4MTAxOSJ9"
+        },
+        {
+          "resource": "repo://utils/chunkLoadError.ts#L1-L32",
+          "version": "repo-lines-v1:sha256:0487d850ddb4fee75f53db655886ee9a23d03a9eae6a004725b390027a37a395:eyJzZWxlY3RlZExpbmVDb3VudCI6MzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQzMWYyNjE3OTE2MTQyMjE2MzcwMjg2ODI4ZDlmNjQwNDE4NzliYTdkZjMyZTI3Y2VlMzY0ZjM2NmI0OTljMjUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cea5384e3e604ad48692a94dfe54aaf1",
+      "statement": "O index.tsx força uma recarga quando um novo service worker assume o controle, limitada a uma recarga a cada 5 minutos por aba via sessionStorage para evitar loop.",
+      "evidence": [
+        {
+          "resource": "repo://index.tsx#L40-L75",
+          "version": "repo-lines-v1:sha256:3b1a00b7b1b7dbcb00e803d9b0a2b1f3dc50f97f7fbbd1b6b5b26dfff35d5f4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjRhNDMzYmY4OGE5OWFiYzU1ZWMzYzkyYmE0ODk4MWVkOGZjZGMyMjlmOGY1Mzg5OGRkZGU2MjVmN2ZiYTc0ZGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjY2ZTBkYTY4NjlhMDFlNjFmZTYyMzFlOTg5YTNkMDg3OGI1ZGYyNWFhMzNlYzk4ODE3YjZlYThlMzlmMTM1NzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjIyOGQyYzMyN2U1ODRkNDIwOTUxZjIwNTQ1YzU5ODQyYmE4YmE4MWZmZGQzODBkODgxOTc5MzdhOWY0N2M1NzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e2815b33eef9498ebc16f66879eff363",
+      "statement": "O ContextSelector é um accordion Organização → Empreendimento (só agrupador) → Obra, mais Empresas; só organização, empresa e obra são contexto real no store.",
+      "evidence": [
+        {
+          "resource": "repo://components/ContextSelector.tsx#L1-L20",
+          "version": "repo-lines-v1:sha256:ce2be4934c23fb6ae1fafacad2081350ede8b2220a3461ae5e13714c7c8220aa:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc5M2EyODE2OTUwNGE0YzExN2M2OTRiNzAzMjgyYTA4YjY5YThmODUzYmVmZjQ4YWQzZTA1YTY1ZDYyN2FlMjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUxMjBmNGFlMzA0OWViODU0NmQxYTI2NGIyOTYwYWM3MTBiYTVhZmY1OGRlNzYzNDBhMmUyZmU1ZTg4YWE4NzIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZlMTI5ODAzNThkZDEwNThkOTcxMWQ4MDlhZTdiNDQ1ZDJkOWY3NWY2NTQzMWJhNDVlMTVkYmJmZDE1NmFlNWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5f147ffa36434468abe82595d2181ec5",
+      "statement": "O Layout filtra os itens do menu com a mesma lógica de permissão por módulo (permissão do membro e matriz module_visibility).",
+      "evidence": [
+        {
+          "resource": "repo://components/Layout.tsx#L236-L300",
+          "version": "repo-lines-v1:sha256:975cacae2ee79fb44a5991a4723e96c5c7ee8239590e1c618b5e4fa011461645:eyJzZWxlY3RlZExpbmVDb3VudCI6NjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0YTE2ZWIwMzViY2Q2MjNmNDM3YjZiYmFjNGFjZDBlZjMyNDJjOTlmOGI3Zjg0NjM3OGZiZWQ3ZDhjYTYzMGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2NTg5ZTU4Y2RkY2YxMmI4MjU2ZDc0ODU3N2FhNTBkZWE2ZjlmNzhkN2YzZjk3NGMxNjg4N2IyYzU3MWVkMjEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJkYWNjYTNiYmM3NzgyYWNhODQxNzQwOTRkNjk4MDdiMmMyMDQ5ODg4ODI0YmU3YWY2MjQ2ZmZmZWJjOWYyZjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhYWYyZThiNDhhYTk4Y2U4OGJlZTJhNGFhYjRlYTA1M2FjMzYyNGI2NThjMDg0OTUwMjQ0NGYxMGNmNWMyNjIifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

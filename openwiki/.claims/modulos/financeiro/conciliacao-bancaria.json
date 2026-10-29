@@ -1,0 +1,112 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:3288f6fb74c0ef0229b4412ea77fe0aeb47dca79c31274b30f82fc45161e3403",
+  "claims": [
+    {
+      "id": "claim_74751bf85c6e48319cabcc08b963c5f9",
+      "statement": "Os parsers de extrato suportam OFX, CSV, XLSX, HTML, CNAB240 e CNAB400, detectam colunas e delimitador, interpretam valores e datas no formato brasileiro e inferem o ano de datas sem ano.",
+      "evidence": [
+        {
+          "resource": "repo://services/bankStatementParsers.ts#L24-L200",
+          "version": "repo-lines-v1:sha256:8a02d06f759686b89f0383a9cbaffd53b5afc98e0e85163605a86c0a40472fff:eyJzZWxlY3RlZExpbmVDb3VudCI6MTc3LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0ZWExMDdmYjQ4YWI0MDllYTI2ZDY2ZjQ0N2JlYTJhY2VhNTBkYjZhZGE1NDcwZGIyYjc2MTliNWM0NTllMzlkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI0MGFmMTIyNDdmNjE5NjFmOGUwYTMxNmYwZDQyNTMyMWZiMTMwZTE5N2Q3NTEyNDU3NTY3OGNiMmMwMTQzN2QzIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJmYTdlMzEyYTA5MDZjZjMwMzI4MjhmNjI2NDU2MmQ5ZDhjYTczMGY0MmNiZGEyZWFjZDkzOTFiOTFhZDcxZGExIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4OTE3Zjk4ZGYzNzQ2ODhmYTE5ZDkzYTk3MGNkODY0N2NkYjIxOWI2Y2U4YTA4NmFlMDcwNjU2ZjEwMzM0ZGJmIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_dce743cc254741ea8ecee440ebf2d6ba",
+      "statement": "A importação recusa OFX de outra conta, exige saldo inicial na primeira importação e grava um registro por arquivo para conferir completude e saldo.",
+      "evidence": [
+        {
+          "resource": "repo://services/bankReconciliationService.ts#L188-L240",
+          "version": "repo-lines-v1:sha256:4cf657f58ad7735f3f32589a3d5e560e480361b8e6af56fb8eae863b167b5b5f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjlmYWRiNWI2Yzg2Zjc5MTk5YTc3MDhmZGQ3Yzk4ZWRhZmJiMzA3YzY3MGU1ZTZjZWZjMzUxNDUzOGE5ODVkZDIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0YTA3MTM5ZWU5MTEwMGUzMGY1ZGVmMjdhOTkwYjIxNjgxODc1NmUyMDVlNzBjMWExNjgzNmE2ODdhNjE5YWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFjYjQ1ZWMxMjI3YWI0MmZjMWQxYWRlZWI5NTViMzcwZGY3ODAwMzkyYzM4N2I1ZjM2YWVkZWRjNmYxZjYwMTkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgxMWRlMjBiNGY2ZWY3YjQ1YzM3OGMzZjFhYjdjZGUyYWQ2ZGE0YzFjZmE2N2Q1ZjhiYmZhOTVhZDBhYTcyNjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_27af68d34d9e4d1cb3e3e491a785dc60",
+      "statement": "Cada linha de extrato recebe uma impressão digital SHA-256 de uma forma canônica, usada para deduplicar reimportações.",
+      "evidence": [
+        {
+          "resource": "repo://services/bankReconciliationService.ts#L1404-L1408",
+          "version": "repo-lines-v1:sha256:4665b9cd2dcac6f7230d6c7d5743121ef9267eecf538616951c9fd5b8f5dd6de:eyJzZWxlY3RlZExpbmVDb3VudCI6NSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiNGI3Mjg1YTc0MzVmYmY1M2U4MThkZjdmODFjYTZlOTg5NzYyMTZiZjFiZmU2NTJkMDUyNzljYWI2NDk1MmM4MiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmZlMTFhNzEyYjhjNzNjMDk3ZThhMWYwYWNiYTljNDIyNjE1YzNiOWVlNzdmN2E3MGIxNmFkZjExOTcxM2UwZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZmNmZDYwOTI3NzhjODE2MjNmY2NkYjllY2QwMTg2YzcxMDM3NmFmM2QwMzYzNGFjYjhmYTc5MGMwNWM2OGYyNyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjAsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZTNiMGM0NDI5OGZjMWMxNDlhZmJmNGM4OTk2ZmI5MjQyN2FlNDFlNDY0OWI5MzRjYTQ5NTk5MWI3ODUyYjg1NSJ9"
+        },
+        {
+          "resource": "repo://services/bankReconciliationService.ts#L446-L476",
+          "version": "repo-lines-v1:sha256:2af7680bc5de246c40cae4fc7c56645adc8290ec451898425fa82a9317fe50da:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcwOGFkNTZhZTNlMmQ4MjBjYTk1YmMxNTFiMjRmYTFmZjE5ZGIwMzA3MWJmMzBiOWE5Y2E2MjgwYmE2MzQ1NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxYzZhMjU3NTM2ZjhlOWI1YzBjN2NkNWNmOGVhM2RkNWRmN2FhNDY2YWZhZGFkNTUzNGRmMTg0ODU3ZDdkZWIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJmNzY5N2U0ODMxNjExNGI3ZDZjMDNkMmU0ODIxZDJhYzk4NGE2MTcyOGYxZmYzMTMwYTU1NjY3NGZjOTI2ZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRmNjQ0ODViZDQ1ZTE2ZTA0OWJiNDNlN2RiM2IwMDczOTA0NDg1YTQwZmMwNmM3MDMxZjZmYWNjNzg2NGRlMTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_452d79ef0d8c46bea17fbdd6bb18f76c",
+      "statement": "utils/reconciliationRules.ts não tem imports para ser carregado igualmente pelo navegador, pelo Vitest e pela Edge Function, mantendo uma única implementação das regras de casamento.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/reconciliation-engine/index.ts#L1-L20",
+          "version": "repo-lines-v1:sha256:48995f1c8733d515aaf3733ab02efdb61028917bca84e1ddee0e0691b38002b1:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3MjQwOWRkMTJhNmZmYWNkYzA5YmYwZjNiZDI4ZDJmZTUzMDNiYzQ1MmFiMDQ5NDE5NzgxNmUyYzljODFjNWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyNDA2ZjZiMGQ1YjhiODZkODY2NTA1ZTg0OTBiM2U0OGMzMWQ2NzVmZmUxOTI3ZWM3ZWFiNjhkZTY2Mzc4NGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRhZGJlYzdkOTMwMmJjMmVlZmIxNjU4MjkzMjQwOTYxMmJlYWFiOTVmNmYwNTkyN2VlODdmNDBiODE3ZGJkMjkifQ"
+        },
+        {
+          "resource": "repo://utils/reconciliationRules.ts#L1-L22",
+          "version": "repo-lines-v1:sha256:29619d58a392ea2603c0832120490e4abe4b0b9fae137543cbc91a4461e5a2db:eyJzZWxlY3RlZExpbmVDb3VudCI6MjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxYThjMzUzMDJiOWFlODg2YjVlNGQ1YzMyMmY4ZGUxMTNmOTM5MTY1ZmJiODk1MDdlOGE1NTAwNWQyYTkyYjIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVkMDBhYzc0NzUwYzdlMzc5ZDQwYWI3OThmZjg4N2JmYjIxOWEzMmU1ZDJkMjdjNTJmZjNhYjAxZjc0YTZjNGMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_52c8651f1bd84d8ca339764c9b2bc436",
+      "statement": "As regras de casamento incluem pares exatos únicos, pares de transferência interna, pontuação por valor/data/texto/documento/contraparte/juros e veto quando a contraparte do extrato discorda da do título.",
+      "evidence": [
+        {
+          "resource": "repo://utils/reconciliationRules.ts#L109-L500",
+          "version": "repo-lines-v1:sha256:edd21a70b345627d1a60d6ddc836e54cba0f72ad80af7a51c6c646979f17649e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzkyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJlYTQ3NTRlZDE1ZDdhMDkwZmZkZTNhNzg3YTI3NjgxNTI5Mzk2ODIxZTc4YjA0ZjNmMTNhY2FhYmJlODM0NjZkIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3MWIyM2U5ZDFkNTM4MzQwNWIzMTRjZWUyY2NjZjA4ODJlZjcwYWY4N2IyNzY2OGU0NmE1ODNmNjkzMDA5MDQ1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0MDkzZDZlYWFiMTEzNjNkMThmMDRlYTgxNWFkYzQ5MmQwMGZjYzk0N2E3MTkzMTI3MThkODUxZDdjNGE0YzNlIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiOGIxOTZlODQyNThhOWU1ZTFhMzc1MjU4MjA4Y2ZkMzdhNWVkYmFiZTk4M2IxZjJmZGY1MzE2Nzc5OWYwZDU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_22c3a3f5188145318da303c80e0c2adc",
+      "statement": "runMatchingEngineTracked chama primeiro a Edge Function reconciliation-engine com corte de tempo próprio de 3 minutos e só roda o motor no navegador quando o servidor não está disponível, evitando dois motores na mesma conta.",
+      "evidence": [
+        {
+          "resource": "repo://services/bankReconciliationService.ts#L930-L1040",
+          "version": "repo-lines-v1:sha256:5fc2b494d3ab54bd22488f27d2fd3db0de766df9eb6e30fc3811849d01c501be:eyJzZWxlY3RlZExpbmVDb3VudCI6MTExLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0ODQ5ZGJhMjI3MjkyYzhjMWU2OWRmZGU1ZGM5OTBkNGJiZWQ4MzBhZjE5NjUwOTVhNzAyMGZiMThlM2M3NzBmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwZTY1NGM0YjdmMzU1MGI1ZWY0MDYyMDk1ZjlkODgyMWY2OGZmNmQ4ZTYwZWQwMGEzOGY3NGNmYTdkZTg4MzY3IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI0MDY0ZjZmZjA1ZDk4OGE1NzY2YTE5ZTE4NzQ5ZGI3NDhjMGVhMDlkMzU3NzUyZmY5ZDg1YzU5M2RmZDUyMmU3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJiMzk0OGFmMDFhYTU0NGU2OGJjYWMxODNiOTBiZjBlOTNiYmI4NDI4ZjJmYTY2ZTI5ZjVkNzFkMzIyY2RjNjA1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_ab074edb715142ffb3b589e4fbc89378",
+      "statement": "Os aliases de contraparte aprendidos na confirmação podem ser gravados só pelo nome, sem party_id, porque fornecedores não têm party_id.",
+      "evidence": [
+        {
+          "resource": "repo://services/bankReconciliationService.ts#L869-L930",
+          "version": "repo-lines-v1:sha256:b50300bdacc5ad2fe0041be4f82b57c4347a83e4268ba70c86b6c7583db96918:eyJzZWxlY3RlZExpbmVDb3VudCI6NjIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJjMmJhZDg3YjRhYmI1NTM5NjkwNDFhNTMzYjcyZDZmZWY2MzVlZGQ4YWNkOGVkMGU0NjY5MDk3MDk1NzQ4NGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ4NDlkYmEyMjcyOTJjOGMxZTY5ZGZkZTVkYzk5MGQ0YmJlZDgzMGFmMTk2NTA5NWE3MDIwZmIxOGUzYzc3MGYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYzZTcxNzI5YjBjYmNhYTUzNTA4ODQ5YmZlYWUyMTZkNzMzNzk5MjM0NmQ3MjQ0MDQ2MzI3YjMxNGU1ODQ2M2YiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjE2MjNlYTMwNTk2MWRjZjI3ZDM0Yjc3MmVmOWM3YjY5M2FjODU4OWJiOGU1NjllMzJlMDg0NWVlNGRhOTdjYTkifQ"
+        },
+        {
+          "resource": "repo://utils/reconciliationRules.ts#L48-L80",
+          "version": "repo-lines-v1:sha256:a47092305cd4c7462b98d897ae53df67a6b2895f3529440888b59e590bf5ea33:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFjYTZhMDU0ZDE2YzQzNTk4OWZlMmMxZWNmNTY0NWM4NTU5OGNjNmM5OTg4OWZlOWNjNzkyNmYwMWY0MGE3M2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYjU0NGE1ODg2MzQzNTBjMTkxNjlhODI0M2I1MzFiZjMwOTVlYjU3YzhmYjAzZTQ0ODM2OTQzZjA4MTY4ODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImYxYzZhMTQyOWVmYzhjOGIyODk2MTc1OGQyYzFhNTQ4NjkzYWEwMDM0ZDI3OWNiMjcwODNmYTAzNGQ2OGZjZTYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzNTcwYjhlZWI5ODJjMmY0NTU3ZjcxM2UyOGYzNjFkZTRhMjRmMmI3OWVhYTk4NjgwOGQ3ZDZhMmIzN2VmNDkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b7f51cff0eb24948905bd04e56436895",
+      "statement": "createMatch concilia pela RPC fn_reconcile_match e dispara depois, fora da transação, os efeitos best-effort do fluxo P2P e do Motor de Processos.",
+      "evidence": [
+        {
+          "resource": "repo://services/bankReconciliationService.ts#L1222-L1270",
+          "version": "repo-lines-v1:sha256:92c577fb40b845cc1fdbe525e996188263d071fcb73d5bef451ff8b5b9296dfd:eyJzZWxlY3RlZExpbmVDb3VudCI6NDksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIwY2JkZDYyZTZhZmNjMDJmOTA3MGUyZGRiZDEzMTRmZWJhZTg0NDM1YTQwOWI2MTYzYmEwYWMyMmUwMTI0NDEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVlNGI5MzExNzVhYTgxZTRjYTU5NmI5YThiN2Q4Mjc4ZDRiZjA5YzdiOTY5M2U1MWQyMzQ0Nzk3YmYzZDIzOTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiNjhjMDVlMzEzODg0MjNiYzYxNGNlYzQ1OTI2OTA4NzY2YmNjNTQyMTdlMDJlMzlhZDIwM2FkYWFjZjg4NjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjdjYjJhMjA3NTgyOWUyN2I2OWIwM2UxNDY5NDZiZjY2YTZiZWU5YmZiODE0OGE3NTZjOTBmN2JhYjc2NDRmMDIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2817723e560d433395fb7a4e58278bb1",
+      "statement": "A organização pode excluir categorias de extrato da conciliação (comparação sem acento e caixa), e extrato sem categoria nunca é excluído.",
+      "evidence": [
+        {
+          "resource": "repo://utils/reconciliationRules.ts#L72-L108",
+          "version": "repo-lines-v1:sha256:161e615a265eefe9cd1d56514415239d786c6f6ceefd148639b6ccc0a4a18103:eyJzZWxlY3RlZExpbmVDb3VudCI6MzcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYjU0NGE1ODg2MzQzNTBjMTkxNjlhODI0M2I1MzFiZjMwOTVlYjU3YzhmYjAzZTQ0ODM2OTQzZjA4MTY4ODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5ODgwNWE0ZmU0YzZiNjZjMDRlZGE2MzhjOGE1M2IyYjRhYTRlMDE0NmZkODk4ZmEwOTgxMmVkM2RhY2UzZmIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU3NDJlZTNmY2MzNmYzMjJlN2VjZGM2YTExMDg3MjcxZDBlMWY4NzQzYWIwMmQ5ODA3ODI0MmU1MGY4ZDg0NmQifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

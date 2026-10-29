@@ -1,0 +1,74 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:e73a1652c8496db8838c7875867c84b785cd15644895a56072f21ce83c25316d",
+  "claims": [
+    {
+      "id": "claim_b7eff83b1ec04ad498830584e3538d2e",
+      "statement": "migrationsPrefixo.test.ts falha quando dois arquivos de supabase/migrations têm o mesmo prefixo de 14 dígitos, quando um .sql não tem prefixo de 14 dígitos ou quando a anistia de colisões antigas cresce ou contém item morto.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/migrationsPrefixo.test.ts",
+          "version": "repo-file-v1:sha256:bdd5e5c9f6bd40bdb15d8e9c6b5bb756651fab740054941cc0f79590b6572f51"
+        }
+      ]
+    },
+    {
+      "id": "claim_5142a828fe6f46d3ad6ab29e6774a1c9",
+      "statement": "Migrations aplicadas à mão (prefixo aplicar_ e série 2027*) rodaram por SQL direto fora de schema_migrations, razão pela qual renomear arquivo já aplicado é evitado e db push é proibido.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md",
+          "version": "repo-file-v1:sha256:aa1f04782cdad50fd299581e64ca7f21a6ccd2c4c89bb6ea3bdfd7d9c535b6aa"
+        },
+        {
+          "resource": "repo://__tests__/migrationsPrefixo.test.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:068613c1eb51764538fb69ab9c3a5e317966867f63871dffe5779ac8609dcf72:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE3OWI2ODU3ZWFjZmFmOTk1YWMwMmMwNGE4OGIxN2ZmZjNlZDljYzMzMzZiMzgzMzRiOTY3NDhiOTBkOWFjNjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjFjNDBjOWFiNWQyMmEwM2Y0MDY1MzNlMTU0MDRiYzk1NjE5OWNmZjRiZmJmODI5YzI3OGRlZjcwMzc0MWMwMTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_137e777d1a11422e94a28dd804ccb55f",
+      "statement": "O banco do projeto é Postgres 17 no Supabase, configurado em supabase/config.toml.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/config.toml#L27-L36",
+          "version": "repo-lines-v1:sha256:bf299ba938b6e04fa662acdf91ab6f01999159f28ee9a9bd3cea12781273de78:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNmODllMWEyYTEwMWJmOTU5MjA1MjIxMWVkNDlkODIzMmNlYTU4M2NlMTUyOTE0YmZjZDljODE1MGY3ZmIxNGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI1YWI5NWMwYTk3MGE5MzEwNzRkZTRhNjMwMmE3YTk0ODY0NWI2YjkwYzk1YTRhYWJlOTI5NzE4NTBhMDg3NTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEyMGNlMmFhZGFiMGQwYjdlMDUxYzliNjc2MzY2OTA1NjY1ZmIyOTMxZjNiYWYwMjIxMmMzMTZkNzUwODlmZDciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0Mzk1YTA1Zjg2ODU2MTdjODY4Y2ZkOTU0YzkwYTRmZTJiOTY1N2I5MzkzNmYzYTBlMWU4NGZjZDUwODFkNmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7445fd958b5b4b4282bcb14a0bd7e98c",
+      "statement": "A migration da trigger de projeto de sistema usa lock_timeout de 800ms, menor que o deadlock_timeout, para abortar com 55P03 em vez de deadlock 40P01 ao criar trigger em internal_transactions.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/20270819000004_trigger_strip_system_project.sql#L1-L35",
+          "version": "repo-lines-v1:sha256:5831ae9e349dc40bbe41c7057210ae1a752da742505aa72a54788f79bd08d80e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgyYzMxYzc5YWJmMzZiOWYyYThlZTU5Yzk3Zjc0MTE4YTU2NmQyOWE3NDhlNzEwODRiZjI2ZWFkYmNjNDg4ODAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY4NzM4YzgzYzcxNWM5ODk4ZmRjYmQzODQ2ZmZhN2RjMjk0OTVlMWI3M2IwNjliZTQ3OTcyZWNiZTdlMDBkYWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b493dce8861f4e188be0807b5b07e8b8",
+      "statement": "Migrations de agendamento são idempotentes (unschedule antes de schedule) e terminam com um bloco que levanta exceção se o job não foi criado.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/aplicar_20271015110200_email_capture_cron.sql",
+          "version": "repo-file-v1:sha256:71e923eab41be65e1fecfdbb348906eba1e3b9d7a877ccf74862f96118d3458e"
+        }
+      ]
+    },
+    {
+      "id": "claim_41f9643d8eac4497ab73501f29f635ad",
+      "statement": "O README.md ainda instrui supabase db push no setup, em conflito com a regra do projeto.",
+      "evidence": [
+        {
+          "resource": "repo://README.md#L190-L230",
+          "version": "repo-lines-v1:sha256:e29dc8d5c5001a6526ddf30743c191901d6bb0afeaaf7e31b9ec9673e5235549:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYzU2OGVhZGRjYzQ4NDAyNmYxZTMyYWYyMmM3NWYzODUzNjJjZjJjNWMxZGQ5NjhjMDU5MmY1NzE5NTgzMzAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5Yzc4NDc4Yzk3MTg3YmVmZGYwZjNhZGI3YmFkYzUwMTgzY2QwMjliY2VhMzU5YmU3NjZkZGNhMGQ1MDgwZmUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ1MTc4YTkxYjhkNDVhODY1ZmNkNGRiOWVjZWNhYmYxM2U1YjlkYTZlNTY5NzY4Zjk4ZWNjNWNiYTY1ZjMyNGUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwMGU0N2QxMzg0MTdmYzc5YTYzZmVlNjY4ODRlZDU1MTlmMmE5MTllYTc3YmZlNWVlOWI1YWZkN2E4MWE2NjIifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

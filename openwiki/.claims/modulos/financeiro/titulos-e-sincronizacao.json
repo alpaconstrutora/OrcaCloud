@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:049fd626eadf390d6a14547f3a7666696fcf511ea2503d85562db574ae78872a",
+  "claims": [
+    {
+      "id": "claim_e9a74117121b428d8a127f83884c6095",
+      "statement": "syncFinancialData materializa parcelas e transações do financialInfo de um projeto em internal_transactions com source_system PROJECT, gravando due_date, e nunca grava o id de um projeto de sistema como project_id.",
+      "evidence": [
+        {
+          "resource": "repo://services/financialSyncService.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:f32ad8cd445a483c2a90fa37214378ff6fbfd993013d4d0f71f5598bc4999df3:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0ZTU1ZmJmMTMyMmNmZDcyODg2ZGU2ODY5ZmU5Y2IyOWI0N2M2YmI4OTM1MTU0MjAxMTcxN2U0MjA4NTM5YTAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc2YmI0ZDQwYzdiYzEwMGUxZjc2Y2Y4NzEzNThjZDUyMjZhNjQzMjRkODI3ZTU1MzdlNTRlYmJlMDllYjhkNWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_db0ba9510efe4b8188363fa9b29cb968",
+      "statement": "O cofre comercial (projeto de sistema) não materializa mais parcelas por syncFinancialData e usa source_system COMMERCIAL, que é isento da trava de período fechado.",
+      "evidence": [
+        {
+          "resource": "repo://services/financialSyncService.ts#L17-L50",
+          "version": "repo-lines-v1:sha256:ef56c49594d4eca45ddf262ced41d0fe86ec6c8ade8855f28528afaf0791a117:eyJzZWxlY3RlZExpbmVDb3VudCI6MzQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0ZjkzYjRhYWY5M2I1OTU4ZjQ2Njg4NzU1ZjNmMjFhYTliMjIyYTVlNzJlMDVkNThkYTM5NjZlMTMxNmNhYTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZhOWM4NDI5NjQ3NjMzOGVlZjFiYTE3ZGE4NjQwN2QwMTkyMjQ3MmZjYzE5NWFmMDQ3MTQ3M2VlYzIyMWIzM2YiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjllNjA0NTk1MGUwMWNhZmYzYTNjYmQ1ZDZhNjhiM2MxMjIzZDE0ZjhhMTk2NDJhZGQ4NDg3MTdmZjRhNGUxYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImQ2MzA1MzdkNThmYjhmNmU1YWZmMDMyYTE1ZTA4NzViZTVjMmRjMTY4ZDAzMjJmYmFkN2ZhMWMyZWZjOTU2M2IifQ"
+        },
+        {
+          "resource": "repo://supabase/migrations/20261220000004_period_lock_triggers.sql#L1-L75",
+          "version": "repo-lines-v1:sha256:26a8347533370d914f77f3f0f5108d9a95a173ef5fed628b3522d7a30f7f8909:eyJzZWxlY3RlZExpbmVDb3VudCI6NzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwNTM1YzgxZDRlNzc0NDI3MTBlN2NhOGJlZTU4NDk1YzA0YWE3YTczY2NlZmUwMjQ5NmE1MTZjMzljMGQyN2MiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ4NTJlZmMwYmRmNTUyNzExYjQ4NzE5MTYwYTU4Y2ZmNGJhZTAwODZlODc1OWI3NGQ5Nzc2MTVlMDYwMWZkYjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMzZDYyNGQ5ODVjOTIwMDE0NWQ1NDVkMzBkY2FiNjllYjFmNWIyNjY0NGY5MmVjYjdhZjUxYjU2ZWUwNTdmNzcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_1f44675565b9443db5ee4640c452d948",
+      "statement": "Os gatilhos de trava de período recusam inserir, alterar ou mover lançamentos de internal_transactions e bank_transactions em meses registrados como fechados em financial_period_locks.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/20261220000004_period_lock_triggers.sql",
+          "version": "repo-file-v1:sha256:3d0a349977ae4e5ebe24ce34912020ada3d8aba7e509bdb13842127c69585f50"
+        }
+      ]
+    },
+    {
+      "id": "claim_722dce55e06a4ba1bee634f78d412583",
+      "statement": "Os status de negócio a pagar são PREVISTO, APROVADO, PAGO, PARCIAL, RENEGOCIADO e CANCELADO; a receber são PREVISTO, EMITIDO, ENVIADO, RECEBIDO, PARCIAL, RENEGOCIADO e CANCELADO; o effective_status das views acrescenta VENCIDO (e RETIDO no a pagar).",
+      "evidence": [
+        {
+          "resource": "repo://types/financial.ts#L702-L712",
+          "version": "repo-lines-v1:sha256:2cfcfe45ba0868727f92474113e8310d1d976d821a3b1463c7fb322e5adcb384:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImNiODlhNTJkNTgyY2YyZTY0OWIxNjE4ZDEwNzMwNjRmZTk4MTUyNmNlZjU2N2I3ZDBlZGVhZDRiY2NjN2IyZjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwMDE1YmY2M2E3MzJiMTI5YWQ3ODBlN2ZiMWVlMDkyMTg4Zjg4YTg0YThjZDNlOTVkYzMzNDhjNDg3NDI5NzEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBjYWQwNzJiNjgxNDllMTM2ZDNlMGIyMDE3NTM2ZjczMjZjMGRlMjdiYmI5MTE1ZjIzYmU5ZTZiYjY1NzAwZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0OTJhNmYwOTU0MTJmMzQxZjI4NmZkYTMwMjgwNjA2ZDc2ZjEwZDVjYzYwMmNhMmM0ZTIzZGFmZTM4ZWExMWMifQ"
+        },
+        {
+          "resource": "repo://types/financial.ts#L823-L835",
+          "version": "repo-lines-v1:sha256:b4354dd4d2feca4847a9d2a9593cb17d90267321d078b0b9209232c49ed09b7c:eyJzZWxlY3RlZExpbmVDb3VudCI6MTMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2YTE1NGFiMjhjMzI5YzNiMDQwMmNjNTkzOTMxYjZhZjJmZjBhOTJiODIwMzg0YTI1YzdiY2MxYTkzOTIwY2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5ZmNhZTM4NWM2ZDNlMjE1ZGI1MDY5MTUwMDM3YTYxMzU5MzgyOGY0YTQ1NWI1NTAzNzlmNjFlZTE0Y2ZhZmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjliNTEyMzhiZGM0YmI3ODAzYWE5YTI3MDgwNzZmYjNmOTYzYzIzN2UyMWQ3MmU5NTdlODdiOGQ5YzFjNzVlODAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_52787bf1983142e4ab61562d81d841c6",
+      "statement": "Um título está pago quando está CONCILIATED ou seu business_status é RECEBIDO ou PAGO, regra única em tituloEstaPago.",
+      "evidence": [
+        {
+          "resource": "repo://utils/situacaoDaCota.ts#L28-L30",
+          "version": "repo-lines-v1:sha256:0c7471c2da00a7fe6754e6985f012cd184201ea65989ba68a36a2eedceadc5e4:eyJzZWxlY3RlZExpbmVDb3VudCI6MywiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiOGRhMjBiZjliZjMzZGE3YzBmZTAzNDAzMTQ2YWEzODA0MTVkNWEyYzUyY2FiZjVlNzdlNTg5YmRiYWY5ZGY3YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTIyZmFhNTM1YmQyZWEzZDUyZTc0MWVkNDU0NDM1YjdmZTQ5ZTgzNTg2ZTk0M2Q5OGQ4MmJiZmIyNGQxZjVjNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOGIzZGQwMmJkNDZkMzk4NTg3MDRlYmZhYzliM2RlZmJkM2E3ODRlNDE4ZDczNTU5YTEzZmE1ZmMzZTI5ZjJkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiM2ZmY2RmZWVmNGM5ZTE3MzVlMmFjODdiYjIwY2EwODIyYzk5OGVjNTkzMGI2Yjc2MjQ4NTg1MjBiMTYxZDY3OCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_f284177697f9442cb3495477f8b9a4e2",
+      "statement": "Contas a Pagar e Contas a Receber leem das views vw_payables e vw_receivables, e a inadimplência vem da RPC fn_inadimplencia.",
+      "evidence": [
+        {
+          "resource": "repo://services/payableService.ts#L126-L160",
+          "version": "repo-lines-v1:sha256:900d0956361483b0181d642fb098b302c68522cc1297b567dabc334c1f08c9b8:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4ZWIzN2NjNzY1ODk0MTFjODQ4MDdlMGJjYjFhZjdkMGUwYTU1NzA4YzNiYmEzNGYxYzdkZmJhNjMzMTgwOTAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZjZWFjNGQ0YmJiM2E3YjlhMjMwNzdiZjU4OWNhMzA4MTkxMjgyZjk4YTZmYTYxZjRkYThkZTViMGNhYjU1ODciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzOWNiOTIyNGIxZTUyMmZiOTFjZWNjODg5NjQ2ZGRmOGE2ODRlYmIwNDZjZDJlMDUzOTQ0MWJjNzBjMDRhYTQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjUxZmU2YjYyZDNkYjkwNDRmN2MwNDdkOWYyMDU1YzM1NDg4Yzg2MzRhYmVmMmYwMDU3ZmYzZTRhNmEwYWFmNjIifQ"
+        },
+        {
+          "resource": "repo://services/receivableService.ts#L210-L220",
+          "version": "repo-lines-v1:sha256:ca92d5140beeaddf9f8c41b9d0bad7a690304562467e3cdeea521dc396d0f0de:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImViMWU5ODU5YTJjNzI0NWU1MTBkNGNkZGJkZGYwM2JlOGY1YzY0NTVjNDFjOGE3MjUyMTJiNWE4MGE5YzkyMzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE5ZTFiYjI0NjEzMzQwMDU2OWI1MDI2YzdjOTMyZTkxNGNjYWQ5YzFmOTBlMjZhNDE0ZmUxNjQwMmE3ZmQ2ZTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImIyNmYzYjQzZmJjZGJiNjlmMzgwMzA2YzhlMjdkZTA0YjlhZTYwNmI2YjI4ODI2MjFhZTU4NGNlYTI4MzY1NDkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZjZDM0ZTcyYTRhNTJiM2E2ZjNhZjQwN2M2ZDNhZGJmMjA2NWRjMjQ2MzFiOWM5MGNkMmNiNDI0NDU1N2U3N2QifQ"
+        },
+        {
+          "resource": "repo://services/receivableService.ts#L390-L400",
+          "version": "repo-lines-v1:sha256:5df3c4cd9d979ecac73c584db6c27142ad297c96d9c60fd36b2f447d21730a5b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY3ZDVjOWRmYjA4Yjg4MDM2NTFhYzM2MzNhNTZiOTI0ZDI0NzI1ZWUwZDA3NjZiYTg5NDhmOGNjMzllNGVjNWMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjJmZTExYTcxMmI4YzczYzA5N2U4YTFmMGFjYmE5YzQyMjYxNWMzYjllZTc3ZjdhNzBiMTZhZGYxMTk3MTNlMGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMyODc5MzhmZWMxNDk1OGViNGM1NWUxYjE4M2U2ODFkNjY1OWUyZDJjZWE1ZDI3MTFlNDllZmUyNmM3MjZjYzkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d4f1080578a748f5a5d8506ac3d2c328",
+      "statement": "syncContractToFinance recusa contrato de locação original, que é faturado pela negociação, e fatura renovações (com parent_contract_id) pelo contrato.",
+      "evidence": [
+        {
+          "resource": "repo://services/contractService.ts#L2020-L2045",
+          "version": "repo-lines-v1:sha256:5067df9a0fa077bbe4fe6edcbf04dcebb2ab74c06be77591892cba5e22f5d7f9:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjYTg1MThiYmQ1M2NiZGIwNDczNTc5MjkzOTc1MTUxMGNiOTBlZjM3YmM2OGU4M2ZhOTA2OWY5Y2Q0Yjc3ZWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE2MTA1OWRmMmExZjRmMjZlODNkM2MxOGE4NDY5YTMwZTA5OWZjNzQ3YTUxYmVhNTMzZWVmMjViZTQwYTFiNjciLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImE0MWUwOTE2YmM2NDljNWVkNDNmNTY3ZDk1ZmIzN2NlZTk3MDMwZTlkZWEwNWExMDViNGE0OWMwYjA0MWUzMDMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjExNDg2NTRhYWQ2MGEzZGFjYTJkYTY5ZjkwZjBiMzc1MGQ1NTNmM2VkYzFmNDU0MzEyZGVhZDUwYTEyZWEwY2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f8f89eff06444bbab96198599140e8f0",
+      "statement": "Títulos com pagamento Asaas em APPROVED, PENDING, SCHEDULED ou DONE ficam travados, e a baixa manual não passa por cima da alçada pendente e emite o evento do fluxo P2P.",
+      "evidence": [
+        {
+          "resource": "repo://services/payableService.ts#L21-L30",
+          "version": "repo-lines-v1:sha256:ea4d6a4a9b6ee7b95ef873f9d50d124f885e018ce5d33935a71cfb8999f91f10:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViMWY3OGQ1MmM3YzM0NjMxOWY3NmMyODAxMTMxODZhNTNiNzAzNTQxZDJkYTI2NDc1YzE4YzVhZWZjMWE5ZTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQxYjJmMTlhYzI5N2YzNjgxOGViMzE3MTBjYmNhMzBkMmEyZWU3ZDcxZDUxZjVlNzMyMjk2MDk2ODdlNmI3YWMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYxMDgwMjQ0MzNjMWMwYTEyZGQwOTg3YjYyNDA2YzY3ZmFhZmJlMDlmM2MwOGJmZmJjMjM2YWM3Y2I5OGJhZDEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYzMDBlYjExZjQ5NzQ5NmZkMGUwODc0YzNjYjQ2MjY0M2VmNWQ2NzA4MmQzZDEwN2U1NjcyMWRhMjY1OWNhY2IifQ"
+        },
+        {
+          "resource": "repo://services/payableService.ts#L230-L262",
+          "version": "repo-lines-v1:sha256:2e471b17072ef1d91a46577e2214bafbc2617f1238b23f54ad53e8c8d69a782e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwMzI1MDQxNDI1OGQzOTc1NGMyOGMyMzU0NjBkZTczODQyYmQ0MTk4MGMzZWFmMGQ0MmNiNGNiMWVhOGMyYWYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY1ZTliYmYzMzVjNjlmZTg4NzcxMWVhMmViMTFkYmE4YjU4MDUwZmE3NWI3OTlmNzIzOTg5NTQwNTk2NjJmMDUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBhYTAwZGUzNjViNDE5ZWE2MzFiZWNjNDEwOTFlMDY5ZGY5ZWZhYzgwZTI3NWRmZDJiODAyOWEwZWFiM2IxNGYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRmN2U2YzJiMTc4NTVhN2U3NWI0NzRkNWY2NWJhOTUwNDNhZTU0NGU1MDg2NmYyNDQwMWQyM2JkZjQ4NmQ0NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5d9f7e7a8c9342d589a55265701c0227",
+      "statement": "O fechamento mensal usa fn_financial_close_checklist para pendências, financial_period_locks para os períodos e fn_period_is_closed para testar uma data.",
+      "evidence": [
+        {
+          "resource": "repo://services/financialCloseService.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:9668d3b46918b97d515ce94ae41848c4ee76c5da03da1533b79c17e984bdd76f:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY4ZmY1OWQxMjBjNzM4MGNiZDNiZjU5ZTAwMzEzYmNkY2Y3MmIyYzk1ZDY1MmY4ZDdhMTQwMjEyYjIwNjExNzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkwY2U4NmU2OGRmY2ExM2UyNzg2N2M3MTJiODJjMzI0NWU4NGI1MDBmNTZiNjBmMTJlYzI0MGUzYWM2MzI4MTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4b897a92d1e940a088e3506e7955c3ee",
+      "statement": "As faixas de alçada de aprovação ficam em financial_approval_config por organização.",
+      "evidence": [
+        {
+          "resource": "repo://services/financialApprovalService.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:104a90c3cb318efc6db4c8ed81997d5120fd1e2865cefb8622362f406f4b00cb:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiZDcyYzdmODg3MmQ3NzY5OTYyYjFlOWQ3OTYwYjg3YTNlNTMwOTgwNWYxMTU3M2YwMGNmYzcyZjA3OTkzMTMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0ZDIyZTM3MzEyZTUwOGRlYjY5Y2FmODlkNzJhYTE3Njc4ZjA5NjBjMmMzZjIwYmVmZWFkYmU3Mzg5ZjdlZTYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:c289ab0ce6e8e59f531383896994940a7a243263ad34f1ad6e2fe59fb1e62ef1",
+  "claims": [
+    {
+      "id": "claim_66b02e9716304660b11c998025c0e041",
+      "statement": "ProfileGroup define o grupo de login (USUARIO, CLIENTE, INVESTIDOR, DESENVOLVEDOR, FORNECEDOR, CORRETOR, PARCEIRO, CREDOR, TREINANDO, SINDICO), distinto do UserProfile derivado e do OrganizationRole owner/admin/member/viewer do membro.",
+      "evidence": [
+        {
+          "resource": "repo://types/users.ts#L233-L288",
+          "version": "repo-lines-v1:sha256:d9ed43f19402e8fe3ff8094e32b65f0c98ca7ff114eb443df29ee5798352cad5:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImExZTU1OGE3NDQ4OGQ2MGZkYjkzNjM1Y2NhMGRhM2VlM2NmMTRlYzk1NmQ2ODI4NDczM2IxOTE2NzRhODIyNmQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijc5YWM0NDJjYTk4M2QxYjgxNTNmMTdhNzYwNjk4NzU4YTk2Y2Y3ODhmMjBiODdkMjE3YWUyOWNmNzU4Y2NkMmYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYxYTI4MGNkODVmYWIzZWU2M2YwYzI1ZmRjZDg4ZjMxZGFhYjE0N2M3ODY3ZTJkMGRmZmY1OTg3MzY0MDFlMzAifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_079e66bf57624a4196fc51c1c0b75ea7",
+      "statement": "validateAccess valida USUARIO/DESENVOLVEDOR pela existência de qualquer linha em organization_members com o e-mail, usando limit(1) para não falhar com membros de várias organizações.",
+      "evidence": [
+        {
+          "resource": "repo://services/profileService.ts#L64-L91",
+          "version": "repo-lines-v1:sha256:0a055912d9d2764d2d5fe39afc2f92f8731d09b76d03b67c8988b4e81eb05890:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk2OTA5YWMxOTZjNDhjYWQ4NDAzNzM2NzAyMzY5N2U4OTVkZDdjMTBmMjE2YTgwYmJmZDgxNWRlYzhhNWNlN2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM5YTg1NzJiODg4YjA4Zjc5Nzk4YTE5YWNhZDFlZmRhZmVkMDI3MDQyNWEzZTFjMjJkODg4ZDEwNmQ2NTY4M2IiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjZlYjhiMWI3MDk2ZWFmYmI5YzExOWRkMWRlYTg0Y2U2NGU4MjYwMDU0NGYxZTJlODQzNzM3OGI3MDA4MWI0MmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjkyMDBkOTVlNmQxYWQ3ZmNhZDViOGVjNmMzODI5YjA4YTFhNDRiNmIyZTk0Yzg0ZGQzYmRkZTExM2I0MjVjYmEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_71f9957b087449689b100c60f05af903",
+      "statement": "Cliente, Fornecedor e Corretor são validados pela RPC portal_token_para_mim e o Síndico pela RPC sindico_portal_token_para_mim; a RPC devolve o token do portal da própria pessoa, usado para abrir a casca do acesso por link.",
+      "evidence": [
+        {
+          "resource": "repo://services/profileService.ts#L1-L29",
+          "version": "repo-lines-v1:sha256:865f2fbe576fd6f2e6e31b8d9c8463c07bed28f98bb1c6fe9909b1ee8945fe92:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjMyMTdhMWVlYThiYWI4ZjFlNGIxMGU5OWIwYzZjZWZkNDY1ZmQ0MmZmNjUwNTNlNWQ2YTM5ODYxY2QyOWZiMzIifQ"
+        },
+        {
+          "resource": "repo://services/profileService.ts#L93-L115",
+          "version": "repo-lines-v1:sha256:9d345f89278a0d2fceb8cd8c1c9eaaf1c6976880b0269d7c639637e5055c04fd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ3Y2I0ZDQ1ZDBkYWU3ZDc0MjJkMjhmNjZmYTNhZjBkY2I1MTRjNTczM2ExNWY4NTY1M2Y2NzVlM2QyMjk3OTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRlOGZmYzdhOTM0ZTk5NjgyZGIzZWRhNmE0ZGNiNmViY2M2Yjg3Y2NjN2I4YTZhMDIxODgyNTUzZGFiZDk4ODkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjMxN2Y4Y2Y5MTBkM2NlNTc5NGFmMjA4ZmUzZjM2NmYwMGNiYzdlZjcxMDIxODRjYmQ3YThmNTg1NjlmZDk5ZjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA1MDFhZDRlMjFlNGZhOWYyNTRiZDg4YjY5ZTA1NjhiZWY3NGIyZWFkODlkY2YwYjYzOWZmNWJiMjFkMTI1MjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_605381937d934b6385aefdfcfa9552b9",
+      "statement": "Credor é validado pela RPC fn_my_credit_rooms, Treinando por academy_portal_user_my_access, Parceiro por linha ativa em partner_users e Investidor por linha em investors.",
+      "evidence": [
+        {
+          "resource": "repo://services/profileService.ts#L95-L165",
+          "version": "repo-lines-v1:sha256:555fec8306427e30881cffa1608de7d03621f7ea80e09ecc3184992ef6d3af00:eyJzZWxlY3RlZExpbmVDb3VudCI6NzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFmYzRiZGQyOWNkYzc4NzU0NjdiNGE3ZGQ4YTEwNWUzOTI5MWE3ZjczOWVlN2Q1ZmQ5MWE3NzM3OGQ3YmM0ZjAiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjkyMDBkOTVlNmQxYWQ3ZmNhZDViOGVjNmMzODI5YjA4YTFhNDRiNmIyZTk0Yzg0ZGQzYmRkZTExM2I0MjVjYmEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5YmMwZGNhZWYwZjUwZmJhYzU2Mjc5ZDViMGUyMjNkZGVhOGZkNWIwNjA2OThlNmU5N2MyYzViNzM5OTdhZDUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_46956419f175485fad8e5aa50969017d",
+      "statement": "Após validar, useAuthSync deriva currentProfile.role a partir do grupo de login escolhido e marca profileSynchronized; em falha de validação da aba que fez o login, agenda signOut em 3 s.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useAuthSync.ts#L108-L165",
+          "version": "repo-lines-v1:sha256:3e6912594bd395f53b37b07df4490eb3cf7e206545f5073f3aa2dc023ac0a54a:eyJzZWxlY3RlZExpbmVDb3VudCI6NTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNDJkNTM5MWFjYTM5MzAyYzk2YTAxNWE0YzcwOGJmMzA3MTczMzk1OTJiNzdmNzhlNTFlZmU2MjFmNzMyNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU3Yjc4Y2E4M2VkMzE2ZjY4MGE0ZGY1OGQ2MmM4YjUzODQ5MDBhZWU3MTkzODNjYzMyYzMwM2UxMjIyNzBlODYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiNjEyMzg2YTliNzczODMxYWUzOGEzYTFiZGExMWJhYTRlNDBjZWMxYjUxZjEwM2I4MmU5ODZjOTgwMDBlNWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQxMDZjZTAwY2JmYzlkMWZjMDM5NDQ2N2YyNjkyYmM3Yjk5ZDcwZGVhNmMyZmJhMjRkOTY2NzVmZDNjYmI2N2IifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_31fa3e2a5686424fb5ac410a7e93b522",
+      "statement": "loginNestaAba guarda em sessionStorage o e-mail de quem fez login naquela aba, e só essa aba pode desconectar a conta quando o portal não combina.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useAuthSync.ts#L108-L125",
+          "version": "repo-lines-v1:sha256:e37ac4843dfc07c5d7b6e9e7928a684b851b6f781fe26fdf60801e6f4d688f05:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjljNDJkNTM5MWFjYTM5MzAyYzk2YTAxNWE0YzcwOGJmMzA3MTczMzk1OTJiNzdmNzhlNTFlZmU2MjFmNzMyNTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4OThjNTQ4ZWZlMGI2OWQ4YzQ5YmE5NWNhM2MxNzQ3OWY4M2MzMzNkMjJhOWQzZTdkNjU1MzBjZTY4ZWMzOTIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJiNjEyMzg2YTliNzczODMxYWUzOGEzYTFiZGExMWJhYTRlNDBjZWMxYjUxZjEwM2I4MmU5ODZjOTgwMDBlNWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZmMGE3ZWQ2MzM2ZmY1MDU3ZGU2NzMwODIyZTVhOTM0OWM3Zjk0MDgxYjdkYmZkMzcxMzM3NmQ0YjA0ZDcwMTUifQ"
+        },
+        {
+          "resource": "repo://lib/loginNestaAba.ts#L1-L42",
+          "version": "repo-lines-v1:sha256:e40fb8f65e9437d3478000ede4f7491ab515505af8276efb226b049f22bf7d10:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_27c00b9000f740a785605f22e0b4610f",
+      "statement": "UserPermissions é um mapa de booleanos canView*/canEdit* por área gravado no membro, incluindo canApproveDiary conferido também no banco.",
+      "evidence": [
+        {
+          "resource": "repo://types/users.ts#L290-L320",
+          "version": "repo-lines-v1:sha256:a2c284f22792fc1d03635768b5aebec00f5a46156d628576951b5159bf54f8fe:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAyMjgwNjRjZWM0YWM4ZmI4NWQ0ZjNjMDllNzYxODczM2UyMTFhYTFjZjcyNzdlMGY5YWIyNTQ1NmQ0YjIzNDMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM2NGQwNjdmOTJlZmFkMTEyNDY5OGRiNTM5MGZkODBlN2NhNWY4Zjk4OGMzYWQ1N2VmMjM5NmE2NmQxMDI4ZTkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNiYzk0NDZhOGRmYmY4ZDM3MGIwMGIxZjRlM2JlMzZmNzhmZjkxYTVmOTY0Njg0NThjNTYzMzNjMTNkNjVmZjYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjAwMGU2MjQyZDJlMmJmYzliYzMyM2UwMjNlM2FiNzhlZGE1MWIzOTMwMmRjMDU4ZTY4MjY0MzMxMDU4MmY5NDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fef20e696ca94096b57bf9d3872c0d3b",
+      "statement": "temAcessoTotal libera toda a interface para uma lista fixa de e-mails; os dados dessas contas são liberados pelo banco via public.superadmins e associação como owner em toda organização.",
+      "evidence": [
+        {
+          "resource": "repo://lib/acessoTotal.ts#L1-L18",
+          "version": "repo-lines-v1:sha256:b1007e4138e685db41cd062803d615842bad583437b388ef480f4d3749b4cbf0:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

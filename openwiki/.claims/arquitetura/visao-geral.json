@@ -1,0 +1,90 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:927ffb8042cc98e40a8ef0732b4b98f0c82994e6a7e3f57705bb108811994225",
+  "claims": [
+    {
+      "id": "claim_0e1f5fe039c74b1da794742b9f05a302",
+      "statement": "O vite.config.ts serve o dev server na porta 3100 e define __BUILD_COMMIT__ a partir de BUILD_COMMIT, VERCEL_GIT_COMMIT_SHA ou git rev-parse HEAD, para provar qual commit está no bundle publicado.",
+      "evidence": [
+        {
+          "resource": "repo://vite.config.ts#L39-L78",
+          "version": "repo-lines-v1:sha256:bfe83916f41325cf8949a6ce34681b7ad30e9095303ecd7154a3d8452dd29932:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRkZDE4N2QwYjRkODE5ZmIzNzUyNmFiMWZjZmZiZDljZmQxOGRkYzE2YmIwNTI5MzI5ZGYyY2JkYmUyMDJhNTciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFmZDE0NjE4MTZjM2M0MjcwNjNlM2Y4YWRjZjM0ODdiOWMzMzc4ZjdmNTU0MTc1YmIzNDMzYzliMmQyYTVhMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJiYjBlNWRiZDQzYzFiNjZjODc2NTMyOTM1ODU4MzE2YTY5ZmE0MzA1Y2JlMjc4NmU0NDQ1MTFkNWViZTJlOTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_605fb9adfc3143e88b78a4702114a9a9",
+      "statement": "O build copia o web-ifc.wasm do node_modules para o caminho fixo /wasm/web-ifc.wasm (servido também no dev), para a versão do WASM sempre bater com a do pacote instalado.",
+      "evidence": [
+        {
+          "resource": "repo://vite.config.ts#L9-L37",
+          "version": "repo-lines-v1:sha256:34e22c27d9781930f00dc30ff0804f6631f409889ada12906a0023f843d6c48d:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6Ijg5ZjJlYzBhNTRjMWQ3OWU0ZTIyZGExYjFiYmMwYTAyZDUzYTkyNjFmM2FlNjUyYWJkY2U3NTZjMzc2N2U3ZTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImEwY2UwNDYxNDA1Y2QyMDE0ZmY4MmQwYTRmMmZkODZhMDkyYzRkNGI5Mzc0NmZkYzg0MmQwOGQ4OTBhNDlkMDgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_543a7a9a263d49378ea84470ad562466",
+      "statement": "O service worker da PWA não pré-armazena bundles JS, busca navegação com NetworkFirst e trata o REST do Supabase como NetworkOnly porque respostas filtradas por sessão/RLS não podem ser cacheadas por URL.",
+      "evidence": [
+        {
+          "resource": "repo://vite.config.ts#L125-L180",
+          "version": "repo-lines-v1:sha256:b20b77a54b18eff89f02393268af013799f96cc8d242ac4cdb3d9d47a69b72b9:eyJzZWxlY3RlZExpbmVDb3VudCI6NTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFiYWI2ZDhkNmUyNzI4NTMxMDhkMWEzMTA3YzlmMmM1NWU3ODk3YWFkNjlkNGY4NzQ2ODAyODdlODQxOWJmNzYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZlNDg5MmU2NmE4ZWViMjYwOGY0ZjEzOGQzNjdhMTQxOThiZTMyMGI3NWVlYTZkYmZlZTJlMzAzNGJjOWVkYjkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNlZWMwZmFkODliMDRjYzljYzJhOWI0ZDExOTgwNTIyYWIxOTFiMDQ1NTMyZDMxNDIzOWYxMzliNDMwMDJjNjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRiZGM4NWQ3ODBhNTc5MmUwYmM0NzliYmU5ZTA3MjFiYjM4NjAyMDYyZmM0OTFlMjFmMWNjYjNlNDU3MTg2YjcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dc49614380854cd798bea13106de65cc",
+      "statement": "O Vitest roda em ambiente node por padrão com setup em __tests__/components/setup.ts; testes que precisam de DOM declaram o ambiente jsdom no próprio arquivo, pois environmentMatchGlobs foi removido no Vitest 4.",
+      "evidence": [
+        {
+          "resource": "repo://vite.config.ts#L192-L203",
+          "version": "repo-lines-v1:sha256:f8b9d53a7c0998636f0bc738ccd5e51bc6bb1805f3344d6fde6a3d637fb9bb9e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlZTJhODM4ZGVlNWRmNjI5YTA5ODk4MmY4MmMxYTQzYmI2NTA0MTExMTllY2E3ODJhMTg3MzgwZjc0ZjVmYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc3ZjhkODZiN2E3YzUzMWI2ODEzNTQyZGFmZjNiMjkxMjM4MWQ4MjE2YmRmNWRjY2U5ZTg3M2QxNDI4ZDFiYjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c17699635bf847219f23afe767845573",
+      "statement": "O script typecheck roda o tsc com heap de 8 GB e o build de produção é typecheck seguido de vite build; o projeto exige Node 24.x.",
+      "evidence": [
+        {
+          "resource": "repo://package.json#L1-L20",
+          "version": "repo-lines-v1:sha256:001a72302ad0dc17c8418e3cecd6a0654f6346da0af3ff4aee5b0dd7987a89bf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzZWFlN2U2YTRkM2M3MWJjYzk2MzI4YzUxOWZiYTI5NDFlZTQ4Njk2OGE2ZDYzMjJmYjA4Y2ViNDRlM2VmZDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwYzk0OTg1NTI2YzFjNTdlZjAwYzAwZDNmNGRjOTA2MTU2NzdhMGEzNmE4Yjc5NWRmZjlhZmZkNTBmZTlmNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4ZGIwNTdlZGE5YWQyZTk2MjUwMzkxYTc5N2JiYjdkZWYxY2Y1NDMyYWZiMWVkZGQ4YmEzOWM4MTVhNjU0N2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_86d8c6327b4a4c61b298914a392214a9",
+      "statement": "index.tsx envolve o App em QueryClientProvider, ConfirmProvider e ToastProvider.",
+      "evidence": [
+        {
+          "resource": "repo://index.tsx#L1-L40",
+          "version": "repo-lines-v1:sha256:36f3d745fa7150ebf6e4d740bb11d79f1afbe4d5bd4e57fc0b25a17a3ba62bff:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjViNGZiMDI5MDNiYzA1N2Q5NDg4OGU4NTBiYWYwZWExNTY1NzIyOWVlZTVkY2UyZDZmMjg4NjkwNThlMjc5MDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc3MTI4MGIyNzRiNTZhOWE4MzZiMDZlZjc1NDY1ZTcwZjE4YmMxOWRjMWM2MDE0NjE5Y2NhODYwN2M3Yjg3ZGUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c05e3f59dfbb4c5abc819c43216e3292",
+      "statement": "O TypeScript roda em modo strict com alias @/ para a raiz do repositório e mapeia @react-three/fiber e @react-three/drei para stubs de tipo locais.",
+      "evidence": [
+        {
+          "resource": "repo://tsconfig.json#L1-L40",
+          "version": "repo-lines-v1:sha256:8d8f99cdb7ee3867a7253b45031a9671266e5231ac42dc9867cae55925f1daf4:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzZWFlN2U2YTRkM2M3MWJjYzk2MzI4YzUxOWZiYTI5NDFlZTQ4Njk2OGE2ZDYzMjJmYjA4Y2ViNDRlM2VmZDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVmNTcwZjYzOTg3ZGVkMGMyNDgzYzMwYWFhOWVkMzc3M2JlNjQwNmJkNTFlYTBmZTIzZTkyZTU5ZmEwZTVkMGQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY3ZTgxYjk1NDNiY2NmNjE0YzRlOWYyYmJjNTcyMWFiZDljMWE4NjJiZmJlYTlmNTQ5Y2Y3OTk5ZGZiNmM0OWIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ace37759db9343c8bf41630d41945240",
+      "statement": "O AppRouter carrega cada módulo de produto (financeiro, suprimentos, RH, comercial, Planta, portais) como componente lazy, o que define um chunk por módulo.",
+      "evidence": [
+        {
+          "resource": "repo://components/AppRouter.tsx#L17-L124",
+          "version": "repo-lines-v1:sha256:3d99ad53468309a7319abe8e7a8dfe51d82542cac3d656bbd3a815c08607551d:eyJzZWxlY3RlZExpbmVDb3VudCI6MTA4LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIxOWFkNWFmMGNjYzkyMWMwYjBkYTQ3MjI4NzU1Y2M2NmFkODVmNzU5MmRiMDdkNWMzZGMxNjY0MWMxNzRjNmQ5IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJkZTBjNGRhODZhMTBjOGUxMmE0NWEyZDdiYTQ2OTE0ODA4NDVhMzQ5M2VkODZlMzMwNWMxYzI1OTQyOGRmYmFhIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlNWRlN2QwMTI3ODgxMjIxZjQ3Mjg4NjdiNTgyNzgzNmJkNjE5YzJjNjA2ZDUxMzBmYTViNmU0OTg5MzAyOGFhIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4NjM1NWNiYzdmYjBjNTJiYzczNGRhMzVjZjNhZDE4OTk0MmQ5ODU2YzdkMjY4M2U4NzZhZGNhMzBlYTYxNjU3In0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

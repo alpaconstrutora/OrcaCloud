@@ -1,0 +1,100 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:b4927e673f0c295793cc4fbbd60983189c81b7e2d04d5392f54323d03b50b477",
+  "claims": [
+    {
+      "id": "claim_bfb2fd120305402884e8f3eda8c687e7",
+      "statement": "uploadNFe calcula o SHA-256 do arquivo, envia ao bucket fiscal-documents sem upsert, extrai a chave de acesso, cria raw_documents com access_key e source_hash e cria o processing_job que dispara o processamento.",
+      "evidence": [
+        {
+          "resource": "repo://services/nfeService.ts#L42-L140",
+          "version": "repo-lines-v1:sha256:c6cbb1e3a4ae2f3983b1f8728013f2e10e77a0438682b5445b25f5d4bb78563c:eyJzZWxlY3RlZExpbmVDb3VudCI6OTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYxODk1NGI3MzI0NDBiZmZmMzZjOTMyYjJjOWQ2MjQ1MjQ4YzllMWE0YzgxYzZhOWRhNWY4ZjM1Yjk5MTU3NjQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBkMWRhMzA3YzU0ZGE3MDUxNGU2NDJhNzBhZWVkMTM3MDc1YmQ4MzhjNWE1OWRlMzFiNzc0MGRmNmQ1YjQyMTciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJjNzA0NTAwMjUxNzAzYzhiYzFkOTg0OGJiNjc2NDMwMzEyNTUyOTRjYjQ2Zjg2ZTliODdmN2ZhYzJhMWNlZWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f8745212c0ca4649821e56a078b0a488",
+      "statement": "O processador trava o job com a RPC acquire_job, marca job e documento como duplicated quando a chave de acesso já existe em nfe_invoices e persiste nota e itens atomicamente pela RPC persist_nfe_transaction.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/fiscal-nfe-processor/index.ts#L276-L410",
+          "version": "repo-lines-v1:sha256:5c3751a2cde1f9642f28b7233355edc2cbec409a1491e129de5b94cf8826cf4f:eyJzZWxlY3RlZExpbmVDb3VudCI6MTM1LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiJhZDRiN2NhNGM5MjAxOTY1ZDE5YTI2YjM3NDc5MjcyZjUzNTEyZjc0MjNiM2FhYWMzOGE5MWJiNTg1ZjZlNDhhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIzOWRlNmIxZmU0ZTczYmVhNGExYWZmN2JiYTgzNTc2Yzc3OThkZmRkMDQ3YTFhNDhhZTg3ODQxMjEwMjYyM2M5IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NDhhYmY4Yjc4MDRlMDc5ZWQyYmNkNjZkYmZhZjAyNmVlZmI4ODQzYzhjMzhkOWQ0NzU4OGYwNjc2OTFhODNmIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiJhNTJlZjVkYWM2Zjg4NjA5Zjc0ZDNiODlmNDUzMjQyNzlhNmI2NjI1MjE3OGFhZjgyOTU3YmY0YjAwM2IzNGVlIn0"
+        }
+      ]
+    },
+    {
+      "id": "claim_122ca86a2ac34908b0110bc1d422e126",
+      "statement": "Em erro, o job vai para dead_letter se o erro é de dado (prefixo DATA_) ou se atingiu max_retries; senão fica failed com next_retry_at de 2^tentativas minutos.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/fiscal-nfe-processor/index.ts#L410-L455",
+          "version": "repo-lines-v1:sha256:56cb0dde4639a941469148b0642cd3bf03541081f7652502cdf9dfa128e5a9dc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM5ZGU2YjFmZTRlNzNiZWE0YTFhZmY3YmJhODM1NzZjNzc5OGRmZGQwNDdhMWE0OGFlODc4NDEyMTAyNjIzYzkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjNhMjkzYmJlZDNhMDdkY2ExNWMwNDNhOTIyM2U4ODliMDFkZmNjNmE1ODc4M2MwODljMWNkYzkxNTFmYjRjOTEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA4YjQ5MzFmNzU4ZGI2MmMyZjdjNDIxNTdjMzExMDU4NTUyMDc2NGQ0YWIyYTRlNDI5YmYyYjdhNDM3OGFiNTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7140007890ed4a8788431387b5e9a6f0",
+      "statement": "Sem record no corpo, o processador busca retry_candidates e jobs órfãos e processa em lotes de 10 em paralelo, como fallback do webhook.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/fiscal-nfe-processor/index.ts#L485-L515",
+          "version": "repo-lines-v1:sha256:b0ba2f446354a1efd4e106c06b1d639688828d28f127cf08d345a87e2942096e:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ4MzJkNWQ0NjY5YmNlMTZmM2MyMTdjNWNkNzhmYTQyOGUzODJlODk1MGRiNGFlOTBhZjc1ZDk0MGFlODA0NDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk4MzVkYTM5ZGIzMThmZDc1MjZmMjQ4ZDUzMTU3M2JhZjNhYjI0YTRhMWIyODdlMmEzZWRlZjdlNzRmZWY3M2MiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjVmYzkzMzM1MzczODY5MjJmNTQ5NWYzZGFmZWFiOTYyMTI4ZjRkZGY2ZTJlZTI4Yzc5MDJhODU5OWIzYzcwYjAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjVjZTFiNzBmMmI1MDIyOGQ3MmQ1N2UxN2I5NDU2MjIxOTIyMTU3MTA2N2Q0YzVhOWQwOTk0NWM1ZjIyNzY2ZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d830495a38794aaa8535d5e84f0eabfe",
+      "statement": "fiscal-nfe-processor só aceita chamadas autenticadas por CRON_SECRET, porque antes dependia só de verify_jwt e aceitava job forjado com a chave anon.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/fiscal-nfe-processor/index.ts#L460-L480",
+          "version": "repo-lines-v1:sha256:fed2d61ab8f85926585c0674ccf55695a26403d3206d24e371040a1b25d9cb37:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzODViNThjYjA2NGIyNGI5NGYzNzhhNjVkZTliNGIxMGNkOGRmMTg1ZDRkYjFjNTdmY2ExYzhkMDA3YmRmMTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFiYzBjZjZkZjk1MTI0YzE0NTQwOGQyNzQ3MjYxZDJkMGE3YTRhZmI2ZThkNjA3ZTcyNGI3ZTk1MTQ0OWJmNzgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImRkZDg3MWZlZjQyM2NlMDA5NmQ4YjUyMmJkZDI3MjQ1NzA0YWYyZGRjYmM0ZGM3YTI1YjIzZmQzMmI4ZGI5MTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY1MWUwODhmOTZlYjhhNjczNDA0ODZiMmIzZjJlNGEyZjBkYjI3NGEyNDk3ZWVhMTQ4ZDJhZWEwZWVmMmQyYjkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_857ab259e5844242aa21e3b6367e9ce2",
+      "statement": "A classificação de itens consulta classification_rules por NCM (4 primeiros dígitos), depois CFOP, depois palavra-chave, e roda após a persistência.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/fiscal-nfe-processor/index.ts#L219-L275",
+          "version": "repo-lines-v1:sha256:5041d6b90eb775e587029cbcff6a9e62b3d5908ad42a37bda3845d83daed608f:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImYwYTg5Zjk0YTI2M2NjYTA3Y2ExMjRlNjU0Y2JjMWJhYWFhNTU5OWViNDY2MzU0ZTdkNzM2NDg4NmNiNmY1YTEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlOWRlMDNjY2FiZWYyNGQ3N2FjNjdhYTNjMjE1MGVmNTI4MTdiNGQ4OWY2MjFiMjJmYTNjNWMxM2U2YjIwZjciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgyNWMzNjA4YmVjNzgxMWMwY2YwMTY4MjA0NTFmM2UxNTY1ZmFjNjI5MDZhZmUwMzg4NjZhZWYxMTU0YTMyZjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c59efbc508124434839fff615cfda45a",
+      "statement": "approveAndLink vincula a nota ao título existente quando o pedido já tem título e, senão, grava um par de partidas em internal_transactions com source_system NFE, due_date e purchase_order_id.",
+      "evidence": [
+        {
+          "resource": "repo://services/nfeService.ts#L350-L449",
+          "version": "repo-lines-v1:sha256:a6db5d144fbc6398cdc5f62252272c23f78ef2c3ae7c7c90a2033d666a3dd10b:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIzODBjNGVmODNkYmVjMTk1ZGUzMTI5ZmU5ZTlmZGI2N2VmNzcwNGU3MmQ0ZmMyMDRlOWEwMmMxZTBlNjM2OWMxIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJkOTRmYWFhZDc0MjQ1OTRiZDY2YmY1NDgyNjFmMTY2MGZiZmI1ODdlMTQ5YzJmODg3MGRkMTkwOGVmMzZlYjU3IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI1MWNjZTYyZDkxYzNjMTRiMzkxNDI0Yzg1NzMzNDYyOGQzYzk4ZTBmOTViYjBhZDczZWI1NDNlYTBlNDI5M2Q1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiIyMzQ4MmZmMTA5ZTMzNGUzZThkYjZiMTFmMGM4OGRkZGFhODQxZDIwMmQ1YWUxMTZiMTU3MzBhMjA2YWYwMDU3In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_325ad12385e54355bb1e94934f338533",
+      "statement": "Jobs em dead letter podem ser reenfileirados ou descartados individualmente ou em lote.",
+      "evidence": [
+        {
+          "resource": "repo://services/nfeService.ts#L212-L265",
+          "version": "repo-lines-v1:sha256:3f8adaadc2d1f4956b286c0c4fc5cfc381682e1cb6dc1590135b65c850d99668:eyJzZWxlY3RlZExpbmVDb3VudCI6NTQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijg4MzNlMzJlYmUxNGUwNjM1Y2JhZWQ2Y2ZlNjA3YTdiZmI5ZWUzZDU4ZmFkNTM4MjM0ODY5MzVhZjkwZTk3YzciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImQxNGExMmEyYzVmMzMyZjM3ZWMwNmRkM2RiNDAyMzRmYWIwYWI1ZWEyMWE5MGM3MTY0Yjk3MDhjYjQ0ZjVlOTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYzNTVjYTQ2MTA2ZDZiYTBkMzIxNGE2MTZlZGZmMzVlZGZhZGRkODMyMGIwNDY1M2E2NTZhNWEzZGJiMzNjNzIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_fea3c04a8d3547838d3f7c0d5e071d96",
+      "statement": "PIS/COFINS dependem do regime tributário da empresa e das tabelas tax_pis_rates/tax_cofins_rates, e Simples/MEI não geram PIS/COFINS destacados.",
+      "evidence": [
+        {
+          "resource": "repo://services/taxPayableService.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:64ab969d373bd0d1cecfad8845b78093fbf6b49daf5bdc60998d1cc380c3ea9f:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImFlOWM3ODNiNjNiNmQwNzBjYmYxNTE4NmQ5Zjk0MzkzOWQyODgyYzg1OWJjMDM5ZDc5MGMwNjAzMDlhN2VjZmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImVkMmRmYWE1ZmY5YTA3ZWFjZDc4MzcxMTNmYjY3NzJiYjA1ZDNjZmU4MzY2MDcxOTJjZmY2NmZmMWU3YWZjNmEifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

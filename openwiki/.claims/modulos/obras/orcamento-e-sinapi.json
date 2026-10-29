@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:033209fead5c69c3d8ce2c6588367ecf62a2e3590acf18d006aca47ce1122edc",
+  "claims": [
+    {
+      "id": "claim_a5dbab898b19436c919ccf004c70fc0b",
+      "statement": "budgetResolver resolve o orçamento efetivo de um projeto pelas fontes own, snapshot, pinned-version, active-version, linked-live e child-project, seguindo linkedProjectId do filho para o pai (PLANEJAMENTO → ORCAMENTO → OBRA); só o projeto ORCAMENTO tem itens em projects.budget.",
+      "evidence": [
+        {
+          "resource": "repo://services/budgetResolver.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:a687ce8b4ceb8ddf2a43a9d6696ac3ffdd9a2db7d111cdffb470a03b7d2cdff3:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ0ZmU4Mzc1OGVmZDRkNTY5NmUxOTE0ZjA4ZDc4MWQ0MmIxMjliYmY2MDU0NWUyN2RjM2Q2M2MyZmRmN2M4NTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZiOTdlZjViZDMyMWM5YzM1ZTAzNWRhMzllZmJkNjc3ODVjYTI2Mjg0MGE3ZjNjNThkZTlhMzVlMjk2MmUzYTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dc8121ae4352420cba87eb45b341c64f",
+      "statement": "BudgetEntry referencia um sinapiItem com quantidade, BDI, etapa (group/phase/subPhase), disciplina, local, centro de custo, status, memória de cálculo e classe de precisão A–E.",
+      "evidence": [
+        {
+          "resource": "repo://types/budget.ts#L53-L85",
+          "version": "repo-lines-v1:sha256:721b3fb46f48ff81449bbc7b3167771fb8a1519d99d570407889d80a613f9df7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZkNmFmYmVjYzFmM2E0MTYyYzBhNThjZDNiNWMzNTljNWVhZmEwYjU5YjhjNDJkNWE3MGRiMzNhMDg1MDQwODQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA5MTQzZmYzN2Q1MWM3MTAzZTA0NjA0ZDc4MTM4YjliNTE1YTkwNWM5ZDhmMGRjMDY1MzgyODI4NTA0ZjIwMTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImJjZTkwMTc3MzgzNTQ1MzQ2ZThjMzJmNjNhYzBjYTFmNzM0NTQwZDI4ZGQzMjgxMTQxNTAyNmQ5NDVhNTJkZDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjJlZGYyNjRlMTZhMDdkMzA4NjVhMTNlZTQ4OTM5ZTM5YTI4NzJhNTI5YTE1YTVlZDQ1Y2RiNmVkYmQxMDcwZTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ecae4df5dea74d478239bad4f741f0df",
+      "statement": "wbsFromBudget reconstrói settings.wbs a partir de group/phase/subPhase dos itens, preservando nomes exatamente e usando 'Geral' para níveis em branco, porque a árvore casa item e EAP por igualdade exata de string.",
+      "evidence": [
+        {
+          "resource": "repo://utils/wbsFromBudget.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:a5a8d246dabd86bf827ca2d4d68f14820a702a1eef9ba568533c0aa355deff30:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1NWFmN2YwNmI0YmJhOTQzYzI0ZWVmNzEyYzRkYWYxMzQ4ZmM4NWI0NjE2NTcyZWVkMjMyMGQ3YmEyOTVjNTQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZmMTY2NGY2MTY4YjAzNWEyZDZjZmFmZTZlZTIwNzNjNjY5Yzg5MTA3NjAxZThkNWMxMmEwZmYzZWUyNjYzMTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImRjNWE0Y2U1NGE4NTU4N2Q0ZGE2ZWI1MGVmMzFhNTA0ZjdkY2E3MThmMjFkYzUxZTBkYTFiNTBjMjViNjJlYjgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_38160dbf4e9645a89c2b73dd13bec352",
+      "statement": "A base SINAPI é versionada por competência (reference_date YYYY-MM-DD com rótulo MM/AAAA) e, sem referência informada, usa a competência publicada mais recente.",
+      "evidence": [
+        {
+          "resource": "repo://services/sinapiService.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:56e1985877cfb29e770914f4be65ff854628bf18b820db050736403ad58bd2dd:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA1YmQwODg3ZDFkNDBiOGEwOTIwY2FjNTExMDkwZDE3Y2U4M2M0MmU4OTNjZmNlMWIzYWZjNWVlODA5ODI0MzQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjcxMzQ1MTgwMTA1YjBjNjZhNzdkYWQ1MWJiMzc5MDFhMzczMmM5NjU0YmE0ZGUzOTgxZjgxZTE4MTc1MjQ4YmYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk0OWUwN2M4NzI3MmEwOTQ0MzY0ZTYwNThiMzgyNzc2MmM1YTViOTdkNjcwYTI5YTZlMTYxOWVkZDA5YzIyNDMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_a9bac3ec96b54dc9a65a59c7843b1e8e",
+      "statement": "A Edge Function sinapi-import recebe lotes de até 200 itens pré-processados no navegador e registra a competência em sinapi_references no último lote.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/functions/sinapi-import/index.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:d45c506dac41ec2312ce06f9c2a162dcb6c30e30136c7509bce08baeea700a77:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3MjQwOWRkMTJhNmZmYWNkYzA5YmYwZjNiZDI4ZDJmZTUzMDNiYzQ1MmFiMDQ5NDE5NzgxNmUyYzljODFjNWIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM0NWYwMzBlMTA4MzZkZjM0NDI5N2Y1NGUyMWJhZmM2NTJkZWYyNzhmODc5OGNlOThiOTMyNmE2Y2VmZGU3YjQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImMyNjEzMmQ4ODJhNGFlYWJkNjZkOGM3Njc2OTM0Nzc1N2JiYzIwOGVkNzAwNGRhNjk4YmZmNjdmYTI3NDZlYjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_4fabec5a4adb4cec80613f721f157e19",
+      "statement": "cubService devolve o CUB de um padrão numa UF a partir do mês mais recente de cub_parametric_data, com mapa explícito de padrão para coluna.",
+      "evidence": [
+        {
+          "resource": "repo://services/cubService.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:af46d5ce5696832e28d21f5f50bba812e80b6cc64eee912a5d5fd2aa0e4e2cbb:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI4NGRhYzM5MTM1YTJhNmIxYTg2MWJmOTg2MDE5NTc1MTQwNjZjZGRhMjA5Zjg0ODRhZDlmOTQwNmMxYzU2ODEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImE4YjdhYmIyODM0MTE2OTUyNDg4NDNhYjc3OTUzZjAxNDY0YmU1NWNlMWYzMzBjMDUxZTIwOTE3ZTMwOGUwOWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM2NmY4NWI4YTE1MTA1OTI4ZGYyNzY5NDUxZjNjZGIwOWFkMjQxYTEwYzM5MjRjNGY1MTYyNDBjZjc4YWIxNmQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_8bb70ff1ec7b4e30980e309c23e83ca8",
+      "statement": "O motor NBR 12721 recebe blocos, pavimentos, unidades e espaços já classificados sem geometria, é alimentado por adaptadores da planta ou de áreas declaradas e emite os nomes de coluna do SQL antigo.",
+      "evidence": [
+        {
+          "resource": "repo://utils/nbr12721/quadros.ts#L43-L60",
+          "version": "repo-lines-v1:sha256:b380d62fb872aef889392d73d459549ed29534a9a48522b2c6ddd6371ccf1e85:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZmYmUwNGY1NmUwZDYzMTczMjdlN2FhMzQxNDAzNDE4NDgxNzM1ZDEyZmQxODFjNzU3ZjY5OGU1NmUxNDYwYjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQwOTM2OTNlZGVkYTIzMGVjY2ZiM2JhMzU0MzhhN2FjYmRhM2Q3ODk4OTdlOGRmMTg2MDU0NDMxMDQyYzcwOTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjIwYTZmMmYzM2E2NmNmY2Q2YzdkZjhlZWRlNjM0YzQxMjU1YzBkZTZhZWY1MDJlYjFhNmZkZmRmNzgzYjRhZjgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBkMzJjODliZTg1MDI2MjY0NWYxOGJiMGQ5YzMzOTc3MjExNDcxODliNjk3MDE4NzZmZjEwYzNhOTkxODdmNzgifQ"
+        },
+        {
+          "resource": "repo://utils/nbr12721/quadros.ts#L463-L463",
+          "version": "repo-lines-v1:sha256:e2198a92f309a011256b06f81f7bf92d3b0988917a6f047eedea421ffd1b2e94:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZTIxOThhOTJmMzA5YTAxMTI1NmIwNmY4MWY3YmY5MmQzYjA5ODg5MTdhNmYwNDdlZWRlYTQyMWZmZDFiMmU5NCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTIxOThhOTJmMzA5YTAxMTI1NmIwNmY4MWY3YmY5MmQzYjA5ODg5MTdhNmYwNDdlZWRlYTQyMWZmZDFiMmU5NCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYjA2YTQ3NzkzZGI1ZDg0NjViZjI1ZDAxN2E2YzJmYzdhN2JlN2ZiODg1ZDdhMTdmYjdlMGM0ZjgzNjhmN2ZhOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiZDkyZGM1ZDcxOGI1ZTI5OTUzZDg4MTcxYjA0YWFkZjdmMzFlNjg2ZjgwMWY3OWY0N2VkNDQ5MDE4OGUxMzFhZSJ9"
+        },
+        {
+          "resource": "repo://utils/nbr12721/tipos.ts#L1-L25",
+          "version": "repo-lines-v1:sha256:d0f3062dfcd7aeb9b78a42ef88d45a3cce9340fce1978e24bbd045d5cb4834d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA3MjMxM2ZjYjllNjU0MTQ2OWJlMmI3YTRkMGNkMWIxYTcyZTQ2OTViNjRhNTQzMzFkN2IwNTczYTk0NTkzZjMiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQ1MjMxNmMyNzI4YzAzZDE3Y2MxZGZlMWY4MWYxZTI0ZDQ0Yzk1NTZjNGFlZjdkOWY4OTM4ODlmZjIyYzZkNTQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_89543a57f2774dcb9b2b00b3ed0b65a8",
+      "statement": "O rebase SINAPI considera só itens SINAPI (base própria não é versionada) e compara custo direto sem BDI.",
+      "evidence": [
+        {
+          "resource": "repo://components/SinapiRebaseModal.tsx",
+          "version": "repo-file-v1:sha256:0f71e9e5a9d41bad2a5d950717632fe21aa8fbda60dcc1906618831c2967fb79"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

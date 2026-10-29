@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:5ed784ceec506d5f33841a51c62d9f4726ec294db7e74dcd89f086dc635965dd",
+  "claims": [
+    {
+      "id": "claim_4b7eeab14cd54cdcb58662d3f83c7786",
+      "statement": "O guia unificado de UI define BankReconciliation.tsx, aba Extrato, como referência canônica de composição de tela, complementada por ClientList, SupplierList e SupplyChainOrderList, e manda copiar os snippets adaptando só os dados.",
+      "evidence": [
+        {
+          "resource": "repo://docs/ui_ux_guia_unificado.md#L24-L46",
+          "version": "repo-lines-v1:sha256:f4a2b5a62bc2bead247182cf7c34b93c773c580ee4349d67e837150241f9291c:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImMyNTJmMjUwNzNlYjJiNjc5MzQ1YWMzZDMyMzRiMDQxZTM3YjZmOWU2MzdhZjViY2Q4ZDViNzY3ODlmOWUwNGUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZTBkZWY4NzU1MDBhNGNkZDJmZjE5ZmY4NzE4ZWY3MjBlMWY3YjE0OWExNDRiNmJiMWQ3ZDI0MTZiZmUzODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImZjNTI3NDE4MWQ0ZmViMjYyNWI2ZDM1MmM5YjQ1OGQ5OTdiNDQ2MzQ0MTAxOGZiNjg5YTNmMmQyNjdmMDI4YjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_e365211bf0cf4122b41f10ccb8589d20",
+      "statement": "A escala compacta de radius (containers rounded-[10px], controles rounded-[6px], altura h-9) é o padrão único do app e a escala antiga rounded-[2.5rem] está deprecated.",
+      "evidence": [
+        {
+          "resource": "repo://docs/ui_ux_guia_unificado.md#L2080-L2105",
+          "version": "repo-lines-v1:sha256:ad831291ab852026cd533c0cec1f09de67fc4941501aa2511e909f8278b54df6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijc2OWM1ZDlmYTQyZjdjODEwMmNjYjAxNzBjNjQwZTg2OGU4YzkzY2I1NjBmZDU1OGI1MWI1MDk1M2EzYWI1ZTIiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZTBkZWY4NzU1MDBhNGNkZDJmZjE5ZmY4NzE4ZWY3MjBlMWY3YjE0OWExNDRiNmJiMWQ3ZDI0MTZiZmUzODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0YzllOTJiNGI2ZjAxM2JkNTA0NzUwMDU0NTE1MTc2NDI5ZGM5NmVhY2MzOTU5ODYxYzFhMGJmNWViMjA1NWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_346dc378e57c464db1206112f3c2e9b1",
+      "statement": "Cliente, fornecedor, centro de custo e plano de contas são escolhidos por drawer (ClientSelect, SupplierSelect, CostCenterSelect, PlanoContasSelect sobre HierarchicalSelect), não por select nativo.",
+      "evidence": [
+        {
+          "resource": "repo://docs/ui_ux_guia_unificado.md#L1635-L1650",
+          "version": "repo-lines-v1:sha256:622b74757fed1e0bc926eeaf078a5154fa615ee7e64d7e39e5916117e2521ffc:eyJzZWxlY3RlZExpbmVDb3VudCI6MTYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2YWE1ZTczMDNhODYxYTZkZTE1MDYwN2JiMGFkYWZkYzE4NTE3Y2Y0MGEzYWNkZWM3YjdhNWJhODNmODhlZjkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQyMGMxNjBkNDNmNjhmODllODMzY2RlM2I4NTNlYWMzYmNmYzQ3YTgyMTc4YzE5MDg0Yjc0NjYyMzQwYTE1OTUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjBiYTE3YWMwN2RjZmUxY2JhMjcyOTEzMTI0OTkxZGVjMWJiMzliOWQ1MzQ2OTMwNzZiMTU5NTdmYWJhNzM0MTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4YmM3MzNmM2ZiMDQ4M2YxMGQwYzcyZjViMGYxN2EwZGY0MTBjMWIxMzBmZTM3ZTNjNzUwYTlmZmIyYjRiOGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2805af50a4a643d0978ab6d59f3288f0",
+      "statement": "UI_PATTERNS.md define painel lateral (Sheet) para 70–80% das interações, modal central só para interrupções críticas e página dedicada para fluxos longos, proibindo drawer aninhado exceto o seletor de campo e proibindo window.confirm em código novo.",
+      "evidence": [
+        {
+          "resource": "repo://UI_PATTERNS.md#L9-L80",
+          "version": "repo-lines-v1:sha256:e729f6e1aafab09fd64d2b01890ae4c0e6400c7e7968fb7170eb89ef28652a2e:eyJzZWxlY3RlZExpbmVDb3VudCI6NzIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk0ZmE0OWEyOGUyYWE5NjEzMWEyMWFlZGEyNTkwMzA2ODg3ODYyZTVhODFhYjQyMGUwOTU3NmRhZjE4YTYyNzMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZTBkZWY4NzU1MDBhNGNkZDJmZjE5ZmY4NzE4ZWY3MjBlMWY3YjE0OWExNDRiNmJiMWQ3ZDI0MTZiZmUzODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijg1YjBmNjNkY2VhYjZjODVjYzQyZWQxNDQxMTIwYmY4N2I3OWIyMjA5YWNjNjk2YjUwNjVhMTc1MzZkMGZmYjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f44c65577dd84cf19ef5bcd9a78f30fb",
+      "statement": "StandardTable embute busca persistida, configuração de colunas, autofit sob comando, largura igual à soma das colunas, cabeçalho ordenável e fixo, loading/empty e paginação opcional aplicada depois de busca e ordenação.",
+      "evidence": [
+        {
+          "resource": "repo://components/ui/StandardTable.tsx#L1-L30",
+          "version": "repo-lines-v1:sha256:2a4d3de13c90e4ac76a8fa30d13504a2ae029298f166dfbf8ccd0fd3651f5ab9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjA4ZGNjMGVkOGRmZWRhOTJiOGJlYWRhYjNkNzZlYmU2NWZmNDYwNTY0ODM3YTFhYTgxYjIyMTAzY2RkMDI1N2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZlZTY4YjY2Y2E2OGU1ZjU0MjYzZGQ1OGQxOGIyZmVkNDRhYzkwNDZlNzIxOGY3N2ViMzEzMGZmNzgzY2U1MWUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjQzODdkNTg3NDliMTk1Y2RmMTNkNTE4NTYxYTc5NDIzOTA0NmI4OTVkNDZlNDUwODIxMDk5NzU0NWQ0MDAwMDQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_cb07c5f05434468a9eb1bfebc5e255ad",
+      "statement": "Com o ToastProvider montado, useToast publica a mensagem no provider e devolve localToast sempre null, porque a forma antiga deixava chamadas de showToast mudas.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useToast.ts#L1-L25",
+          "version": "repo-lines-v1:sha256:f549dce6685e87f6d3c7577a686a0c5d88903546b438314210359faa03f47abf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZhMTA0OGZjYjMzMWJjOTA5M2U2YTk1YmQxMjE5YzEwMWNhZDdkNjE5YjRhOWE5NDk2YzFkY2ZjNWEwNTg2ZDkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkYjU0NGE1ODg2MzQzNTBjMTkxNjlhODI0M2I1MzFiZjMwOTVlYjU3YzhmYjAzZTQ0ODM2OTQzZjA4MTY4ODEiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjU1ZjY0ODdlYWNkMDc3MzJkNjUxZmMyNzExNzE0YjA5Y2NmYzIxNTUxYTdiNzhjYWEwMWIxNTQzNTY0YWIxNzYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0608701411694c778b77dc7cca9da80b",
+      "statement": "index.css restringe a variante dark: a elementos dentro da classe .dark, impedindo que o modo escuro do sistema operacional altere as telas.",
+      "evidence": [
+        {
+          "resource": "repo://docs/ui_ux_guia_unificado.md#L3656-L3680",
+          "version": "repo-lines-v1:sha256:aee6dbc44dbf49c8787c46102c1273deb97c0de4b694bd845a1e8a8f33be6360:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NjE5ODk4YmQ0YjU5ZTQ3ZTdjM2FiOGY0ODBmZGY3MDkzOTQ2NWVlNjIzMjUwYTJkZTM5YTIxYzIxYzk2NzgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjkxYjBiODFmMTIxYTA3NjkxZWY5ZDVmOTJkMjFhOWMxNGNhYjE2ZjI1ZTgwODczZGMxNGU3YWJmNjQ5OTRkZTQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZTBkZWY4NzU1MDBhNGNkZDJmZjE5ZmY4NzE4ZWY3MjBlMWY3YjE0OWExNDRiNmJiMWQ3ZDI0MTZiZmUzODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhhNTExYzdlY2IzZTExZDI3MWE1NDYwZjQ1NjAxMjQ3NzI5OGJjYTNiZWM1MWM3ODQ2M2ZhZmVhZGUxY2IxNGQifQ"
+        },
+        {
+          "resource": "repo://index.css#L11-L11",
+          "version": "repo-lines-v1:sha256:ddd25666939e7f4aff9eb09581f09ed70bcaa7b5b108d9261933a132fd81869b:eyJzZWxlY3RlZExpbmVDb3VudCI6MSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZGRkMjU2NjY5MzllN2Y0YWZmOWViMDk1ODFmMDllZDcwYmNhYTdiNWIxMDhkOTI2MTkzM2ExMzJmZDgxODY5YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZGRkMjU2NjY5MzllN2Y0YWZmOWViMDk1ODFmMDllZDcwYmNhYTdiNWIxMDhkOTI2MTkzM2ExMzJmZDgxODY5YiIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiY2Y1OGFkODVlZjNkNWJlNDFjYWMyMTljZDE5NDgzN2Y2ODQ3NGZlZGZhN2YzMWI3YzlhOGI0OGZkMTI5NDg5NiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMTA1NmRiN2IzOTFiMTNiN2MwMzhkMTMzOTQ4NjZkYTUyZjA0MDMyYjY2NmM3OGE1MDQ0NjFiMjFmMDQxZTYxZSJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_91df55ee03084d1b97a1a7922274fd61",
+      "statement": "check-ui-standard.sh reprova font-bold/black/mono em td, pílula rounded-full com uppercase, confirm() nativo, busca em useState em vez de usePersistedState e botão-ícone com a assinatura antiga.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/check-ui-standard.sh#L1-L30",
+          "version": "repo-lines-v1:sha256:f181a728308c278b6c3974011fbf3c41f141b27778173d9eb00cc48ce20c6314:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFkOTVmYzA0YTgwYzk1MmY0OWNlNDE4ODYyN2M1M2IwZmJlOGM0NDA0MWI5NTJkNTkyYWNkMWRlOTk4NjE0NjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4YmM2ZGNlZGZiODhkYWJjZTk1NjJmOGRjNjZjYTgwZGM3ODhkZmEyZDRlZDJhZjM1NDE5Mjk1MjA2NzUzZmQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc0MjdhZWRmOThkZmEyZjc1Y2RjZTdlNmNiOTVkYzdjZTNkNjhmMjE5NmMzYzRjMDJjYTFiNzFlMGE3MTBiMTMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3f3b90589b574cd4ba7f22b09c917d2c",
+      "statement": "O guia determina que valor de campo nunca apareça em cinza-claro, mesmo automático ou só-leitura, sinalizando o estado por outro meio.",
+      "evidence": [
+        {
+          "resource": "repo://docs/ui_ux_guia_unificado.md#L3620-L3640",
+          "version": "repo-lines-v1:sha256:3ccd2e5f9dcfc6090f6e9466ed043bb6b53750aa1d9c1566a6e4dd22b7e68f61:eyJzZWxlY3RlZExpbmVDb3VudCI6MjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjhlOTI1OTg0NDAyOTMyNGFkYWJhZmYyYjQxZDVmZDlkNzU2NTY1YzhkMjRiYjU2Nzg3NmY3Yzg4NGEzMzE5ZWEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4YWE3ZDBiMDk3Y2Y1Y2I4OGQzZWYyMDdlNjJhOTllZTI2YmFjZDc0OTRkODE2NzhhMDkwOWUyMjRkYjc1M2EiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjgzZTBkZWY4NzU1MDBhNGNkZDJmZjE5ZmY4NzE4ZWY3MjBlMWY3YjE0OWExNDRiNmJiMWQ3ZDI0MTZiZmUzODciLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIxNWJhNTExZDA2NzA3N2QyNGU2MWMxYTQ4ZjYzMGIyMWUwMmY1Yjc0YjZiOTQ2ODhkMmE1NDRmNTZhYmEyY2EifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

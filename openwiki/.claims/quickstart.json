@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:af95ee4147bb2e0c5e74a406a8398837fc2051a5da7f7c8d31107e3819be810e",
+  "claims": [
+    {
+      "id": "claim_010dfdc6da9640619aa5bdab6fc561ad",
+      "statement": "O app é uma SPA Vite servida em desenvolvimento na porta 3100 e exige VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY para inicializar o cliente Supabase.",
+      "evidence": [
+        {
+          "resource": "repo://lib/supabase.ts#L7-L12",
+          "version": "repo-lines-v1:sha256:2e61fc409a9705c950e5e7e09a43e47b7178a817aff93ba8520c70e89e855980:eyJzZWxlY3RlZExpbmVDb3VudCI6NiwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMDU4ZDhiMzFhNDBiMGI5MzE3YzVjZmU5YjA5MDgyMGJjYWNlYjA5MTMzM2FjNjk1ZjAzZjJiMzllMjE1NDM1YyIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTIyZmFhNTM1YmQyZWEzZDUyZTc0MWVkNDU0NDM1YjdmZTQ5ZTgzNTg2ZTk0M2Q5OGQ4MmJiZmIyNGQxZjVjNSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiNzIxNDIzMzQyOTUwOTFhMjBlMGM4N2U5MGVjODc0ZjFjMjM4NWFkZGEyZmZhNzNlNDkxYjMxODEyYzI4M2JkNiIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNzY1NDc1OTk2ZTA0NjM5MjRlM2E5NjczZTU2NTFiMmMxMzYyYjQwOTZlYWY3MWJkYTE1ZGI5M2E5Yjc3ZWRkNCJ9"
+        },
+        {
+          "resource": "repo://vite.config.ts#L75-L78",
+          "version": "repo-lines-v1:sha256:437e13431110e3ac8fdbd0389b40ce26f9eef7f2bf9b4e1e764ae71308204a2e:eyJzZWxlY3RlZExpbmVDb3VudCI6NCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiZDlmYTRmNmI3YjUxOTM5ZjA5NDY0NWEwM2IxZmY5NGE0ZGU2ODAyZTk0ZDk2OGUzNmJmM2JmNjc0ZGY3ODE2YiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTg3NGYwNTUyZTg2ZjM3MmNmMjczNGU5ODFhMzRlZTNkZDVlODI1NzdlNzc2ZDc1YmQ3ZDQzYTkzNGU2NDdjZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiYTViNTQ4MzI5ODRhOTE3MzE0ODZkYjBjZTU2ZTlhNzhhMjg0ZThiMjMxZmMwYjA5MTRlNTI0NGEzY2E1ZmMyOSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiYmJiMGU1ZGJkNDNjMWI2NmM4NzY1MzI5MzU4NTgzMTZhNjlmYTQzMDVjYmUyNzg2ZTQ0NDUxMWQ1ZWJlMmU5MiJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_3427463c87434916b17ca7e2ecf3e9a8",
+      "statement": "Os scripts do projeto incluem dev, build (typecheck + vite build), typecheck, test (vitest run) e ci (typecheck, test e build), com Node 24.x declarado em engines.",
+      "evidence": [
+        {
+          "resource": "repo://package.json#L1-L20",
+          "version": "repo-lines-v1:sha256:001a72302ad0dc17c8418e3cecd6a0654f6346da0af3ff4aee5b0dd7987a89bf:eyJzZWxlY3RlZExpbmVDb3VudCI6MjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjgzZWFlN2U2YTRkM2M3MWJjYzk2MzI4YzUxOWZiYTI5NDFlZTQ4Njk2OGE2ZDYzMjJmYjA4Y2ViNDRlM2VmZDYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIwYzk0OTg1NTI2YzFjNTdlZjAwYzAwZDNmNGRjOTA2MTU2NzdhMGEzNmE4Yjc5NWRmZjlhZmZkNTBmZTlmNTgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM4ZGIwNTdlZGE5YWQyZTk2MjUwMzkxYTc5N2JiYjdkZWYxY2Y1NDMyYWZiMWVkZGQ4YmEzOWM4MTVhNjU0N2UifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2e2366058e6d46f0b7e526fa05d5e9f2",
+      "statement": "O CLAUDE.md do repositório define regras obrigatórias sobre padrão de UI, projetos de sistema, classificação de obra, seletor de organização, planos em docs/planos, segurança de migrations e frentes de trabalho.",
+      "evidence": [
+        {
+          "resource": "repo://CLAUDE.md#L1-L590",
+          "version": "repo-lines-v1:sha256:ecb56644e6a6df655829add0472383b7dd8fb890549b43d2625b6b7e90aa6a2c:eyJzZWxlY3RlZExpbmVDb3VudCI6NTkwLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIwMWEyYTE1YzViNGIyNDQ2NDJlZmExM2YyNzk4MDc0Mzc2ZThlODFhMTRjZDE1Y2Q3MTA5OTljYjcxODViYTRmIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiIwMWJhNDcxOWM4MGI2ZmU5MTFiMDkxYTdjMDUxMjRiNjRlZWVjZTk2NGUwOWMwNThlZjhmOTgwNWRhY2E1NDZiIiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI0Y2JmOTBjZDIwNmUwZmI2ZTAxZDNmNTQxZTE3YjYyZDFkODY5MGUxYjc0OWIxMTI4MWJhMjE2MGE1NWM3N2IwIn0"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

@@ -1,0 +1,104 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:fb546a80c8b9955846ce63ffb333e2d83389298ef36a17587d3072dd42b4de63",
+  "claims": [
+    {
+      "id": "claim_a95bb86f41f343c0bb61b099a92d24bb",
+      "statement": "useOrgContext lê do store e resolve a organização pela organização escolhida no topo, depois pela organização dona da empresa ativa, e senão devolve null ('Todas'); a obra ativa não participa da cascata.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useOrgContext.tsx#L65-L104",
+          "version": "repo-lines-v1:sha256:d6e8e48cee067f9e7f4438cf8c2ae6c7ada565696875a39811c4cfdb3f0df9cc:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjFmY2UzODc2NDg1MTZiNjRiODhmNDc5OTMzYjE3NTAwYTIyMjFhMDBmNWM5NzBkYWQwMmRkMWFmNzRkODVhMWIiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjZhOWVlZmI1YWViNjhlMjU5YzJhNGY4OGVkYWE3ODVhNDE4NTE4YjM5MDM1ZTllYjlkZmM3Yjg0MTk1YWVhOWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_98483239b1d445ca9e28d633335fd612",
+      "statement": "WriteTarget só admite uma organização específica ou todas as organizações do usuário; não existe alvo global com organization_id NULL porque esse registro ficaria visível a todos os clientes do SaaS.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useOrgContext.tsx#L106-L138",
+          "version": "repo-lines-v1:sha256:71a2a9af3a0dbd11575702347480e625b78fd08f3a2b0a32bfea65b4ad1a10e2:eyJzZWxlY3RlZExpbmVDb3VudCI6MzMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU1ZGE0NWE3YjIyN2MxYjcwZjliMWIzODBmYThhNDc2YTE4MWM4MjZjN2IxNjEzZTA2NDUyZTk2MTlkOTQwM2QiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImYwNGQxODc3YTA1ZWE3ZDQ1MTBlZWYzMmJkMDQ2YTgzMDBlNjdjYWI2YzE4YTI1Y2VmNzZiMWNiNDJiNDUxNWUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_5e8092337eac4fb685d99fba92df0009",
+      "statement": "forEachTargetOrg replica a criação com Promise.allSettled, tolerando falhas individuais, e partialFailureNote distingue duplicatas de falhas de RLS (42501) no resumo.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useOrgContext.tsx#L164-L201",
+          "version": "repo-lines-v1:sha256:5bc24c4786223359b728b3ff57f202daf5c022f6d19280d6dca30507c262bba9:eyJzZWxlY3RlZExpbmVDb3VudCI6MzgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM2NzU3YzYyOTdhNjEzOTRjZDJlNDM5ODA0MjQzYzQyM2I1ZTIwZGU2ZGRiNzRiMGEzZjBmMjg0ZTgwMDNiMWYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImM0MjQ5ZWNhZDgxMmQ4N2RjODYyZWMzNzZiNzRlYjQ4YjJkYzk0MDQ4ZmU5MGQ4ZmI1MjliNTQ0ZTllZGI2MDEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9bd28fedcdcf48af8d3a9edf51406317",
+      "statement": "useWritableOrganizations restringe a lista às organizações em que o e-mail do usuário é membro, porque o seletor do topo pode listar organizações onde gravar dá 42501.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useOrgContext.tsx#L203-L246",
+          "version": "repo-lines-v1:sha256:8789098d4ae12df731ec621d95c375a0213e057ea1e7959345aa33a2699ddb17:eyJzZWxlY3RlZExpbmVDb3VudCI6NDQsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI2N2IwMTU0YWZkMGIyMjBlZDJjNDBlZTQ4ZDg4NDMzNDI1YzgzOGRlMjVkZjJhNTcwM2M5Mzg4ZGM4OTJjZDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3ZTZhOTQzODYzOWQzMDk3NDgwMjhjOWY5NGQ4YzM3YzgzZGY1ZjEzMWRlNDg5NTUwNGZhYjk4NzhkYjIwNmIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_dcfa6c52f6484c4684b6d1571b3b1513",
+      "statement": "useOrgWriteTarget resolve sem modal quando há organização no topo ou só uma organização gravável, e só oferece a opção 'Todas as organizações' no modo all-allowed.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useOrgContext.tsx#L248-L349",
+          "version": "repo-lines-v1:sha256:0f3e1df1a2e34796b422ccb63e7d7ee4ae7ec24f3465afdef7a3af91ebaa0db5:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAyLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0NWQ1YWJhY2EyMjY4MGFlOTUzMzY3MDBkZjc2NjM2MTk3YTdjYjZjMDA0ZjRjZDc5YWMxYjFmZDJmMGFjNGE1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlMjJmYWE1MzViZDJlYTNkNTJlNzQxZWQ0NTQ0MzViN2ZlNDllODM1ODZlOTQzZDk4ZDgyYmJmYjI0ZDFmNWM1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiI5NzhjYzQxZThjYWQ5MzUxYmIxNjlkNzQ3NGY1OGM4ZDYzYzU5NmExYmQxYzVlMjBkYmRmZDdmOWZhYWY4YzFiIiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_f71d5425e00143779e84f96f157bc847",
+      "statement": "errorMessage extrai message/details/code de erros do Supabase que não são instância de Error.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useOrgContext.tsx#L140-L162",
+          "version": "repo-lines-v1:sha256:be9250f5414e9d74503890d45790f8cce5cdba810a0700980b602e10a80d4eb6:eyJzZWxlY3RlZExpbmVDb3VudCI6MjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjQ3YzExMTViNWUzOWI5MWViOTY5MThhNDNkOGYxZmUxMjIyMjQ5OWQ5Yzc3YTU3NTYzYjk0NjA5NWU1MGI1MTAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImNlNzkwYTJjZGQzNjA5OWEzNGE0MWFjZjQxMDk0Y2UzYTdkMGQ4YmE2NjllZmQ4MTU0NjY1ZTU1OWM2YWIzMTcifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_52391ffade1446b7b58b72dfda18defa",
+      "statement": "orgContextGuard.test.ts varre components, hooks e services e falha em quatro padrões (organizations[0], sentinela string vazia, guard que bloqueia leitura, React Query desabilitado por falta de organização), funcionando como catraca com BASELINE que só pode diminuir e ALLOWLIST justificada.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/orgContextGuard.test.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:20966a12b28b8b4e62c44e6cb8b8d86ee7a607b0014201ec0054cfa343593d5d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1ZDVmNzExNjg5ZWU3MjgxNWYxNDJiNDQ1NTczN2FmMGI2MjIxYjM0ODZlYmEwMWQ2NDMxNjA4MjhiYjQ1OTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3NTM5Mzg2YmU4MjNmY2U4YzhhOWYwN2MyZTI0ODMxZTY2YzdmZGU4M2EwNGI3ZjFhZTFiYmEyODBlNTk1MDkifQ"
+        },
+        {
+          "resource": "repo://__tests__/orgContextGuard.test.ts#L60-L145",
+          "version": "repo-lines-v1:sha256:3dbf507199129c42da48c35c05d5161dd4ccf7bb2077434aba2820434d0ca6e6:eyJzZWxlY3RlZExpbmVDb3VudCI6ODYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJhYjcwMjVmZWZhOTNiOWU0OTkyNzEyMDczNTA4ZDFiMGY2MzBjNmJiMDVhOWU2NmQxN2E5YmRlMjMzZDk5NjAiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImNlNzgwMjEyOWM0ZTg4YTVjZmZkNDU3ZjI5MTgxNDlkODk1OGVkMWVhMmQxYWY3ZDhiY2UwNjZmMTQ1ZTk3ZWQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjYyNjc5YTEyN2E5OTgzNDQ1MmE4ZmIyMGExYzQ2M2IxYTZkYzBmMTQzM2Y5NmY3NjRmZjhmZjgyODBlZDhkNWEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ac8196eb62cf4ea1bcec9494c341e064",
+      "statement": "O padrão de service aplica .eq('organization_id') apenas quando há organização, deixando a RLS recortar o resto.",
+      "evidence": [
+        {
+          "resource": "repo://services/inventoryService.ts#L143-L150",
+          "version": "repo-lines-v1:sha256:276506fd57c2411e1969c43a78303c6fff8216b0d6292b6806f8b0b35ef685a2:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiMGEyMDgwYjU4Zjk1NGUwZDNhM2ZmNTZmOTYwZjFkMDJkYTdmM2I2ZWMzMDlhOGM5NTU3YmY4NTFiY2Y4OTE4NSIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMmVjNWJmZGRjNzYwMDlmMjE3Zjg2MDFlMzRmN2QwNDI0MzQ2NzM4NDY1MGYwNDhjYmUyZTFmNzg1Y2QzYzNlOSIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiZTE5YzEwNWRkMzdlNGY1NTM5YzA2MzU2MDcyYjI0ZjYyNmY0ODg4NjVmZDEwZTg1ZGQxNzc0YmFmMTBiNmE0ZSIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiOGY1ZDFlNWU3NTg1ZWVmZDZjZGQzMTA0NDYxMWUxODMxZjZjN2RhNGM5OGNhZmZmYWJmZTM3NDIyZmY4YWE3MCJ9"
+        }
+      ]
+    },
+    {
+      "id": "claim_5ce75d0720b346d5ba85b730bb970690",
+      "statement": "is_org_member é SECURITY DEFINER e considera membro quem tem linha em organization_members com user_id = auth.uid() (ou e-mail do JWT em linhas sem user_id), além de corretores ativos em broker_profiles.",
+      "evidence": [
+        {
+          "resource": "repo://supabase/migrations/20260706000002_fix_is_org_member_remove_backdoor.sql",
+          "version": "repo-file-v1:sha256:a1e7d887af3c8378c8697d005076cc39c376966433477adc782273f098029a29"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

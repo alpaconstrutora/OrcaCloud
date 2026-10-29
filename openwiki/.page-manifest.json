@@ -1,0 +1,180 @@
+{
+  "schemaVersion": 1,
+  "pages": {
+    "/openwiki/arquitetura/estado-e-dados.md": {
+      "pageVersion": "sha256:f82f32f5e12e182af79947ff526f65a1d93c52bc865f984d80482c0cb0fc479d",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/arquitetura/navegacao-e-telas.md": {
+      "pageVersion": "sha256:7df9e384205b0fd0004f2fe9a7aa65856e8fd5fefec1ad7d24e7ac408c1d2f64",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/arquitetura/visao-geral.md": {
+      "pageVersion": "sha256:927ffb8042cc98e40a8ef0732b4b98f0c82994e6a7e3f57705bb108811994225",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/conceitos/autenticacao-e-perfis.md": {
+      "pageVersion": "sha256:c289ab0ce6e8e59f531383896994940a7a243263ad34f1ad6e2fe59fb1e62ef1",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/conceitos/classificacao-de-projetos.md": {
+      "pageVersion": "sha256:319a14e191237473a01a2f8e3dd86b2f691c915b118e02c818ca79adfd5c10b6",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/conceitos/multi-tenancy-organizacao.md": {
+      "pageVersion": "sha256:fb546a80c8b9955846ce63ffb333e2d83389298ef36a17587d3072dd42b4de63",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/integracoes/edge-functions.md": {
+      "pageVersion": "sha256:35d34d1e93156f196d4d19cead439d6892341202c1130caccc28c54a0624ac50",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/interface/padroes-de-ui.md": {
+      "pageVersion": "sha256:5ed784ceec506d5f33841a51c62d9f4726ec294db7e74dcd89f086dc635965dd",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/comercial/empreendimentos-vendas-e-locacoes.md": {
+      "pageVersion": "sha256:021bad1b354f83651e1130708daea5b08efacd610a88ae83e87651d7c788acee",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/financeiro/boletos-asaas-e-cobranca.md": {
+      "pageVersion": "sha256:b22170fe8427a16d9acdb9e0c007d8469d87bc5f7596a4d04dd19e5292c0eae8",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/financeiro/conciliacao-bancaria.md": {
+      "pageVersion": "sha256:3288f6fb74c0ef0229b4412ea77fe0aeb47dca79c31274b30f82fc45161e3403",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/financeiro/titulos-e-sincronizacao.md": {
+      "pageVersion": "sha256:049fd626eadf390d6a14547f3a7666696fcf511ea2503d85562db574ae78872a",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/fiscal/ingestao-nfe.md": {
+      "pageVersion": "sha256:b4927e673f0c295793cc4fbbd60983189c81b7e2d04d5392f54323d03b50b477",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/obras/orcamento-e-sinapi.md": {
+      "pageVersion": "sha256:033209fead5c69c3d8ce2c6588367ecf62a2e3590acf18d006aca47ce1122edc",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/obras/planejamento-e-diario.md": {
+      "pageVersion": "sha256:91a46ff68bfd1ae8a090443fad8b948dd4a686820a0d9f39fb4aa78da46742e8",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/planta/disciplinas-e-geradores.md": {
+      "pageVersion": "sha256:a13c34dd9e9a32ba21f7b36b4fa3714c8ed83b53f978fe435c2d321cc6c428cc",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/planta/kernel-e-editor.md": {
+      "pageVersion": "sha256:16179649efbcef22ab5490f57930b03439566599bd0c6f040be6896a7e2713a5",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/portais/portais-externos.md": {
+      "pageVersion": "sha256:37b433516a608049ff955c4c80749fe2771845c0f95cb7fae14403e44065e71f",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/rh/folha-de-pagamento.md": {
+      "pageVersion": "sha256:6285ec3eba914a33067d83f56411aab857c5fb5f605bdaee051847900ff3d6e7",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/modulos/suprimentos/compras-e-contratos.md": {
+      "pageVersion": "sha256:ac279a25b16d17fce81da5604184ff9eee7d604d02ef5d89c8947b1920f7a0c9",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/operacao/banco-e-migrations.md": {
+      "pageVersion": "sha256:e73a1652c8496db8838c7875867c84b785cd15644895a56072f21ce83c25316d",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/operacao/publicacao-e-frentes.md": {
+      "pageVersion": "sha256:1c51f3a69c26d207d051d61c57958cebd40d3058a33f3e66ca293ff3d3717159",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/quickstart.md": {
+      "pageVersion": "sha256:af95ee4147bb2e0c5e74a406a8398837fc2051a5da7f7c8d31107e3819be810e",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/seguranca/rls-funcoes-e-edge-functions.md": {
+      "pageVersion": "sha256:3a0e098c088c06d39dedd4dce63ccd381f1189cc7be3a50319a21b0c543f876c",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    },
+    "/openwiki/testes/suite-e-travas.md": {
+      "pageVersion": "sha256:8f0fae79b9c47e4f73375690cc3bf1f28810686bce61e34937e3f28b6e6435a0",
+      "completedBy": "claude-code",
+      "completedRunId": "d675acd4-fbde-4965-99b1-e0d0a689916f",
+      "gitHead": "88b431c23a27b9a7e55a0334179f77c945e6cbef",
+      "sourceFingerprint": "sha256:988d6a40bd98b4bfdb29dc3f83503ecabb7d53406057d37f5d32c364a3ba3b43"
+    }
+  }
+}

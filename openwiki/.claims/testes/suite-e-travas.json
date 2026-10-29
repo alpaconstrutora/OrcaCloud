@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:8f0fae79b9c47e4f73375690cc3bf1f28810686bce61e34937e3f28b6e6435a0",
+  "claims": [
+    {
+      "id": "claim_c42312aea14f4f23b834fbf50035c198",
+      "statement": "O Vitest roda em ambiente node com globals, inclui __tests__/**/*.test.ts(x) e usa __tests__/components/setup.ts como setup; testes de DOM declaram o ambiente jsdom no próprio arquivo.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/components/setup.ts",
+          "version": "repo-file-v1:sha256:380ea4fdb738a46711fd17c6fb504ef0fd21bfdcf9af1e646ea777b3b8a6720c"
+        },
+        {
+          "resource": "repo://vite.config.ts#L192-L203",
+          "version": "repo-lines-v1:sha256:f8b9d53a7c0998636f0bc738ccd5e51bc6bb1805f3344d6fde6a3d637fb9bb9e:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImVlZTJhODM4ZGVlNWRmNjI5YTA5ODk4MmY4MmMxYTQzYmI2NTA0MTExMTllY2E3ODJhMTg3MzgwZjc0ZjVmYTMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoyLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijc3ZjhkODZiN2E3YzUzMWI2ODEzNTQyZGFmZjNiMjkxMjM4MWQ4MjE2YmRmNWRjY2U5ZTg3M2QxNDI4ZDFiYjIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_9f52a9fe383640cd81cfde84f8bade2c",
+      "statement": "orgContextGuard.test.ts funciona como catraca: BASELINE de dívida que só pode diminuir, falha também quando o arquivo melhora sem baixar o número, e ALLOWLIST separada com exceções justificadas.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/orgContextGuard.test.ts#L1-L60",
+          "version": "repo-lines-v1:sha256:20966a12b28b8b4e62c44e6cb8b8d86ee7a607b0014201ec0054cfa343593d5d:eyJzZWxlY3RlZExpbmVDb3VudCI6NjAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1ZDVmNzExNjg5ZWU3MjgxNWYxNDJiNDQ1NTczN2FmMGI2MjIxYjM0ODZlYmEwMWQ2NDMxNjA4MjhiYjQ1OTkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjdlYjcwMjU3NTkzZGEwNmY2ODJhM2RkZGE1NGE5ZDI2MGQ0ZmM1MTRmNjQ1MjM3ZjVjYTc0YjA4ZjhkYTYxYTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjA3NTM5Mzg2YmU4MjNmY2U4YzhhOWYwN2MyZTI0ODMxZTY2YzdmZGU4M2EwNGI3ZjFhZTFiYmEyODBlNTk1MDkifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d8773c77bdf44e4ea7472a3de4e4b82b",
+      "statement": "segurancaMigrations.test.ts é um teste e não um script porque scripts dependiam de alguém lembrar de rodar, e vale para migrations a partir de um corte de histórico que não deve ser movido.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/segurancaMigrations.test.ts",
+          "version": "repo-file-v1:sha256:3c8c29f94a64160769333d1c0b36afec81bc54d5180512dcb811046992a46f95"
+        }
+      ]
+    },
+    {
+      "id": "claim_feef1fe3f3904d158677eb1bd9e4a0ce",
+      "statement": "selectEstrelaSensivel.test.ts barra select('*') novo em tabelas com credencial, documento pessoal ou remuneração.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/selectEstrelaSensivel.test.ts",
+          "version": "repo-file-v1:sha256:18f606f7d467255222b3319f6e3e850b15e569fe8aea06d35442d8371426f037"
+        }
+      ]
+    },
+    {
+      "id": "claim_e91d6b3982af4371836351cc3b33456f",
+      "statement": "darkSoPorClasse.test.ts garante que a variante dark: do Tailwind só vale por classe e nunca pelo modo escuro do sistema.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/darkSoPorClasse.test.ts",
+          "version": "repo-file-v1:sha256:bcd170f15ded231296f23d9492c81e3c1fbf09bc7125221e57ab3969a074984b"
+        }
+      ]
+    },
+    {
+      "id": "claim_9c8a1308bcc44568b88dbfc893a5e0fa",
+      "statement": "bytesNulNoFonte.test.ts proibe byte NUL literal no código-fonte.",
+      "evidence": [
+        {
+          "resource": "repo://__tests__/bytesNulNoFonte.test.ts",
+          "version": "repo-file-v1:sha256:4653648dc71af65d53c81716aa42fe3338898ca4b0584b3802fcc99d5a69fe6f"
+        }
+      ]
+    },
+    {
+      "id": "claim_674a2b57caf440de83c00e0644384969",
+      "statement": "O CI executa npm ci, tsc --noEmit, check-xss-sinks.sh, vitest run e vite build com Node 20 e heap ampliado.",
+      "evidence": [
+        {
+          "resource": "repo://.github/workflows/ci.yml",
+          "version": "repo-file-v1:sha256:a7ee18133656822a314dbc2a0e93cd99ae3070a954737189325661dd6beb5fb3"
+        }
+      ]
+    },
+    {
+      "id": "claim_6c1aae076723482db454314e178e95c3",
+      "statement": "check-ui-standard.sh recebe os arquivos editados e sai com erro ao encontrar violações do guia de UI.",
+      "evidence": [
+        {
+          "resource": "repo://scripts/check-ui-standard.sh",
+          "version": "repo-file-v1:sha256:d601958d4dc6fcb8f7a18cbfb298de05aba2ae0361da80deadd3eca940bbb4b7"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

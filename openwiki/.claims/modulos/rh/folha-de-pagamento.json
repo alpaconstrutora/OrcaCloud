@@ -1,0 +1,110 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:6285ec3eba914a33067d83f56411aab857c5fb5f605bdaee051847900ff3d6e7",
+  "claims": [
+    {
+      "id": "claim_7700163c34764406afbfb0d681368ba4",
+      "statement": "participaDaFolha decide por datas: admissão após o fim do período ou desligamento antes do início exclui; ATIVO participa; DESLIGADO participa se tem data de desligamento; saiDaFolha limpa quem saiu ao reprocessar, exceto AFASTADO.",
+      "evidence": [
+        {
+          "resource": "repo://services/payrollEngine.ts#L95-L120",
+          "version": "repo-lines-v1:sha256:bc5250a19de37ed8ff2b943506ccf117da1ddd4ed9af4ea4ab43215aa97f9590:eyJzZWxlY3RlZExpbmVDb3VudCI6MjYsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjUyMGJlYTgzY2I1YTdlYmQ4MDYzMmYzYTBkYjE0MTIxNDNkYzgwZjllMTcyMDFlNmE2ODNlM2Y4NTg4NjFlM2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjU1NTFjNDJiMmE0NDU3ZWIxMzgxYzM1NjJmM2NkMmFjOGY3ZTEzODQ5NTY2OTk2ZjQ3MGNlMzc1NDM3ZTVlZmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImJmNWRiYmNmMTc1ZGNlOTQ0NDcyNmM2MDg5MjQ4YzgyMzgzZDVhN2QzNTE4ZmY2NzExODdmZjZkOTEyMmZhNTEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b036d9dd8b27462aba05d0110e9fe3df",
+      "statement": "O motor despacha por tipo de folha (mensal, adiantamento, férias, 13º, rescisão) e finaliza todos por finaliseWithRubrics e persistResults.",
+      "evidence": [
+        {
+          "resource": "repo://services/payrollEngine.ts#L122-L690",
+          "version": "repo-lines-v1:sha256:35d0717d1ee004fe1829c79e359147eb83e45eac62ed5ec46319be5a1d907215:eyJzZWxlY3RlZExpbmVDb3VudCI6NTY5LCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIyYmIwOTVlYWYxYjhmY2EwNmJhM2NiZWZjNThjNjQwOTc3MjQ2YjM4MTVhMGMwOWM1MmUwYThlNTE5M2RhMDNiIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiI3ZWI3MDI1NzU5M2RhMDZmNjgyYTNkZGRhNTRhOWQyNjBkNGZjNTE0ZjY0NTIzN2Y1Y2E3NGIwOGY4ZGE2MWE2IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MywicHJlY2VkaW5nQ29udGV4dEhhc2giOiJkZGY3ZjcyMDZkMTE4YzBlNGNkYzM5MjYzYjJkYzY4YTNlNjAzYjZjNTdlMTFmMTQxZjAwYjNjOWQ2OWQxMTM3IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MywiZm9sbG93aW5nQ29udGV4dEhhc2giOiI4YjczOWFiYmQ4ZTMxODg1YjI5ZmI3MzczNjY3MDQzZjI4ZThmODEzNTMzNjgxYTFkMTZjMTg0YzMyYTQ3MjU2In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_89ee28109bc940d0a4b59b36e6e221a9",
+      "statement": "As fórmulas de rubrica são avaliadas por um parser aritmético seguro em vez de new Function ou eval.",
+      "evidence": [
+        {
+          "resource": "repo://services/payrollEngine.ts#L1-L10",
+          "version": "repo-lines-v1:sha256:431af09589e02e50d0fd88ba87dcef5b61c61bd883e9d82d4614947ecfcbaea7:eyJzZWxlY3RlZExpbmVDb3VudCI6MTAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM3YzE5YzI3ZGJiYjBhODc4OTkxOWI1ZmU3YWUzZTAxZjUzN2YyMTNjMmY4ZWY4ODk4NGY0ZTg0YjdmMTQ4N2EiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImIxZWZkNjEwNzg5ZmI5YzVjMDE4NTVmYTZiNmYyZjJkOWIxODE0ZWQ2MWU5NjI5MTFhODc5NTI4YzU0NWRiNGUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBkZGRkNTAwMmQxMzdhNjNhNGEwZGIxNTQ1NzMwYWRhMDQwYmY2ZjkyNTk0Mjc4NTc5Njk5NjRkNDU1NGQ4ZmUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_b8546975999249d3a45f4b4c03f9375e",
+      "statement": "lib/payrollCalc.ts é a fonte única do INSS progressivo por faixas e do IRRF, incluindo o redutor mensal de 2026 (até R$ 312,89 até R$ 5.000; fórmula 978,62 − 0,133145 × rendimentos até R$ 7.350) aplicado sobre o rendimento tributável bruto.",
+      "evidence": [
+        {
+          "resource": "repo://lib/payrollCalc.ts#L1-L113",
+          "version": "repo-lines-v1:sha256:05d7a802d78ea883a3fb730c7ac4eec53cb8fd7f3457eea962784585e4f49ac9:eyJzZWxlY3RlZExpbmVDb3VudCI6MTEzLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiIxNWRmZGUwNDBjNzUxMDk5N2M3ZDQ1ZTMzYjYzNjc2NjZmNmUzM2FhOGFkZmNlYTQ1MTc3NTdjNjdkYzY3NmZhIiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlMjJmYWE1MzViZDJlYTNkNTJlNzQxZWQ0NTQ0MzViN2ZlNDllODM1ODZlOTQzZDk4ZDgyYmJmYjI0ZDFmNWM1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_1fbf6439f34b4143b703cd131c338a98",
+      "statement": "O salário base da folha vem do histórico salarial na competência, com reajuste no meio do mês proporcional sobre o mês comercial de 30 dias.",
+      "evidence": [
+        {
+          "resource": "repo://lib/payrollSalarioCompetencia.ts#L1-L121",
+          "version": "repo-lines-v1:sha256:5690f5a35a84ef92e0e6385a95eb0476423bf51aca495d23cf0a253fa406b098:eyJzZWxlY3RlZExpbmVDb3VudCI6MTIxLCJmaXJzdFNlbGVjdGVkTGluZUhhc2giOiI0NWQ1YWJhY2EyMjY4MGFlOTUzMzY3MDBkZjc2NjM2MTk3YTdjYjZjMDA0ZjRjZDc5YWMxYjFmZDJmMGFjNGE1IiwibGFzdFNlbGVjdGVkTGluZUhhc2giOiJlMjJmYWE1MzViZDJlYTNkNTJlNzQxZWQ0NTQ0MzViN2ZlNDllODM1ODZlOTQzZDk4ZDgyYmJmYjI0ZDFmNWM1IiwicHJlY2VkaW5nQ29udGV4dExpbmVDb3VudCI6MCwicHJlY2VkaW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1IiwiZm9sbG93aW5nQ29udGV4dExpbmVDb3VudCI6MCwiZm9sbG93aW5nQ29udGV4dEhhc2giOiJlM2IwYzQ0Mjk4ZmMxYzE0OWFmYmY0Yzg5OTZmYjkyNDI3YWU0MWU0NjQ5YjkzNGNhNDk1OTkxYjc4NTJiODU1In0"
+        }
+      ]
+    },
+    {
+      "id": "claim_26cb1df9c05c4668b9e9ac90e4be9b45",
+      "statement": "Qualquer rubrica pode ser recorrente no colaborador com valor fixo em R$ ou percentual do salário, e a mesma regra é usada pela tela e pelo motor.",
+      "evidence": [
+        {
+          "resource": "repo://lib/payrollRubricaRecorrente.ts#L1-L70",
+          "version": "repo-lines-v1:sha256:47207e83dcd8c9992dad2454e3e522350fb1fa3b5b514921540800f51dd5a94d:eyJzZWxlY3RlZExpbmVDb3VudCI6NzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjY4MzY5ZjMzNDdiN2Y2NjZkNTkzMjZmNDI2N2NkMTA4ZDk1OTdjYTI2ZjAzMGNlZDc4ZDNjMTFjYmJlYjk0MjgiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjhiNTdmMGVmZWNiNDdlYjVhMjE4YTk2ZWExMGQxN2VmYjZjNzk5YTJiNjFmYTBkYjY0NjEyZjM3MWY5Yjg1ZTIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_f6662479abe84424a342cf9d57275719",
+      "statement": "A folha gera um título por encargo ou retenção (salário, INSS, IRRF, FGTS, CPP, RAT, um por entidade de terceiros, repasses e outros encargos) por obra e chave contábil; demais descontos só reduzem o líquido.",
+      "evidence": [
+        {
+          "resource": "repo://utils/folhaFinanceiro.ts#L1-L61",
+          "version": "repo-lines-v1:sha256:3a8ab563e041c7e86a3d644685371bc87789c85bd7df3a52a8aef30442731178:eyJzZWxlY3RlZExpbmVDb3VudCI6NjEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4MjUxYjE5NjBhNzU3MDZkY2ZmMDI2MTZmMzkxMWJmYjdlZmQ4NzY4Mjg0Yzg3ZGEzYTY3MTY0ZWMwZDY5ZjYiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM0ZTNiMzIxZWM2YjVlNzE4ZDk1ZjMwYzcwMGU5OWFkZTUwYWQ5YjA3OTJkYjFlNWQyOGI2ODE3ZTI5NmJjMDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjI1Mzg3OGQ4MDI4ZmEzMWYyYzhjYTM2MTJhMjY1YzIzYWUxYzcyOTZjZDI2ODE3MmQ2NzMzMTViZWVmNTM2NzEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_c3685223fa07423ca85a8ba6dd922863",
+      "statement": "syncPayrollToFinance preserva títulos pagos, conciliados, cancelados à mão, em DARF ou com pagamento Asaas, regrava o resto por reference_id e apaga o excedente do cálculo antigo.",
+      "evidence": [
+        {
+          "resource": "repo://services/payrollService.ts#L1583-L1600",
+          "version": "repo-lines-v1:sha256:545b1e5761a1957e5d7d6a49181a6447a54bec190bb052d26562e1e2b3999f10:eyJzZWxlY3RlZExpbmVDb3VudCI6MTgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImJkOTcxOGYyY2MwNWI0ZTI1ZmJkMzMwMzQ0MDIzODUxNDQ4ZjE1ODk4N2IzZDhhZTIyNmYzNTkyZGE1NGY1MGQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAwYzcwMGFlZTU4YmRkOGZjZmE1NTcxYjY3NmY3MWUwZjkyYjgxN2E1ODk4MjQ3MTE5ODdlNTg1ODlhMmI2NDYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImExM2U0MTE1ZTgwNWY1NjA5MjhmNjYxZDg4N2ExZDMzMTMwMjA2MmQ2NjRiMGE2YTA1YzlhMGY5YzYzNDdmYzAiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjRiNzc3MjdjNmU3YjNmNGQzNDIyODMyNmFhZjVhOGQ2NDhkOGIzMjFlNzUzOTYwNGRiYzYwNjhkYTkzNTQzMTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_87deda76702e47808ff2bb6dfa146291",
+      "statement": "O custo de mão de obra de uma competência considera só folhas mensais com status FECHADO ou PROCESSANDO e a competência mais recente até o mês de referência.",
+      "evidence": [
+        {
+          "resource": "repo://utils/folhaDaCompetencia.ts#L1-L40",
+          "version": "repo-lines-v1:sha256:cff8f35ad9ced6c9e480d6bb9bf1c8e623107597e0b62a25a5ea7d0936f2f566:eyJzZWxlY3RlZExpbmVDb3VudCI6NDAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6Ijk1OGFhYmU4NzcxYzlhMmY4YzI2ODFhMGNkOThlMWJlYjFmZGQ1YTVkOWMxM2RhNThhMDkwMjk5Zjc4ZmIyOTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImI0ZjRhMGEyYmE5NDVjYjI3ZDgxZjM0OTEzNmU5MzUzZTFmMmE0YTVlNDgyYTU3ZTQyYjUxNmRjOGI0YjQ5NzUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_7a16b1b15400471f9c9a4edc4b428ff4",
+      "statement": "espelharFolhaNasObras só atualiza o espelho legado de exibição nas obras, que o financialSyncService não materializa mais.",
+      "evidence": [
+        {
+          "resource": "repo://services/payrollService.ts#L1805-L1812",
+          "version": "repo-lines-v1:sha256:1891978c76fee0c28e5d04cd7f1c2c2ca97feb3cadc7217ce96426bb0ba07ee2:eyJzZWxlY3RlZExpbmVDb3VudCI6OCwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiYmEyZDhmNDllMGQ0NmQwYjE4YTUyOWI1NjhmOTgzZWIxZDE2MDdiZjdjNjhmYTAzYTA0MzdhMDc0YzgxMDlmMCIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiMDgyNWRiMGY0YzhhYTM5YzA3ZjNjNWMxYTcxOTZlZDM0NzZhNDQ5NDA4MmVlNDE5NjA0NjkzZGM5YTc1NmY0NyIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiOWNhNzI2ZmZkYmMzYjkyOGIxMjFhMDAyMzE2NWNjNTNmZmQ2M2FmNWIwMjU5M2RjNTZkMTcwN2QzYjAxNjdjMyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiMDEzOTk0Yjk1OWViMDMyNDg5MTVhZmJmNTIxODZlYTI3YmRlNTZjYTkzZjZlY2ZiMmM1MjhhMzA4YmM4MDUwYyJ9"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

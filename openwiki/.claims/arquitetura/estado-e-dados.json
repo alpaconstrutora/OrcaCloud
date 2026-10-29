@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "pageVersion": "sha256:f82f32f5e12e182af79947ff526f65a1d93c52bc865f984d80482c0cb0fc479d",
+  "claims": [
+    {
+      "id": "claim_b88ea0980d4543688d48c3b7cdcb2b45",
+      "statement": "O cliente Supabase único substitui o fetch global por um wrapper com AbortController que aborta a requisição após um tempo-limite, combinando-o com qualquer AbortSignal externo.",
+      "evidence": [
+        {
+          "resource": "repo://lib/supabase.ts#L14-L44",
+          "version": "repo-lines-v1:sha256:3fb08fdafe905467444da500d50c73923aaf76216b3c9225163b80f08584ca66:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjFmYzRhNzU5YTM0ZDA4M2JjNDIxMDc5NDAwMTJiZWJiNTU2ZjZmM2NlNWI0ZGM5YzFhM2VlZmIzYzE5ZTJmMTgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEzZGRlZjcyNDc4NmI0YWY0NWFiN2NhZDgxZDM3N2FlNTQzYmI3ODQxMjk2NTY4ZmI1MjI2OTk4YWVjMjE2MzQiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImU2MWY4MDBiNGQ4ZTVkNmMxNTRjNDg2Yjg1ZjY5ODE3NjAyMTcwZjQxMmRhNTBjMGNlOTBlYTVlNzk2NDI3NmQiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_2bd4112f809f49a89d821a1090fcb4ca",
+      "statement": "O tempo-limite é de 150 s para caminhos /functions/v1/ (Edge Functions) e de 20 s para todo o resto (PostgREST, RPC, auth, storage).",
+      "evidence": [
+        {
+          "resource": "repo://lib/tempoLimiteRequisicao.ts#L1-L25",
+          "version": "repo-lines-v1:sha256:c0a4305e2847c5c1dddafe45e72c66e3b58364622aa85e99cbe35498cf38e051:eyJzZWxlY3RlZExpbmVDb3VudCI6MjUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_26110a0b19c54f66b6b8d9de1347a48b",
+      "statement": "fetchAllPages pagina com .range() em blocos de 1000 até uma página vir incompleta, porque o PostgREST limita silenciosamente cada resposta a 1000 linhas; a consulta precisa de ordenação determinística.",
+      "evidence": [
+        {
+          "resource": "repo://lib/supabasePaginate.ts#L1-L42",
+          "version": "repo-lines-v1:sha256:928c40deb132cedc0b01e0c77fcb0f2bf750b6590bf5d14593535d6285f58cd6:eyJzZWxlY3RlZExpbmVDb3VudCI6NDIsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBlMTgxMGFhNWYyM2JiZjQ5Zjg3OGEzZTU5YTRhNmQyZDhiMDMwYzE2MDRiNzEzYjFiMmMxZGVhZDllNzZmOGYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_37325e3a728945b1a4e95b1d43ce73f9",
+      "statement": "O store deriva de uma única busca ALL três listas: projects (só OBRA, sem projetos de sistema), allProjects (quatro classificações sem projetos de sistema) e systemProjects; setProjects aplica os mesmos cortes.",
+      "evidence": [
+        {
+          "resource": "repo://store/useStore.ts#L293-L339",
+          "version": "repo-lines-v1:sha256:7abe8bea9829246f3cfd395c9c0575cb22b7866b197a97c170c55eeac3474971:eyJzZWxlY3RlZExpbmVDb3VudCI6NDcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjIxNTJmMmM3M2VkZTdjMjNiY2ViMmNlMjgxYzQ2MDQwYmIyMzNkZjM5YWU4MGYxMzRkYWMyZDk5OTE3YjI1MmUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjYwNDBmYWVlYmYzYzllMjNkNDlhZDEyNzg4YzAwYWVjZWFkOTJjZjJmOTgxY2Y5YTZiNWQzZDljNWVkNDFlMGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjljODA5YWJmNzc0OTUxZDU0YzRkMzIyYTBiZDIzZmU4NzYxOTM1M2IzZjI0ZTNlN2M1ZGJkNzliNDZhMTkzMzkifQ"
+        },
+        {
+          "resource": "repo://store/useStore.ts#L94-L122",
+          "version": "repo-lines-v1:sha256:e32fa10599bd0ee3b60c9888fc73813f4c83927a3eae2adc90657adf4e1f3a1a:eyJzZWxlY3RlZExpbmVDb3VudCI6MjksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImQ2NjA3YTMzMzg5MGFiNDBhYWU1M2FiZGM5MjExNzAzMTgxODhlOTljMjI5N2Y1NGFlMTIzMTRlYWJkNjkxODkiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjZiYTEwM2QxNGZkZThiZmE2ODBhNGNlZDE5YTkyZDRiOWE2NGZhYjZiY2NjMWM1NDg0NzBhMzY4OWMwMmQ5YzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImViN2Y2Zjk0ZDQwZDE3MjZjNjcwMmFjNDQ0MjUwOWRkZDQ3ODFjZTE2MDQ1MjMyZWE4NDFiZjJkMjRkYjQxN2MiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjgwOGE4NWI4NTc0MWIyYzZkYTViMmNhZmNhZTZhODcwYjJmMzA4OWVhNGNkYzI0YTg1MTM0NWU5Mjg2NzBkODYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_3641d92522b9405a930001a6d785a72f",
+      "statement": "activeOrganizationId null representa 'Todas as organizações', persistido como a string 'TODAS' no localStorage; trocar a organização zera a empresa ativa, e o primeiro login começa em 'Todas'.",
+      "evidence": [
+        {
+          "resource": "repo://store/useStore.ts#L241-L249",
+          "version": "repo-lines-v1:sha256:8858211ab91d9ec91d5449b68733e4c657fff31720fa22ef77d5c89fd684bb89:eyJzZWxlY3RlZExpbmVDb3VudCI6OSwiZmlyc3RTZWxlY3RlZExpbmVIYXNoIjoiN2E2ZTZkYzNlZWUzNTBjNThlNWM2NjAxYzIzNTI4MzAzZTQ5NDg4OTVhMzAzZDUzOWQ3MTJhNDIwOTE0YWY1ZiIsImxhc3RTZWxlY3RlZExpbmVIYXNoIjoiZTg3NGYwNTUyZTg2ZjM3MmNmMjczNGU5ODFhMzRlZTNkZDVlODI1NzdlNzc2ZDc1YmQ3ZDQzYTkzNGU2NDdjZCIsInByZWNlZGluZ0NvbnRleHRMaW5lQ291bnQiOjMsInByZWNlZGluZ0NvbnRleHRIYXNoIjoiMzEyMDA5NzUzOWI2ZDQyMjVlNTI5YTliOTk3MGFhNTM4ZDliMjQyZDA3NGY1ZjJjMDE4Yjg3ODQyNzg3MDViYyIsImZvbGxvd2luZ0NvbnRleHRMaW5lQ291bnQiOjMsImZvbGxvd2luZ0NvbnRleHRIYXNoIjoiNDhkNTU1OGRmOTg2ZmQ5NjBkMDg2MWM1YTdjZWEzOTNhOGQ0ZjEwNTU5ZTA1NWEyZjE4ZGI4NGUzMWJkYzFjNiJ9"
+        },
+        {
+          "resource": "repo://store/useStore.ts#L349-L367",
+          "version": "repo-lines-v1:sha256:afb6ae86694837ba4dd72a747387f94a4fa5a855c597a1801031a8fb0b50c2d6:eyJzZWxlY3RlZExpbmVDb3VudCI6MTksImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImZjYTZmNzZlZDkyNGZhMTliZTFkZjk2NWM5NGViOTkyNzkzMDAxZDk3NzBjNmU4MTRlMWZkMTc3MmQ5MGVlNGEiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjJlOTY3NzI0YjkxNzNmYWY2YTk4MDVmZDEzYjZiOTEzNGFhMThlMWIxZGM1YmI3MThjMWJlYTlkY2FhYzlkNzEiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjM3ZDlmM2QzM2Q2MjAzZjg5MWY0OWY0MWNkNDRjZGJhYmFiNDhlZTg3NmZiYzE1Njk0MjdiNWQ5ZTRlMTIwZWMifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_0a74fe54447447228cb9c157ccd89ff7",
+      "statement": "fetchCompanies nunca elege a matriz como empresa ativa; se a empresa salva não existe mais na lista, a seleção volta a nenhuma.",
+      "evidence": [
+        {
+          "resource": "repo://store/useStore.ts#L260-L286",
+          "version": "repo-lines-v1:sha256:d64e32c1c5bae2b634c58dfb9cfdfed45ecc3548fd1032becee71b730384e55b:eyJzZWxlY3RlZExpbmVDb3VudCI6MjcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImM4NmEwNzVkZDQ0Zjg4NGU5NjU3YWNkOGIxNGIxYWQ3OGI3M2MxMDg1YTI4MmQ2ZTI3ZDRiMDJjYWY2MDdkMjgiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImU4NzRmMDU1MmU4NmYzNzJjZjI3MzRlOTgxYTM0ZWUzZGQ1ZTgyNTc3ZTc3NmQ3NWJkN2Q0M2E5MzRlNjQ3Y2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjM5ZDM2NmFmZjA5OGMxYjU2NTU5ZTU5YzkxMGQ4Yzc5N2EzYmQzMWUyYWJlOTYxY2MwOTY4MjVhZDE1OTNjYzYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImIzN2E2M2M1Y2M1M2U3NmJhNjlhYzJlMDhlOTcwY2Y1N2U0ZDljNmE3Yjk3MzcxN2E1OGU5ZTc0MTQ5MDk0MjYifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_51fb5dd5dcdd4df78df285fcc1361532",
+      "statement": "logout remove apenas as chaves sb-* e orca_* do localStorage (preservando preferências de UI), limpa o sessionStorage, avisa outras abas e redireciona para a página de login de origem.",
+      "evidence": [
+        {
+          "resource": "repo://store/useStore.ts#L368-L395",
+          "version": "repo-lines-v1:sha256:6b2994e73ad9886687e96f9ce005c446af5de1bc2c7af9bd6710d080639491dd:eyJzZWxlY3RlZExpbmVDb3VudCI6MjgsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImEwMTE2NTcyODA0ZTIxNzYyNTliM2I1YmYwZTE1NDc4ZjgyNDI2ZDliMjZjYTkzZWRkNjk3ODMzM2RmZGE3N2YiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjE0MTlhNmRjYzA0ZTIxM2EzYzdhNzdhNDU2YjAxZTc2ZDFlZjc4Y2QwMGJiZWMxZDhmODE0NThmZTkzZWRjNTYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjI5NmUwOTM3NmM2ODYzMTA4OTc1ZDBlMmRlNTAyMjgzZDNkNmZlZDI2MzZiNmViNDhiZWZkZmMxZTI1Nzk1OTgiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjoxLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImE3ZjE1NzI3YTgzZTIzZWNlNzdhNDhmYmUwZGMzYWQ3ZDkyMjU5ZDBkYTFlN2E3NzkyNWJjMWUzYjI5NDVhYWQifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ddfca4e670854ca095ae8346ae2a4d94",
+      "statement": "O QueryClient singleton usa staleTime de 2 min, gcTime de 10 min, retry 1 e refetchOnWindowFocus desligado, e exporta níveis STALE slow/normal/fast.",
+      "evidence": [
+        {
+          "resource": "repo://lib/queryClient.ts#L1-L31",
+          "version": "repo-lines-v1:sha256:5347755b03f7259dc631d77af7663974bae80d4a70925affce83f62185fc83d0:eyJzZWxlY3RlZExpbmVDb3VudCI6MzEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVkNjU1NTdjZWQ2ZWEzMzRiN2YxNmQ4NzU2MTZlMDY1NDk4M2IwMDU5YjkzMjJkZjQ4NGRiYjQzOGNmMmNiZDciLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjAzYzQ5ZGYzMTJlOWI4ZDgwYTRkODRiZjZmYTU0ODJjM2I3MThmODgxOGU4OWU2OTg4ZjRmNTcwNDk3N2JmNzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjowLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_ca95c18401bd47129b7e1d53834af0f1",
+      "statement": "As chaves do React Query vêm de fábricas hierárquicas em lib/queryKeys.ts, consumidas por hooks de consulta que encapsulam chave, staleTime e chamada ao service; mutações invalidam as chaves afetadas no onSuccess.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useLaborMutations.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:06b058a355d4baf84ea48be890667a55f061446724085b83e4ef8bb2b1ea5366:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk3ZWUxZTkwODRkOTA1ZmM4ZDEwZDY3NGY3YjJlN2I2ZGNkZmQ5YTcyMTVhMmRhMTFhOTk5ZTEzYzhhZThhNjcifQ"
+        },
+        {
+          "resource": "repo://hooks/useLaborQueries.ts#L1-L35",
+          "version": "repo-lines-v1:sha256:4ab8bf47225ed52594389958e0564be9ec52c48e69dac67b108143a63829bcf7:eyJzZWxlY3RlZExpbmVDb3VudCI6MzUsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImUyMmZhYTUzNWJkMmVhM2Q1MmU3NDFlZDQ1NDQzNWI3ZmU0OWU4MzU4NmU5NDNkOThkODJiYmZiMjRkMWY1YzUiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjY4MDg1M2Q0Y2EzMDUxN2EwNDZhYjFjNDQ4OGI4YTE0NDczYTZlMzJlNmFiMzllMDViZGRmYjU5YTc5MmMzYmUifQ"
+        },
+        {
+          "resource": "repo://lib/queryKeys.ts#L1-L30",
+          "version": "repo-lines-v1:sha256:13bfacf7ce6555e718b358405f5ec7413868cde5561df07b7c555c409b66bcef:eyJzZWxlY3RlZExpbmVDb3VudCI6MzAsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjQ1ZDVhYmFjYTIyNjgwYWU5NTMzNjcwMGRmNzY2MzYxOTdhN2NiNmMwMDRmNGNkNzlhYzFiMWZkMmYwYWM0YTUiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY5ZTRmMWZlZGY1Y2E5NGE2MjIxMzM0NmRhM2Y1ZWIxYWQ2ZDAxYzg4YjRlZjVjMDZmYjQ1NTQ1OGE5YWNmNjYiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjowLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImUzYjBjNDQyOThmYzFjMTQ5YWZiZjRjODk5NmZiOTI0MjdhZTQxZTQ2NDliOTM0Y2E0OTU5OTFiNzg1MmI4NTUiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6ImY2ODM5ZGFmYzE3YmZiNGQ3ZDE1OGMwNWJlNmM0MjBiOGVkZGYwYTJkNDcyMDBkMzYwYTQ5MDUzMmNmNTVkNjEifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_562f55c4cdef458587da723fb4d82e6e",
+      "statement": "O auto-save do orçamento do projeto ativo grava com debounce de 2 s e, se o projeto é trocado durante o debounce, salva imediatamente o projeto que está saindo.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/usePersistenceSync.ts#L163-L225",
+          "version": "repo-lines-v1:sha256:60bb2f42866f2aacac5836e84b1ed80eefd4b733e07315c3a0e4bdb84dfea7f6:eyJzZWxlY3RlZExpbmVDb3VudCI6NjMsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImRjOTMwZDgxYTkwY2ZjZWQ2NjgzMGJhNTJkNDg1N2YzYTgyODZkNWQ2YTdlMTY4YTNhZTZiMzQ2OGVmODRmNjMiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6IjU1OTA3MWY0ZmQzMWI1MTU1NTE0ZDFhODY5ZGZiMGRmMjkzY2QxYzUwYjk2MTQyN2Y4MzJkZDIyZTljZmYxODIiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjEwNzY2M2FmY2M0MTU5NDlhN2U3MWQzOWFmMzhkMDExZmQxMTNlNDhmNjQ1YmJkOTA0YmRlNmU4ZGQ3YTRhNGMiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk1N2Q0NDBkM2RhODQ5ZGNiN2NiZTAwYjBmMzUwMTQ4YTUzNGQ1NWMyYmNhZTFlZGQ0YmYxMGE4ZDY4NGFiZGIifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_aba08f756800490ebe202460d82c8b50",
+      "statement": "Seleções transitórias de Suprimentos, Imovib, vendas, locações e diário são apagadas do localStorage ao sair da view correspondente, e a lista de views de Suprimentos inclui o Mapa de Cotação para não apagar a cotação que ele vai ler.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/usePersistenceSync.ts#L105-L161",
+          "version": "repo-lines-v1:sha256:cc60944ffe9ca031df12953ce3460e64954dca70a928a8e4df7ba0b6ccb65990:eyJzZWxlY3RlZExpbmVDb3VudCI6NTcsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6IjM1MGUxNzA3ZjYwMjI1MTUwMjYyNzI0YmY0OGEzYjg1NDAwZGIzNjJlYmI1NWY2NDc2N2NmNjAwODllZWNjMDQiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImY0Yjc2NjFmNTRhZmEzZDc0OWM3NDdhZWJmOWQxZDliMmU1NDFkNmFjNTYwZTVlZTg5N2JkZWM4OTlhZWQ3M2QiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6ImI4Nzk5M2NlZWQ4YWViMWI3Nzg1NzQzZmMwOTViOGMwMzI1NzFlZTFjNDVjMmNjZjhjNzlhMDU2YTM5MDQ5NjkiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6IjBmNDIwMzE3ZDFhODJjNjJhNTFkMDA4NTM3NjYzOTJiNzRmZmRiMmE5MTgwZWYyMjQ4NDViYmViNTRlM2Y3NTgifQ"
+        }
+      ]
+    },
+    {
+      "id": "claim_d612a96fe17d46a8865992c8f410dc76",
+      "statement": "useAuthSync valida o acesso ao grupo de login escolhido via profileService.validateAccess antes de marcar o perfil como sincronizado, e não desconecta quando a sessão veio de outra aba.",
+      "evidence": [
+        {
+          "resource": "repo://hooks/useAuthSync.ts#L95-L135",
+          "version": "repo-lines-v1:sha256:5019bbada57a9b26ca42914876bd6ad20e2279afdd5b53d485a47563cb5a1479:eyJzZWxlY3RlZExpbmVDb3VudCI6NDEsImZpcnN0U2VsZWN0ZWRMaW5lSGFzaCI6ImI0ODNkOGQzNWZiMDBiZGRkZDE1M2VlYTQzODA2ZmUxYjM5NTZmMzc4NTBlMzAzNDFhZWNiMGQ0MDc0MTA1M2UiLCJsYXN0U2VsZWN0ZWRMaW5lSGFzaCI6ImVjZDE5NjA1MjhlYmI1NWQ0ZTM3NDhhMTU0ZTkwZGJiYzk0NTc5NjJhNzJlOTRjOTZkNTIwYTRiNzA5MmQ2MzkiLCJwcmVjZWRpbmdDb250ZXh0TGluZUNvdW50IjozLCJwcmVjZWRpbmdDb250ZXh0SGFzaCI6IjhmY2YzYWNhNzgyNTQwZGQ2Nzk1M2Q4NmMxODc1MDM0NWFlMGRmYjM0Y2I4YmIyNTU3NDg0NTMzYjBjNGJmNDYiLCJmb2xsb3dpbmdDb250ZXh0TGluZUNvdW50IjozLCJmb2xsb3dpbmdDb250ZXh0SGFzaCI6Ijk5NDliZTllOGQyZjM0ODFiZjYxZGMxYWE1NWI5NDA5YzAzYTk4ZTI4MTBlYWM2NGM0NGNmZTFjMGJiNjcxNzYifQ"
+        }
+      ]
+    }
+  ],
+  "verification": {
+    "by": "openwiki/0.7.2",
+    "at": "2026-10-29T16:11:22.971Z"
+  }
+}

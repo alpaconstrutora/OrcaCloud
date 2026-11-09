@@ -17300,6 +17300,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                 // O corte da prancha com o MESMO terreno da tela (a camada "Curvas de nível")
                 // e as mesmas escolhas de Vista › Exibir (13/10/2026).
                 terrenoDoCorte={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
+                pisosDaMassa={pisosDaMassa}
+                exibirNaMassa={{ blocos: mostrarNomesDosBlocosNaVista, unidades: mostrarUnidadesNaVista, posicao: mostrarPosicaoNaVista, pavimentos: mostrarPavimentosNaVista }}
                 cotasDoTerrenoNoCorte={mostrarCotasDoTerrenoNoCorte}
                 comprimentosNoCorte={mostrarComprimentosNoCorte}
                 hipotesesDeIncendio={incendioDoEstudo.hipoteses}

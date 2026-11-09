@@ -32,6 +32,8 @@ export interface BlocoNaVista {
   /** Quantos pavimentos e o piso a piso (09/11/2026): o pavimento k (1 = o de baixo) vai de vMin + (k−1)·pé-direito. */
   pavimentos: number;
   peDireitoMm: number;
+  /** O nome e a elevação do cadastro de cada pavimento (1 = o de baixo), quando o bloco é de uma torre (09/11/2026). */
+  rotulosDosPisos?: { nome: string; elevacaoMm: number | null }[];
 }
 
 /**
@@ -70,9 +72,23 @@ export function massaNaVista(model: BlueprintModel, base: BaseElevacao, origem: 
  * eles. É ela que a tela, a prancha (PDF/PNG) e o DXF recebem — os três desenham a mesma coisa. Só com blocos, a
  * caixa é a deles (e a linha do solo); com peças, a união.
  */
-export function comMassa<P extends ProjecaoElevacao | ProjecaoCorte>(model: BlueprintModel, proj: P, origem: Point | null, levelIds?: readonly ObjectId[]): P {
-  const massa = massaNaVista(model, proj.base, origem, levelIds);
-  if (massa.length === 0) return proj;
+export function comMassa<P extends ProjecaoElevacao | ProjecaoCorte>(
+  model: BlueprintModel,
+  proj: P,
+  origem: Point | null,
+  levelIds?: readonly ObjectId[],
+  /** 09/11/2026: os pavimentos das torres — com eles, a projeção leva também as unidades e os nomes dos pavimentos. */
+  pisos?: PisosDaMassa | null,
+): P {
+  const semRotulos = massaNaVista(model, proj.base, origem, levelIds);
+  if (semRotulos.length === 0) return proj;
+  const massa = pisos
+    ? semRotulos.map((b) => {
+        const daTorre = pisos.get(b.blocoId);
+        return daTorre ? { ...b, rotulosDosPisos: daTorre.map((p) => ({ nome: p.nome, elevacaoMm: p.elevacaoMm })) } : b;
+      })
+    : semRotulos;
+  const unidadesDaMassa = pisos ? unidadesNaVista(massa, proj.base, origem, (id, k) => pisos.get(id)?.[k - 1]?.unidades) : undefined;
   const semPecas =
     proj.paredes.every((p) => p.degenerada) &&
     proj.estruturas.every((e) => e.degenerada) &&
@@ -88,7 +104,7 @@ export function comMassa<P extends ProjecaoElevacao | ProjecaoCorte>(model: Blue
     : { uMin: Math.min(proj.bbox.uMin, uMin), uMax: Math.max(proj.bbox.uMax, uMax), vMin: Math.min(proj.bbox.vMin, vMin), vMax: Math.max(proj.bbox.vMax, vMax) };
   // A linha do solo atravessa a caixa toda: sem estender, ela parava onde acabavam as peças.
   const linhaDoSolo = { ...proj.linhaDoSolo, uMin: Math.min(proj.linhaDoSolo.uMin, bbox.uMin), uMax: Math.max(proj.linhaDoSolo.uMax, bbox.uMax) };
-  return { ...proj, massa, bbox, linhaDoSolo };
+  return { ...proj, massa, bbox, linhaDoSolo, ...(unidadesDaMassa ? { unidadesDaMassa } : {}) };
 }
 
 /** Uma unidade de um pavimento do bloco, na planta (a fatia do 3D e da planta baixa). */
@@ -178,6 +194,63 @@ export function unidadesNaVista(
         for (const [p0, p1] of semOsCobertos(u0, u1, cobertos)) out.push({ ...comum(f), uMin: p0, uMax: p1 });
         cobertos.push([u0, u1]);
       }
+    }
+  }
+  return out;
+}
+
+/** Os pavimentos das torres, por bloco: cada um (1 = o de baixo) com o nome, a elevação e as unidades na planta. */
+export type PisosDaMassa = ReadonlyMap<string, readonly { nome: string; elevacaoMm: number | null; unidades: readonly FatiaDoPiso[] }[]>;
+
+/** O que escrever na massa — cada um com o seu liga/desliga no Exibir das vistas. */
+export interface ExibirNaMassa {
+  blocos: boolean;
+  unidades: boolean;
+  posicao: boolean;
+  pavimentos: boolean;
+}
+
+const ROTULO_DA_POSICAO: Record<string, string> = { FRENTE: 'Frente', FUNDOS: 'Fundos', LATERAL: 'Lateral' };
+
+/** "101 · Frente" (com a Posição) ou "101". Quem desenha usa o primeiro que couber, e o segundo se só ele couber. */
+export function textosDaUnidade(u: Pick<UnidadeNaVista, 'nome' | 'posicao'>, comPosicao: boolean): string[] {
+  return comPosicao && u.posicao ? [`${u.nome} · ${ROTULO_DA_POSICAO[u.posicao] ?? u.posicao}`, u.nome] : [u.nome];
+}
+
+/** O rótulo de um pavimento ao lado do bloco: em que borda, a que altura, e o texto. */
+export interface RotuloDoPavimento {
+  blocoId: ObjectId;
+  /** INICIO = antes do menor `u` (à esquerda no papel), por fora; FIM = depois do maior, por fora; DENTRO = no bloco. */
+  lado: 'INICIO' | 'FIM' | 'DENTRO';
+  /** A borda do bloco de onde o texto parte. */
+  u: number;
+  /** O meio do pavimento. */
+  v: number;
+  texto: string;
+}
+
+const fmtElevacao = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toFixed(2).replace('.', ',')}`;
+
+/**
+ * OS PAVIMENTOS AO LADO DO BLOCO (09/11/2026): "nome +elevação" de cada pavimento — por fora, antes do bloco que
+ * encosta no começo do conjunto e depois do que encosta no fim; o do meio, por dentro. Um bloco cortado em dois trechos
+ * ("L") escreve uma vez por lado. Sem cadastro: "Nº pav" e a cota do desenho. A tela, a prancha e o DXF usam este.
+ */
+export function rotulosDosPavimentos(massa: readonly BlocoNaVista[]): RotuloDoPavimento[] {
+  if (massa.length === 0) return [];
+  const inicio = Math.min(...massa.map((b) => b.uMin));
+  const fim = Math.max(...massa.map((b) => b.uMax));
+  const feitos = new Set<string>();
+  const out: RotuloDoPavimento[] = [];
+  for (const b of massa) {
+    const lado = Math.abs(b.uMin - inicio) < 1 ? 'INICIO' : Math.abs(b.uMax - fim) < 1 ? 'FIM' : 'DENTRO';
+    const chave = `${b.blocoId}|${lado}`;
+    if (feitos.has(chave)) continue;
+    feitos.add(chave);
+    for (let k = 1; k <= b.pavimentos; k++) {
+      const vMin = b.vMin + (k - 1) * b.peDireitoMm;
+      const r = b.rotulosDosPisos?.[k - 1];
+      out.push({ blocoId: b.blocoId, lado, u: lado === 'FIM' ? b.uMax : b.uMin, v: vMin + b.peDireitoMm / 2, texto: `${r?.nome ?? `${k}º pav`} ${fmtElevacao(r?.elevacaoMm ?? vMin)}` });
     }
   }
   return out;

@@ -71,6 +71,7 @@ import {
 } from './blueprintCotas';
 import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, linhasDaRegiao, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
+import { rotulosDosPavimentos, textosDaUnidade, type ExibirNaMassa } from './blueprintMassaNaVista';
 import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { medidasDoCorte } from './blueprintCorteMedidas';
@@ -591,6 +592,8 @@ import { caixaDoDesenho } from './blueprintExport';
 import { desenharUnifilar, desenharUnifilarEmArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from './blueprintUnifilar';
 
 export interface OpcoesDxf {
+  /** O que escrever na massa das vistas (09/11/2026) — os liga/desliga de Vista › Exibir. Ausente = tudo. */
+  exibirNaMassa?: ExibirNaMassa;
   titulo: string;
   revisao: number;
   hash: string;
@@ -751,7 +754,7 @@ function entidadesDeAnotacoes(anotacoes: readonly Anotacao[], P: (p: Ponto) => P
   return saida;
 }
 
-function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: number): string {
+function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: number, exibir?: ExibirNaMassa): string {
   const dx = offsetX - proj.bbox.uMin;
   const bv = proj.bbox.vMin;
   const P = (u: number, v: number) => ({ x: u + dx, y: v - bv });
@@ -764,9 +767,30 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
   );
 
   // A MASSA (29/10/2026): o contorno de cada bloco e as linhas dos pavimentos.
+  // 09/11/2026: o nome do bloco, as unidades (divisa e número) e os pavimentos — os mesmos liga/desliga da tela. O
+  // texto em mm reais (o DXF é 1:1): 300 mm o nome, 200 mm o resto; a largura estimada (0,6 × altura por letra)
+  // decide se a Posição cabe.
+  const ver = { blocos: exibir?.blocos ?? true, unidades: exibir?.unidades ?? true, posicao: exibir?.posicao ?? true, pavimentos: exibir?.pavimentos ?? true };
+  const cabe = (t: string, altura: number, largura: number) => t.length * altura * 0.6 + altura <= largura;
   for (const b of proj.massa ?? []) {
     saida += polilinha(CAMADAS.ELEV_MASSA, [P(b.uMin, b.vMin), P(b.uMax, b.vMin), P(b.uMax, b.vMax), P(b.uMin, b.vMax)]);
     for (const v of b.pisos) saida += linha(CAMADAS.ELEV_MASSA, P(b.uMin, v), P(b.uMax, v));
+    if (ver.blocos) saida += texto(CAMADAS.ELEV_MASSA, P((b.uMin + b.uMax) / 2, b.vMax - 450), b.nome, 300, { centralizar: true });
+  }
+  if (ver.unidades) {
+    for (const u of proj.unidadesDaMassa ?? []) {
+      saida += linha(CAMADAS.ELEV_MASSA, P(u.uMin, u.vMin), P(u.uMin, u.vMax));
+      saida += linha(CAMADAS.ELEV_MASSA, P(u.uMax, u.vMin), P(u.uMax, u.vMax));
+      const t = textosDaUnidade(u, ver.posicao).find((x) => cabe(x, 200, u.uMax - u.uMin));
+      if (t) saida += texto(CAMADAS.ELEV_MASSA, P((u.uMin + u.uMax) / 2, (u.vMin + u.vMax) / 2), t, 200, { centralizar: true });
+    }
+  }
+  if (ver.pavimentos) {
+    for (const r of rotulosDosPavimentos(proj.massa ?? [])) {
+      const largura = r.texto.length * 200 * 0.6;
+      const u = r.lado === 'INICIO' ? r.u - 300 - largura : r.lado === 'FIM' ? r.u + 300 : r.u + 150;
+      saida += texto(CAMADAS.ELEV_MASSA, P(u, r.v - 100), r.texto, 200);
+    }
   }
 
   for (const p of proj.paredes) {
@@ -1123,7 +1147,7 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
     const passo =
       Math.max(...o.elevacoes.map((p) => p.bbox.uMax - p.bbox.uMin), 1) + 3000;
     for (const proj of o.elevacoes) {
-      dxf += entidadesDeElevacao(proj, offsetX);
+      dxf += entidadesDeElevacao(proj, offsetX, o.exibirNaMassa);
       // As anotações desta vista (E8.1), no mesmo deslocamento do bloco.
       const daVista = (model.anotacoes ?? []).filter((a) =>
         'corteId' in proj ? a.vista.tipo === 'CORTE' && a.vista.corteId === proj.corteId : a.vista.tipo === 'ELEVACAO' && a.vista.direcao === proj.direcao,

@@ -50,6 +50,7 @@ import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import type { ProjecaoCorte, TerrenoParaCorte } from './blueprintCorte';
+import { rotulosDosPavimentos, textosDaUnidade, type ExibirNaMassa, type PisosDaMassa } from './blueprintMassaNaVista';
 import { medidasDoCorte } from './blueprintCorteMedidas';
 import {
   AFASTAMENTO_COTA,
@@ -369,6 +370,13 @@ export interface OpcoesExportacao {
    * do terreno, a linha do platô e as medidas; ausente, o corte sai como sempre saiu.
    */
   terrenoDoCorte?: TerrenoParaCorte | null;
+  /**
+   * A IDENTIFICAÇÃO DA MASSA NA PRANCHA (09/11/2026, *"implementar unidades e pavimentos também"*): os pavimentos das
+   * torres (com as unidades) e o que escrever — os mesmos liga/desliga de Vista › Exibir. Ausentes = só os blocos e
+   * os nomes deles.
+   */
+  pisosDaMassa?: PisosDaMassa | null;
+  exibirNaMassa?: ExibirNaMassa;
   /** As cotas do terreno no corte (níveis, corte/aterro, talude, muro). Ausente = sim, havendo terreno. */
   cotasDoTerrenoNoCorte?: boolean;
   /** A cadeia de comprimentos abaixo do corte. Ausente = sim, havendo terreno. */
@@ -1540,7 +1548,31 @@ export function desenharElevacao(
       tracejar(c.x + c.w, c.y + c.h, c.x, c.y + c.h, contorno);
       tracejar(c.x, c.y + c.h, c.x, c.y, contorno);
     } else d.retangulo(c.x, c.y, c.w, c.h, contorno);
-    if (c.w > 12 && c.h > 5) d.texto(c.x + c.w / 2, c.y + 3.2, b.nome, 2.2, COR_TRACO, { centralizar: true });
+    if ((opcoes.exibirNaMassa?.blocos ?? true) && c.w > 12 && c.h > 5) d.texto(c.x + c.w / 2, c.y + 3.2, b.nome, 2.2, COR_TRACO, { centralizar: true });
+  }
+  // A largura do texto: a do desenhista, quando ele sabe medir; senão, a estimativa de 0,6 × altura por letra.
+  const larguraDe = (t: string, altura: number) => (d.larguraDoTexto ? d.larguraDoTexto(t, altura) : t.length * altura * 0.6);
+  // AS UNIDADES (09/11/2026): a divisa tracejada de cada trecho e o número (com a Posição, se ligada e se couber).
+  if (opcoes.exibirNaMassa?.unidades ?? true) {
+    for (const u of projecao.unidadesDaMassa ?? []) {
+      const c = caixa(u.uMin, u.uMax, u.vMin, u.vMax);
+      const fina = { espessuraMm: ESPESSURA_FINA_MM, cor: COR_TRACO };
+      tracejar(c.x, c.y, c.x, c.y + c.h, fina);
+      tracejar(c.x + c.w, c.y, c.x + c.w, c.y + c.h, fina);
+      const altura = Math.min(1.8, c.h * 0.4);
+      const texto = textosDaUnidade(u, opcoes.exibirNaMassa?.posicao ?? true).find((t) => larguraDe(t, altura) + 1 <= c.w);
+      if (texto && altura >= 1) d.texto(c.x + c.w / 2, c.y + c.h / 2 + altura / 2, texto, altura, COR_TRACO, { centralizar: true });
+    }
+  }
+  // OS PAVIMENTOS (09/11/2026): "nome +elevação" ao lado do bloco — por fora no começo e no fim do conjunto.
+  if ((opcoes.exibirNaMassa?.pavimentos ?? true) && (projecao.massa ?? []).length > 0) {
+    for (const r of rotulosDosPavimentos(projecao.massa ?? [])) {
+      const altura = 1.8;
+      const x = px(r.u);
+      const y = py(r.v) + altura / 2;
+      const largura = larguraDe(r.texto, altura);
+      d.texto(r.lado === 'INICIO' ? x - 1.5 - largura : r.lado === 'FIM' ? x + 1.5 : x + 1, y, r.texto, altura, '#333333');
+    }
   }
 
   for (const p of projecao.paredes) {

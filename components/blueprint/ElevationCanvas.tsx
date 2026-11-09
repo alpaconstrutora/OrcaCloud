@@ -19,7 +19,7 @@ import {
 } from '../../utils/blueprintElevation';
 import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
-import { comMassa, unidadesNaVista, type BlocoNaVista, type FatiaDoPiso } from '../../utils/blueprintMassaNaVista';
+import { comMassa, rotulosDosPavimentos, textosDaUnidade, type BlocoNaVista, type ExibirNaMassa, type PisosDaMassa } from '../../utils/blueprintMassaNaVista';
 import { COR_DO_USO_DO_BLOCO } from '../../utils/blueprintMassa';
 import { DESTAQUE_DO_USO, tomClaro } from '../../utils/blueprintConcepcao';
 import type { UsoDoBloco } from '../../utils/blueprintKernel/model';
@@ -87,9 +87,9 @@ interface Props {
    * posição etc"*): por bloco, cada pavimento (1 = o de baixo) com o nome, a elevação do cadastro e as unidades na
    * planta (a mesma arrumação da planta baixa e do 3D). Ausente = só o que o modelo diz (nomes e "Nº pav").
    */
-  pisosDaMassa?: ReadonlyMap<string, readonly { nome: string; elevacaoMm: number | null; unidades: readonly FatiaDoPiso[] }[]> | null;
+  pisosDaMassa?: PisosDaMassa | null;
   /** O que escrever na massa — cada um com o seu liga/desliga no Exibir das vistas. Ausente = tudo. */
-  exibirNaMassa?: { blocos: boolean; unidades: boolean; posicao: boolean; pavimentos: boolean };
+  exibirNaMassa?: ExibirNaMassa;
   className?: string;
 }
 
@@ -229,10 +229,10 @@ export default function ElevationCanvas({
     () =>
       // Com a massa (29/10/2026): a MESMA projeção que a prancha e o DXF recebem.
       corte
-        ? comMassa(model, projetarCorte(model, { corte, levelIds, terreno }), corte.a, levelIds)
-        : comMassa(model, projetarElevacao(model, { direcao, levelIds }), null, levelIds),
+        ? comMassa(model, projetarCorte(model, { corte, levelIds, terreno }), corte.a, levelIds, pisosDaMassa)
+        : comMassa(model, projetarElevacao(model, { direcao, levelIds }), null, levelIds, pisosDaMassa),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y, terrenoChave, !!terreno],
+    [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y, terrenoChave, !!terreno, pisosDaMassa],
   );
 
   // OS BLOCOS DE MASSA (29/10/2026): "coloquei um corte na planta porém a mensagem que recebo é nada para mostrar".
@@ -243,14 +243,8 @@ export default function ElevationCanvas({
   const verPosicao = exibirNaMassa?.posicao ?? true;
   const verPavimentos = exibirNaMassa?.pavimentos ?? true;
   /** As unidades de cada pavimento: as que o corte atravessa, ou as que a fachada mostra (09/11/2026). */
-  const unidadesDaMassa = useMemo(
-    () =>
-      verUnidades && pisosDaMassa && massa.length > 0
-        ? unidadesNaVista(massa, projecao.base, corte ? corte.a : null, (id, k) => pisosDaMassa.get(id)?.[k - 1]?.unidades)
-        : [],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [verUnidades, pisosDaMassa, massa, projecao, corte?.a.x, corte?.a.y],
-  );
+  // A projeção já traz as unidades (`comMassa` com os pavimentos) — a mesma conta da prancha e do DXF.
+  const unidadesDaMassa = useMemo(() => (verUnidades ? (projecao.unidadesDaMassa ?? []) : []), [verUnidades, projecao]);
 
   // As medidas do terreno (níveis, corte/aterro, comprimentos) — puras, só no corte.
   const medidas = useMemo(() => (ehCorte(projecao) ? medidasDoCorte(projecao) : null), [projecao]);
@@ -503,7 +497,6 @@ export default function ElevationCanvas({
 
     // 1e. AS UNIDADES (09/11/2026): a divisa de cada trecho de unidade no pavimento (tracejada) e o número — com a
     //     Posição do cadastro ao lado quando ligada e quando cabe; se não cabe, só o número; nem isso, nada.
-    const ROTULO_DA_POSICAO: Record<string, string> = { FRENTE: 'Frente', FUNDOS: 'Fundos', LATERAL: 'Lateral' };
     for (const u of unidadesDaMassa) {
       const p1 = paraTela({ x: u.uMin, y: u.vMax });
       const p2 = paraTela({ x: u.uMax, y: u.vMin });
@@ -527,8 +520,7 @@ export default function ElevationCanvas({
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillStyle = '#0f172a';
-        const comPosicao = verPosicao && u.posicao ? `${u.nome} · ${ROTULO_DA_POSICAO[u.posicao] ?? u.posicao}` : null;
-        const texto = comPosicao && ctx.measureText(comPosicao).width + 6 <= w ? comPosicao : ctx.measureText(u.nome).width + 6 <= w ? u.nome : null;
+        const texto = textosDaUnidade(u, verPosicao).find((t) => ctx.measureText(t).width + 6 <= w);
         if (texto) ctx.fillText(texto, x + w / 2, y + h / 2 + (verNomesDosBlocos ? 4 : 0));
       }
       ctx.restore();
@@ -537,39 +529,21 @@ export default function ElevationCanvas({
     // 1f. OS PAVIMENTOS (09/11/2026): "nome +elevação" de cada pavimento ao lado do bloco — por fora, à esquerda do
     //     bloco que encosta na borda esquerda do conjunto e à direita do que encosta na direita; o do meio, por dentro.
     if (verPavimentos && massa.length > 0) {
-      const telaX = (u: number) => paraTela({ x: u, y: 0 }).x;
-      const xs = massa.flatMap((b) => [telaX(b.uMin), telaX(b.uMax)]);
-      const esquerda = Math.min(...xs);
-      const direita = Math.max(...xs);
-      const fmt = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toFixed(2).replace('.', ',')}`;
-      const feitos = new Set<string>();
       ctx.save();
       ctx.font = '500 11px system-ui, sans-serif';
       ctx.textBaseline = 'middle';
       ctx.fillStyle = '#334155';
-      for (const b of massa) {
-        const x0 = Math.min(telaX(b.uMin), telaX(b.uMax));
-        const x1 = Math.max(telaX(b.uMin), telaX(b.uMax));
-        const lado = Math.abs(x0 - esquerda) < 1 ? 'ESQUERDA' : Math.abs(x1 - direita) < 1 ? 'DIREITA' : 'DENTRO';
-        const chave = `${b.blocoId}|${lado}`;
-        if (feitos.has(chave)) continue;
-        feitos.add(chave);
-        const pisos = pisosDaMassa?.get(b.blocoId);
-        for (let k = 1; k <= b.pavimentos; k++) {
-          const vMin = b.vMin + (k - 1) * b.peDireitoMm;
-          const yMeio = paraTela({ x: 0, y: vMin + b.peDireitoMm / 2 }).y;
-          const piso = pisos?.[k - 1];
-          const texto = `${piso?.nome ?? `${k}º pav`} ${fmt(piso?.elevacaoMm ?? vMin)}`;
-          if (lado === 'ESQUERDA') {
-            ctx.textAlign = 'right';
-            ctx.fillText(texto, x0 - 6, yMeio);
-          } else if (lado === 'DIREITA') {
-            ctx.textAlign = 'left';
-            ctx.fillText(texto, x1 + 6, yMeio);
-          } else {
-            ctx.textAlign = 'left';
-            ctx.fillText(texto, x0 + 4, yMeio, Math.max(20, x1 - x0 - 8));
-          }
+      for (const r of rotulosDosPavimentos(massa)) {
+        const t = paraTela({ x: r.u, y: r.v });
+        if (r.lado === 'INICIO') {
+          ctx.textAlign = 'right';
+          ctx.fillText(r.texto, t.x - 6, t.y);
+        } else if (r.lado === 'FIM') {
+          ctx.textAlign = 'left';
+          ctx.fillText(r.texto, t.x + 6, t.y);
+        } else {
+          ctx.textAlign = 'left';
+          ctx.fillText(r.texto, t.x + 4, t.y);
         }
       }
       ctx.restore();
@@ -1021,7 +995,6 @@ export default function ElevationCanvas({
     projecao,
     massa,
     unidadesDaMassa,
-    pisosDaMassa,
     verNomesDosBlocos,
     verPosicao,
     verPavimentos,

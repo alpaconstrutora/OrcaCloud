@@ -8,7 +8,7 @@ import PagamentoAvulsoSheet from './financeiro/PagamentoAvulsoSheet';
 import { invoiceService } from '../services/invoiceService';
 import { payableService, payableParty } from '../services/payableService';
 import { darfService } from '../services/darfService';
-import { colapsarDarfs } from '../utils/darf';
+import { colapsarDarfs, soOsDeContasAPagar } from '../utils/darf';
 import { exportService } from '../services/exportService';
 import { Invoice, Payable, type Darf } from '../types/financial';
 import type { Organization } from '../types';
@@ -254,8 +254,10 @@ export default function ContasPagarManager({ organizations }: Props) {
     // DARFs (Tributos a Pagar › DARFs): os tributos de um DARF viram UMA linha
     // na tabela de parcelas (`colapsarDarfs`). `payables` continua cru, porque o
     // Fechamento por CC é contábil e lê os tributos um a um.
+    // Tributo só entra nas parcelas com o DARF fechado — enviado para aprovação
+    // (pedido de 09/11/2026); FGTS segue avulso. `soOsDeContasAPagar` corta o resto.
     const [darfs, setDarfs] = useState<Darf[]>([]);
-    const linhas = useMemo(() => colapsarDarfs(payables, darfs), [payables, darfs]);
+    const linhas = useMemo(() => colapsarDarfs(soOsDeContasAPagar(payables, darfs), darfs), [payables, darfs]);
     // Recorte de PARCELAS após busca/status/período — reportado pelo filho, para
     // o export (abaixo) sair igual ao que a tabela mostra, não a lista inteira.
     const [payablesVisible, setPayablesVisible] = useState<Payable[]>([]);

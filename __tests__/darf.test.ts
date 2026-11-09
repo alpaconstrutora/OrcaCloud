@@ -35,9 +35,9 @@ describe('validarSelecaoParaDarf', () => {
         const v = validarSelecaoParaDarf([tributo('a'), tributo('b', { amount: 50, transaction_date: '2026-10-20' })]);
         expect(v).toMatchObject({ ok: true, orgId: 'org1', competencia: '2026-10', total: 150 });
     });
-    it('1 tributo só vale com multa/juros', () => {
-        expect(validarSelecaoParaDarf([tributo('a')]).motivo).toBe('Selecione ao menos 2 tributos');
-        expect(validarSelecaoParaDarf([tributo('a')], true).ok).toBe(true);
+    it('sem mínimo: 1 tributo basta (pedido de 09/11/2026); nenhum não', () => {
+        expect(validarSelecaoParaDarf([tributo('a')]).ok).toBe(true);
+        expect(validarSelecaoParaDarf([]).motivo).toBe('Selecione ao menos 1 tributo');
     });
     it('organizações misturadas', () => {
         expect(validarSelecaoParaDarf([tributo('a'), tributo('b', { organization_id: 'org2' })]).motivo)

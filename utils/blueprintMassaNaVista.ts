@@ -34,6 +34,12 @@ export interface BlocoNaVista {
   peDireitoMm: number;
   /** O nome e a elevação do cadastro de cada pavimento (1 = o de baixo), quando o bloco é de uma torre (09/11/2026). */
   rotulosDosPisos?: { nome: string; elevacaoMm: number | null }[];
+  /**
+   * Quão longe de quem olha (10/11/2026): a menor profundidade do contorno; o cortado (no plano) é −∞. O bloco mais
+   * perto ESCONDE a identificação do de trás onde os dois se sobrepõem na vista — "na vista de frente e fundos a
+   * identificação das unidades está sobreposta. mostrar apenas a que está na frente".
+   */
+  profundidade: number;
 }
 
 /**
@@ -43,7 +49,7 @@ export interface BlocoNaVista {
 export function massaNaVista(model: BlueprintModel, base: BaseElevacao, origem: Point | null, levelIds?: readonly ObjectId[]): BlocoNaVista[] {
   const projU = (p: Point) => p.x * base.u.x + p.y * base.u.y;
   const profundidade = (p: Point) => p.x * base.d.x + p.y * base.d.y;
-  const out: (BlocoNaVista & { fundo: number })[] = [];
+  const out: BlocoNaVista[] = [];
   for (const b of model.blocos ?? []) {
     if (b.pontos.length < 3 || b.pavimentos <= 0 || b.peDireitoMm <= 0) continue;
     if (levelIds && !levelIds.includes(b.levelId)) continue;
@@ -56,15 +62,37 @@ export function massaNaVista(model: BlueprintModel, base: BaseElevacao, origem: 
       const destino = classificarNoCorte(b.pontos, base, origem);
       if (destino === 'FRENTE') continue;
       if (destino === 'CORTADO') {
-        for (const t of trechosCortados(b.pontos, base, origem)) out.push({ ...comum, cortado: true, uMin: t.uMin, uMax: t.uMax, fundo: -Infinity });
+        for (const t of trechosCortados(b.pontos, base, origem)) out.push({ ...comum, cortado: true, uMin: t.uMin, uMax: t.uMax, profundidade: -Infinity });
         continue;
       }
     }
     const us = b.pontos.map(projU);
-    out.push({ ...comum, cortado: false, uMin: Math.min(...us), uMax: Math.max(...us), fundo });
+    out.push({ ...comum, cortado: false, uMin: Math.min(...us), uMax: Math.max(...us), profundidade: fundo });
   }
   // De trás para a frente: o mais fundo primeiro; o cortado (no plano) por último.
-  return out.sort((a, b) => b.fundo - a.fundo).map(({ fundo: _f, ...x }) => x);
+  return out.sort((a, b) => b.profundidade - a.profundidade);
+}
+
+/**
+ * O ponto `(u, v)` do bloco `b` fica atrás de OUTRO bloco mais perto de quem olha? (10/11/2026) — o que está atrás não
+ * se lê na vista: a sua identificação (nome, unidade, pavimento) não é escrita ali.
+ */
+export function escondidoNaVista(massa: readonly BlocoNaVista[], b: BlocoNaVista, u: number, v: number): boolean {
+  return massa.some(
+    (o) => o !== b && o.blocoId !== b.blocoId && o.profundidade < b.profundidade && u > o.uMin && u < o.uMax && v > o.vMin && v < o.vMax,
+  );
+}
+
+/** O nome do bloco (no alto, ao centro) se lê — um bloco mais perto e tão alto quanto ele o esconderia (10/11/2026). */
+export function nomeDoBlocoAVista(massa: readonly BlocoNaVista[], b: BlocoNaVista): boolean {
+  return !escondidoNaVista(massa, b, (b.uMin + b.uMax) / 2, b.vMax - Math.min(600, (b.vMax - b.vMin) / 4));
+}
+
+/** Os trechos em `u` que os blocos mais perto cobrem na altura `v` (10/11/2026). */
+function cobertosNaAltura(massa: readonly BlocoNaVista[], b: BlocoNaVista, v: number): [number, number][] {
+  return massa
+    .filter((o) => o !== b && o.blocoId !== b.blocoId && o.profundidade < b.profundidade && v > o.vMin && v < o.vMax)
+    .map((o): [number, number] => [o.uMin, o.uMax]);
 }
 
 /**
@@ -171,13 +199,15 @@ export function unidadesNaVista(
       const vMin = b.vMin + (k - 1) * b.peDireitoMm;
       const vMax = vMin + b.peDireitoMm;
       const comum = (f: FatiaDoPiso) => ({ blocoId: b.blocoId, indice: k, nome: f.nome, posicao: f.posicao, vMin, vMax, cortada: b.cortado });
+      // O que os blocos mais perto escondem neste pavimento (10/11/2026): a Torre A na frente da Torre B, na fachada.
+      const daFrente = cobertosNaAltura(blocos, b, (vMin + vMax) / 2);
       if (b.cortado && origem) {
         for (const f of fatias) {
           if (f.anel.length < 3) continue;
           for (const t of trechosCortados([...f.anel], base, origem)) {
             const u0 = Math.max(t.uMin, b.uMin);
             const u1 = Math.min(t.uMax, b.uMax);
-            if (u1 - u0 > MIN_TRECHO_MM) out.push({ ...comum(f), uMin: u0, uMax: u1 });
+            if (u1 - u0 > MIN_TRECHO_MM) for (const [p0, p1] of semOsCobertos(u0, u1, daFrente)) out.push({ ...comum(f), uMin: p0, uMax: p1 });
           }
         }
         continue;
@@ -186,7 +216,7 @@ export function unidadesNaVista(
         .filter((f) => f.anel.length >= 3)
         .map((f) => ({ f, perto: Math.min(...f.anel.map(profundidade)), us: f.anel.map(projU) }))
         .sort((x, y) => x.perto - y.perto);
-      const cobertos: [number, number][] = [];
+      const cobertos: [number, number][] = [...daFrente];
       for (const { f, us } of porPerto) {
         const u0 = Math.max(Math.min(...us), b.uMin);
         const u1 = Math.min(Math.max(...us), b.uMax);
@@ -250,6 +280,9 @@ export function rotulosDosPavimentos(massa: readonly BlocoNaVista[]): RotuloDoPa
     for (let k = 1; k <= b.pavimentos; k++) {
       const vMin = b.vMin + (k - 1) * b.peDireitoMm;
       const r = b.rotulosDosPisos?.[k - 1];
+      // A borda escondida atrás de um bloco da frente (10/11/2026): o rótulo do de trás cairia sobre o da frente.
+      const borda = lado === 'FIM' ? b.uMax - 1 : b.uMin + 1;
+      if (escondidoNaVista(massa, b, borda, vMin + b.peDireitoMm / 2)) continue;
       out.push({ blocoId: b.blocoId, lado, u: lado === 'FIM' ? b.uMax : b.uMin, v: vMin + b.peDireitoMm / 2, texto: `${r?.nome ?? `${k}º pav`} ${fmtElevacao(r?.elevacaoMm ?? vMin)}` });
     }
   }

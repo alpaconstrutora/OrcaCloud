@@ -71,7 +71,7 @@ import {
 } from './blueprintCotas';
 import { contornoDaNuvem, posicaoDaEtiquetaDaNuvem, cotaAngularDesenhada, cotaLinearDesenhada, linhasDaHachura, linhasDaRegiao, pontaDaSeta } from './blueprintAnotacoes';
 import type { ProjecaoElevacao } from './blueprintElevation';
-import { rotulosDosPavimentos, textosDaUnidade, type ExibirNaMassa } from './blueprintMassaNaVista';
+import { nomeDoBlocoAVista, rotulosDosPavimentos, textosDaUnidade, type ExibirNaMassa } from './blueprintMassaNaVista';
 import { simboloDaElevacao, simboloDasFolhas } from './blueprintFolhas';
 import type { ProjecaoCorte } from './blueprintCorte';
 import { medidasDoCorte } from './blueprintCorteMedidas';
@@ -775,7 +775,7 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
   for (const b of proj.massa ?? []) {
     saida += polilinha(CAMADAS.ELEV_MASSA, [P(b.uMin, b.vMin), P(b.uMax, b.vMin), P(b.uMax, b.vMax), P(b.uMin, b.vMax)]);
     for (const v of b.pisos) saida += linha(CAMADAS.ELEV_MASSA, P(b.uMin, v), P(b.uMax, v));
-    if (ver.blocos) saida += texto(CAMADAS.ELEV_MASSA, P((b.uMin + b.uMax) / 2, b.vMax - 450), b.nome, 300, { centralizar: true });
+    if (ver.blocos && nomeDoBlocoAVista(proj.massa ?? [], b)) saida += texto(CAMADAS.ELEV_MASSA, P((b.uMin + b.uMax) / 2, b.vMax - 450), b.nome, 300, { centralizar: true });
   }
   if (ver.unidades) {
     for (const u of proj.unidadesDaMassa ?? []) {

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { baseDoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { projetarElevacao } from '../utils/blueprintElevation';
-import { comMassa, massaNaVista, unidadesNaVista, type FatiaDoPiso } from '../utils/blueprintMassaNaVista';
+import { comMassa, massaNaVista, rotulosDosPavimentos, unidadesNaVista, type FatiaDoPiso, type PisosDaMassa } from '../utils/blueprintMassaNaVista';
 import { DesenhistaDeProva, desenharElevacao, enquadrarElevacao, PAPEIS, type OpcoesExportacao } from '../utils/blueprintExport';
 import { CAMADAS, gerarDxf } from '../utils/blueprintDxf';
 
@@ -156,5 +156,66 @@ describe('unidadesNaVista (09/11/2026)', () => {
     const corte = { id: 'c', rotulo: 'A', a: { x: 6000, y: -2000 }, b: { x: 6000, y: 66000 }, olharPara: 'ESQUERDA' as const };
     const base = baseDoCorte(corte as never);
     expect(unidadesNaVista(massaNaVista(m, base, corte.a), base, corte.a, () => null)).toEqual([]);
+  });
+});
+
+describe('unidades e pavimentos na prancha e no DXF (09/11/2026)', () => {
+  const corte = { id: 'c', uid: 'c', rotulo: 'A', a: { x: 6000, y: -2000 }, b: { x: 6000, y: 66000 }, olharPara: 'ESQUERDA' as const };
+  const OPCOES = (extra: Partial<OpcoesExportacao> = {}): OpcoesExportacao => ({ denominador: 100, papel: PAPEIS[2] ?? PAPEIS[0], titulo: 'Estudo', revisao: 1, hash: 'h', ...extra });
+  const unidadesDaTorreA: FatiaDoPiso[] = [
+    { nome: '101', posicao: 'FRENTE', anel: ret(2281, 6342, 9031, 19342) },
+    { nome: '102', posicao: 'FRENTE', anel: ret(9031, 6342, 15781, 19342) },
+    { nome: '103', posicao: 'FUNDOS', anel: ret(2281, 19342, 9031, 32342) },
+    { nome: '104', posicao: 'FUNDOS', anel: ret(9031, 19342, 15781, 32342) },
+  ];
+  const comPisos = () => {
+    const m = garden();
+    const idA = m.blocos!.find((b) => b.nome === 'Torre A')!.id;
+    const pisos: PisosDaMassa = new Map([[idA, ['Térreo', 'Pavimento 1', 'Pavimento 2', 'Pavimento 3'].map((nome, i) => ({ nome, elevacaoMm: i * 3000, unidades: i === 1 ? unidadesDaTorreA : [] }))]]);
+    return { m, pisos, proj: comMassa(m, projetarCorte(m, { corte: corte as never }), corte.a, undefined, pisos) };
+  };
+
+  it('a projeção com os pavimentos leva as unidades e os nomes dos pavimentos', () => {
+    const { proj } = comPisos();
+    expect(proj.unidadesDaMassa!.map((u) => u.nome)).toEqual(['101', '103']);
+    const torreA = proj.massa!.find((b) => b.nome === 'Torre A')!;
+    expect(torreA.rotulosDosPisos!.map((r) => r.nome)).toEqual(['Térreo', 'Pavimento 1', 'Pavimento 2', 'Pavimento 3']);
+  });
+
+  it('os pavimentos ao lado: por fora no começo e no fim do conjunto, um rótulo por pavimento', () => {
+    const { proj } = comPisos();
+    const r = rotulosDosPavimentos(proj.massa!);
+    const daTorreA = r.filter((x) => x.texto.startsWith('Térreo') || x.texto.startsWith('Pavimento'));
+    expect(daTorreA.map((x) => x.texto)).toEqual(['Térreo +0,00', 'Pavimento 1 +3,00', 'Pavimento 2 +6,00', 'Pavimento 3 +9,00']);
+    expect(new Set(r.map((x) => x.lado))).toEqual(new Set(['INICIO', 'FIM']));
+    // A Torre B não tem cadastro: "Nº pav" e a cota do desenho.
+    expect(r.some((x) => x.texto === '1º pav +0,00')).toBe(true);
+  });
+
+  it('⚠️ PRONTO QUANDO: a prancha escreve as unidades (com a posição) e os pavimentos — e cada liga/desliga tira o seu', () => {
+    const { proj } = comPisos();
+    const textos = (o: OpcoesExportacao) => {
+      const d = new DesenhistaDeProva();
+      desenharElevacao(d, proj, o, enquadrarElevacao(proj, o.denominador, o.papel));
+      return d.chamadas.filter((c) => c.tipo === 'texto').map((c) => String(c.args[2]));
+    };
+    const tudo = textos(OPCOES());
+    expect(tudo).toEqual(expect.arrayContaining(['Torre A', '101 · Frente', '103 · Fundos', 'Pavimento 1 +3,00']));
+    const nada = textos(OPCOES({ exibirNaMassa: { blocos: false, unidades: false, posicao: false, pavimentos: false } }));
+    expect(nada.some((t) => t === 'Torre A' || t.startsWith('101') || t.startsWith('Pavimento'))).toBe(false);
+    const semPosicao = textos(OPCOES({ exibirNaMassa: { blocos: true, unidades: true, posicao: false, pavimentos: true } }));
+    expect(semPosicao).toContain('101');
+    expect(semPosicao).not.toContain('101 · Frente');
+  });
+
+  it('o DXF escreve as unidades e os pavimentos na camada da massa — e desliga com o Exibir', () => {
+    const { m, proj } = comPisos();
+    const tudo = gerarDxf(m, { titulo: 'T', revisao: 1, hash: 'h', elevacoes: [proj] });
+    expect(tudo).toContain('101 · Frente');
+    expect(tudo).toContain('Pavimento 1 +3,00');
+    expect(tudo).toContain('Torre A');
+    const nada = gerarDxf(m, { titulo: 'T', revisao: 1, hash: 'h', elevacoes: [proj], exibirNaMassa: { blocos: false, unidades: false, posicao: false, pavimentos: false } });
+    expect(nada).not.toContain('101 · Frente');
+    expect(nada).not.toContain('Pavimento 1 +3,00');
   });
 });

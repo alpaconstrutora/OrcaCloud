@@ -35,7 +35,7 @@
  */
 
 import { ladoDoEixo, parDaLinha, segmentosDoEletroduto } from './blueprintRede';
-import type { BlocoNaVista } from './blueprintMassaNaVista';
+import type { BlocoNaVista, UnidadeNaVista } from './blueprintMassaNaVista';
 import { DISCIPLINAS_DO_PONTO_HIDRAULICO, TIPOS_DE_CLIMATIZACAO } from './blueprintKernel';
 import { FICHA_DO_PONTO_HIDRAULICO } from './blueprintHidraulica';
 import {
@@ -204,7 +204,9 @@ export interface ProjecaoCorte {
   base: BaseElevacao;
   levelIds: ObjectId[];
   /** Os blocos de massa (29/10/2026), cortados e atrás — ver `comMassa` em `blueprintMassaNaVista`. */
-  massa?: BlocoNaVista[];
+  massa?: BlocoNaVista[];
+  /** As unidades de cada pavimento da massa (09/11/2026), quando há os pavimentos das torres. */
+  unidadesDaMassa?: UnidadeNaVista[];
   /** O que o plano atravessa. Pintado por CIMA da vista. */
   cortados: ItemCortado[];
   /** O que está ATRÁS do plano — os mesmos tipos da elevação. */

@@ -86,7 +86,15 @@ export default function PainelVersoes({
   terrenoDoCorte,
   cotasDoTerrenoNoCorte,
   comprimentosNoCorte,
+  pisosDaMassa,
+  exibirNaMassa,
 }: {
+  /**
+   * 09/11/2026: os pavimentos das torres (com as unidades) e os liga/desliga de Vista › Exibir — o corte e as fachadas
+   * da prancha e do DXF saem com os nomes, as unidades e os pavimentos, como a tela mostra.
+   */
+  pisosDaMassa?: import('../../utils/blueprintMassaNaVista').PisosDaMassa | null;
+  exibirNaMassa?: import('../../utils/blueprintMassaNaVista').ExibirNaMassa;
   /**
    * 13/10/2026: o terreno do corte (o mesmo da tela) e os itens "Cotas do terreno" e
    * "Comprimentos" de Vista › Exibir — a prancha, o PNG e o DXF do corte saem com o
@@ -479,6 +487,8 @@ export default function PainelVersoes({
       terrenoDoCorte,
       cotasDoTerrenoNoCorte,
       comprimentosNoCorte,
+      pisosDaMassa,
+      exibirNaMassa,
       // F8: a camada elétrica no DXF quando a prancha "Elétrica" está marcada;
       // no PDF/PNG cada prancha decide por si (`exportarPranchasPdf`).
       eletrica: comEletrica || undefined,

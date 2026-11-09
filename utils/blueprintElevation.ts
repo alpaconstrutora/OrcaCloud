@@ -23,7 +23,7 @@
  */
 
 import { segmentosDoEletroduto } from './blueprintRede';
-import type { BlocoNaVista } from './blueprintMassaNaVista';
+import type { BlocoNaVista, UnidadeNaVista } from './blueprintMassaNaVista';
 import { trechosDasFolhas } from './blueprintFolhas';
 import {
   type BlueprintModel,
@@ -248,7 +248,9 @@ export interface ProjecaoElevacao {
   base: BaseElevacao;
   levelIds: ObjectId[];
   /** Os blocos de massa (29/10/2026) — ver `comMassa` em `blueprintMassaNaVista`. */
-  massa?: BlocoNaVista[];
+  massa?: BlocoNaVista[];
+  /** As unidades de cada pavimento da massa (09/11/2026), quando há os pavimentos das torres. */
+  unidadesDaMassa?: UnidadeNaVista[];
   /** Paredes ordenadas por `profundidade` DECRESCENTE — fundo primeiro. */
   paredes: RetanguloElevacao[];
   aberturas: AberturaElevacao[];

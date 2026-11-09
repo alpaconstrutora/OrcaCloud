@@ -63,7 +63,7 @@ import {
   type ProjecaoElevacao,
 } from '../utils/blueprintElevation';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../utils/blueprintCorte';
-import { comMassa } from '../utils/blueprintMassaNaVista';
+import { comMassa, type PisosDaMassa } from '../utils/blueprintMassaNaVista';
 import { modeloDoPavimento, papelDoTemplate, planejarConjunto, type PranchaPlanejada, type TemplateDePrancha, redesDoTemplate } from '../utils/blueprintPranchas';
 import { COBERTURA_DXF, gerarDxf, type TopografiaParaDxf } from '../utils/blueprintDxf';
 import { COBERTURA_IFC, gerarIfc, ifcGuidDoProjeto, type ResultadoDeClimatizacaoIfc } from '../utils/blueprintIfc';
@@ -223,6 +223,8 @@ function projecaoDaPrancha(
   levelIds?: string[],
   /** O terreno do corte (13/10/2026): com ele, o corte sai com o perfil, o platô e as medidas. */
   terreno?: TerrenoParaCorte | null,
+  /** Os pavimentos das torres (09/11/2026): com eles, a massa sai com as unidades e os nomes dos pavimentos. */
+  pisos?: PisosDaMassa | null,
 ): ProjecaoElevacao | ProjecaoCorte | null {
   if (ehPlantaDaPrancha(p)) return null;
   const id = corteDaPrancha(p);
@@ -232,9 +234,9 @@ function projecaoDaPrancha(
     // A aba Versões pode ter sido aberta antes da exclusão.
     if (!corte) return null;
     // Com a massa (29/10/2026): o estudo de massa é só blocos, e a prancha saía vazia.
-    return comMassa(model, projetarCorte(model, { corte, levelIds, terreno: terreno ?? null }), corte.a, levelIds);
+    return comMassa(model, projetarCorte(model, { corte, levelIds, terreno: terreno ?? null }), corte.a, levelIds, pisos);
   }
-  return comMassa(model, projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p]!, levelIds }), null, levelIds);
+  return comMassa(model, projetarElevacao(model, { direcao: DIRECAO_DA_PRANCHA[p]!, levelIds }), null, levelIds, pisos);
 }
 
 /**
@@ -532,7 +534,7 @@ export function exportarPranchasPdf(
       }
       return [{ p, enq, proj: null }];
     }
-    const proj = projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte);
+    const proj = projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte, o.pisosDaMassa);
     if (!proj) return [];
     const enq = enquadrarElevacao(proj, o.denominador, o.papel);
     if (!enq.cabe) throw new EscalaNaoCabe(o.denominador, enq.escalaSugerida);
@@ -744,9 +746,9 @@ export function desenharConjunto(
       case 'ELEVACAO': {
         const corte = p.corteId ? (model.sections ?? []).find((c) => c.id === p.corteId) : null;
         const proj = corte
-          ? comMassa(model, projetarCorte(model, { corte, terreno: o.terrenoDoCorte ?? null }), corte.a)
+          ? comMassa(model, projetarCorte(model, { corte, terreno: o.terrenoDoCorte ?? null }), corte.a, undefined, o.pisosDaMassa)
           : p.direcao
-            ? comMassa(model, projetarElevacao(model, { direcao: p.direcao }), null)
+            ? comMassa(model, projetarElevacao(model, { direcao: p.direcao }), null, undefined, o.pisosDaMassa)
             : null;
         if (!proj) {
           folhas.push({ prancha: p, denominador: 0 });
@@ -832,7 +834,7 @@ export function exportarPranchasPng(
 ): void {
   const k = dpi / 25.4;
   for (const p of pranchas) {
-    const proj = projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte);
+    const proj = projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte, o.pisosDaMassa);
     if (!ehPlantaDaPrancha(p) && !proj) continue;
     const oArquivo = { ...o, ...opcoesDaCamada(p), titulo: `${o.titulo} — ${rotuloDaPrancha(model, p)}` };
     const canvas = document.createElement('canvas');
@@ -991,7 +993,7 @@ export function montarDxf(
   topografia?: TopografiaParaDxf,
 ): ArtefatoExportado[] {
   const projetadas = (vistas ?? [])
-    .map((p) => projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte))
+    .map((p) => projecaoDaPrancha(model, p, levelIds, o.terrenoDoCorte, o.pisosDaMassa))
     .filter((x): x is ProjecaoElevacao | ProjecaoCorte => x !== null);
 
   const conteudo = gerarDxf(model, {
@@ -1004,6 +1006,7 @@ export function montarDxf(
     eletrica: o.eletrica,
     hipotesesEletricas: o.hipotesesEletricas,
     exibicaoEletrica: o.exibicaoEletrica,
+    exibirNaMassa: o.exibirNaMassa,
     redes: o.redesNoDxf,
     incendio: o.incendioNoDxf,
     climatizacao: o.climatizacaoNoDxf,

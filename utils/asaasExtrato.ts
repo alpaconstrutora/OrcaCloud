@@ -323,9 +323,9 @@ export function ordenarPeloSaldo<T extends LinhaComSaldo>(linhas: T[]): T[] {
     // Saldo de fechamento do dia anterior: a âncora do dia seguinte.
     let fechamento: number | null = null;
     for (const dia of [...porDia.keys()].sort()) {
-        const ordenado = encadearDia(porDia.get(dia)!, fechamento);
+        const ordenado: T[] = encadearDia(porDia.get(dia)!, fechamento);
         saida.push(...ordenado);
-        const ultima = ordenado[ordenado.length - 1];
+        const ultima: T | undefined = ordenado[ordenado.length - 1];
         fechamento = ultima?.saldo_apos == null ? null : Number(ultima.saldo_apos);
     }
     return saida;

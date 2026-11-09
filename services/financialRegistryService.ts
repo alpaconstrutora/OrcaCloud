@@ -9,7 +9,7 @@ export const financialRegistryService = {
     async listPaymentAccounts(organizationId?: string, empresaId?: string, opts: { incluirInativas?: boolean } = {}): Promise<PaymentAccount[]> {
         let query = supabase
             .from('payment_accounts')
-            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, serves_all_organizations, kind, is_active, created_at, payment_account_organizations(organization_id)');
+            .select('id, code, organization_id, empresa_id, name, description, bank, branch, account_number, pix_chave, pix_tipo, serves_all_organizations, kind, is_active, created_at, payment_account_organizations(organization_id)');
 
         if (!opts.incluirInativas) query = query.eq('is_active', true);
 

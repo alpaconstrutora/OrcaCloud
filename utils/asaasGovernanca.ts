@@ -119,3 +119,74 @@ export function quarentenaDaChave(
     const mesmo = !!quemEnvia && alteracao.por.trim().toLowerCase() === quemEnvia.trim().toLowerCase();
     return { alteradaEm: alteracao.em, por: alteracao.por, liberaEm: new Date(libera).toISOString(), bloqueiaVoce: mesmo };
 }
+
+// ─── Saque para conta PRÓPRIA (plano 2026-11-09-conta-asaas-tela-financeiro, PR 2) ───
+//
+// Sem título: não passa por alçada nem pelos tetos de pagamento a terceiros
+// (decisão aprovada com o plano). O que protege é o DESTINO — só outra conta de
+// pagamento da mesma organização, do mesmo CNPJ da conta Asaas, com a chave PIX
+// guardada por gatilho (só gestor altera, auditada, quarentena de 24 h) — e a
+// validação de saque, que confere o titular pelo CNPJ.
+
+export interface DestinoDoSaque {
+    id: string;
+    nome: string;
+    ativa: boolean;
+    kind: string | null;
+    /** A conta é da mesma organização dona da conta Asaas. */
+    mesmaOrganizacao: boolean;
+    /** Chave cadastrada e válida (`validarChavePix`); o motivo quando inválida. */
+    chaveValida: boolean;
+    chaveInvalida: string | null;
+    /** CNPJ (só dígitos) da empresa dona da conta de destino. */
+    documento: string | null;
+}
+
+export interface FatosDoSaqueProprio {
+    ehGestor: boolean;
+    temConta: boolean;
+    /** Saldo lido AGORA na Asaas; null = não foi possível ler. */
+    saldo: number | null;
+    valor: number;
+    destino: DestinoDoSaque | null;
+    /** CNPJ (só dígitos) da empresa dona da conta Asaas. */
+    documentoDaContaAsaas: string | null;
+    quarentena: Quarentena | null;
+}
+
+export function bloqueiosDoSaqueProprio(f: FatosDoSaqueProprio): string[] {
+    const b: string[] = [];
+    if (!f.temConta) b.push('A conta Asaas não tem chave de API cadastrada (Minha Organização › Contas).');
+    if (!f.ehGestor) b.push('Só proprietário ou administrador da organização transfere o saldo da Asaas.');
+
+    if (!(f.valor > 0)) b.push('Informe o valor a transferir.');
+    else if (f.saldo == null) b.push('Não foi possível ler o saldo na Asaas agora — tente de novo em instantes.');
+    else if (f.valor > f.saldo + 0.004) b.push(`O valor passa do saldo disponível na Asaas (${brl(f.saldo)}).`);
+
+    const d = f.destino;
+    if (!d) {
+        b.push('Escolha a conta bancária de destino.');
+        return b;
+    }
+    if (!d.mesmaOrganizacao) b.push('A conta de destino é de outra organização — o saque só vai para conta da organização dona da conta Asaas.');
+    if (!d.ativa) b.push(`A conta ${d.nome} está desativada.`);
+    if (d.kind !== 'banco') b.push(`A conta ${d.nome} não é uma conta bancária.`);
+    if (!d.chaveValida) {
+        b.push(d.chaveInvalida
+            ? `A chave PIX da conta ${d.nome} é inválida: ${d.chaveInvalida}`
+            : `A conta ${d.nome} não tem chave PIX cadastrada (Minha Organização › Contas).`);
+    }
+
+    const docDestino = (d.documento ?? '').replace(/\D/g, '');
+    const docAsaas = (f.documentoDaContaAsaas ?? '').replace(/\D/g, '');
+    if (docDestino.length !== 14 && docDestino.length !== 11) {
+        b.push(`A conta ${d.nome} não tem empresa com CNPJ — é por ele que o titular da chave é conferido antes de o dinheiro sair.`);
+    } else if (docAsaas && docAsaas !== docDestino) {
+        b.push(`A conta ${d.nome} é de outro CNPJ: o saque para conta própria só vai para o mesmo titular da conta Asaas.`);
+    }
+
+    if (f.quarentena?.bloqueiaVoce) {
+        b.push(`Você cadastrou ou alterou a chave PIX desta conta há menos de ${HORAS_QUARENTENA} h: outro administrador precisa enviar — ou aguarde.`);
+    }
+    return b;
+}

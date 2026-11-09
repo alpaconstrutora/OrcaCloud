@@ -132,6 +132,10 @@ export interface PaymentAccount {
     bank?: string;
     branch?: string;
     account_number?: string;
+    /** Chave PIX da conta própria — destino da transferência do saldo da conta Asaas.
+     *  Só gestor altera (gatilho `fn_conta_bancaria_protegida`, auditado). */
+    pix_chave?: string | null;
+    pix_tipo?: 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria' | null;
     opening_balance?: number;
     opening_balance_date?: string;
     /** 'banco' | 'caixa' | 'gateway' (conta Asaas). Só leitura no front. */

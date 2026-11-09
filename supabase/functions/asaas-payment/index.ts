@@ -3,13 +3,13 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
 import { exigirMembro, respostaDeErro, PAPEIS_GESTORES } from "../_shared/auth.ts"
-import { resolverContaAsaas, contaDoRegistro, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
+import { resolverContaAsaas, contaDoRegistro, contaPorId, cabecalhosAsaas, type ContaAsaas } from "../_shared/asaasConta.ts"
 import { lerTitulo, avaliarDisparo } from "../_shared/asaasDisparo.ts"
 import { destinoDoTitulo, opcaoEscolhida, opcoesPublicas, contaDaOpcao } from "../_shared/pixFavorecido.ts"
 import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
 import { validarChavePix, tipoParaAsaas, type TipoChavePix } from "../../../utils/pixKey.ts"
 import { validateCpfCnpj } from "../../../lib/validators.ts"
-import { quarentenaDaChave, HORAS_QUARENTENA } from "../../../utils/asaasGovernanca.ts"
+import { quarentenaDaChave, HORAS_QUARENTENA, bloqueiosDoSaqueProprio, type DestinoDoSaque } from "../../../utils/asaasGovernanca.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -21,6 +21,10 @@ declare const Deno: { env: { get(key: string): string | undefined } };
 //                      oficial em 17/10/2026)
 //   cancel           — boleto (POST /v3/bill/{id}/cancel) ou PIX
 //                      (DELETE /v3/transfers/{id}/cancel), só antes de concluir
+//   saque_quote / saque_pay — saldo da conta Asaas → conta bancária PRÓPRIA da
+//                      mesma organização, por PIX, SEM título (plano
+//                      docs/planos/2026-11-09-conta-asaas-tela-financeiro.md, PR 2).
+//                      Portão próprio: `bloqueiosDoSaqueProprio` (testado).
 //
 // Portão de disparo único (`avaliarDisparo` → `bloqueiosDoDisparo`, testado):
 // só owner/admin; título aprovado na alçada (ou sem faixa); tetos da conta
@@ -81,6 +85,90 @@ interface TransferResponse {
 
 const hojeBRT = () => new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
 
+// deno-lint-ignore no-explicit-any
+type Admin = any;
+
+interface DestinoComChave {
+    destino: DestinoDoSaque;
+    banco: string;
+    chave: string | null;
+    tipo: TipoChavePix | null;
+    /** Razão social da empresa dona da conta — o titular esperado da chave. */
+    titular: string | null;
+    quarentena: ReturnType<typeof quarentenaDaChave>;
+}
+
+const soDigitos = (s: string | null | undefined) => (s ?? '').replace(/\D/g, '') || null;
+
+/**
+ * Fatos do saque para conta própria, lidos no SERVIDOR (nunca do corpo): saldo
+ * ao vivo, CNPJ da empresa da conta Asaas e as contas bancárias da organização
+ * com chave PIX, CNPJ da empresa e quarentena da chave.
+ */
+async function fatosDoSaque(admin: Admin, conta: ContaAsaas, organizationId: string, quemEnvia: string) {
+    let saldo: number | null = null;
+    let saldoErro: string | null = null;
+    try {
+        const r = await fetch(`${conta.base}/finance/balance`, { headers: cabecalhosAsaas(conta.apiKey) });
+        const dd = await r.json().catch(() => ({}));
+        if (r.ok && typeof dd?.balance === 'number') saldo = dd.balance;
+        else saldoErro = dd?.errors?.[0]?.description ?? `HTTP ${r.status}`;
+    } catch (e) {
+        saldoErro = e instanceof Error ? e.message : String(e);
+    }
+
+    const { data: contas } = await admin.from('payment_accounts')
+        .select('id,name,kind,is_active,organization_id,bank,branch,account_number,pix_chave,pix_tipo,empresa_id')
+        .or(`id.eq.${conta.paymentAccountId},organization_id.eq.${organizationId}`);
+    type Pa = { id: string; name: string; kind: string | null; is_active: boolean | null; organization_id: string; bank: string | null; branch: string | null; account_number: string | null; pix_chave: string | null; pix_tipo: string | null; empresa_id: string | null };
+    const lista = (contas ?? []) as Pa[];
+    const empresas = [...new Set(lista.map(c => c.empresa_id).filter((x): x is string => !!x))];
+    const { data: cos } = empresas.length
+        ? await admin.from('companies').select('id,cnpj,razao_social').in('id', empresas)
+        : { data: [] };
+    const empresa = new Map(((cos ?? []) as { id: string; cnpj: string | null; razao_social: string | null }[]).map(c => [c.id, c]));
+
+    const daConta = lista.find(c => c.id === conta.paymentAccountId);
+    const documentoDaConta = soDigitos(daConta?.empresa_id ? empresa.get(daConta.empresa_id)?.cnpj : null);
+
+    const candidatas = lista.filter(c => c.id !== conta.paymentAccountId && c.organization_id === organizationId && (c.kind ?? 'banco') === 'banco' && c.is_active !== false);
+    const desde = new Date(Date.now() - HORAS_QUARENTENA * 3600_000).toISOString();
+    const { data: alteracoes } = candidatas.length
+        ? await admin.from('conta_bancaria_auditoria')
+            .select('registro_id,autor,created_at')
+            .eq('tabela', 'payment_accounts')
+            .in('registro_id', candidatas.map(c => c.id)).in('acao', ['criada', 'alterada']).gte('created_at', desde)
+            .order('created_at', { ascending: false })
+        : { data: [] };
+    const ultima = new Map<string, { em: string; por: string }>();
+    for (const a of (alteracoes ?? []) as { registro_id: string; autor: string; created_at: string }[]) {
+        if (!ultima.has(a.registro_id)) ultima.set(a.registro_id, { em: a.created_at, por: a.autor });
+    }
+
+    const destinos: DestinoComChave[] = candidatas.map(c => {
+        const v = c.pix_chave ? validarChavePix(c.pix_tipo, c.pix_chave) : null;
+        const emp = c.empresa_id ? empresa.get(c.empresa_id) : undefined;
+        return {
+            destino: {
+                id: c.id,
+                nome: c.name,
+                ativa: c.is_active !== false,
+                kind: c.kind ?? 'banco',
+                mesmaOrganizacao: c.organization_id === organizationId,
+                chaveValida: !!v?.ok,
+                chaveInvalida: v && !v.ok ? v.motivo : null,
+                documento: soDigitos(emp?.cnpj),
+            },
+            banco: [c.bank, c.branch && `ag. ${c.branch}`, c.account_number && `c/c ${c.account_number}`].filter(Boolean).join(' · '),
+            chave: v?.ok ? v.chave : null,
+            tipo: v?.ok ? (c.pix_tipo as TipoChavePix) : null,
+            titular: emp?.razao_social ?? null,
+            quarentena: quarentenaDaChave(ultima.get(c.id) ?? null, Date.now(), quemEnvia),
+        };
+    });
+    return { saldo, saldoErro, documentoDaConta, destinos };
+}
+
 serve(async (req: Request) => {
     if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
@@ -95,7 +183,11 @@ serve(async (req: Request) => {
         boleto_id?: string;
         transaction_id?: string;
         supplier_payment_id?: string;
-        action?: 'quote' | 'pay' | 'cancel' | 'pix_quote' | 'pix_pay';
+        action?: 'quote' | 'pay' | 'cancel' | 'pix_quote' | 'pix_pay' | 'saque_quote' | 'saque_pay';
+        /** Saque: a conta Asaas de onde sai e a conta própria que recebe. */
+        payment_account_id?: string;
+        destino_payment_account_id?: string;
+        valor?: number;
         schedule_date?: string;
         destino?: {
             ref?: string;
@@ -173,6 +265,131 @@ serve(async (req: Request) => {
     }
 
     // Conta Asaas da organização (dona → atende também → reserva global).
+    // ─── Saque para conta própria (sem título) ────────────────
+    if (action === 'saque_quote' || action === 'saque_pay') {
+        if (!body.payment_account_id) return json({ error: 'payment_account_id é obrigatório.' }, 400);
+        let contaSaque: ContaAsaas;
+        try { contaSaque = await contaPorId(admin, body.payment_account_id); }
+        catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 422); }
+        // A org do corpo foi conferida contra o chamador; a conta tem de ser DELA.
+        if (contaSaque.organizationId !== organization_id) {
+            return json({ error: 'Esta conta Asaas não pertence à organização informada.' }, 403);
+        }
+
+        const fatos = await fatosDoSaque(admin, contaSaque, organization_id!, userEmail);
+
+        if (action === 'saque_quote') {
+            return json({
+                ok: true,
+                saldo: fatos.saldo,
+                saldo_erro: fatos.saldoErro,
+                destinos: fatos.destinos.map(d => ({
+                    id: d.destino.id,
+                    nome: d.destino.nome,
+                    banco: d.banco,
+                    chave: d.chave,
+                    tipo: d.tipo,
+                    titular: d.titular,
+                    quarentena: d.quarentena,
+                    // Bloqueios do DESTINO (valor ainda não escolhido: conferido no envio).
+                    bloqueios: bloqueiosDoSaqueProprio({
+                        ehGestor, temConta: true, saldo: fatos.saldo, valor: 0.01,
+                        destino: d.destino, documentoDaContaAsaas: fatos.documentoDaConta, quarentena: d.quarentena,
+                    }),
+                })),
+            });
+        }
+
+        // ── saque_pay ──
+        if (!ehGestor) return soGestor();
+        const valor = Math.round(Number(body.valor ?? 0) * 100) / 100;
+        const escolhido = fatos.destinos.find(d => d.destino.id === body.destino_payment_account_id) ?? null;
+        const bloqueios = bloqueiosDoSaqueProprio({
+            ehGestor, temConta: true, saldo: fatos.saldo, valor,
+            destino: escolhido?.destino ?? null, documentoDaContaAsaas: fatos.documentoDaConta,
+            quarentena: escolhido?.quarentena ?? null,
+        });
+        if (bloqueios.length) return json({ error: bloqueios[0], bloqueios }, 422);
+        const d = escolhido!;
+
+        // Duplo clique / duas abas: o mesmo saque em andamento há menos de 2 min.
+        const { data: emCurso } = await admin.from('supplier_payments')
+            .select('id')
+            .eq('payment_account_id', contaSaque.paymentAccountId)
+            .eq('favorecido_origem', 'conta_propria')
+            .eq('value', valor)
+            .in('status', ['APPROVED', 'PENDING'])
+            .gte('created_at', new Date(Date.now() - 2 * 60_000).toISOString())
+            .limit(1);
+        if (emCurso?.length) return json({ error: 'Um saque igual acabou de ser enviado — confira o extrato antes de repetir.' }, 409);
+
+        const { data: spRow, error: spErr } = await admin.from('supplier_payments').insert({
+            organization_id,
+            transaction_id: null,
+            payment_account_id: contaSaque.paymentAccountId,
+            destino_payment_account_id: d.destino.id,
+            provider: 'asaas',
+            payment_type: 'PIX_TRANSFER',
+            pix_key: d.chave,
+            pix_key_type: d.tipo,
+            beneficiary_name: d.titular,
+            beneficiary_document: d.destino.documento,
+            favorecido_origem: 'conta_propria',
+            favorecido_documento_esperado: d.destino.documento,
+            titular_diferente_autorizado: false,
+            value: valor,
+            status: 'APPROVED',
+            approved_by_email: userEmail,
+            approved_at: new Date().toISOString(),
+            created_by_email: userEmail,
+        }).select('id').single();
+        if (spErr) return json({ error: 'Falha ao registrar o saque', detail: spErr.message }, 500);
+
+        const res = await fetch(`${contaSaque.base}/transfers`, {
+            method: 'POST',
+            headers: cabecalhosAsaas(contaSaque.apiKey),
+            body: JSON.stringify({
+                value: valor,
+                operationType: 'PIX',
+                pixAddressKey: d.chave,
+                pixAddressKeyType: tipoParaAsaas(d.tipo!),
+                description: `Transferência para conta própria — ${d.destino.nome}`.slice(0, 140),
+                externalReference: spRow.id,
+            }),
+        });
+        const t = await res.json().catch(() => ({})) as TransferResponse;
+        if (!res.ok || !t.id) {
+            const msg = (t as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${res.status}`;
+            await admin.from('supplier_payments').update({
+                status: 'FAILED', failure_reason: msg, raw_response: t, updated_at: new Date().toISOString(),
+            }).eq('id', spRow.id);
+            return json({ error: `Asaas (saque): ${msg}`, detail: t }, 502);
+        }
+
+        await admin.from('supplier_payments').update({
+            asaas_transfer_id: t.id,
+            beneficiary_name: t.bankAccount?.ownerName?.trim() || d.titular,
+            status: t.status === 'FAILED' ? 'FAILED' : t.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING',
+            failure_reason: t.status === 'FAILED' ? (t.failReason ?? 'Recusado pela Asaas') : null,
+            fee: t.transferFee ?? null,
+            asaas_authorized: t.authorized ?? null,
+            raw_response: t,
+            updated_at: new Date().toISOString(),
+        }).eq('id', spRow.id);
+
+        if (t.status === 'DONE') {
+            await processarEventoAsaas(admin, { event: 'TRANSFER_DONE', transfer: { ...t, id: t.id } });
+        }
+
+        return json({
+            ok: true,
+            supplier_payment_id: spRow.id,
+            asaas_transfer_id: t.id,
+            status: t.status ?? null,
+            aguardando_autorizacao: t.authorized === false,
+        });
+    }
+
     let conta: ContaAsaas | null;
     try { conta = await resolverContaAsaas(admin, organization_id!); }
     catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 503); }

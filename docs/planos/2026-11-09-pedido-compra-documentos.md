@@ -65,14 +65,14 @@ e link público (`portalToken`, sessão anon, leitura sempre por RPC).
    **Pronto quando:** `check-ui-standard.sh` sai 0 e typecheck verde.
 
 ## Estado
-- [x] 1. migration escrita; testes de migration verdes — [ ] **aplicada no banco** (bloqueada pelo classificador de permissão; aguarda liberação do usuário)
-- [x] 2. upload — [ ] deploy
-- [x] 3. download — [ ] deploy
+- [x] 1. migration aplicada em 2026-11-09 (`db query --linked -f`). Conferido no banco: 3 policies na tabela, 3 no storage, bucket privado de 10 MB, anon executa só a RPC de link. Regras testadas com JWT simulado, em transação desfeita: comprador envia (o nome forjado é trocado pelo e-mail do JWT); comprador não grava como fornecedor; fornecedor vê o do comprador, envia, não exclui o do comprador, exclui o próprio; estranho não vê nem envia.
+- [x] 2. upload — publicada pelo usuário (v5). Sonda de fora: sem credencial 401, token falso 403.
+- [x] 3. download — publicada pelo usuário (v5). Token falso → "Link inválido ou expirado".
 - [x] 4. regras puras + teste (7 verdes)
 - [x] 5. serviço
 - [x] 6. componente — `check-ui-standard.sh` = 0
-- [x] 7. detalhe do pedido — `check-ui-standard.sh` = 0, typecheck verde
-- [ ] Verificação ponta a ponta (depende de 1–3 no ar)
+- [x] 7. detalhe do pedido — `check-ui-standard.sh` = 0, typecheck verde, build verde
+- [ ] Verificação na tela: comprador, fornecedor logado e fornecedor pelo link (envio real pelo link não testado por mim — o modo automático barrou ler um token de portal do banco)
 
 ## Verificação
 1. `npm run ci` na frente.

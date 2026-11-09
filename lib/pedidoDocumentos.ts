@@ -69,6 +69,30 @@ export function tamanhoLegivel(bytes: number | null | undefined): string {
     return `${(bytes / (1024 * 1024)).toLocaleString('pt-BR', { maximumFractionDigits: 1 })} MB`;
 }
 
+/** "Nº" do cartão de recibo: 8 caracteres do id, em caixa alta (o id inteiro vai no `title`). */
+export function codigoCurtoDocumento(id: string): string {
+    return id.replace(/-/g, '').slice(0, 8).toUpperCase();
+}
+
+/**
+ * Larguras (1 a 3) das barras do código de barras DECORATIVO do cartão de
+ * recibo. Determinístico pelo id: o mesmo documento desenha sempre o mesmo
+ * código. Não codifica nada legível — é só a cara de papel.
+ */
+export function barrasDoCodigo(id: string, quantidade = 36): number[] {
+    let h = 2166136261;
+    for (let i = 0; i < id.length; i++) {
+        h ^= id.charCodeAt(i);
+        h = Math.imul(h, 16777619);
+    }
+    const barras: number[] = [];
+    for (let i = 0; i < quantidade; i++) {
+        h ^= h << 13; h ^= h >>> 17; h ^= h << 5;
+        barras.push(1 + ((h >>> 0) % 3));
+    }
+    return barras;
+}
+
 /** Linha crua (tabela ou RPC de link) → objeto da tela. */
 export function documentoDaLinha(r: Record<string, unknown>): DocumentoPedido {
     return {

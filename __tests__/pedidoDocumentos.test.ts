@@ -6,7 +6,25 @@ import {
     rotuloCategoriaDocumento,
     documentoDaLinha,
     tamanhoLegivel,
+    codigoCurtoDocumento,
+    barrasDoCodigo,
 } from '../lib/pedidoDocumentos';
+
+describe('anexos do pedido · cartão de recibo', () => {
+    const id = '3f2a9c10-77ab-4d1e-9b0c-1234567890ab';
+
+    it('Nº curto: 8 caracteres do id, sem hífen, em caixa alta', () => {
+        expect(codigoCurtoDocumento(id)).toBe('3F2A9C10');
+    });
+
+    it('código de barras decorativo: mesmo id desenha o mesmo código; outro id, outro', () => {
+        const a = barrasDoCodigo(id);
+        expect(a).toHaveLength(36);
+        expect(a.every(b => b >= 1 && b <= 3)).toBe(true);
+        expect(barrasDoCodigo(id)).toEqual(a);
+        expect(barrasDoCodigo('9d0e1f22-0000-4000-8000-000000000001')).not.toEqual(a);
+    });
+});
 
 describe('anexos do pedido · arquivo aceito', () => {
     it('aceita PDF, XML de NF e foto', () => {

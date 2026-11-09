@@ -168,6 +168,18 @@ describe('ordenarPeloSaldo', () => {
         const linhas = [l('a', '2026-11-09', 1, 'DEBIT', null), l('b', '2026-11-09', 2, 'CREDIT', 10)];
         expect(ordenarPeloSaldo(linhas).map(x => x.id)).toEqual(['a', 'b']);
     });
+    it('saldo que vai e volta no dia: a abertura (fechamento da véspera) decide — caso real de 22/10/2026', () => {
+        const linhas = [
+            l('pixB', '2026-10-22', 200, 'DEBIT', 138.35),
+            l('devolucao', '2026-10-22', 200, 'CREDIT', 338.35),
+            l('pixA', '2026-10-22', 200, 'DEBIT', 138.35),
+            l('boleto', '2026-10-19', 61.65, 'DEBIT', 338.35),
+            l('cobranca', '2026-10-29', 2000, 'CREDIT', 2138.35),
+        ];
+        const ordem = ordenarPeloSaldo(linhas);
+        expect(ordem.map(x => x.saldo_apos)).toEqual([338.35, 138.35, 338.35, 138.35, 2138.35]);
+        expect(ordem[2].id).toBe('devolucao');
+    });
     it('encadeamento ambíguo não inventa ordem', () => {
         const linhas = [l('a', '2026-11-09', 10, 'CREDIT', 110), l('b', '2026-11-09', 10, 'CREDIT', 110)];
         expect(ordenarPeloSaldo(linhas).map(x => x.id)).toEqual(['a', 'b']);

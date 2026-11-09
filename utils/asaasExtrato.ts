@@ -320,14 +320,48 @@ export function ordenarPeloSaldo<T extends LinhaComSaldo>(linhas: T[]): T[] {
         porDia.get(d)!.push(l);
     }
     const saida: T[] = [];
-    for (const dia of [...porDia.keys()].sort()) saida.push(...encadearDia(porDia.get(dia)!));
+    // Saldo de fechamento do dia anterior: a âncora do dia seguinte.
+    let fechamento: number | null = null;
+    for (const dia of [...porDia.keys()].sort()) {
+        const ordenado = encadearDia(porDia.get(dia)!, fechamento);
+        saida.push(...ordenado);
+        const ultima = ordenado[ordenado.length - 1];
+        fechamento = ultima?.saldo_apos == null ? null : Number(ultima.saldo_apos);
+    }
     return saida;
 }
 
-function encadearDia<T extends LinhaComSaldo>(dia: T[]): T[] {
+const depoisDe = (l: LinhaComSaldo) => Number(l.saldo_apos);
+const antesDe = (l: LinhaComSaldo) => depoisDe(l) - (l.direction === 'DEBIT' ? -1 : 1) * Number(l.amount);
+
+/**
+ * Encadeia a partir do saldo de abertura conhecido. Empate (o saldo vai e volta
+ * no mesmo dia: PIX −200, devolução +200, PIX −200 — Asaas de produção, 22/10/2026)
+ * escolhe a primeira candidata na ordem recebida; só vale se TODAS as linhas
+ * couberem na cadeia.
+ */
+function encadearComAbertura<T extends LinhaComSaldo>(dia: T[], abertura: number): T[] | null {
+    const resto = [...dia];
+    const ordem: T[] = [];
+    let saldo = abertura;
+    while (resto.length) {
+        const proxima = resto.find(l => mesmoValor(antesDe(l), saldo));
+        if (!proxima) return null;
+        ordem.push(proxima);
+        resto.splice(resto.indexOf(proxima), 1);
+        saldo = depoisDe(proxima);
+    }
+    return ordem;
+}
+
+function encadearDia<T extends LinhaComSaldo>(dia: T[], abertura: number | null = null): T[] {
     if (dia.length < 2 || dia.some(l => l.saldo_apos === null || l.saldo_apos === undefined)) return dia;
-    const depois = (l: T) => Number(l.saldo_apos);
-    const antes = (l: T) => depois(l) - (l.direction === 'DEBIT' ? -1 : 1) * Number(l.amount);
+    if (abertura !== null) {
+        const ancorada = encadearComAbertura(dia, abertura);
+        if (ancorada) return ancorada;
+    }
+    const depois = depoisDe;
+    const antes = antesDe;
     const resto = [...dia];
     // A primeira do dia: o saldo antes dela não é o saldo depois de nenhuma outra.
     const primeiras = resto.filter(l => !resto.some(o => o !== l && mesmoValor(depois(o), antes(l))));

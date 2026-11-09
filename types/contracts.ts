@@ -62,6 +62,8 @@ export interface Contract {
     reajuste_index?: string;
     reajuste_data_base?: string;
     reajuste_proximo?: string;
+    /** Não recorrente: quanto os reajustes somaram. current_value = original + aditivos + este. */
+    reajuste_acumulado?: number;
     // Locação (domain='LOCACAO') — a garantia formal (caução/fiança/seguro) fica em
     // `contract_guarantees`; aqui ficam só os campos diretos do contrato de aluguel.
     guarantor_name?: string;            // Fiador (pessoa física)

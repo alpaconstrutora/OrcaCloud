@@ -12,6 +12,7 @@ import { resolverCategoriaDoContrato } from './financialCategoryResolver';
 import {
     planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, marcaDeVencimentoManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
 } from '../utils/contratoParcelaVariavel';
+import { reajustarCronograma, valorAtualDoContrato } from '../utils/reajusteParcelado';
 import {
     Contract,
     ContractItem,
@@ -1920,9 +1921,12 @@ export const contractService = {
             // prorrogação. Recalcular `original_value + Σ(aditivos)` aqui
             // apagaria silenciosamente todo o reajuste acumulado assim que
             // alguém editasse o valor do contrato na tela.
+            // Não recorrente: o reajuste entra pela coluna `reajuste_acumulado` —
+            // o formulário manda o Valor Original em todo "Salvar", e até 09/11/2026
+            // a conta parava nos aditivos e apagava o reajuste.
             const { data: contractRow } = await supabase
                 .from('contracts')
-                .select('is_recurring')
+                .select('is_recurring, reajuste_acumulado')
                 .eq('id', id)
                 .maybeSingle();
 
@@ -1934,7 +1938,7 @@ export const contractService = {
                     .eq('status', 'Aprovado');
 
                 const addendumsTotal = (addendums || []).reduce((sum, a) => sum + (a.value_impact || 0), 0);
-                updates.current_value = updates.original_value + addendumsTotal;
+                updates.current_value = valorAtualDoContrato(updates.original_value, addendumsTotal, contractRow?.reajuste_acumulado);
             }
         }
 
@@ -2364,7 +2368,7 @@ export const contractService = {
         if (addendum.value_impact !== 0 || addendum.new_end_date) {
             const { data: contract, error: contractErr } = await supabase
                 .from('contracts')
-                .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, empreendimento_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, minuta_versions, created_at')
+                .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, reajuste_acumulado, retention_rate, responsible_email, signed_contract_url, empresa_id, empreendimento_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, minuta_versions, created_at')
                 .eq('id', addendum.contract_id)
                 .single();
 
@@ -2373,16 +2377,16 @@ export const contractService = {
             const contractUpdates: Record<string, any> = {};
             if (addendum.value_impact !== 0) {
                 // Recalcula pela MESMA fórmula de updateContract (original_value +
-                // Σ dos aditivos aprovados). Antes era `current_value += impacto`,
-                // e os dois caminhos divergiam: salvar o contrato depois de
-                // aprovar um aditivo reescrevia o valor com outra conta.
+                // Σ dos aditivos aprovados + reajuste acumulado). Antes era
+                // `current_value += impacto`, e os dois caminhos divergiam: salvar o
+                // contrato depois de aprovar um aditivo reescrevia o valor com outra conta.
                 const { data: aprovados } = await supabase
                     .from('contract_addendums')
                     .select('value_impact')
                     .eq('contract_id', addendum.contract_id)
                     .eq('status', 'Aprovado');
                 const total = (aprovados || []).reduce((sum, a) => sum + (a.value_impact || 0), 0);
-                contractUpdates.current_value = (contract.original_value || 0) + total;
+                contractUpdates.current_value = valorAtualDoContrato(contract.original_value, total, contract.reajuste_acumulado);
             }
             if (addendum.new_end_date) {
                 contractUpdates.end_date = addendum.new_end_date;
@@ -3178,6 +3182,8 @@ export const contractService = {
      * Aplica reajuste ao contrato usando a fórmula padrão:
      *   novo_valor = current_value × (indexValue / indexBase)
      * onde indexBase e indexValue são fornecidos pelo chamador (ex: INCC/IPCA manual ou via API).
+     * Exceção: contrato Parcelado reajusta só o saldo (parcelas a vencer em aberto) e
+     * novo_valor = current_value + acréscimo dessas parcelas.
      * Atualiza current_value, reajuste_data_base (nova base = hoje) e reajuste_proximo (+ 12 meses),
      * e re-sincroniza parcelas/recorrência ao módulo financeiro.
      */
@@ -3192,7 +3198,7 @@ export const contractService = {
 
         const { data: contract, error: fetchErr } = await supabase
             .from('contracts')
-            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, retention_rate, responsible_email, signed_contract_url, empresa_id, empreendimento_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
+            .select('id, organization_id, project_id, budget_id, supplier_id, number, title, description, contract_type, nature, start_date, end_date, is_recurring, billing_cycle, due_day, status, original_value, current_value, reajuste_index, reajuste_data_base, reajuste_proximo, reajuste_acumulado, retention_rate, responsible_email, signed_contract_url, empresa_id, empreendimento_id, cost_center_id, category_id, payment_method, payment_term_type, payment_days, payment_installments, payment_schedule, client_id, direction, execution_address, client_responsible, internal_responsible, sla_days, warranty_months, labor_value, materials_value, services_included, services_excluded, signature_status, signature_token, signature_url, signature_completed_at, approval_status, approval_chain, approval_required_levels, created_at')
             .eq('id', contractId)
             .single();
         if (fetchErr) throw fetchErr;
@@ -3202,14 +3208,43 @@ export const contractService = {
         }
 
         const fator = indexValue / indexBase;
-        const novoValor = parseFloat((contract.current_value * fator).toFixed(2));
         const hoje = new Date().toISOString().split('T')[0];
         const proximo = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+
+        // Parcelado: o reajuste vai para o CRONOGRAMA (é dele que o sync tira o valor
+        // de cada parcela) e só sobre o saldo — ver utils/reajusteParcelado.ts. Até
+        // 09/11/2026 só `current_value` mudava, sobre o contrato inteiro, e o sync
+        // logo abaixo regravava as parcelas com os valores antigos.
+        const parcelado = !contract.is_recurring && contract.payment_term_type === 'Parcelado';
+        let novoValor = parseFloat((contract.current_value * fator).toFixed(2));
+        let cronogramaReajustado: ContractInstallment[] | undefined;
+        if (parcelado && contract.payment_schedule?.length) {
+            const { data: titulos, error: titulosErr } = await supabase
+                .from('internal_transactions')
+                .select(COLUNAS_PARCELA_EXISTENTE)
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_PARCELADO')
+                .like('reference_id', `${contract.id}%`);
+            if (titulosErr) throw titulosErr;
+            const r = reajustarCronograma(
+                contract.payment_schedule, (titulos ?? []) as unknown as ParcelaExistente[], contract.id, fator, hoje);
+            if (r.reajustadas === 0) {
+                throw new Error('Nenhuma parcela a vencer em aberto para reajustar — as restantes já foram pagas ou tiveram o valor alterado à mão.');
+            }
+            cronogramaReajustado = r.cronograma;
+            novoValor = parseFloat((Number(contract.current_value) + r.acrescimo).toFixed(2));
+        }
 
         const { data: updated, error: updateErr } = await supabase
             .from('contracts')
             .update({
                 current_value: novoValor,
+                // Não recorrente: guarda o acréscimo, senão o próximo "Salvar" do
+                // contrato ou aditivo aprovado o apaga (valorAtualDoContrato).
+                ...(!contract.is_recurring ? {
+                    reajuste_acumulado: parseFloat((Number(contract.reajuste_acumulado ?? 0) + novoValor - Number(contract.current_value)).toFixed(2)),
+                } : {}),
+                ...(cronogramaReajustado ? { payment_schedule: cronogramaReajustado } : {}),
                 reajuste_data_base: hoje,
                 reajuste_proximo: proximo,
                 ...(notes ? { description: `[Reajuste ${hoje}] ${notes}\n${contract.description || ''}` } : {}),
@@ -3219,7 +3254,8 @@ export const contractService = {
             .single();
         if (updateErr) throw updateErr;
 
-        // Re-sync parcelas futuras se parcelado
+        // Re-sync das parcelas a partir do cronograma reajustado: pagas e valor manual
+        // ficam como estão (planejarSyncParcelas).
         if (!updated.is_recurring && updated.payment_term_type === 'Parcelado') {
             await syncParceladoScheduleToFinance(updated as Contract);
         }

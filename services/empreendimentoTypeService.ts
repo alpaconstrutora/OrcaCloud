@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import { COLOR_OPTIONS, colorClasses } from './obraTypeService';
+import type { EstruturaDoTipo } from '../utils/empreendimentoTipos';
 
 // A "categoria do motor" (vertical/horizontal/misto/comercial) saiu em 14/10/2026: só o Motor de
 // Áreas NBR 12721 antigo a lia, e ele foi removido (Fase 10 do plano
@@ -16,10 +17,12 @@ export interface EmpreendimentoTypeRecord {
   is_system: boolean;
   active: boolean;
   sort_order: number;
+  /** Como a aba de unidades se monta (torres, lote ou imóvel único) — 09/11/2026. */
+  estrutura: EstruturaDoTipo;
   created_at: string;
 }
 
-export type EmpreendimentoTypeInsert = Pick<EmpreendimentoTypeRecord, 'name' | 'color' | 'description'> & {
+export type EmpreendimentoTypeInsert = Pick<EmpreendimentoTypeRecord, 'name' | 'color' | 'description'> & Partial<Pick<EmpreendimentoTypeRecord, 'estrutura'>> & {
   organization_id: string;
   slug?: string;
 };
@@ -44,7 +47,7 @@ export const empreendimentoTypeService = {
   async list(organizationId?: string): Promise<EmpreendimentoTypeRecord[]> {
     let query = supabase
       .from('empreendimento_types')
-      .select('id, organization_id, name, slug, color, description, is_system, active, sort_order, created_at')
+      .select('id, organization_id, name, slug, color, description, is_system, active, sort_order, estrutura, created_at')
       .eq('active', true);
 
     query = organizationId
@@ -68,7 +71,7 @@ export const empreendimentoTypeService = {
     return data;
   },
 
-  async update(id: string, updates: Partial<Pick<EmpreendimentoTypeRecord, 'name' | 'color' | 'description' | 'active'>>): Promise<EmpreendimentoTypeRecord> {
+  async update(id: string, updates: Partial<Pick<EmpreendimentoTypeRecord, 'name' | 'color' | 'description' | 'active' | 'estrutura'>>): Promise<EmpreendimentoTypeRecord> {
     const { data, error } = await supabase
       .from('empreendimento_types')
       .update(updates)
@@ -84,6 +87,7 @@ export const empreendimentoTypeService = {
       name: `${type.name} (Cópia)`,
       color: type.color,
       description: type.description,
+      estrutura: type.estrutura,
       organization_id: organizationId,
     });
   },

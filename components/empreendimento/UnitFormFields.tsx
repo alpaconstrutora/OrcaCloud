@@ -138,10 +138,18 @@ interface UnitFormFieldsProps {
   idPrefix?: string;
   /** Os andares do cadastro de pavimentos da torre: com algum, "Pavimento" vira uma lista deles. */
   pavimentos?: AndarDoCadastro[];
+  /**
+   * Imóvel único — casa, chácara (09/11/2026): sem torre de verdade, Pavimento, Tipo de pavimento e
+   * Posição (frente/lateral/fundos do prédio) não têm o que dizer e somem.
+   */
+  semPavimento?: boolean;
+  /** Rótulo do campo do nome; padrão "Unidade (ex: 101) *". */
+  rotuloDoNome?: string;
 }
 
 export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
   value, onChange, towers, towerId, onTowerChange, erroNome, idPrefix = 'unidade', pavimentos = [],
+  semPavimento = false, rotuloDoNome = 'Unidade (ex: 101) *',
 }) => {
   const id = (k: string) => `${idPrefix}-${k}`;
   const numero = (k: keyof UnitFormValues, rotulo: string, step?: string) => (
@@ -162,14 +170,14 @@ export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
         </Campo>
       )}
 
-      <Campo rotulo="Unidade (ex: 101) *" htmlFor={id('name')} className="col-span-full">
+      <Campo rotulo={rotuloDoNome} htmlFor={id('name')} className="col-span-full">
         <input id={id('name')} className={`${campoCls} ${erroNome ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20' : ''}`}
           value={value.name} onChange={e => onChange({ name: e.target.value })}
           aria-invalid={!!erroNome} aria-describedby={erroNome ? id('name-erro') : undefined} />
         {erroNome && <p id={id('name-erro')} className="text-xs text-red-600">{erroNome}</p>}
       </Campo>
 
-      {pavimentos.length > 0 ? (
+      {semPavimento ? null : pavimentos.length > 0 ? (
         <Campo rotulo="Pavimento" htmlFor={id('floor')}>
           <select id={id('floor')} className={campoCls} value={value.floor}
             onChange={e => {
@@ -192,13 +200,15 @@ export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
             onChange={e => onChange({ floor: e.target.value, floor_id: '' })} />
         </Campo>
       )}
-      <Campo rotulo="Tipo de pavimento" htmlFor={id('floor_tipo')}>
-        <select id={id('floor_tipo')} className={campoCls} value={value.floor_tipo}
-          onChange={e => onChange({ floor_tipo: e.target.value as FloorTipo | '' })}>
-          <option value="">—</option>
-          {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
-        </select>
-      </Campo>
+      {!semPavimento && (
+        <Campo rotulo="Tipo de pavimento" htmlFor={id('floor_tipo')}>
+          <select id={id('floor_tipo')} className={campoCls} value={value.floor_tipo}
+            onChange={e => onChange({ floor_tipo: e.target.value as FloorTipo | '' })}>
+            <option value="">—</option>
+            {(Object.keys(FLOOR_TIPO_LABEL) as FloorTipo[]).map(t => <option key={t} value={t}>{FLOOR_TIPO_LABEL[t]}</option>)}
+          </select>
+        </Campo>
+      )}
       <Campo rotulo="Tipologia" htmlFor={id('typology')}>
         <input id={id('typology')} className={campoCls} placeholder="ex: 2 quartos" value={value.typology}
           onChange={e => onChange({ typology: e.target.value })} />
@@ -212,13 +222,15 @@ export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
       {numero('bathrooms', 'Banheiros')}
       {numero('suites', 'Suítes')}
 
-      <Campo rotulo="Posição" htmlFor={id('position_type')}>
-        <select id={id('position_type')} className={campoCls} value={value.position_type}
-          onChange={e => onChange({ position_type: e.target.value as UnitPositionType | '' })}>
-          <option value="">—</option>
-          {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
-        </select>
-      </Campo>
+      {!semPavimento && (
+        <Campo rotulo="Posição" htmlFor={id('position_type')}>
+          <select id={id('position_type')} className={campoCls} value={value.position_type}
+            onChange={e => onChange({ position_type: e.target.value as UnitPositionType | '' })}>
+            <option value="">—</option>
+            {(Object.keys(POSITION_LABEL) as UnitPositionType[]).map(t => <option key={t} value={t}>{POSITION_LABEL[t]}</option>)}
+          </select>
+        </Campo>
+      )}
       <Campo rotulo="Vista" htmlFor={id('view_type')}>
         <select id={id('view_type')} className={campoCls} value={value.view_type}
           onChange={e => onChange({ view_type: e.target.value as UnitViewType | '' })}>

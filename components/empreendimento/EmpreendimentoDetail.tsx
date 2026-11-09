@@ -3,6 +3,9 @@ import React from 'react';
 import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
+import UnidadeUnicaEditor from './UnidadeUnicaEditor';
+import { estruturaDoTipo, type EstruturaDoTipo } from '../../utils/empreendimentoTipos';
+import { ehUnidadeUnica } from '../../utils/empreendimentoUnidadeUnica';
 import { EspelhoVendasTab } from './EspelhoVendasTab';
 import { EspelhoLocacoesTab } from './EspelhoLocacoesTab';
 import { SyncCenterTab } from './SyncCenterTab';
@@ -110,11 +113,18 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
   React.useEffect(() => { loadPendingCuradoria(); }, [loadPendingCuradoria, refreshKey]);
 
+  // Unidade única (09/11/2026): o Tipo diz se a aba é Torres & Unidades ou a do Lote/Casa/Chácara. Os tipos
+  // vêm da org do PRÓPRIO empreendimento (regra #5) — com o topo em outra org, o "Lote" dela não viria.
+  const [estrutura, setEstrutura] = React.useState<EstruturaDoTipo>('TORRES');
   React.useEffect(() => {
-    empreendimentoTypeService.list(organizationId)
-      .then(types => setTipoNameMap(Object.fromEntries(types.map(t => [t.slug, t.name]))))
-      .catch(() => setTipoNameMap({}));
-  }, [organizationId]);
+    const orgDoRegistro = e.organization_id || organizationId || undefined;
+    empreendimentoTypeService.list(orgDoRegistro)
+      .then(types => {
+        setTipoNameMap(Object.fromEntries(types.map(t => [t.slug, t.name])));
+        setEstrutura(estruturaDoTipo(types, e.tipo, orgDoRegistro));
+      })
+      .catch(() => { setTipoNameMap({}); setEstrutura('TORRES'); });
+  }, [organizationId, e.organization_id, e.tipo]);
 
   // "Todas as organizações" não bloqueia a leitura — a org sai da própria entidade
   // aberta, não do topo (CLAUDE.md regra #5).
@@ -230,7 +240,8 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'visao', label: 'Visão Geral', icon: FileText },
     // A Curadoria (conflitos da sincronização) mora DENTRO desta aba desde 28/10/2026: o contador vem junto.
     { id: 'sync', label: 'Sincronização', icon: ArrowLeftRight, badge: pendingCuradoria },
-    { id: 'torres', label: 'Torres & Unidades', icon: Layers },
+    // Unidade única: a mesma aba (mesmo id), com o nome do que ela é.
+    { id: 'torres', label: estrutura === 'LOTE' ? 'Lote' : ehUnidadeUnica(estrutura) ? 'Unidade' : 'Torres & Unidades', icon: Layers },
     // Só existe quando o catálogo (Configurações do Sistema → Características de
     // Unidade) tem ao menos 1 característica aplicável ao tipo deste empreendimento.
     ...(caracteristicas.length > 0 ? [{ id: 'caracteristicas' as Tab, label: 'Características Adicionais', icon: ListChecks }] : []),
@@ -432,13 +443,26 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
       {tab === 'torres' && (
         <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm">
-          <TowerEditor
-            key={refreshKey}
-            empreendimentoId={e.id}
-            organizationId={organizationId}
-            empreendimento={e}
-            onTerrenoSaved={onSynced}
-          />
+          {ehUnidadeUnica(estrutura) ? (
+            <UnidadeUnicaEditor
+              key={refreshKey}
+              empreendimentoId={e.id}
+              organizationId={organizationId}
+              empreendimento={e}
+              estrutura={estrutura}
+              nomeDoTipo={tipoLabel}
+              onTerrenoSaved={onSynced}
+              onAbrirEspelho={() => setTab('comercial')}
+            />
+          ) : (
+            <TowerEditor
+              key={refreshKey}
+              empreendimentoId={e.id}
+              organizationId={organizationId}
+              empreendimento={e}
+              onTerrenoSaved={onSynced}
+            />
+          )}
         </div>
       )}
 
@@ -448,6 +472,7 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
           organizationId={effectiveOrgId ?? organizationId}
           caracteristicas={caracteristicas}
           onManageCaracteristicas={onChangeView ? () => onChangeView('settings') : undefined}
+          unidadeUnica={ehUnidadeUnica(estrutura)}
         />
       )}
       {tab === 'regulatorio' && (

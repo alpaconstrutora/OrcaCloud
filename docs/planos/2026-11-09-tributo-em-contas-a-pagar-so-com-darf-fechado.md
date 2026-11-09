@@ -102,6 +102,8 @@ dos arquivos `aplicar_20271021300000`, `aplicar_20271026400000`, `aplicar_202710
   'TAX' …)` com party_type NULL) — corrigido para `IS DISTINCT FROM` antes de aplicar.
 - [x] U1–U2 e testes (`darf.test.ts`, `darfAprovacao.test.ts`); T1–T4 com
   `check-ui-standard.sh` limpo nos 4 arquivos e `tsc` limpo
-- [ ] Aplicar a migration no banco
+- [x] Aplicar a migration no banco — o usuário rodou (09/11; o auto mode barrou a minha); conferido: as 6 funções
+  vivas trazem o texto de 09/11 e a ACL sem PUBLIC/anon
+- [x] PR #269 mesclado (`44d8cc8`); domínio servindo `44d8cc8` com "Tributo fora de DARF" no bundle
 - [ ] Conferência no navegador (Contas a Pagar, Tributos, DARFs) — precisa da senha do
   usuário de leitura

@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Landmark, Loader2, KeyRound, RefreshCw, PlugZap, AlertTriangle, Check } from 'lucide-react';
 import { asaasContaService, CONTA_ASAAS_PADRAO, type AmbienteAsaas, type ContaAsaasConfig } from '../../services/asaasContaService';
 import { formatMoney, formatDateBR } from '../ui/Format';
+import { useStore } from '../../store/useStore';
 
 interface Props {
     paymentAccountId: string;
@@ -34,6 +35,7 @@ function dataHora(iso: string | null): string {
  * modo piloto, clicou no Salvar do drawer e a mudança se perdeu sem aviso.
  */
 export default function ContaAsaasSecao({ paymentAccountId, registrarAoSalvar }: Props) {
+    const setActiveView = useStore(s => s.setActiveView);
     const [carregando, setCarregando] = useState(true);
     const [cfg, setCfg] = useState<ContaAsaasConfig | null>(null);
     const [ativando, setAtivando] = useState(false);
@@ -164,6 +166,15 @@ export default function ContaAsaasSecao({ paymentAccountId, registrarAoSalvar }:
                         {cfg?.extrato_sincronizado_ate ? formatDateBR(cfg.extrato_sincronizado_ate) : `ainda não (a partir de ${formatDateBR(editando.extrato_desde)})`}
                     </dd>
                 </dl>
+                {temChave && cfg?.ativo && (
+                    <button
+                        type="button"
+                        onClick={() => setActiveView('conta-asaas')}
+                        className="mt-1.5 text-sm font-medium text-blue-600 hover:text-blue-700 hover:underline"
+                    >
+                        Ver saldo e extrato em Financeiro › Conta Asaas
+                    </button>
+                )}
                 {cfg?.ultimo_erro && (
                     <p className="mt-2 flex items-start gap-1.5 text-xs text-red-700 bg-red-50 rounded-[6px] p-2.5">
                         <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" />

@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { baseDaAsaas, linhaDoExtrato, vinculoDoExtrato, janelaDoExtrato, valoresIguais } from '../utils/asaasExtrato';
+import {
+    baseDaAsaas, linhaDoExtrato, vinculoDoExtrato, janelaDoExtrato, valoresIguais,
+    saldoDoItem, rotuloDoTipoAsaas, ehTaxaAsaas, resumoAReceber, partirPeriodo, ordenarPeloSaldo,
+} from '../utils/asaasExtrato';
 
 const minusculas = (s: string) => s.toLowerCase();
 
@@ -79,5 +82,94 @@ describe('valoresIguais', () => {
         expect(valoresIguais(100, '100.00')).toBe(true);
         expect(valoresIguais(100, 100.01)).toBe(false);
         expect(valoresIguais(null, 0)).toBe(false);
+    });
+});
+
+describe('saldo após o movimento', () => {
+    it('linhaDoExtrato guarda o balance da Asaas com 2 casas', () => {
+        expect(linhaDoExtrato({ id: 'x', value: 10, balance: 2138.349999, date: '2026-11-09' }, 'c', 'o', minusculas).saldo_apos).toBe(2138.35);
+        expect(linhaDoExtrato({ id: 'y', value: 10, balance: 0, date: '2026-11-09' }, 'c', 'o', minusculas).saldo_apos).toBe(0);
+    });
+    it('sem balance fica nulo (nunca zero inventado)', () => {
+        expect(saldoDoItem({})).toBeNull();
+        expect(saldoDoItem({ balance: null })).toBeNull();
+    });
+});
+
+describe('rotuloDoTipoAsaas', () => {
+    it('traduz os tipos conhecidos', () => {
+        expect(rotuloDoTipoAsaas('PAYMENT_RECEIVED')).toBe('Cobrança recebida');
+        expect(rotuloDoTipoAsaas('TRANSFER')).toBe('Transferência enviada');
+        expect(rotuloDoTipoAsaas('BILL_PAYMENT_FEE')).toBe('Taxa do pagamento de conta');
+    });
+    it('tipo novo da Asaas volta com o próprio código; vazio vira "Movimento"', () => {
+        expect(rotuloDoTipoAsaas('TIPO_NOVO_DA_ASAAS')).toBe('TIPO_NOVO_DA_ASAAS');
+        expect(rotuloDoTipoAsaas(null)).toBe('Movimento');
+    });
+    it('taxa é o _FEE, não a devolução da taxa', () => {
+        expect(ehTaxaAsaas('PAYMENT_FEE')).toBe(true);
+        expect(ehTaxaAsaas('PAYMENT_FEE_REVERSAL')).toBe(false);
+        expect(ehTaxaAsaas('BILL_PAYMENT_FEE_CANCELLED')).toBe(false);
+        expect(ehTaxaAsaas('PAYMENT_RECEIVED')).toBe(false);
+    });
+});
+
+describe('resumoAReceber', () => {
+    it('aguardando crédito pelo líquido; em aberto = pendentes + vencidas pelo bruto', () => {
+        const r = resumoAReceber({
+            confirmadas: { quantity: 2, value: 300, netValue: 290.02 },
+            pendentes: { quantity: 3, value: 1000.1, netValue: 994 },
+            vencidas: { quantity: 1, value: 250.2, netValue: 248.21 },
+        });
+        expect(r.aguardandoCredito).toEqual({ quantidade: 2, valor: 290.02 });
+        expect(r.emAberto).toEqual({ quantidade: 4, valor: 1250.3 });
+        expect(r.vencidas).toEqual({ quantidade: 1, valor: 250.2 });
+    });
+    it('estatística que falhou conta como zero', () => {
+        expect(resumoAReceber({}).emAberto).toEqual({ quantidade: 0, valor: 0 });
+    });
+});
+
+describe('partirPeriodo', () => {
+    it('todo depois do "desde" → só gravado', () => {
+        expect(partirPeriodo({ inicio: '2026-11-01', fim: '2026-11-30', desde: '2026-10-17' }))
+            .toEqual({ historico: null, gravado: { inicio: '2026-11-01', fim: '2026-11-30' } });
+    });
+    it('todo antes → só histórico', () => {
+        expect(partirPeriodo({ inicio: '2026-06-01', fim: '2026-06-30', desde: '2026-10-17' }))
+            .toEqual({ historico: { inicio: '2026-06-01', fim: '2026-06-30' }, gravado: null });
+    });
+    it('atravessa o "desde" → histórico até a véspera, gravado a partir dele', () => {
+        expect(partirPeriodo({ inicio: '2026-10-01', fim: '2026-10-31', desde: '2026-10-17' }))
+            .toEqual({ historico: { inicio: '2026-10-01', fim: '2026-10-16' }, gravado: { inicio: '2026-10-17', fim: '2026-10-31' } });
+        expect(partirPeriodo({ inicio: '2026-02-01', fim: '2026-03-31', desde: '2026-03-01' }).historico?.fim).toBe('2026-02-28');
+    });
+    it('período inválido não consulta nada', () => {
+        expect(partirPeriodo({ inicio: '2026-11-30', fim: '2026-11-01', desde: '2026-10-17' })).toEqual({ historico: null, gravado: null });
+        expect(partirPeriodo({ inicio: '', fim: '2026-11-01', desde: '2026-10-17' })).toEqual({ historico: null, gravado: null });
+    });
+});
+
+describe('ordenarPeloSaldo', () => {
+    const l = (id: string, dia: string, amount: number, direction: 'CREDIT' | 'DEBIT', saldo_apos: number | null) =>
+        ({ id, transaction_date: dia, amount, direction, saldo_apos });
+
+    it('no mesmo dia, a ordem sai do encadeamento do saldo', () => {
+        // saldo 100 → +100 (cobrança) = 200 → −1,99 (taxa) = 198,01 → −50 (PIX) = 148,01
+        const embaralhado = [
+            l('pix', '2026-11-09', 50, 'DEBIT', 148.01),
+            l('cob', '2026-11-09', 100, 'CREDIT', 200),
+            l('taxa', '2026-11-09', 1.99, 'DEBIT', 198.01),
+            l('ontem', '2026-11-08', 100, 'CREDIT', 100),
+        ];
+        expect(ordenarPeloSaldo(embaralhado).map(x => x.id)).toEqual(['ontem', 'cob', 'taxa', 'pix']);
+    });
+    it('sem saldo mantém a ordem recebida dentro do dia', () => {
+        const linhas = [l('a', '2026-11-09', 1, 'DEBIT', null), l('b', '2026-11-09', 2, 'CREDIT', 10)];
+        expect(ordenarPeloSaldo(linhas).map(x => x.id)).toEqual(['a', 'b']);
+    });
+    it('encadeamento ambíguo não inventa ordem', () => {
+        const linhas = [l('a', '2026-11-09', 10, 'CREDIT', 110), l('b', '2026-11-09', 10, 'CREDIT', 110)];
+        expect(ordenarPeloSaldo(linhas).map(x => x.id)).toEqual(['a', 'b']);
     });
 });

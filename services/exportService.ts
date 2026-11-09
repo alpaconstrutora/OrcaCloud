@@ -98,6 +98,18 @@ interface FluxoRow {
  * só formata e escreve o arquivo, quem conhece o domínio (rótulos de origem,
  * de status) é a tela. Evita duplicar ORIGEM_PT/STATUS_PT aqui.
  */
+/** Financeiro › Conta Asaas — uma linha do extrato, já com os rótulos da tela. */
+export interface ExtratoAsaasExportRow {
+    data: string;          // AAAA-MM-DD
+    tipo: string;
+    descricao: string;
+    titulo: string;
+    entrada: number | null;
+    saida: number | null;
+    saldoApos: number | null;
+    situacao: string;
+}
+
 interface PayableExportRow {
     credor: string;
     descricao: string;
@@ -413,6 +425,73 @@ export const exportService = {
         const ws = XLSX.utils.json_to_sheet(exportData);
         const wb = XLSX.utils.book_new();
         XLSX.utils.book_append_sheet(wb, ws, "Contas a Pagar");
+        const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
+        const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
+        saveAs(blob, `${options.fileName}.xlsx`);
+    },
+
+    /** Financeiro › Conta Asaas — extrato do período com o saldo após cada movimento. */
+    generateExtratoAsaasPDF(rows: ExtratoAsaasExportRow[], options: { fileName: string; title: string; subtitulo: string }) {
+        const doc = new jsPDF({ orientation: 'landscape' });
+        const pageWidth = doc.internal.pageSize.getWidth();
+        const primaryColor: [number, number, number] = [30, 41, 59];
+        const brl = (v: number | null) => v == null ? '' : new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+        doc.setFillColor(...primaryColor);
+        doc.rect(0, 0, pageWidth, 35, 'F');
+        doc.setTextColor(255, 255, 255);
+        doc.setFontSize(20);
+        doc.setFont('helvetica', 'bold');
+        doc.text(options.title.toUpperCase(), 15, 22);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`${options.subtitulo} | Gerado em: ${new Date().toLocaleDateString('pt-BR')} ${new Date().toLocaleTimeString('pt-BR')}`, 15, 30);
+
+        autoTable(doc, {
+            startY: 45,
+            head: [['Data', 'Tipo', 'Descrição', 'Título', 'Entrada', 'Saída', 'Saldo após', 'Situação']],
+            body: rows.map(r => [
+                new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR'),
+                r.tipo, r.descricao, r.titulo || '—',
+                brl(r.entrada), brl(r.saida), brl(r.saldoApos), r.situacao,
+            ]),
+            theme: 'grid',
+            headStyles: { fillColor: primaryColor, fontSize: 9 },
+            styles: { fontSize: 8 },
+            columnStyles: { 4: { halign: 'right' }, 5: { halign: 'right' }, 6: { halign: 'right' } },
+            alternateRowStyles: { fillColor: [248, 250, 252] },
+        });
+
+        const finalY = (doc as JsPDFWithAutoTable).lastAutoTable.finalY + 10;
+        const entradas = rows.reduce((s, r) => s + (r.entrada ?? 0), 0);
+        const saidas = rows.reduce((s, r) => s + (r.saida ?? 0), 0);
+        doc.setFontSize(9);
+        doc.setTextColor(0, 0, 0);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Entradas: ${brl(entradas)}    Saídas: ${brl(saidas)}`, 15, finalY);
+
+        doc.setFontSize(8);
+        doc.setTextColor(100, 116, 139);
+        doc.setFont('helvetica', 'normal');
+        doc.text('Relatório gerado via Opura Financial Suite.', pageWidth / 2, doc.internal.pageSize.getHeight() - 10, { align: 'center' });
+
+        doc.save(`${options.fileName}.pdf`);
+    },
+
+    generateExtratoAsaasExcel(rows: ExtratoAsaasExportRow[], options: { fileName: string }) {
+        const exportData = rows.map(r => ({
+            'Data': new Date(r.data + 'T00:00:00').toLocaleDateString('pt-BR'),
+            'Tipo': r.tipo,
+            'Descrição': r.descricao,
+            'Título': r.titulo || '-',
+            'Entrada': r.entrada ?? '',
+            'Saída': r.saida ?? '',
+            'Saldo após': r.saldoApos ?? '',
+            'Situação': r.situacao,
+        }));
+        const ws = XLSX.utils.json_to_sheet(exportData);
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, "Extrato Asaas");
         const excelBuffer = XLSX.write(wb, { bookType: 'xlsx', type: 'array' });
         const blob = new Blob([excelBuffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet;charset=UTF-8' });
         saveAs(blob, `${options.fileName}.xlsx`);

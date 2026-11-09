@@ -4,6 +4,15 @@ import { parcelaBaixada, type ParcelaExistente } from './contratoParcelaVariavel
 const centavos = (v: number) => Math.round(v * 100) / 100;
 
 /**
+ * Valor atual do contrato NÃO recorrente: original + aditivos aprovados + reajuste
+ * acumulado. Fórmula única do "Salvar" do contrato e da aprovação de aditivo — até
+ * 09/11/2026 as duas paravam nos aditivos e apagavam o reajuste.
+ */
+export function valorAtualDoContrato(original: number, aditivosAprovados: number, reajusteAcumulado: number | null | undefined): number {
+    return centavos(Number(original || 0) + Number(aditivosAprovados || 0) + Number(reajusteAcumulado || 0));
+}
+
+/**
  * Reajuste de contrato PARCELADO: aplica o fator ao CRONOGRAMA, que é de onde
  * `syncParceladoScheduleToFinance` tira o valor de cada parcela. Até 09/11/2026
  * `applyReajuste` só mudava `current_value` e o sync seguinte regravava as parcelas

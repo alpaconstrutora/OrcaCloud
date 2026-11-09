@@ -997,6 +997,37 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         }
     };
 
+    /** Por que "Aplicar reajuste" não pode rodar. `null` = pode. */
+    const motivoSemReajuste = !contract ? null
+        : !contract.reajuste_index || contract.reajuste_index === 'Sem Reajuste'
+            ? 'Contrato sem índice de reajuste — escolha o índice no formulário abaixo.'
+            : !['Ativo', 'Assinado'].includes(contract.status)
+                ? `Só contrato Ativo ou Assinado pode ser reajustado (este está "${contract.status}").`
+                : null;
+
+    /** Abre o modal de reajuste já com os índices sugeridos (Configurações › Índices). */
+    const abrirReajuste = async () => {
+        if (!contract?.reajuste_index) return;
+        setReajusteModal(true);
+        setReajusteSuggestion(null);
+        try {
+            const orgId = contract.organization_id;
+            const dataBase = contract.reajuste_data_base ?? contract.start_date;
+            const [baseRow, atualRow] = await Promise.all([
+                contractIndexService.getClosestTo(contract.reajuste_index as IndexName, dataBase, orgId),
+                contractIndexService.getClosestTo(contract.reajuste_index as IndexName, new Date().toISOString().slice(0, 10), orgId),
+            ]);
+            if (baseRow && atualRow && baseRow.id !== atualRow.id) {
+                setReajusteSuggestion({
+                    base: baseRow.value, atual: atualRow.value,
+                    baseMonth: baseRow.reference_month, atualMonth: atualRow.reference_month,
+                });
+                setReajusteBase(baseRow.value.toString());
+                setReajusteAtual(atualRow.value.toString());
+            }
+        } catch { /* sugestão é opcional */ }
+    };
+
     const handleApplyReajuste = async () => {
         if (!contract) return;
         const base = parseFloat(reajusteBase.replace(',', '.'));
@@ -1009,6 +1040,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
         try {
             const updated = await contractService.applyReajuste(contract.id, base, atual, reajusteNotes || undefined);
             setContract(updated);
+            await recarregarParcelas(updated).catch(() => undefined);
             setReajusteModal(false);
             setReajusteBase('');
             setReajusteAtual('');
@@ -2060,6 +2092,39 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     <span className="text-emerald-700 font-medium">Saldo a Faturar</span>
                                     <span className="font-medium text-emerald-700">R$ {fmt(contract.current_value - totalMeasurements)}</span>
                                 </div>
+                            </div>
+
+                            {/* Reajuste — o botão saiu por engano em 02/09/2026 (bb85a3e5, junto com o
+                                card Configurações) e o modal ficou sem quem o abrisse. O índice em
+                                si continua sendo escolhido no formulário. */}
+                            <div className="space-y-2 pt-3 border-t border-gray-100">
+                                <div className="flex justify-between items-center text-xs">
+                                    <span className="text-gray-500 font-medium">Índice de Reajuste</span>
+                                    <span className="font-medium text-gray-900">{contract.reajuste_index || '—'}</span>
+                                </div>
+                                {contract.reajuste_data_base && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500 font-medium">Data-base</span>
+                                        <span className="font-medium text-gray-900">{new Date(contract.reajuste_data_base.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                    </div>
+                                )}
+                                {contract.reajuste_proximo && (
+                                    <div className="flex justify-between items-center text-xs">
+                                        <span className="text-gray-500 font-medium">Próximo reajuste</span>
+                                        <span className="font-medium text-gray-900">{new Date(contract.reajuste_proximo.slice(0, 10) + 'T12:00:00').toLocaleDateString('pt-BR')}</span>
+                                    </div>
+                                )}
+                                <span title={motivoSemReajuste ?? undefined} className="block">
+                                    <button
+                                        type="button"
+                                        onClick={abrirReajuste}
+                                        disabled={!!motivoSemReajuste}
+                                        className="w-full flex items-center justify-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 transition-all font-medium text-[13px] active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                                    >
+                                        <TrendingUp className="w-[15px] h-[15px]" />
+                                        Aplicar reajuste
+                                    </button>
+                                </span>
                             </div>
 
                             {/* Secundário: emitir o dossiê é consulta, não a ação principal do contrato. */}
@@ -4155,8 +4220,12 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                 </div>
                                 {reajusteBase && reajusteAtual && parseFloat(reajusteBase) > 0 && parseFloat(reajusteAtual) > 0 && (
                                     <div className="p-3 bg-blue-50 rounded-[6px] text-xs text-blue-700">
-                                        Fator: {(parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toFixed(5)} ·
-                                        Novo valor: R$ {(contract.current_value * parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                        Fator: {(parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toFixed(5)} ·{' '}
+                                        {!contract.is_recurring && contract.payment_term_type === 'Parcelado'
+                                            // Parcelado reajusta só o saldo (utils/reajusteParcelado.ts) —
+                                            // o novo valor depende de quais parcelas estão em aberto.
+                                            ? 'Sobem só as parcelas a vencer em aberto (pagas e com valor alterado à mão ficam como estão); o valor do contrato aumenta pelo acréscimo delas.'
+                                            : `Novo valor: R$ ${(contract.current_value * parseFloat(reajusteAtual) / parseFloat(reajusteBase)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}
                                     </div>
                                 )}
                                 <div>

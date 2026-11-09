@@ -12,6 +12,7 @@ import { resolverCategoriaDoContrato } from './financialCategoryResolver';
 import {
     planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, marcaDeVencimentoManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
 } from '../utils/contratoParcelaVariavel';
+import { reajustarCronograma } from '../utils/reajusteParcelado';
 import {
     Contract,
     ContractItem,
@@ -3178,6 +3179,8 @@ export const contractService = {
      * Aplica reajuste ao contrato usando a fórmula padrão:
      *   novo_valor = current_value × (indexValue / indexBase)
      * onde indexBase e indexValue são fornecidos pelo chamador (ex: INCC/IPCA manual ou via API).
+     * Exceção: contrato Parcelado reajusta só o saldo (parcelas a vencer em aberto) e
+     * novo_valor = current_value + acréscimo dessas parcelas.
      * Atualiza current_value, reajuste_data_base (nova base = hoje) e reajuste_proximo (+ 12 meses),
      * e re-sincroniza parcelas/recorrência ao módulo financeiro.
      */
@@ -3202,14 +3205,38 @@ export const contractService = {
         }
 
         const fator = indexValue / indexBase;
-        const novoValor = parseFloat((contract.current_value * fator).toFixed(2));
         const hoje = new Date().toISOString().split('T')[0];
         const proximo = new Date(new Date().setFullYear(new Date().getFullYear() + 1)).toISOString().split('T')[0];
+
+        // Parcelado: o reajuste vai para o CRONOGRAMA (é dele que o sync tira o valor
+        // de cada parcela) e só sobre o saldo — ver utils/reajusteParcelado.ts. Até
+        // 09/11/2026 só `current_value` mudava, sobre o contrato inteiro, e o sync
+        // logo abaixo regravava as parcelas com os valores antigos.
+        const parcelado = !contract.is_recurring && contract.payment_term_type === 'Parcelado';
+        let novoValor = parseFloat((contract.current_value * fator).toFixed(2));
+        let cronogramaReajustado: ContractInstallment[] | undefined;
+        if (parcelado && contract.payment_schedule?.length) {
+            const { data: titulos, error: titulosErr } = await supabase
+                .from('internal_transactions')
+                .select(COLUNAS_PARCELA_EXISTENTE)
+                .eq('organization_id', contract.organization_id)
+                .eq('source_system', 'CONTRACT_PARCELADO')
+                .like('reference_id', `${contract.id}%`);
+            if (titulosErr) throw titulosErr;
+            const r = reajustarCronograma(
+                contract.payment_schedule, (titulos ?? []) as unknown as ParcelaExistente[], contract.id, fator, hoje);
+            if (r.reajustadas === 0) {
+                throw new Error('Nenhuma parcela a vencer em aberto para reajustar — as restantes já foram pagas ou tiveram o valor alterado à mão.');
+            }
+            cronogramaReajustado = r.cronograma;
+            novoValor = parseFloat((Number(contract.current_value) + r.acrescimo).toFixed(2));
+        }
 
         const { data: updated, error: updateErr } = await supabase
             .from('contracts')
             .update({
                 current_value: novoValor,
+                ...(cronogramaReajustado ? { payment_schedule: cronogramaReajustado } : {}),
                 reajuste_data_base: hoje,
                 reajuste_proximo: proximo,
                 ...(notes ? { description: `[Reajuste ${hoje}] ${notes}\n${contract.description || ''}` } : {}),
@@ -3219,7 +3246,8 @@ export const contractService = {
             .single();
         if (updateErr) throw updateErr;
 
-        // Re-sync parcelas futuras se parcelado
+        // Re-sync das parcelas a partir do cronograma reajustado: pagas e valor manual
+        // ficam como estão (planejarSyncParcelas).
         if (!updated.is_recurring && updated.payment_term_type === 'Parcelado') {
             await syncParceladoScheduleToFinance(updated as Contract);
         }

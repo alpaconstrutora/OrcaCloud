@@ -5,6 +5,7 @@ import {
     DollarSign, AlertTriangle, Landmark, MoveHorizontal, Layers,
 } from 'lucide-react';
 import { taxPayableService } from '../services/taxPayableService';
+import { darfService } from '../services/darfService';
 import { taxSettingsService } from '../services/taxSettingsService';
 import type { TaxPayable, TaxPayableEffectiveStatus } from '../types/financial';
 import type { Organization } from '../types';
@@ -18,7 +19,7 @@ import { useStore } from '../store/useStore';
 import ActionIconButton from './ui/ActionIconButton';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { agruparLinhas, chavePorMes, chavePorNome, chavePorRotulo, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela, MESES } from '../utils/agruparLinhas';
-import { dataBR, motivoNaoAgrupavel, validarSelecaoParaDarf } from '../utils/darf';
+import { dataBR, motivoForaDeContasAPagar, motivoNaoAgrupavel, validarSelecaoParaDarf } from '../utils/darf';
 import { FilterPopover } from './ui/FilterPopover';
 import { filtrarPorOrigem, origemDoTributo, origensSelecionadas, ORIGENS_TRIBUTO, ORIGEM_TRIBUTO_LABEL, type OrigemTributo } from '../utils/tributoOrigem';
 import DarfSheet from './financeiro/DarfSheet';
@@ -241,9 +242,9 @@ type ViewId = 'tributos' | 'fechamento' | 'darfs';
 
 // Título/subtítulo mudam com a aba ativa (§19.1/§20)
 const VIEW_HEADERS: Record<ViewId, { title: string; subtitle: string }> = {
-    tributos:   { title: 'Tributos a Pagar', subtitle: 'Gestão dos tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações. O pagamento é feito em Contas a Pagar.' },
+    tributos:   { title: 'Tributos a Pagar', subtitle: 'Gestão dos tributos (IRRF, PIS, COFINS, CSLL…) sobre Vendas de Ativos e Locações. O pagamento é feito em Contas a Pagar, pelo DARF enviado para aprovação; o FGTS vai avulso.' },
     fechamento: { title: 'Fechamento',       subtitle: 'Conferência e fechamento dos tributos apurados sobre Vendas de Ativos e Locações.' },
-    darfs:      { title: 'DARFs',            subtitle: 'Guias que agrupam tributos da mesma competência. O pagamento é feito em Contas a Pagar, como um título só.' },
+    darfs:      { title: 'DARFs',            subtitle: 'Guias que agrupam tributos da mesma competência. Enviada para aprovação, a guia vai para Contas a Pagar como um título só.' },
 };
 const VIEWS: { id: ViewId; label: string }[] = [
     { id: 'tributos',   label: 'Tributos a Pagar' },
@@ -427,6 +428,9 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     // `linhas` = tudo que o servidor devolveu; `rows` = o que o filtro de Origem deixa ver. KPIs,
     // filtro avançado, ordenação e agrupamento leem `rows`, então acompanham o recorte.
     const [linhas, setRows] = useState<TaxPayable[]>([]);
+    // Aprovação de cada DARF: o tributo só aparece em Contas a Pagar com o DARF
+    // enviado (pedido de 09/11/2026) — é o que decide o link "Ver em Contas a Pagar".
+    const [aprovacaoDosDarfs, setAprovacaoDosDarfs] = useState<Map<string, string>>(new Map());
     const [loading, setLoading] = useState(true);
     const [error, setError]     = useState<string | null>(null);
 
@@ -552,8 +556,13 @@ export default function TributosAPagarManager({ organizationId, organizations }:
         setLoading(true);
         setError(null);
         try {
-            const data = await taxPayableService.list(effectiveOrgId, { search, status: statusFilter, dueFrom: dueFrom || undefined, dueTo: dueTo || undefined });
+            // DARF que não carregou não derruba a tela: o link fica ligado (sem motivo conhecido).
+            const [data, darfs] = await Promise.all([
+                taxPayableService.list(effectiveOrgId, { search, status: statusFilter, dueFrom: dueFrom || undefined, dueTo: dueTo || undefined }),
+                darfService.list(effectiveOrgId).catch(err => { console.error('[Tributos] DARFs não carregados:', err); return null; }),
+            ]);
             setRows(data);
+            if (darfs) setAprovacaoDosDarfs(new Map(darfs.map(d => [d.id, d.aprovacao])));
             setSelectedIds(new Set());
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Erro ao carregar');
@@ -698,8 +707,8 @@ export default function TributosAPagarManager({ organizationId, organizations }:
     /** Selecionados do recorte inteiro (inclui grupo recolhido depois de marcado). */
     const selecionados = useMemo(() => sorted.filter(r => selectedIds.has(r.id) && !motivoNaoAgrupavel(r)), [sorted, selectedIds]);
     const allVisibleSelected = selectableVisible.length > 0 && selectableVisible.every(r => selectedIds.has(r.id));
-    // Com 1 tributo o DARF ainda vale (com multa/juros): o painel cobra isso; a barra só barra org/competência.
-    const validacaoDarf = validarSelecaoParaDarf(selecionados, true);
+    // Sem mínimo (09/11/2026): 1 tributo já vira DARF; a barra só barra org/competência/FGTS.
+    const validacaoDarf = validarSelecaoParaDarf(selecionados);
 
     function handleRowCheck(id: string, index: number, shiftKey: boolean) {
         if (shiftKey && lastCheckedIndex !== null) {
@@ -735,6 +744,7 @@ export default function TributosAPagarManager({ organizationId, organizations }:
             due_date: dueDate,
             effective_status: r.business_status === 'PREVISTO' ? (dueDate < hoje ? 'VENCIDO' : 'PREVISTO') : r.effective_status,
         }));
+        setAprovacaoDosDarfs(prev => new Map(prev).set(darfId, 'RASCUNHO'));
         setSelectedIds(new Set());
     }
 
@@ -1128,6 +1138,11 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                     // No DARF: valor/vencimento/status mudam só desagrupando (trava no banco).
                                     const motivoDarf = r.darf_id ? `Agrupado no DARF de venc. ${dataBR(r.due_date)} — desagrupe em DARFs para alterar` : null;
                                     const motivoSelecao = motivoNaoAgrupavel(r);
+                                    // Fora de Contas a Pagar (solto, ou DARF não enviado): o link desliga e diz por quê.
+                                    // DARF cuja aprovação não carregou: sem motivo conhecido, o link fica ligado.
+                                    const motivoForaCP = r.darf_id && !aprovacaoDosDarfs.has(r.darf_id)
+                                        ? null
+                                        : motivoForaDeContasAPagar(r, r.darf_id ? aprovacaoDosDarfs.get(r.darf_id) : null);
                                     return (
                                         <tr key={r.id} className={`hover:bg-blue-50/50 transition-colors ${selectedIds.has(r.id) ? 'bg-blue-50/60' : isVencido ? 'bg-red-50/30' : ''}`}>
                                             <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center">
@@ -1155,15 +1170,19 @@ export default function TributosAPagarManager({ organizationId, organizations }:
                                                     {/* Pagar, dar baixa e estornar moram em Contas a Pagar (um só lugar para
                                                         pagar): daqui só se abre o título lá. */}
                                                     {!isCancelado && (
-                                                        <button
-                                                            onClick={() => navigateToFocus('contas-a-pagar', r.id, 'CONTA_PAGAR')}
-                                                            className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap"
-                                                            title={isPago ? 'Abrir em Contas a Pagar (recibo e estorno da baixa)'
-                                                                : isRetido ? 'Abrir em Contas a Pagar'
-                                                                : 'Abrir em Contas a Pagar para dar baixa'}
-                                                        >
-                                                            Ver em Contas a Pagar
-                                                        </button>
+                                                        <span title={motivoForaCP ?? undefined} className="inline-flex">
+                                                            <button
+                                                                onClick={() => navigateToFocus('contas-a-pagar', r.id, 'CONTA_PAGAR')}
+                                                                disabled={!!motivoForaCP}
+                                                                className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-blue-600"
+                                                                title={motivoForaCP ? undefined
+                                                                    : isPago ? 'Abrir em Contas a Pagar (recibo e estorno da baixa)'
+                                                                    : isRetido ? 'Abrir em Contas a Pagar'
+                                                                    : 'Abrir em Contas a Pagar para dar baixa'}
+                                                            >
+                                                                Ver em Contas a Pagar
+                                                            </button>
+                                                        </span>
                                                     )}
                                                     {!isPago && !isRetido && (
                                                         <span title={motivoDarf ?? undefined} className="inline-flex">

@@ -54,20 +54,18 @@ export interface ValidacaoSelecaoDarf {
     total: number;
 }
 
-/**
- * A seleção vira um DARF? Mesmas regras de `fn_darf_criar`: ao menos 2
- * tributos (ou 1 com multa/juros — tributo atrasado sozinho também é DARF),
- * uma organização e uma competência.
- */
 /** Linha de FGTS (folha ou manual) — tem guia própria, não vai em DARF com os demais. */
-export const ehFgts = (t: Pick<TaxPayable, 'party_name'>) => /^FGTS\b/i.test((t.party_name ?? '').trim());
+export const ehFgts = (t: { party_name?: string | null }) => /^FGTS\b/i.test((t.party_name ?? '').trim());
 
-export function validarSelecaoParaDarf(tributos: TaxPayable[], comEncargos = false): ValidacaoSelecaoDarf {
+/**
+ * A seleção vira um DARF? Mesmas regras de `fn_darf_criar`: uma organização e
+ * uma competência. Sem mínimo de tributos (pedido de 09/11/2026): 1 basta.
+ */
+export function validarSelecaoParaDarf(tributos: TaxPayable[]): ValidacaoSelecaoDarf {
     const total = tributos.reduce((s, t) => s + (t.amount ?? 0), 0);
     const base = { orgId: null, competencia: null, total };
-    const minimo = comEncargos ? 1 : 2;
-    if (tributos.length < minimo) {
-        return { ...base, ok: false, motivo: comEncargos ? 'Selecione ao menos 1 tributo' : 'Selecione ao menos 2 tributos' };
+    if (tributos.length === 0) {
+        return { ...base, ok: false, motivo: 'Selecione ao menos 1 tributo' };
     }
     const bloqueado = tributos.find(t => motivoNaoAgrupavel(t));
     if (bloqueado) {
@@ -239,14 +237,63 @@ type DarfNaAprovacao = Pick<Darf, 'n_pagos' | 'aprovacao'>;
 export function motivoNaoEnviaDarfParaAprovacao(d: DarfNaAprovacao): string | null {
     if (d.n_pagos > 0) return 'DARF pago — não há pagamento a aprovar';
     if (d.aprovacao === 'PENDENTE') return 'Já está em Financeiro › Aprovações';
+    // O banco aceitaria, mas reenviar um aprovado o devolveria à fila sem motivo.
+    if (d.aprovacao === 'APROVADO') return 'Já aprovado — liberado para pagamento em Contas a Pagar';
     return null;
 }
 
-/** Segunda linha do Status na aba DARFs — o mesmo vocabulário de Contas a Pagar. Pago/rascunho: sem linha. */
+/** Segunda linha do Status na aba DARFs — o mesmo vocabulário de Contas a Pagar. Pago: sem linha. */
 export function aprovacaoDoDarfNaTela(d: DarfNaAprovacao): { rotulo: string; cor: string } | null {
     if (d.n_pagos > 0) return null;
     if (d.aprovacao === 'PENDENTE') return { rotulo: 'Aguardando aprovação', cor: 'text-orange-700' };
     if (d.aprovacao === 'APROVADO') return { rotulo: 'Liberado para pagamento', cor: 'text-blue-700' };
     if (d.aprovacao === 'REJEITADO') return { rotulo: 'Bloqueado', cor: 'text-red-700' };
+    return { rotulo: 'Não enviado', cor: 'text-gray-600' };
+}
+
+// ── DARF fechado = enviado para aprovação (pedido de 09/11/2026) ──
+// Plano: docs/planos/2026-11-09-tributo-em-contas-a-pagar-so-com-darf-fechado.md
+//
+// Montar o DARF é rascunho; enviar para aprovação o fecha. Só então o tributo
+// chega a Contas a Pagar — e o DARF fica travado até aprovar ou rejeitar. FGTS
+// continua avulso (guia própria). O corte é na TELA: `vw_payables` continua
+// com tudo, porque DRE, fluxo de caixa e projeções contam o tributo.
+
+/** Texto IDÊNTICO ao da recusa de `fn_darf_editar` (aplicar_20271109300000). */
+export const MOTIVO_DARF_AGUARDANDO = 'DARF aguardando aprovação em Financeiro › Aprovações: vencimento, multa e juros só mudam depois de aprovado ou rejeitado.';
+
+export const MOTIVO_TRIBUTO_SEM_DARF = 'Tributo fora de DARF: agrupe em um DARF e envie para aprovação (Tributos a Pagar › DARFs) — só então ele aparece em Contas a Pagar.';
+export const MOTIVO_DARF_NAO_ENVIADO = 'DARF ainda não enviado para aprovação: envie em Tributos a Pagar › DARFs — só então ele aparece em Contas a Pagar.';
+
+/** Vale para `Payable` (Contas a Pagar) e `TaxPayable` (Tributos), que só diferem no vocabulário de status. */
+interface TituloNaTela {
+    party_type?: string | null;
+    party_name?: string | null;
+    darf_id?: string | null;
+    status?: string | null;
+    business_status?: string | null;
+    approval_status?: string | null;
+}
+
+/**
+ * Por que este título NÃO aparece em Contas a Pagar — `null` quando aparece.
+ * `aprovacaoDoDarf` é a do DARF inteiro (`vw_darfs.aprovacao`); sem ela, vale a
+ * do próprio membro (as RPCs gravam a mesma em todos).
+ */
+export function motivoForaDeContasAPagar(t: TituloNaTela, aprovacaoDoDarf?: string | null): string | null {
+    // Já pago fica: é o histórico, e o estorno da baixa é em Contas a Pagar.
+    // Mesma régua de `membroPago`.
+    if (t.status === 'CONCILIATED' || t.business_status === 'PAGO') return null;
+    if (t.darf_id) {
+        const aprovacao = aprovacaoDoDarf ?? t.approval_status ?? 'RASCUNHO';
+        return aprovacao === 'RASCUNHO' ? MOTIVO_DARF_NAO_ENVIADO : null;
+    }
+    if (t.party_type === 'TAX' && !ehFgts(t)) return MOTIVO_TRIBUTO_SEM_DARF;
     return null;
+}
+
+/** Os títulos que a lista de Contas a Pagar mostra (antes de `colapsarDarfs`). */
+export function soOsDeContasAPagar<T extends TituloNaTela>(payables: T[], darfs: Pick<Darf, 'id' | 'aprovacao'>[]): T[] {
+    const aprovacao = new Map(darfs.map(d => [d.id, d.aprovacao]));
+    return payables.filter(p => !motivoForaDeContasAPagar(p, p.darf_id ? aprovacao.get(p.darf_id) : null));
 }

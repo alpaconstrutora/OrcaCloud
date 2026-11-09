@@ -6,7 +6,7 @@ import MoneyCentsInput from '../ui/MoneyCentsInput';
 import { useConfirm } from '../ui/confirm';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { darfService, type FormDarf } from '../../services/darfService';
-import { competenciaBR, menorVencimento, normalizarLinhaDigitavel } from '../../utils/darf';
+import { competenciaBR, menorVencimento, normalizarLinhaDigitavel, MOTIVO_DARF_AGUARDANDO } from '../../utils/darf';
 import type { Darf, TaxPayable } from '../../types/financial';
 
 /**
@@ -77,6 +77,9 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
     const confirm = useConfirm();
     const isEdit = !!darf;
     const pago = !!darf && darf.n_pagos > 0;
+    // Enviado para aprovação = fechado (09/11/2026): valores travados até aprovar ou rejeitar.
+    const aguardando = !!darf && !pago && darf.aprovacao === 'PENDENTE';
+    const motivoTrava = pago ? MOTIVO_DARF_PAGO : aguardando ? MOTIVO_DARF_AGUARDANDO : null;
 
     const [form, setForm] = useState<EstadoForm>({ dueDate: '', multa: '', juros: '', codigoBarras: '', numeroDocumento: '', observacao: '' });
     const [snapshot, setSnapshot] = useState('');
@@ -144,9 +147,8 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
         const e: Partial<Record<keyof EstadoForm, string>> = {};
         if (!form.dueDate) e.dueDate = 'Informe o vencimento do DARF.';
         if (!linha.valido) e.codigoBarras = `Informe os 44 dígitos do código de barras ou os 48 da linha digitável (tem ${linha.digitos.length}).`;
-        if (!pago && nTributos < 2 && multa + juros <= 0) e.multa = 'Com 1 tributo, o DARF precisa de multa ou juros — ou selecione mais tributos.';
         return e;
-    }, [form.dueDate, linha.valido, linha.digitos.length, pago, nTributos, multa, juros]);
+    }, [form.dueDate, linha.valido, linha.digitos.length]);
     const mostrar = (k: keyof EstadoForm) => (tentou ? erros[k] ?? null : null);
 
     const dirty = JSON.stringify(form) !== snapshot || !!arquivo || removerAnexo;
@@ -199,7 +201,7 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
                 onSaved({
                     darfId: id,
                     dueDate: form.dueDate,
-                    mensagem: `DARF criado com ${tributos.length} tributo${tributos.length !== 1 ? 's' : ''} · ${formatMoney(total)}. O pagamento é em Contas a Pagar.`,
+                    mensagem: `DARF criado com ${tributos.length} tributo${tributos.length !== 1 ? 's' : ''} · ${formatMoney(total)}. Envie para aprovação (aba DARFs) para ele aparecer em Contas a Pagar.`,
                 });
             }
         } catch (e) {
@@ -218,7 +220,7 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
                 <SheetDescription>
                     Competência {competenciaBR(competencia)}
                     {organizacaoNome ? ` · ${organizacaoNome}` : ''}
-                    {' · '}o pagamento é feito em Contas a Pagar, como um título só.
+                    {' · '}enviado para aprovação, vai para Contas a Pagar como um título só.
                 </SheetDescription>
             </SheetHeader>
 
@@ -227,6 +229,12 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
                     <div className="flex gap-2 p-3 rounded-[6px] bg-amber-50 border border-amber-100 text-amber-800 text-sm">
                         <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                         <span>Este DARF já está pago. Dá para trocar o código de barras, o número, a observação e o anexo; vencimento, multa e juros só depois de estornar a baixa em Contas a Pagar.</span>
+                    </div>
+                )}
+                {aguardando && (
+                    <div className="flex gap-2 p-3 rounded-[6px] bg-amber-50 border border-amber-100 text-amber-800 text-sm">
+                        <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                        <span>Este DARF está aguardando aprovação em Financeiro › Aprovações. Dá para trocar o código de barras, o número, a observação e o anexo; vencimento, multa e juros só depois de aprovado ou rejeitado.</span>
                     </div>
                 )}
 
@@ -276,14 +284,14 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
                     <SecaoTitulo icon={CalendarClock} titulo="Vencimento e valores" />
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <Campo label="Vencimento do DARF *" erro={mostrar('dueDate')}
-                            dica={pago ? null : 'Os tributos passam a vencer nesta data; o vencimento original volta se o DARF for desagrupado.'}>
+                            dica={motivoTrava ? null : 'Os tributos passam a vencer nesta data; o vencimento original volta se o DARF for desagrupado.'}>
                             {/* Campo desligado não mostra o `title` em todo navegador: o motivo vai no span. */}
-                            <span title={pago ? MOTIVO_DARF_PAGO : undefined} className="block">
+                            <span title={motivoTrava ?? undefined} className="block">
                                 <input
                                     type="date"
                                     value={form.dueDate}
                                     max="9999-12-31"
-                                    disabled={pago}
+                                    disabled={!!motivoTrava}
                                     onChange={e => set('dueDate', e.target.value)}
                                     className={`${CAMPO} ${mostrar('dueDate') ? CAMPO_ERRO : ''}`}
                                 />
@@ -293,21 +301,21 @@ const DarfSheet: React.FC<Props> = ({ open, onClose, organizationId, organizacao
                             {/* Só leitura e escuro (§32): é a soma, não um campo a preencher. */}
                             <p className="h-9 flex items-center text-sm font-medium text-gray-900" aria-live="polite">{formatMoney(total)}</p>
                         </Campo>
-                        <Campo label="Multa (R$)" erro={mostrar('multa')} dica={pago ? null : 'Despesa de "Multa e Juros de Mora", paga junto com o DARF.'}>
-                            <span title={pago ? MOTIVO_DARF_PAGO : undefined} className="block">
+                        <Campo label="Multa (R$)" erro={mostrar('multa')} dica={motivoTrava ? null : 'Despesa de "Multa e Juros de Mora", paga junto com o DARF.'}>
+                            <span title={motivoTrava ?? undefined} className="block">
                                 <MoneyCentsInput
                                     value={form.multa}
-                                    disabled={pago}
+                                    disabled={!!motivoTrava}
                                     onChange={v => set('multa', v)}
                                     className={`${CAMPO} ${mostrar('multa') ? CAMPO_ERRO : ''}`}
                                 />
                             </span>
                         </Campo>
                         <Campo label="Juros (R$)">
-                            <span title={pago ? MOTIVO_DARF_PAGO : undefined} className="block">
+                            <span title={motivoTrava ?? undefined} className="block">
                                 <MoneyCentsInput
                                     value={form.juros}
-                                    disabled={pago}
+                                    disabled={!!motivoTrava}
                                     onChange={v => set('juros', v)}
                                     className={CAMPO}
                                 />

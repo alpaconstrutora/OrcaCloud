@@ -7,7 +7,7 @@ import { formatMoney, formatDateBR } from '../ui/Format';
 import { useStore } from '../../store/useStore';
 import { darfService } from '../../services/darfService';
 import { taxPayableService } from '../../services/taxPayableService';
-import { aprovacaoDoDarfNaTela, competenciaBR, formatarLinhaDigitavel, motivoNaoEnviaDarfParaAprovacao } from '../../utils/darf';
+import { aprovacaoDoDarfNaTela, competenciaBR, formatarLinhaDigitavel, motivoNaoEnviaDarfParaAprovacao, MOTIVO_DARF_NAO_ENVIADO } from '../../utils/darf';
 import type { Darf, DarfStatus, TaxPayable } from '../../types/financial';
 import DarfSheet from './DarfSheet';
 
@@ -18,6 +18,10 @@ import DarfSheet from './DarfSheet';
  * Gestão da guia (editar, desagrupar, conferir a composição). O PAGAMENTO é em
  * Contas a Pagar, onde o DARF aparece como um título só ("Ver em Contas a Pagar").
  * Sem KPI nesta aba: os totais a pagar já estão na aba Tributos a Pagar.
+ *
+ * DARF montado é RASCUNHO e só existe aqui. "Enviar para aprovação" o FECHA: ele
+ * passa a Contas a Pagar e fica travado até aprovar ou rejeitar (pedido de
+ * 09/11/2026, docs/planos/2026-11-09-tributo-em-contas-a-pagar-so-com-darf-fechado.md).
  */
 
 const STATUS_DARF: Record<DarfStatus, { rotulo: string; cor: string }> = {
@@ -43,9 +47,10 @@ const COLUNAS: StandardTableColumn[] = [
 ];
 
 /** Por que não dá para desagrupar — `null` quando dá. Mesmas recusas de `fn_darf_desagrupar`. */
-export function motivoNaoDesagrupa(d: Pick<Darf, 'conciliado_no_extrato' | 'n_pagos'>): string | null {
+export function motivoNaoDesagrupa(d: Pick<Darf, 'conciliado_no_extrato' | 'n_pagos' | 'aprovacao'>): string | null {
     if (d.conciliado_no_extrato) return 'Conciliado com o extrato — desfaça a conciliação em Conciliação Bancária antes de desagrupar';
     if (d.n_pagos > 0) return 'DARF pago — estorne a baixa em Contas a Pagar antes de desagrupar';
+    if (d.aprovacao === 'PENDENTE') return 'DARF aguardando aprovação — rejeite-o em Financeiro › Aprovações antes de desagrupar';
     return null;
 }
 
@@ -119,7 +124,8 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
             title: 'Desagrupar este DARF?',
             message: (
                 <>
-                    Os <b>{d.qtd_tributos}</b> tributo{d.qtd_tributos !== 1 ? 's' : ''} voltam a ser títulos separados em Contas a Pagar, com o vencimento original.
+                    Os <b>{d.qtd_tributos}</b> tributo{d.qtd_tributos !== 1 ? 's' : ''} voltam soltos para a aba Tributos, com o vencimento original
+                    {d.aprovacao !== 'RASCUNHO' && <>, e saem de Contas a Pagar até entrarem em outro DARF enviado para aprovação</>}.
                     {d.multa + d.juros > 0 && <> A multa e os juros lançados no DARF (<b>{formatMoney(d.multa + d.juros)}</b>) são apagados.</>}
                     {d.documento_path && <> O PDF anexado é removido.</>}
                 </>
@@ -145,14 +151,28 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
     /**
      * "Enviar para aprovação" (pedido de 26/10/2026): o DARF entra em Financeiro ›
      * Aprovações como UM item, e aprovar/rejeitar vale para todos os tributos dele.
+     * Desde 09/11/2026 é também o que FECHA o DARF: ele passa a Contas a Pagar e
+     * trava vencimento, multa, juros e desagrupar — por isso confirma.
      * Estado local (§22): a RPC não devolve a linha, mas só a aprovação muda.
      */
     async function enviarParaAprovacao(d: Darf) {
+        const ok = await confirm({
+            title: 'Enviar este DARF para aprovação?',
+            message: (
+                <>
+                    O DARF de <b>{formatMoney(d.total)}</b> passa a aparecer em Contas a Pagar e entra em Financeiro › Aprovações.
+                    Até ser aprovado ou rejeitado, vencimento, multa e juros ficam travados e ele não pode ser desagrupado.
+                </>
+            ),
+            variant: 'default',
+            confirmLabel: 'Enviar para aprovação',
+        });
+        if (!ok) return;
         setOcupado(d.id);
         try {
             await darfService.enviarParaAprovacao(d.id);
             setDarfs(prev => prev.map(x => (x.id === d.id ? { ...x, aprovacao: 'PENDENTE', alcada_pendente: true } : x)));
-            notify('DARF enviado para aprovação em Financeiro › Aprovações.');
+            notify('DARF enviado para aprovação em Financeiro › Aprovações — já aparece em Contas a Pagar.');
         } catch (e) {
             notify(e instanceof Error ? e.message : 'Não foi possível enviar o DARF para aprovação.', 'error');
         } finally {
@@ -321,16 +341,21 @@ export default function DarfsTab({ organizationId, nomeDaOrganizacao, focoDarfId
     const renderAcoes = (d: Darf) => {
         const motivoDesagrupa = motivoNaoDesagrupa(d);
         const motivoEnvio = motivoNaoEnviaDarfParaAprovacao(d);
+        // Rascunho não está em Contas a Pagar: o link desliga e diz por quê.
+        const naoEnviado = d.n_pagos === 0 && d.aprovacao === 'RASCUNHO';
         return (
             <div className="flex items-center gap-1.5">
-                <button
-                    type="button"
-                    onClick={() => navigateToFocus('contas-a-pagar', d.id, 'CONTA_PAGAR')}
-                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap"
-                    title={d.status_efetivo === 'PAGO' ? 'Abrir em Contas a Pagar (estorno da baixa)' : 'Abrir em Contas a Pagar para dar baixa'}
-                >
-                    Ver em Contas a Pagar
-                </button>
+                <span title={naoEnviado ? MOTIVO_DARF_NAO_ENVIADO : undefined} className="inline-flex">
+                    <button
+                        type="button"
+                        onClick={() => navigateToFocus('contas-a-pagar', d.id, 'CONTA_PAGAR')}
+                        disabled={naoEnviado}
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all whitespace-nowrap disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-blue-600"
+                        title={naoEnviado ? undefined : d.status_efetivo === 'PAGO' ? 'Abrir em Contas a Pagar (estorno da baixa)' : 'Abrir em Contas a Pagar para dar baixa'}
+                    >
+                        Ver em Contas a Pagar
+                    </button>
+                </span>
                 {/* Botão desligado diz o motivo — o ActionIconButton desligado engole o title, por isso o span. */}
                 <span title={motivoEnvio ?? undefined}>
                     <ActionIconButton

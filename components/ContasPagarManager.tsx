@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    AlertCircle, Check,
+    AlertCircle, CalendarClock, Check,
     Clock, ExternalLink, FileDown, FileText, Loader2, RefreshCw,
     Search, X, DollarSign, AlertTriangle, MoveHorizontal, Layers, Plus,
 } from 'lucide-react';
@@ -283,6 +283,9 @@ export default function ContasPagarManager({ organizations }: Props) {
     // os dois = aquele mês daquele ano. Somam-se ao período (não substituem).
     const [vencAno, setVencAno] = usePersistedState('contasPagarManagerFilters:vencAno', '');
     const [vencMes, setVencMes] = usePersistedState('contasPagarManagerFilters:vencMes', '');
+    // Ocultar o que vence depois de hoje (09/11/2026). Soma-se ao período e ao
+    // Ano/Mês; o que não tem vencimento continua aparecendo.
+    const [ocultarFuturos, setOcultarFuturos] = usePersistedState('contasPagarManagerFilters:ocultarFuturos', false);
     // Competência ('YYYY-MM') do Fechamento por CC = Ano + Mês escolhidos. Não há mais
     // seletor de competência próprio: Ano/Mês já dizem qual mês é (18/10/2026).
     const competencia = vencAno && vencMes ? `${vencAno}-${vencMes}` : '';
@@ -365,6 +368,8 @@ export default function ContasPagarManager({ organizations }: Props) {
         // Ano/Mês também escondem parcelas: sem limpá-los o foco num título ficaria preso.
         setVencAno('');
         setVencMes('');
+        // Título com vencimento futuro também fica escondido por este.
+        setOcultarFuturos(false);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, []);
 
@@ -453,6 +458,7 @@ export default function ContasPagarManager({ organizations }: Props) {
             if (vencAte && inv.dueDate && inv.dueDate > vencAte) return false;
             if (vencAno && (inv.dueDate ?? '').slice(0, 4) !== vencAno) return false;
             if (vencMes && (inv.dueDate ?? '').slice(5, 7) !== vencMes) return false;
+            if (ocultarFuturos && inv.dueDate && inv.dueDate.slice(0, 10) > hojeLocal()) return false;
             if (search) {
                 const q = search.toLowerCase();
                 const hit = (inv.supplierName ?? '').toLowerCase().includes(q)
@@ -499,7 +505,7 @@ export default function ContasPagarManager({ organizations }: Props) {
             });
         }
         return result;
-    }, [invoices, statusFilter, vencDe, vencAte, vencAno, vencMes, search, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [invoices, statusFilter, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, search, advancedFilters.rules, advancedFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     const { campo: groupBy, agrupando, recolhidos } = agrupamento;
     const grupos = useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filtered, {
@@ -876,7 +882,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                             sub={`${summary.qtdVenc7} conta${summary.qtdVenc7 !== 1 ? 's' : ''} próximas`}
                             icon={<Clock className="w-5 h-5" />}
                             color="amber"
-                            onClick={() => { setStatusFilter('all'); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
+                            onClick={() => { setStatusFilter('all'); setOcultarFuturos(false); const d = new Date(); d.setDate(d.getDate() + 7); setVencAte(d.toISOString().slice(0, 10)); setVencDe(new Date().toISOString().slice(0, 10)); }}
                         />
                         <KpiCard
                             label="Em Atraso"
@@ -980,6 +986,30 @@ export default function ContasPagarManager({ organizations }: Props) {
                                     <X className="w-3.5 h-3.5" />
                                 </button>
                             )}
+
+                            {/* Vencimentos futuros — liga/desliga. Fora do Fechamento, que
+                                olha uma competência fechada, não "até hoje". Ativo = recorte
+                                ligado, mesmo vocabulário azul do FilterPopover (§5.4). */}
+                            {visao !== 'fechamento' && (
+                                <>
+                                    <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
+                                    <button
+                                        onClick={() => setOcultarFuturos(!ocultarFuturos)}
+                                        aria-pressed={ocultarFuturos}
+                                        title={ocultarFuturos
+                                            ? 'Mostrando só o que vence até hoje. Clique para mostrar também os vencimentos futuros.'
+                                            : 'Esconder o que vence depois de hoje (o que não tem vencimento continua aparecendo).'}
+                                        className={`flex items-center gap-1.5 h-9 px-3 rounded-[6px] border text-sm font-medium whitespace-nowrap transition-all ${
+                                            ocultarFuturos
+                                                ? 'border-blue-300 bg-blue-50 text-blue-700'
+                                                : 'border-gray-200 bg-gray-50 text-gray-700 hover:text-gray-900'
+                                        }`}
+                                    >
+                                        <CalendarClock className="w-3.5 h-3.5" />
+                                        Ocultar futuros
+                                    </button>
+                                </>
+                            )}
                         </div>
 
                         <div className="flex items-center gap-3 shrink-0">
@@ -1014,6 +1044,7 @@ export default function ContasPagarManager({ organizations }: Props) {
                             vencAte={vencAte}
                             vencAno={vencAno}
                             vencMes={vencMes}
+                            ocultarFuturos={ocultarFuturos}
                             loading={loading}
                             error={error}
                             onReload={() => carregar(effectiveOrgId)}

@@ -126,7 +126,8 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, recibo: 130, status: 120,
+    // Vencimento e Status em linha única (data · atraso; status · detalhe): mais largos.
+    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 200, recibo: 130, status: 240,
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 250,
 };
 
@@ -225,12 +226,17 @@ function renderParcelaCell(
         case 'vencimento': {
             // Pela data (situacaoDaLinha): o business_status antigo AGUARDANDO_APROVACAO não vira VENCIDO na view.
             const vencido = row.effective_status === 'VENCIDO' || (situacaoDaLinha(row).vencido && row.effective_status !== 'PAGO');
+            // Data e atraso na MESMA linha (pedido 09/11/2026): empilhados, a linha
+            // da tabela dobrava de altura só nas vencidas. `title` devolve o texto
+            // inteiro quando a coluna estreita corta o atraso.
+            const atraso = vencido && row.due_date ? `${diasAtraso(row.due_date)}d atraso` : null;
             return (
-                <div className={`text-center text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`}>
+                <div
+                    className={`truncate text-center text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`}
+                    title={atraso ? `${formatDateBR(row.due_date)} · ${atraso}` : undefined}
+                >
                     {formatDateBR(row.due_date)}
-                    {vencido && row.due_date && (
-                        <div className="text-xs text-red-500">{diasAtraso(row.due_date)}d atraso</div>
-                    )}
+                    {atraso && <span className="text-red-500"> · {atraso}</span>}
                 </div>
             );
         }
@@ -287,6 +293,9 @@ interface Props {
      *  Diferente do período, parcela SEM vencimento não passa quando um deles está ativo. */
     vencAno: string;
     vencMes: string;
+    /** Esconde o que vence DEPOIS de hoje (estado do pai). Parcela sem vencimento
+     *  continua aparecendo, como no período. */
+    ocultarFuturos: boolean;
     loading: boolean;
     error: string | null;
     onReload: () => void;
@@ -377,7 +386,7 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
     }
 }
 
-export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso, onComponentesChanged }: Props) {
+export default function ContasPagarParcelas({ rows, organizationId, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, loading, error, onReload, onRowChanged, onRowRemoved, notify, onVisibleRowsChange, focusId, onFocusConsumed, onClearPeriod, logoDaOrg, onEditarAvulso, onNovoAvulso, onComponentesChanged }: Props) {
     const confirm = useConfirm();
     const navigateToFocus = useStore(s => s.navigateToFocus);
     // Linhas DARF com a composição aberta (chevron "Ver composição").
@@ -602,6 +611,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         + cols.getWidth('actions') + 40;
 
     const filtered = useMemo(() => {
+        const hojeStr = hojeLocal();
         let result = rowsWithNames.filter(r => {
             if (!passaNoFiltroDeStatus(r, statusFiltro)) return false;
             if (origemFiltro !== 'all' && r.source_system !== origemFiltro) return false;
@@ -611,6 +621,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             if (vencAte && r.due_date && r.due_date > vencAte) return false;
             if (vencAno && (r.due_date ?? '').slice(0, 4) !== vencAno) return false;
             if (vencMes && (r.due_date ?? '').slice(5, 7) !== vencMes) return false;
+            if (ocultarFuturos && r.due_date && r.due_date.slice(0, 10) > hojeStr) return false;
             if (search) {
                 const termo = search.toLowerCase();
                 const hit = (r.credor_display || payableParty(r)).toLowerCase().includes(termo)
@@ -660,7 +671,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         // custo, plano de contas, imóvel apropriado) chegam por consulta assíncrona
         // depois das linhas. Com `rows` na lista, o memo não recalculava quando eles
         // chegavam e as colunas ficavam em branco para sempre.
-    }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     useEffect(() => { onVisibleRowsChange?.(filtered); }, [filtered, onVisibleRowsChange]);
 
@@ -692,7 +703,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     // a página no novo total.
     // Trocar o agrupamento reordena tudo: também volta para a 1. Recolher um grupo
     // não — só encurta a lista, e `currentPage` prende a página no novo total.
-    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId, groupBy]);
+    useEffect(() => { setPage(1); }, [search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, tableColumns.sortColumn, tableColumns.sortDirection, pageSize, organizationId, groupBy]);
     // Agrupado, a página continua contando LINHAS DE DADO; os cabeçalhos de grupo
     // entram por cima (e repetem com "continua" quando o grupo vem da página anterior).
     const totalPages = Math.max(1, Math.ceil(totalLinhas / pageSize));
@@ -1029,25 +1040,23 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             );
         }
         const situacao = situacaoDaLinha(row);
+        // Status, detalhes e Asaas numa linha só (pedido 09/11/2026) — o `title`
+        // carrega o texto inteiro e as explicações, já que a coluna pode cortar.
+        const dica = [
+            [STATUS_PT[situacao.chave] ?? situacao.chave, ...situacao.detalhes, asaas].filter(Boolean).join(' · '),
+            situacao.motivoRejeicao ? `Rejeitado: ${situacao.motivoRejeicao}` : null,
+            asaas ? (sp?.asaas_authorized === false
+                ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
+                : 'A baixa acontece sozinha quando a Asaas confirmar.') : null,
+        ].filter(Boolean).join('\n');
         return (
-            <div className="text-center" title={situacao.motivoRejeicao ? `Rejeitado: ${situacao.motivoRejeicao}` : undefined}>
+            <div className="truncate text-center text-sm font-normal" title={dica}>
                 <StatusBadge status={situacao.chave} />
-                {situacao.detalhes.length > 0 && (
-                    <div className="text-xs font-normal">
-                        {situacao.detalhes.map((d, i) => (
-                            <span key={d} className={d === 'Vencido' ? 'text-red-600' : 'text-amber-700'}>
-                                {i > 0 ? ' · ' : ''}{d}
-                            </span>
-                        ))}
-                    </div>
-                )}
+                {situacao.detalhes.map(d => (
+                    <span key={d} className={d === 'Vencido' ? 'text-red-600' : 'text-amber-700'}> · {d}</span>
+                ))}
                 {asaas && (
-                    <div className="flex items-center justify-center gap-1 text-xs font-normal text-blue-700"
-                        title={sp?.asaas_authorized === false
-                            ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
-                            : 'A baixa acontece sozinha quando a Asaas confirmar.'}>
-                        <Landmark className="w-3 h-3" /> {asaas}
-                    </div>
+                    <span className="text-blue-700"> · <Landmark className="inline w-3 h-3 align-[-1px]" /> {asaas}</span>
                 )}
             </div>
         );

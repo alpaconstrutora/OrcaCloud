@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { baseDoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { projetarElevacao } from '../utils/blueprintElevation';
-import { comMassa, massaNaVista } from '../utils/blueprintMassaNaVista';
+import { comMassa, massaNaVista, unidadesNaVista, type FatiaDoPiso } from '../utils/blueprintMassaNaVista';
 import { DesenhistaDeProva, desenharElevacao, enquadrarElevacao, PAPEIS, type OpcoesExportacao } from '../utils/blueprintExport';
 import { CAMADAS, gerarDxf } from '../utils/blueprintDxf';
 
@@ -111,5 +111,50 @@ describe('a projeção com a massa: tela, prancha e DXF (29/10/2026)', () => {
     const proj = comMassa(m, projetarCorte(m, { corte: corte as never }), corte.a);
     const dxf = gerarDxf(m, { titulo: 'T', revisao: 1, hash: 'h', elevacoes: [proj] });
     expect(dxf).toContain(CAMADAS.ELEV_MASSA);
+  });
+});
+
+describe('unidadesNaVista (09/11/2026)', () => {
+  // A Torre A em 4 unidades por pavimento: 2 fileiras (x 2,3–9 e 9–15,8 m) × 2 ao longo (y 6–19 e 19–32 m).
+  const fatias: FatiaDoPiso[] = [
+    { nome: '101', posicao: 'FRENTE', anel: ret(2281, 6342, 9031, 19342) },
+    { nome: '102', posicao: 'FRENTE', anel: ret(9031, 6342, 15781, 19342) },
+    { nome: '103', posicao: 'FUNDOS', anel: ret(2281, 19342, 9031, 32342) },
+    { nome: '104', posicao: 'FUNDOS', anel: ret(9031, 19342, 15781, 32342) },
+  ];
+  const soTorreA = (blocoId: string, k: number) => (k === 1 && blocoId === 'A' ? fatias : null);
+
+  it('no corte, as unidades que o plano atravessa no pavimento, cada uma no seu trecho', () => {
+    const m = garden();
+    const idA = m.blocos!.find((b) => b.nome === 'Torre A')!.id;
+    // O plano em x = 6 m atravessa a fileira de 101 e 103.
+    const corte = { id: 'c', rotulo: 'A', a: { x: 6000, y: -2000 }, b: { x: 6000, y: 66000 }, olharPara: 'ESQUERDA' as const };
+    const base = baseDoCorte(corte as never);
+    const blocos = massaNaVista(m, base, corte.a).filter((b) => b.blocoId === idA);
+    const r = unidadesNaVista(blocos, base, corte.a, (id, k) => soTorreA(id === idA ? 'A' : id, k));
+    expect(r.map((u) => [u.nome, u.posicao, Math.round(u.uMax - u.uMin), u.vMin, u.vMax, u.cortada])).toEqual([
+      ['101', 'FRENTE', 13000, 0, 3000, true],
+      ['103', 'FUNDOS', 13000, 0, 3000, true],
+    ]);
+  });
+
+  it('na fachada, a unidade da frente cobre a de trás', () => {
+    const m = garden();
+    const idA = m.blocos!.find((b) => b.nome === 'Torre A')!.id;
+    // Olhando de x grande para x pequeno (o plano à direita das torres, olhando para −x): a fileira de 102/104 (x 9–15,8)
+    // está mais perto e cobre 101/103.
+    const lado = { id: 'c', rotulo: 'L', a: { x: 20000, y: -2000 }, b: { x: 20000, y: 66000 }, olharPara: 'ESQUERDA' as const };
+    const base = baseDoCorte(lado as never);
+    const blocos = massaNaVista(m, base, null).filter((b) => b.blocoId === idA);
+    const r = unidadesNaVista(blocos, base, null, (id, k) => soTorreA(id === idA ? 'A' : id, k));
+    expect(r.map((u) => u.nome).sort()).toEqual(['102', '104']);
+    expect(r.every((u) => !u.cortada)).toBe(true);
+  });
+
+  it('pavimento sem unidades não sai', () => {
+    const m = garden();
+    const corte = { id: 'c', rotulo: 'A', a: { x: 6000, y: -2000 }, b: { x: 6000, y: 66000 }, olharPara: 'ESQUERDA' as const };
+    const base = baseDoCorte(corte as never);
+    expect(unidadesNaVista(massaNaVista(m, base, corte.a), base, corte.a, () => null)).toEqual([]);
   });
 });

@@ -143,6 +143,11 @@ export const ITENS_DE_EXIBICAO: readonly ItemDeExibicao[] = [
   bool('vistaRotulosEsquadria', 'Rótulos de esquadria', 'VISTAS', true),
   bool('vistaParedesInternas', 'Paredes internas', 'VISTAS', false),
   bool('vistaEstrutura', 'Estrutura', 'VISTAS', true),
+  // A identificação da massa no corte e nas fachadas (09/11/2026).
+  bool('vistaNomesDosBlocos', 'Nomes dos blocos', 'VISTAS', true),
+  bool('vistaUnidades', 'Unidades', 'VISTAS', true),
+  bool('vistaPosicaoDasUnidades', 'Posição das unidades', 'VISTAS', true),
+  bool('vistaPavimentos', 'Pavimentos', 'VISTAS', true),
 
   // ── 3D ────────────────────────────────────────────────────────────────────────────────
   bool('vista3dPisosELajes', 'Pisos e lajes', '3D', true),

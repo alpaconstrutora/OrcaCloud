@@ -29,6 +29,9 @@ export interface BlocoNaVista {
   pisos: number[];
   /** Inteiro abaixo do chão (o subsolo): quem desenha traceja, como a fundação. */
   enterrado: boolean;
+  /** Quantos pavimentos e o piso a piso (09/11/2026): o pavimento k (1 = o de baixo) vai de vMin + (k−1)·pé-direito. */
+  pavimentos: number;
+  peDireitoMm: number;
 }
 
 /**
@@ -45,7 +48,7 @@ export function massaNaVista(model: BlueprintModel, base: BaseElevacao, origem: 
     const vMin = b.cotaBaseMm;
     const vMax = b.cotaBaseMm + b.pavimentos * b.peDireitoMm;
     const pisos = Array.from({ length: b.pavimentos - 1 }, (_, k) => vMin + (k + 1) * b.peDireitoMm);
-    const comum = { blocoId: b.id, nome: b.nome, uso: b.uso, vMin, vMax, pisos, enterrado: vMax <= 0 };
+    const comum = { blocoId: b.id, nome: b.nome, uso: b.uso, vMin, vMax, pisos, enterrado: vMax <= 0, pavimentos: b.pavimentos, peDireitoMm: b.peDireitoMm };
     const fundo = Math.min(...b.pontos.map(profundidade));
     if (origem) {
       const destino = classificarNoCorte(b.pontos, base, origem);
@@ -86,4 +89,96 @@ export function comMassa<P extends ProjecaoElevacao | ProjecaoCorte>(model: Blue
   // A linha do solo atravessa a caixa toda: sem estender, ela parava onde acabavam as peças.
   const linhaDoSolo = { ...proj.linhaDoSolo, uMin: Math.min(proj.linhaDoSolo.uMin, bbox.uMin), uMax: Math.max(proj.linhaDoSolo.uMax, bbox.uMax) };
   return { ...proj, massa, bbox, linhaDoSolo };
+}
+
+/** Uma unidade de um pavimento do bloco, na planta (a fatia do 3D e da planta baixa). */
+export interface FatiaDoPiso {
+  nome: string;
+  /** A Posição do cadastro (FRENTE, FUNDOS, LATERAL), ou null. */
+  posicao: string | null;
+  anel: readonly Point[];
+}
+
+/** Um trecho de unidade na vista: o retângulo dela no pavimento, onde o nome é escrito. */
+export interface UnidadeNaVista {
+  blocoId: ObjectId;
+  /** O pavimento do bloco (1 = o de baixo). */
+  indice: number;
+  nome: string;
+  posicao: string | null;
+  uMin: number;
+  uMax: number;
+  vMin: number;
+  vMax: number;
+  /** Atravessada pelo plano (corte) ou vista. */
+  cortada: boolean;
+}
+
+const MIN_TRECHO_MM = 1;
+
+/** [a, b] menos os intervalos já cobertos, em pedaços. */
+function semOsCobertos(a: number, b: number, cobertos: readonly [number, number][]): [number, number][] {
+  let pedacos: [number, number][] = [[a, b]];
+  for (const [c0, c1] of cobertos) {
+    pedacos = pedacos.flatMap(([p0, p1]): [number, number][] => {
+      if (c1 <= p0 || c0 >= p1) return [[p0, p1]];
+      const out: [number, number][] = [];
+      if (c0 > p0) out.push([p0, c0]);
+      if (c1 < p1) out.push([c1, p1]);
+      return out;
+    });
+  }
+  return pedacos.filter(([p0, p1]) => p1 - p0 > MIN_TRECHO_MM);
+}
+
+/**
+ * AS UNIDADES NA VISTA (09/11/2026, *"nos corte habilite exibir/ocultar identificação dos blocos, unidades, posição
+ * etc"*): em cada pavimento de cada bloco da vista, os trechos de unidade, para escrever o número (e a Posição).
+ *  - bloco CORTADO: as unidades que o plano atravessa, no trecho do bloco (`trechosCortados` de cada fatia);
+ *  - bloco em VISTA (a fachada, ou atrás do plano): a unidade mais perto de quem olha cobre as de trás — cada
+ *    fatia, da mais perto para a mais longe, fica com o que ainda não foi coberto.
+ * `fatiasDoPiso(bloco, k)` diz as unidades do pavimento k; null (ou vazio) = o pavimento sai sem unidades.
+ */
+export function unidadesNaVista(
+  blocos: readonly BlocoNaVista[],
+  base: BaseElevacao,
+  origem: Point | null,
+  fatiasDoPiso: (blocoId: ObjectId, indice: number) => readonly FatiaDoPiso[] | null | undefined,
+): UnidadeNaVista[] {
+  const projU = (p: Point) => p.x * base.u.x + p.y * base.u.y;
+  const profundidade = (p: Point) => p.x * base.d.x + p.y * base.d.y;
+  const out: UnidadeNaVista[] = [];
+  for (const b of blocos) {
+    for (let k = 1; k <= b.pavimentos; k++) {
+      const fatias = fatiasDoPiso(b.blocoId, k);
+      if (!fatias || fatias.length === 0) continue;
+      const vMin = b.vMin + (k - 1) * b.peDireitoMm;
+      const vMax = vMin + b.peDireitoMm;
+      const comum = (f: FatiaDoPiso) => ({ blocoId: b.blocoId, indice: k, nome: f.nome, posicao: f.posicao, vMin, vMax, cortada: b.cortado });
+      if (b.cortado && origem) {
+        for (const f of fatias) {
+          if (f.anel.length < 3) continue;
+          for (const t of trechosCortados([...f.anel], base, origem)) {
+            const u0 = Math.max(t.uMin, b.uMin);
+            const u1 = Math.min(t.uMax, b.uMax);
+            if (u1 - u0 > MIN_TRECHO_MM) out.push({ ...comum(f), uMin: u0, uMax: u1 });
+          }
+        }
+        continue;
+      }
+      const porPerto = fatias
+        .filter((f) => f.anel.length >= 3)
+        .map((f) => ({ f, perto: Math.min(...f.anel.map(profundidade)), us: f.anel.map(projU) }))
+        .sort((x, y) => x.perto - y.perto);
+      const cobertos: [number, number][] = [];
+      for (const { f, us } of porPerto) {
+        const u0 = Math.max(Math.min(...us), b.uMin);
+        const u1 = Math.min(Math.max(...us), b.uMax);
+        if (u1 - u0 <= MIN_TRECHO_MM) continue;
+        for (const [p0, p1] of semOsCobertos(u0, u1, cobertos)) out.push({ ...comum(f), uMin: p0, uMax: p1 });
+        cobertos.push([u0, u1]);
+      }
+    }
+  }
+  return out;
 }

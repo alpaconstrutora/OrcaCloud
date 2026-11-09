@@ -46,6 +46,7 @@ import {
   CornerDownRight,
   DoorOpen,
   Building2,
+  Compass,
   CarFront,
   Box,
   Columns2,
@@ -630,6 +631,7 @@ import { arranjarAndar, arrumacaoEfetiva, arrumarUnidades, type EscolhaDaArrumac
 import { frenteDoLote } from '../../utils/blueprintAncorasHidro';
 import { chaveDaUnidade } from '../../utils/blueprintEstruturaDaTorre';
 import { gravacoesDoArrasto, type AlcanceDoArrasto } from '../../utils/blueprintArrastoDasUnidades';
+import type { FatiaDoPiso } from '../../utils/blueprintMassaNaVista';
 import type { PapelDoBloco } from '../../utils/blueprintAjusteAoEmpreendimento';
 import { loteDaFichaParaLancar, passosDaCasaPeloEmpreendimento, type PassoDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
 import { useUnidadesDoEmpreendimento } from '../../hooks/useUnidadesDoEmpreendimento';
@@ -1835,6 +1837,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    * parece defeito, não preferência.
    */
   const [mostrarEstruturaVista, setMostrarEstruturaVista] = usePreferenciaDaPlanta<boolean>('vistaEstrutura');
+  // A identificação da massa no corte e nas fachadas (09/11/2026).
+  const [mostrarNomesDosBlocosNaVista, setMostrarNomesDosBlocosNaVista] = usePreferenciaDaPlanta<boolean>('vistaNomesDosBlocos');
+  const [mostrarUnidadesNaVista, setMostrarUnidadesNaVista] = usePreferenciaDaPlanta<boolean>('vistaUnidades');
+  const [mostrarPosicaoNaVista, setMostrarPosicaoNaVista] = usePreferenciaDaPlanta<boolean>('vistaPosicaoDasUnidades');
+  const [mostrarPavimentosNaVista, setMostrarPavimentosNaVista] = usePreferenciaDaPlanta<boolean>('vistaPavimentos');
   /**
    * PISOS E LAJES no 3D (27/09/2026): um botão só para a laje fina do piso E a
    * laje ESTRUTURAL — antes ele só mexia na fina, e a L1 ficava na tela ("botão
@@ -9231,6 +9238,31 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     },
     [ajusteAoEmpreendimento, editor.model.blocos, arrumacaoDasUnidades, referenciasDosBlocos],
   );
+  /**
+   * OS PAVIMENTOS DA MASSA PARA O CORTE E AS FACHADAS (09/11/2026): por bloco ligado a uma torre, cada pavimento com o
+   * nome e a elevação do Empreendimento e as unidades na planta (a mesma arrumação do 3D e da planta baixa).
+   */
+  const pisosDaMassa = useMemo(() => {
+    if (!ajusteAoEmpreendimento) return null;
+    const m = new Map<string, { nome: string; elevacaoMm: number | null; unidades: FatiaDoPiso[] }[]>();
+    for (const b of editor.model.blocos ?? []) {
+      const papel = ajusteAoEmpreendimento.papeis.get(b.id);
+      if (!papel) continue;
+      m.set(
+        b.id,
+        Array.from({ length: b.pavimentos }, (_, i) => {
+          const piso = papel.pisos[i];
+          const a = arranjoDoPiso(b.id, i + 1);
+          return {
+            nome: piso?.nome ?? `${i + 1}º pavimento`,
+            elevacaoMm: piso ? piso.elevacaoMm : null,
+            unidades: a && a.fatias.length === a.unidades.length ? a.fatias.map((anel, k) => ({ nome: a.unidades[k].nome, posicao: a.unidades[k].posicao, anel })) : [],
+          };
+        }),
+      );
+    }
+    return m;
+  }, [ajusteAoEmpreendimento, editor.model.blocos, arranjoDoPiso]);
   const massa3dPorUnidade = useMemo(() => {
     if (!ajusteAoEmpreendimento) return massa3d;
     return massa3d.flatMap((p) => {
@@ -15412,6 +15444,63 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                               ? 'Não há peça estrutural desenhada — use o menu Componentes na planta baixa.'
                               : 'Pilares, vigas e lajes na fachada. A fundação aparece tracejada, abaixo da linha do solo.',
                         },
+                        // A IDENTIFICAÇÃO DA MASSA (09/11/2026): blocos, unidades, posição e pavimentos.
+                        ...(() => {
+                          const semBlocos = (editor.model.blocos ?? []).length === 0;
+                          const semEmpreendimento = !pisosDaMassa || pisosDaMassa.size === 0;
+                          const MOTIVO_SEM_BLOCOS = 'Não há bloco de massa — desenhe um na aba Terreno › Massa.';
+                          const MOTIVO_SEM_EMPREENDIMENTO = 'Os blocos não estão ligados às torres de um Empreendimento com unidades (Torres e Unidades).';
+                          return [
+                            {
+                              chave: 'vista-nomes-dos-blocos',
+                              rotulo: 'Nomes dos blocos',
+                              icone: Building2,
+                              ligado: mostrarNomesDosBlocosNaVista,
+                              alternar: () => setMostrarNomesDosBlocosNaVista((v) => !v),
+                              desabilitado: semBlocos,
+                              ajuda: semBlocos ? MOTIVO_SEM_BLOCOS : '"Torre A", "Torre A · Garagem" no alto de cada bloco.',
+                            },
+                            {
+                              chave: 'vista-unidades',
+                              rotulo: 'Unidades',
+                              icone: Hash,
+                              ligado: mostrarUnidadesNaVista,
+                              alternar: () => setMostrarUnidadesNaVista((v) => !v),
+                              desabilitado: semBlocos || semEmpreendimento,
+                              ajuda: semBlocos
+                                ? MOTIVO_SEM_BLOCOS
+                                : semEmpreendimento
+                                  ? MOTIVO_SEM_EMPREENDIMENTO
+                                  : 'Em cada pavimento, a divisa e o número das unidades que o corte atravessa (ou que a fachada mostra), na mesma arrumação da planta.',
+                            },
+                            {
+                              chave: 'vista-posicao-das-unidades',
+                              rotulo: 'Posição das unidades',
+                              icone: Compass,
+                              ligado: mostrarPosicaoNaVista,
+                              alternar: () => setMostrarPosicaoNaVista((v) => !v),
+                              desabilitado: semBlocos || semEmpreendimento || !mostrarUnidadesNaVista,
+                              ajuda: semBlocos
+                                ? MOTIVO_SEM_BLOCOS
+                                : semEmpreendimento
+                                  ? MOTIVO_SEM_EMPREENDIMENTO
+                                  : !mostrarUnidadesNaVista
+                                    ? 'Ligue "Unidades" (acima): a posição vai junto do número.'
+                                    : 'Junto do número, a Posição do cadastro: "101 · Frente". Some quando não cabe.',
+                            },
+                            {
+                              chave: 'vista-pavimentos',
+                              rotulo: 'Pavimentos',
+                              icone: Layers,
+                              ligado: mostrarPavimentosNaVista,
+                              alternar: () => setMostrarPavimentosNaVista((v) => !v),
+                              desabilitado: semBlocos,
+                              ajuda: semBlocos
+                                ? MOTIVO_SEM_BLOCOS
+                                : 'O nome e a elevação de cada pavimento ao lado do bloco ("Térreo +0,00"); sem Empreendimento, "1º pav" e a cota do desenho.',
+                            },
+                          ];
+                        })(),
                       ]
                     : vistaDePlanta
                       ? [
@@ -16830,6 +16919,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               // O mesmo toggle "Curvas de nível" da planta governa o perfil no
               // corte: é uma camada só, vista de dois jeitos.
               terreno={mostrarCurvasDeNivel ? terrenoParaCorteComPlato : null}
+              pisosDaMassa={pisosDaMassa}
+              exibirNaMassa={{ blocos: mostrarNomesDosBlocosNaVista, unidades: mostrarUnidadesNaVista, posicao: mostrarPosicaoNaVista, pavimentos: mostrarPavimentosNaVista }}
               terrenoChave={`${chaveDaTopografia}:${cotaZeroDoTerrenoM}:${mostrarTerraplenagem ? cotaDoPlatoM : ''}:${terraplenagem.base}:${JSON.stringify(terraplenagem.parametros)}:${JSON.stringify(inclinacaoDoPlato)}`}
             />
           ) : (

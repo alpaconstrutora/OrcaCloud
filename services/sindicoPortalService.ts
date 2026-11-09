@@ -151,11 +151,22 @@ export interface CondominioDoFinanceiro {
     /** Só condomínio com organização própria grava pelo portal. */
     podeOperar: boolean;
     motivoNaoOpera: string | null;
-    centros: { id: string; code: string; name: string; parentId: string | null }[];
+    /** `paymentAccountId`: conta vinculada ao centro (09/11/2026) — preenche a conta do lançamento. */
+    centros: { id: string; code: string; name: string; parentId: string | null; paymentAccountId?: string | null }[];
     categorias: { id: string; name: string; parentId: string | null; nature: string | null }[];
     planos: { id: string; code: string | null; name: string }[];
     contas: { id: string; name: string; bank: string | null }[];
     fornecedores: { id: string; name: string; nickname: string | null; document: string | null; category: string | null }[];
+}
+
+/**
+ * Centro que o lançamento do síndico já traz escolhido: o primeiro por código que
+ * NÃO é grupo — grupo não recebe lançamento (09/11/2026; o banco recusa). Antes era
+ * "o primeiro sem pai", que é justamente o grupo quando ele está na lista.
+ */
+export function centroPadraoDoCondominio(condominio: Pick<CondominioDoFinanceiro, 'centros'> | null | undefined) {
+    const centros = condominio?.centros ?? [];
+    return centros.find(c => !!c.parentId) ?? centros[0];
 }
 
 export interface FinanceiroDoSindico {

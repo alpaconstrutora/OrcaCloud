@@ -10,8 +10,9 @@ import HierarchicalSelect from '../HierarchicalSelect';
 import { GhostButton, PrimaryButton, TextLinkButton, fmtBRLCents, fmtDate } from '../portal/PortalKit';
 import FornecedorDoSindicoSheet from './FornecedorDoSindicoSheet';
 import {
-    sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico, type LinhaDoSindico,
+    centroPadraoDoCondominio, sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico, type LinhaDoSindico,
 } from '../../services/sindicoPortalService';
+import { contaPeloCentroDeCusto } from '../../lib/contaPeloCentroDeCusto';
 import {
     MAX_PARCELAS_AVULSO, PERIODICIDADES_CONTRATO, montarTitulosAvulsos, previaParcelas, validarPagamentoAvulso,
     type FormPagamentoAvulso, type FormaPagamentoAvulso, type PeriodicidadeContrato,
@@ -59,13 +60,18 @@ const Campo: React.FC<React.PropsWithChildren<{ label: string; erro?: string | n
 );
 
 function formVazio(condominio: CondominioDoFinanceiro | null, hoje: string): FormPagamentoAvulso {
-    // O centro "raiz" do condomínio (o primeiro por código) já vem escolhido:
-    // quase toda despesa é dele, e o banco recusa centro de outro prédio.
-    const raiz = condominio?.centros.find(c => !c.parentId) ?? condominio?.centros[0];
+    // O centro do condomínio (o primeiro por código que não é grupo) já vem escolhido:
+    // quase toda despesa é dele, e o banco recusa centro de outro prédio. A conta
+    // vinculada a ele vem junto.
+    const raiz = centroPadraoDoCondominio(condominio);
+    const conta = contaPeloCentroDeCusto({
+        contaAtual: null, contaPreenchidaAntes: null, contaDoCentro: raiz?.paymentAccountId,
+        contasDisponiveis: (condominio?.contas ?? []).map(a => a.id),
+    }).conta;
     return {
         supplierId: null, credorNome: '', descricao: '', valorTotal: 0, projeto: null,
         costCenterId: raiz?.id ?? null, planoDeContasId: null, categoryId: null, categoryName: null,
-        formaPagamento: null, paymentAccountId: null, competencia: '', parcelas: 1, periodicidade: 'Mensal',
+        formaPagamento: null, paymentAccountId: conta, competencia: '', parcelas: 1, periodicidade: 'Mensal',
         primeiroVencimento: hoje, jaPago: false, dataPagamento: hoje,
     };
 }
@@ -108,6 +114,8 @@ const LancarContaSheet: React.FC<Props> = ({ open, identidade, condominios, titu
 
     const [condominioId, setCondominioId] = React.useState<string>('');
     const condominio = condominios.find(c => c.id === condominioId) ?? null;
+    // Conta que a regra do centro de custo preencheu — trocar o centro só mexe nela.
+    const contaAuto = React.useRef<string | null>(null);
     const [form, setForm] = React.useState<FormPagamentoAvulso>(() => formVazio(null, hoje));
     const [snapshot, setSnapshot] = React.useState('');
     const [valorTexto, setValorTexto] = React.useState('');
@@ -128,6 +136,8 @@ const LancarContaSheet: React.FC<Props> = ({ open, identidade, condominios, titu
         const condId = titulo?.condominioId ?? condominios[0]?.id ?? '';
         const cond = condominios.find(c => c.id === condId) ?? null;
         const f = titulo ? formDoTitulo(titulo, hoje) : formVazio(cond, hoje);
+        // Conta de formulário novo veio do centro (regra); a de um título existente é escolha gravada.
+        contaAuto.current = titulo ? null : f.paymentAccountId;
         setCondominioId(condId);
         setForm(f);
         setSnapshot(JSON.stringify(f));
@@ -143,6 +153,15 @@ const LancarContaSheet: React.FC<Props> = ({ open, identidade, condominios, titu
     }, [open, titulo?.id]);
 
     const set = <K extends keyof FormPagamentoAvulso>(k: K, v: FormPagamentoAvulso[K]) => setForm(f => ({ ...f, [k]: v }));
+    const trocarCentro = (id: string | null) => {
+        const r = contaPeloCentroDeCusto({
+            contaAtual: form.paymentAccountId, contaPreenchidaAntes: contaAuto.current,
+            contaDoCentro: condominio?.centros.find(c => c.id === id)?.paymentAccountId,
+            contasDisponiveis: (condominio?.contas ?? []).map(a => a.id),
+        });
+        contaAuto.current = r.preenchida;
+        setForm(f => ({ ...f, costCenterId: id, paymentAccountId: r.conta }));
+    };
 
     const fornecedores = React.useMemo(
         () => [...(condominio?.fornecedores ?? []), ...fornecedoresNovos.filter(n => !condominio?.fornecedores.some(f => f.id === n.id))],
@@ -235,7 +254,9 @@ const LancarContaSheet: React.FC<Props> = ({ open, identidade, condominios, titu
                                     onChange={e => {
                                         const c = condominios.find(x => x.id === e.target.value) ?? null;
                                         setCondominioId(e.target.value);
-                                        setForm(f => ({ ...f, ...formVazio(c, hoje), descricao: f.descricao, valorTotal: f.valorTotal }));
+                                        const novo = formVazio(c, hoje);
+                                        contaAuto.current = novo.paymentAccountId;
+                                        setForm(f => ({ ...f, ...novo, descricao: f.descricao, valorTotal: f.valorTotal }));
                                     }}>
                                     {condominios.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
                                 </select>
@@ -325,7 +346,7 @@ const LancarContaSheet: React.FC<Props> = ({ open, identidade, condominios, titu
                             <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                 <Campo label="Centro de custo *" erro={mostrar('costCenterId')}>
                                     <CostCenterSelect costCenters={centros} value={form.costCenterId ?? ''}
-                                        onChange={v => set('costCenterId', v || null)} hoverCls="hover:bg-[#FDEDE8]" size="sm" />
+                                        onChange={v => trocarCentro(v || null)} hoverCls="hover:bg-[#FDEDE8]" size="sm" />
                                 </Campo>
                                 <Campo label="Conta financeira *" erro={mostrar('categoryId')}>
                                     <HierarchicalSelect

@@ -7,7 +7,7 @@ import {
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import CostCenterSelect from '../CostCenterSelect';
 import HierarchicalSelect from '../HierarchicalSelect';
-import { sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico } from '../../services/sindicoPortalService';
+import { centroPadraoDoCondominio, sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico } from '../../services/sindicoPortalService';
 import type { ContaDoCondominio } from '../../utils/financeiroDoSindico';
 import {
     ROTULO_SITUACAO_DO_MOVIMENTO, motivoNaoConciliaMovimento, motivoNaoIgnoraMovimento, resumoDoExtrato, situacaoDoMovimento,
@@ -307,7 +307,7 @@ const ConciliarSheet: React.FC<{
         let vivo = true;
         setModo('titulo'); setCandidatos(null); setErroLista(null); setEscolhido(''); setBusca(''); setAjuste(null);
         setDescricao(movimento.descricao); setParte(''); setCategoria(null); setErro(null);
-        setCentro((condominio?.centros.find(c => !c.parentId) ?? condominio?.centros[0])?.id ?? null);
+        setCentro(centroPadraoDoCondominio(condominio)?.id ?? null);
         sindicoPortalService.candidatosDoMovimento(identidade, movimento.id)
             .then(c => {
                 if (!vivo) return;

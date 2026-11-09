@@ -7,8 +7,9 @@ import PlanoContasSelect from '../PlanoContasSelect';
 import HierarchicalSelect from '../HierarchicalSelect';
 import { GhostButton, PrimaryButton } from '../portal/PortalKit';
 import {
-    sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico, type UnidadeParaSindico,
+    centroPadraoDoCondominio, sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico, type UnidadeParaSindico,
 } from '../../services/sindicoPortalService';
+import { contaPeloCentroDeCusto } from '../../lib/contaPeloCentroDeCusto';
 import { FORMAS_PAGAMENTO } from '../../utils/baixaRecebivel';
 import { hojeEmBrasilia } from '../../utils/mandatoSindico';
 
@@ -50,7 +51,12 @@ interface Props {
 
 const LancarReceitaSheet: React.FC<Props> = ({ open, identidade, condominio, unidades, onClose, onSalvo }) => {
     const hoje = hojeEmBrasilia();
-    const raiz = condominio?.centros.find(c => !c.parentId) ?? condominio?.centros[0];
+    const raiz = centroPadraoDoCondominio(condominio);
+    // Conta que a regra do centro de custo preencheu — trocar o centro só mexe nela.
+    const contaAuto = React.useRef<string | null>(null);
+    const idsDasContas = (condominio?.contas ?? []).map(a => a.id);
+    const contaDoCentro = (centroId: string | null | undefined) =>
+        condominio?.centros.find(c => c.id === centroId)?.paymentAccountId ?? null;
 
     const [pagador, setPagador] = React.useState('');
     const [nomeLivre, setNomeLivre] = React.useState('');
@@ -71,7 +77,9 @@ const LancarReceitaSheet: React.FC<Props> = ({ open, identidade, condominio, uni
     React.useEffect(() => {
         if (!open) return;
         setPagador(''); setNomeLivre(''); setDescricao(''); setValorTexto(''); setVencimento(hoje); setCompetencia('');
-        setCentro(raiz?.id ?? null); setCategoria(null); setPlano(null); setForma(''); setConta('');
+        const inicial = contaPeloCentroDeCusto({ contaAtual: null, contaPreenchidaAntes: null, contaDoCentro: contaDoCentro(raiz?.id), contasDisponiveis: idsDasContas });
+        contaAuto.current = inicial.preenchida;
+        setCentro(raiz?.id ?? null); setCategoria(null); setPlano(null); setForma(''); setConta(inicial.conta ?? '');
         setJaRecebido(false); setDataRecebimento(hoje); setErro(null);
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [open]);
@@ -177,7 +185,12 @@ const LancarReceitaSheet: React.FC<Props> = ({ open, identidade, condominio, uni
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
                             <Campo label="Centro de custo *">
                                 <CostCenterSelect costCenters={centros} value={centro ?? ''}
-                                    onChange={v => setCentro(v || null)} hoverCls="hover:bg-[#FDEDE8]" size="sm" />
+                                    onChange={v => {
+                                        setCentro(v || null);
+                                        const r = contaPeloCentroDeCusto({ contaAtual: conta, contaPreenchidaAntes: contaAuto.current, contaDoCentro: contaDoCentro(v), contasDisponiveis: idsDasContas });
+                                        contaAuto.current = r.preenchida;
+                                        setConta(r.conta ?? '');
+                                    }} hoverCls="hover:bg-[#FDEDE8]" size="sm" />
                             </Campo>
                             <Campo label="Conta financeira *">
                                 <HierarchicalSelect

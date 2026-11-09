@@ -14,6 +14,7 @@ import { financialRegistryService } from '../../services/financialRegistryServic
 import { projectService } from '../../services/projectService';
 import { payableService, type PagamentoAvulsoGravado } from '../../services/payableService';
 import { FORMAS_PAGAMENTO, hojeLocal } from '../../utils/baixaRecebivel';
+import { contaPeloCentroDeCusto } from '../../lib/contaPeloCentroDeCusto';
 import {
     MAX_PARCELAS_AVULSO,
     PERIODICIDADES_CONTRATO,
@@ -195,6 +196,20 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
 
     const set = <K extends keyof FormPagamentoAvulso>(k: K, v: FormPagamentoAvulso[K]) =>
         setForm(f => ({ ...f, [k]: v }));
+
+    // Conta que a regra do centro de custo preencheu — trocar o centro só mexe nela,
+    // nunca na conta escolhida à mão (nem na gravada no título aberto).
+    const contaAuto = useRef<string | null>(null);
+    useEffect(() => { if (open) contaAuto.current = null; }, [open, editId]);
+    const trocarCentro = (id: string | null) => {
+        const r = contaPeloCentroDeCusto({
+            contaAtual: form.paymentAccountId, contaPreenchidaAntes: contaAuto.current,
+            contaDoCentro: centros.find(c => c.id === id)?.payment_account_id,
+            contasDisponiveis: contasPagamento.map(a => a.id),
+        });
+        contaAuto.current = r.preenchida;
+        setForm(f => ({ ...f, costCenterId: id, paymentAccountId: r.conta }));
+    };
 
     // Nome do credor: o do fornecedor escolhido; senão, o digitado.
     const fornecedor = fornecedores.find(s => s.id === form.supplierId);
@@ -442,7 +457,7 @@ const PagamentoAvulsoSheet: React.FC<Props> = ({ open, organizationId, editId, o
                             <CostCenterSelect
                                 costCenters={centros}
                                 value={form.costCenterId ?? ''}
-                                onChange={v => set('costCenterId', v || null)}
+                                onChange={v => trocarCentro(v || null)}
                                 hoverCls="hover:bg-blue-50"
                                 size="sm"
                             />

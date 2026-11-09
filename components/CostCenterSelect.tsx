@@ -27,10 +27,11 @@ export interface CostCenterOption {
      *  árvore ganha um cabeçalho por organização — mesmo desenho do PlanoContasSelect. */
     organization_id?: string | null;
     /** `false` = só agrupa, não é escolhível (clicar abre/fecha os filhos).
-     *  Default: escolhível, que é como todo chamador anterior se comporta.
-     *  Existe para quem monta uma lista PARCIAL da árvore e precisa incluir o
-     *  grupo só para o accordion existir — caso do vínculo de condomínio, em
-     *  que o grupo não pode virar o centro de custo do caixa. */
+     *  Sem valor: GRUPO (`parent_id === null`) não é escolhível, centro de custo é
+     *  — grupo não recebe lançamento (09/11/2026; o banco também recusa, gatilho
+     *  `trg_cc_bloquear_lancamento_em_grupo`). `permitirGrupo` no seletor libera
+     *  para filtro/relatório. Lista sem `parent_id` (campo ausente) não sabe quem
+     *  é grupo e deixa tudo escolhível. */
     selecionavel?: boolean;
 }
 
@@ -53,12 +54,21 @@ interface Props {
     /** Linha de "limpar" com rótulo/valor próprios — ver HierarchicalSelect. */
     clearLabel?: string;
     clearValue?: string;
+    /** Grupo escolhível — SÓ para filtro e relatório ("ver tudo do grupo Obra").
+     *  Campo que grava lançamento nunca passa isto: grupo não recebe lançamento. */
+    permitirGrupo?: boolean;
 }
 
 /** Itens do drawer a partir da lista crua. Exportado para quem precisa da
  *  mesma resolução fora do seletor (ex.: rótulo em célula). */
-export function costCenterSelectItems(costCenters: CostCenterOption[], orgNames: ReadonlyMap<string, string> = new Map()): HierarchicalSelectItem[] {
+export function costCenterSelectItems(
+    costCenters: CostCenterOption[],
+    orgNames: ReadonlyMap<string, string> = new Map(),
+    opts: { permitirGrupo?: boolean } = {},
+): HierarchicalSelectItem[] {
     const porId = new Map(costCenters.map(c => [c.id, c]));
+    const selecionavelDe = (cc: CostCenterOption): boolean | undefined =>
+        cc.selecionavel ?? (!opts.permitirGrupo && cc.parent_id === null ? false : undefined);
     const orgs = [...new Set(costCenters.map(c => c.organization_id ?? ''))];
     const agruparPorOrg = orgs.length > 1;
     const orgNodeId = (org: string | null | undefined) => `org:${org ?? ''}`;
@@ -70,9 +80,9 @@ export function costCenterSelectItems(costCenters: CostCenterOption[], orgNames:
         const prefixo = parentName ? `${parentName} > ` : null;
         const name = prefixo && cc.name.startsWith(prefixo) ? cc.name.slice(prefixo.length) : cc.name;
         if (!parentId && agruparPorOrg) {
-            return { id: cc.id, code: cc.code ?? null, name, parentId: orgNodeId(cc.organization_id), parentName: orgNames.get(cc.organization_id ?? '') ?? 'Organização', fullName: cc.name, selecionavel: cc.selecionavel };
+            return { id: cc.id, code: cc.code ?? null, name, parentId: orgNodeId(cc.organization_id), parentName: orgNames.get(cc.organization_id ?? '') ?? 'Organização', fullName: cc.name, selecionavel: selecionavelDe(cc) };
         }
-        return { id: cc.id, code: cc.code ?? null, name, parentId, parentName, fullName: cc.name, selecionavel: cc.selecionavel };
+        return { id: cc.id, code: cc.code ?? null, name, parentId, parentName, fullName: cc.name, selecionavel: selecionavelDe(cc) };
     });
     if (!agruparPorOrg) return itens;
     const cabecalhos: HierarchicalSelectItem[] = orgs.map(org => ({
@@ -85,11 +95,11 @@ const CostCenterSelect: React.FC<Props> = ({
     costCenters, value, onChange, placeholder = '—', valueField = 'id', size, disabled,
     triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
-    clearLabel, clearValue,
+    clearLabel, clearValue, permitirGrupo,
 }) => {
     const organizations = useStore(s => s.organizations);
     const orgNames = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
-    const items = useMemo(() => costCenterSelectItems(costCenters, orgNames), [costCenters, orgNames]);
+    const items = useMemo(() => costCenterSelectItems(costCenters, orgNames, { permitirGrupo }), [costCenters, orgNames, permitirGrupo]);
     return (
         <HierarchicalSelect
             items={items}

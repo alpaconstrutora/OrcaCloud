@@ -29,14 +29,14 @@ describe('costCenterSelectItems — várias organizações', () => {
     ];
     it('cabeçalho por org; grupo pendura na org, filho continua no grupo', () => {
         const itens = costCenterSelectItems(ccs, new Map([['A', 'Altair'], ['B', 'Alpa']]));
-        expect(itens.filter(i => i.selecionavel === false).map(i => i.name)).toEqual(['Altair', 'Alpa']);
+        expect(itens.filter(i => i.id.startsWith('org:')).map(i => i.name)).toEqual(['Altair', 'Alpa']);
         expect(itens.find(i => i.id === 'g1')).toMatchObject({ parentId: 'org:A', parentName: 'Altair' });
         expect(itens.find(i => i.id === 'f1')).toMatchObject({ parentId: 'g1', name: 'Pro-labore' });
         expect(itens.find(i => i.id === 'g2')).toMatchObject({ parentId: 'org:B' });
     });
     it('uma org só: sem cabeçalho (comportamento anterior intacto)', () => {
         const itens = costCenterSelectItems(ccs.filter(c => c.organization_id === 'A'));
-        expect(itens.some(i => i.selecionavel === false)).toBe(false);
+        expect(itens.some(i => i.id.startsWith('org:'))).toBe(false);
         expect(itens.find(i => i.id === 'g1')?.parentId).toBeNull();
     });
 });

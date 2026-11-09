@@ -124,7 +124,7 @@ export const financialRegistryService = {
     async listCostCenters(organizationId?: string, empresaId?: string): Promise<CostCenter[]> {
         let query = supabase
             .from('cost_centers_v2')
-            .select('id, organization_id, empresa_id, parent_id, empreendimento_id, name, code, created_at');
+            .select('id, organization_id, empresa_id, parent_id, empreendimento_id, payment_account_id, name, code, created_at');
 
         if (empresaId) {
             query = query.eq('empresa_id', empresaId);
@@ -136,7 +136,7 @@ export const financialRegistryService = {
 
         if (error) throw error;
 
-        type Row = { id: string; organization_id: string; empresa_id?: string; parent_id?: string | null; empreendimento_id?: string | null; name: string; code: string; created_at?: string };
+        type Row = { id: string; organization_id: string; empresa_id?: string; parent_id?: string | null; empreendimento_id?: string | null; payment_account_id?: string | null; name: string; code: string; created_at?: string };
         const rows = (data || []) as Row[];
         const byId = new Map(rows.map(r => [r.id, r]));
 
@@ -153,6 +153,7 @@ export const financialRegistryService = {
             parent_id: r.parent_id ?? null,
             parent_name: r.parent_id ? (byId.get(r.parent_id)?.name ?? null) : null,
             empreendimento_id: r.empreendimento_id ?? null,
+            payment_account_id: r.payment_account_id ?? null,
         }));
     },
 

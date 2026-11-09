@@ -50,7 +50,7 @@ import type { ProjecaoElevacao } from './blueprintElevation';
 import { envelopesParaExportacao, type ZonaParaExportacao } from './blueprintZonaUrbanistica';
 import { bolhasDosEixos, crescerFaixa, faixaVazia, type FaixaDasCotas } from './blueprintEixosAutomaticos';
 import type { ProjecaoCorte, TerrenoParaCorte } from './blueprintCorte';
-import { rotulosDosPavimentos, textosDaUnidade, type ExibirNaMassa, type PisosDaMassa } from './blueprintMassaNaVista';
+import { nomeDoBlocoAVista, rotulosDosPavimentos, textosDaUnidade, type ExibirNaMassa, type PisosDaMassa } from './blueprintMassaNaVista';
 import { medidasDoCorte } from './blueprintCorteMedidas';
 import {
   AFASTAMENTO_COTA,
@@ -1548,7 +1548,7 @@ export function desenharElevacao(
       tracejar(c.x + c.w, c.y + c.h, c.x, c.y + c.h, contorno);
       tracejar(c.x, c.y + c.h, c.x, c.y, contorno);
     } else d.retangulo(c.x, c.y, c.w, c.h, contorno);
-    if ((opcoes.exibirNaMassa?.blocos ?? true) && c.w > 12 && c.h > 5) d.texto(c.x + c.w / 2, c.y + 3.2, b.nome, 2.2, COR_TRACO, { centralizar: true });
+    if ((opcoes.exibirNaMassa?.blocos ?? true) && c.w > 12 && c.h > 5 && nomeDoBlocoAVista(projecao.massa ?? [], b)) d.texto(c.x + c.w / 2, c.y + 3.2, b.nome, 2.2, COR_TRACO, { centralizar: true });
   }
   // A largura do texto: a do desenhista, quando ele sabe medir; senão, a estimativa de 0,6 × altura por letra.
   const larguraDe = (t: string, altura: number) => (d.larguraDoTexto ? d.larguraDoTexto(t, altura) : t.length * altura * 0.6);

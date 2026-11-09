@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, type BlueprintModel, type Command } from '../utils/blueprintKernel';
 import { baseDoCorte, projetarCorte } from '../utils/blueprintCorte';
 import { projetarElevacao } from '../utils/blueprintElevation';
-import { comMassa, massaNaVista, rotulosDosPavimentos, unidadesNaVista, type FatiaDoPiso, type PisosDaMassa } from '../utils/blueprintMassaNaVista';
+import { comMassa, massaNaVista, nomeDoBlocoAVista, rotulosDosPavimentos, unidadesNaVista, type FatiaDoPiso, type PisosDaMassa } from '../utils/blueprintMassaNaVista';
 import { DesenhistaDeProva, desenharElevacao, enquadrarElevacao, PAPEIS, type OpcoesExportacao } from '../utils/blueprintExport';
 import { CAMADAS, gerarDxf } from '../utils/blueprintDxf';
 
@@ -217,5 +217,47 @@ describe('unidades e pavimentos na prancha e no DXF (09/11/2026)', () => {
     const nada = gerarDxf(m, { titulo: 'T', revisao: 1, hash: 'h', elevacoes: [proj], exibirNaMassa: { blocos: false, unidades: false, posicao: false, pavimentos: false } });
     expect(nada).not.toContain('101 · Frente');
     expect(nada).not.toContain('Pavimento 1 +3,00');
+  });
+});
+
+describe('só o que está na frente (10/11/2026)', () => {
+  // "na vista de frente e fundos a identificação das unidades está sobreposta. mostrar apenas a que está na frente".
+  // A fachada da FRENTE do Garden: olhando para +y, a Torre A (y 6–32 m) fica na frente da Torre B (y 32–58 m), no
+  // mesmo trecho de u.
+  const frente = { id: 'f', rotulo: 'F', a: { x: -10000, y: -5000 }, b: { x: 30000, y: -5000 }, olharPara: 'ESQUERDA' as const };
+  const fatias = (prefixo: string, y0: number, y1: number): FatiaDoPiso[] => [
+    { nome: `${prefixo}01`, posicao: 'FRENTE', anel: ret(2281, y0, 9031, (y0 + y1) / 2) },
+    { nome: `${prefixo}02`, posicao: 'FRENTE', anel: ret(9031, y0, 15781, (y0 + y1) / 2) },
+    { nome: `${prefixo}03`, posicao: 'FUNDOS', anel: ret(2281, (y0 + y1) / 2, 9031, y1) },
+    { nome: `${prefixo}04`, posicao: 'FUNDOS', anel: ret(9031, (y0 + y1) / 2, 15781, y1) },
+  ];
+  const montar = () => {
+    const m = garden();
+    const id = (nome: string) => m.blocos!.find((b) => b.nome === nome)!.id;
+    const pisos: PisosDaMassa = new Map([
+      [id('Torre A'), [0, 1, 2, 3].map((i) => ({ nome: `A${i}`, elevacaoMm: i * 3000, unidades: fatias(`A${i}`, 6342, 32342) }))],
+      [id('Torre B'), [0, 1, 2, 3].map((i) => ({ nome: `B${i}`, elevacaoMm: i * 3000, unidades: fatias(`B${i}`, 32342, 58342) }))],
+    ]);
+    const base = baseDoCorte(frente as never);
+    const massa = massaNaVista(m, base, null);
+    return { m, pisos, base, massa };
+  };
+
+  it('⚠️ PRONTO QUANDO: as unidades da Torre B (atrás da A) não saem; só as da frente da A', () => {
+    const { pisos, base, massa } = montar();
+    const r = unidadesNaVista(massa, base, null, (id, k) => pisos.get(id)?.[k - 1]?.unidades);
+    expect(r.some((u) => u.nome.startsWith('B'))).toBe(false);
+    expect(r.filter((u) => u.indice === 2).map((u) => u.nome).sort()).toEqual(['A101', 'A102']);
+  });
+
+  it('o nome e os pavimentos do bloco de trás não saem; os da frente, sim', () => {
+    const { pisos, m, base } = montar();
+    const massa = massaNaVista(m, base, null).map((b) => ({ ...b, rotulosDosPisos: pisos.get(b.blocoId)?.map((p) => ({ nome: p.nome, elevacaoMm: p.elevacaoMm })) }));
+    const visiveis = massa.filter((b) => nomeDoBlocoAVista(massa, b)).map((b) => b.nome).sort();
+    expect(visiveis).toContain('Torre A');
+    expect(visiveis).not.toContain('Torre B');
+    const textos = rotulosDosPavimentos(massa).map((x) => x.texto);
+    expect(textos.some((t) => t.startsWith('A1'))).toBe(true);
+    expect(textos.some((t) => t.startsWith('B1'))).toBe(false);
   });
 });

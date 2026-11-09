@@ -19,7 +19,7 @@ import {
 } from '../../utils/blueprintElevation';
 import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
-import { comMassa, rotulosDosPavimentos, textosDaUnidade, type BlocoNaVista, type ExibirNaMassa, type PisosDaMassa } from '../../utils/blueprintMassaNaVista';
+import { comMassa, nomeDoBlocoAVista, rotulosDosPavimentos, textosDaUnidade, type BlocoNaVista, type ExibirNaMassa, type PisosDaMassa } from '../../utils/blueprintMassaNaVista';
 import { COR_DO_USO_DO_BLOCO } from '../../utils/blueprintMassa';
 import { DESTAQUE_DO_USO, tomClaro } from '../../utils/blueprintConcepcao';
 import type { UsoDoBloco } from '../../utils/blueprintKernel/model';
@@ -485,7 +485,7 @@ export default function ElevationCanvas({
       if (b.enterrado) ctx.setLineDash([6, 4]);
       ctx.strokeRect(x, y, w, h);
       ctx.setLineDash([]);
-      if (verNomesDosBlocos && w > 60 && h > 18) {
+      if (verNomesDosBlocos && w > 60 && h > 18 && nomeDoBlocoAVista(massa, b)) {
         ctx.fillStyle = '#0f172a';
         ctx.font = '600 12px system-ui, sans-serif';
         ctx.textAlign = 'center';

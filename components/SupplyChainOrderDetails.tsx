@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal, ClipboardCheck, Scale } from 'lucide-react';
+import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal, ClipboardCheck, Scale, Paperclip } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TabsBar, type TabsBarItem } from './ui/TabsBar';
 import { useConfirm } from './ui/confirm';
@@ -31,6 +31,9 @@ import { supplierPortalTokenService } from '../services/supplierPortalTokenServi
 import { pedidoCompradorService } from '../services/pedidoCompradorService';
 import { pedidoFinanceiroService } from '../services/pedidoFinanceiroService';
 import PedidoParcelasComprador from './PedidoParcelasComprador';
+import PedidoDocumentos from './suprimentos/PedidoDocumentos';
+import { pedidoDocumentoService } from '../services/pedidoDocumentoService';
+import type { DocumentoPedido } from '../lib/pedidoDocumentos';
 import { PAYABLE_STATUS } from './supplier/portal/status';
 import { fmtDate } from './portal/PortalKit';
 import { reciboPagamentoPortalService, rotuloRecibo } from '../services/reciboPagamentoPortalService';
@@ -225,8 +228,10 @@ const getStatusStyles = (status: string) => {
 // Sub-abas da aba Recebimento (pedido do usuário em 2026-10-19: a aba ficava
 // longa mesmo com poucos itens — rastreamento, 3-way match, conferências e
 // divergências empilhados). Divergências moram em Conferência: nascem dela e o
-// fornecedor responde ali. 3-way match é só do comprador.
-type SubAbaRecebimento = 'rastreamento' | 'conferencia' | 'match';
+// fornecedor responde ali. 3-way match é só do comprador. Documentos (anexos
+// do pedido: NF, recibo, comprovante, boleto) entrou em 2026-11-09, a pedido do
+// usuário ("pode ficar dentro de recebimento").
+type SubAbaRecebimento = 'rastreamento' | 'conferencia' | 'match' | 'documentos';
 
 const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ orderId, onBack, initialView = 'details', currentUser: propUser, portalToken, perfil, accent = 'indigo' }) => {
     const A = ACCENTS[accent];
@@ -320,6 +325,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     const [receiptPhotoUrls, setReceiptPhotoUrls] = React.useState<Record<string, string>>({});
     const [discrepancies, setDiscrepancies] = React.useState<PurchaseDiscrepancy[]>([]);
     const [notifLogs, setNotifLogs] = React.useState<NotificationLogEntry[]>([]);
+    const [documentosPedido, setDocumentosPedido] = React.useState<DocumentoPedido[]>([]);
     const [resolutionInputs, setResolutionInputs] = React.useState<Record<string, string>>({});
     // Rascunho da resposta do fornecedor, por divergência (o comprador usa
     // `resolutionInputs`; são campos diferentes porque são papéis diferentes).
@@ -759,14 +765,21 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
      * que o modo token ficasse sem nenhuma.
      */
     const carregarAnexosDoPedido = async () => {
+        // Documentos (sub-aba de Recebimento) falham sozinhos: um erro aqui não
+        // pode derrubar comprovante, divergência e log, que vêm no mesmo lote.
+        const documentos = pedidoDocumentoService.listar(orderId, portalToken).catch(e => {
+            console.error('[SupplyChainOrderDetails] documentos do pedido:', e);
+            return [] as DocumentoPedido[];
+        });
         if (portalToken) {
-            const [recebimento, logs] = await Promise.all([
+            const [recebimento, logs, docs] = await Promise.all([
                 supplierPortalTokenService.getOrderReceipts(portalToken, orderId),
                 supplierPortalTokenService.getOrderNotifications(portalToken, orderId),
+                documentos,
             ]);
-            return { receipts: recebimento.receipts, discrepancies: recebimento.discrepancies, notifLogs: logs };
+            return { receipts: recebimento.receipts, discrepancies: recebimento.discrepancies, notifLogs: logs, documentos: docs };
         }
-        const [orderReceipts, orderDiscrepancies, orderNotifLogs] = await Promise.all([
+        const [orderReceipts, orderDiscrepancies, orderNotifLogs, docs] = await Promise.all([
             receiptService.listByOrder(orderId),
             discrepancyService.listByOrder(orderId),
             // O fornecedor logado lê o mesmo histórico sem os campos técnicos
@@ -774,19 +787,22 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
             ehComprador
                 ? notificationLogService.listByOrder(orderId)
                 : notificationLogService.listByOrderForSupplier(orderId),
+            documentos,
         ]);
-        return { receipts: orderReceipts, discrepancies: orderDiscrepancies, notifLogs: orderNotifLogs };
+        return { receipts: orderReceipts, discrepancies: orderDiscrepancies, notifLogs: orderNotifLogs, documentos: docs };
     };
 
     const aplicarAnexos = (anexos: {
         receipts: PurchaseReceipt[];
         discrepancies: PurchaseDiscrepancy[];
         notifLogs: NotificationLogEntry[];
+        documentos: DocumentoPedido[];
     }) => {
         setReceipts(anexos.receipts);
         resolveReceiptPhotos(anexos.receipts);
         setDiscrepancies(anexos.discrepancies);
         setNotifLogs(anexos.notifLogs);
+        setDocumentosPedido(anexos.documentos);
     };
 
     // Resolve signed URLs (15min) para as fotos dos comprovantes (bucket privado).
@@ -1811,6 +1827,13 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         },
                     ];
                     if (ehComprador) tabs.push({ id: 'match', label: '3-way match', icon: <Scale className="w-4 h-4" /> });
+                    tabs.push({
+                        id: 'documentos',
+                        label: 'Documentos',
+                        icon: <Paperclip className="w-4 h-4" />,
+                        badge: documentosPedido.length,
+                        badgeTitulo: `${documentosPedido.length} documento${documentosPedido.length === 1 ? '' : 's'} anexado${documentosPedido.length === 1 ? '' : 's'}`,
+                    });
                     return <TabsBar<SubAbaRecebimento> tabs={tabs} value={subAbaRecebimento} onChange={setSubAbaRecebimento} accent={accent} />;
                 })()}
 
@@ -2032,6 +2055,20 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 {/* 3-Way Match — ferramenta interna de conferência (compra × NFe × recebimento),
                     fora do escopo do link público */}
                 {abaDetalhe === 'recebimento' && subAbaRecebimento === 'match' && ehComprador && <ThreeWayMatchPanel orderId={order.id} />}
+
+                {/* Documentos — anexos do pedido (comprador e fornecedor) e, só
+                    para leitura, as notas fiscais já ligadas a ele. */}
+                {abaDetalhe === 'recebimento' && subAbaRecebimento === 'documentos' && (
+                    <PedidoDocumentos
+                        orderId={order.id}
+                        portalToken={portalToken}
+                        ehComprador={ehComprador}
+                        accent={accent}
+                        documentos={documentosPedido}
+                        onDocumentosChange={setDocumentosPedido}
+                        notify={notify}
+                    />
+                )}
 
                 {/* Receipts from purchase_receipts table */}
                 {abaDetalhe === 'recebimento' && subAbaRecebimento === 'conferencia' && receipts.length > 0 && (
@@ -2258,7 +2295,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     comprador, Financeiro › Contas a Pagar › aba Notas. Mesmo
                     dado, dois lugares — removido a pedido do usuário em
                     2026-08-21 (mesmo raciocínio da remoção do Fluxo de
-                    Atendimento em 2026-08-20). */}
+                    Atendimento em 2026-08-20).
+                    Em 2026-11-09 o usuário pediu de volta um lugar para enviar
+                    NF/recibo no pedido: virou Recebimento › Documentos, que NÃO
+                    repete aquele problema — o anexo só guarda o arquivo (não cria
+                    nota nem título), e as notas dos outros módulos aparecem lá só
+                    para leitura. */}
 
                 {/* Notification Log — e-mail, WhatsApp e webhook disparados para o
                     fornecedor são comunicação do pedido: vivem na aba Comunicação,

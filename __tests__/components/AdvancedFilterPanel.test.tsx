@@ -121,3 +121,30 @@ describe('AdvancedFilterPanel — valor escolhido da lista', () => {
     expect((screen.getAllByRole('combobox')[2] as HTMLSelectElement).value).toBe('Concluído');
   });
 });
+
+// 09/11/2026, Meus Fornecedores: lógica E / OU quando há mais de um filtro.
+describe('AdvancedFilterPanel — E / OU', () => {
+  it('a 1ª regra diz "Onde"; da 2ª em diante o conector troca E ↔ OU para o conjunto todo', async () => {
+    localStorage.setItem(`${CHAVE}:rules`, JSON.stringify([
+      { id: 'r1', fieldKey: 'status', operator: 'is', value: 'Concluído' },
+      { id: 'r2', fieldKey: 'status', operator: 'is', value: 'Pendente' },
+    ]));
+    const user = userEvent.setup();
+    render(<Tela />);
+    expect(linhas()).toEqual([]); // E: nenhuma é Concluída E Pendente
+    await user.click(screen.getByRole('button', { name: /Filtro avançado/ }));
+    expect(screen.getByText('Onde')).toBeInTheDocument();
+    const conector = screen.getByRole('combobox', { name: 'Ligar as regras com' }) as HTMLSelectElement;
+    expect(conector.value).toBe('e');
+
+    await user.selectOptions(conector, 'ou');
+    expect(linhas()).toEqual(['Reboco parede', 'Construção almoxarifado']);
+
+    // a 3ª regra nasce com o mesmo conector, e os dois seletores andam juntos
+    await user.click(screen.getByRole('button', { name: /Adicionar filtro/ }));
+    const conectores = screen.getAllByRole('combobox', { name: 'Ligar as regras com' }) as HTMLSelectElement[];
+    expect(conectores.map(c => c.value)).toEqual(['ou', 'ou']);
+    await user.selectOptions(conectores[1], 'e');
+    expect((screen.getAllByRole('combobox', { name: 'Ligar as regras com' }) as HTMLSelectElement[]).map(c => c.value)).toEqual(['e', 'e']);
+  });
+});

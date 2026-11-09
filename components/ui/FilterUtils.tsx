@@ -70,11 +70,16 @@ const OPERATOR_LABEL = Object.fromEntries(
 /** Operadores que não precisam de input de valor. */
 const VALUELESS_OPERATORS: FilterOperator[] = ['is_set', 'is_not_set'];
 
+/** Como a regra se liga à anterior. A 1ª regra ignora o conector. */
+export type FilterConector = 'e' | 'ou';
+
 export interface FilterRule {
   id: string;
   fieldKey: string;
   operator: FilterOperator;
   value: unknown; // string | number | [min, max] | undefined (operadores sem valor)
+  /** Ausente = 'e' (regras gravadas antes do OU existir, 09/11/2026). */
+  conector?: FilterConector;
 }
 
 export interface SavedFilter {
@@ -116,10 +121,32 @@ function defaultRule(fields: FilterFieldConfig[]): FilterRule {
   return { id: makeId(), fieldKey: field.key, operator: OPERATORS_BY_TYPE[field.type][0].value, value: undefined };
 }
 
+/** Regra que pede valor e ainda não tem — recém-adicionada, o usuário não digitou. */
+function regraSemValor(rule: FilterRule): boolean {
+  if (VALUELESS_OPERATORS.includes(rule.operator)) return false;
+  const v = rule.value;
+  if (Array.isArray(v)) return v.every(x => x === undefined || x === null || x === '');
+  return v === undefined || v === null || v === '';
+}
+
+/** Conector efetivo do conjunto: o da 2ª regra (a 1ª não tem). O painel mantém todos iguais. */
+export function conectorDasRegras(rules: FilterRule[]): FilterConector {
+  return rules[1]?.conector === 'ou' ? 'ou' : 'e';
+}
+
 /**
- * Avalia uma lista de regras em AND contra um item. `getValue` isola o hook do
- * shape de cada tela (campos derivados/aninhados não precisam virar propriedade
- * plana só para o filtro funcionar).
+ * Avalia as regras contra um item, ligadas por E/OU (09/11/2026, Meus Fornecedores).
+ * Precedência usual: E antes de OU — "A e B ou C" = (A e B) ou C. O painel usa um
+ * conector só para o conjunto (padrão ClickUp), mas a avaliação não depende disso.
+ *
+ * Ficam de fora, para não decidir o resultado:
+ * - regra de campo que saiu da configuração (órfã) — antes ela "passava", o que no
+ *   OU faria TODA linha passar;
+ * - regra que pede valor e ainda está vazia — com OU, a regra recém-adicionada
+ *   ("Contém" + nada) casaria tudo antes de o usuário digitar.
+ *
+ * `getValue` isola o hook do shape de cada tela (campos derivados/aninhados não
+ * precisam virar propriedade plana só para o filtro funcionar).
  */
 export function applyFilterRules<T>(
   items: T[],
@@ -130,10 +157,20 @@ export function applyFilterRules<T>(
   if (rules.length === 0) return items;
   const fieldByKey = new Map(fields.map(f => [f.key, f]));
 
+  // Grupos de E separados por OU. O conector é lido da posição ORIGINAL da regra:
+  // tirar uma regra vazia do meio não pode trocar o "ou" da seguinte por "e".
+  const grupos: FilterRule[][] = [];
+  rules.forEach((rule, i) => {
+    const abreGrupo = i === 0 || rule.conector === 'ou';
+    if (abreGrupo || grupos.length === 0) grupos.push([]);
+    if (fieldByKey.has(rule.fieldKey) && !regraSemValor(rule)) grupos[grupos.length - 1].push(rule);
+  });
+  const ativos = grupos.filter(g => g.length > 0);
+  if (ativos.length === 0) return items;
+
   return items.filter(item =>
-    rules.every(rule => {
-      const field = fieldByKey.get(rule.fieldKey);
-      if (!field) return true; // campo removido da config — regra órfã não derruba a lista
+    ativos.some(grupo => grupo.every(rule => {
+      const field = fieldByKey.get(rule.fieldKey)!;
       const raw = getValue(item, rule.fieldKey);
       const isEmpty = raw === null || raw === undefined || raw === '';
 
@@ -176,7 +213,7 @@ export function applyFilterRules<T>(
         }
         default: return true;
       }
-    })
+    }))
   );
 }
 
@@ -185,7 +222,9 @@ export function useAdvancedFilters(fields: FilterFieldConfig[], storageKey: stri
   const [savedFilters, setSavedFilters] = usePersistedState<SavedFilter[]>(`${storageKey}:saved`, []);
   const [showPanel, setShowPanel] = React.useState(false);
 
-  const addRule = () => setRules(prev => [...prev, defaultRule(fields)]);
+  // A regra nova herda o conector do conjunto — o painel mostra um só.
+  const addRule = () => setRules(prev => [...prev, { ...defaultRule(fields), conector: conectorDasRegras(prev) }]);
+  const setConector = (conector: FilterConector) => setRules(prev => prev.map(r => ({ ...r, conector })));
   const removeRule = (id: string) => setRules(prev => prev.filter(r => r.id !== id));
   const updateRule = (id: string, patch: Partial<FilterRule>) =>
     setRules(prev => prev.map(r => (r.id === id ? { ...r, ...patch } : r)));
@@ -203,6 +242,7 @@ export function useAdvancedFilters(fields: FilterFieldConfig[], storageKey: stri
 
   return {
     rules, addRule, removeRule, updateRule, clearRules,
+    conector: conectorDasRegras(rules), setConector,
     savedFilters, saveCurrentAsFilter, applySavedFilter, deleteSavedFilter,
     showPanel, setShowPanel,
     activeCount: rules.length,
@@ -399,7 +439,7 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
       </button>
 
       {state.showPanel && (
-        <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-50 min-w-[420px]">
+        <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-50 min-w-[490px]">
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Filtros</span>
             <div className="relative">
@@ -428,12 +468,28 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
           </div>
 
           <div className="space-y-2">
-            {state.rules.map(rule => {
+            {state.rules.map((rule, indice) => {
               const field = fieldByKey.get(rule.fieldKey) ?? fields[0];
               const operators = OPERATORS_BY_TYPE[field.type];
               const needsValue = !VALUELESS_OPERATORS.includes(rule.operator);
               return (
                 <div key={rule.id} className="flex items-center gap-2">
+                  {/* E / OU entre as regras (09/11/2026). Um conector para o conjunto,
+                      padrão ClickUp: trocar em qualquer linha troca todas. */}
+                  {indice === 0 ? (
+                    <span className="w-16 shrink-0 text-xs font-semibold text-gray-500 pl-1">Onde</span>
+                  ) : (
+                    <select
+                      aria-label="Ligar as regras com"
+                      title="E = a linha precisa atender a todas as regras · OU = basta atender a uma"
+                      value={state.conector}
+                      onChange={e => state.setConector(e.target.value as FilterConector)}
+                      className="w-16 shrink-0 border border-gray-200 rounded-lg px-2 py-1.5 text-form-input font-semibold text-blue-700 outline-none focus:border-blue-400"
+                    >
+                      <option value="e">E</option>
+                      <option value="ou">OU</option>
+                    </select>
+                  )}
                   <select
                     value={rule.fieldKey}
                     onChange={e => {

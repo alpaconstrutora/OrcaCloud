@@ -14,6 +14,7 @@ import { PaymentAccount } from '../types/financial';
 import { supplierService } from '../services/supplierService';
 import { clientService as crmClientService } from '../services/clientService';
 import { financialRegistryService } from '../services/financialRegistryService';
+import { contaPeloCentroDeCusto } from '../lib/contaPeloCentroDeCusto';
 import { projectService } from '../services/projectService';
 import { laborService } from '../services/laborService';
 import { contractTypeService } from '../services/contractTypeService';
@@ -281,6 +282,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     // Qual botão disparou o submit — "Salvar e Permanecer" não fecha o painel
     // depois de salvar (só disponível ao ajustar um contrato de Suprimentos).
     const submitModeRef = React.useRef<'exit' | 'stay'>('exit');
+    // Conta que a regra do centro de custo preencheu (lib/contaPeloCentroDeCusto) —
+    // trocar o centro só mexe nela, nunca na conta escolhida à mão.
+    const contaAutoRef = React.useRef<string | null>(null);
 
     // Reset do formulário só no MOMENTO EM QUE O MODAL ABRE (isOpen: false → true),
     // nunca de novo enquanto ele já está aberto. Antes dependia de [isOpen,
@@ -686,6 +690,19 @@ export const ContractModal: React.FC<ContractModalProps> = ({
     };
 
     const isOutgoing = direction === 'OUTGOING' || (formData.direction ?? initialData?.direction) === 'OUTGOING';
+
+    // A conta só aparece (e só é gravada pela tela) no contrato de saída — no de
+    // entrada a regra não preenche um campo que o usuário não vê.
+    const trocarCentroDeCusto = (v: string) => {
+        if (!isOutgoing) { setFormData({ ...formData, cost_center_id: v }); return; }
+        const r = contaPeloCentroDeCusto({
+            contaAtual: formData.payment_account_id, contaPreenchidaAntes: contaAutoRef.current,
+            contaDoCentro: costCenters.find(c => c.id === v)?.payment_account_id,
+            contasDisponiveis: paymentAccounts.map(a => a.id),
+        });
+        contaAutoRef.current = r.preenchida;
+        setFormData({ ...formData, cost_center_id: v, payment_account_id: r.conta ?? undefined });
+    };
 
     const handleCreateClient = async () => {
         if (!newClientName.trim() || !organizationId) return;
@@ -1830,7 +1847,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     <CostCenterSelect
                                         costCenters={costCenters}
                                         value={formData.cost_center_id || ''}
-                                        onChange={(v) => setFormData({ ...formData, cost_center_id: v })}
+                                        onChange={trocarCentroDeCusto}
                                         placeholder="Nenhum centro vinculado"
                                         hoverCls="hover:bg-blue-50"
                                         size="sm"

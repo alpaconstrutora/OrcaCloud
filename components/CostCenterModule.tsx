@@ -11,6 +11,7 @@ import CostCenterV2ImportModal from './CostCenterV2ImportModal';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, type WriteTarget } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import { costCenterService } from '../services/costCenterService';
+import { financialRegistryService } from '../services/financialRegistryService';
 import { exportService } from '../services/exportService';
 import { projectService } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
@@ -18,7 +19,7 @@ import { empreendimentoLinksService } from '../services/empreendimentoLinksServi
 import { empreendimentoAuditService } from '../services/empreendimentoAuditService';
 import { onlyObras } from '../utils/projectClassification';
 import { EmpreendimentoCell, type EmpreendimentoCellValue } from './empreendimento/EmpreendimentoCell';
-import { CostCenterV2 } from '../types/financial';
+import { CostCenterV2, PaymentAccount } from '../types/financial';
 import { agruparLinhas, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
@@ -34,6 +35,8 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'name',           label: 'Centro de custo',        sortable: true },
     { key: 'empreendimento', label: 'Empreendimento',         sortable: true },
     { key: 'obra',           label: 'Obra',                   sortable: true },
+    // Conta vinculada (09/11/2026): o lançamento neste centro de custo vem com ela.
+    { key: 'conta',          label: 'Conta bancária',         sortable: true },
     { key: 'description',    label: 'Descrição',              sortable: true },
     { key: 'actions',        label: 'Ações',                  sortable: false },
 ];
@@ -42,7 +45,7 @@ const COLUMNS: ColumnConfig[] = [
 // São chutes de partida: o botão "Ajustar largura ao conteúdo" (§6.1.2) mede o
 // dado real e substitui estes valores por tela.
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    code: 100, organization: 170, group: 210, name: 190, empreendimento: 170, obra: 150, description: 220, actions: 150,
+    code: 100, organization: 170, group: 210, name: 190, empreendimento: 170, obra: 150, conta: 180, description: 220, actions: 150,
 };
 
 // "Agrupar" — guia de UI §6.12. A tela é uma árvore (grupo → centro de custo); agrupar
@@ -75,6 +78,7 @@ const COST_CENTER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boo
     name:           { label: 'Centro de custo',          className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     empreendimento: { label: 'Empreendimento',           className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     obra:           { label: 'Obra',                     className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    conta:          { label: 'Conta bancária',           className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     description:    { label: 'Descrição',                className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
@@ -100,11 +104,14 @@ interface FormState {
      *  'item': grupo é família de despesa, não recebe lançamento — vincular não
      *  segregaria caixa nenhum. Mesmo vínculo que a aba Vinculações grava. */
     empreendimento_id: string;
+    /** Conta bancária vinculada (opcional) — só para 'item': grupo não recebe
+     *  lançamento. O lançamento neste centro de custo vem com ela preenchida. */
+    payment_account_id: string;
     name: string;
     description: string;
 }
 
-const EMPTY_FORM: FormState = { recordType: 'group', organization_id: '', parent_id: '', project_id: '', empreendimento_id: '', name: '', description: '' };
+const EMPTY_FORM: FormState = { recordType: 'group', organization_id: '', parent_id: '', project_id: '', empreendimento_id: '', payment_account_id: '', name: '', description: '' };
 
 /** Opção do select de Empreendimento — vem de TODAS as organizações do usuário. */
 interface EmpreendimentoOpcao { id: string; name: string; organizationId: string }
@@ -129,9 +136,10 @@ function renderCostCenterCell(
         empreendimentoOf: (item: CostCenterV2) => EmpreendimentoCellValue | undefined;
         obraNameById: Record<string, string>;
         orgNameById: Map<string, string>;
+        contaNameById: Map<string, string>;
     },
 ): React.ReactNode {
-    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoOf, obraNameById, orgNameById } = ctx;
+    const { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, empreendimentoOf, obraNameById, orgNameById, contaNameById } = ctx;
     switch (key) {
         case 'code':
             return <span className="text-xs font-normal text-gray-500 whitespace-nowrap">{item.code}</span>;
@@ -166,6 +174,14 @@ function renderCostCenterCell(
                     {item.project_id ? (obraNameById[item.project_id] || '—') : <span className="text-gray-400 italic">—</span>}
                 </span>
             );
+        case 'conta': {
+            const nome = item.payment_account_id ? contaNameById.get(item.payment_account_id) : undefined;
+            return (
+                <span className="block truncate text-sm font-normal text-gray-700" title={nome}>
+                    {item.payment_account_id ? (nome || '—') : <span className="text-gray-400 italic">—</span>}
+                </span>
+            );
+        }
         case 'description':
             return <span className="block truncate text-sm font-normal text-gray-500" title={item.description || undefined}>{item.description || '-'}</span>;
         default:
@@ -213,6 +229,9 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     const [sheetObrasLoading, setSheetObrasLoading] = useState(false);
     const [sheetEmpreendimentos, setSheetEmpreendimentos] = useState<EmpreendimentoOpcao[]>([]);
     const [sheetEmpreendimentosLoading, setSheetEmpreendimentosLoading] = useState(false);
+    // Contas de todas as organizações do usuário (a RLS recorta): nome na coluna
+    // "Conta bancária" e opções do formulário, filtradas pela org do registro.
+    const [contas, setContas] = useState<PaymentAccount[]>([]);
     const confirm = useConfirm();
 
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -234,6 +253,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     }, [organizationId]);
 
     React.useEffect(() => { load(); }, [load]);
+
+    useEffect(() => {
+        let cancelled = false;
+        financialRegistryService.listPaymentAccounts(undefined, undefined, { incluirInativas: true })
+            .then(rows => { if (!cancelled) setContas(rows); })
+            .catch(() => { if (!cancelled) setContas([]); });
+        return () => { cancelled = true; };
+    }, []);
+    const contaNameById = useMemo(() => new Map(contas.map(c => [c.id, c.bank ? `${c.name} · ${c.bank}` : c.name])), [contas]);
 
     // Resolve nome da obra e empreendimento para cada organização presente na
     // listagem atual. O empreendimento chega por dois caminhos: o vínculo DIRETO
@@ -310,10 +338,11 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             case 'name': return (a.parent_id ? a.name : '').localeCompare(b.parent_id ? b.name : '', 'pt-BR') * dir;
             case 'obra': return (a.project_id ? obraNameById[a.project_id] || '' : '').localeCompare(b.project_id ? obraNameById[b.project_id] || '' : '', 'pt-BR') * dir;
             case 'empreendimento': return (empreendimentoOf(a)?.name || '').localeCompare(empreendimentoOf(b)?.name || '', 'pt-BR') * dir;
+            case 'conta': return (a.payment_account_id ? contaNameById.get(a.payment_account_id) || '' : '').localeCompare(b.payment_account_id ? contaNameById.get(b.payment_account_id) || '' : '', 'pt-BR') * dir;
             case 'description': return (a.description || '').localeCompare(b.description || '', 'pt-BR') * dir;
             default: return a.code.localeCompare(b.code, 'pt-BR', { numeric: true });
         }
-    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoOf, orgNameById]);
+    }, [tableColumns.sortColumn, tableColumns.sortDirection, groupNameFor, obraNameById, empreendimentoOf, orgNameById, contaNameById]);
 
     const matchesSearch = useCallback((item: CostCenterV2) => {
         const q = searchTerm.trim().toLowerCase();
@@ -327,9 +356,10 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             (item.description || '').toLowerCase().includes(q) ||
             groupNameFor(item).toLowerCase().includes(q) ||
             obraName.toLowerCase().includes(q) ||
-            empreendimentoName.toLowerCase().includes(q)
+            empreendimentoName.toLowerCase().includes(q) ||
+            (item.payment_account_id ? contaNameById.get(item.payment_account_id) || '' : '').toLowerCase().includes(q)
         );
-    }, [searchTerm, groupNameFor, obraNameById, empreendimentoOf, orgNameById]);
+    }, [searchTerm, groupNameFor, obraNameById, empreendimentoOf, orgNameById, contaNameById]);
 
     const isFiltering = searchTerm.trim() !== '';
 
@@ -414,6 +444,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             parent_id: '',
             project_id: '',
             empreendimento_id: '',
+            payment_account_id: '',
             name: '',
             description: '',
         });
@@ -428,6 +459,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             parent_id: item.parent_id || '',
             project_id: item.project_id || '',
             empreendimento_id: item.empreendimento_id || '',
+            payment_account_id: item.payment_account_id || '',
             name: item.name,
             description: item.description || '',
         });
@@ -528,6 +560,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             .sort((a, b) => (a.orgId === linkOrgId ? -1 : b.orgId === linkOrgId ? 1 : a.orgName.localeCompare(b.orgName, 'pt-BR')));
     }, [sheetEmpreendimentos, orgNameById, linkOrgId]);
 
+    // Contas oferecidas no formulário: as ativas da organização do registro + as que
+    // a atendem (regra de 15/09/2026). A já gravada fica na lista mesmo inativa.
+    const contasDoFormulario = useMemo(() => {
+        if (!linkOrgId) return [];
+        return contas.filter(a =>
+            (a.is_active !== false || a.id === editingItem?.payment_account_id)
+            && (a.organization_id === linkOrgId || a.serves_all_organizations || (a.served_organization_ids ?? []).includes(linkOrgId)));
+    }, [contas, linkOrgId, editingItem]);
+
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name.trim() || (!editingItem && !createTarget)) return;
@@ -550,12 +591,14 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
             const parentId = formData.recordType === 'group' ? null : (formData.parent_id || null);
             const projectId = formData.recordType === 'group' ? null : (formData.project_id || null);
             const empreendimentoId = formData.recordType === 'group' ? null : (formData.empreendimento_id || null);
+            const paymentAccountId = formData.recordType === 'group' ? null : (formData.payment_account_id || null);
             if (editingItem) {
                 const campos = {
                     name: formData.name.trim(),
                     description: formData.description.trim() || null,
                     parent_id: editingHasChildren ? editingItem.parent_id : parentId,
                     project_id: projectId,
+                    payment_account_id: paymentAccountId,
                 };
                 if (mudouOrganizacao) {
                     // Um único PATCH para o próprio registro (campos + org + código
@@ -595,6 +638,8 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                         parent_id: parentNaOrg,
                         project_id: projectId,
                         empreendimento_id: empreendimentoId,
+                        // Conta só chega preenchida com organização única (como o empreendimento).
+                        payment_account_id: paymentAccountId,
                         name: formData.name.trim(),
                         description: formData.description.trim() || undefined,
                     });
@@ -848,7 +893,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                         <tr key={item.id} className={`group hover:bg-blue-50/50 transition-colors ${isGroup ? 'bg-gray-50/60' : ''}`}>
                                             {tableColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoOf, orgNameById })}
+                                                    {renderCostCenterCell(key, { item, isGroup, hasChildren, expanded, toggleExpand, groupNameFor, obraNameById, empreendimentoOf, orgNameById, contaNameById })}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -898,6 +943,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                             organization_id,
                                             parent_id: voltou ? (editingItem.parent_id || '') : '',
                                             project_id: voltou ? (editingItem.project_id || '') : '',
+                                            payment_account_id: voltou ? (editingItem.payment_account_id || '') : '',
                                         });
                                     }}
                                     className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -910,7 +956,7 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                     <p className="mt-1.5 text-xs text-amber-600">
                                         {editingHasChildren
                                             ? 'O grupo e todos os seus centros de custo serão movidos. A obra vinculada de cada um é desfeita — obra pertence à organização.'
-                                            : 'Grupo e obra são por organização — escolha de novo abaixo. O vínculo com empreendimento é mantido.'}
+                                            : 'Grupo, obra e conta bancária são por organização — escolha de novo abaixo. O vínculo com empreendimento é mantido.'}
                                     </p>
                                 )}
                             </div>
@@ -920,10 +966,15 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                             <div>
                                 <label className="text-xs font-semibold text-slate-500">Tipo de registro</label>
                                 <div className="mt-1.5 grid grid-cols-2 gap-2">
+                                    {/* Centro de custo não vira grupo: pode já ter lançamentos, e grupo
+                                        não recebe lançamento (09/11/2026 — o banco recusa o novo).
+                                        Grupo sem filho ainda pode virar centro de custo. */}
                                     <button
                                         type="button"
-                                        onClick={() => setFormData({ ...formData, recordType: 'group', parent_id: '', project_id: '', empreendimento_id: '' })}
-                                        className={`h-9 rounded-[6px] text-sm font-medium border transition-all ${formData.recordType === 'group' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+                                        disabled={!!editingItem.parent_id}
+                                        title={editingItem.parent_id ? 'Centro de custo não vira grupo: ele pode ter lançamentos, e grupo não recebe lançamento.' : undefined}
+                                        onClick={() => setFormData({ ...formData, recordType: 'group', parent_id: '', project_id: '', empreendimento_id: '', payment_account_id: '' })}
+                                        className={`h-9 rounded-[6px] text-sm font-medium border transition-all disabled:opacity-50 disabled:cursor-not-allowed ${formData.recordType === 'group' ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
                                     >
                                         Grupo
                                     </button>
@@ -1018,6 +1069,29 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                     </>
                                 ) : (
                                     <p className="mt-1.5 text-xs text-gray-400">Ao criar em "Todas as organizações" o centro de custo é replicado em cada uma — escolha uma organização para vincular a um empreendimento.</p>
+                                )}
+                            </div>
+                        )}
+
+                        {formData.recordType === 'item' && (
+                            <div>
+                                <label className="text-xs font-semibold text-slate-500">Conta bancária <span className="text-gray-400 font-normal">(opcional)</span></label>
+                                {linkOrgId ? (
+                                    <>
+                                        <select
+                                            value={formData.payment_account_id}
+                                            onChange={(e) => setFormData({ ...formData, payment_account_id: e.target.value })}
+                                            className="mt-1.5 w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                        >
+                                            <option value="">— Sem conta vinculada —</option>
+                                            {contasDoFormulario.map(a => (
+                                                <option key={a.id} value={a.id}>{a.name}{a.bank ? ` · ${a.bank}` : ''}{a.is_active === false ? ' (inativa)' : ''}</option>
+                                            ))}
+                                        </select>
+                                        <p className="mt-1.5 text-xs text-gray-400">Ao escolher este centro de custo num lançamento, a conta vem preenchida — dá para trocar no próprio lançamento.</p>
+                                    </>
+                                ) : (
+                                    <p className="mt-1.5 text-xs text-gray-400">Disponível só ao gravar numa organização específica — não em "Todas as organizações".</p>
                                 )}
                             </div>
                         )}

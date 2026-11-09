@@ -1,7 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { CostCenterV2 } from '../types/financial';
 
-const COLUMNS = 'id, organization_id, empresa_id, parent_id, project_id, empreendimento_id, code, name, description, created_at, updated_at';
+const COLUMNS = 'id, organization_id, empresa_id, parent_id, project_id, empreendimento_id, payment_account_id, code, name, description, created_at, updated_at';
 
 export interface CostCenterInput {
     organization_id: string;
@@ -13,6 +13,8 @@ export interface CostCenterInput {
      *  20270919000030 — um empreendimento pode ter vários). Gravado pela aba
      *  Vinculações do Empreendimento, pelo módulo de Condomínios e pelo cadastro. */
     empreendimento_id?: string | null;
+    /** Conta bancária vinculada (opcional) — só centro de custo; grupo não recebe lançamento. */
+    payment_account_id?: string | null;
     name: string;
     description?: string | null;
     /** Código manual — se omitido, `create` gera via RPC (001, 002...). */
@@ -46,6 +48,7 @@ export const costCenterService = {
                 parent_id: input.parent_id ?? null,
                 project_id: input.project_id ?? null,
                 empreendimento_id: input.empreendimento_id ?? null,
+                payment_account_id: input.payment_account_id ?? null,
                 code,
                 name: input.name,
                 description: input.description ?? null,
@@ -69,6 +72,7 @@ export const costCenterService = {
         if (input.empresa_id !== undefined) payload.empresa_id = input.empresa_id;
         if (input.project_id !== undefined) payload.project_id = input.project_id;
         if (input.empreendimento_id !== undefined) payload.empreendimento_id = input.empreendimento_id;
+        if (input.payment_account_id !== undefined) payload.payment_account_id = input.payment_account_id;
 
         const { data, error } = await supabase
             .from('cost_centers_v2')
@@ -89,6 +93,7 @@ export const costCenterService = {
             parent_id: item.parent_id,
             project_id: item.project_id,
             empreendimento_id: item.empreendimento_id,
+            payment_account_id: item.payment_account_id,
             name: `${item.name} (cópia)`,
             description: item.description,
         });

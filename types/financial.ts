@@ -169,6 +169,9 @@ export interface CostCenter {
      *  (`aplicar_20270905000024_condominio_rateio.sql`; N:1 desde 20270919000030).
      *  Preenchido = a despesa que cai aqui é do caixa daquele condomínio. */
     empreendimento_id?: string | null;
+    /** Só em `cost_centers_v2`: conta bancária vinculada (opcional) — preenche a
+     *  conta do lançamento ao escolher este centro de custo. */
+    payment_account_id?: string | null;
 }
 
 // Módulo "Centro de Custo" (Minha Organização) — tabela nova `cost_centers_v2`,
@@ -187,6 +190,9 @@ export interface CostCenterV2 {
      *  20270919000030 — um empreendimento pode ter vários). Coexiste com
      *  `project_id`: prédio em operação/retrofit não tem obra de onde derivar. */
     empreendimento_id?: string | null;
+    /** Conta bancária vinculada (opcional, 09/11/2026): o lançamento neste centro
+     *  de custo vem com ela preenchida — ver `lib/contaPeloCentroDeCusto.ts`. */
+    payment_account_id?: string | null;
     code: string;
     name: string;
     description?: string | null;

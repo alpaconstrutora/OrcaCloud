@@ -287,7 +287,11 @@ const HierarchicalSelect: React.FC<Props> = ({
                                 type="button"
                                 onClick={() => alternarExpansao(item.id)}
                                 className="flex-1 min-w-0 flex items-center gap-3 text-left"
+                                title={item.code ? 'Grupo — escolha um item dentro dele' : undefined}
                             >
+                                {item.code && (
+                                    <span className="text-xs font-normal text-gray-500 whitespace-nowrap shrink-0" style={{ width: `${larguraCodigo}ch` }}>{item.code}</span>
+                                )}
                                 <span className="text-sm font-semibold text-gray-700 truncate">{item.name}</span>
                             </button>
                         ) : (

@@ -10,6 +10,14 @@
 //     entra mais.
 //   • testar { payment_account_id } — consulta o saldo com a chave guardada.
 //   • sincronizar { payment_account_id } — importa o extrato agora.
+// Ações de LEITURA (tela Financeiro › Conta Asaas — plano
+// docs/planos/2026-11-09-conta-asaas-tela-financeiro.md): qualquer MEMBRO da
+// org dona — o extrato já é legível por ele em `bank_transactions`.
+//   • resumo { payment_account_id } — saldo ao vivo + a receber
+//     (/finance/payment/statistics: CONFIRMED, PENDING, OVERDUE).
+//   • extrato_consulta { payment_account_id, inicio, fim } — histórico ANTERIOR
+//     a `extrato_desde`, lido da Asaas e NUNCA gravado (gravar jogaria movimento
+//     de antes da integração na fila da Conciliação).
 // Cron (CRON_SECRET): importa o extrato de todas as contas Asaas ativas.
 //
 // Extrato → bank_transactions (NORMALIZED) na conta Asaas. O movimento que
@@ -26,11 +34,12 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { chamadaDeCron, exigirGestor, exigirUsuario, respostaDeErro } from "../_shared/auth.ts"
+import { chamadaDeCron, exigirGestor, exigirMembro, exigirUsuario, respostaDeErro } from "../_shared/auth.ts"
 import { cabecalhosAsaas, contaPorId, type ContaAsaas } from "../_shared/asaasConta.ts"
 import {
     baseDaAsaas, linhaDoExtrato, vinculoDoExtrato, janelaDoExtrato, valoresIguais,
-    type ItemExtratoAsaas, type Vinculo,
+    saldoDoItem, resumoAReceber, partirPeriodo,
+    type ItemExtratoAsaas, type Vinculo, type EstatisticaCobrancas,
 } from "../../../utils/asaasExtrato.ts"
 import { cobrancaPaga } from "../../../utils/asaasEventos.ts"
 import { normalizeText } from "../../../utils/reconciliationRules.ts"
@@ -82,10 +91,12 @@ serve(async (req: Request) => {
     if (!usuario.ok) return respostaDeErro(usuario, corsHeaders);
 
     const body = await req.json().catch(() => ({})) as {
-        acao?: 'salvar_chave' | 'testar' | 'sincronizar';
+        acao?: 'salvar_chave' | 'testar' | 'sincronizar' | 'resumo' | 'extrato_consulta';
         payment_account_id?: string;
         env?: string;
         chave?: string;
+        inicio?: string;
+        fim?: string;
     };
     if (!body.payment_account_id) return json({ error: 'payment_account_id é obrigatório.' }, 400);
 
@@ -95,7 +106,11 @@ serve(async (req: Request) => {
         .eq('id', body.payment_account_id)
         .maybeSingle();
     // Sem conta → passa nulo ao gate, que responde 400 sem revelar se o id existe.
-    const vinculo = await exigirGestor(req, pa?.organization_id ?? null);
+    // Leitura: membro da dona. Chave, teste e sincronização: só gestor.
+    const leitura = body.acao === 'resumo' || body.acao === 'extrato_consulta';
+    const vinculo = leitura
+        ? await exigirMembro(req, pa?.organization_id ?? null)
+        : await exigirGestor(req, pa?.organization_id ?? null);
     if (!vinculo.ok) return respostaDeErro(vinculo, corsHeaders);
     if (!pa) return json({ error: 'Conta de pagamento não encontrada.' }, 404);
 
@@ -175,8 +190,84 @@ serve(async (req: Request) => {
         return json({ ok: true, ...r });
     }
 
+    if (body.acao === 'resumo') {
+        let conta: ContaAsaas;
+        try { conta = await contaPorId(admin, pa.id); }
+        catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 422); }
+        const [saldo, confirmadas, pendentes, vencidas] = await Promise.all([
+            consultarSaldo(conta.base, conta.apiKey),
+            estatisticaDeCobrancas(conta, 'CONFIRMED'),
+            estatisticaDeCobrancas(conta, 'PENDING'),
+            estatisticaDeCobrancas(conta, 'OVERDUE'),
+        ]);
+        await registrarSaldoOuErro(admin, pa.id, saldo);
+        if (!saldo.ok) {
+            return json({
+                error: saldo.status === 401
+                    ? 'A Asaas recusou a chave guardada (HTTP 401) — um administrador precisa cadastrar uma nova.'
+                    : `Falha ao consultar a Asaas: ${saldo.erro}`,
+            }, 422);
+        }
+        const falhas = [confirmadas, pendentes, vencidas].filter(e => !e.ok).map(e => e.erro);
+        return json({
+            ok: true,
+            env: conta.env,
+            saldo: saldo.saldo,
+            saldo_em: new Date().toISOString(),
+            a_receber: resumoAReceber({ confirmadas: confirmadas.dados, pendentes: pendentes.dados, vencidas: vencidas.dados }),
+            // "A receber" que falhou volta zerado — a tela avisa, não esconde.
+            a_receber_erro: falhas.length ? falhas[0] : null,
+        });
+    }
+
+    if (body.acao === 'extrato_consulta') {
+        const { data: g } = await admin.from('payment_account_gateway')
+            .select('extrato_desde').eq('payment_account_id', pa.id).maybeSingle();
+        if (!g) return json({ error: 'Esta conta não é uma conta Asaas.' }, 422);
+        const { historico } = partirPeriodo({ inicio: body.inicio ?? '', fim: body.fim ?? '', desde: g.extrato_desde });
+        if (!historico) {
+            return json({ error: `Informe um período anterior a ${g.extrato_desde} — dali em diante o extrato está gravado.` }, 400);
+        }
+        let conta: ContaAsaas;
+        try { conta = await contaPorId(admin, pa.id); }
+        catch (e) { return json({ error: e instanceof Error ? e.message : String(e) }, 422); }
+        try {
+            const { itens, truncado } = await buscarExtrato(conta, historico.inicio, historico.fim);
+            return json({
+                ok: true,
+                janela: historico,
+                truncado,
+                linhas: itens.map(i => ({
+                    id: i.id,
+                    data: i.date.slice(0, 10),
+                    valor: Math.round(Number(i.value ?? 0) * 100) / 100,
+                    saldo_apos: saldoDoItem(i),
+                    tipo: i.type ?? null,
+                    descricao: (i.description && i.description.trim()) || null,
+                })),
+            });
+        } catch (e) {
+            return json({ error: e instanceof Error ? e.message : String(e) }, 422);
+        }
+    }
+
     return json({ error: 'Ação inválida.' }, 400);
 });
+
+// ─── Asaas: a receber ───────────────────────────────────────────────────
+
+interface Estatistica { ok: boolean; dados: EstatisticaCobrancas | null; erro: string | null }
+
+async function estatisticaDeCobrancas(conta: ContaAsaas, status: string): Promise<Estatistica> {
+    try {
+        const r = await fetch(`${conta.base}/finance/payment/statistics?status=${status}`, { headers: cabecalhosAsaas(conta.apiKey) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) return { ok: false, dados: null, erro: d?.errors?.[0]?.description ?? `HTTP ${r.status}` };
+        return { ok: true, dados: d as EstatisticaCobrancas, erro: null };
+    } catch (e) {
+        return { ok: false, dados: null, erro: e instanceof Error ? e.message : String(e) };
+    }
+}
 
 // ─── Asaas: saldo ───────────────────────────────────────────────────────
 
@@ -231,19 +322,7 @@ async function sincronizarExtrato(admin: Admin, contaId: string): Promise<Result
     const { inicio, fim } = janelaDoExtrato({ desde: g.extrato_desde, sincronizadoAte: g.extrato_sincronizado_ate, hoje: hoje() });
 
     // 1. Busca paginada.
-    const itens: ItemExtratoAsaas[] = [];
-    for (let offset = 0; itens.length < MAX_LINHAS; offset += 100) {
-        const url = `${conta.base}/financialTransactions?startDate=${inicio}&finishDate=${fim}&order=asc&offset=${offset}&limit=100`;
-        const r = await fetch(url, { headers: cabecalhosAsaas(conta.apiKey) });
-        const d = await r.json().catch(() => ({}));
-        if (!r.ok) {
-            throw new Error(r.status === 401
-                ? 'Chave de API recusada pela Asaas (HTTP 401).'
-                : (d?.errors?.[0]?.description ?? `HTTP ${r.status}`));
-        }
-        for (const it of (d?.data ?? []) as ItemExtratoAsaas[]) itens.push(it);
-        if (!d?.hasMore) break;
-    }
+    const { itens } = await buscarExtrato(conta, inicio, fim);
 
     // 2. Grava (idempotente por (bank_account_id, external_id)).
     const linhas = itens.map(i => linhaDoExtrato(i, contaId, conta.organizationId!, normalizeText));
@@ -254,6 +333,25 @@ async function sincronizarExtrato(admin: Admin, contaId: string): Promise<Result
             .select('id');
         if (error) throw new Error(`gravar extrato: ${error.message}`);
         importadas += (data ?? []).length;
+    }
+
+    // 2b. Saldo após o movimento nas linhas já gravadas sem ele (importadas
+    //     antes da coluna existir — o upsert acima ignora duplicadas).
+    for (let i = 0; i < itens.length; i += 200) {
+        const lote = itens.slice(i, i + 200).filter(it => saldoDoItem(it) !== null);
+        if (!lote.length) continue;
+        const { data: semSaldo, error } = await admin.from('bank_transactions')
+            .select('id,external_id')
+            .eq('bank_account_id', contaId)
+            .in('external_id', lote.map(it => it.id))
+            .is('saldo_apos', null);
+        if (error) throw new Error(`ler saldo do extrato: ${error.message}`);
+        const saldoPorId = new Map(lote.map(it => [it.id, saldoDoItem(it)]));
+        for (const b of semSaldo ?? []) {
+            const { error: eUpd } = await admin.from('bank_transactions')
+                .update({ saldo_apos: saldoPorId.get(b.external_id) }).eq('id', b.id);
+            if (eUpd) throw new Error(`gravar saldo do extrato: ${eUpd.message}`);
+        }
     }
 
     // 3. Vínculo determinístico — também para linhas de execuções anteriores
@@ -293,6 +391,26 @@ async function sincronizarExtrato(admin: Admin, contaId: string): Promise<Result
     // no_periodo: o botão dizia "0 novo(s)" quando o cron já tinha importado
     // tudo — parecia que não havia movimento nenhum.
     return { no_periodo: itens.length, importadas, vinculadas, sem_vinculo: semVinculo, janela: `${inicio}..${fim}` };
+}
+
+/** GET /financialTransactions paginado (100 por página) até `MAX_LINHAS`. */
+async function buscarExtrato(conta: ContaAsaas, inicio: string, fim: string): Promise<{ itens: ItemExtratoAsaas[]; truncado: boolean }> {
+    const itens: ItemExtratoAsaas[] = [];
+    let truncado = false;
+    for (let offset = 0; ; offset += 100) {
+        if (itens.length >= MAX_LINHAS) { truncado = true; break; }
+        const url = `${conta.base}/financialTransactions?startDate=${inicio}&finishDate=${fim}&order=asc&offset=${offset}&limit=100`;
+        const r = await fetch(url, { headers: cabecalhosAsaas(conta.apiKey) });
+        const d = await r.json().catch(() => ({}));
+        if (!r.ok) {
+            throw new Error(r.status === 401
+                ? 'Chave de API recusada pela Asaas (HTTP 401).'
+                : (d?.errors?.[0]?.description ?? `HTTP ${r.status}`));
+        }
+        for (const it of (d?.data ?? []) as ItemExtratoAsaas[]) itens.push(it);
+        if (!d?.hasMore) break;
+    }
+    return { itens, truncado };
 }
 
 interface Titulo { id: string; amount: number; direction: string }

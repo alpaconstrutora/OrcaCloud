@@ -1,5 +1,5 @@
 import React from 'react';
-import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone } from 'lucide-react';
+import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone, Wallet } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
@@ -504,7 +504,7 @@ const Layout: React.FC<LayoutProps> = ({
   const suprimentosViews = ['fluxo-p2p','supplies-solicitacoes','supplies-contracts','supplies-quotations','supplies-orders','supplies-receipts','plano-aquisicoes','almoxarifado'];
   const [isSuprimentosOpen, setIsSuprimentosOpen] = React.useState(() => suprimentosViews.includes(activeView));
   React.useEffect(() => { if (suprimentosViews.includes(activeView)) setIsSuprimentosOpen(true); }, [activeView]);
-  const financeiroViews = ['fluxo-financeiro','financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module', 'dividas-financiamentos'];
+  const financeiroViews = ['fluxo-financeiro','financial-dashboard','contas-a-receber','financial-boletos','contas-a-pagar','tributos-a-pagar','boletos-pagar','extrato-bancario','bank-reconciliation','financial-approval','financial-calendar','dunning','financial-intelligence','project-financial', 'fpa-module', 'dividas-financiamentos', 'conta-asaas'];
   const [isFinanceiroOpen, setIsFinanceiroOpen] = React.useState(() => financeiroViews.includes(activeView));
   React.useEffect(() => { if (financeiroViews.includes(activeView)) setIsFinanceiroOpen(true); }, [activeView]);
   const systemConfigViews = ['settings','master-data'];
@@ -547,6 +547,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'fluxo-financeiro', label: 'Fluxo financeiro (Torre de Controle)', group: 'Financeiro', icon: Workflow },
       { id: 'contas-a-receber', label: 'Contas a receber', group: 'Financeiro', icon: TrendingUp },
       { id: 'boletos-pagar', label: 'Boletos a pagar', group: 'Financeiro', icon: Banknote },
+      { id: 'conta-asaas', label: 'Conta Asaas', group: 'Financeiro', icon: Wallet },
       { id: 'dividas-financiamentos', label: 'Dívidas e financiamentos', group: 'Financeiro', icon: Landmark },
       { id: 'credit-rooms', label: 'Portal de crédito (Credit Room)', group: 'Financeiro', icon: Landmark },
       { id: 'sales', label: 'Vendas de ativos', group: 'Comercial', icon: Building2 },
@@ -1131,6 +1132,9 @@ const Layout: React.FC<LayoutProps> = ({
                             BankReconciliation de "Conciliação Bancária" (rota duplicada).
                             A rota segue viva no AppRouter para links antigos. */}
                         <DropdownItem id="bank-reconciliation" label="Conciliação Bancária" icon={ArrowRightLeft} />
+                        {/* Saldo, a receber e extrato da conta Asaas —
+                            docs/planos/2026-11-09-conta-asaas-tela-financeiro.md */}
+                        <DropdownItem id="conta-asaas" label="Conta Asaas" icon={Wallet} />
                         <DropdownItem id="financial-calendar" label="Calendário" icon={Calendar} />
                         <DropdownItem id="dunning" label="Cobrança Auto." icon={Bell} />
                         <DropdownItem id="financial-approval" label="Aprovações" icon={Shield} />

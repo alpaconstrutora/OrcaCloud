@@ -91,6 +91,7 @@ const FinancialIntelligence    = React.lazy(() => import('./FinancialIntelligenc
 const ClientChargesModule      = React.lazy(() => import('./ClientChargesModule'));
 const BoletoManager            = React.lazy(() => import('./BoletoManager'));
 const BankReconciliation       = React.lazy(() => import('./BankReconciliation'));
+const ContaAsaasModule         = React.lazy(() => import('./financeiro/ContaAsaasModule'));
 const ContasReceberManager  = React.lazy(() => import('./ContasReceberManager'));
 const ContasPagarManager    = React.lazy(() => import('./ContasPagarManager'));
 const TributosAPagarManager  = React.lazy(() => import('./TributosAPagarManager'));
@@ -1457,6 +1458,15 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
             organizationId={activeOrganizationId || ''}
             defaultView="statement"
           />
+        </React.Suspense>
+      );
+    // Financeiro › Tesouraria › Conta Asaas — saldo, a receber e extrato.
+    // Sem prop de organização (REGRA #5): a tela lê `useOrgContext()`.
+    // docs/planos/2026-11-09-conta-asaas-tela-financeiro.md
+    case 'conta-asaas':
+      return (
+        <React.Suspense fallback={<Spinner />}>
+          <ContaAsaasModule />
         </React.Suspense>
       );
     case 'bank-reconciliation':

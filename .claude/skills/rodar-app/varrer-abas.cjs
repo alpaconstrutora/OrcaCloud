@@ -46,7 +46,7 @@ const PRESETS = {
     // Engenharia e Incorporação
     'eng-obras', 'eng-orcamentos', 'eng-planejamento', 'empreendimentos',
     // Corporativo
-    'opura-docs', 'opura-assets', 'dividas-financiamentos',
+    'opura-docs', 'opura-assets', 'dividas-financiamentos', 'conta-asaas',
   ],
   rh: [
     'labor-dashboard', 'labor-employees', 'labor-teams', 'labor-allocations',

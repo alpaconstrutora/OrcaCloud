@@ -180,6 +180,8 @@ export const CAMADAS = {
   /** MURO (kernel 0.104.0): o contorno dos trechos cheios na espessura e a linha do vão de cada portão. */
   MURO: 'PLANTA-MUROS',
   ELEV_ESCADA: 'ELEVACAO-ESCADA',
+  /** Os blocos de massa no corte e na elevação (29/10/2026): contorno e linhas dos pavimentos. */
+  ELEV_MASSA: 'ELEVACAO-MASSA',
   CORTE_ESCADA: 'CORTE-ESCADA',
   /**
    * ELÉTRICA (F8, 13/09/2026) em duas camadas: os símbolos e eletrodutos, e
@@ -260,6 +262,7 @@ const COR_CAMADA: Record<string, number> = {
   [CAMADAS.ESCADA]: 9, // cinza claro — pedra, distinto do magenta do concreto
   [CAMADAS.MURO]: 8, // cinza escuro — alvenaria de divisa, subordinada à parede da casa
   [CAMADAS.ELEV_ESCADA]: 9,
+  [CAMADAS.ELEV_MASSA]: 8,
   [CAMADAS.CORTE_ESCADA]: 9,
   [CAMADAS.ELETRICA]: 2, // amarelo — a cor da elétrica no canvas
   [CAMADAS.ELETRICA_TEXTO]: 2,
@@ -760,6 +763,12 @@ function entidadesDeElevacao(proj: ProjecaoElevacao | ProjecaoCorte, offsetX: nu
     P(proj.bbox.uMax, proj.linhaDoSolo.v),
   );
 
+  // A MASSA (29/10/2026): o contorno de cada bloco e as linhas dos pavimentos.
+  for (const b of proj.massa ?? []) {
+    saida += polilinha(CAMADAS.ELEV_MASSA, [P(b.uMin, b.vMin), P(b.uMax, b.vMin), P(b.uMax, b.vMax), P(b.uMin, b.vMax)]);
+    for (const v of b.pisos) saida += linha(CAMADAS.ELEV_MASSA, P(b.uMin, v), P(b.uMax, v));
+  }
+
   for (const p of proj.paredes) {
     if (p.degenerada) continue;
     saida += polilinha(CAMADAS.ELEV_PAREDES, [
@@ -1107,6 +1116,8 @@ export function gerarDxf(model: BlueprintModel, o: OpcoesDxf): string {
       // O beiral avança além da última parede: sem ele aqui, a primeira
       // elevação nasceria por cima da ponta do telhado.
       ...(model.roofs ?? []).flatMap((r) => r.pontos.map((p) => p.x)),
+      // A massa (29/10/2026): o estudo só de blocos punha a primeira vista sobre a planta.
+      ...(model.blocos ?? []).flatMap((b) => b.pontos.map((p) => p.x)),
     ];
     let offsetX = (xs.length ? Math.max(...xs) : 0) + 3000;
     const passo =

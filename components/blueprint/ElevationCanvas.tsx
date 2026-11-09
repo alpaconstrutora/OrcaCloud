@@ -19,6 +19,10 @@ import {
 } from '../../utils/blueprintElevation';
 import { simboloDaElevacao } from '../../utils/blueprintFolhas';
 import { type ProjecaoCorte, type TerrenoParaCorte, projetarCorte } from '../../utils/blueprintCorte';
+import { comMassa, type BlocoNaVista } from '../../utils/blueprintMassaNaVista';
+import { COR_DO_USO_DO_BLOCO } from '../../utils/blueprintMassa';
+import { DESTAQUE_DO_USO, tomClaro } from '../../utils/blueprintConcepcao';
+import type { UsoDoBloco } from '../../utils/blueprintKernel/model';
 import { encaixarNaVista, escalaGrafica, marcasDaRegua, medicaoNaVista, medidasDoCorte, type PontoDaVista } from '../../utils/blueprintCorteMedidas';
 import { useCanvasVista, type BBoxMundo } from '../../hooks/useCanvasVista';
 import { useRodaNaoPassiva } from '../../hooks/useRodaNaoPassiva';
@@ -157,8 +161,17 @@ export function bboxVisivel(proj: ProjecaoElevacao | ProjecaoCorte, comEstrutura
   };
 }
 
-function bboxDaProjecao(proj: ProjecaoElevacao | ProjecaoCorte, comEstrutura: boolean): BBoxMundo {
-  const { uMin, uMax, vMin, vMax } = bboxVisivel(proj, comEstrutura);
+function bboxDaProjecao(proj: ProjecaoElevacao | ProjecaoCorte, comEstrutura: boolean, massa: readonly BlocoNaVista[] = []): BBoxMundo {
+  let { uMin, uMax, vMin, vMax } = bboxVisivel(proj, comEstrutura);
+  // A MASSA (29/10/2026): com peças, a caixa cresce para caber os blocos; só com blocos, a caixa é a deles.
+  if (massa.length > 0) {
+    const semPecas =
+      proj.paredes.every((p) => p.degenerada) && proj.estruturas.every((e) => e.degenerada) && !('cortados' in proj && proj.cortados.length > 0);
+    const mu = [Math.min(...massa.map((b) => b.uMin)), Math.max(...massa.map((b) => b.uMax))];
+    const mv = [Math.min(proj.linhaDoSolo.v, ...massa.map((b) => b.vMin)), Math.max(...massa.map((b) => b.vMax))];
+    if (semPecas) [uMin, uMax, vMin, vMax] = [mu[0], mu[1], mv[0], mv[1]];
+    else [uMin, uMax, vMin, vMax] = [Math.min(uMin, mu[0]), Math.max(uMax, mu[1]), Math.min(vMin, mv[0]), Math.max(vMax, mv[1])];
+  }
   // Uma folga de 10% para a edificação não colar nas bordas.
   const folgaU = Math.max(500, (uMax - uMin) * 0.1);
   const folgaV = Math.max(500, (vMax - vMin) * 0.1);
@@ -204,12 +217,17 @@ export default function ElevationCanvas({
   const chaveNiveis = levelIds ? levelIds.join(',') : 'todos';
   const projecao = useMemo<Projecao>(
     () =>
+      // Com a massa (29/10/2026): a MESMA projeção que a prancha e o DXF recebem.
       corte
-        ? projetarCorte(model, { corte, levelIds, terreno })
-        : projetarElevacao(model, { direcao, levelIds }),
+        ? comMassa(model, projetarCorte(model, { corte, levelIds, terreno }), corte.a, levelIds)
+        : comMassa(model, projetarElevacao(model, { direcao, levelIds }), null, levelIds),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [model, direcao, chaveNiveis, corte?.id, corte?.olharPara, corte?.a.x, corte?.a.y, corte?.b.x, corte?.b.y, terrenoChave, !!terreno],
   );
+
+  // OS BLOCOS DE MASSA (29/10/2026): "coloquei um corte na planta porém a mensagem que recebo é nada para mostrar".
+  // No corte, cortados e atrás; na fachada, todos em vista — ver `utils/blueprintMassaNaVista`.
+  const massa = useMemo(() => projecao.massa ?? [], [projecao]);
 
   // As medidas do terreno (níveis, corte/aterro, comprimentos) — puras, só no corte.
   const medidas = useMemo(() => (ehCorte(projecao) ? medidasDoCorte(projecao) : null), [projecao]);
@@ -222,6 +240,7 @@ export default function ElevationCanvas({
     const cantos = (r: { uMin: number; uMax: number; vMin: number; vMax: number }) =>
       vertices.push({ u: r.uMin, v: r.vMin }, { u: r.uMax, v: r.vMin }, { u: r.uMin, v: r.vMax }, { u: r.uMax, v: r.vMax });
     for (const p of projecao.paredes) if (!p.degenerada) cantos(p);
+    for (const b of massa) cantos(b);
     for (const o of projecao.aberturas) cantos(o);
     for (const e of projecao.estruturas) if (!e.degenerada) cantos(e);
     const linhas: PontoDaVista[][] = [];
@@ -238,7 +257,7 @@ export default function ElevationCanvas({
     const { uMin, uMax } = projecao.bbox;
     linhas.push([{ u: uMin - 1e6, v: projecao.linhaDoSolo.v }, { u: uMax + 1e6, v: projecao.linhaDoSolo.v }]);
     return { vertices, linhas };
-  }, [projecao, medidas]);
+  }, [projecao, medidas, massa]);
 
   // Sair do modo limpa a medida; trocar de vista também (a medida era daquele desenho).
   useEffect(() => {
@@ -287,7 +306,7 @@ export default function ElevationCanvas({
   //    e quando o botão "Enquadrar" bumpa o token. ──────────────────────────
   useEffect(() => {
     if (tamanho.w > 0 && tamanho.h > 0) {
-      enquadrar(bboxDaProjecao(projecao, mostrarEstrutura), tamanho);
+      enquadrar(bboxDaProjecao(projecao, mostrarEstrutura, massa), tamanho);
     }
     // `mostrarEstrutura` NA LISTA: ligar e desligar o toggle muda a altura do
     // que está desenhado em 9 m. Sem reenquadrar, a fachada fica minúscula num
@@ -319,6 +338,8 @@ export default function ElevationCanvas({
     // camada ou trocar de versão reenquadra, pela mesma razão do corte acima.
     terrenoChave,
     !!terreno,
+    // A massa entra na caixa: o bloco que aparece (ou some) reenquadra.
+    massa.length,
   ]);
 
   // ── Desenho ───────────────────────────────────────────────────────────────
@@ -414,6 +435,46 @@ export default function ElevationCanvas({
         ctx.stroke();
       }
       ctx.setLineDash([]);
+      ctx.restore();
+    }
+
+    // 1d. A MASSA (29/10/2026): cada bloco um retângulo com as linhas dos pavimentos, de trás para a frente. O que o
+    //     plano ATRAVESSA sai cheio na cor do uso e com o traço grosso (é o corte); o que está atrás, claro e fino (é
+    //     vista); o subsolo, tracejado. O nome no alto, por dentro — em cima, o da garagem cairia na base da torre.
+    for (const b of massa) {
+      const p1 = paraTela({ x: b.uMin, y: b.vMax });
+      const p2 = paraTela({ x: b.uMax, y: b.vMin });
+      const x = Math.min(p1.x, p2.x);
+      const y = Math.min(p1.y, p2.y);
+      const w = Math.abs(p2.x - p1.x);
+      const h = Math.abs(p2.y - p1.y);
+      const destaque = DESTAQUE_DO_USO[b.uso as UsoDoBloco] ?? '#334155';
+      ctx.save();
+      ctx.fillStyle = b.cortado ? tomClaro(destaque, 0.55) : (COR_DO_USO_DO_BLOCO[b.uso as UsoDoBloco] ?? '#e2e8f0');
+      ctx.globalAlpha = b.cortado ? 1 : 0.5;
+      ctx.fillRect(x, y, w, h);
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = b.cortado ? destaque : '#64748b';
+      ctx.lineWidth = 1;
+      for (const v of b.pisos) {
+        const yy = Math.round(paraTela({ x: 0, y: v }).y) + 0.5;
+        ctx.beginPath();
+        ctx.moveTo(x, yy);
+        ctx.lineTo(x + w, yy);
+        ctx.stroke();
+      }
+      ctx.strokeStyle = b.cortado ? '#0f172a' : '#334155';
+      ctx.lineWidth = b.cortado ? 2.2 : 1.2;
+      if (b.enterrado) ctx.setLineDash([6, 4]);
+      ctx.strokeRect(x, y, w, h);
+      ctx.setLineDash([]);
+      if (w > 60 && h > 18) {
+        ctx.fillStyle = '#0f172a';
+        ctx.font = '600 12px system-ui, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'top';
+        ctx.fillText(b.nome, x + w / 2, y + 4, w - 8);
+      }
       ctx.restore();
     }
 
@@ -861,6 +922,7 @@ export default function ElevationCanvas({
     }
   }, [
     projecao,
+    massa,
     vista,
     tamanho,
     paraTela,
@@ -979,10 +1041,12 @@ export default function ElevationCanvas({
   // visto dirigindo a produção, não no harness, que tinha casa.
   const temPerfilDoTerreno =
     ehCorte(projecao) && (projecao.perfilDoTerreno ?? []).some((pedaco) => pedaco.length >= 2);
+  // E a MASSA (29/10/2026): o estudo de massa é só blocos, e o corte deles dizia "desenhe paredes".
   const vazio =
     projecao.paredes.every((p) => p.degenerada) &&
     projecao.estruturas.every((e) => e.degenerada) &&
-    !temPerfilDoTerreno;
+    !temPerfilDoTerreno &&
+    massa.length === 0;
 
   return (
     <div ref={containerRef} className={`relative h-full w-full bg-white ${className ?? ''}`}>

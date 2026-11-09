@@ -19,6 +19,12 @@ Sessão de 09/11/2026 (VS Code):
   (`moveColumn` em `components/ui/TableUtils.tsx`: tira e reinsere no índice do alvo).
 - Filtro avançado: `applyFilterRules` só fazia `rules.every(...)` (E).
 
+## Andamento
+
+- 09/11/2026: código, testes e PR #279 (rascunho). Aplicar a migration no banco remoto
+  foi barrado pelo auto mode ([Production Deploy]) — aguarda o usuário aplicar ou autorizar.
+  Os três itens só são marcados como feitos após a conferência em produção.
+
 ## Itens
 
 ### 1. Colunas visíveis salvas no usuário (banco)

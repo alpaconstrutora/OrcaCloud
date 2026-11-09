@@ -19,7 +19,7 @@ const json = (body: unknown, status = 200) =>
 // Buckets que esta function aceita assinar. Lista fechada de propósito: o
 // `bucket` vem do corpo da requisição, e sem esta lista qualquer bucket privado
 // do projeto (incluindo os que nada têm a ver com fornecedor) viraria alvo.
-const BUCKETS_PERMITIDOS = ['invoices', 'receipts'] as const;
+const BUCKETS_PERMITIDOS = ['invoices', 'receipts', 'purchase-order-documents'] as const;
 type BucketPermitido = typeof BUCKETS_PERMITIDOS[number];
 
 // Gera link assinado para uma NFe/recibo do próprio fornecedor, para uso pelo acesso via
@@ -75,6 +75,24 @@ serve(async (req: Request) => {
             .maybeSingle();
 
         if (invoiceError || !invoice) {
+            return json({ error: 'Documento não pertence a este fornecedor' }, 403);
+        }
+    } else if (bucketAlvo === 'purchase-order-documents') {
+        // Anexo do pedido (Recebimento › Documentos): casa pelo file_path exato e
+        // pelo pedido do fornecedor do token — os dois lados enviam, e o
+        // fornecedor vê os anexos do comprador no mesmo pedido.
+        const { data: documento, error: documentoError } = await admin
+            .from('purchase_order_documents')
+            .select('id, order_id')
+            .eq('file_path', storagePath)
+            .maybeSingle();
+        const { data: doFornecedor } = documento
+            ? await admin.rpc('supplier_portal_pedido_do_fornecedor', {
+                p_order_id: documento.order_id, p_supplier_id: tok.supplier_id,
+            })
+            : { data: false };
+
+        if (documentoError || !documento || !doFornecedor) {
             return json({ error: 'Documento não pertence a este fornecedor' }, 403);
         }
     } else {

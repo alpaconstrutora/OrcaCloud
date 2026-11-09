@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, CheckCircle2, FileText, Loader2, Paperclip, Receipt, Upload } from 'lucide-react';
+import { AlertCircle, CheckCircle2, FileText, LayoutGrid, List, Loader2, Paperclip, Receipt, Search, Upload } from 'lucide-react';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
+import CartaoRecibo from '../ui/CartaoRecibo';
+import { usePersistedScopedSearch, usePersistedState } from '../ui/TableUtils';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from '../ui/sheet';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { useConfirm } from '../ui/confirm';
@@ -10,6 +12,8 @@ import { pedidoDocumentoService, type NotaVinculadaAoPedido } from '../../servic
 import {
     ACCEPT_DOCUMENTO_PEDIDO,
     CATEGORIAS_DOCUMENTO_PEDIDO,
+    barrasDoCodigo,
+    codigoCurtoDocumento,
     erroDoArquivoDocumento,
     motivoNaoExcluir,
     rotuloCategoriaDocumento,
@@ -33,6 +37,11 @@ import {
  *      continua em Contas a Pagar › Notas — o motivo de a seção "Documentos
  *      Fiscais" ter saído deste pedido em 21/08 era justamente ter dois lugares.
  *
+ * Os documentos têm duas visualizações, à escolha do usuário (09/11/2026:
+ * "não é para substituir e sim criar uma opção de visualização"): tabela
+ * (padrão) e cartões com cara de recibo de papel (`CartaoRecibo`, guia §34).
+ * A busca é UMA só e vale nos dois modos.
+ *
  * A lista de documentos mora no PAI (o badge da sub-aba conta ela, e ela chega
  * junto dos demais anexos do pedido); este componente só a recebe e devolve.
  */
@@ -43,21 +52,26 @@ const ACCENTS = {
         solidBtn: 'bg-indigo-600 hover:bg-indigo-700',
         ring: 'focus:border-indigo-600',
         link: 'text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50',
+        // Botão ativo do alternador cartões/lista (§5: azul sólido no app).
+        toggleAtivo: 'bg-blue-600 text-white',
     },
     portal: {
         solidBtn: 'bg-[#E1553C] hover:bg-[#C8452E]',
         ring: 'focus:border-[#E1553C]',
         link: 'text-[#C24428] hover:text-[#A8381F] hover:bg-[#FDEDE8]',
+        toggleAtivo: 'bg-[#E1553C] text-white',
     },
 } as const;
 
+// Soma 1.000 + 130 de ações: cabe na área útil do detalhe (~1.150 px com a
+// barra lateral). Antes somava 1.240 e a coluna de ações ficava cortada.
 const COLUNAS_DOCUMENTOS: StandardTableColumn[] = [
-    { key: 'categoria', label: 'Categoria', sortable: true, width: 140 },
-    { key: 'arquivo', label: 'Arquivo', sortable: true, width: 280 },
-    { key: 'descricao', label: 'Descrição', sortable: true, width: 240 },
-    { key: 'enviadoPor', label: 'Enviado por', sortable: true, width: 200 },
-    { key: 'tamanho', label: 'Tamanho', sortable: true, width: 100, align: 'right' },
-    { key: 'data', label: 'Data', sortable: true, width: 150 },
+    { key: 'categoria', label: 'Categoria', sortable: true, width: 120 },
+    { key: 'arquivo', label: 'Arquivo', sortable: true, width: 250 },
+    { key: 'descricao', label: 'Descrição', sortable: true, width: 170 },
+    { key: 'enviadoPor', label: 'Enviado por', sortable: true, width: 180 },
+    { key: 'tamanho', label: 'Tamanho', sortable: true, width: 110, align: 'right' },
+    { key: 'data', label: 'Data', sortable: true, width: 170 },
 ];
 
 const COLUNAS_NOTAS: StandardTableColumn[] = [
@@ -89,6 +103,9 @@ const PedidoDocumentos: React.FC<PedidoDocumentosProps> = ({
     const [enviando, setEnviando] = useState(false);
     const [formAberto, setFormAberto] = useState(false);
     const [abrindoId, setAbrindoId] = useState<string | null>(null);
+
+    const [modo, setModo] = usePersistedState<'cards' | 'list'>('suprimentos:pedido:documentos:viewMode', 'list');
+    const [busca, setBusca] = usePersistedScopedSearch('suprimentos:pedido:documentos:busca', orderId);
 
     const [notas, setNotas] = useState<NotaVinculadaAoPedido[]>([]);
     const [carregandoNotas, setCarregandoNotas] = useState(true);
@@ -156,92 +173,180 @@ const PedidoDocumentos: React.FC<PedidoDocumentosProps> = ({
         }
     };
 
+    const textoDeBusca = (d: DocumentoPedido) =>
+        `${d.fileName} ${d.descricao ?? ''} ${rotuloCategoriaDocumento(d.categoria)} ${d.enviadoPor ?? ''}`;
+    const termo = busca.trim().toLowerCase();
+    const filtrados = termo ? documentos.filter(d => textoDeBusca(d).toLowerCase().includes(termo)) : documentos;
+    // Cartões na ordem padrão da tabela: mais recentes primeiro.
+    const cartoes = [...filtrados].sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+
+    const botaoAbrir = (d: DocumentoPedido) => (
+        <button
+            type="button"
+            onClick={() => abrirEmNovaAba(d.id, () => pedidoDocumentoService.urlDoDocumento(d, portalToken))}
+            disabled={abrindoId === d.id}
+            className={`text-sm font-medium p-1.5 rounded-lg transition-all disabled:opacity-60 ${A.link}`}
+        >
+            {abrindoId === d.id ? 'Abrindo…' : 'Abrir'}
+        </button>
+    );
+
+    // Desligado, o ActionIconButton não recebe hover: o motivo mora no span em volta.
+    const botaoExcluir = (d: DocumentoPedido) => {
+        const motivo = motivoNaoExcluir(d, ehComprador);
+        return (
+            <span className="inline-flex" title={motivo ?? undefined}>
+                <ActionIconButton kind="delete" disabled={!!motivo} onClick={() => excluir(d)} />
+            </span>
+        );
+    };
+
+    // Alternador cartões/tabela (§5.1, molde de LaborDocuments) + ação primária
+    // (§17), os mesmos nos dois modos.
+    // Num grupo só: no celular a régua empilha, e alternador + botão ficam na
+    // mesma linha, à direita, em vez de duas linhas centralizadas.
+    const controles = (
+        <div className="flex items-center justify-end gap-2.5 w-full md:w-auto shrink-0">
+            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
+                <button type="button" onClick={() => setModo('cards')} title="Visualização em cards" aria-pressed={modo === 'cards'}
+                    className={`p-1.5 rounded-[6px] transition-all ${modo === 'cards' ? A.toggleAtivo : 'text-gray-400 hover:text-gray-600'}`}>
+                    <LayoutGrid className="w-4 h-4" />
+                </button>
+                <button type="button" onClick={() => setModo('list')} title="Visualização em lista" aria-pressed={modo === 'list'}
+                    className={`p-1.5 rounded-[6px] transition-all ${modo === 'list' ? A.toggleAtivo : 'text-gray-400 hover:text-gray-600'}`}>
+                    <List className="w-4 h-4" />
+                </button>
+            </div>
+            <button
+                type="button"
+                onClick={() => setFormAberto(true)}
+                className={`flex items-center gap-1.5 h-9 px-3.5 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0 ${A.solidBtn}`}
+            >
+                <Upload className="w-[15px] h-[15px]" />
+                Enviar documento
+            </button>
+        </div>
+    );
+
+    const vazio = {
+        icon: <Paperclip className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+        title: 'Nenhum documento anexado',
+        subtitle: 'Envie notas fiscais, recibos, comprovantes ou boletos deste pedido. Comprador e fornecedor veem os mesmos arquivos.',
+    };
+
     return (
         <div className="space-y-6">
-            <StandardTable<DocumentoPedido>
-                storageKey="suprimentos:pedido:documentos"
-                searchScope={orderId}
-                columns={COLUNAS_DOCUMENTOS}
-                rows={documentos}
-                rowKey={d => d.id}
-                searchText={d => `${d.fileName} ${d.descricao ?? ''} ${rotuloCategoriaDocumento(d.categoria)} ${d.enviadoPor ?? ''}`}
-                searchPlaceholder="Buscar documento..."
-                defaultSort={{ column: 'data', direction: 'desc' }}
-                sortValue={(key, d) => {
-                    switch (key) {
-                        case 'categoria': return rotuloCategoriaDocumento(d.categoria);
-                        case 'arquivo': return d.fileName.toLowerCase();
-                        case 'descricao': return (d.descricao ?? '').toLowerCase();
-                        case 'enviadoPor': return `${d.enviadoPorLado} ${d.enviadoPor ?? ''}`;
-                        case 'tamanho': return d.sizeBytes ?? 0;
-                        default: return d.createdAt;
-                    }
-                }}
-                renderCell={(key, d) => {
-                    switch (key) {
-                        case 'categoria':
-                            return <span className="text-sm font-normal text-gray-700">{rotuloCategoriaDocumento(d.categoria)}</span>;
-                        case 'arquivo':
-                            return (
-                                <span className="flex items-center gap-2 min-w-0 text-sm font-normal text-gray-900" title={d.fileName}>
-                                    <FileText className="w-4 h-4 text-gray-400 shrink-0" />
-                                    <span className="truncate">{d.fileName}</span>
-                                </span>
-                            );
-                        case 'descricao':
-                            return <span className="block truncate text-sm font-normal text-gray-700" title={d.descricao ?? undefined}>{d.descricao || '—'}</span>;
-                        case 'enviadoPor':
-                            return (
-                                <span className="block truncate text-sm font-normal text-gray-700" title={d.enviadoPor ?? undefined}>
-                                    {d.enviadoPorLado === 'FORNECEDOR' ? 'Fornecedor' : 'Comprador'}
-                                    {d.enviadoPor ? <span className="text-gray-500"> · {d.enviadoPor}</span> : null}
-                                </span>
-                            );
-                        case 'tamanho':
-                            return <span className="text-sm font-normal text-gray-700">{tamanhoLegivel(d.sizeBytes)}</span>;
-                        default:
-                            return <span className="text-sm font-normal text-gray-700">{formatDateTimeBR(d.createdAt)}</span>;
-                    }
-                }}
-                actions={{
-                    width: 130,
-                    render: d => {
-                        const motivo = motivoNaoExcluir(d, ehComprador);
-                        return (
-                            <div className="flex items-center justify-end gap-1.5">
-                                <button
-                                    type="button"
-                                    onClick={() => abrirEmNovaAba(d.id, () => pedidoDocumentoService.urlDoDocumento(d, portalToken))}
-                                    disabled={abrindoId === d.id}
-                                    className={`text-sm font-medium p-1.5 rounded-lg transition-all disabled:opacity-60 ${A.link}`}
-                                >
-                                    {abrindoId === d.id ? 'Abrindo…' : 'Abrir'}
-                                </button>
-                                {/* Desligado, o ActionIconButton não recebe hover:
-                                    o motivo mora no span em volta. */}
-                                <span className="inline-flex" title={motivo ?? undefined}>
-                                    <ActionIconButton kind="delete" disabled={!!motivo} onClick={() => excluir(d)} />
-                                </span>
+            {modo === 'cards' ? (
+                /* §5.2 — régua e grade no mesmo card. */
+                <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
+                    <div className="p-2 border-b border-gray-100 bg-white">
+                        <div className="flex flex-col md:flex-row gap-2.5 items-center">
+                            <div className="flex-1 relative w-full">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Buscar documento..."
+                                    value={busca}
+                                    onChange={e => setBusca(e.target.value)}
+                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                />
                             </div>
-                        );
-                    },
-                }}
-                toolbarRight={
-                    <button
-                        type="button"
-                        onClick={() => setFormAberto(true)}
-                        className={`flex items-center gap-1.5 h-9 px-3.5 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 shrink-0 ${A.solidBtn}`}
-                    >
-                        <Upload className="w-[15px] h-[15px]" />
-                        Enviar documento
-                    </button>
-                }
-                empty={{
-                    icon: <Paperclip className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
-                    title: 'Nenhum documento anexado',
-                    subtitle: 'Envie notas fiscais, recibos, comprovantes ou boletos deste pedido. Comprador e fornecedor veem os mesmos arquivos.',
-                }}
-            />
+                            {controles}
+                        </div>
+                    </div>
+                    {cartoes.length === 0 ? (
+                        <div className="text-center py-12">
+                            {vazio.icon}
+                            <h3 className="text-lg font-bold text-gray-900 mb-2">{termo ? 'Nenhum documento encontrado' : vazio.title}</h3>
+                            <p className="text-sm text-gray-500">{termo ? 'Tente ajustar a busca.' : vazio.subtitle}</p>
+                        </div>
+                    ) : (
+                        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6 bg-gray-50">
+                            {cartoes.map(d => (
+                                <CartaoRecibo
+                                    key={d.id}
+                                    titulo={rotuloCategoriaDocumento(d.categoria)}
+                                    icone={<Receipt className="w-5 h-5" />}
+                                    numero={codigoCurtoDocumento(d.id)}
+                                    numeroTitulo={d.id}
+                                    subtitulo={formatDateTimeBR(d.createdAt)}
+                                    linhas={[
+                                        { rotulo: 'Arquivo', valor: d.fileName, titulo: d.fileName },
+                                        { rotulo: 'Tamanho', valor: tamanhoLegivel(d.sizeBytes), numerico: true },
+                                        {
+                                            rotulo: 'Enviado por',
+                                            valor: `${d.enviadoPorLado === 'FORNECEDOR' ? 'Fornecedor' : 'Comprador'}${d.enviadoPor ? ` · ${d.enviadoPor}` : ''}`,
+                                            titulo: d.enviadoPor ?? undefined,
+                                        },
+                                    ]}
+                                    observacao={d.descricao}
+                                    barras={barrasDoCodigo(d.id)}
+                                    rodape={<>{botaoAbrir(d)}{botaoExcluir(d)}</>}
+                                />
+                            ))}
+                        </div>
+                    )}
+                </div>
+            ) : (
+                <StandardTable<DocumentoPedido>
+                    storageKey="suprimentos:pedido:documentos"
+                    columns={COLUNAS_DOCUMENTOS}
+                    rows={documentos}
+                    rowKey={d => d.id}
+                    search={busca}
+                    onSearchChange={setBusca}
+                    searchText={textoDeBusca}
+                    searchPlaceholder="Buscar documento..."
+                    filters={controles}
+                    defaultSort={{ column: 'data', direction: 'desc' }}
+                    sortValue={(key, d) => {
+                        switch (key) {
+                            case 'categoria': return rotuloCategoriaDocumento(d.categoria);
+                            case 'arquivo': return d.fileName.toLowerCase();
+                            case 'descricao': return (d.descricao ?? '').toLowerCase();
+                            case 'enviadoPor': return `${d.enviadoPorLado} ${d.enviadoPor ?? ''}`;
+                            case 'tamanho': return d.sizeBytes ?? 0;
+                            default: return d.createdAt;
+                        }
+                    }}
+                    renderCell={(key, d) => {
+                        switch (key) {
+                            case 'categoria':
+                                return <span className="text-sm font-normal text-gray-700">{rotuloCategoriaDocumento(d.categoria)}</span>;
+                            case 'arquivo':
+                                return (
+                                    <span className="flex items-center gap-2 min-w-0 text-sm font-normal text-gray-900" title={d.fileName}>
+                                        <FileText className="w-4 h-4 text-gray-400 shrink-0" />
+                                        <span className="truncate">{d.fileName}</span>
+                                    </span>
+                                );
+                            case 'descricao':
+                                return <span className="block truncate text-sm font-normal text-gray-700" title={d.descricao ?? undefined}>{d.descricao || '—'}</span>;
+                            case 'enviadoPor':
+                                return (
+                                    <span className="block truncate text-sm font-normal text-gray-700" title={d.enviadoPor ?? undefined}>
+                                        {d.enviadoPorLado === 'FORNECEDOR' ? 'Fornecedor' : 'Comprador'}
+                                        {d.enviadoPor ? <span className="text-gray-500"> · {d.enviadoPor}</span> : null}
+                                    </span>
+                                );
+                            case 'tamanho':
+                                return <span className="text-sm font-normal text-gray-700 whitespace-nowrap">{tamanhoLegivel(d.sizeBytes)}</span>;
+                            default:
+                                return <span className="text-sm font-normal text-gray-700">{formatDateTimeBR(d.createdAt)}</span>;
+                        }
+                    }}
+                    actions={{
+                        width: 130,
+                        render: d => (
+                            <div className="flex items-center justify-end gap-1.5">
+                                {botaoAbrir(d)}
+                                {botaoExcluir(d)}
+                            </div>
+                        ),
+                    }}
+                    empty={vazio}
+                />
+            )}
 
             <div className="space-y-3">
                 <SecaoTitulo

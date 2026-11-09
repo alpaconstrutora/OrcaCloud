@@ -144,6 +144,7 @@ Ao aplicar o padrão numa nova tela, marque cada item:
 - [ ] **Valor de campo (§32)** — valor sempre escuro (`text-gray-900`), inclusive automático/só-leitura; cinza-claro só no `placeholder:`
 - [ ] **`dark:` só por classe (§33)** — sem `dark:` em código novo; conferir a tela com o sistema em modo escuro (tem de ficar igual à do modo claro)
 - [ ] **Malha do formulário (§30)** — rótulo→campo `space-y-1.5`, campos `gap-x-6 gap-y-4`, seção `space-y-4` com título `pb-3`, seções `space-y-8` no card; campo curto (data/select/valor) nunca em coluna única; sem `pb-10` morto
+- [ ] **Cartão de recibo (§34)** — se a lista também aparece como papel: `CartaoRecibo` como alternativa à tabela (alternador persistido, padrão `'list'`), uma busca só para os dois modos
 - [ ] **Gráficos (§28)** — card `ChartCard` (título §21 + subtítulo com a base do dado), grade hairline sólida, marcas finas com ponta arredondada, rótulo direto só na ponta em cor de TEXTO, legenda HTML quando há 2+ séries, paleta validada, estado vazio próprio, `—`/vazio em vez de zero quando não medido
 
 ---
@@ -223,6 +224,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §31 Diagrama de processo (canvas) — se a tela desenha um fluxo de nós: fundo pontilhado por `style`, cartão-nó, linha 2px com seta por costura, rótulo de aresta em chip `rounded-[6px]` sem caixa alta, caixa de grupo tracejada, controles de zoom; drawers/modais FORA da camada com `transform`
 - [ ] §32 Valor de campo — nenhum `<input>`/`<textarea>` com o valor em cinza-claro (automático/só-leitura incluído)
 - [ ] §33 `dark:` só por classe — a tela fica IDÊNTICA com o sistema em modo escuro e em modo claro; não escrever `dark:` em código novo (a variante é por classe e nada liga a classe)
+- [ ] §34 Cartão de recibo — se a tela mostra comprovantes como papel: `CartaoRecibo`, só como alternativa à tabela, busca única nos dois modos
 
 **Critério de "auditoria completa" cumprido:** todas as linhas acima aparecem
 na resposta final com veredito. Não é permitido dizer "X% do padrão auditado"
@@ -3709,6 +3711,54 @@ funcionar no Escuro Total; as sobrescritas globais cuidam das cores neutras.
 > 🔒 Trava: `__tests__/darkSoPorClasse.test.ts` — compila o Tailwind com o `index.css` real e confere que o
 > CSS gerado não tem `prefers-color-scheme` (com controle negativo) e que nada liga a classe `dark`;
 > `__tests__/components/EmitDocumentModalPadrao.test.tsx` — a gaveta não tem `dark:`.
+
+---
+
+## 34. CARTÃO DE RECIBO (`CartaoRecibo`) — comprovante visto como papel
+
+**Criado em 2026-11-09, a pedido do usuário** (Suprimentos › Pedido de compra › Recebimento ›
+Documentos): *"lista de recibo em formato de cards imitando um recibo real"* — e, na mesma
+conversa, *"não é para substituir e sim criar uma opção de visualização para o usuário escolher
+como preferir"*. Componente: **`components/ui/CartaoRecibo.tsx`**. Referência de uso:
+`components/suprimentos/PedidoDocumentos.tsx`.
+
+**Quando usar:** lista de comprovantes/anexos (recibo, nota, boleto) que o usuário quer ver como
+papel. É **sempre uma visualização alternativa à tabela**, nunca no lugar dela: alternador
+cartões/lista (§5.1, `LayoutGrid`/`List`, `usePersistedState` com padrão `'list'`) e **uma busca
+só** para os dois modos (`StandardTable` com `search`/`onSearchChange` **e** `searchText`; a grade
+filtra com a mesma função).
+
+**Anatomia (já embutida — não reescrever):**
+
+| Peça | Como |
+|---|---|
+| Papel | creme `#FFFDF7`, `rounded-t-[6px]`, `px-5 pt-5` |
+| Sombra | `filter: drop-shadow(...)` no invólucro — acompanha a serrilha; `box-shadow` desenharia um retângulo |
+| Cabeçalho | ícone + título `text-sm font-semibold uppercase tracking-[0.25em]` centralizado; "Nº" curto `font-mono` com o id inteiro no `title` (§27) |
+| Picote | linha tracejada + meia-lua nas laterais pintada com `fundo` (a cor ATRÁS do cartão — `bg-gray-50` da grade) |
+| Linhas | `<dl>` "rótulo ··· valor": rótulo `text-xs text-gray-500`, pontilhado `flex-1`, valor `text-sm text-gray-900` à direita, cortado com `title`; `numerico` → `font-mono tabular-nums` |
+| Observação | itálico entre aspas, `text-sm text-gray-700` |
+| Código de barras | DECORATIVO (`aria-hidden`), larguras determinísticas pelo id (`barrasDoCodigo`) |
+| Serrilha | faixa `h-1.5` com dois `linear-gradient` 135°/225° de 12px, por `style` |
+
+```tsx
+<div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6 bg-gray-50">
+  <CartaoRecibo
+    titulo="Recibo" icone={<Receipt className="w-5 h-5" />}
+    numero={codigoCurto(id)} numeroTitulo={id} subtitulo={formatDateTimeBR(criadoEm)}
+    linhas={[{ rotulo: 'Arquivo', valor: nome, titulo: nome }, { rotulo: 'Tamanho', valor: '120 KB', numerico: true }]}
+    observacao={descricao} barras={barrasDoCodigo(id)}
+    rodape={<>{botaoAbrir}{botaoExcluir}</>}
+  />
+</div>
+```
+
+> ✅ A grade mora no card acoplado (§5.2), logo abaixo da régua; vazio e "busca sem resultado"
+> seguem o §12 dentro dele (sem moldura própria).
+> ✅ Continuam valendo: ação dominante em texto + `ActionIconButton` (§9/§9.2; desligado, o motivo
+> num `<span title>` em volta), `useConfirm()` (§14), valor escuro (§32), sem `dark:` (§33).
+> ❌ Não é status badge: nada de carimbo/pílula de status no cartão (§8).
+> ❌ `font-mono` aqui é do papel (números do cupom) — não vale como licença para `font-mono` em `<td>` (§7).
 
 ---
 

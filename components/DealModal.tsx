@@ -34,6 +34,7 @@ import {
     resumoDoPlano,
     precoSemJurosPadrao,
     editarValorTotal,
+    valorDoContratoPeloPlano,
     type CamposDoPlano,
     type SistemaAmortizacao,
 } from '../utils/jurosParcelamento';
@@ -1104,6 +1105,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             // delas que a parcela herda Centro de Custo e Plano de Contas.
             ...(formData.cost_center_id ? { cost_center_id: formData.cost_center_id } : {}),
             ...(formData.plano_de_contas_id ? { plano_de_contas_id: formData.plano_de_contas_id } : {}),
+            // Venda com juros: o contrato passa a valer o total com juros, também
+            // quando já existia antes do plano (ver valorDoContratoPeloPlano).
+            ...valorDoContratoPeloPlano(formData),
         });
         // Conferir o resultado em vez de confiar: a propagação tem um portão
         // (podeFaturarContratoComercial) que, quando barra, só escreve no

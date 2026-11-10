@@ -6,6 +6,7 @@ import {
     montarPlanoNoNegocio,
     resumoDoPlano,
     editarValorTotal,
+    valorDoContratoPeloPlano,
     type PlanoComJuros,
     type CamposDoPlano,
     type NegocioDoPlano,
@@ -290,5 +291,21 @@ describe('Fix round 1 — Valor Total editado à mão depois dos juros', () => {
         expect(preverPlano(negocio({ contract_total_value: 90000 }) as NegocioDoPlano, campos({ taxaMensal: 0 })).base).toBe(90000);
         expect(preverPlano(negocio({ contract_total_value: 90000 }) as NegocioDoPlano, campos({ precoSemJuros: 80000 })).base).toBe(80000);
         expect(preverPlano(negocio({ contract_total_value: 106618.53, price_before_interest: 100000 }) as NegocioDoPlano, campos()).base).toBe(100000);
+    });
+});
+
+describe('valorDoContratoPeloPlano — contrato existente ao lançar o plano', () => {
+    it('venda com juros: o contrato passa a valer o total com juros', () => {
+        const d = montar(negocio({ contract_total_value: 120000 }), campos({ entrada: 20000 }));
+        expect(valorDoContratoPeloPlano(d)).toEqual({ original_value: 126618.53 });
+    });
+
+    it('sem juros: não mexe no valor do contrato', () => {
+        const d = montar(negocio({ contract_total_value: 120000 }), campos({ entrada: 20000, taxaMensal: 0 }));
+        expect(valorDoContratoPeloPlano(d)).toEqual({});
+    });
+
+    it('locação: nunca (original_value do recorrente é o valor da parcela)', () => {
+        expect(valorDoContratoPeloPlano({ type: 'RENTAL', interest_rate_monthly: 1, contract_total_value: 30000 })).toEqual({});
     });
 });

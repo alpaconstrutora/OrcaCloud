@@ -18,6 +18,8 @@ const ops: Op[] = [];
 let existentes: unknown[] = [];
 /** Erro devolvido a esse SELECT (ex.: coluna interest_amount ainda sem a migration). */
 let erroLeitura: { code: string; message: string } | null = null;
+/** Linha de `contracts` que já existe (updateContract lê is_recurring/reajuste_acumulado). */
+let contratoRow: Record<string, unknown> | null = null;
 
 function table(name: string) {
     const rec: Op = { table: name, op: '', filters: [] };
@@ -30,10 +32,13 @@ function table(name: string) {
         update: (p: unknown) => { rec.op = 'update'; rec.args = p; ops.push(rec); return b; },
         delete: () => { rec.op = 'delete'; ops.push(rec); return b; },
         eq: filt, in: filt, like: filt, filter: filt, gte: filt, lte: filt, order: filt, limit: filt, or: filt, is: filt,
-        maybeSingle: async () => ({ data: null, error: null }),
-        // INSERT em contracts devolve a própria linha gravada (createContract lê `data`).
+        maybeSingle: async () => ({ data: name === 'contracts' ? contratoRow : null, error: null }),
+        // INSERT em contracts devolve a própria linha gravada (createContract lê `data`);
+        // UPDATE devolve a linha existente com o que mudou (updateContract lê `data`).
         single: async () => ({
-            data: rec.op === 'insert' ? { id: 'c-novo', ...(rec.args as object) } : null,
+            data: rec.op === 'insert' ? { id: 'c-novo', ...(rec.args as object) }
+                : rec.op === 'update' && contratoRow ? { ...contratoRow, ...(rec.args as object) }
+                : null,
             error: null,
         }),
         then: (resolve: (v: unknown) => void) => resolve(
@@ -56,6 +61,7 @@ vi.mock('../services/financialCategoryResolver', () => ({
 }));
 
 import { contractService } from '../services/contractService';
+import { montarPlanoNoNegocio, valorDoContratoPeloPlano, type CamposDoPlano, type NegocioDoPlano } from '../utils/jurosParcelamento';
 import type { Contract } from '../types';
 
 const venda = {
@@ -157,7 +163,7 @@ describe('sync Parcelado — leitura dos títulos falhou', () => {
 });
 
 describe('createFromDeal — contrato de venda com juros', () => {
-    beforeEach(() => { ops.length = 0; existentes = []; });
+    beforeEach(() => { ops.length = 0; existentes = []; contratoRow = null; });
 
     const deal = {
         id: 'd1', organization_id: 'org1', client_id: 'cli1', contract_number: 'CV-9',
@@ -176,5 +182,45 @@ describe('createFromDeal — contrato de venda com juros', () => {
     it('venda sem juros continua nascendo com o valor da negociação', async () => {
         await contractService.createFromDeal({ ...deal, interest_rate_monthly: 0, contract_total_value: 126618.53 }, 'VENDAS');
         expect(inserido().original_value).toBe(100000);
+    });
+});
+
+/**
+ * Contrato que JÁ EXISTIA quando o plano com juros é lançado (Ruling 14): o
+ * "Lançar no Financeiro" / "Gerar no contrato" (aplicarPlanoNoContrato do DealModal)
+ * manda `payment_schedule` + `valorDoContratoPeloPlano(formData)` ao updateContract.
+ * Antes o contrato ficava no preço à vista e as parcelas somavam o total com juros.
+ */
+describe('contrato existente recebe o plano com juros', () => {
+    const campos: CamposDoPlano = {
+        entrada: 20000, parcelas: 12, tipo: 'MENSAL', intervaloMeses: 1,
+        primeiroVencimento: '2026-12-10', taxaMensal: 1, sistema: 'PRICE',
+    };
+    const negocio: NegocioDoPlano = { type: 'SALE', value: 120000, date: '2026-11-10', contract_total_value: 120000 };
+    const atualizacao = (c: CamposDoPlano) => {
+        const d = { ...negocio, ...montarPlanoNoNegocio(negocio, c, 'p') };
+        return { payment_schedule: venda.payment_schedule, payment_term_type: 'Parcelado' as const, ...valorDoContratoPeloPlano(d) };
+    };
+    const gravado = () => ops.find(o => o.table === 'contracts' && o.op === 'update')!.args as Record<string, unknown>;
+
+    beforeEach(() => {
+        ops.length = 0;
+        existentes = [];
+        erroLeitura = null;
+        contratoRow = { ...(venda as unknown as Record<string, unknown>), original_value: 120000, current_value: 120500, reajuste_acumulado: 500 };
+    });
+
+    it('Price com entrada de 20.000: original_value vira 126.618,53 e o reajuste continua somado', async () => {
+        await contractService.updateContract('c1', atualizacao(campos));
+        expect(gravado().original_value).toBe(126618.53);
+        // valorAtualDoContrato: original + aditivos (nenhum) + reajuste acumulado.
+        expect(gravado().current_value).toBe(127118.53);
+        expect(gravado()).not.toHaveProperty('reajuste_acumulado');
+    });
+
+    it('sem juros não manda original_value — o contrato fica como está', async () => {
+        await contractService.updateContract('c1', atualizacao({ ...campos, taxaMensal: 0 }));
+        expect(gravado()).not.toHaveProperty('original_value');
+        expect(gravado()).not.toHaveProperty('current_value');
     });
 });

@@ -364,3 +364,23 @@ export function resumoDoPlano(previa: PreviaDoPlano, rotuloTipo: string): string
     }
     return (entrada > 0 ? `entrada de ${fmtMoeda(entrada)} + ` : '') + parcelas;
 }
+
+/**
+ * Valor do contrato que o "Lançar no Financeiro" / "Gerar no contrato" manda junto
+ * com o plano (`aplicarPlanoNoContrato` do DealModal). Decisão do usuário: o valor
+ * da venda com juros é o TOTAL com juros. `createFromDeal` já faz o contrato NASCER
+ * assim; este é o caso do contrato que já existia antes do plano com juros — ele
+ * ficava no preço à vista enquanto as parcelas somavam o total com juros.
+ *
+ * Vazio sem juros (nada muda) e em locação (aluguel nunca tem juros, e o
+ * `original_value` do recorrente é o valor da PARCELA). `updateContract` recalcula
+ * `current_value` por `valorAtualDoContrato` — original + aditivos + reajuste
+ * acumulado —, então o reajuste já aplicado continua somado.
+ */
+export function valorDoContratoPeloPlano(
+    deal: Partial<Pick<PropertyDeal, 'type' | 'interest_rate_monthly' | 'contract_total_value'>>,
+): { original_value?: number } {
+    if (deal.type === 'RENTAL') return {};
+    const total = Number(deal.contract_total_value) || 0;
+    return (Number(deal.interest_rate_monthly) || 0) > 0 && total > 0 ? { original_value: total } : {};
+}

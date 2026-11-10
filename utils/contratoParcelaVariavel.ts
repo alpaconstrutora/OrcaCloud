@@ -73,7 +73,7 @@ export interface ParcelaExistente {
     vencimento_manual_em?: string | null;
     vencimento_manual_por?: string | null;
     /** Parte de juros da parcela de venda com juros (Price/SAC) e a Conta Financeira
-     *  dela — migration aplicar_20271109950000. Lidas para a parcela com valor
+     *  dela — migration aplicar_20271110300000. Lidas para a parcela com valor
      *  alterado à mão manter os juros DELA (ver planejarSyncParcelas). */
     interest_amount?: number | null;
     interest_category_id?: string | null;

@@ -7,7 +7,7 @@ import { formatMoney } from '../ui/Format';
 import { projectService } from '../../services/projectService';
 import { resolveProjectBudget } from '../../services/budgetResolver';
 import { sinapiService } from '../../services/sinapiService';
-import { SinapiType, type BudgetEntry } from '../../types/budget';
+import { montarLinhas, type LinhaDoOrcamento as Linha } from '../../lib/orcamentoLinhas';
 import type { PurchaseRequestItem } from '../../types/purchaseRequest';
 
 /**
@@ -23,20 +23,6 @@ import type { PurchaseRequestItem } from '../../types/purchaseRequest';
  * preço gravado no orçamento — mesma regra de `SupplyChainQuotationForm`.
  */
 
-interface Linha {
-    key: string;
-    code: string;
-    description: string;
-    unit: string;
-    quantity: number;
-    price: number;
-    origem: string;
-    budgetItemId: string;
-    budgetItemCode: string;
-    budgetItemDescription: string;
-    compositionCode?: string;
-}
-
 const COLUMNS: StandardTableColumn[] = [
     // Soma 790px: cabe no Sheet 4xl (896 − p-6 − checkbox) sem rolagem lateral.
     { key: 'code', label: 'Código', sortable: true, width: 90 },
@@ -46,41 +32,6 @@ const COLUMNS: StandardTableColumn[] = [
     { key: 'quantity', label: 'Qtd orçada', sortable: true, width: 100, align: 'right' },
     { key: 'price', label: 'Preço ref.', sortable: true, width: 110, align: 'right' },
 ];
-
-const TIPO: Record<string, string> = {
-    [SinapiType.COMPOSITION]: 'Composição',
-    [SinapiType.INPUT]: 'Insumo',
-    [SinapiType.SERVICE]: 'Serviço',
-};
-
-function montarLinhas(budget: BudgetEntry[], preco: Map<string, number>): Linha[] {
-    const linhas: Linha[] = [];
-    for (const e of budget) {
-        const s = e.sinapiItem;
-        if (!s) continue;
-        const base = { budgetItemId: e.id, budgetItemCode: s.code, budgetItemDescription: s.description };
-        linhas.push({
-            key: e.id, code: s.code, description: s.description, unit: s.unit,
-            quantity: Number(e.quantity) || 0,
-            price: preco.get(s.code) ?? (Number(s.price) || 0),
-            origem: `${TIPO[s.type] ?? 'Item'} do orçamento`,
-            ...base,
-        });
-        if (s.type === SinapiType.COMPOSITION) {
-            for (const c of s.composition ?? []) {
-                linhas.push({
-                    key: `${e.id}:${c.code}`, code: c.code, description: c.description, unit: c.unit,
-                    quantity: Math.round((Number(c.quantity) || 0) * (Number(e.quantity) || 0) * 10000) / 10000,
-                    price: preco.get(c.code) ?? (Number(c.price) || 0),
-                    origem: `Insumo de ${s.code}`,
-                    compositionCode: s.code,
-                    ...base,
-                });
-            }
-        }
-    }
-    return linhas;
-}
 
 interface Props {
     open: boolean;

@@ -102,3 +102,40 @@ export async function resolverCategoriaDoContrato(contract: {
         recebivel ? CATEGORIA_PADRAO_CONTRATO_RECEBIVEL : CATEGORIA_PADRAO_CONTRATO_PAGAVEL,
     );
 }
+
+/** Nome preferido da Conta Financeira dos juros de venda parcelada (semeada global). */
+export const CATEGORIA_RECEITA_FINANCEIRA = 'Receita Financeira';
+
+/**
+ * Conta Financeira em que cai a parte de JUROS de uma parcela de venda com juros
+ * (Price/SAC) — `internal_transactions.interest_category_id`. Plano
+ * docs/planos/2026-11-09-negociacao-parcelamento-com-juros.md.
+ *
+ * Procura pelo que a DRE lê (`dre_group = 'FINANCEIRO'`, `nature = 'REVENUE'`), não
+ * só pelo nome: a org pode ter renomeado ou criado a sua. Preferência: nome
+ * "Receita Financeira" antes de outra receita financeira; dentro disso, a da org
+ * antes da global (a semeada em 20260708000001 é global, organization_id nulo).
+ *
+ * `null` quando não há nenhuma — e nunca lança: o lançamento da venda não pode
+ * falhar por falta dela (grava a categoria dos juros nula e o DealModal avisa).
+ */
+export async function resolverCategoriaReceitaFinanceira(organizationId: string | null | undefined): Promise<string | null> {
+    try {
+        let q = supabase
+            .from('financial_categories')
+            .select('id, name, organization_id')
+            .eq('dre_group', 'FINANCEIRO')
+            .eq('nature', 'REVENUE');
+        q = organizationId
+            ? q.or(`organization_id.eq.${organizationId},organization_id.is.null`)
+            : q.is('organization_id', null);
+        const { data, error } = await q;
+        if (error || !data?.length) return null;
+        const peso = (l: LinhaCategoria) =>
+            (l.name === CATEGORIA_RECEITA_FINANCEIRA ? 0 : 2) + (l.organization_id === organizationId ? 0 : 1);
+        const [melhor] = [...(data as LinhaCategoria[])].sort((a, b) => peso(a) - peso(b));
+        return melhor.id;
+    } catch {
+        return null;
+    }
+}

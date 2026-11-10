@@ -29,6 +29,13 @@ export interface BlocoPagamento {
     notes?: string;
     /** Ids das linhas que compõem o bloco — presente quando veio de `agruparPlano`. */
     ids?: string[];
+    /**
+     * Venda com juros (utils/jurosParcelamento): parte de juros e de principal
+     * de CADA parcela do bloco, na ordem das linhas. Ausente = parcela sem
+     * decomposição conhecida (plano sem juros, ou bloco editado à mão).
+     */
+    juros?: number[];
+    principal?: number[];
 }
 
 const dois = (n: number) => Number(n.toFixed(2));
@@ -92,6 +99,11 @@ export function expandirBloco(bloco: BlocoPagamento, idBase: string): PaymentIns
         installmentType: bloco.tipo,
         ...(bloco.paymentType ? { paymentType: bloco.paymentType } : {}),
         ...(bloco.notes ? { notes: bloco.notes } : {}),
+        // Juros/principal só quando o bloco sabe os dois desta parcela — a linha
+        // de um plano sem juros continua sem as chaves (nada novo no jsonb).
+        ...(bloco.juros?.[i] != null && bloco.principal?.[i] != null
+            ? { interest: dois(bloco.juros[i]), principal: dois(bloco.principal[i]) }
+            : {}),
     }));
 }
 
@@ -104,7 +116,13 @@ export function expandirBloco(bloco: BlocoPagamento, idBase: string): PaymentIns
  * na cadência, outro tipo — abre um bloco novo. Plano montado fora daqui (ou
  * editado linha a linha no futuro) continua legível: no pior caso vira uma
  * sequência de blocos de uma parcela.
+ *
+ * Linhas com `interest`/`principal` (venda com juros) devolvem o bloco com
+ * `juros[]`/`principal[]`, para que reescrever o plano a partir dos blocos
+ * (ex.: editar OUTRO bloco no Sheet) não apague a decomposição de quem não mudou.
  */
+const temJuros = (l: PaymentInstallment) => l.interest != null && l.principal != null;
+
 export function agruparPlano(installments: PaymentInstallment[]): BlocoPagamento[] {
     const linhas = [...(installments || [])]
         .filter(i => i && i.dueDate)
@@ -130,6 +148,16 @@ export function agruparPlano(installments: PaymentInstallment[]): BlocoPagamento
                 atual.quantidade += 1;
                 if (atual.quantidade === 2) atual.intervaloMeses = passo;
                 atual.ids!.push(linha.id);
+                // Juros por parcela acompanham o bloco só se TODAS as linhas
+                // dele os têm; uma linha sem decomposição apaga a do bloco
+                // inteiro (os arrays deixariam de casar com as parcelas).
+                if (atual.juros && atual.principal && temJuros(linha)) {
+                    atual.juros.push(linha.interest!);
+                    atual.principal.push(linha.principal!);
+                } else {
+                    delete atual.juros;
+                    delete atual.principal;
+                }
                 void ultimo;
                 continue;
             }
@@ -143,6 +171,7 @@ export function agruparPlano(installments: PaymentInstallment[]): BlocoPagamento
             paymentType: linha.paymentType,
             notes: linha.notes,
             ids: [linha.id],
+            ...(temJuros(linha) ? { juros: [linha.interest!], principal: [linha.principal!] } : {}),
         });
     }
     return blocos;

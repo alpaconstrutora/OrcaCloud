@@ -65,6 +65,28 @@ describe('reajustarCronograma', () => {
         expect(r.acrescimo).toBe(12.37);
     });
 
+    // Venda com juros (Price/SAC): a parcela carrega a parte de juros e a de
+    // principal. Se só `value` subisse, o título ficaria com juros + principal ≠ valor.
+    it('reajustarCronograma escala juros e principal', () => {
+        const r = reajustarCronograma(
+            [{ date: '2027-01-10', value: 1000, interest: 200, principal: 800 }], [], C, 1.1, '2026-11-09');
+        expect(r.cronograma[0]).toEqual({ date: '2027-01-10', value: 1100, interest: 220, principal: 880 });
+    });
+
+    it('juros e principal continuam fechando o valor depois do arredondamento', () => {
+        const r = reajustarCronograma(
+            [{ date: '2027-01-10', value: 333.33, interest: 111.11, principal: 222.22 }], [], C, 1.0371, '2026-11-09');
+        const l = r.cronograma[0];
+        expect(l.value).toBe(345.7);
+        expect(l.interest).toBe(115.23);
+        expect(Math.round(((l.interest ?? 0) + (l.principal ?? 0)) * 100) / 100).toBe(l.value);
+    });
+
+    it('parcela sem juros continua sem as chaves de juros', () => {
+        const r = reajustarCronograma([{ date: '2027-01-10', value: 1000 }], [], C, 1.1, '2026-11-09');
+        expect(r.cronograma[0]).toEqual({ date: '2027-01-10', value: 1100 });
+    });
+
     it('não altera o cronograma recebido', () => {
         const copia = structuredClone(cronograma);
         reajustarCronograma(cronograma, [], C, 1.05, '2026-11-09');

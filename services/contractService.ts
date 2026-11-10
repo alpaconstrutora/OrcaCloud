@@ -8,7 +8,7 @@ import { generateRentalContractNumber } from './rentalContractNumberingService';
 import { generateUnitSaleContractNumber } from './unitSaleContractNumberingService';
 import { INITIAL_PROJECT_SETTINGS } from '../constants';
 import { BudgetEntry } from '../types/budget';
-import { resolverCategoriaDoContrato } from './financialCategoryResolver';
+import { resolverCategoriaDoContrato, resolverCategoriaReceitaFinanceira } from './financialCategoryResolver';
 import {
     planejarSyncParcelas, parcelaBaixada, marcaDeValorManual, marcaDeVencimentoManual, COLUNAS_PARCELA_EXISTENTE, type ParcelaExistente,
 } from '../utils/contratoParcelaVariavel';
@@ -534,12 +534,16 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
             // pagas e conciliadas (o vínculo da conciliação ia junto, por CASCADE),
             // e a cada "Salvar" dos Dados Gerais. Agora planejarSyncParcelas decide:
             // baixada fica intocada; valor alterado à mão é preservado.
-            const { data: oldRows } = await supabase
+            const { data: oldRows, error: oldRowsErr } = await supabase
                 .from('internal_transactions')
                 .select(COLUNAS_PARCELA_EXISTENTE)
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_PARCELADO')
                 .like('reference_id', `${contract.id}%`);
+            // Leitura falhou (ex.: coluna nova de COLUNAS_PARCELA_EXISTENTE ainda sem a
+            // migration): parar. Seguir com a lista vazia regravaria como PENDING as
+            // parcelas já pagas e conciliadas — planejarSyncParcelas não as veria.
+            if (oldRowsErr) throw oldRowsErr;
 
             // O contrato virou PARCELADO: a cobrança em parcela única que o
             // caminho "À Vista" tinha lançado antes está errada por definição, e
@@ -583,6 +587,25 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 await supabase.from('internal_transactions').delete().in('id', medicoesApagaveis);
             }
 
+            // Juros da venda parcelada (Price/SAC, "Montar plano" do DealModal): a
+            // parcela do cronograma traz a parte de juros embutida no valor. O título
+            // continua com o valor cheio na categoria da venda; `interest_amount` +
+            // `interest_category_id` deixam a DRE separar a parte de juros como
+            // Receita Financeira (plano 2026-11-09-negociacao-parcelamento-com-juros).
+            // Só recebível tem Receita Financeira; sem a categoria na org, lança do
+            // mesmo jeito com ela nula — o DealModal avisa no "Lançar no Financeiro".
+            const jurosDaParcela = (i: number): number | null => {
+                const j = Number(contract.payment_schedule![i]?.interest);
+                return Number.isFinite(j) && j > 0 ? Math.round(j * 100) / 100 : null;
+            };
+            const temJuros = contract.payment_schedule.some((_, i) => jurosDaParcela(i) !== null);
+            const categoriaJuros = temJuros && isReceivableContract(contract)
+                ? await resolverCategoriaReceitaFinanceira(contract.organization_id)
+                : null;
+            if (temJuros && !categoriaJuros) {
+                console.warn(`[CONTRACTS] Contrato ${contract.number || contract.id}: juros lançados sem Conta Financeira (org sem "Receita Financeira").`);
+            }
+
             // Insert one row per installment with unique reference_id
             const party = await resolveContractParty(contract, supplierName);
             const txDirection = isReceivableContract(contract) ? 'CREDIT' : 'DEBIT';
@@ -623,6 +646,11 @@ async function syncParceladoScheduleToFinance(contract: Contract) {
                 // Sinal/Mensal/Chaves.
                 installment_type: tx.installment_type,
                 payment_type: tx.payment_type,
+                // Em TODA linha (nula quando a parcela não tem juros): o upsert grava a
+                // união das chaves do lote, e a parcela que perdeu os juros num plano
+                // refeito tem de perdê-los no título também.
+                interest_amount: jurosDaParcela(i),
+                interest_category_id: jurosDaParcela(i) !== null ? categoriaJuros : null,
             }));
             const plano = planejarSyncParcelas(internalRows, (oldRows ?? []) as unknown as ParcelaExistente[]);
             if (plano.idsApagar.length) {
@@ -838,12 +866,16 @@ async function syncRecurringToFinance(contract: Contract) {
             // até 17/10/2026 ele regravava amount/status/business_status da série toda, e
             // "Lançar Financeiro" de novo devolvia parcela paga e conciliada para PENDING.
             // Parcela com valor alterado à mão (19/10/2026) vai com o valor DELA.
-            const { data: existentes } = await supabase
+            const { data: existentes, error: existentesErr } = await supabase
                 .from('internal_transactions')
                 .select(COLUNAS_PARCELA_EXISTENTE)
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_RECURRING')
                 .like('reference_id', `${contract.id}-p%`);
+            // Leitura falhou (ex.: coluna nova de COLUNAS_PARCELA_EXISTENTE ainda sem a
+            // migration): parar. Seguir com a lista vazia regravaria como PENDING as
+            // parcelas já pagas e conciliadas — planejarSyncParcelas não as veria.
+            if (existentesErr) throw existentesErr;
             const linhas = transactions.map(tx => ({
                 organization_id: contract.organization_id,
                 source_system: 'CONTRACT_RECURRING',
@@ -1252,12 +1284,16 @@ async function syncAVistaToFinance(contract: Contract) {
             // regravada, e a de valor alterado à mão mantém o valor
             // (planejarSyncParcelas). Até 19/10/2026 esta linha era apagada sem olhar
             // o status e reinserida como PENDING.
-            const { data: avistaExistente } = await supabase
+            const { data: avistaExistente, error: avistaExistenteErr } = await supabase
                 .from('internal_transactions')
                 .select(COLUNAS_PARCELA_EXISTENTE)
                 .eq('organization_id', contract.organization_id)
                 .eq('source_system', 'CONTRACT_AVISTA')
                 .eq('reference_id', contract.id);
+            // Leitura falhou (ex.: coluna nova de COLUNAS_PARCELA_EXISTENTE ainda sem a
+            // migration): parar. Seguir com a lista vazia regravaria como PENDING as
+            // parcelas já pagas e conciliadas — planejarSyncParcelas não as veria.
+            if (avistaExistenteErr) throw avistaExistenteErr;
 
             // Simétrico do que syncParceladoScheduleToFinance faz com as linhas À
             // Vista: o contrato deixou de ser parcelado, então as parcelas ainda
@@ -1504,6 +1540,23 @@ export const contractService = {
         }
     },
 
+    /**
+     * Só o `payment_schedule` gravado agora — lido na hora, não do objeto que a
+     * tela tem em mãos (`getContractByDealId`/cadeia de renovação não o trazem, e
+     * o da tela fica velho depois do primeiro "Lançar no Financeiro"). Usado por
+     * `aplicarPlanoNoContrato` do DealModal para saber se o contrato já recebeu
+     * um plano com juros (ver `valorDoContratoPeloPlano`).
+     */
+    getPaymentSchedule: async (id: string): Promise<ContractInstallment[]> => {
+        const { data, error } = await supabase
+            .from('contracts')
+            .select('payment_schedule')
+            .eq('id', id)
+            .maybeSingle();
+        if (error) throw error;
+        return ((data as { payment_schedule?: ContractInstallment[] | null } | null)?.payment_schedule) ?? [];
+    },
+
     // Cria (ou retorna se já existir) um contrato a partir de uma negociação
     // comercial. `domain` decide o tipo: 'VENDAS' (compra e venda avulsa) ou
     // 'LOCACAO' (contrato recorrente de aluguel, com reajuste anual). Idempotente
@@ -1536,6 +1589,10 @@ export const contractService = {
         // Sem isso o plano ficava só na negociação e nenhuma parcela o herdava
         // (2026-09-14: 4 locações com "Receitas de Locação", 569 títulos sem).
         plano_de_contas_id?: string | null;
+        // Venda parcelada com juros (Price/SAC): taxa a.m. e Valor Total do
+        // Contrato JÁ com os juros — ver o valor do contrato de venda abaixo.
+        interest_rate_monthly?: number | null;
+        contract_total_value?: number | null;
     }, domain: 'VENDAS' | 'LOCACAO' = 'VENDAS'): Promise<Contract> => {
         if (!deal.organization_id) throw new Error('Negociação sem organização — impossível gerar contrato.');
         if (!deal.client_id) throw new Error('Negociação sem cliente — selecione o comprador antes de gerar o contrato.');
@@ -1686,6 +1743,16 @@ export const contractService = {
             return deal.value || 0;
         })();
 
+        // Venda com juros: o contrato vale o que o comprador vai pagar — entrada +
+        // parcelas com juros, o Valor Total do Contrato que o "Montar plano" grava.
+        // `deal.value` é o preço à vista (soma das unidades); com ele, o contrato
+        // nascia menor que a soma das próprias parcelas. Sem juros, nada muda.
+        // `current_value` nasce igual (createContract) e depois segue
+        // valorAtualDoContrato: original + aditivos + reajuste acumulado.
+        const saleValue = (Number(deal.interest_rate_monthly) || 0) > 0 && (Number(deal.contract_total_value) || 0) > 0
+            ? Number(deal.contract_total_value)
+            : (deal.value || 0);
+
         const payload = {
             deal_id: deal.id,
             organization_id: deal.organization_id,
@@ -1703,7 +1770,7 @@ export const contractService = {
             domain,
             status,
             // Locação: valor da PARCELA (ver rentalInstallmentValue). Vendas: total.
-            original_value: isRental ? rentalInstallmentValue : (deal.value || 0),
+            original_value: isRental ? rentalInstallmentValue : saleValue,
             start_date: deal.date || new Date().toISOString().split('T')[0],
             is_recurring: isRental,
             ...(isRental ? {

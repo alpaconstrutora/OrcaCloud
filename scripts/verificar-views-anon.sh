@@ -60,7 +60,8 @@ vw_communication_read_rate vw_company_consolidated vw_esocial_status_panel
 vw_incentive_event_months vw_journal_entries tts_apuracao_view
 vw_fpa_budget_vs_actual vw_fpa_cashflow_projection vw_hr_productivity_by_project
 vw_hr_retention_cohorts vw_hr_turnover_trend vw_project_cost_comparison
-vw_team_hourly_cost"
+vw_team_hourly_cost
+v_internal_transactions_dre"
 
 # ── FASE 1 ────────────────────────────────────────────────────────────────
 echo "── FASE 1 — sem sessao (esperado: 42501 em todas)"
@@ -69,7 +70,7 @@ for v in $VIEWS; do
   r=$(curl -s "$URL/rest/v1/$v?select=*&limit=1" -H "apikey: $KEY" | head -c 60)
   echo "$r" | grep -q "42501" || { echo "   AINDA ABERTA: $v -> $r"; abertas=$((abertas+1)); }
 done
-[ "$abertas" -eq 0 ] && echo "   OK — 24/24 fechadas para anon" \
+[ "$abertas" -eq 0 ] && echo "   OK — $(echo $VIEWS | wc -w)/$(echo $VIEWS | wc -w) fechadas para anon" \
                      || echo "   FALHA — $abertas view(s) ainda respondem sem sessao"
 echo
 

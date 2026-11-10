@@ -11,6 +11,10 @@ export interface PaymentInstallment {
     transactionId?: string;
     /** Nº do recibo de recebimento ATIVO (`financial_receipts`), quando já emitido. */
     receiptNumber?: number | null;
+    /** Parcela de venda com juros (Price/SAC): parte de juros embutida em `value`. */
+    interest?: number;
+    /** Parcela de venda com juros (Price/SAC): parte de principal (`value - interest`). */
+    principal?: number;
     dealId?: string;
     dealType?: 'SALE' | 'RENTAL' | 'SERVICE';
     clientId?: string;
@@ -265,6 +269,12 @@ export interface InternalTransaction {
      *  valor VARIÁVEL (por medição) — aceita "Ajustar valor" na conciliação.
      *  Ver utils/contratoParcelaVariavel.ts. */
     valor_variavel?: boolean | null;
+    /** Parcela de venda com juros (Price/SAC): parte de juros embutida em `amount`.
+     *  Gravada por contractService.syncParceladoScheduleToFinance; nula = sem juros. */
+    interest_amount?: number | null;
+    /** Conta Financeira (financial_categories) da parte de juros — "Receita
+     *  Financeira" da org; nula quando a org não tem (a DRE não separa os juros). */
+    interest_category_id?: string | null;
     created_at?: string;
     updated_at?: string;
 }

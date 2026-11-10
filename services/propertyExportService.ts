@@ -15,6 +15,48 @@ const INSTALLMENT_TYPE_LABELS: Record<string, string> = {
 
 const fmtCurrency = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n || 0);
 const fmtDate = (d?: string) => d ? new Date(d + 'T12:00:00Z').toLocaleDateString('pt-BR') : '-';
+/** Taxa ao mês: `1` → "1,00%", `1.25` → "1,25%", `0.8333` → "0,8333%". */
+const fmtTaxa = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 4 })}%`;
+
+/**
+ * Linhas da tabela "Condições da Negociação" da proposta ([Descrição, Valor]).
+ *
+ * Locação: `deal.value` é a soma das unidades — o "Valor Mensal Sugerido"
+ * da aba Forma de Pagamento, NÃO o total do contrato. Anunciá-lo como
+ * "Valor Total" numa proposta de aluguel dizia ao cliente que o contrato
+ * inteiro custa um mês. O que vale é o que foi negociado: mensal, nº de
+ * parcelas e o total.
+ *
+ * Venda com juros (Price/SAC): "Valor Total" continua sendo o preço; logo abaixo
+ * vêm a taxa, o sistema e o total com juros (`contract_total_value`), que é o
+ * que a tabela do Plano de Pagamento soma. Sem essas linhas o cliente via dois
+ * totais que não batiam e nenhuma menção a juros.
+ */
+export function condicoesDaProposta(deal: PropertyDeal): string[][] {
+    const isRental = deal.type === 'RENTAL';
+    const mensal = deal.installment_value || 0;
+    const nParcelas = deal.installments || 0;
+    const condicoes: string[][] = [
+        ['Tipo de Negociação', deal.type === 'SALE' ? 'Venda' : 'Aluguel'],
+    ];
+    if (isRental && mensal > 0) {
+        condicoes.push(['Valor Mensal', fmtCurrency(mensal)]);
+        if (nParcelas > 0) condicoes.push(['Nº de Parcelas', String(nParcelas)]);
+        condicoes.push(['Valor Total do Contrato',
+            fmtCurrency(deal.contract_total_value || mensal * nParcelas)]);
+    } else {
+        condicoes.push(['Valor Total', fmtCurrency(deal.value)]);
+        const taxa = Number(deal.interest_rate_monthly) || 0;
+        if (deal.type === 'SALE' && taxa > 0) {
+            condicoes.push(['Juros a.m.', fmtTaxa(taxa)]);
+            condicoes.push(['Sistema', deal.amortization_system === 'SAC' ? 'SAC' : 'Price']);
+            condicoes.push(['Valor Total com juros', fmtCurrency(Number(deal.contract_total_value) || 0)]);
+        }
+    }
+    condicoes.push(['Data Prevista', new Date(deal.date).toLocaleDateString('pt-BR')]);
+    condicoes.push(['Status Atual', deal.status]);
+    return condicoes;
+}
 
 export const propertyExportService = {
     /**
@@ -126,32 +168,10 @@ export const propertyExportService = {
         doc.text('CONDIÇÕES DA NEGOCIAÇÃO', 14, currentY);
         currentY += 5;
 
-        // Locação: `deal.value` é a soma das unidades — o "Valor Mensal Sugerido"
-        // da aba Forma de Pagamento, NÃO o total do contrato. Anunciá-lo como
-        // "Valor Total" numa proposta de aluguel dizia ao cliente que o contrato
-        // inteiro custa um mês. O que vale é o que foi negociado: mensal, nº de
-        // parcelas e o total.
-        const isRental = deal.type === 'RENTAL';
-        const mensal = deal.installment_value || 0;
-        const nParcelas = deal.installments || 0;
-        const condicoes: string[][] = [
-            ['Tipo de Negociação', deal.type === 'SALE' ? 'Venda' : 'Aluguel'],
-        ];
-        if (isRental && mensal > 0) {
-            condicoes.push(['Valor Mensal', fmtCurrency(mensal)]);
-            if (nParcelas > 0) condicoes.push(['Nº de Parcelas', String(nParcelas)]);
-            condicoes.push(['Valor Total do Contrato',
-                fmtCurrency(deal.contract_total_value || mensal * nParcelas)]);
-        } else {
-            condicoes.push(['Valor Total', fmtCurrency(deal.value)]);
-        }
-        condicoes.push(['Data Prevista', new Date(deal.date).toLocaleDateString('pt-BR')]);
-        condicoes.push(['Status Atual', deal.status]);
-
         autoTable(doc, {
             startY: currentY,
             head: [['Descrição', 'Valor Negociado']],
-            body: condicoes,
+            body: condicoesDaProposta(deal),
             theme: 'grid',
             headStyles: { fillColor: [30, 41, 59] },
             styles: { fontSize: 10 }

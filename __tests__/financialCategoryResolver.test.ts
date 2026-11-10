@@ -9,7 +9,7 @@
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-type Cat = { id: string; name: string; organization_id: string | null };
+type Cat = { id: string; name: string; organization_id: string | null; dre_group?: string; nature?: string };
 let catalogo: Cat[] = [];
 const filtros: unknown[][] = [];
 
@@ -18,16 +18,19 @@ function table(name: string) {
     let porId: string | null = null;
     let nomes: string[] = [];
     let orgFiltro: string | null = null;   // 'org1' → org1 ou global; null → só global
+    const porColuna: Record<string, string> = {};   // dre_group / nature
     const b: Record<string, unknown> = {};
     Object.assign(b, {
         select: () => b,
-        eq: (col: string, v: string) => { filtros.push([col, v]); if (col === 'id') porId = v; return b; },
+        eq: (col: string, v: string) => { filtros.push([col, v]); if (col === 'id') porId = v; else porColuna[col] = v; return b; },
         in: (col: string, v: string[]) => { filtros.push([col, v]); nomes = v; return b; },
         or: (expr: string) => { filtros.push(['or', expr]); orgFiltro = expr.match(/organization_id\.eq\.([^,]+)/)?.[1] ?? null; return b; },
         is: (col: string, v: null) => { filtros.push([col, v]); orgFiltro = null; return b; },
         maybeSingle: async () => ({ data: catalogo.find(c => c.id === porId) ?? null, error: null }),
         then: (resolve: (v: unknown) => void) => resolve({
-            data: catalogo.filter(c => nomes.includes(c.name) && (c.organization_id === null || c.organization_id === orgFiltro)),
+            data: catalogo.filter(c => (nomes.length ? nomes.includes(c.name) : true)
+                && Object.entries(porColuna).every(([col, v]) => (c as Record<string, unknown>)[col] === v)
+                && (c.organization_id === null || c.organization_id === orgFiltro)),
             error: null,
         }),
     });
@@ -36,7 +39,7 @@ function table(name: string) {
 vi.mock('../lib/supabase', () => ({ supabase: { from: (name: string) => table(name) } }));
 
 import {
-    categoriaDoTributo, resolverCategoriaPorNomes, resolverCategoriaDoContrato,
+    categoriaDoTributo, resolverCategoriaPorNomes, resolverCategoriaDoContrato, resolverCategoriaReceitaFinanceira,
     CATEGORIA_IMPOSTO_SOBRE_RECEITA, CATEGORIA_IMPOSTO_SOBRE_RESULTADO,
 } from '../services/financialCategoryResolver';
 
@@ -109,5 +112,34 @@ describe('resolverCategoriaDoContrato — escolhida no contrato > padrão pela d
         catalogo = [{ id: 'g-serv', name: 'Receita de Serviços', organization_id: null }];
         const r = await resolverCategoriaDoContrato({ organization_id: 'org1', category_id: 'sumiu' }, true);
         expect(r).toEqual({ category_id: 'g-serv', category: 'Receita de Serviços' });
+    });
+});
+
+/**
+ * Juros da venda parcelada (Price/SAC) vão para a Receita Financeira — a parte de
+ * juros do título é classificada à parte na DRE (plano 2026-11-09, Task 4).
+ */
+describe('resolverCategoriaReceitaFinanceira — FINANCEIRO/REVENUE, preferindo "Receita Financeira"', () => {
+    const rf = (id: string, org: string | null, name = 'Receita Financeira'): Cat =>
+        ({ id, name, organization_id: org, dre_group: 'FINANCEIRO', nature: 'REVENUE' });
+
+    it('acha a global semeada (organization_id nulo)', async () => {
+        catalogo = [rf('g-rf', null), { id: 'g-juros', name: 'Juros e Taxas Bancárias', organization_id: null, dre_group: 'FINANCEIRO', nature: 'EXPENSE' }];
+        expect(await resolverCategoriaReceitaFinanceira('org1')).toBe('g-rf');
+    });
+
+    it('o nome "Receita Financeira" vence outra receita financeira; a da org vence a global', async () => {
+        catalogo = [rf('o-rend', 'org1', 'Rendimentos de Aplicação'), rf('g-rf', null), rf('o-rf', 'org1')];
+        expect(await resolverCategoriaReceitaFinanceira('org1')).toBe('o-rf');
+    });
+
+    it('sem nenhuma com esse nome, usa outra FINANCEIRO/REVENUE da org', async () => {
+        catalogo = [rf('o-rend', 'org1', 'Rendimentos de Aplicação')];
+        expect(await resolverCategoriaReceitaFinanceira('org1')).toBe('o-rend');
+    });
+
+    it('nada FINANCEIRO/REVENUE (nem de outra org serve) → null', async () => {
+        catalogo = [rf('o2-rf', 'org2'), { id: 'g-juros', name: 'Juros e Taxas Bancárias', organization_id: null, dre_group: 'FINANCEIRO', nature: 'EXPENSE' }];
+        expect(await resolverCategoriaReceitaFinanceira('org1')).toBeNull();
     });
 });

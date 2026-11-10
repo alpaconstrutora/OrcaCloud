@@ -72,13 +72,19 @@ export interface ParcelaExistente {
     vencimento_manual_anterior?: string | null;
     vencimento_manual_em?: string | null;
     vencimento_manual_por?: string | null;
+    /** Parte de juros da parcela de venda com juros (Price/SAC) e a Conta Financeira
+     *  dela — migration aplicar_20271110300000. Lidas para a parcela com valor
+     *  alterado à mão manter os juros DELA (ver planejarSyncParcelas). */
+    interest_amount?: number | null;
+    interest_category_id?: string | null;
 }
 
 /** Colunas que o sync precisa ler para decidir (select de `internal_transactions`). */
 export const COLUNAS_PARCELA_EXISTENTE =
     'id, reference_id, status, business_status, amount, original_amount, discount_type, discount_amount, '
     + 'valor_manual, valor_manual_anterior, valor_manual_em, valor_manual_por, '
-    + 'due_date, transaction_date, vencimento_manual, vencimento_manual_anterior, vencimento_manual_em, vencimento_manual_por';
+    + 'due_date, transaction_date, vencimento_manual, vencimento_manual_anterior, vencimento_manual_em, vencimento_manual_por, '
+    + 'interest_amount, interest_category_id';
 
 /**
  * Campos que a parcela alterada à mão leva para o sync. Vão TODOS em toda linha do
@@ -127,6 +133,11 @@ export function parcelaComAlteracaoManual(t: ParcelaExistente): boolean {
  * - `idsApagar`: linhas existentes que o sync pode remover — nunca baixada, e nunca
  *   a manual que continua no lote (ela é atualizada, não recriada).
  *
+ * Juros (venda com Price/SAC, só no lote do Parcelado — os outros syncs não levam a
+ * chave): a parcela normal segue o cronograma, então o `interest_amount` novo do
+ * contrato chega ao título em aberto. A de VALOR manual mantém os juros da linha,
+ * junto com o valor — trocar só os juros deixaria juros de um valor que não é o dela.
+ *
  * Parcela baixada fica fora das três listas: nada a regrava nem a apaga.
  */
 export function planejarSyncParcelas<T extends {
@@ -159,6 +170,9 @@ export function planejarSyncParcelas<T extends {
             valor_manual_em: m.valor_manual_em ?? null,
             valor_manual_por: m.valor_manual_por ?? null,
             ...(dataDaLinha ? { due_date: dataDaLinha, transaction_date: dataDaLinha } : {}),
+            ...(valor && 'interest_amount' in l
+                ? { interest_amount: m.interest_amount ?? null, interest_category_id: m.interest_category_id ?? null }
+                : {}),
             vencimento_manual: !!dataDaLinha,
             vencimento_manual_anterior: m.vencimento_manual_anterior ?? null,
             vencimento_manual_em: m.vencimento_manual_em ?? null,

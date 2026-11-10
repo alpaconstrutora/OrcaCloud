@@ -22,11 +22,25 @@ import {
     subtotalDoBloco,
     saldoDoPlano,
     blocoParaGerador,
-    montarPlanoRapido,
     somarDias,
     somarMeses,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
+// Parcelamento COM JUROS (Price/SAC) do "Montar plano" — venda. Testado em
+// __tests__/jurosParcelamento.test.ts.
+import {
+    preverPlano,
+    montarPlanoNoNegocio,
+    resumoDoPlano,
+    precoSemJurosPadrao,
+    editarValorTotal,
+    manterJurosDoBlocoEditado,
+    planoComoSchedule as planoDaNegociacaoComoSchedule,
+    atualizacaoDoContratoPeloPlano,
+    type CamposDoPlano,
+    type SistemaAmortizacao,
+} from '../utils/jurosParcelamento';
+import { salesPlanService } from '../services/salesPlanService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -37,6 +51,7 @@ import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
+import { resolverCategoriaReceitaFinanceira } from '../services/financialCategoryResolver';
 import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
 import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
@@ -874,41 +889,96 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // nenhum: o plano por blocos existia (acima), mas quem escolhia "Parcelado"
     // não via onde dizer quantas parcelas, com qual entrada e de quanto em quanto
     // tempo. Este gerador vive logo abaixo do select e escreve nos MESMOS lugares
-    // que o Sheet de bloco (down_payment + aplicarBlocos): nenhum formato novo.
-    // A parte pura é `montarPlanoRapido` (utils/paymentPlan.ts, testada).
+    // que o Sheet de bloco (down_payment + custom_installments): nenhum formato novo.
+    // A parte pura é `montarPlanoRapido` (utils/paymentPlan.ts, testada) e, desde
+    // 09/11/2026, `preverPlano`/`montarPlanoNoNegocio` (utils/jurosParcelamento.ts),
+    // que somam o parcelamento COM JUROS (Price/SAC) em venda.
     const [planoRapido, setPlanoRapido] = useState({ entrada: '', parcelas: '12', tipo: 'MENSAL', primeiroVencimento: '' });
+    /**
+     * Juros do "Montar plano" (só venda). `null` = o usuário não mexeu no campo,
+     * e o painel mostra o que o app já sabe: a taxa/sistema/preço gravados na
+     * negociação ou, sem juros gravado, a taxa do Plano de vendas do
+     * empreendimento (`sugestaoJuros`). O que o usuário digita nunca é
+     * sobrescrito; zera a cada abertura, porque a instância do modal não desmonta.
+     */
+    const [planoJuros, setPlanoJuros] = useState<{ taxa: string | null; sistema: SistemaAmortizacao | null; preco: string | null }>(
+        { taxa: null, sistema: null, preco: null },
+    );
+    const [sugestaoJuros, setSugestaoJuros] = useState<{ taxa: number; plano: string } | null>(null);
+    useEffect(() => {
+        if (isOpen) setPlanoJuros({ taxa: null, sistema: null, preco: null });
+    }, [isOpen, initialData]);
+    const ehVenda = formData.type === 'SALE';
+    // A sugestão do Plano de vendas só preenche venda SEM plano montado e sem
+    // juros gravado. Venda que já tem plano sem juros abre com o campo vazio:
+    // senão "Substituir plano" para trocar o nº de parcelas somaria juros em
+    // silêncio (Ruling 10 da revisão da Task 3).
+    const usaSugestaoDeJuros = !!sugestaoJuros && planoJuros.taxa === null
+        && formData.interest_rate_monthly == null && linhasDoPlano.length === 0;
+    const taxaJurosTexto = planoJuros.taxa
+        ?? (formData.interest_rate_monthly != null
+            ? String(formData.interest_rate_monthly)
+            : (usaSugestaoDeJuros && sugestaoJuros ? String(sugestaoJuros.taxa) : ''));
+    const taxaJuros = ehVenda ? Math.max(0, parseFloat(taxaJurosTexto) || 0) : 0;
+    const sistemaJuros: SistemaAmortizacao = planoJuros.sistema ?? formData.amortization_system ?? 'PRICE';
+    const jurosVemDoPlanoDeVendas = usaSugestaoDeJuros;
+    /**
+     * "Preço sem juros" fica na tela com taxa > 0 E sempre que o negócio tem
+     * `price_before_interest` — nesse caso ele é a base mesmo com taxa 0, e
+     * esconder o campo escondia por que o Valor Total ia mudar. Valor digitado
+     * só vale com o campo à vista.
+     */
+    const mostrarPrecoSemJuros = ehVenda && (taxaJuros > 0 || formData.price_before_interest != null);
     /** Tipos que geram série (Parcelas mensais/bimestrais/…), na ordem do catálogo. */
     const tiposDeSerie = useMemo(
         () => sortPaymentTypes(paymentTypes.filter(t => t.active !== false && t.generates_series)),
         [paymentTypes],
     );
-    const totalDoContrato = Number(formData.contract_total_value) || 0;
-    /** O que "Montar plano" vai gravar, calculado a cada tecla para a linha de resumo. */
-    const previaPlanoRapido = useMemo(() => montarPlanoRapido({
-        total: totalDoContrato,
-        entrada: formData.type === 'SALE' ? (parseFloat(planoRapido.entrada) || 0) : 0,
+    /** Os campos do painel, já em números. */
+    const camposDoPlano = (): CamposDoPlano => ({
+        entrada: ehVenda ? (parseFloat(planoRapido.entrada) || 0) : 0,
         parcelas: Math.floor(Number(planoRapido.parcelas) || 1),
         tipo: planoRapido.tipo,
         intervaloMeses: intervalMonthsForType(paymentTypes, planoRapido.tipo),
         primeiroVencimento: planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || '',
-        // Locação: a parcela é o aluguel mensal (`value`), não o total ÷ nº.
-        valorParcelaFixo: formData.type === 'RENTAL' ? (Number(formData.value) || 0) : undefined,
-    }), [totalDoContrato, planoRapido, paymentTypes, formData.type, formData.value, formData.payment_due_date, formData.date]);
+        taxaMensal: taxaJuros,
+        sistema: sistemaJuros,
+        ...(mostrarPrecoSemJuros && planoJuros.preco !== null ? { precoSemJuros: parseFloat(planoJuros.preco) || 0 } : {}),
+    });
+    /** O que "Montar plano" vai gravar, calculado a cada tecla para a linha de resumo. */
+    const previaPlanoRapido = useMemo(
+        () => preverPlano(formData, camposDoPlano()),
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [formData.type, formData.value, formData.date, formData.contract_total_value, formData.price_before_interest,
+            formData.payment_due_date, planoRapido, planoJuros.preco, mostrarPrecoSemJuros, taxaJuros, sistemaJuros, paymentTypes],
+    );
+    /** Preço sem juros que o campo mostra (o digitado, ou o gravado/total). */
+    const precoSemJurosExibido = planoJuros.preco ?? precoSemJurosPadrao(formData);
+    /**
+     * Venda sem base para distribuir. A validação olha a base que o plano USA
+     * (`previa.base`), não o Valor Total — com juros gravados eles diferem.
+     */
+    /** Σ juros das parcelas do plano gravado (venda com juros). */
+    const jurosNoPlano = arredonda2((formData.custom_installments || [])
+        .reduce((soma, l) => soma + (Number(l.interest) || 0), 0));
+    const faltaBaseDoPlano = ehVenda && previaPlanoRapido.base <= 0
+        ? (mostrarPrecoSemJuros ? 'o preço sem juros' : 'o Valor Total do Contrato')
+        : null;
 
-    /** "Entrada de R$ 20.000,00 + 10× Parcelas mensais de R$ 10.000,00" */
-    const resumoPlanoRapido = (() => {
-        const { entrada, blocos } = previaPlanoRapido;
-        const n = blocos.reduce((s, b) => s + b.quantidade, 0);
-        const rotulo = (labelForInstallmentType(paymentTypes, planoRapido.tipo) || planoRapido.tipo).toLowerCase();
-        const valores = blocos.map(b => fmtMoeda(b.valorParcela));
-        const parcelas = valores.length === 2 ? `${n}× ${rotulo} (${blocos[0].quantidade}× ${valores[0]} + 1× ${valores[1]})` : `${n}× ${rotulo} de ${valores[0]}`;
-        return (entrada > 0 ? `entrada de ${fmtMoeda(entrada)} + ` : '') + parcelas;
-    })();
+    /**
+     * "Entrada de R$ 20.000,00 + 10× Parcelas mensais de R$ 10.000,00" — com
+     * juros: "… de R$ 8.884,88 (Price, 1% a.m.) — juros R$ 6.618,53, total R$ 126.618,53".
+     */
+    const resumoPlanoRapido = resumoDoPlano(
+        previaPlanoRapido,
+        labelForInstallmentType(paymentTypes, planoRapido.tipo) || planoRapido.tipo,
+    );
 
     const montarPlano = async () => {
-        const primeiro = planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || '';
+        const campos = camposDoPlano();
+        const primeiro = campos.primeiroVencimento;
         if (!primeiro) { notifyError('Informe o 1º vencimento das parcelas.'); return; }
-        if (formData.type === 'SALE' && totalDoContrato <= 0) { notifyError('Informe o Valor Total do Contrato antes de montar o plano.'); return; }
+        if (faltaBaseDoPlano) { notifyError(`Informe ${faltaBaseDoPlano} antes de montar o plano.`); return; }
         if (formData.type === 'RENTAL' && (Number(formData.value) || 0) <= 0) { notifyError('Informe o valor mensal antes de montar o plano.'); return; }
         if (linhasDoPlano.length > 0) {
             const ok = await confirm({
@@ -919,22 +989,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             });
             if (!ok) return;
         }
-        const { entrada, blocos } = previaPlanoRapido;
-        setFormData(prev => ({
-            ...prev,
-            ...(prev.type === 'SALE'
-                ? (entrada > 0
-                    ? { down_payment: entrada, down_payment_installment_type: 'SINAL' }
-                    : { down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined })
-                : {}),
-            payment_due_date: primeiro,
-            // Locação: o total do contrato É mensal × nº (não vem das unidades,
-            // que somam o valor de UM mês). Sem isto o saldo acusava "excede o total".
-            ...(prev.type === 'RENTAL'
-                ? { contract_total_value: arredonda2(blocos.reduce((soma, b) => soma + subtotalDoBloco(b), 0)) }
-                : {}),
-        }));
-        aplicarBlocos(blocos);
+        // Sinal, 1º vencimento, cronograma (+ espelho do gerador de contrato) e,
+        // com juros, taxa/sistema/preço sem juros e o total com juros. Comissão
+        // não muda: continua sobre `value` (soma das unidades).
+        const idBase = `plano-${Date.now()}`;
+        setFormData(prev => ({ ...prev, ...montarPlanoNoNegocio(prev, campos, idBase) }));
     };
 
     const salvarBloco = () => {
@@ -943,17 +1002,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (valorParcela <= 0) { notifyError('Informe o valor do pagamento.'); return; }
         if (blocoForm.tipo !== 'SINAL' && !blocoForm.primeiroVencimento) { notifyError('Informe a data de vencimento.'); return; }
 
-        const novo: BlocoPagamento = {
-            tipo: blocoForm.tipo,
-            quantidade,
-            valorParcela,
-            primeiroVencimento: blocoForm.primeiroVencimento,
-            intervaloMeses: geraSerie ? intervaloDoTipo : null,
-            paymentType: blocoForm.paymentType || undefined,
-            notes: blocoForm.notes || undefined,
-        };
-
         const editandoSinal = blocoEditandoIdx !== null && !!linhasDoPlano[blocoEditandoIdx]?.ehSinal;
+        // Só a forma de pagamento/observação mudou (mesmos nº, valor, 1º
+        // vencimento e intervalo): os juros/principal do bloco original vêm
+        // junto. Mudou parcela de verdade: a decomposição deixa de ser conhecida.
+        const novo: BlocoPagamento = manterJurosDoBlocoEditado(
+            blocoEditandoIdx !== null && !editandoSinal ? linhasDoPlano[blocoEditandoIdx]?.bloco : undefined,
+            {
+                tipo: blocoForm.tipo,
+                quantidade,
+                valorParcela,
+                primeiroVencimento: blocoForm.primeiroVencimento,
+                intervaloMeses: geraSerie ? intervaloDoTipo : null,
+                paymentType: blocoForm.paymentType || undefined,
+                notes: blocoForm.notes || undefined,
+            },
+        );
+
         const atuais = blocosNaoSinal();
 
         if (novo.tipo === 'SINAL') {
@@ -1005,29 +1070,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [lancandoNoFinanceiro, setLancandoNoFinanceiro] = useState(false);
 
     /**
-     * O plano no formato `payment_schedule` do contrato: sinal + cronograma, por
-     * data. Leva junto o TIPO de cada parcela (Sinal/Mensal/Chaves…) e a forma de
-     * pagamento — sem isso a coluna "Tipo" da aba Parcelas nascia vazia e o
-     * usuário teria de reclassificar à mão o que o plano já sabia.
+     * O plano no formato `payment_schedule` do contrato (sinal + cronograma, por
+     * data, com tipo, forma de pagamento e, com juros, `interest`/`principal`).
+     * A regra é pura e testada: `planoComoSchedule` de utils/jurosParcelamento.
      */
-    const planoComoSchedule = () => [
-        ...((Number(formData.down_payment) || 0) > 0 && formData.date
-            ? [{
-                date: formData.date,
-                value: Number(formData.down_payment) || 0,
-                installment_type: formData.down_payment_installment_type || 'SINAL',
-                payment_type: formData.down_payment_payment_type ?? null,
-            }]
-            : []),
-        ...(formData.custom_installments || []).map(i => ({
-            date: i.dueDate,
-            value: Number(i.value) || 0,
-            installment_type: i.installmentType ?? null,
-            payment_type: i.paymentType ?? null,
-        })),
-    ]
-        .filter(i => i.date && i.value > 0)
-        .sort((a, b) => a.date.localeCompare(b.date));
+    const planoComoSchedule = () => planoDaNegociacaoComoSchedule(formData);
 
     /**
      * Grava o plano no contrato e devolve quantas parcelas ficaram em Contas a
@@ -1038,14 +1085,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * recorrente" e deixava o usuário sem saída.
      */
     const aplicarPlanoNoContrato = async (contrato: Contract): Promise<number> => {
-        await contractService.updateContract(contrato.id, {
-            payment_schedule: planoComoSchedule(),
-            payment_term_type: 'Parcelado',
-            // As dimensões contábeis do cabeçalho da negociação vão junto: é
-            // delas que a parcela herda Centro de Custo e Plano de Contas.
-            ...(formData.cost_center_id ? { cost_center_id: formData.cost_center_id } : {}),
-            ...(formData.plano_de_contas_id ? { plano_de_contas_id: formData.plano_de_contas_id } : {}),
-        });
+        // Venda SEM juros agora: o contrato pode ter ficado no total COM juros de
+        // um lançamento anterior (juros zerado depois de lançar). Só o
+        // `payment_schedule` gravado sabe — lido na hora, porque o objeto do
+        // contrato que a tela tem não o traz e fica velho após o 1º lançamento.
+        // Com juros (o valor vai de qualquer jeito) e locação: não precisa ler.
+        const precisaDoCronogramaAtual = formData.type === 'SALE' && !((Number(formData.interest_rate_monthly) || 0) > 0);
+        const cronogramaAtual = precisaDoCronogramaAtual
+            ? await contractService.getPaymentSchedule(contrato.id).catch(() => contrato.payment_schedule)
+            : undefined;
+        // Cronograma, prazo Parcelado, Centro de Custo/Plano de Contas do cabeçalho
+        // (a parcela herda deles) e, em venda, o valor do contrato — ver
+        // atualizacaoDoContratoPeloPlano/valorDoContratoPeloPlano.
+        await contractService.updateContract(contrato.id, atualizacaoDoContratoPeloPlano(formData, cronogramaAtual));
         // Conferir o resultado em vez de confiar: a propagação tem um portão
         // (podeFaturarContratoComercial) que, quando barra, só escreve no
         // console. Sem esta leitura, o usuário veria "lançado" e Contas a
@@ -1054,6 +1106,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
         await recarregarParcelas();
         return lancadas.length;
+    };
+
+    /**
+     * Plano com juros e org sem a Conta Financeira "Receita Financeira": o sync lança
+     * as parcelas do mesmo jeito (juros sem categoria), mas a DRE não consegue separar
+     * os juros da receita da venda — o usuário precisa saber, senão só descobre na DRE.
+     * O sync resolve a categoria de novo por conta própria; esta consulta é só o aviso.
+     */
+    const avisoJurosSemCategoria = async (parcelas: ReturnType<typeof planoComoSchedule>): Promise<string> => {
+        if (!parcelas.some(p => (Number(p.interest) || 0) > 0)) return '';
+        const categoria = await resolverCategoriaReceitaFinanceira(formData.organization_id || organizationId);
+        return categoria ? '' : ' Atenção: a organização não tem a Conta Financeira "Receita Financeira" — os juros foram lançados sem categoria própria e a DRE não os separa da receita da venda. Cadastre-a e lance de novo.';
     };
 
     const handleLancarNoFinanceiro = async () => {
@@ -1092,6 +1156,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 return;
             }
 
+            const aviso = await avisoJurosSemCategoria(parcelas);
             const lancadas = { length: await aplicarPlanoNoContrato(contrato) };
 
             if (lancadas.length === 0) {
@@ -1105,7 +1170,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
 
             setActiveTab('parcelas');
-            notifySuccess(`${lancadas.length} parcela(s) lançadas em Contas a Receber pelo contrato ${contrato.number || ''}.`);
+            notifySuccess(`${lancadas.length} parcela(s) lançadas em Contas a Receber pelo contrato ${contrato.number || ''}.${aviso}`);
         } catch (err) {
             notifyError(err instanceof Error ? err.message : 'Erro ao lançar o plano no financeiro.');
         } finally {
@@ -1526,6 +1591,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 installment_value: formData.installment_value,
                 cost_center_id: formData.cost_center_id,
                 plano_de_contas_id: formData.plano_de_contas_id,
+                // Venda com juros: o contrato nasce com o Valor Total (com juros).
+                interest_rate_monthly: formData.interest_rate_monthly,
+                contract_total_value: formData.contract_total_value,
             }, isRental ? 'LOCACAO' : 'VENDAS');
             setLinkedContract(contract);
             return contract;
@@ -1749,6 +1817,36 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     );
 
     const selectedProperty = properties.find(p => p.id === formData.property_id);
+
+    /**
+     * Juros sugerido no "Montar plano" (venda): a taxa do Plano de vendas ATIVO
+     * do empreendimento da unidade principal (`sales_plans.building_id` =
+     * `parent_id` da unidade, como no Simulador do corretor). Só quando há
+     * EXATAMENTE um plano ativo com juros > 0 — com dois, não há como escolher
+     * por quem negocia. É sugestão: o campo continua editável e o que o usuário
+     * digita, ou a taxa já gravada na negociação, vence (ver `planoJuros`).
+     */
+    const empreendimentoDaUnidade = selectedProperty?.parent_id || buildingId || null;
+    useEffect(() => {
+        if (!isOpen || formData.type !== 'SALE' || !empreendimentoDaUnidade) {
+            setSugestaoJuros(null);
+            return;
+        }
+        let vivo = true;
+        salesPlanService.listActive(empreendimentoDaUnidade)
+            .then(planos => {
+                if (!vivo) return;
+                const comJuros = planos.filter(p => (Number(p.interest_rate_monthly) || 0) > 0);
+                setSugestaoJuros(comJuros.length === 1
+                    ? { taxa: Number(comJuros[0].interest_rate_monthly), plano: comJuros[0].name }
+                    : null);
+            })
+            .catch(err => {
+                console.error('[DealModal] Erro ao carregar o plano de vendas do empreendimento:', err);
+                if (vivo) setSugestaoJuros(null);
+            });
+        return () => { vivo = false; };
+    }, [isOpen, formData.type, empreendimentoDaUnidade]);
     const expandedProperty = properties.find(p => p.id === (expandedUnitId || formData.property_id));
     /** O cliente apontado por `client_id` — UM dos compradores (o primeiro).
      *  Só para o que ainda é de cliente único (análise de crédito, locação). */
@@ -2130,12 +2228,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
             setLoading(true);
             try {
+                const aviso = await avisoJurosSemCategoria(parcelas);
                 const quantas = await aplicarPlanoNoContrato(target.contract);
                 setGenerateResult(quantas > 0
                     ? {
                         ok: true,
                         msg: `${quantas} parcela(s) do Plano de Pagamento lançadas em Contas a Receber pelo contrato ${target.contract.number || ''}. `
-                            + 'Elas aparecem nesta mesma tabela.',
+                            + 'Elas aparecem nesta mesma tabela.' + aviso,
                     }
                     : {
                         ok: false,
@@ -3253,16 +3352,29 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 value={formData.contract_total_value ?? ''}
                                                 onChange={(v) => setFormData(prev => ({
                                                     ...prev,
-                                                    contract_total_value: v === '' ? undefined : Number(v),
+                                                    // À mão: com juros, o preço sem juros gravado deixa de valer
+                                                    // e o total digitado vira a base da próxima montagem.
+                                                    ...editarValorTotal(prev, v === '' ? undefined : Number(v)),
                                                 }))}
                                                 className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 placeholder="0,00"
                                             />
                                         </div>
+                                        {/* Venda com juros: o total = soma das unidades + juros do plano.
+                                            Essa diferença é esperada e sai em linha neutra; qualquer
+                                            outra continua no aviso âmbar. */}
                                         {unitsTotal > 0 && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal) >= 0.01 && (
-                                            <span className="block text-xs text-amber-600 px-1">
-                                                A composição das unidades soma {fmtMoeda(unitsTotal)} — diferença de {fmtMoeda(Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal))}.
-                                            </span>
+                                            formData.price_before_interest != null && jurosNoPlano > 0
+                                                && Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal - jurosNoPlano) < 0.01
+                                                ? (
+                                                    <span className="block text-xs text-gray-500 px-1">
+                                                        Inclui juros de {fmtMoeda(jurosNoPlano)} sobre a soma das unidades ({fmtMoeda(unitsTotal)}).
+                                                    </span>
+                                                ) : (
+                                                    <span className="block text-xs text-amber-600 px-1">
+                                                        A composição das unidades soma {fmtMoeda(unitsTotal)} — diferença de {fmtMoeda(Math.abs((Number(formData.contract_total_value) || 0) - unitsTotal))}.
+                                                    </span>
+                                                )
                                         )}
                                     </div>
                                 )}
@@ -3390,7 +3502,16 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 {formData.payment_method === 'INSTALLMENTS' && usaTrioFinanceiro && (
                                     <div className="space-y-2 p-4 bg-gray-50 border border-gray-100 rounded-[10px]">
                                         <label className="text-xs font-semibold text-slate-500">Montar plano de pagamento</label>
-                                        <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${formData.type === 'SALE' ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                                        {/* Venda: 5 campos; +Sistema com taxa > 0; +Preço sem juros com
+                                            taxa > 0 ou preço sem juros gravado. Os dois entram à direita,
+                                            sem empurrar o campo que está sendo digitado. */}
+                                        <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${!ehVenda
+                                            ? 'md:grid-cols-3'
+                                            : taxaJuros > 0 && mostrarPrecoSemJuros
+                                                ? 'md:grid-cols-4 xl:grid-cols-7'
+                                                : taxaJuros > 0 || mostrarPrecoSemJuros
+                                                    ? 'md:grid-cols-3 xl:grid-cols-6'
+                                                    : 'md:grid-cols-3 xl:grid-cols-5'}`}>
                                             {formData.type === 'SALE' && (
                                                 <div className="space-y-1.5">
                                                     <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
@@ -3435,11 +3556,58 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 />
                                             </div>
+                                            {/* Juros (só venda). Vazio/0 = o plano de sempre (total ÷ nº).
+                                                Com taxa, aparecem Sistema e Preço sem juros — a base dos
+                                                juros, que fica gravada para remontar sem juros sobre juros. */}
+                                            {ehVenda && (
+                                                <div className="space-y-1.5">
+                                                    <label htmlFor="plano-juros-taxa" className="text-xs font-semibold text-slate-500">Juros a.m. (%)</label>
+                                                    <input
+                                                        id="plano-juros-taxa"
+                                                        type="number" min="0" step="0.01" placeholder="0"
+                                                        value={taxaJurosTexto}
+                                                        onChange={(e) => setPlanoJuros(prev => ({ ...prev, taxa: e.target.value }))}
+                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    />
+                                                    {jurosVemDoPlanoDeVendas && sugestaoJuros && (
+                                                        <span className="block text-xs text-gray-500 px-1">Do plano de vendas {sugestaoJuros.plano}.</span>
+                                                    )}
+                                                </div>
+                                            )}
+                                            {ehVenda && taxaJuros > 0 && (
+                                                <div className="space-y-1.5">
+                                                    <label htmlFor="plano-juros-sistema" className="text-xs font-semibold text-slate-500">Sistema</label>
+                                                    <select
+                                                        id="plano-juros-sistema"
+                                                        value={sistemaJuros}
+                                                        onChange={(e) => setPlanoJuros(prev => ({ ...prev, sistema: e.target.value as SistemaAmortizacao }))}
+                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                                    >
+                                                        <option value="PRICE">Price (fixa)</option>
+                                                        <option value="SAC">SAC (decrescente)</option>
+                                                    </select>
+                                                </div>
+                                            )}
+                                            {mostrarPrecoSemJuros && (
+                                                <div className="space-y-1.5">
+                                                    <label htmlFor="plano-juros-preco" className="text-xs font-semibold text-slate-500">Preço sem juros</label>
+                                                    <div className="relative">
+                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                                        <MoneyCentsInput
+                                                            id="plano-juros-preco"
+                                                            placeholder="0,00"
+                                                            value={precoSemJurosExibido}
+                                                            onChange={(v) => setPlanoJuros(prev => ({ ...prev, preco: v }))}
+                                                            className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            )}
                                         </div>
                                         <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pt-1">
                                             <span className="text-xs text-gray-500">
-                                                {formData.type === 'SALE' && totalDoContrato <= 0
-                                                    ? 'Informe o Valor Total do Contrato para calcular as parcelas.'
+                                                {faltaBaseDoPlano
+                                                    ? `Informe ${faltaBaseDoPlano} para calcular as parcelas.`
                                                     : `Vai gerar: ${resumoPlanoRapido}.`}
                                             </span>
                                             <button

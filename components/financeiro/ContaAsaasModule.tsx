@@ -1,8 +1,9 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
-    AlertTriangle, ArrowDownLeft, ArrowUpRight, Clock, FileDown, FileText, Hourglass,
+    AlertTriangle, ArrowDownLeft, ArrowRightLeft, ArrowUpRight, Clock, FileDown, FileText, Hourglass,
     Landmark, Loader2, RefreshCw, Wallet,
 } from 'lucide-react';
+import TransferirSaldoSheet from './TransferirSaldoSheet';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import { useStore } from '../../store/useStore';
 import { temAcessoTotal } from '../../lib/acessoTotal';
@@ -103,6 +104,7 @@ function situacao(l: LinhaExtratoAsaas): { texto: string; cor: string } {
 }
 
 const MOTIVO_NAO_GESTOR = 'Só proprietário ou administrador da organização dona da conta sincroniza o extrato.';
+const MOTIVO_NAO_GESTOR_SAQUE = 'Só proprietário ou administrador da organização dona da conta transfere o saldo.';
 
 export default function ContaAsaasModule() {
     const { orgId } = useOrgContext();
@@ -129,6 +131,7 @@ export default function ContaAsaasModule() {
     const [historicoTruncado, setHistoricoTruncado] = useState(false);
     const [ocupado, setOcupado] = useState<null | 'saldo' | 'sincronizar'>(null);
     const [msg, setMsg] = useState<{ tipo: 'ok' | 'erro'; texto: string } | null>(null);
+    const [transferindo, setTransferindo] = useState(false);
 
     const conta = contas.find(c => c.payment_account_id === contaId) ?? contas[0] ?? null;
 
@@ -415,6 +418,16 @@ export default function ContaAsaasModule() {
                             </button>
                             <button
                                 type="button"
+                                onClick={() => setTransferindo(true)}
+                                disabled={!ehGestor || ocupado !== null}
+                                title={!ehGestor ? MOTIVO_NAO_GESTOR_SAQUE : ocupado ? 'Aguarde a operação em andamento.' : 'PIX do saldo da Asaas para uma conta bancária própria da organização.'}
+                                className={`${BOTAO} bg-blue-600 text-white hover:bg-blue-700`}
+                            >
+                                <ArrowRightLeft className="w-[15px] h-[15px]" />
+                                Transferir para o banco
+                            </button>
+                            <button
+                                type="button"
                                 onClick={() => exportService.generateExtratoAsaasPDF(linhasDeExportacao(), { fileName: nomeArquivo(), title: 'Extrato Asaas', subtitulo: subtituloExportacao() })}
                                 disabled={!visiveis.length}
                                 title={!visiveis.length ? 'Não há movimentos no período para exportar.' : 'Exporta os movimentos que estão na tabela.'}
@@ -529,6 +542,20 @@ export default function ContaAsaasModule() {
                             subtitle: recorte !== 'todos' ? 'Experimente o filtro "Todos" ou outro período.' : 'Escolha outro período.',
                         }}
                     />
+
+                    {transferindo && (
+                        <TransferirSaldoSheet
+                            organizationId={conta.organization_id}
+                            paymentAccountId={conta.payment_account_id}
+                            env={conta.env}
+                            onClose={() => setTransferindo(false)}
+                            onDone={texto => {
+                                setTransferindo(false);
+                                setMsg({ tipo: 'ok', texto });
+                                carregarResumo(conta.payment_account_id);
+                            }}
+                        />
+                    )}
                 </>
             )}
         </div>

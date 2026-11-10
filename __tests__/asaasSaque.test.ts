@@ -151,3 +151,30 @@ describe('escolherReserva (pedido chegou antes de o OrçaCloud gravar o id da As
         expect(mesmoDocumento('***********', '03853394612')).toBe(false);
     });
 });
+
+describe('saque para conta própria (plano 2026-11-09-conta-asaas-tela-financeiro)', () => {
+    // Registro como a Edge grava: sem título, CNPJ da empresa dona como esperado e como
+    // documento do favorecido (é por ele que a busca de reserva acha o registro).
+    const CNPJ = '12345678000190';
+    const saque: PagamentoRegistrado = {
+        payment_type: 'PIX_TRANSFER', status: 'APPROVED', value: 1500, pix_key: CNPJ,
+        identification_field: null, beneficiary_document: CNPJ, favorecido_documento_esperado: CNPJ,
+    };
+    const pedido = (cpfCnpj: string, value = 1500) => ({
+        type: 'TRANSFER', transfer: { id: 'tra_1', value, bankAccount: { pixAddressKey: null, cpfCnpj } },
+    });
+
+    it('aprova quando o titular da chave é o próprio CNPJ', () => {
+        expect(decidirSaque(pedido('12.345.678/0001-90'), saque)).toEqual({ status: 'APPROVED' });
+    });
+    it('recusa chave cujo titular é outro CNPJ (chave trocada)', () => {
+        expect(decidirSaque(pedido('98765432000110'), saque).status).toBe('REFUSED');
+    });
+    it('recusa valor diferente do registrado', () => {
+        expect(decidirSaque(pedido(CNPJ, 1500.01), saque).status).toBe('REFUSED');
+    });
+    it('a reserva acha o saque pelo valor + CNPJ antes de o id da Asaas ser gravado', () => {
+        expect(escolherReserva(pedido(CNPJ), [saque])).toBe(saque);
+        expect(escolherReserva(pedido('98765432000110'), [saque])).toBeNull();
+    });
+});

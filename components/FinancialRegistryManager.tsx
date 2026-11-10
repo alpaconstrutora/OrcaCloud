@@ -7,6 +7,9 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
 import TableSwitch from './ui/TableSwitch';
+import { TIPOS_CHAVE_PIX, validarChavePix } from '../utils/pixKey';
+
+type PaymentAccountPixTipo = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria' | null;
 
 interface RegistryItem {
     id: string;
@@ -27,6 +30,9 @@ interface RegistryItem {
     served_organization_ids?: string[];
     /** Conta de pagamento: 'banco' | 'caixa' | 'gateway' (Asaas). */
     kind?: string;
+    /** Conta de pagamento: chave PIX (destino do saque da conta Asaas). */
+    pix_chave?: string | null;
+    pix_tipo?: PaymentAccountPixTipo;
 }
 
 const NATURE_LABELS: Record<'CREDORA' | 'DEVEDORA', string> = {
@@ -326,12 +332,31 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         e.preventDefault();
         if (!formData.name) return;
 
+        // Chave PIX da conta: sem tipo não há chave; com tipo, grava normalizada
+        // (como a Asaas espera) — e inválida não sai daqui.
+        let paraGravar = formData;
+        if (showBankDetails && formData.kind !== 'gateway' && ('pix_chave' in formData || 'pix_tipo' in formData)) {
+            const chave = (formData.pix_chave ?? '').trim();
+            if (!formData.pix_tipo || !chave) {
+                paraGravar = { ...formData, pix_tipo: null, pix_chave: null };
+            } else {
+                const v = validarChavePix(formData.pix_tipo, chave);
+                if (!v.ok) {
+                    notify(`Chave PIX inválida: ${v.motivo}`, 'error');
+                    return;
+                }
+                paraGravar = { ...formData, pix_chave: v.chave };
+            }
+        }
+
         setLoading(true);
         try {
-            await onSave(formData);
+            await onSave(paraGravar);
         } catch (error) {
             console.error('Error saving item:', error);
-            notify('Erro ao salvar o registro.', 'error');
+            // O motivo do banco importa aqui: a chave PIX só gestor altera (gatilho 42501).
+            const motivo = (error as { message?: string } | null)?.message;
+            notify(motivo ? `Erro ao salvar o registro: ${motivo}` : 'Erro ao salvar o registro.', 'error');
             setLoading(false);
             return;
         }
@@ -866,6 +891,42 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                         />
                                     </div>
                                 </div>
+
+                                {/* Chave PIX da conta própria — destino de "Transferir para o banco" na
+                                    Conta Asaas (docs/planos/2026-11-09-conta-asaas-tela-financeiro.md).
+                                    Só gestor altera: o banco recusa (gatilho) e registra cada troca. */}
+                                {formData.kind !== 'gateway' && (() => {
+                                    const chave = (formData.pix_chave ?? '').trim();
+                                    const v = chave ? validarChavePix(formData.pix_tipo, chave) : null;
+                                    return (
+                                        <div>
+                                            <label className="text-xs font-semibold text-slate-500">Chave PIX desta conta</label>
+                                            <p className="text-xs text-gray-400 mt-0.5">Usada para transferir o saldo da conta Asaas para esta conta. Só proprietário ou administrador altera; quem altera fica 24 h sem poder enviar para ela.</p>
+                                            <div className="mt-1.5 grid grid-cols-[160px_1fr] gap-4">
+                                                <select
+                                                    aria-label="Tipo da chave PIX"
+                                                    value={formData.pix_tipo || ''}
+                                                    onChange={(e) => setFormData({ ...formData, pix_tipo: (e.target.value || null) as PaymentAccountPixTipo })}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                >
+                                                    <option value="">Sem chave</option>
+                                                    {TIPOS_CHAVE_PIX.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
+                                                </select>
+                                                <input
+                                                    type="text"
+                                                    aria-label="Chave PIX"
+                                                    value={formData.pix_chave || ''}
+                                                    onChange={(e) => setFormData({ ...formData, pix_chave: e.target.value })}
+                                                    disabled={!formData.pix_tipo}
+                                                    title={!formData.pix_tipo ? 'Escolha o tipo da chave primeiro.' : undefined}
+                                                    placeholder={formData.pix_tipo ? 'Chave PIX' : 'Escolha o tipo'}
+                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all disabled:bg-gray-50 disabled:cursor-not-allowed"
+                                                />
+                                            </div>
+                                            {v && !v.ok && <p className="mt-1 text-xs text-red-600">{v.motivo}</p>}
+                                        </div>
+                                    );
+                                })()}
 
                                 {/* "Atende também" — a conta tem UMA org dona; pode atender outras (algumas ou
                                     todas) e aí o extrato dela classifica com centro de custo / plano de contas /

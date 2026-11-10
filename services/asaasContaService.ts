@@ -129,6 +129,42 @@ async function invocar<T>(acao: string, body: Record<string, unknown>): Promise<
     return data as T;
 }
 
+/** Mesma leitura de erro de `invocar`, para a Edge `asaas-payment` (corpo com `action`). */
+async function invocarPagamento<T>(body: Record<string, unknown>): Promise<T> {
+    const { data, error } = await supabase.functions.invoke('asaas-payment', { body });
+    if (error) {
+        let detalhe = '';
+        const ctx = (error as { context?: Response }).context;
+        if (ctx && typeof ctx.json === 'function') {
+            try { detalhe = (await ctx.json())?.error ?? ''; } catch { /* corpo não-JSON */ }
+        }
+        throw new Error(detalhe || error.message);
+    }
+    if (data && (data as { error?: string }).error) throw new Error((data as { error: string }).error);
+    return data as T;
+}
+
+export interface DestinoDeSaque {
+    id: string;
+    nome: string;
+    /** "Sicredi · ag. 0230 · c/c 55883-5" */
+    banco: string;
+    chave: string | null;
+    tipo: string | null;
+    /** Razão social da empresa dona — o titular esperado da chave. */
+    titular: string | null;
+    quarentena: { alteradaEm: string; por: string; liberaEm: string; bloqueiaVoce: boolean } | null;
+    /** Por que não dá para enviar para esta conta (vazio = pode). */
+    bloqueios: string[];
+}
+
+export interface CotacaoSaque {
+    ok: boolean;
+    saldo: number | null;
+    saldo_erro: string | null;
+    destinos: DestinoDeSaque[];
+}
+
 export const asaasContaService = {
     /** Configuração da conta, ou null se ela ainda não é conta Asaas. */
     async get(paymentAccountId: string): Promise<ContaAsaasConfig | null> {
@@ -273,6 +309,19 @@ export const asaasContaService = {
             titulo: titulos.get(l.id) ?? null,
             historico: false,
         }));
+    },
+
+    /** Saque para conta própria: saldo ao vivo e as contas bancárias da org que podem receber. */
+    saqueCotacao(organizationId: string, paymentAccountId: string) {
+        return invocarPagamento<CotacaoSaque>({ action: 'saque_quote', organization_id: organizationId, payment_account_id: paymentAccountId });
+    },
+
+    /** Envia o PIX do saldo da conta Asaas para a conta própria escolhida (só gestor). */
+    saqueEnviar(organizationId: string, paymentAccountId: string, destinoId: string, valor: number) {
+        return invocarPagamento<{ ok: boolean; supplier_payment_id: string; asaas_transfer_id: string; status: string | null; aguardando_autorizacao: boolean }>({
+            action: 'saque_pay', organization_id: organizationId, payment_account_id: paymentAccountId,
+            destino_payment_account_id: destinoId, valor,
+        });
     },
 
     /** Conta Asaas que atende a organização (dona primeiro), ou null. */

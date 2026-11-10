@@ -1,5 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { bloqueiosDoDisparo, inicioDoDiaBrasilia, quarentenaDaChave, type FatosDoDisparo } from '../utils/asaasGovernanca';
+import {
+    bloqueiosDoDisparo, bloqueiosDoSaqueProprio, inicioDoDiaBrasilia, quarentenaDaChave,
+    type DestinoDoSaque, type FatosDoDisparo, type FatosDoSaqueProprio,
+} from '../utils/asaasGovernanca';
 
 const ok: FatosDoDisparo = {
     temConta: true, ehGestor: true,
@@ -97,5 +100,49 @@ describe('quarentenaDaChave (chave alterada há menos de 24 h)', () => {
 
     it("alteração do sistema avisa, mas não bloqueia", () => {
         expect(quarentenaDaChave(alt(1, 'sistema'), agora, 'ana@alpa.com')?.bloqueiaVoce).toBe(false);
+    });
+});
+
+describe('bloqueiosDoSaqueProprio (saldo da Asaas → conta bancária própria)', () => {
+    const CNPJ = '12345678000190';
+    const destino: DestinoDoSaque = {
+        id: 'sicredi', nome: 'Sicredi', ativa: true, kind: 'banco', mesmaOrganizacao: true,
+        chaveValida: true, chaveInvalida: null, documento: CNPJ,
+    };
+    const ok: FatosDoSaqueProprio = {
+        ehGestor: true, temConta: true, saldo: 2138.35, valor: 1000, destino, documentoDaContaAsaas: CNPJ, quarentena: null,
+    };
+
+    it('gestor, saldo suficiente, conta própria com chave e mesmo CNPJ: libera', () => {
+        expect(bloqueiosDoSaqueProprio(ok)).toEqual([]);
+        expect(bloqueiosDoSaqueProprio({ ...ok, valor: 2138.35 })).toEqual([]);
+    });
+    it('não consome os tetos de terceiros: valor alto passa se couber no saldo', () => {
+        expect(bloqueiosDoSaqueProprio({ ...ok, saldo: 500000, valor: 450000 })).toEqual([]);
+    });
+    it('membro comum não transfere', () => {
+        expect(bloqueiosDoSaqueProprio({ ...ok, ehGestor: false }).join()).toMatch(/proprietário ou administrador/);
+    });
+    it('valor acima do saldo, zero ou saldo ilegível', () => {
+        expect(bloqueiosDoSaqueProprio({ ...ok, valor: 2138.36 }).join()).toMatch(/passa do saldo/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, valor: 0 }).join()).toMatch(/Informe o valor/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, saldo: null }).join()).toMatch(/ler o saldo/);
+    });
+    it('destino de outra org, desativado, não bancário ou sem chave', () => {
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, mesmaOrganizacao: false } }).join()).toMatch(/outra organização/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, ativa: false } }).join()).toMatch(/desativada/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, kind: 'gateway' } }).join()).toMatch(/não é uma conta bancária/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, chaveValida: false } }).join()).toMatch(/não tem chave PIX/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, chaveValida: false, chaveInvalida: 'CNPJ inválido' } }).join()).toMatch(/inválida: CNPJ inválido/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: null }).join()).toMatch(/Escolha a conta/);
+    });
+    it('titular: sem CNPJ no destino ou CNPJ diferente da conta Asaas bloqueia', () => {
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, documento: null } }).join()).toMatch(/sem|não tem empresa com CNPJ/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, documento: '98765432000110' } }).join()).toMatch(/outro CNPJ/);
+        expect(bloqueiosDoSaqueProprio({ ...ok, destino: { ...destino, documento: '12.345.678/0001-90' } })).toEqual([]);
+    });
+    it('quem alterou a chave há menos de 24 h não envia (quarentena)', () => {
+        const q = quarentenaDaChave({ em: new Date(Date.now() - 3600_000).toISOString(), por: 'ana@alpa.com' }, Date.now(), 'ana@alpa.com');
+        expect(bloqueiosDoSaqueProprio({ ...ok, quarentena: q }).join()).toMatch(/há menos de 24 h/);
     });
 });

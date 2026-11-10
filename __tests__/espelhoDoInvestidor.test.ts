@@ -62,7 +62,14 @@ describe('montarEspelhoDoInvestidor', () => {
   });
 
   it('a ficha traz o preço de tabela e os dados do cadastro', () => {
-    expect(r.dados.get('202')).toEqual({ tipologia: '2 quartos', areaPrivativaM2: 80, dormitorios: 2, banheiros: 2, vagas: 1, preco: 520_000 });
+    expect(r.dados.get('202')).toEqual({ tipologia: '2 quartos', plantaUrl: null, areaPrivativaM2: 80, dormitorios: 2, banheiros: 2, vagas: 1, preco: 520_000 });
+  });
+
+  // F5 (10/11/2026): a planta baixa da tipologia, que vem com a obra.
+  it('a ficha leva a planta da tipologia da unidade quando a obra a traz', () => {
+    const comPlantas = montarEspelhoDoInvestidor({ ...OBRA, plantas: [{ tipologia: '2 QUARTOS', tipologia_chave: '2 quartos', imagem_url: 'https://x/2q.png' }] });
+    expect(comPlantas.dados.get('202')!.plantaUrl).toBe('https://x/2q.png');
+    expect(montarEspelhoDoInvestidor({ ...OBRA, plantas: null }).dados.get('202')!.plantaUrl).toBeNull();
   });
 
   it('unidade vendável sem andar conta nos números e é dita fora do desenho', () => {
@@ -173,6 +180,69 @@ describe('migration do contorno da torre — as funções reescritas continuam s
   });
 
   it('"vendida" continua sendo as etapas da regra do front, e as internas seguem sem GRANT', () => {
+    const listas = [...sql.matchAll(/n\.status IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
+    expect(listas.length).toBe(2);
+    for (const l of listas) expect(l).toEqual(ETAPAS_VENDIDA);
+    expect(sql).not.toMatch(/GRANT[^;]*fn_espelho_de_vendas_das_obras/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_broker_portal_get_espelho\(TEXT\) TO anon, authenticated;/);
+  });
+});
+
+/**
+ * F5 (10/11/2026): a migration das plantas por tipologia REESCREVE de novo as duas funções do espelho, para trazer
+ * `plantas`. É a definição que vale no banco — a mesma trava tem de valer para ela.
+ */
+describe('migration das plantas por tipologia — tabela fechada, bucket sem listagem, funções sem dado de pessoa', () => {
+  const sql = lerMigration('aplicar_20271110400000_empreendimento_tipologia_plantas.sql');
+  const anterior = lerMigration('aplicar_20271110200000_torre_contorno_na_planta.sql');
+  const chavesDe = (texto: string) => [...texto.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
+  const funcao = (texto: string, nome: string) => {
+    const i = texto.indexOf(`CREATE OR REPLACE FUNCTION public.${nome}`);
+    return texto.slice(i, texto.indexOf('$X$;', i));
+  };
+
+  it('a tabela nasce com RLS, policy só para authenticated pela organização do empreendimento, e fechada para anon', () => {
+    expect(sql).toMatch(/ALTER TABLE public\.empreendimento_tipologia_plantas ENABLE ROW LEVEL SECURITY;/);
+    expect(sql).toMatch(/CREATE POLICY org_access_empr_tipologia_plantas ON public\.empreendimento_tipologia_plantas\s+FOR ALL TO authenticated/);
+    expect(sql.match(/e\.organization_id IN \(SELECT public\.empr_user_org_ids\(\)\)/g)).toHaveLength(2);
+    expect(sql).toMatch(/REVOKE ALL ON TABLE public\.empreendimento_tipologia_plantas FROM anon;/);
+    expect(sql).not.toMatch(/GRANT[^;]*empreendimento_tipologia_plantas[^;]*anon/);
+    expect(sql).toMatch(/UNIQUE \(empreendimento_id, tipologia_chave\)/);
+  });
+
+  it('o bucket é público pela URL, mas ninguém sem sessão lista, sobe, troca ou apaga', () => {
+    const policies = [...sql.matchAll(/CREATE POLICY "empreendimento_midia_[a-z_]+" ON storage\.objects\s+FOR (\w+) TO ([a-z, ]+)/g)].map((m) => [m[1], m[2].trim()]);
+    expect(policies).toEqual([['SELECT', 'authenticated'], ['INSERT', 'authenticated'], ['UPDATE', 'authenticated'], ['DELETE', 'authenticated']]);
+    // Toda policy do bucket prende a primeira pasta do caminho à organização de quem pede (USING e WITH CHECK).
+    expect(sql.match(/\(storage\.foldername\(name\)\)\[1\] IN \(SELECT o::text FROM public\.empr_user_org_ids\(\) o\)/g)).toHaveLength(5);
+  });
+
+  it('nas funções entra só `plantas` (e o empreendimento da planta, no corretor); nada de negociação, comprador ou corretor', () => {
+    const novas = (nome: string) => {
+      const antes = chavesDe(funcao(anterior, nome));
+      const depois = chavesDe(funcao(sql, nome));
+      // Nenhuma chave de antes saiu.
+      for (const k of antes) expect(depois).toContain(k);
+      return [...new Set(depois.filter((k) => !antes.includes(k)))].sort();
+    };
+    // `commercial_building_id` da planta já era chave da torre: não conta como nova.
+    expect(novas('fn_broker_portal_get_espelho')).toEqual(['empreendimento_id', 'imagem_url', 'plantas', 'tipologia', 'tipologia_chave']);
+    expect(novas('fn_espelho_de_vendas_das_obras')).toEqual(['imagem_url', 'plantas', 'tipologia', 'tipologia_chave']);
+    expect(chavesDe(sql).filter((k) => /client|buyer|comprador|cliente|deal|negoc|broker|corretor|document|cpf|cnpj|email|phone|contract/.test(k))).toEqual([]);
+  });
+
+  it('as plantas do corretor são só as dos prédios que ele vê (o mesmo `visiveis` das unidades)', () => {
+    const doCorretor = funcao(sql, 'fn_broker_portal_get_espelho');
+    const trecho = doCorretor.slice(doCorretor.indexOf("'plantas'"), doCorretor.indexOf("'torres'"));
+    expect(trecho).toMatch(/e2\.commercial_building_id IN \(\s*SELECT COALESCE\(p\.parent_id, p\.id\)\s+FROM public\.commercial_properties p\s+WHERE p\.id IN \(SELECT id FROM visiveis\)/);
+  });
+
+  it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {
+    const doInvestidor = sql.slice(sql.lastIndexOf("'units', COALESCE"), sql.indexOf('FROM unidades u WHERE u.tower_id = t.id'));
+    expect([...doInvestidor.matchAll(/'([a-z_]+)'\s*,/g)].map((m) => m[1]).filter((k) => k !== 'units').sort()).toEqual([
+      'bathrooms', 'bedrooms', 'floor', 'floor_tipo', 'id', 'is_vendavel', 'name', 'parking_spaces', 'position_type', 'price',
+      'private_area', 'sort_order', 'status', 'sun_orientation', 'typology', 'vaga_na_planta',
+    ]);
     const listas = [...sql.matchAll(/n\.status IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
     expect(listas.length).toBe(2);
     for (const l of listas) expect(l).toEqual(ETAPAS_VENDIDA);

@@ -104,6 +104,29 @@ describe('Espelho3D — ficha', () => {
         expect(acao).toHaveBeenCalledWith('A-1-2');
     });
 
+    // F5 (10/11/2026): a planta baixa da tipologia da unidade.
+    it('unidade com planta: a ficha mostra a planta da tipologia, e tocar amplia num diálogo (não em tela cheia)', async () => {
+        const comPlanta = new Map<string, DadosDaUnidade>([['A-1-2', { tipologia: 'Tipo 3', plantaUrl: 'https://x/tipo3.png' }]]);
+        montar({ dados: comPlanta });
+        fireEvent.click(await screen.findByTestId('cena'));
+        const ficha = screen.getByRole('region', { name: 'Ficha da unidade 102' });
+        expect(within(ficha).getByText('Planta da tipologia Tipo 3')).toBeTruthy();
+        expect(within(ficha).getByAltText('Planta da tipologia Tipo 3').getAttribute('src')).toBe('https://x/tipo3.png');
+        expect(screen.queryByRole('dialog')).toBeNull();
+        fireEvent.click(within(ficha).getByRole('button', { name: 'Ampliar a planta da tipologia tipo 3' }));
+        const dialogo = screen.getByRole('dialog');
+        expect(within(dialogo).getByAltText('Planta da tipologia Tipo 3')).toBeTruthy();
+        expect(within(dialogo).getByText('Unidade 102 · Torre A')).toBeTruthy();
+        fireEvent.click(within(dialogo).getByRole('button', { name: 'Fechar a planta' }));
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('unidade sem planta: a ficha não tem o trecho da planta', async () => {
+        montar();
+        fireEvent.click(await screen.findByTestId('cena'));
+        expect(screen.queryByTestId('ficha-planta')).toBeNull();
+    });
+
     it('fechar a ficha tira a seleção', async () => {
         montar();
         fireEvent.click(await screen.findByTestId('cena'));

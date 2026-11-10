@@ -25,6 +25,12 @@ if (q.get('sem3d')) HTMLCanvasElement.prototype.getContext = (() => null) as nev
 const STATUS = ['DISPONIVEL', 'DISPONIVEL', 'VENDIDO', 'RESERVADO', 'VENDIDO', 'DISPONIVEL', 'PERMUTADO', 'VENDIDO'];
 const dados = new Map<string, DadosDaUnidade>();
 
+/** F5: uma planta baixa de mentira por tipologia (SVG embutido), para ver a ficha e a ampliação. */
+const plantaDeExemplo = (quartos: number) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 260"><rect width="400" height="260" fill="#fff"/><g fill="none" stroke="#111827" stroke-width="4"><rect x="20" y="20" width="360" height="220"/><path d="M20 140H220M220 20V240${quartos > 2 ? 'M300 20V140' : ''}M220 140H380"/></g><g font-family="sans-serif" font-size="14" fill="#374151"><text x="80" y="85">Sala</text><text x="70" y="195">Cozinha</text><text x="235" y="85">Quarto 1</text>${quartos > 2 ? '<text x="312" y="85">Qto 3</text>' : ''}<text x="265" y="195">Quarto 2</text></g></svg>`,
+  )}`;
+
 function torre(id: string, nome: string, andares: number, porAndar: number, areas: number[], extra: Partial<TorreDoEspelho> = {}): TorreDoEspelho {
   const units = [];
   for (let n = 1; n <= andares; n++) {
@@ -32,7 +38,7 @@ function torre(id: string, nome: string, andares: number, porAndar: number, area
       const uid = `${id}-${n}-${k + 1}`;
       const area = areas[k % areas.length];
       units.push({ id: uid, name: `${n}0${k + 1}`, floor: n, floor_tipo: 'TIPO' as const, private_area: area, status: STATUS[(n * 3 + k * 5) % STATUS.length] as never, sort_order: k });
-      dados.set(uid, { tipologia: area > 100 ? '3 quartos' : '2 quartos', areaPrivativaM2: area, dormitorios: area > 100 ? 3 : 2, banheiros: 2, vagas: area > 100 ? 2 : 1, preco: Math.round(area * (9000 + n * 120)) });
+      dados.set(uid, { tipologia: area > 100 ? '3 quartos' : '2 quartos', plantaUrl: plantaDeExemplo(area > 100 ? 3 : 2), areaPrivativaM2: area, dormitorios: area > 100 ? 3 : 2, banheiros: 2, vagas: area > 100 ? 2 : 1, preco: Math.round(area * (9000 + n * 120)) });
     }
   }
   return { id, name: nome, sort_order: 0, pe_direito_padrao_m: 3, units: units as never, ...extra };

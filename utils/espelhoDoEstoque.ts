@@ -26,6 +26,7 @@ import type { Property } from '../types/imovib';
 import type { EmpreendimentoFloor, EmpreendimentoUnit, FloorTipo, OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
 import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
+import { plantaDaUnidade, plantasPorChave, type PlantaDaTipologia } from './espelhoPlantaDaTipologia';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade, PaletaDoEspelho } from './espelhoDeVendas3dMalha';
 import { negocioAtivoDaUnidade, statusEfetivoDaUnidade, type NegocioDaUnidade } from './statusEfetivoDaUnidade';
@@ -102,9 +103,11 @@ const numero = (v: unknown): number | null => (typeof v === 'number' && Number.i
 const andarDo = (i: ImovelDoEstoque): number | null => numero(i.floor) ?? numero(i.specs?.floor);
 const nomeDo = (i: ImovelDoEstoque) => rotuloCurtoDaUnidade(String(i.number || i.name || ''));
 
-function dadosDo(i: ImovelDoEstoque): DadosDaUnidade {
+function dadosDo(i: ImovelDoEstoque, plantas: ReadonlyMap<string, string>): DadosDaUnidade {
+  const tipologia = i.typology || i.specs?.typology || null;
   return {
-    tipologia: i.typology || i.specs?.typology || null,
+    tipologia,
+    plantaUrl: plantaDaUnidade(plantas, tipologia),
     areaPrivativaM2: numero(i.private_area) ?? numero(i.area),
     dormitorios: numero(i.bedrooms) ?? numero(i.specs?.bedrooms),
     banheiros: numero(i.bathrooms) ?? numero(i.specs?.bathrooms),
@@ -180,6 +183,8 @@ export function montarEspelhoDoEstoque(entrada: {
   imoveis: readonly ImovelDoEstoque[];
   negocios: readonly NegocioDaUnidade[] | null | undefined;
   estrutura?: readonly TorreDaEstrutura[] | null;
+  /** As plantas por tipologia do empreendimento DESTE prédio (F5); a ficha mostra a da tipologia do imóvel. */
+  plantas?: readonly PlantaDaTipologia[] | null;
   hipoteses?: Partial<HipotesesDoEspelho>;
 }): EspelhoDoEstoque {
   const unidades = entrada.imoveis.filter((i) => i.type !== 'BUILDING');
@@ -187,7 +192,8 @@ export function montarEspelhoDoEstoque(entrada: {
   const statusPorUnidade = new Map<string, SaleUnitStatus>(
     unidades.map((i) => [i.id, statusDoEspelhoDoCorretor(statusEfetivoDaUnidade(i.status, negocioAtivoDaUnidade(i.id, entrada.negocios)))]),
   );
-  const dados = new Map(unidades.map((i) => [i.id, dadosDo(i)]));
+  const plantas = plantasPorChave(entrada.plantas);
+  const dados = new Map(unidades.map((i) => [i.id, dadosDo(i, plantas)]));
 
   const estrutura = (entrada.estrutura ?? []).filter((t) => !t.blueprint_quadra_uid);
   const colocados = (cena: CenaDoEspelho) => new Set(cena.prismas.map((p) => p.unitId).filter(Boolean)).size;

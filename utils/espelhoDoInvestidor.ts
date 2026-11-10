@@ -15,6 +15,7 @@ import type { SaleUnitStatus } from '../lib/salesAnalysis';
 import type { EmpreendimentoFloor, EmpreendimentoUnit, FloorTipo, OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
 import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
+import { plantaDaUnidade, plantasPorChave, type PlantaDaTipologia } from './espelhoPlantaDaTipologia';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade } from './espelhoDeVendas3dMalha';
 
@@ -60,6 +61,8 @@ export interface ObraDoEspelho {
   /** Soma do valor das negociações vendidas (Contrato, Assinatura ou Concluído), cada uma uma vez. */
   vgv_vendido: number | null;
   torres: TorreDoInvestidor[];
+  /** As plantas por tipologia dos empreendimentos desta obra (F5). Ausente antes da migration. */
+  plantas?: PlantaDaTipologia[] | null;
 }
 
 export interface ResumoDoInvestidor {
@@ -93,6 +96,7 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
   const dados = new Map<string, DadosDaUnidade>();
   const ocultas = new Set<string>();
   const pavimentosPorTorre = new Map<string, EmpreendimentoFloor[]>();
+  const plantas = plantasPorChave(obra.plantas);
   let unidades = 0;
   let vendidas = 0;
   let vgvEstoque = 0;
@@ -123,6 +127,7 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
             statusPorUnidade.set(u.id, status);
             dados.set(u.id, {
               tipologia: u.typology,
+              plantaUrl: plantaDaUnidade(plantas, u.typology),
               areaPrivativaM2: numero(u.private_area),
               dormitorios: numero(u.bedrooms),
               banheiros: numero(u.bathrooms),

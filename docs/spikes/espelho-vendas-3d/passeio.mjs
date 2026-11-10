@@ -76,6 +76,20 @@ try {
   confere(!!ficha, `tocar no desenho abre a ficha de uma unidade (${ficha ?? 'nenhuma'})`);
   await page.screenshot({ path: path.join(prints, '02-ficha.png') });
 
+  // 1b. F5: a ficha traz a planta da tipologia; tocar amplia num diálogo (não em tela cheia) e Esc fecha.
+  confere((await page.getByTestId('ficha-planta').count()) === 1, 'a ficha mostra a planta da tipologia');
+  await page.getByTestId('ficha-planta').click();
+  await page.waitForTimeout(400);
+  const dialogo = await page.getByRole('dialog').boundingBox();
+  const janela = page.viewportSize();
+  confere(!!dialogo && dialogo.width <= janela.width && (await page.getByRole('dialog').getByRole('img').count()) === 1, 'tocar na planta abre o diálogo com a imagem');
+  const painel = await page.locator('[role=dialog] > div').nth(1).boundingBox();
+  confere(!!painel && painel.width < janela.width * 0.9 && painel.height < janela.height, `a planta ampliada não ocupa a tela inteira (${Math.round(painel?.width ?? 0)}×${Math.round(painel?.height ?? 0)} em ${janela.width}×${janela.height})`);
+  await page.screenshot({ path: path.join(prints, '11-planta-ampliada.png') });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+  confere((await page.getByRole('dialog').count()) === 0 && !!(await fichaAberta(page)), 'Esc fecha a planta e a ficha continua aberta');
+
   // 2. Arrastar gira a câmera e NÃO troca nem fecha a ficha.
   await page.mouse.move(caixa.x + caixa.width * 0.5, caixa.y + caixa.height * 0.5);
   await page.mouse.down();

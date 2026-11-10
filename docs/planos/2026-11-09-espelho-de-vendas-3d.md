@@ -230,7 +230,7 @@ Mudou em relação ao plano aprovado (10/11/2026):
 - [x] F2 — componente `<Espelho3D>` (PR #287)
 - [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
 - [ ] F4 — Portal do Investidor: em `main` (#294, `bda7f3f6`), no ar; migration `aplicar_20271110100000_investor_portal_espelho.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: as duas internas sem EXECUTE para a API; a do link para anon; a do app só authenticated; token inexistente → `valid=false`). FALTA conferir com um investidor ligado a uma obra com torres — hoje não há nenhum vínculo investidor ↔ obra no banco
-- [ ] F5 — planta baixa por tipologia: código pronto (branch `feat/espelho-3d-f5`); FALTA aplicar a migration `aplicar_20271110400000_empreendimento_tipologia_plantas.sql` (pede autorização própria) e subir uma planta de verdade para conferir a ficha nos portais
+- [ ] F5 — planta baixa por tipologia: migration `aplicar_20271110400000_empreendimento_tipologia_plantas.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: tabela com RLS e sem SELECT para anon; 5 policies só para authenticated; bucket público de 5 MB; as duas funções com `plantas` e os privilégios de antes; VGV vendido do Bella Vista igual ao de antes, R$ 3.255.000). FALTA subir as plantas de verdade (o Garden Cambuhy tem Tipo 1 a 8) e conferir a ficha nos portais
 - [ ] F6 — vista da janela
 - [ ] F7 — luz do dia
 

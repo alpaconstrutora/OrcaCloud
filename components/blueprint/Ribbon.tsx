@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas, tabIndexDaAba } from '../ui/abasPeloTeclado';
 
 /**
  * O RIBBON do editor de Planta Inteligente — abas por disciplina, no estilo do
@@ -105,9 +106,10 @@ export default function Ribbon<Id extends string>({
         <div
           role="tablist"
           aria-label="Abas de ferramentas"
+          onKeyDown={moverEntreAbas}
           className="flex max-w-full flex-wrap items-center gap-1 rounded-[10px] border border-gray-100 bg-gray-50 p-1"
         >
-          {abas.map((a) => {
+          {abas.map((a, i) => {
             const selecionada = a.id === ativa;
             return (
               <button
@@ -115,6 +117,7 @@ export default function Ribbon<Id extends string>({
                 type="button"
                 role="tab"
                 aria-selected={selecionada}
+                tabIndex={tabIndexDaAba(selecionada, i, abas.some((x) => x.id === ativa))}
                 /* Recolhido, o clique na aba TRAZ o painel de volta: sem isto o
                    clique não faz nada visível e o usuário acha que travou. */
                 onClick={() => {
@@ -126,7 +129,7 @@ export default function Ribbon<Id extends string>({
                 onDoubleClick={() => {
                   if (!recolhido) onRecolher?.(true);
                 }}
-                className={`h-7 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium transition-all ${
+                className={`h-7 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
                   selecionada
                     ? a.contextual
                       ? 'bg-white text-emerald-700 shadow-sm'

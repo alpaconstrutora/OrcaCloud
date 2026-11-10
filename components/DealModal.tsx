@@ -13,6 +13,7 @@ import {
     intervalMonthsForType,
     sortPaymentTypes,
 } from '../constants/paymentTypes';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
 // Parte pura do Plano de Pagamento (expansão de bloco em parcelas, agrupamento
 // de volta, saldo). Testada em __tests__/paymentPlan.test.ts.
@@ -3014,21 +3015,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         formData.contract_number
     );
 
-    /** Setas/Home/End no trilho de abas: troca a aba e leva o foco junto (ativação automática). */
-    const moverEntreAbas = (e: React.KeyboardEvent<HTMLDivElement>) => {
-        const i = tabs.findIndex(t => t.id === activeTab);
-        const destino = e.key === 'ArrowRight' ? (i + 1) % tabs.length
-            : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length
-            : e.key === 'Home' ? 0
-            : e.key === 'End' ? tabs.length - 1
-            : -1;
-        if (destino < 0) return;
-        e.preventDefault();
-        const id = tabs[destino].id;
-        setActiveTab(id);
-        document.getElementById(`deal-aba-${id}`)?.focus();
-    };
-
     const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: boolean }[] = [
         {
             id: 'cliente',
@@ -3131,9 +3117,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     bg-white text-blue-600 shadow-sm; flex-wrap, nunca overflow-x-auto. */}
                 <div className="px-8 shrink-0">
                     <div className="flex items-center bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                        {/* Padrão de abas do WAI-ARIA: o leitor de tela anuncia "aba, 3 de 8,
-                            selecionada"; Tab entra só na aba ativa e as setas (Home/End)
-                            andam entre elas — antes eram 8 botões soltos (audit, 10/11/2026). */}
+                        {/* Padrão de abas do WAI-ARIA (`ui/abasPeloTeclado`): o leitor de tela
+                            anuncia "aba, 3 de 8, selecionada"; Tab entra só na aba ativa e as
+                            setas (Home/End) andam entre elas. Trilho próprio, não `TabsBar`:
+                            cada aba carrega o ponto com o motivo (title + leitor de tela). */}
                         <div
                             role="tablist"
                             aria-label="Seções da negociação"
@@ -3159,7 +3146,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         key={tab.id}
                                         type="button"
                                         role="tab"
-                                        id={`deal-aba-${tab.id}`}
                                         aria-selected={isActive}
                                         tabIndex={isActive ? 0 : -1}
                                         onClick={() => setActiveTab(tab.id)}

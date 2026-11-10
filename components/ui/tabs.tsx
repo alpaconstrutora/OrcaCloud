@@ -1,4 +1,5 @@
 import React, { createContext, useContext, useState } from 'react'
+import { moverEntreAbas } from './abasPeloTeclado'
 
 interface TabsContextValue {
   value: string
@@ -38,6 +39,7 @@ export function TabsList({ children, className = '' }: { children: React.ReactNo
   return (
     <div
       role="tablist"
+      onKeyDown={moverEntreAbas}
       className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${className}`}
     >
       {children}
@@ -50,10 +52,14 @@ export function TabsTrigger({ value, children, className = '' }: { value: string
   const active = current === value
   return (
     <button
+      type="button"
       role="tab"
       aria-selected={active}
+      // O gatilho não enxerga os irmãos: sem aba ativa, todas ficam no Tab (o
+      // valor inicial vazio do <Tabs> não pode tirar o trilho do teclado).
+      tabIndex={active || current === '' ? 0 : -1}
       onClick={() => onValueChange(value)}
-      className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+      className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
         active
           ? 'bg-white text-blue-600 shadow-sm'
           : 'text-gray-700 hover:text-gray-900'

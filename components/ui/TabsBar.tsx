@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas, tabIndexDaAba } from './abasPeloTeclado';
 
 /**
  * Toolbar de abas — §19.1 de `docs/ui_ux_guia_unificado.md`, em componente.
@@ -44,26 +45,29 @@ interface TabsBarProps<T extends string> {
 
 /* Classes por extenso — o JIT do Tailwind não enxerga classe montada em runtime. */
 const ACCENTS = {
-    blue: { ativa: 'bg-white text-blue-600 shadow-sm', contador: 'text-blue-400', novo: 'font-semibold text-blue-600' },
-    orange: { ativa: 'bg-white text-orange-600 shadow-sm', contador: 'text-orange-400', novo: 'font-semibold text-orange-600' },
-    indigo: { ativa: 'bg-white text-indigo-600 shadow-sm', contador: 'text-indigo-400', novo: 'font-semibold text-indigo-600' },
-    portal: { ativa: 'bg-white text-[#C24428] shadow-sm', contador: 'text-[#E1553C]', novo: 'font-semibold text-[#C24428]' },
+    blue: { ativa: 'bg-white text-blue-600 shadow-sm', contador: 'text-blue-400', novo: 'font-semibold text-blue-600', anel: 'focus-visible:ring-blue-500' },
+    orange: { ativa: 'bg-white text-orange-600 shadow-sm', contador: 'text-orange-400', novo: 'font-semibold text-orange-600', anel: 'focus-visible:ring-orange-500' },
+    indigo: { ativa: 'bg-white text-indigo-600 shadow-sm', contador: 'text-indigo-400', novo: 'font-semibold text-indigo-600', anel: 'focus-visible:ring-indigo-500' },
+    portal: { ativa: 'bg-white text-[#C24428] shadow-sm', contador: 'text-[#E1553C]', novo: 'font-semibold text-[#C24428]', anel: 'focus-visible:ring-[#C24428]' },
 };
 
 export function TabsBar<T extends string>({ tabs, value, onChange, children, className = '', bare, accent = 'blue' }: TabsBarProps<T>) {
     const cor = ACCENTS[accent];
+    const algumaAtiva = tabs.some(t => t.id === value);
     /* flex-wrap, nunca overflow-x-auto — rolagem horizontal esconde aba sem avisar (§19.1) */
     const trilho = (
-            <div role="tablist" className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${bare ? className : ''}`}>
-                {tabs.map(t => {
+            <div role="tablist" onKeyDown={moverEntreAbas} className={`flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full ${bare ? className : ''}`}>
+                {tabs.map((t, i) => {
                     const active = t.id === value;
                     return (
                         <button
                             key={t.id}
+                            type="button"
                             role="tab"
                             aria-selected={active}
+                            tabIndex={tabIndexDaAba(active, i, algumaAtiva)}
                             onClick={() => onChange(t.id)}
-                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-2 ${cor.anel} ${
                                 active ? cor.ativa : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

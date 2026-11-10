@@ -73,6 +73,76 @@ export function mesclarOrdemDeColunas(ordemSalva: string[], ordemDefault: string
   return out;
 }
 
+/** De que lado da coluna-alvo o mouse soltou — metade esquerda ou direita do cabeçalho. */
+export type LadoDeSoltar = 'antes' | 'depois';
+
+/**
+ * Nova ordem depois de soltar `dragKey` sobre `dropKey`.
+ *
+ * Com `lado` (o SortableHeader passa desde 09/11/2026), a coluna vai exatamente
+ * para onde a linha azul mostrou: antes ou depois da coluna-alvo. Sem `lado`
+ * (quem chama sem saber o lado), o comportamento antigo: ocupa o índice do alvo —
+ * o que, arrastando para a DIREITA, soltava DEPOIS do alvo com a linha azul
+ * desenhada ANTES dele. Era o "a posição das colunas não mantém" de Meus Fornecedores.
+ */
+export function moverColuna(ordem: string[], dragKey: string, dropKey: string, lado?: LadoDeSoltar): string[] {
+  if (dragKey === dropKey) return ordem;
+  const from = ordem.indexOf(dragKey);
+  const to = ordem.indexOf(dropKey);
+  if (from === -1 || to === -1) return ordem;
+  const next = [...ordem];
+  next.splice(from, 1);
+  if (!lado) {
+    next.splice(to, 0, dragKey);
+    return next;
+  }
+  const alvo = next.indexOf(dropKey);
+  next.splice(lado === 'antes' ? alvo : alvo + 1, 0, dragKey);
+  return next;
+}
+
+/** Forma gravada da preferência — no localStorage e, por usuário, no banco. */
+export interface PreferenciaDeColunasGravada {
+  visibleColumns?: string[];
+  sortColumn?: string | null;
+  sortDirection?: 'asc' | 'desc';
+  knownColumns?: string[];
+  columnOrder?: string[];
+}
+
+/**
+ * Preferência gravada + colunas que a tela define HOJE → estado da tabela.
+ * Coluna nova (fora de `knownColumns`) entra visível, salvo `defaultHidden`, e se
+ * encaixa na ordem ao lado da vizinha (mesclarOrdemDeColunas). Usada pela leitura
+ * do localStorage e pela do banco (usePreferenciaDeColunasDoUsuario), para as duas
+ * darem o mesmo resultado.
+ */
+export function mesclarPreferenciaDeColunas(
+  gravada: PreferenciaDeColunasGravada,
+  defaultVisibleColumns: string[],
+  allColumns: string[],
+): PersistedTableState {
+  const storedVisible = gravada.visibleColumns ?? defaultVisibleColumns;
+  // Sem knownColumns salvo (preferência de antes dessa mudança): assume que
+  // o que estava visível é tudo que o usuário conhecia até então.
+  const knownColumns = gravada.knownColumns ?? gravada.visibleColumns ?? defaultVisibleColumns;
+  // Sem columnOrder salvo (preferência de antes do drag-and-drop existir):
+  // usa a ordem default da tela.
+  const columnOrder = gravada.columnOrder ?? allColumns;
+
+  const newColumns = allColumns.filter(k => !knownColumns.includes(k));
+  // Coluna nova entra visível — a menos que a tela a tenha marcado defaultHidden.
+  const newVisibleColumns = newColumns.filter(k => defaultVisibleColumns.includes(k));
+  const missingFromOrder = allColumns.filter(k => !columnOrder.includes(k));
+  return {
+    visibleColumns: newVisibleColumns.length ? [...storedVisible, ...newVisibleColumns] : storedVisible,
+    sortColumn: gravada.sortColumn ?? null,
+    sortDirection: gravada.sortDirection ?? 'asc',
+    knownColumns: newColumns.length ? [...knownColumns, ...newColumns] : knownColumns,
+    columnOrder: missingFromOrder.length ? mesclarOrdemDeColunas(columnOrder, allColumns) : columnOrder,
+  };
+}
+
 function loadPersistedTableState(
   storageKey: string,
   defaultVisibleColumns: string[],
@@ -88,46 +158,11 @@ function loadPersistedTableState(
     const stored = localStorage.getItem(storageKey);
     if (!stored) return fallback;
     const parsed = JSON.parse(stored);
-
-    let storedVisible: string[];
-    let sortColumn: string | null;
-    let sortDirection: 'asc' | 'desc';
-    let knownColumns: string[];
-    let columnOrder: string[];
-
-    if (Array.isArray(parsed)) {
-      // Formato legado: só as colunas visíveis.
-      storedVisible = parsed;
-      sortColumn = null;
-      sortDirection = 'asc';
-      knownColumns = parsed;
-      columnOrder = parsed;
-    } else {
-      storedVisible = parsed.visibleColumns ?? defaultVisibleColumns;
-      sortColumn = parsed.sortColumn ?? null;
-      sortDirection = parsed.sortDirection ?? 'asc';
-      // Sem knownColumns salvo (preferência de antes dessa mudança): assume que
-      // o que estava visível é tudo que o usuário conhecia até então.
-      knownColumns = parsed.knownColumns ?? storedVisible;
-      // Sem columnOrder salvo (preferência de antes do drag-and-drop existir):
-      // usa a ordem default da tela.
-      columnOrder = parsed.columnOrder ?? allColumns;
-    }
-
-    const newColumns = allColumns.filter(k => !knownColumns.includes(k));
-    // Coluna nova entra visível — a menos que a tela a tenha marcado defaultHidden.
-    const newVisibleColumns = newColumns.filter(k => defaultVisibleColumns.includes(k));
-    // Colunas que a tela define hoje mas que não estão na ordem salva (coluna nova
-    // introduzida depois do último salvamento) entram ao lado da vizinha da ordem
-    // default — ver mesclarOrdemDeColunas.
-    const missingFromOrder = allColumns.filter(k => !columnOrder.includes(k));
-    return {
-      visibleColumns: newVisibleColumns.length ? [...storedVisible, ...newVisibleColumns] : storedVisible,
-      sortColumn,
-      sortDirection,
-      knownColumns: newColumns.length ? [...knownColumns, ...newColumns] : knownColumns,
-      columnOrder: missingFromOrder.length ? mesclarOrdemDeColunas(columnOrder, allColumns) : columnOrder,
-    };
+    // Formato legado: array puro = só as colunas visíveis (eram também a ordem).
+    const gravada: PreferenciaDeColunasGravada = Array.isArray(parsed)
+      ? { visibleColumns: parsed, knownColumns: parsed, columnOrder: parsed }
+      : parsed;
+    return mesclarPreferenciaDeColunas(gravada, defaultVisibleColumns, allColumns);
   } catch (e) {
     console.warn(`Failed to load table preferences from localStorage (${storageKey}):`, e);
     return fallback;
@@ -174,18 +209,9 @@ export const useTableColumns = (
   }, [columnOrder, visibleColumns]);
 
   // Estilo ClickUp: arrastar o cabeçalho de `dragKey` e soltar sobre `dropKey`
-  // troca a posição das duas colunas na ordem geral (não só entre visíveis).
-  const moveColumn = React.useCallback((dragKey: string, dropKey: string) => {
-    if (dragKey === dropKey) return;
-    setColumnOrder(prev => {
-      const from = prev.indexOf(dragKey);
-      const to = prev.indexOf(dropKey);
-      if (from === -1 || to === -1) return prev;
-      const next = [...prev];
-      next.splice(from, 1);
-      next.splice(to, 0, dragKey);
-      return next;
-    });
+  // move a coluna na ordem geral (não só entre visíveis) — ver moverColuna.
+  const moveColumn = React.useCallback((dragKey: string, dropKey: string, lado?: LadoDeSoltar) => {
+    setColumnOrder(prev => moverColuna(prev, dragKey, dropKey, lado));
   }, []);
 
   const handleColumnSort = (colKey: string) => {
@@ -204,6 +230,18 @@ export const useTableColumns = (
         : [...prev, colKey]
     );
   };
+
+  // Preferência vinda de fora do localStorage (o banco, por usuário) — passa pela
+  // mesma mescla de colunas novas que a leitura local. Aditivo.
+  const aplicarPreferencia = React.useCallback((gravada: PreferenciaDeColunasGravada) => {
+    const p = mesclarPreferenciaDeColunas(gravada, defaultVisibleColumns, allColumns);
+    setVisibleColumns(p.visibleColumns);
+    setSortColumn(p.sortColumn);
+    setSortDirection(p.sortDirection);
+    setKnownColumns(p.knownColumns);
+    setColumnOrder(p.columnOrder);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [allColumns.join('|'), defaultVisibleColumns.join('|')]);
 
   const resetColumns = () => {
     setVisibleColumns(defaultVisibleColumns);
@@ -237,6 +275,9 @@ export const useTableColumns = (
     orderedVisibleColumns,
     moveColumn,
     setColumnOrder,
+    // Preferência por usuário no banco (usePreferenciaDeColunasDoUsuario) — aditivo.
+    knownColumns,
+    aplicarPreferencia,
   };
 };
 
@@ -303,6 +344,9 @@ interface ColumnConfigButtonProps {
    * por usuário, não só no localStorage deste navegador). Omitir mantém a tela idêntica. */
   onSaveDefault?: () => void | Promise<void>;
   savingDefault?: boolean;
+  /** A tela grava a escolha no usuário sozinha (usePreferenciaDeColunasDoUsuario) —
+   *  o modal avisa. Omitir mantém o texto de antes. */
+  salvaNoUsuario?: boolean;
 }
 
 export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
@@ -314,6 +358,7 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
   onReset,
   onSaveDefault,
   savingDefault = false,
+  salvaNoUsuario = false,
 }) => {
   const visiveis = columns.filter(c => visibleColumns.includes(c.key)).length;
 
@@ -344,7 +389,9 @@ export const ColumnConfigButton: React.FC<ColumnConfigButtonProps> = ({
         <Modal open onClose={onToggleShow} size="sm" zIndex={10001}>
           <ModalHeader
             title="Colunas visíveis"
-            description={`${visiveis} de ${columns.length} na tabela. A mudança vale na hora.`}
+            description={salvaNoUsuario
+              ? `${visiveis} de ${columns.length} na tabela. A escolha e a ordem das colunas ficam salvas no seu usuário, em qualquer computador.`
+              : `${visiveis} de ${columns.length} na tabela. A mudança vale na hora.`}
             onClose={onToggleShow}
           />
           <ModalBody className="p-3">
@@ -413,7 +460,13 @@ interface SortableHeaderProps {
   /** Estilo ClickUp: presente = header vira arrastável, trocando de posição com a
    *  coluna onde for solto (via `moveColumn` de useTableColumns). Aditivo — quem
    *  não passar não ganha (nem perde) nada. */
-  onMoveColumn?: (dragKey: string, dropKey: string) => void;
+  onMoveColumn?: (dragKey: string, dropKey: string, lado?: LadoDeSoltar) => void;
+}
+
+/** Metade do cabeçalho em que o mouse está: a esquerda solta antes, a direita depois. */
+function ladoNoCabecalho(e: React.DragEvent): LadoDeSoltar {
+  const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+  return e.clientX < r.left + r.width / 2 ? 'antes' : 'depois';
 }
 
 export const SortableHeader: React.FC<SortableHeaderProps> = ({
@@ -434,7 +487,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   const caseClasses = uppercase
     ? 'text-gray-700 uppercase tracking-wider'
     : 'text-gray-700';
-  const [dragOver, setDragOver] = React.useState(false);
+  const [dragOver, setDragOver] = React.useState<LadoDeSoltar | null>(null);
   const [dragging, setDragging] = React.useState(false);
 
   const dragProps = onMoveColumn ? {
@@ -457,22 +510,27 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
     onDragOver: (e: React.DragEvent) => {
       e.preventDefault();
       e.dataTransfer.dropEffect = 'move';
-      if (!dragOver) setDragOver(true);
+      const lado = ladoNoCabecalho(e);
+      if (dragOver !== lado) setDragOver(lado);
     },
-    onDragLeave: () => setDragOver(false),
+    onDragLeave: () => setDragOver(null),
     onDrop: (e: React.DragEvent) => {
       e.preventDefault();
-      setDragOver(false);
+      setDragOver(null);
       const dragKey = e.dataTransfer.getData('text/plain');
-      if (dragKey) onMoveColumn(dragKey, colKey);
+      if (dragKey) onMoveColumn(dragKey, colKey, ladoNoCabecalho(e));
     },
   } : {};
-  // Feedback visual só do lado onde o mouse está (dragOver), estilo ClickUp — uma
-  // borda azul indica "solte aqui", à esquerda da coluna sobrevoada. `dragging`
+  // Feedback visual estilo ClickUp — uma borda azul indica "solte aqui", do lado
+  // da coluna sobrevoada em que o mouse está, e é ali que a coluna cai (o lado vai
+  // junto no onMoveColumn; até 09/11/2026 a borda ficava sempre à esquerda e a
+  // coluna arrastada para a direita caía do outro lado). `dragging`
   // esmaece a própria coluna de origem enquanto arrasta — sem isso, escondido o
   // ghost nativo (ver setDragImage acima), não sobraria nenhum indício visual
   // de qual coluna está sendo movida.
-  const dragOverClasses = dragOver ? 'before:absolute before:left-0 before:top-0 before:bottom-0 before:w-0.5 before:bg-blue-500' : '';
+  const dragOverClasses = dragOver
+    ? `before:absolute ${dragOver === 'antes' ? 'before:left-0' : 'before:right-0'} before:top-0 before:bottom-0 before:w-0.5 before:bg-blue-500`
+    : '';
   const draggingClasses = dragging ? 'opacity-40' : '';
 
   if (!sortable) {

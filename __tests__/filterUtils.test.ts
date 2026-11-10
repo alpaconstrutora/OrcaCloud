@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { applyFilterRules, distinctOptions, normalizarTexto, type FilterFieldConfig, type FilterRule } from '../components/ui/FilterUtils'
+import { applyFilterRules, conectorDasRegras, distinctOptions, normalizarTexto, type FilterFieldConfig, type FilterRule } from '../components/ui/FilterUtils'
 
 // Caso real de 10/10/2026 (Minhas Tarefas): o usuário filtrou "Status Não é concluído"
 // e nada mudou. O valor comparado precisa ser o que a célula MOSTRA, e a comparação
@@ -57,5 +57,50 @@ describe('FilterUtils — valor escolhido, comparação sem caixa nem acento', (
   it('normalizarTexto tira acento, caixa e espaço das pontas', () => {
     expect(normalizarTexto('  Concluído ')).toBe('concluido')
     expect(normalizarTexto(null)).toBe('')
+  })
+})
+
+// 09/11/2026, Meus Fornecedores: "Filtro avançado deve ter lógica E e OU para quando o
+// usuário coloca mais de um filtro".
+describe('FilterUtils — E / OU entre as regras', () => {
+  const comConector = (r: FilterRule, conector: 'e' | 'ou'): FilterRule => ({ ...r, conector })
+
+  it('sem conector (regras gravadas antes do OU) continua E', () => {
+    expect(titulos([regra('status', 'is', 'Pendente'), regra('valor', 'gt', '15')])).toEqual(['Comprar ventilador'])
+  })
+
+  it('OU: basta uma regra casar', () => {
+    expect(titulos([
+      regra('status', 'is', 'Concluído'),
+      comConector(regra('obra', 'contains', 'sao'), 'ou'),
+    ])).toEqual(['Reboco parede', 'Pintura'])
+  })
+
+  it('E antes de OU: "A e B ou C" = (A e B) ou C', () => {
+    expect(titulos([
+      regra('valor', 'gt', '5'),
+      comConector(regra('status', 'is', 'Pendente'), 'e'),
+      comConector(regra('obra', 'contains', 'ipe'), 'ou'),
+    ])).toEqual(['Reboco parede', 'Comprar ventilador'])
+  })
+
+  it('regra ainda sem valor não decide — no OU ela casaria tudo', () => {
+    expect(titulos([
+      regra('status', 'is', 'Pendente'),
+      comConector(regra('titulo', 'contains', ''), 'ou'),
+    ])).toEqual(['Comprar ventilador'])
+    expect(titulos([regra('status', 'is', '')])).toHaveLength(3)
+  })
+
+  it('regra órfã (campo saiu da tela) não faz o OU deixar tudo passar', () => {
+    expect(titulos([
+      regra('status', 'is', 'Pendente'),
+      comConector(regra('campo_removido', 'is', 'x'), 'ou'),
+    ])).toEqual(['Comprar ventilador'])
+  })
+
+  it('conectorDasRegras lê o da 2ª regra', () => {
+    expect(conectorDasRegras([])).toBe('e')
+    expect(conectorDasRegras([regra('a', 'is', 1), comConector(regra('b', 'is', 1), 'ou')])).toBe('ou')
   })
 })

@@ -4,6 +4,10 @@ export interface TableColumnPreference {
   visibleColumns: string[];
   sortColumn: string | null;
   sortDirection: 'asc' | 'desc';
+  /** Ordem de TODAS as colunas (arrastada no cabeçalho). Ausente = ordem default. */
+  columnOrder?: string[];
+  /** Colunas que a tela tinha ao gravar — coluna nova fora daqui nasce visível. */
+  knownColumns?: string[];
 }
 
 /**
@@ -20,7 +24,7 @@ export const tableColumnPreferencesService = {
   async get(userEmail: string, storageKey: string): Promise<TableColumnPreference | null> {
     const { data, error } = await supabase
       .from('user_table_column_preferences')
-      .select('visible_columns, sort_column, sort_direction')
+      .select('visible_columns, sort_column, sort_direction, column_order, known_columns')
       .eq('user_email', userEmail.toLowerCase())
       .eq('storage_key', storageKey)
       .maybeSingle();
@@ -35,6 +39,8 @@ export const tableColumnPreferencesService = {
       visibleColumns: (data.visible_columns as string[]) || [],
       sortColumn: data.sort_column,
       sortDirection: (data.sort_direction as 'asc' | 'desc') || 'asc',
+      columnOrder: (data.column_order as string[] | null) ?? undefined,
+      knownColumns: (data.known_columns as string[] | null) ?? undefined,
     };
   },
 
@@ -48,6 +54,9 @@ export const tableColumnPreferencesService = {
           visible_columns: pref.visibleColumns,
           sort_column: pref.sortColumn,
           sort_direction: pref.sortDirection,
+          // Só quando vierem: quem grava sem ordem (OpuraDocs) não apaga a que já existe.
+          ...(pref.columnOrder ? { column_order: pref.columnOrder } : {}),
+          ...(pref.knownColumns ? { known_columns: pref.knownColumns } : {}),
           updated_at: new Date().toISOString(),
         },
         { onConflict: 'user_email,storage_key' }

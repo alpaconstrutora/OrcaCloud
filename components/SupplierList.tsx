@@ -13,6 +13,7 @@ import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
 import { agruparLinhas, chavePorNome, entradasDaPagina, linhasDaTela, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
+import { usePreferenciaDeColunasDoUsuario } from '../hooks/usePreferenciaDeColunasDoUsuario';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 // Erros do Supabase/Postgrest não são instâncias de Error — são objetos
@@ -340,6 +341,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     };
 
     const tableColumns = useTableColumns(SUPPLIER_COLUMNS, 'supplierListColumns');
+    // Colunas visíveis + ordem arrastada + ordenação: escolha do usuário, no banco (09/11/2026).
+    usePreferenciaDeColunasDoUsuario(tableColumns, 'supplierListColumns');
     // Declarada antes do filtro avançado: alimenta as opções do campo Categoria.
     const distinctCategories = React.useMemo(
         () => [...new Set(suppliers.map(s => s.category).filter((c): c is string => !!c))].sort(),
@@ -573,6 +576,7 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
                                 onToggleShow={() => tableColumns.setShowColumnConfig(!tableColumns.showColumnConfig)}
                                 onToggleColumn={tableColumns.toggleColumn}
                                 onReset={tableColumns.resetColumns}
+                                salvaNoUsuario
                             />
                             {/* Autofit sob comando explícito — nunca automático (ver doc de autoFit
                                 em TableUtils). Duplo clique no divisor segue "restaurar padrão". */}

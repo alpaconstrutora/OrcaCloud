@@ -360,6 +360,92 @@ export function montarPlanoNoNegocio(deal: NegocioDoPlano, c: CamposDoPlano, idB
     };
 }
 
+/** A série principal como a tabela do plano a edita na linha. */
+export interface SerieAlvo {
+    parcelas: number;
+    tipo: string;
+    intervaloMeses: number;
+    primeiroVencimento: string;
+    /** Detalhe da série (gaveta) — vai para todas as parcelas recalculadas. */
+    paymentType?: BlocoPagamento['paymentType'];
+    notes?: string;
+}
+
+/**
+ * Edição NA LINHA da série principal (tabela do plano, aba Financeiro): a série
+ * fecha a conta sobre o que sobra do sinal e das demais linhas (reforços,
+ * chaves, avulsas), que ficam como estão — inclusive juros/principal já
+ * conhecidos. O `montarPlanoNoNegocio`, ao contrário, troca o plano inteiro por
+ * entrada + série; aqui ele é reusado com a entrada = sinal + demais linhas, e
+ * o resultado é remontado com as linhas de volta.
+ *
+ * Com juros, eles incidem só sobre a série (o saldo financiado); sinal e demais
+ * linhas entram pelo valor nominal. Locação: a parcela é o aluguel (`value`),
+ * não há sinal, e o total do contrato é a soma de tudo.
+ *
+ * Recusa (`ok: false`) quando sinal + demais linhas já cobrem a base: a série
+ * ficaria zerada ou negativa — a tela diz quanto excede.
+ */
+export function replanejarSerie(
+    deal: NegocioDoPlano,
+    sinal: number,
+    outros: BlocoPagamento[],
+    serie: SerieAlvo,
+    juros: { taxaMensal: number; sistema: SistemaAmortizacao; precoSemJuros?: number },
+    idBase: string,
+): { ok: true; patch: Partial<PropertyDeal> } | { ok: false; motivo: string; excesso: number } {
+    const venda = deal.type === 'SALE';
+    const fixos = dois((venda ? Math.max(0, sinal) : 0) + outros.reduce((t, b) => t + subtotalDoBloco(b), 0));
+    const campos: CamposDoPlano = {
+        entrada: venda ? fixos : 0,
+        parcelas: Math.max(1, Math.floor(serie.parcelas || 1)),
+        tipo: serie.tipo,
+        intervaloMeses: Math.max(1, Math.floor(serie.intervaloMeses || 1)),
+        primeiroVencimento: serie.primeiroVencimento,
+        taxaMensal: venda ? (Number(juros.taxaMensal) || 0) : 0,
+        sistema: juros.sistema,
+        ...(juros.precoSemJuros != null ? { precoSemJuros: juros.precoSemJuros } : {}),
+    };
+
+    if (venda) {
+        const { base } = preverPlano(deal, campos);
+        if (fixos >= base - 0.005) {
+            return {
+                ok: false,
+                motivo: 'O sinal e as demais linhas já cobrem o valor do contrato — não sobra nada para a série.',
+                excesso: dois(fixos - base),
+            };
+        }
+    }
+
+    const montado = montarPlanoNoNegocio(deal, campos, idBase);
+    const linhasDosOutros = outros.flatMap((b, i) => expandirBloco(b, `${idBase}-o${i}`));
+    const linhasDaSerie = (montado.custom_installments || []).map(l => ({
+        ...l,
+        ...(serie.paymentType ? { paymentType: serie.paymentType } : {}),
+        ...(serie.notes ? { notes: serie.notes } : {}),
+    }));
+    const linhas = [...linhasDosOutros, ...linhasDaSerie]
+        .sort((a, b) => a.dueDate.localeCompare(b.dueDate));
+    const blocosDaSerie = preverPlano(deal, campos).blocos;
+    const espelho = espelhoDoPlano([...outros, ...blocosDaSerie]);
+
+    const patch: Partial<PropertyDeal> = {
+        ...montado,
+        custom_installments: linhas,
+        ...(espelho ? { installment_value: espelho.valor, installments: espelho.quantidade } : {}),
+    };
+    if (venda) {
+        // O sinal é o de antes — o `montarPlanoNoNegocio` o recebeu somado às demais linhas.
+        Object.assign(patch, sinal > 0
+            ? { down_payment: dois(sinal), down_payment_installment_type: 'SINAL' }
+            : { down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined });
+    } else {
+        patch.contract_total_value = dois(linhas.reduce((t, l) => t + (Number(l.value) || 0), 0));
+    }
+    return { ok: true, patch };
+}
+
 /**
  * Bloco salvo no Sheet "Editar pagamento" (`salvarBloco` do DealModal). O
  * formulário do Sheet não tem juros, então o bloco novo nasce sem `juros`/

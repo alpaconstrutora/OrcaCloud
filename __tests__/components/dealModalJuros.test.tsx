@@ -1,7 +1,12 @@
 // @vitest-environment jsdom
 /**
- * Gerenciar Negociação › aba Financeiro › "Montar plano" com juros (09/11/2026).
+ * Gerenciar Negociação › aba Financeiro › plano de pagamento com juros (09/11/2026).
  * Plano: docs/planos/2026-11-09-negociacao-parcelamento-com-juros.md (Task 3).
+ * Desde 10/11/2026 (docs/planos/2026-11-10-negociacao-aba-financeiro.md, item 2) o
+ * painel "Montar plano" só existe como linha de partida da venda SEM plano; com
+ * plano montado, os juros ficam numa faixa acima da tabela e recalculam a série
+ * na hora — as mesmas regras (sem juros sobre juros, taxa zero volta ao plano
+ * simples, total digitado vira a base) agora valem para a faixa.
  *
  * O DealModal DE VERDADE, com a rede trocada por stubs: o que se confere aqui é
  * o que a tela mostra e o que o botão grava no Valor Total do Contrato. A
@@ -25,7 +30,10 @@ vi.mock('../../lib/supabase', () => {
 });
 const listas = vi.hoisted(() => ({ planos: [] as { name: string; interest_rate_monthly: number }[] }));
 vi.mock('../../services/salesPlanService', () => ({
-    salesPlanService: { listActive: vi.fn(async () => listas.planos) },
+    salesPlanService: {
+        listActive: vi.fn(async () => listas.planos),
+        validateSimulation: vi.fn(async () => ({ overall: 'ALLOWED', checks: [] })),
+    },
 }));
 vi.mock('../../services/commercialService', async (original) => ({
     ...(await original<typeof import('../../services/commercialService')>()),
@@ -80,12 +88,15 @@ const valorTotal = () =>
     screen.getByText('Valor Total do Contrato').parentElement!.querySelector('input') as HTMLInputElement;
 const juros = () => screen.getByLabelText('Juros a.m. (%)') as HTMLInputElement;
 const resumo = () => screen.getByText(/^Vai gerar:/).textContent!.replace(/ /g, ' ');
-const botaoMontar = () => screen.getByRole('button', { name: /^(Montar|Substituir) plano$/ });
+const botaoMontar = () => screen.getByRole('button', { name: /^Montar plano$/ });
+/** Valor mostrado na linha da série principal (a única série nestes cenários). */
+const valorDaSerie = (rotulo = 'Parcelas 1–12') =>
+    screen.getByText(rotulo).closest('tr')!.querySelectorAll('td')[2].textContent!.replace(/\u00a0/g, ' ');
 
 describe('DealModal › Montar plano com juros', () => {
     beforeEach(() => { listas.planos = []; listActive.mockClear(); });
 
-    it('remontar não aplica juros sobre juros', async () => {
+    it('juros na faixa recalculam a série sem juros sobre juros', async () => {
         abrir();
         fireEvent.change(juros(), { target: { value: '1' } });
         expect(resumo()).toBe(
@@ -97,32 +108,33 @@ describe('DealModal › Montar plano com juros', () => {
 
         fireEvent.click(botaoMontar());
         await waitFor(() => expect(valorTotal().value).toBe('106.618,53'));
-        expect(screen.getByRole('button', { name: 'Substituir plano' })).toBeInTheDocument();
+        // Montado: a linha de partida sai; o plano se edita na tabela.
+        expect(screen.queryByRole('button', { name: /^Montar plano$/ })).toBeNull();
+        expect(screen.getByText('Parcelas 1–12')).toBeInTheDocument();
 
-        // De novo, sem mudar nada: a base é o preço sem juros gravado, não o total.
-        fireEvent.click(botaoMontar());
+        // Mexer na faixa e voltar: a base é o preço sem juros gravado, não o total com juros.
+        fireEvent.change(screen.getByLabelText('Sistema'), { target: { value: 'SAC' } });
+        await waitFor(() => expect(valorTotal().value).toBe('106.500,00'));
+        fireEvent.change(screen.getByLabelText('Sistema'), { target: { value: 'PRICE' } });
         await waitFor(() => expect(valorTotal().value).toBe('106.618,53'));
         expect((screen.getByLabelText('Preço sem juros') as HTMLInputElement).value).toBe('100.000,00');
     });
 
-    it('juros zero volta ao plano simples', async () => {
+    it('juros zero na faixa volta ao plano simples', async () => {
         abrir();
         fireEvent.change(juros(), { target: { value: '1' } });
         fireEvent.click(botaoMontar());
         await waitFor(() => expect(valorTotal().value).toBe('106.618,53'));
 
         fireEvent.change(juros(), { target: { value: '0' } });
-        expect(screen.queryByLabelText('Sistema')).toBeNull();
-        // O preço sem juros gravado é a base desta montagem: o campo fica à vista.
-        expect((screen.getByLabelText('Preço sem juros') as HTMLInputElement).value).toBe('100.000,00');
-        expect(resumo()).toBe('Vai gerar: 12× parcelas mensais (11× R$ 8.333,33 + 1× R$ 8.333,37).');
-        fireEvent.click(botaoMontar());
+        // A base volta a ser o preço sem juros gravado (100.000) e as colunas de juros saem.
         await waitFor(() => expect(valorTotal().value).toBe('100.000,00'));
-        // Sem juros e sem preço sem juros gravado, o painel volta ao de sempre.
+        expect(screen.queryByLabelText('Sistema')).toBeNull();
         expect(screen.queryByLabelText('Preço sem juros')).toBeNull();
+        expect(valorDaSerie()).toBe('R$ 8.333,33 → R$ 8.333,37');
     });
 
-    it('total editado depois dos juros → taxa 0 → remontar: o Valor Total digitado fica', async () => {
+    it('total editado depois dos juros → juros zero na faixa: o Valor Total digitado fica', async () => {
         abrir();
         fireEvent.change(juros(), { target: { value: '1' } });
         fireEvent.click(botaoMontar());
@@ -134,24 +146,21 @@ describe('DealModal › Montar plano com juros', () => {
         expect((screen.getByLabelText('Preço sem juros') as HTMLInputElement).value).toBe('130.000,00');
 
         fireEvent.change(juros(), { target: { value: '0' } });
-        expect(screen.queryByLabelText('Preço sem juros')).toBeNull();
-        expect(resumo()).toBe('Vai gerar: 12× parcelas mensais (11× R$ 10.833,33 + 1× R$ 10.833,37).');
-        fireEvent.click(botaoMontar());
-        await act(async () => { await Promise.resolve(); });
+        await waitFor(() => expect(valorDaSerie()).toBe('R$ 10.833,33 → R$ 10.833,37'));
         expect(valorTotal().value).toBe('130.000,00');
-        expect(resumo()).toBe('Vai gerar: 12× parcelas mensais (11× R$ 10.833,33 + 1× R$ 10.833,37).');
+        expect(screen.queryByLabelText('Preço sem juros')).toBeNull();
     });
 
-    it('total editado depois dos juros → taxa > 0 → remontar: a base é o total digitado', async () => {
+    it('total editado depois dos juros → mexer na taxa: a base é o total digitado', async () => {
         abrir();
         fireEvent.change(juros(), { target: { value: '1' } });
         fireEvent.click(botaoMontar());
         await waitFor(() => expect(valorTotal().value).toBe('106.618,53'));
 
         fireEvent.change(valorTotal(), { target: { value: '13000000' } });
-        expect(resumo()).toMatch(/^Vai gerar: 12× parcelas mensais de R\$ 11\.550,34 \(Price, 1% a\.m\.\)/);
-        fireEvent.click(botaoMontar());
+        fireEvent.change(juros(), { target: { value: '1.0' } });
         await waitFor(() => expect(valorTotal().value).not.toBe('130.000,00'));
+        expect(valorDaSerie()).toMatch(/^R\$ 11\.550,34/);
         expect((screen.getByLabelText('Preço sem juros') as HTMLInputElement).value).toBe('130.000,00');
     });
 
@@ -168,11 +177,11 @@ describe('DealModal › Montar plano com juros', () => {
         listas.planos = [{ name: 'Tabela 2026', interest_rate_monthly: 1.2 }, { name: 'À vista', interest_rate_monthly: 0 }];
         abrir();
         await waitFor(() => expect(juros().value).toBe('1.2'));
-        expect(screen.getByText('Do plano de vendas Tabela 2026.')).toBeInTheDocument();
+        expect(screen.getByText('Taxa do plano de vendas Tabela 2026.')).toBeInTheDocument();
         // Editável, e o que o usuário digita vence a sugestão.
         fireEvent.change(juros(), { target: { value: '0.9' } });
         expect(juros().value).toBe('0.9');
-        expect(screen.queryByText(/Do plano de vendas/)).toBeNull();
+        expect(screen.queryByText(/Taxa do plano de vendas/)).toBeNull();
     });
 
     it('dois planos com juros: não sugere nada', async () => {
@@ -194,7 +203,7 @@ describe('DealModal › Montar plano com juros', () => {
     it('locação não mostra os campos de juros', async () => {
         listas.planos = [{ name: 'Tabela 2026', interest_rate_monthly: 1.2 }];
         abrir('RENTAL');
-        expect(screen.getByText('Montar plano de pagamento')).toBeInTheDocument();
+        expect(botaoMontar()).toBeInTheDocument();
         // Locação não pergunta pelo plano de vendas.
         await act(async () => { await Promise.resolve(); });
         expect(listActive).not.toHaveBeenCalled();
@@ -212,9 +221,10 @@ describe('DealModal › Montar plano com juros', () => {
         abrir('SALE', plano);
         await aguardarPlanoDeVendas();
         expect(juros().value).toBe('');
-        expect(screen.queryByText(/Do plano de vendas/)).toBeNull();
-        expect(resumo()).not.toMatch(/a\.m\./);
-        expect(screen.getByRole('button', { name: 'Substituir plano' })).toBeInTheDocument();
+        expect(screen.queryByText(/Taxa do plano de vendas/)).toBeNull();
+        // Com plano montado não há linha de partida: o plano se edita na tabela.
+        expect(screen.queryByText(/^Vai gerar:/)).toBeNull();
+        expect(screen.getByText('Parcelas 1–10')).toBeInTheDocument();
     });
 });
 

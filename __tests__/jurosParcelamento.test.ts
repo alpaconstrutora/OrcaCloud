@@ -11,11 +11,12 @@ import {
     planoComoSchedule,
     atualizacaoDoContratoPeloPlano,
     espelhoDoPlano,
+    replanejarSerie,
     type PlanoComJuros,
     type CamposDoPlano,
     type NegocioDoPlano,
 } from '../utils/jurosParcelamento';
-import { agruparPlano, expandirBloco, montarPlanoRapido } from '../utils/paymentPlan';
+import { agruparPlano, expandirBloco, montarPlanoRapido, saldoDoPlano, type BlocoPagamento } from '../utils/paymentPlan';
 import type { PropertyDeal } from '../types/imovib';
 
 const dois = (n: number) => Number(n.toFixed(2));
@@ -457,5 +458,74 @@ describe('planoComoSchedule / atualizacaoDoContratoPeloPlano — o elo DealModal
             ] as PropertyDeal['custom_installments'],
         });
         expect(linhas.map(l => l.date)).toEqual(['2026-12-10', '2027-01-10']);
+    });
+});
+
+describe('replanejarSerie', () => {
+    // A tabela do plano edita a série principal NA LINHA: ela fecha a conta sobre
+    // o que sobra do sinal e das demais linhas, que ficam como estão (o
+    // montarPlanoNoNegocio, ao contrário, troca o plano inteiro por entrada + série).
+    const chaves: BlocoPagamento = { tipo: 'CHAVES', quantidade: 1, valorParcela: 10000, primeiroVencimento: '2031-01-10', intervaloMeses: null };
+    const serie = { parcelas: 47, tipo: 'MENSAL', intervaloMeses: 1, primeiroVencimento: '2026-12-10' };
+    const semJuros = { taxaMensal: 0, sistema: 'PRICE' as const };
+
+    it('sem juros: sinal e chaves ficam; a série fecha o total', () => {
+        const r = replanejarSerie(negocio({ contract_total_value: 80000 }), 30000, [chaves], serie, semJuros, 'x');
+        if (!r.ok) throw new Error(r.motivo);
+        expect(r.patch.down_payment).toBe(30000);
+        const linhas = r.patch.custom_installments!;
+        expect(linhas.filter(l => l.installmentType === 'CHAVES').map(l => l.value)).toEqual([10000]);
+        expect(linhas.filter(l => l.installmentType === 'MENSAL')).toHaveLength(47);
+        expect(saldoDoPlano(80000, 30000, linhas)).toBe(0);
+        expect(r.patch.payment_due_date).toBe('2026-12-10');
+    });
+
+    it('com juros (Price): juros só sobre a série; chaves nominal; total = preço + juros', () => {
+        const r = replanejarSerie(negocio({ contract_total_value: 80000 }), 30000, [chaves], serie, { taxaMensal: 1, sistema: 'PRICE' }, 'x');
+        if (!r.ok) throw new Error(r.motivo);
+        const linhas = r.patch.custom_installments!;
+        const mensais = linhas.filter(l => l.installmentType === 'MENSAL');
+        expect(mensais).toHaveLength(47);
+        expect(mensais.every(l => (l.interest ?? 0) >= 0 && l.principal != null)).toBe(true);
+        const principal = mensais.reduce((t, l) => t + (l.principal ?? 0), 0);
+        expect(Math.round(principal * 100) / 100).toBe(40000);
+        const chavesLinha = linhas.find(l => l.installmentType === 'CHAVES')!;
+        expect(chavesLinha.value).toBe(10000);
+        expect(chavesLinha.interest ?? null).toBeNull();
+        expect(r.patch.interest_rate_monthly).toBe(1);
+        expect(r.patch.price_before_interest).toBe(80000);
+        const juros = mensais.reduce((t, l) => t + (l.interest ?? 0), 0);
+        expect(r.patch.contract_total_value).toBeCloseTo(80000 + juros, 2);
+    });
+
+    it('sinal + demais linhas já passam do total: recusa e diz quanto excede', () => {
+        const r = replanejarSerie(negocio({ contract_total_value: 80000 }), 50000, [{ ...chaves, valorParcela: 40000 }], serie, semJuros, 'x');
+        expect(r.ok).toBe(false);
+        if (r.ok) return;
+        expect(r.excesso).toBe(10000);
+    });
+
+    it('locação: a parcela é o aluguel; demais linhas ficam; total = soma', () => {
+        const caucao: BlocoPagamento = { tipo: 'AVULSA', quantidade: 1, valorParcela: 5000, primeiroVencimento: '2026-11-15', intervaloMeses: null };
+        const r = replanejarSerie(negocio({ type: 'RENTAL', value: 2500, contract_total_value: 0 }), 0, [caucao], { ...serie, parcelas: 24 }, semJuros, 'x');
+        if (!r.ok) throw new Error(r.motivo);
+        expect('down_payment' in r.patch).toBe(false);
+        const linhas = r.patch.custom_installments!;
+        expect(linhas.filter(l => l.installmentType === 'MENSAL').every(l => l.value === 2500)).toBe(true);
+        expect(r.patch.contract_total_value).toBe(24 * 2500 + 5000);
+    });
+
+    it('a forma de pagamento e a observação da série sobrevivem ao recálculo', () => {
+        const r = replanejarSerie(negocio({ contract_total_value: 80000 }), 30000, [], { ...serie, paymentType: 'BOLETO', notes: 'Boleto Sicredi' }, semJuros, 'x');
+        if (!r.ok) throw new Error(r.motivo);
+        expect(r.patch.custom_installments!.every(l => l.paymentType === 'BOLETO' && l.notes === 'Boleto Sicredi')).toBe(true);
+    });
+
+    it('demais linhas com juros conhecidos mantêm a decomposição', () => {
+        const reforco: BlocoPagamento = { ...chaves, tipo: 'ANUAL', juros: [120], principal: [9880] };
+        const r = replanejarSerie(negocio({ contract_total_value: 80000 }), 30000, [reforco], serie, semJuros, 'x');
+        if (!r.ok) throw new Error(r.motivo);
+        const l = r.patch.custom_installments!.find(x => x.installmentType === 'ANUAL')!;
+        expect([l.interest, l.principal]).toEqual([120, 9880]);
     });
 });

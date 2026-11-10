@@ -164,7 +164,22 @@ seletores; fonte de 11 px; fecha a crítica.
   não visto: o "Lançar" do cabeçalho (exige venda já lançada).
   Fora do escopo, anotado: a aba Contrato ainda tem 2 azuis sólidos ("Gerar Documento do
   Contrato", "Gerar Contrato").
-- [ ] 5. audit
+- [x] 5. audit — relatório (o audit DOCUMENTA; as correções vão para o item 6). Nota 13/20
+  (A11y 2 · Desempenho 3 · Tema 3 · Responsivo 3 · Integridade 2), medido no dev local:
+  - P1: 4 campos sem nome acessível (valor da unidade na Composição, Valor Total, Condição de
+    pagamento, Data Efetiva — `<label>` sem `htmlFor`); abas sem `role="tablist"/"tab"`,
+    `aria-selected` nem setas; contraste < 4,5 — prefixos "R$" 2,60 e "BRL" 2,49, "Nenhum centro de
+    custo/Nenhuma conta vinculada" 2,48, "Total do contrato · 1 unidade" 4,44, "Análise de Crédito"
+    2,60; valor da unidade (Composição) sem indicador de foco.
+  - P2: CC e Plano de Contas no tamanho `md` (54px, `rounded-2xl`, borda quase invisível — §7.1.1
+    pede `size="sm"`); placeholder "0" dos juros 3,42; "BRL" × "R$"; em 390px o rodapé corta
+    "Salvar alterações" (termina em 416px numa tela de 386px — app interno é de computador).
+  - P3: "ANÁLISE DE CRÉDITO" em caixa alta/`font-black` (§21) e seta 1,47; `text-[11px]` em 2
+    lugares fora da aba (dica do lote em cinza-claro, status do contrato); H1 → H3 sem H2.
+  - Detector: 14 avisos de tamanho de fonte — 12× `text-[13px]` são falso positivo (o guia do app
+    prescreve 13px em botões; o DESIGN.md lido é o do Portal do Colaborador), 2× 11px reais (P3).
+  - Bom: tabela nova toda nomeada (aria-label), foco visível nas demais paradas, ordem de Tab
+    lógica, sem `dark:` (§33), tabela rola dentro do contêiner em 390px, conferência com espera.
 - [ ] 6. polish
 
 ## Desvios registrados

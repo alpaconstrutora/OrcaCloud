@@ -271,6 +271,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // Idem para o "+ Item avulso", na régua de "Itens do pedido" — a tabela
     // "Itens avulsos" do formulário repetia estas linhas (pedido de 10/11/2026).
     const [barraItens, setBarraItens] = React.useState<HTMLDivElement | null>(null);
+    // "+ Item do orçamento" abre uma tela do formulário no lugar desta tabela.
+    const [telaOrcamentoAberta, setTelaOrcamentoAberta] = React.useState(false);
     const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>(
         initialView === 'logistics' ? 'recebimento' : 'dados'
     );
@@ -1316,7 +1318,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     Removido a pedido do usuário em 2026-08-20. */}
 
                 {/* ── Aba "Itens do Pedido": tabela do pedido (leitura) ── */}
-                {abaDetalhe === 'itens' && (
+                {abaDetalhe === 'itens' && !telaOrcamentoAberta && (
                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                     {/* §5.2 — toolbar ACOPLADA: a régua de controles e a tabela
                         dividem um card só. Moldura, borda e sombra ficam no pai; a
@@ -1562,6 +1564,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             barraItens={barraItens}
                             itensGravados={order.items}
                             versaoGravada={order.version}
+                            onTelaOrcamento={setTelaOrcamentoAberta}
                         />
                     </div>
                 )}

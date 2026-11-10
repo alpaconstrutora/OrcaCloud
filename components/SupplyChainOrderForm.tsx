@@ -18,7 +18,7 @@ import { sinapiService } from '../services/sinapiService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { costCenterService } from '../services/costCenterService';
-import PedidoOrcamentoPicker, { type ItemDoOrcamentoEscolhido } from './suprimentos/PedidoOrcamentoPicker';
+import PedidoOrcamentoTela, { type ItemDoOrcamentoEscolhido } from './suprimentos/PedidoOrcamentoTela';
 import DatabasePickerModal from './DatabasePickerModal';
 import { Supplier, BudgetEntry, SinapiItem, PaymentAccount, CostCenter } from '../types';
 import { CostCenterV2 } from '../types/financial';
@@ -158,12 +158,15 @@ interface SupplyChainOrderFormProps {
      *  antiga e cairia em conflito de versão. */
     itensGravados?: PedidoItemGravado[];
     versaoGravada?: number;
+    /** Embutido: a tela "Itens do orçamento da obra" abriu/fechou — o detalhe
+     *  esconde a tabela "Itens do pedido" enquanto ela está aberta. */
+    onTelaOrcamento?: (aberta: boolean) => void;
 }
 
 /** Item como está gravado em `purchase_orders.items`. */
 type PedidoItemGravado = { code: string; description: string; unit: string; quantity: number; unitPrice: number; total?: number; quotedUnitPrice?: number | null; quotedTotal?: number | null; avulso?: boolean };
 
-const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados', barraDeAcoes, barraItens, itensGravados, versaoGravada }) => {
+const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados', barraDeAcoes, barraItens, itensGravados, versaoGravada, onTelaOrcamento }) => {
     const { orgId: contextOrgId } = useOrgContext();
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
@@ -253,9 +256,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [quotedPrices, setQuotedPrices] = React.useState<Map<string, number | null>>(new Map());
     const [selectedMaterialsData, setSelectedMaterialsData] = React.useState<Map<string, SinapiItem>>(new Map());
 
-    // "+ Item do orçamento" — painel com o orçamento da obra (pedido de 10/11/2026;
-    // antes a tabela "Seleção de materiais da obra" ficava sempre aberta).
+    // "+ Item do orçamento" — tela própria com o orçamento da obra, no lugar da
+    // lista de itens (pedidos de 10/11/2026: primeiro a tabela "Seleção de
+    // materiais da obra" sempre aberta virou painel; o painel ficou estreito e
+    // virou tela).
     const [pickerOrcamentoAberto, setPickerOrcamentoAberto] = React.useState(false);
+    React.useEffect(() => { onTelaOrcamento?.(pickerOrcamentoAberto); }, [pickerOrcamentoAberto, onTelaOrcamento]);
+    // Trocar de aba no detalhe fecha a tela — voltar à aba Itens mostra a lista.
+    React.useEffect(() => { setPickerOrcamentoAberto(false); }, [painel]);
     const [formError, setFormError] = React.useState<string | null>(null);
 
     // Avulso Items State
@@ -1554,7 +1562,29 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                             {/* Embutido: a tabela "Itens do pedido" do detalhe já lista os
                                 avulsos — aqui fica só o "+ Item avulso", desenhado na
                                 régua dela (pedido de 10/11/2026). */}
-                            {embedded && mostrarItens && selectedProjectId && barraItens && createPortal(
+                            {/* "+ Item do orçamento": a tela entra no lugar da lista de itens
+                                (no detalhe, o próprio detalhe esconde a tabela dele). */}
+                            {mostrarItens && selectedProjectId && pickerOrcamentoAberto && (
+                                <PedidoOrcamentoTela
+                                    onVoltar={() => setPickerOrcamentoAberto(false)}
+                                    budget={projectData?.budget ?? []}
+                                    precos={customPrices}
+                                    compradas={purchasedQuantities}
+                                    noPedido={codigosNoPedido}
+                                    onItemAvulso={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                                    onAdd={async (itens) => {
+                                        if (embedded && isEditing) {
+                                            const erro = await acrescentarAoPedido(itens);
+                                            if (erro) return erro;
+                                        } else {
+                                            incluirDoOrcamento(itens);
+                                        }
+                                        setPickerOrcamentoAberto(false);
+                                    }}
+                                />
+                            )}
+
+                            {embedded && mostrarItens && selectedProjectId && barraItens && !pickerOrcamentoAberto && createPortal(
                                 <>
                                 {/* "+ Item do orçamento" abre o painel com o orçamento da obra
                                     (pedido de 10/11/2026 — a tabela de seleção ficava sempre aberta). */}
@@ -1578,7 +1608,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 barraItens,
                             )}
 
-                            {!embedded && mostrarItens && selectedProjectId && (
+                            {!embedded && mostrarItens && selectedProjectId && !pickerOrcamentoAberto && (
                                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                                     {/* §5.2 — toolbar ACOPLADA: régua de controles e tabela no
                                         mesmo card, sem moldura própria. Conteúdo do §5.1: busca,
@@ -1859,31 +1889,6 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     />
                 )}
 
-                {/* Montado só aberto: o Sheet fechado continua no DOM, e com
-                    orçamento de centenas de linhas a tabela inteira ficaria
-                    desenhada escondida na aba Itens. */}
-                {pickerOrcamentoAberto && (
-                <PedidoOrcamentoPicker
-                    open={pickerOrcamentoAberto}
-                    onClose={() => setPickerOrcamentoAberto(false)}
-                    budget={projectData?.budget ?? []}
-                    precos={customPrices}
-                    compradas={purchasedQuantities}
-                    noPedido={codigosNoPedido}
-                    // O Novo pedido é uma camada z-[110]; o painel vem por cima.
-                    zIndex={embedded ? undefined : 130}
-                    onItemAvulso={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
-                    onAdd={async (itens) => {
-                        if (embedded && isEditing) {
-                            const erro = await acrescentarAoPedido(itens);
-                            if (erro) return erro;
-                        } else {
-                            incluirDoOrcamento(itens);
-                        }
-                        setPickerOrcamentoAberto(false);
-                    }}
-                />
-                )}
             </div>
         </div>
     );

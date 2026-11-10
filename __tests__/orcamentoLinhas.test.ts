@@ -14,6 +14,8 @@ const ORCAMENTO = [
         composition: [
             { code: 'TACO', description: 'Taco de madeira', unit: 'm2', price: 120, type: SinapiType.INPUT, quantity: 1.05 },
             { code: 'COLA', description: 'Cola PVA', unit: 'kg', price: 30, type: SinapiType.INPUT, quantity: 0.4 },
+            { code: '88316', description: 'SERVENTE COM ENCARGOS COMPLEMENTARES', unit: 'H', price: 20.92, type: SinapiType.COMPOSITION, quantity: 0.24 },
+            { code: '5631', description: 'ESCAVADEIRA HIDRÁULICA', unit: 'CHP', price: 250, type: SinapiType.COMPOSITION, quantity: 0.01 },
         ],
     } },
     { id: 'b3', quantity: 1, sinapiItem: { code: 'SRV', description: 'Limpeza final', unit: 'vb', price: 900, type: SinapiType.SERVICE } },
@@ -22,7 +24,7 @@ const ORCAMENTO = [
 describe('montarLinhas (base comum)', () => {
     it('desdobra a composição nos insumos, com coeficiente × quantidade orçada, e usa o preço SINAPI quando houver', () => {
         const linhas = montarLinhas(ORCAMENTO, new Map([['COLA', 33]]));
-        expect(linhas.map(l => l.code)).toEqual(['CIM', '101751', 'TACO', 'COLA', 'SRV']);
+        expect(linhas.map(l => l.code)).toEqual(['CIM', '101751', 'TACO', 'COLA', '88316', '5631', 'SRV']);
         const taco = linhas.find(l => l.code === 'TACO')!;
         expect(taco.quantity).toBe(6.0244); // 1.05 × 5.7375 = 6.024375
         expect(taco.compositionCode).toBe('101751');
@@ -37,6 +39,11 @@ describe('linhasDoOrcamentoParaPedido', () => {
 
     it('serviço de topo fica de fora — pedido de compra não compra serviço', () => {
         expect(linhas.some(l => l.code === 'SRV')).toBe(false);
+    });
+
+    it('mão de obra da composição (unidade H) fica de fora; equipamento (CHP) continua', () => {
+        expect(linhas.some(l => l.code === '88316')).toBe(false);
+        expect(por('5631').compositionCode).toBe('101751');
     });
 
     it('a composição é título (não se marca); os insumos dela, sim', () => {

@@ -1,4 +1,4 @@
-import { SinapiType, type BudgetEntry } from '../types/budget';
+import { SinapiCategory, SinapiType, type BudgetEntry } from '../types/budget';
 
 /**
  * Linhas do orçamento da obra para os seletores de Suprimentos.
@@ -74,6 +74,8 @@ export function montarLinhas(budget: BudgetEntry[], preco: Map<string, number>):
  * - `jaNoPedido`: o código já está neste pedido — editar a quantidade é na
  *   tabela "Itens do pedido", não incluir de novo.
  * - `aComprar`: orçada − comprada, nunca negativa.
+ * - Mão de obra da composição (Servente, Carpinteiro…) fica de fora — não se
+ *   compra em pedido (pedido do usuário em 10/11/2026). Ver `ehMaoDeObra`.
  */
 export interface LinhaDoOrcamentoNoPedido extends LinhaDoOrcamento {
     comprada: number;
@@ -82,14 +84,27 @@ export interface LinhaDoOrcamentoNoPedido extends LinhaDoOrcamento {
     jaNoPedido: boolean;
 }
 
+/**
+ * Insumo de mão de obra. Nas composições gravadas no orçamento a `category`
+ * vem vazia; o que marca a mão de obra SINAPI é a unidade H (hora) — "SERVENTE
+ * COM ENCARGOS COMPLEMENTARES", "CARPINTEIRO DE FORMAS…". Equipamento vem em
+ * CHP/CHI (custo horário) e NÃO entra aqui.
+ */
+export function ehMaoDeObra(item: { unit?: string; category?: string }): boolean {
+    return item.category === SinapiCategory.MAO_DE_OBRA || (item.unit ?? '').trim().toUpperCase() === 'H';
+}
+
 export function linhasDoOrcamentoParaPedido(
     budget: BudgetEntry[],
     preco: Map<string, number>,
     compradas: Map<string, number>,
     noPedido: Set<string>,
 ): LinhaDoOrcamentoNoPedido[] {
+    const maoDeObra = new Set<string>();
+    budget.forEach(e => e.sinapiItem?.composition?.forEach(c => { if (ehMaoDeObra(c)) maoDeObra.add(`${e.id}:${c.code}`); }));
     return montarLinhas(budget, preco)
         .filter(l => l.compositionCode || l.type !== SinapiType.SERVICE)
+        .filter(l => !maoDeObra.has(l.key))
         .map(l => {
             const titulo = !l.compositionCode && l.type === SinapiType.COMPOSITION;
             const comprada = titulo ? 0 : (compradas.get(l.code) ?? 0);

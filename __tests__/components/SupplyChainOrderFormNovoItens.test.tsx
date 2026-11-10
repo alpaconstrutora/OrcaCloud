@@ -117,6 +117,16 @@ describe('Novo pedido › Itens do pedido', () => {
         expect(orderService.createOrder).not.toHaveBeenCalled();
     });
 
+    it('a tela do orçamento entra no lugar da lista; "Voltar" devolve a lista sem incluir nada', async () => {
+        fireEvent.click(await abrirComObra());
+        expect(await screen.findByText('Itens do orçamento da obra')).toBeTruthy();
+        expect(screen.queryByText('Nenhum item no pedido')).toBeNull();
+
+        fireEvent.click(screen.getByRole('button', { name: 'Voltar para Itens do pedido' }));
+        await waitFor(() => expect(screen.getByText('Nenhum item no pedido')).toBeTruthy());
+        expect(screen.queryByText('Itens do orçamento da obra')).toBeNull();
+    });
+
     it('editar item do orçamento: descrição travada, quantidade muda; excluir tira da lista', async () => {
         fireEvent.click(await abrirComObra());
         fireEvent.click(within((await screen.findByText('Brita 1')).closest('tr')!).getByRole('checkbox'));

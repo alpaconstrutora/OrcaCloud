@@ -182,6 +182,18 @@ describe('montarCenaDoEspelho — o status', () => {
 });
 
 describe('montarCenaDoEspelho — o que fica de fora', () => {
+  it('unidade oculta ocupa o seu lugar na torre, mas sai neutra: sem id, sem nome, sem status', () => {
+    const cena = montarCenaDoEspelho({ torres: [torre('A')], unidadesOcultas: new Set(['A-1-2']) });
+    const doAndar = cena.prismas.filter((p) => p.andar === 1);
+    expect(doAndar).toHaveLength(4);
+    expect(doAndar.filter((p) => p.unitId).map((p) => p.unitId).sort()).toEqual(['A-1-1', 'A-1-3', 'A-1-4']);
+    expect(doAndar.find((p) => !p.unitId)).toMatchObject({ rotulo: null, status: null });
+    // As outras não se alargam para o lugar dela.
+    for (const p of doAndar) expect(area(p.anel)).toBeCloseTo(80, 0);
+    expect(contagemPorStatus(cena.prismas).available).toBe(11);
+    expect(cena.torres[0].unidades).toBe(11);
+  });
+
   it('quadra de loteamento não é torre', () => {
     const cena = montarCenaDoEspelho({ torres: [torre('A'), torre('Q', { blueprint_quadra_uid: 'q1' })] });
     expect(cena.torres.map((t) => t.torreId)).toEqual(['A']);

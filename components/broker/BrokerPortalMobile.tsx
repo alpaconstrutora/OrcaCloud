@@ -19,6 +19,7 @@ import BrokerTraining from './BrokerTraining';
 import BrokerEvents from './BrokerEvents';
 import BrokerChat from './BrokerChat';
 import { useBrokerPortal, TAB_BY_ID, formatCurrency, type PortalTab } from './useBrokerPortal';
+import { EstoqueEm3D, SeletorDaVisaoDoEstoque } from './EstoqueEm3D';
 import { abasDoCelular, abasHabilitadas } from '../../utils/brokerPortalTabs';
 import type { BrokerProfile } from '../../types';
 
@@ -236,16 +237,20 @@ const BrokerPortalMobile: React.FC<Props> = ({ profile, organizationId, portalTo
                             <div className="space-y-4">
                                 <FiltrosDoEstoque h={h} />
                                 <div data-tour="estoque-mapa">
-                                    <PropertyUnitMap
-                                        units={h.displayUnits}
-                                        parentProperty={h.buildings.find(b => b.id === h.selectedBuildingId)}
-                                        deals={h.dealsDoMapa}
-                                        onSelectUnit={h.handleMakeProposal}
-                                        onReserveUnit={h.handleReserve}
-                                        selectedUnitIds={h.cart.map(u => u.id)}
-                                        onToggleUnit={h.handleToggleCart}
-                                        compacto
-                                    />
+                                    {h.estoqueEm3d ? (
+                                        <EstoqueEm3D h={h} />
+                                    ) : (
+                                        <PropertyUnitMap
+                                            units={h.displayUnits}
+                                            parentProperty={h.buildings.find(b => b.id === h.selectedBuildingId)}
+                                            deals={h.dealsDoMapa}
+                                            onSelectUnit={h.handleMakeProposal}
+                                            onReserveUnit={h.handleReserve}
+                                            selectedUnitIds={h.cart.map(u => u.id)}
+                                            onToggleUnit={h.handleToggleCart}
+                                            compacto
+                                        />
+                                    )}
                                 </div>
                             </div>
                         )}
@@ -553,6 +558,7 @@ const FiltrosDoEstoque: React.FC<{ h: ReturnType<typeof useBrokerPortal> }> = ({
                 {h.buildings.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
             </select>
         )}
+        <SeletorDaVisaoDoEstoque h={h} />
     </div>
 );
 

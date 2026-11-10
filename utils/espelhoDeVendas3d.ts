@@ -98,6 +98,11 @@ export interface EntradaDaCena {
   pavimentosPorTorre?: ReadonlyMap<string, EmpreendimentoFloor[]>;
   /** O status de cada unidade (pelo id) quando quem chama já o resolveu pela negociação; sem ele, o do cadastro. */
   statusPorUnidade?: ReadonlyMap<string, SaleUnitStatus>;
+  /**
+   * Unidades que ocupam o seu lugar na torre mas não se mostram a quem olha (o imóvel não está liberado ao corretor,
+   * ou a unidade não tem imóvel no estoque): o prisma sai neutro, sem id nem status — a torre fica inteira.
+   */
+  unidadesOcultas?: ReadonlySet<string>;
   /** `empreendimentos.distancias_entre_torres`, já lido por `lerDistancias`. */
   distancias?: readonly DistanciaEntreTorres[];
   hipoteses?: Partial<HipotesesDoEspelho>;
@@ -156,7 +161,7 @@ interface TorreMontada {
 }
 
 /** Os prismas de um piso: uma fatia por unidade, ou o contorno inteiro quando o andar não tem unidade. */
-function prismasDoPiso(m: TorreMontada, piso: PisoDaTorre, anel: Point[], statusDe: (u: UnidadeDoPiso) => SaleUnitStatus, avisos: Set<string>): PrismaDoEspelho[] {
+function prismasDoPiso(m: TorreMontada, piso: PisoDaTorre, anel: Point[], statusDe: (u: UnidadeDoPiso) => SaleUnitStatus, ocultas: ReadonlySet<string> | undefined, avisos: Set<string>): PrismaDoEspelho[] {
   const comum = {
     torreId: m.t.id,
     torre: m.nome,
@@ -180,7 +185,9 @@ function prismasDoPiso(m: TorreMontada, piso: PisoDaTorre, anel: Point[], status
   }
   return fatias.map((fatia, k) => {
     const { u } = arrumadas.unidades[k];
-    return { ...comum, chave: `${m.t.id}:${piso.numero}:${u.id ?? `u${k}`}`, unitId: u.id, rotulo: u.nome, anel: fatia, status: statusDe(u) };
+    const chave = `${m.t.id}:${piso.numero}:${u.id ?? `u${k}`}`;
+    if (u.id && ocultas?.has(u.id)) return { ...comum, chave, unitId: null, rotulo: null, anel: fatia, status: null };
+    return { ...comum, chave, unitId: u.id, rotulo: u.nome, anel: fatia, status: statusDe(u) };
   });
 }
 
@@ -235,7 +242,7 @@ export function montarCenaDoEspelho(entrada: EntradaDaCena): CenaDoEspelho {
       anel = anel.map((p) => ({ x: p.x + dx, y: p.y + dy }));
       cursor += c.maxX - c.minX;
     }
-    const daTorre = m.pisos.flatMap((piso) => prismasDoPiso(m, piso, anel, statusDe, avisos));
+    const daTorre = m.pisos.flatMap((piso) => prismasDoPiso(m, piso, anel, statusDe, entrada.unidadesOcultas, avisos));
     prismas.push(...daTorre);
     naCena.push({
       torreId: m.t.id,

@@ -21,6 +21,18 @@ export const PALETA_PADRAO_DO_ESPELHO: PaletaDoEspelho = {
   other: { cor: SALE_STATUS_COLORS.other, rotulo: 'Outro status', plural: 'Outros status' },
 };
 
+/** O que o cadastro diz da unidade, além do que o prisma já traz (torre, andar, nome, status) — a ficha. */
+export interface DadosDaUnidade {
+  tipologia?: string | null;
+  areaPrivativaM2?: number | null;
+  dormitorios?: number | null;
+  banheiros?: number | null;
+  vagas?: number | null;
+  /** Preço de tabela; só aparece com `mostrarPreco`. */
+  preco?: number | null;
+  fotoUrl?: string | null;
+}
+
 /** A ordem da legenda: o que está à venda primeiro. */
 export const ORDEM_DOS_STATUS: readonly SaleUnitStatus[] = ['available', 'reserved', 'sold', 'exchanged', 'other'];
 

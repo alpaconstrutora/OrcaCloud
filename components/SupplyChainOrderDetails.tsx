@@ -265,6 +265,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // `initialView='logistics'` (lista de pedidos e portal do fornecedor pedem
     // "ver a logística deste pedido") não abre mais uma tela própria: abre esta
     // tela já na aba Recebimento, que é onde o rastreamento passou a morar.
+    // Ponto do cabeçalho onde o formulário embutido desenha o "Salvar alterações",
+    // ao lado de "Negociar" (pedido de 10/11/2026) — ver SupplyChainOrderForm `barraDeAcoes`.
+    const [barraSalvar, setBarraSalvar] = React.useState<HTMLDivElement | null>(null);
     const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>(
         initialView === 'logistics' ? 'recebimento' : 'dados'
     );
@@ -1195,6 +1198,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         </button>
                     )}
 
+                    {/* "Salvar alterações" do formulário embutido, por portal — só nas
+                        abas que editam o pedido (nas outras o formulário fica escondido). */}
+                    {ehComprador && (abaDetalhe === 'dados' || abaDetalhe === 'itens' || abaDetalhe === 'financeiro') && (
+                        <div ref={setBarraSalvar} className="contents" />
+                    )}
+
                     <button
                         onClick={() => setShowNegotiation(true)}
                         className={`flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] text-[13px] font-medium transition-all border active:scale-95 ${A.negotiateBtn}`}
@@ -1544,6 +1553,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             editingOrderId={order.id}
                             onBack={() => { /* sem "voltar": a tela é o detalhe */ }}
                             onSave={() => { loadOrderData(); }}
+                            barraDeAcoes={barraSalvar}
                         />
                     </div>
                 )}

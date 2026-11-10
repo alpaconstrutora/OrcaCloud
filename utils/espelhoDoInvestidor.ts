@@ -16,6 +16,7 @@ import type { EmpreendimentoFloor, EmpreendimentoUnit, FloorTipo, OrdemDasUnidad
 import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
 import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
 import { plantaDaUnidade, plantasPorChave, type PlantaDaTipologia } from './espelhoPlantaDaTipologia';
+import { rotuloDaVista, vistaDaUnidade, type VistaDaTorre } from './espelhoVistaDaJanela';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade } from './espelhoDeVendas3dMalha';
 
@@ -53,6 +54,8 @@ export interface TorreDoInvestidor extends LinhaComContorno {
   distancias_entre_torres: unknown;
   floors: EmpreendimentoFloor[];
   units: UnidadeDoInvestidor[];
+  /** As vistas da janela da torre, por faixa de andares (F6). Ausente antes da migration. */
+  vistas?: VistaDaTorre[] | null;
 }
 
 export interface ObraDoEspelho {
@@ -97,6 +100,8 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
   const ocultas = new Set<string>();
   const pavimentosPorTorre = new Map<string, EmpreendimentoFloor[]>();
   const plantas = plantasPorChave(obra.plantas);
+  // Sem nenhuma vista na obra a ficha nem fala nisso (`vista` fica de fora).
+  const obraTemVista = (obra.torres ?? []).some((t) => (t.vistas ?? []).length > 0);
   let unidades = 0;
   let vendidas = 0;
   let vgvEstoque = 0;
@@ -128,6 +133,12 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
             dados.set(u.id, {
               tipologia: u.typology,
               plantaUrl: plantaDaUnidade(plantas, u.typology),
+              ...(obraTemVista
+                ? (() => {
+                    const v = vistaDaUnidade(t.vistas, u.floor, u.sun_orientation);
+                    return { vista: v ? { url: v.imagem_url, legenda: v.legenda ?? null, cobre: rotuloDaVista(v) } : null };
+                  })()
+                : {}),
               areaPrivativaM2: numero(u.private_area),
               dormitorios: numero(u.bedrooms),
               banheiros: numero(u.bathrooms),

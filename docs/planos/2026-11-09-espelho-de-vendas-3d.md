@@ -212,9 +212,21 @@ Mudou em relação ao plano aprovado (10/11/2026):
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| migration | Tabela `empreendimento_tower_vistas (tower_id, andar_de, andar_ate, orientacao, imagem_url, legenda)`. | — |
-| `utils/espelhoVistaDaUnidade.ts` (novo) | `vistaDaUnidade(vistas, andar, sun_orientation)`: a faixa mais estreita que contém o andar; orientação igual vence a nula. | Teste puro. |
-| `TowerEditor.tsx`, `FichaDaUnidade.tsx`, RPCs | Cadastro por torre; botão "Vista da janela", desligado com motivo sem imagem. | Conferido nos dois portais. |
+| `supabase/migrations/aplicar_20271110600000_empreendimento_tower_vistas.sql` (novo) | Tabela `empreendimento_tower_vistas (tower_id, andar_de, andar_ate, orientacao, imagem_url, imagem_path, legenda)` com CHECK da faixa em ordem e da orientação conhecida; RLS pela organização do empreendimento da torre; fechada para anon. A imagem vai no bucket `empreendimento-midia` da F5 (`…/vistas/`). Reescreve `fn_broker_portal_get_espelho` e `fn_espelho_de_vendas_das_obras` com o MESMO corpo mais a chave `vistas` em cada torre. | Aplicada no banco: a verificação embutida passa; privilégios das duas funções iguais aos de antes; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `utils/espelhoVistaDaJanela.ts` (novo) | `vistaDaUnidade(vistas, andar, orientacao)`: das faixas que contêm o andar, a da mesma face vence a de qualquer face; depois, a mais estreita; vista de outra face nunca serve. `orientacaoDoImovel` (`NORTH` → `NORTE`), `rotuloDaVista`, `problemaDaVista`. | `npx vitest run __tests__/espelhoVistaDaJanela.test.ts` verde (10 casos). |
+| `services/empreendimentoTowerVistasService.ts` (novo) | `listar`, `dasTorres`, `adicionar` (sobe a foto, grava, confere a linha que voltou e apaga o arquivo solto se não ficou), `remover`. | Typecheck; coberto pelos testes de quem usa. |
+| `components/empreendimento/VistasDaTorreSecao.tsx` (novo) + `TowerEditor.tsx` | Seção "Vista da janela" dentro do card da torre: lista das vistas com o que cada uma cobre, e o formulário (do andar, até o andar, face, legenda, foto); "Adicionar vista" desligado dizendo o que falta. | `npx vitest run __tests__/components/VistasDaTorreSecao.test.tsx` verde (9 casos); cadastrar uma vista numa torre do Garden Cambuhy. |
+| `services/espelhoDeVendasService.ts` | `estruturaDoPredio` traz `vistas` de cada torre (tolerante à tabela ausente). | Typecheck. |
+| `utils/espelhoDoEstoque.ts`, `utils/espelhoDoInvestidor.ts`, `utils/espelhoDeVendas3dMalha.ts` | `DadosDaUnidade.vista`: ausente = o prédio não tem vista (a ficha nem fala nisso); `null` = tem, mas nenhuma cobre a unidade; senão `{ url, legenda, cobre }`. No corretor o imóvel acha a torre pela unidade ligada e, sem ligação, pelo nome do bloco (a regra do contorno). | Casos novos nos dois testes. |
+| `components/espelho3d/FichaDaUnidade.tsx` | Botão "Vista da janela": abre a foto num diálogo central com a legenda e a faixa; desligado, com o motivo no `title` e escrito embaixo (em tablet não há hover). | 3 casos novos em `Espelho3D.test.tsx`; passeio do harness. |
+| `__tests__/espelhoDoInvestidor.test.ts` | A trava do texto vale para a migration nova: tabela com RLS e fechada para anon; nas funções só entram as chaves da vista e nenhuma de antes sai; a vista sai pela torre que a função já entregava. | 4 casos novos passam. |
+
+Corrigido junto (achado conferindo a F5 em produção, 10/11/2026): o 3D rotulava a unidade por `number || name`; no Garden
+Cambuhy o `number` de todo imóvel é 1201 (o número do endereço), e a lista e a ficha diziam "Unidade 1201" para as 34.
+Passa a ser `name || number`, como o espelho 2D.
+
+Mudou em relação ao plano aprovado: a ficha só mostra o botão quando o prédio tem alguma vista cadastrada (desligado,
+com o motivo, quando nenhuma cobre a unidade). Um botão sempre desligado em todo prédio sem vista seria só ruído.
 
 ### F7 — Luz do dia
 
@@ -230,8 +242,8 @@ Mudou em relação ao plano aprovado (10/11/2026):
 - [x] F2 — componente `<Espelho3D>` (PR #287)
 - [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
 - [ ] F4 — Portal do Investidor: em `main` (#294, `bda7f3f6`), no ar; migration `aplicar_20271110100000_investor_portal_espelho.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: as duas internas sem EXECUTE para a API; a do link para anon; a do app só authenticated; token inexistente → `valid=false`). FALTA conferir com um investidor ligado a uma obra com torres — hoje não há nenhum vínculo investidor ↔ obra no banco
-- [ ] F5 — planta baixa por tipologia: migration `aplicar_20271110500000_empreendimento_tipologia_plantas.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: tabela com RLS e sem SELECT para anon; 5 policies só para authenticated; bucket público de 5 MB; as duas funções com `plantas` e os privilégios de antes; VGV vendido do Bella Vista igual ao de antes, R$ 3.255.000). FALTA subir as plantas de verdade (o Garden Cambuhy tem Tipo 1 a 8) e conferir a ficha nos portais
-- [ ] F6 — vista da janela
+- [x] F5 — planta baixa por tipologia: #300 (`e48e216c`); migration `aplicar_20271110500000_empreendimento_tipologia_plantas.sql` aplicada em 10/11/2026 com autorização do usuário; as 8 plantas do Garden Cambuhy (Tipo 1 a 8) foram subidas pelo usuário e a ficha foi conferida em produção no Portal do Corretor (unidade de Tipo 3 com a planta carregada)
+- [ ] F6 — vista da janela: código pronto (branch `feat/espelho-3d-f6`); FALTA aplicar a migration `aplicar_20271110600000_empreendimento_tower_vistas.sql` (pede autorização própria) e cadastrar uma vista de verdade para conferir a ficha nos portais
 - [ ] F7 — luz do dia
 
 ## Riscos

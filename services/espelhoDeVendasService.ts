@@ -5,6 +5,8 @@ import { contornoDaLinha, type ContornoParaATorre, type LinhaComContorno } from 
 import type { ContornoDaTorre } from '../utils/espelhoDeVendas3d';
 import type { PlantaDaTipologia } from '../utils/espelhoPlantaDaTipologia';
 import { empreendimentoTipologiaPlantasService } from './empreendimentoTipologiaPlantasService';
+import { empreendimentoTowerVistasService } from './empreendimentoTowerVistasService';
+import type { VistaDaTorre } from '../utils/espelhoVistaDaJanela';
 
 /**
  * ESPELHO DE VENDAS 3D (F3, 09/11/2026) — a estrutura das torres do Empreendimento
@@ -24,7 +26,7 @@ const CONTORNO_COLS = 'contorno_na_planta, contorno_frente, contorno_norte_deg, 
 const FLOOR_COLS = 'id, tower_id, name, tipo, floor_number, repeat_count, units_per_floor, prefix, pe_direito_m, elevacao_m, sort_order, created_at, updated_at';
 const UNIT_COLS = 'id, tower_id, name, floor, floor_tipo, private_area, position_type, sun_orientation, sort_order, vaga_na_planta, commercial_property_id';
 
-type LinhaDaTorre = Omit<TorreDaEstrutura, 'commercial_building_id' | 'distancias_entre_torres' | 'floors' | 'units' | 'contorno_na_planta' | 'contorno_frente' | 'contorno_norte_deg'> & { empreendimento_id: string };
+type LinhaDaTorre = Omit<TorreDaEstrutura, 'commercial_building_id' | 'distancias_entre_torres' | 'floors' | 'units' | 'vistas' | 'contorno_na_planta' | 'contorno_frente' | 'contorno_norte_deg'> & { empreendimento_id: string };
 
 /** Coluna que ainda não existe no banco (a migration do contorno não foi aplicada). */
 const colunaAusente = (e: { code?: string; message?: string } | null) =>
@@ -84,11 +86,13 @@ export const espelhoDeVendasService = {
         if (torres.length === 0) return [];
         const ids = torres.map(t => t.id);
 
-        const [floorsRes, unitsRes, contornos] = await Promise.all([
+        const [floorsRes, unitsRes, contornos, vistas] = await Promise.all([
             supabase.from('empreendimento_floors').select(FLOOR_COLS).in('tower_id', ids).order('sort_order'),
             supabase.from('empreendimento_units').select(UNIT_COLS).in('tower_id', ids).order('sort_order'),
             // Sem contorno (ou sem a coluna) a torre sai esquemática — nunca derruba o desenho.
             this.contornosGravados(ids).catch(() => new Map<string, ContornoGravado>()),
+            // Sem vista (ou sem a tabela) a ficha só não fala em vista — nunca derruba o desenho.
+            empreendimentoTowerVistasService.dasTorres(ids).catch(() => new Map<string, VistaDaTorre[]>()),
         ]);
         if (floorsRes.error) throw floorsRes.error;
         if (unitsRes.error) throw unitsRes.error;
@@ -104,6 +108,7 @@ export const espelhoDeVendasService = {
             commercial_building_id: doEmpreendimento.get(empreendimento_id)?.commercial_building_id ?? null,
             distancias_entre_torres: doEmpreendimento.get(empreendimento_id)?.distancias_entre_torres ?? null,
             floors: floors.filter(f => f.tower_id === t.id),
+            vistas: vistas.get(t.id) ?? [],
             units: units.filter(u => u.tower_id === t.id).map(({ tower_id: _torre, commercial_property_id, ...u }) => ({ ...u, property_id: commercial_property_id })),
         }));
     },

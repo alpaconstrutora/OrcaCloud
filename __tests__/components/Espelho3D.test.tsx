@@ -127,6 +127,36 @@ describe('Espelho3D — ficha', () => {
         expect(screen.queryByTestId('ficha-planta')).toBeNull();
     });
 
+    // F6 (10/11/2026): a vista da janela.
+    it('unidade com vista: o botão abre a foto num diálogo, com a legenda e o que ela cobre', async () => {
+        const comVista = new Map<string, DadosDaUnidade>([['A-1-2', { vista: { url: 'https://x/vista.jpg', legenda: 'Vista para a praça', cobre: 'Térreo ao 3º pavimento · qualquer face' } }]]);
+        montar({ dados: comVista });
+        fireEvent.click(await screen.findByTestId('cena'));
+        const botao = screen.getByRole('button', { name: 'Vista da janela' });
+        expect(botao).not.toBeDisabled();
+        fireEvent.click(botao);
+        const dialogo = screen.getByRole('dialog');
+        expect(within(dialogo).getByAltText('Vista da janela').getAttribute('src')).toBe('https://x/vista.jpg');
+        expect(within(dialogo).getByText('Vista para a praça · Térreo ao 3º pavimento · qualquer face')).toBeTruthy();
+        fireEvent.click(within(dialogo).getByRole('button', { name: 'Fechar a vista' }));
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('o prédio tem vistas mas nenhuma cobre esta unidade: o botão fica desligado e diz por quê', async () => {
+        montar({ dados: new Map<string, DadosDaUnidade>([['A-1-2', { vista: null }]]) });
+        fireEvent.click(await screen.findByTestId('cena'));
+        const botao = screen.getByRole('button', { name: 'Vista da janela' });
+        expect(botao).toBeDisabled();
+        expect(botao.parentElement!.getAttribute('title')).toBe('Não há foto de vista cadastrada para o andar desta unidade.');
+        expect(screen.getByText('Não há foto de vista cadastrada para o andar desta unidade.')).toBeTruthy();
+    });
+
+    it('prédio sem nenhuma vista cadastrada: a ficha nem fala em vista', async () => {
+        montar();
+        fireEvent.click(await screen.findByTestId('cena'));
+        expect(screen.queryByRole('button', { name: 'Vista da janela' })).toBeNull();
+    });
+
     it('fechar a ficha tira a seleção', async () => {
         montar();
         fireEvent.click(await screen.findByTestId('cena'));

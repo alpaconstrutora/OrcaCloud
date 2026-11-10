@@ -1,5 +1,6 @@
 // @ts-nocheck
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import TabsBar from './ui/TabsBar';
 import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders, BarChart3, Link2, Check, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 // Vocabulário ÚNICO do status da negociação (Proposta → … → Concluído), o mesmo
@@ -2125,66 +2126,20 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 delas — então a navegação fica no topo, e o KPI passa a ser conteúdo
                 da aba "Unidades do edifício". */}
             {selectedBuildingId && (
-                <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    <button
-                        onClick={() => setActiveTab('inventory')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <HomeIcon className="w-3.5 h-3.5" />
-                        Unidades do edifício
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('deals')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'deals' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <Tag className="w-3.5 h-3.5" />
-                        Negociações
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('price-tables')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'price-tables' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <DollarSign className="w-3.5 h-3.5" />
-                        Tabela de preços
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('sales-plans')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'sales-plans' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <Percent className="w-3.5 h-3.5" />
-                        Planos de vendas
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('brokers')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'brokers' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <User className="w-3.5 h-3.5" />
-                        Corretores
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('intelligence')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'intelligence' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <Sliders className="w-3.5 h-3.5" />
-                        Inteligência
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('dashboard')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <TrendingUp className="w-3.5 h-3.5" />
-                        Resultados
-                    </button>
-                    <button
-                        onClick={() => setActiveTab('simulation')}
-                        className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'simulation' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
-                    >
-                        <Activity className="w-3.5 h-3.5" />
-                        Simulação
-                    </button>
-                </div>
-                </div>
+                <TabsBar<SalesTab>
+                    tabs={[
+                        { id: 'inventory', label: 'Unidades do edifício', icon: <HomeIcon className="w-3.5 h-3.5" /> },
+                        { id: 'deals', label: 'Negociações', icon: <Tag className="w-3.5 h-3.5" /> },
+                        { id: 'price-tables', label: 'Tabela de preços', icon: <DollarSign className="w-3.5 h-3.5" /> },
+                        { id: 'sales-plans', label: 'Planos de vendas', icon: <Percent className="w-3.5 h-3.5" /> },
+                        { id: 'brokers', label: 'Corretores', icon: <User className="w-3.5 h-3.5" /> },
+                        { id: 'intelligence', label: 'Inteligência', icon: <Sliders className="w-3.5 h-3.5" /> },
+                        { id: 'dashboard', label: 'Resultados', icon: <TrendingUp className="w-3.5 h-3.5" /> },
+                        { id: 'simulation', label: 'Simulação', icon: <Activity className="w-3.5 h-3.5" /> },
+                    ]}
+                    value={activeTab}
+                    onChange={setActiveTab}
+                />
             )}
 
             {/* 3. KPI cards — só existem na aba "Unidades do edifício" (inventory);

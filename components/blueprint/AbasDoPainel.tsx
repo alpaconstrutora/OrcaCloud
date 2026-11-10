@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas, tabIndexDaAba } from '../ui/abasPeloTeclado';
 
 /**
  * Barra de abas do painel lateral do editor — anatomia do §19.1 do guia.
@@ -46,15 +47,17 @@ export default function AbasDoPainel<T extends string>({
       <div
         className="flex max-w-full flex-wrap items-center gap-1 rounded-[10px] border border-gray-100 bg-gray-50 p-1"
         role="tablist"
+        onKeyDown={moverEntreAbas}
       >
-        {abas.map((a) => (
+        {abas.map((a, i) => (
           <button
             key={a.id}
             type="button"
             role="tab"
             aria-selected={ativa === a.id}
+            tabIndex={tabIndexDaAba(ativa === a.id, i, abas.some((x) => x.id === ativa))}
             onClick={() => onEscolher(a.id)}
-            className={`h-7 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium transition-all ${
+            className={`h-7 whitespace-nowrap rounded-[6px] px-3 text-sm font-medium outline-none transition-all focus-visible:ring-2 focus-visible:ring-blue-500 ${
               ativa === a.id
                 ? 'bg-white text-blue-600 shadow-sm'
                 : 'text-gray-700 hover:text-gray-900'

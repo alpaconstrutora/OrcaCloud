@@ -8,6 +8,7 @@ import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFoot
 import CostCenterSelect from '../CostCenterSelect';
 import HierarchicalSelect from '../HierarchicalSelect';
 import { centroPadraoDoCondominio, sindicoPortalService, type CondominioDoFinanceiro, type IdentidadeDoSindico } from '../../services/sindicoPortalService';
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import type { ContaDoCondominio } from '../../utils/financeiroDoSindico';
 import {
     ROTULO_SITUACAO_DO_MOVIMENTO, motivoNaoConciliaMovimento, motivoNaoIgnoraMovimento, resumoDoExtrato, situacaoDoMovimento,
@@ -369,10 +370,10 @@ const ConciliarSheet: React.FC<{
             </SheetHeader>
             <SheetPanel className="p-4 md:p-6">
                 <div className="bg-white p-6 rounded-[10px] border border-gray-100 shadow-sm space-y-6">
-                    <div className="inline-flex rounded-[8px] border border-[#ECECEF] p-0.5" role="tablist">
+                    <div className="inline-flex rounded-[8px] border border-[#ECECEF] p-0.5" role="tablist" aria-label="Como conciliar" onKeyDown={moverEntreAbas}>
                         {([['titulo', 'Casar com um título'], ['lancar', 'Lançar e conciliar']] as const).map(([id, rotulo]) => (
-                            <button key={id} type="button" role="tab" aria-selected={modo === id} onClick={() => setModo(id)}
-                                className={`h-8 px-3 rounded-[6px] text-sm ${modo === id ? 'bg-[#FDEDE8] text-[#C24428] font-medium' : 'text-[#4A505C] hover:bg-gray-50'}`}>
+                            <button key={id} type="button" role="tab" aria-selected={modo === id} tabIndex={modo === id ? 0 : -1} onClick={() => setModo(id)}
+                                className={`h-8 px-3 rounded-[6px] text-sm outline-none focus-visible:ring-2 focus-visible:ring-[#C24428] ${modo === id ? 'bg-[#FDEDE8] text-[#C24428] font-medium' : 'text-[#4A505C] hover:bg-gray-50'}`}>
                                 {rotulo}
                             </button>
                         ))}

@@ -12,6 +12,9 @@ import { PropertyStatus, UserProfile, ProfileGroup } from '../../types';
 import type { BrokerUnit, BrokerProposal, BrokerProfile, BrokerCommission } from '../../types';
 import { useOrgContext } from '../../hooks/useOrgContext';
 import type { PropertyDeal } from '../../types/imovib';
+import { usePersistedState } from '../ui/TableUtils';
+import { espelhoDeVendasService } from '../../services/espelhoDeVendasService';
+import { montarEspelhoDoEstoque, type TorreDaEstrutura } from '../../utils/espelhoDoEstoque';
 
 /**
  * Comportamento do Portal do Corretor — uma fonte só para as duas cascas
@@ -309,6 +312,46 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
         })
     ] as unknown as PropertyDeal[], [commercialDeals, proposals]);
 
+    // ── Estoque em 3D (Espelho de Vendas 3D, F3 — 09/11/2026) ─────────────────
+    // Plano: docs/planos/2026-11-09-espelho-de-vendas-3d.md. O 3D desenha UM prédio:
+    // o escolhido no filtro, ou o único quando só há um. A forma vem do
+    // Empreendimento quando o prédio o tem ligado; senão do próprio estoque
+    // (`montarEspelhoDoEstoque`). Status e negócios são os MESMOS do 2D.
+    const [visaoDoEstoque, setVisaoDoEstoque] = usePersistedState<'2D' | '3D'>('broker_portal_estoque_visao', '2D');
+    const predioDoEspelho = selectedBuildingId !== 'all' ? selectedBuildingId : buildings.length === 1 ? buildings[0].id : null;
+    /** Por que o 3D não pode ser aberto agora — vai no `title` do botão desligado. */
+    const motivoSem3d = selectedPurpose === 'RENTAL'
+        ? 'O 3D mostra o estoque de venda. Escolha Vendas ou Todos.'
+        : !predioDoEspelho
+            ? (buildings.length === 0 ? 'Não há empreendimento com torre no estoque para desenhar.' : 'Escolha um empreendimento para ver em 3D.')
+            : null;
+    const estoqueEm3d = visaoDoEstoque === '3D' && !motivoSem3d;
+
+    // Pelo link a RPC traz as torres de todos os prédios de uma vez; dentro do app,
+    // as do prédio escolhido. Falha (ou função ainda não aplicada) = sem estrutura:
+    // o desenho sai do estoque — nunca derruba a aba.
+    const chaveDaEstrutura = portalToken ? 'link' : predioDoEspelho ? `predio:${predioDoEspelho}` : null;
+    const [estrutura, setEstrutura] = useState<{ chave: string; torres: TorreDaEstrutura[] } | null>(null);
+    const estruturaPronta = !!chaveDaEstrutura && estrutura?.chave === chaveDaEstrutura;
+    React.useEffect(() => {
+        if (!estoqueEm3d || !chaveDaEstrutura || estruturaPronta) return;
+        let vivo = true;
+        Promise.resolve()
+            .then(() => portalToken ? espelhoDeVendasService.estruturaPorToken(portalToken) : espelhoDeVendasService.estruturaDoPredio(predioDoEspelho!))
+            .catch(err => { console.warn('[BrokerPortal] estrutura do espelho 3D indisponível — desenhando pelo estoque:', err); return [] as TorreDaEstrutura[]; })
+            .then(torres => { if (vivo) setEstrutura({ chave: chaveDaEstrutura, torres }); });
+        return () => { vivo = false; };
+    }, [estoqueEm3d, chaveDaEstrutura, estruturaPronta, portalToken, predioDoEspelho]);
+
+    const espelhoDoEstoque = useMemo(() => {
+        if (!estoqueEm3d || !predioDoEspelho || !estruturaPronta) return null;
+        return montarEspelhoDoEstoque({
+            imoveis: visibleUnits.filter(u => u.parent_id === predioDoEspelho),
+            negocios: dealsDoMapa,
+            estrutura: estrutura!.torres.filter(t => t.commercial_building_id === predioDoEspelho),
+        });
+    }, [estoqueEm3d, predioDoEspelho, estruturaPronta, estrutura, visibleUnits, dealsDoMapa]);
+
     // ── Aviso curto (antes eram `alert()` do navegador) ───────────────────────
     const [shareMsg, setShareMsg] = useState<string | null>(null);
     const toastTimer = React.useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -475,6 +518,7 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
         currentTab, setCurrentTab, irParaAba,
         selectedPurpose, setSelectedPurpose, selectedBuildingId, setSelectedBuildingId,
         units, loading, proposals, myProposals, visibleUnits, buildings, displayUnits, dealsDoMapa, stats,
+        visaoDoEstoque, setVisaoDoEstoque, motivoSem3d, estoqueEm3d, espelhoDoEstoque,
         cart, cartTotal, cartWarning, setCartWarning, handleToggleCart, limparCesta,
         showSimulator, setShowSimulator, abrirSimulador: abrirSimuladorDaCesta, cancelarSimulador, handleMakeProposal, handleSubmitProposal, handleReserve,
         effectiveBroker, effectiveBrokerEmail, brokerDisplayName,

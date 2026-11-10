@@ -1,7 +1,7 @@
 import React from 'react';
 import { X } from 'lucide-react';
 import type { PrismaDoEspelho } from '../../utils/espelhoDeVendas3d';
-import type { PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
+import type { DadosDaUnidade, PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
 
 /**
  * A ficha da unidade tocada no Espelho de Vendas 3D (09/11/2026). Plano:
@@ -12,17 +12,7 @@ import type { PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
  * cor semântica, igual nos dois — e não a pílula de um nem a do outro.
  */
 
-/** O que o cadastro diz da unidade, além do que o prisma já traz (torre, andar, nome, status). */
-export interface DadosDaUnidade {
-    tipologia?: string | null;
-    areaPrivativaM2?: number | null;
-    dormitorios?: number | null;
-    banheiros?: number | null;
-    vagas?: number | null;
-    /** Preço de tabela; só aparece com `mostrarPreco`. */
-    preco?: number | null;
-    fotoUrl?: string | null;
-}
+export type { DadosDaUnidade };
 
 const m2 = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })} m²`;
 const brl = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });

@@ -19,6 +19,7 @@ import MobilePreviewFrame from './MobilePreviewFrame';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { useBrokerPortal, ALL_TABS, TAB_BY_ID, formatCurrency, type PortalTab } from './broker/useBrokerPortal';
+import { EstoqueEm3D, SeletorDaVisaoDoEstoque } from './broker/EstoqueEm3D';
 import { ehAbaDeDemonstracao } from '../utils/brokerPortalTabs';
 import type { BrokerProfile } from '../types';
 
@@ -75,6 +76,7 @@ const BrokerPortal: React.FC<BrokerPortalProps> = (props) => {
 };
 
 const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab = 'analytics', organizationId: initialOrgId, isPreview = false, portalToken, initialBroker, onBack, forcarTour = null, onLogout }) => {
+    const h = useBrokerPortal({ profile, activeTab, organizationId: initialOrgId, isPreview, portalToken, initialBroker });
     const {
         isAdmin, selectedOrgId, currentTab, irParaAba,
         selectedPurpose, setSelectedPurpose, selectedBuildingId, setSelectedBuildingId,
@@ -84,7 +86,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
         effectiveBroker, effectiveBrokerEmail, brokerDisplayName,
         enabledTabIds, visibleTabs, navTabs, toggleTabVisibility,
         proposalUnitLabel, handleProposalPdf, handleProposalShare, shareMsg, toast,
-    } = useBrokerPortal({ profile, activeTab, organizationId: initialOrgId, isPreview, portalToken, initialBroker });
+    } = h;
 
     const [showMobilePreview, setShowMobilePreview] = useState(false);
     const [showTabConfig, setShowTabConfig] = useState(false);
@@ -560,6 +562,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             {currentTab === 'estoque' && !showSimulator && (
                 <div className="space-y-6">
                     <div className="flex flex-col xl:flex-row gap-4 justify-between xl:items-center">
+                        <div className="flex flex-wrap items-center gap-2">
                         <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit shrink-0" data-tour="estoque-finalidade">
                             {[
                                 { id: 'SALE', label: 'Vendas' },
@@ -577,6 +580,8 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                                     {p.label}
                                 </button>
                             ))}
+                        </div>
+                        <SeletorDaVisaoDoEstoque h={h} />
                         </div>
 
                         {buildings.length > 0 && (
@@ -611,6 +616,9 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                     </div>
 
                     <div data-tour="estoque-mapa">
+                    {h.estoqueEm3d ? (
+                        <EstoqueEm3D h={h} />
+                    ) : (
                     <PropertyUnitMap
                         units={displayUnits}
                         parentProperty={buildings.find(b => b.id === selectedBuildingId)}
@@ -620,6 +628,7 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                         selectedUnitIds={cart.map(u => u.id)}
                         onToggleUnit={handleToggleCart}
                     />
+                    )}
                     </div>
                 </div>
             )}

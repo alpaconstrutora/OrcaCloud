@@ -114,6 +114,17 @@ describe('Suprimentos › Contratos', () => {
         expect(screen.queryByText('Fundação')).toBeNull();
         expect(screen.getByText('Pintura')).toBeTruthy();
     });
+
+    // 10/11/2026: o lápis abria o drawer com o contrato da LISTA (sem
+    // payment_schedule) e o salvar regravava as parcelas. Agora abre a página.
+    // docs/planos/2026-11-10-contrato-lapis-abre-pagina.md
+    it('o lápis "Ajustar Contrato" abre a página do contrato', async () => {
+        const onViewDetails = vi.fn();
+        render(<SupplyChainContractList projectId="" organizationId="org1" onCreateNew={() => {}} onViewDetails={onViewDetails} />);
+        const linha = (await screen.findByText('Pintura')).closest('tr')!;
+        fireEvent.click(within(linha).getByTitle('Ajustar Contrato'));
+        expect(onViewDetails).toHaveBeenCalledWith('2');
+    });
 });
 
 describe('Suprimentos › Cotações', () => {

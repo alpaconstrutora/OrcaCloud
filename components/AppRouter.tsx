@@ -997,7 +997,6 @@ const AppRouter: React.FC<AppRouterProps> = (props) => {
           setContractsVersion={setContractsVersion}
           setSelectedContractId={setSelectedContractId}
           setIsCreatingContract={setIsCreatingContract}
-          setEditingContract={setEditingContract}
           budget={budget}
         />
       );
@@ -1624,13 +1623,12 @@ interface ShellProps {
     setContractsVersion: (fn: (v: number) => number) => void;
     setSelectedContractId: (id: string | null) => void;
     setIsCreatingContract: (v: boolean) => void;
-    setEditingContract: (c: Contract | null) => void;
     budget: BudgetEntry[];
 }
 
 const ContractsDashboardShell: React.FC<ShellProps> = ({
     organizationId, projectId, contractsVersion, setContractsVersion,
-    setSelectedContractId, setIsCreatingContract, setEditingContract,
+    setSelectedContractId, setIsCreatingContract,
 }) => {
     const [templatesOpen, setTemplatesOpen] = React.useState(false);
 
@@ -1641,7 +1639,6 @@ const ContractsDashboardShell: React.FC<ShellProps> = ({
                 domain="SUPRIMENTOS"
                 onCreateNew={() => setIsCreatingContract(true)}
                 onViewDetails={(id) => setSelectedContractId(id)}
-                onEdit={(contract) => { setEditingContract(contract); setIsCreatingContract(true); }}
                 onDelete={() => setContractsVersion(v => v + 1)}
                 organizationId={organizationId || undefined}
                 version={contractsVersion}

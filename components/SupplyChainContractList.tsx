@@ -184,7 +184,6 @@ interface SupplyChainContractListProps {
     projectId: string;
     onCreateNew: () => void;
     onViewDetails: (contractId: string) => void;
-    onEdit?: (contract: Contract) => void;
     onDelete?: () => void;
     organizationId?: string;
     version?: number;
@@ -200,7 +199,6 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
     projectId,
     onCreateNew,
     onViewDetails,
-    onEdit,
     onDelete,
     organizationId,
     version,
@@ -609,7 +607,10 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <FileText className="w-5 h-5" />
                                     </div>
                                     <div className="flex flex-col gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                        <ActionIconButton kind="edit" size="sm" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit && onEdit(contract); }} />
+                                        {/* Ajustar = a página do contrato (abas Resumo/Financeiro/Emissão).
+                                            O drawer recebia o contrato da LISTA, sem payment_schedule, e o
+                                            salvar regravava as parcelas (10/11/2026). Drawer só cria. */}
+                                        <ActionIconButton kind="edit" size="sm" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onViewDetails(contract.id); }} />
                                         <ActionIconButton kind="duplicate" size="sm" title="Duplicar Contrato" onClick={(e) => handleDuplicate(e, contract.id)} />
                                         <ActionIconButton kind="delete" size="sm" title="Excluir Contrato" onClick={(e) => handleDelete(e, contract.id)} />
                                     </div>
@@ -737,7 +738,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                                 >
                                                     Ver Detalhes
                                                 </button>
-                                                <ActionIconButton kind="edit" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onEdit?.(contract); }} />
+                                                {/* Mesma página do "Ver Detalhes" — ver o comentário da grade. */}
+                                                <ActionIconButton kind="edit" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onViewDetails(contract.id); }} />
                                                 <InlineDisclosureMenu
                                                     menuItems={[
                                                         { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar Contrato', onClick: () => performDuplicate(contract.id) },

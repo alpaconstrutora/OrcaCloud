@@ -44,7 +44,17 @@ export interface Investor {
     email?: string;
     phone?: string;
     document?: string;
+    /** Organização DONA — a que pode editá-lo. Compartilhar é `is_shared`, nunca NULL. */
     organization_id?: string;
+    /**
+     * "Disponível em todas as organizações": aparece na lista de cada organização
+     * de quem marcou, e o Portal do Investidor mostra as obras vinculadas a ele
+     * nessas organizações (`fn_orgs_do_investidor`). Os destinos ficam em
+     * `investor_org_shares`, gravados por gatilho.
+     */
+    is_shared?: boolean;
+    /** Organizações de destino do compartilhamento (só leitura, derivado). */
+    _shared_org_ids?: string[];
     settings?: {
         investorPortalTabs?: string[];
         [key: string]: any;
@@ -52,34 +62,28 @@ export interface Investor {
     created_at?: string;
 }
 
+type InvestorRowDb = Investor & { investor_org_shares?: { target_org_id: string }[] | null };
+
 export const investorService = {
     async listInvestors(organizationId?: string) {
-        // We'll try to fetch, if it fails because table doesn't exist, we return empty
         try {
-            const INVESTOR_COLS = 'id, code, name, email, phone, document, organization_id, settings, created_at';
-
-            let query = supabase
+            const { data, error } = await supabase
                 .from('investors')
-                .select(INVESTOR_COLS);
-
-            if (organizationId) {
-                query = query.or(`organization_id.eq.${organizationId},organization_id.is.null`);
-            }
-
-            let { data, error } = await query.order('name', { ascending: true });
-
-            if (error && error.code === '42703' && organizationId) {
-                console.warn("[INVESTOR SERVICE] organization_id column missing, falling back to global list.");
-                const retry = await supabase
-                    .from('investors')
-                    .select(INVESTOR_COLS)
-                    .order('name', { ascending: true });
-                data = retry.data;
-                error = retry.error;
-            }
+                .select('id, code, name, email, phone, document, organization_id, is_shared, settings, created_at, investor_org_shares(target_org_id)')
+                .order('name', { ascending: true });
 
             if (error) throw error;
-            return data as Investor[];
+            const investors = ((data ?? []) as InvestorRowDb[]).map(({ investor_org_shares, ...inv }) => ({
+                ...inv,
+                _shared_org_ids: (investor_org_shares ?? []).map(s => s.target_org_id),
+            }));
+            // A RLS já recorta o que o usuário enxerga; com uma organização no topo,
+            // ficam os dela e os compartilhados COM ela (não com outra do usuário).
+            return investors.filter(i =>
+                !organizationId
+                || i.organization_id === organizationId
+                || (i.is_shared && i._shared_org_ids.includes(organizationId)),
+            ) as Investor[];
         } catch (error: unknown) {
             console.warn("Could not list investors:", error instanceof Error ? error.message : error);
             return [];
@@ -87,7 +91,7 @@ export const investorService = {
     },
 
     async saveInvestor(investor: Partial<Investor>) {
-        const INVESTOR_COLS = 'id, code, name, email, phone, document, organization_id, settings, created_at';
+        const INVESTOR_COLS = 'id, code, name, email, phone, document, organization_id, is_shared, settings, created_at';
         // Coerce empty email to null so the UNIQUE constraint allows multiple
         // investors without email. Kept off the typed interface (DB-only concern).
         const payload: Record<string, unknown> = {

@@ -23,6 +23,8 @@ Depois da crítica (nota 20/40, 3 problemas P1), o usuário respondeu às pergun
 | 10/11/2026 | Escopo | Tudo, inclusive os menores |
 | 10/11/2026 | Ritmo | Um comando de cada vez |
 | 10/11/2026 | "Forma de pagamento" com dois sentidos (clarify) | **Topo vira "Condição de pagamento"**; "Forma de pagamento" fica só para o meio (PIX/TED/Dinheiro/Cheque), como em Suprimentos e no Financeiro |
+| 10/11/2026 | Venda: "Gerar parcelas" × "Lançar no Financeiro" (distill) | **Manter os dois** — "Lançar" é o principal da aba Parcelas; "Gerar parcelas" secundário |
+| 10/11/2026 | "Data do 1º Pagamento" repete a 1ª data da série (distill) | **Só sem série** — com série, a data fica na linha da tabela |
 
 Crítica completa: `.impeccable/critique/2026-11-10T14-26-00Z__components-dealmodal-tsx.md`
 (não versionada; frente `design/negociacao-financeiro`).
@@ -153,7 +155,15 @@ seletores; fonte de 11 px; fecha a crítica.
   corretor"): `BrokerProposalSimulator` usa `textoDaRegra(c, 'corretor')` — mesmos números, ação
   no vocabulário da Simulação ("escolha outro plano", "aumente a entrada", "reduza o desconto").
   Não conferida na tela: só abre no Portal do Corretor e nenhum plano de vendas está ativo.
-- [ ] 4. distill
+- [x] 4. distill — só "Salvar alterações" em azul sólido (Adicionar pagamento, Montar plano,
+  Lançar e Gerar parcelas viram `BOTAO_SECUNDARIO`); "Lançar no Financeiro" saiu da aba Financeiro
+  (lá fica a situação + "Lançar pela aba Parcelas") e é a ação da aba Parcelas (estado vazio; no
+  cabeçalho quando a venda já tem cobranças); "Ver plano de pagamento" removido (só trocava de aba,
+  comentário desatualizado); "Data do 1º Pagamento" só sem série. Teste do aviso de Receita
+  Financeira passou a abrir na aba Parcelas. Conferido no dev local com escritas bloqueadas;
+  não visto: o "Lançar" do cabeçalho (exige venda já lançada).
+  Fora do escopo, anotado: a aba Contrato ainda tem 2 azuis sólidos ("Gerar Documento do
+  Contrato", "Gerar Contrato").
 - [ ] 5. audit
 - [ ] 6. polish
 

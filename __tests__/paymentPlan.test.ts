@@ -108,6 +108,23 @@ describe('expandirBloco', () => {
         expect(linhas[0].paymentType).toBe('PIX');
         expect(linhas[1].notes).toBe('cheque do sócio');
     });
+
+    it('expandirBloco leva juros e principal por parcela', () => {
+        const linhas = expandirBloco(
+            { ...bloco({ quantidade: 2, valorParcela: 8884.88 }), juros: [1000, 921.15], principal: [7884.88, 7963.73] },
+            'pj',
+        );
+        expect(linhas.map(l => ({ interest: l.interest, principal: l.principal }))).toEqual([
+            { interest: 1000, principal: 7884.88 },
+            { interest: 921.15, principal: 7963.73 },
+        ]);
+    });
+
+    it('sem juros no bloco, a linha não ganha interest/principal', () => {
+        const [linha] = expandirBloco(bloco({ quantidade: 1 }), 'sj');
+        expect('interest' in linha).toBe(false);
+        expect('principal' in linha).toBe(false);
+    });
 });
 
 describe('agruparPlano', () => {
@@ -147,6 +164,34 @@ describe('agruparPlano', () => {
 
     it('lista vazia devolve nenhum bloco', () => {
         expect(agruparPlano([])).toEqual([]);
+    });
+
+    it('não quebra com juros: reagrupa levando juros/principal de volta por parcela', () => {
+        const linhas = expandirBloco(
+            { ...bloco({ quantidade: 2, valorParcela: 8884.88 }), juros: [1000, 921.15], principal: [7884.88, 7963.73] },
+            'pj',
+        );
+        const [b] = agruparPlano(linhas);
+        expect(b).toMatchObject({ quantidade: 2, valorParcela: 8884.88, juros: [1000, 921.15], principal: [7884.88, 7963.73] });
+        // E de novo expandido, a decomposição volta igual.
+        expect(expandirBloco(b, 'x').map(l => l.interest)).toEqual([1000, 921.15]);
+    });
+
+    it('linhas sem juros não ganham juros/principal no bloco', () => {
+        const [b] = agruparPlano(expandirBloco(bloco({ quantidade: 3 }), 's'));
+        expect('juros' in b).toBe(false);
+        expect('principal' in b).toBe(false);
+    });
+
+    it('bloco com linhas misturadas (com e sem juros) perde a decomposição inteira', () => {
+        const linhas: PaymentInstallment[] = [
+            { id: '1', dueDate: '2026-10-10', value: 1000, status: 'PENDING', description: '', installmentType: 'MENSAL', interest: 10, principal: 990 },
+            { id: '2', dueDate: '2026-11-10', value: 1000, status: 'PENDING', description: '', installmentType: 'MENSAL' },
+        ];
+        const [b] = agruparPlano(linhas);
+        expect(b.quantidade).toBe(2);
+        expect(b.juros).toBeUndefined();
+        expect(b.principal).toBeUndefined();
     });
 });
 

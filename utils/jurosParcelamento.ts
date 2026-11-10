@@ -15,7 +15,16 @@
 //   ao juros delas até esgotar — assim Σ principal = base EXATAMENTE.
 // - Tudo em centavos inteiros (a parcela é arredondada UMA vez); a ÚLTIMA linha
 //   absorve o resíduo: `saldo + juros`. Σ juros = Σ parcelas − base.
-import { BlocoPagamento, somarMeses, mesesEntre } from './paymentPlan';
+import {
+    BlocoPagamento,
+    somarMeses,
+    mesesEntre,
+    montarPlanoRapido,
+    expandirBloco,
+    blocoParaGerador,
+    subtotalDoBloco,
+} from './paymentPlan';
+import type { PropertyDeal } from '../types/imovib';
 
 export type SistemaAmortizacao = 'PRICE' | 'SAC';
 
@@ -140,4 +149,188 @@ export function montarPlanoComJuros(p: PlanoComJuros): {
     const somaParcelas = dois(linhas.reduce((s, l) => s + l.valor, 0));
     const somaJuros = dois(linhas.reduce((s, l) => s + l.juros, 0));
     return { entrada, blocos, totalComJuros: dois(entrada + somaParcelas), totalJuros: somaJuros };
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// "Montar plano" da negociação (aba Financeiro do DealModal) — a transição de
+// estado, pura. O componente junta os campos do painel em `CamposDoPlano` e faz
+// `setFormData(prev => ({ ...prev, ...montarPlanoNoNegocio(prev, campos, id) }))`.
+//
+// Duas regras que só existem aqui:
+// - Juros 0/vazio (ou locação) ⇒ é o `montarPlanoRapido` de sempre. Negócio que
+//   nunca teve juros não ganha NENHUMA coluna nova no patch (o `saveDeal` manda o
+//   formData inteiro para o banco).
+// - A base dos juros é o PREÇO SEM JUROS (`price_before_interest`), não o Valor
+//   Total do Contrato — que, depois de montar com juros, já inclui os juros.
+//   Remontar sobre o total aplicaria juros sobre juros.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** O que o painel "Montar plano" tem em mãos, já convertido em números. */
+export interface CamposDoPlano {
+    /** Entrada/sinal (venda). Locação ignora. */
+    entrada: number;
+    parcelas: number;
+    tipo: string;
+    intervaloMeses: number;
+    primeiroVencimento: string;
+    /** Taxa ao mês em % (`1` = 1% a.m.); 0 = sem juros. Só vale em venda. */
+    taxaMensal: number;
+    sistema: SistemaAmortizacao;
+    /** Preço sem juros digitado. Ausente = `price_before_interest ?? contract_total_value`. */
+    precoSemJuros?: number;
+}
+
+/** Os campos da negociação que o "Montar plano" lê (o formulário é parcial). */
+export type NegocioDoPlano = Partial<Pick<PropertyDeal,
+    'type' | 'value' | 'date' | 'contract_total_value' | 'price_before_interest' | 'interest_rate_monthly' | 'amortization_system'>>;
+
+export interface PreviaDoPlano {
+    entrada: number;
+    blocos: BlocoPagamento[];
+    /** null = plano sem juros (o gerador simples). */
+    juros: null | {
+        taxaMensal: number;
+        sistema: SistemaAmortizacao;
+        precoSemJuros: number;
+        totalComJuros: number;
+        totalJuros: number;
+    };
+}
+
+/** Preço sem juros que o painel mostra quando o usuário não digitou nenhum. */
+export const precoSemJurosPadrao = (d: Pick<PropertyDeal, 'contract_total_value' | 'price_before_interest'>): number =>
+    Number(d.price_before_interest ?? d.contract_total_value) || 0;
+
+/** O que "Montar plano" vai gravar — também alimenta a linha de resumo. */
+export function preverPlano(deal: NegocioDoPlano, c: CamposDoPlano): PreviaDoPlano {
+    const venda = deal.type === 'SALE';
+    const taxa = Number(c.taxaMensal) || 0;
+    if (venda && taxa > 0) {
+        const precoSemJuros = c.precoSemJuros ?? precoSemJurosPadrao(deal);
+        const r = montarPlanoComJuros({
+            precoSemJuros,
+            entrada: c.entrada,
+            parcelas: c.parcelas,
+            tipo: c.tipo,
+            intervaloMeses: c.intervaloMeses,
+            primeiroVencimento: c.primeiroVencimento,
+            dataBase: deal.date || c.primeiroVencimento,
+            taxaMensal: taxa,
+            sistema: c.sistema,
+        });
+        return {
+            entrada: r.entrada,
+            blocos: r.blocos,
+            juros: {
+                taxaMensal: taxa,
+                sistema: c.sistema,
+                precoSemJuros: dois(precoSemJuros),
+                totalComJuros: r.totalComJuros,
+                totalJuros: r.totalJuros,
+            },
+        };
+    }
+    // Sem juros: exatamente o gerador de antes. A única diferença é a base de um
+    // negócio que JÁ teve juros: o total gravado inclui os juros, então volta ao
+    // preço sem juros.
+    const total = venda && deal.price_before_interest != null
+        ? Number(deal.price_before_interest) || 0
+        : Number(deal.contract_total_value) || 0;
+    const simples = montarPlanoRapido({
+        total,
+        entrada: venda ? c.entrada : 0,
+        parcelas: c.parcelas,
+        tipo: c.tipo,
+        intervaloMeses: c.intervaloMeses,
+        primeiroVencimento: c.primeiroVencimento,
+        // Locação: a parcela é o aluguel mensal (`value`), não o total ÷ nº.
+        valorParcelaFixo: deal.type === 'RENTAL' ? (Number(deal.value) || 0) : undefined,
+    });
+    return { entrada: simples.entrada, blocos: simples.blocos, juros: null };
+}
+
+/**
+ * O patch que "Montar plano" aplica sobre a negociação: sinal, 1º vencimento,
+ * cronograma expandido (+ espelho do gerador de contrato) e, em venda com
+ * juros, as três colunas de juros e o total com juros. `idBase` prefixa os ids
+ * das linhas (`${idBase}-${i}-${k}`).
+ */
+export function montarPlanoNoNegocio(deal: NegocioDoPlano, c: CamposDoPlano, idBase: string): Partial<PropertyDeal> {
+    const { entrada, blocos, juros } = preverPlano(deal, c);
+    const linhas = blocos.flatMap((b, i) => expandirBloco(b, `${idBase}-${i}`));
+    // Espelho para o gerador do contrato, que só sabe UMA série homogênea e lê
+    // estes dois campos (ver geracaoContrato no DealModal).
+    const espelho = blocoParaGerador(blocos);
+    const venda = deal.type === 'SALE';
+    const tinhaJuros = deal.interest_rate_monthly != null
+        || deal.amortization_system != null
+        || deal.price_before_interest != null;
+
+    let colunasDeJuros: Partial<PropertyDeal> = {};
+    if (juros) {
+        colunasDeJuros = {
+            interest_rate_monthly: juros.taxaMensal,
+            amortization_system: juros.sistema,
+            price_before_interest: juros.precoSemJuros,
+            contract_total_value: juros.totalComJuros,
+        };
+    } else if (venda && tinhaJuros) {
+        // Juros zerado num negócio que tinha juros: limpa as três colunas e o
+        // total volta ao preço sem juros.
+        colunasDeJuros = {
+            interest_rate_monthly: null,
+            amortization_system: null,
+            price_before_interest: null,
+            ...(deal.price_before_interest != null
+                ? { contract_total_value: Number(deal.price_before_interest) || 0 }
+                : {}),
+        };
+    }
+
+    return {
+        ...(venda
+            ? (entrada > 0
+                ? { down_payment: entrada, down_payment_installment_type: 'SINAL' }
+                : { down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined })
+            : {}),
+        payment_due_date: c.primeiroVencimento,
+        // Locação: o total do contrato É mensal × nº (não vem das unidades,
+        // que somam o valor de UM mês).
+        ...(deal.type === 'RENTAL'
+            ? { contract_total_value: dois(blocos.reduce((soma, b) => soma + subtotalDoBloco(b), 0)) }
+            : {}),
+        ...colunasDeJuros,
+        custom_installments: linhas,
+        ...(espelho ? { installment_value: espelho.valor, installments: espelho.quantidade } : {}),
+    };
+}
+
+const fmtMoeda = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
+const fmtTaxa = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
+
+/**
+ * Linha de resumo do painel (sem o "Vai gerar:" e sem o ponto final):
+ * - sem juros: "entrada de R$ 20.000,00 + 10× parcelas mensais de R$ 10.000,00";
+ * - Price: "… 12× parcelas mensais de R$ 8.884,88 (Price, 1% a.m.) — juros R$ 6.618,53, total R$ 126.618,53";
+ * - SAC: "… de R$ 11.200,00 a R$ 10.100,00 (SAC, 1% a.m.) — …" (a parcela cai).
+ * `rotuloTipo` é o nome do tipo da série ("Parcelas mensais").
+ */
+export function resumoDoPlano(previa: PreviaDoPlano, rotuloTipo: string): string {
+    const { entrada, blocos, juros } = previa;
+    const n = blocos.reduce((s, b) => s + b.quantidade, 0);
+    const rotulo = rotuloTipo.toLowerCase();
+    const valores = blocos.map(b => fmtMoeda(b.valorParcela));
+    let parcelas: string;
+    if (juros) {
+        const faixa = juros.sistema === 'SAC' && valores.length > 1
+            ? `de ${valores[0]} a ${valores[valores.length - 1]}`
+            : `de ${valores[0]}`;
+        parcelas = `${n}× ${rotulo} ${faixa} (${juros.sistema === 'SAC' ? 'SAC' : 'Price'}, ${fmtTaxa(juros.taxaMensal)}% a.m.)`
+            + ` — juros ${fmtMoeda(juros.totalJuros)}, total ${fmtMoeda(juros.totalComJuros)}`;
+    } else {
+        parcelas = valores.length === 2
+            ? `${n}× ${rotulo} (${blocos[0].quantidade}× ${valores[0]} + 1× ${valores[1]})`
+            : `${n}× ${rotulo} de ${valores[0]}`;
+    }
+    return (entrada > 0 ? `entrada de ${fmtMoeda(entrada)} + ` : '') + parcelas;
 }

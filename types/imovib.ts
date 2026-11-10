@@ -374,8 +374,9 @@ export interface PropertyDeal {
     /** Sistema de amortização do parcelamento com juros (Price = parcela fixa;
      *  SAC = amortização constante). Nulo = sem juros. */
     amortization_system?: 'PRICE' | 'SAC' | null;
-    /** Saldo financiado ANTES dos juros — base que o "Montar plano" usa para
-     *  refazer o cálculo ao reabrir a negociação. */
+    /** Preço SEM juros (entrada + principal financiado) — base que o "Montar
+     *  plano" usa para refazer o cálculo ao reabrir a negociação; o Valor Total
+     *  do Contrato já inclui os juros. Nulo = sem juros. */
     price_before_interest?: number | null;
     down_payment?: number;
     /** Forma de pagamento, tipo de parcela e observação da Entrada — mesmos campos por parcela em custom_installments, espelhados aqui porque a Entrada não é um item do array (é o campo down_payment). */

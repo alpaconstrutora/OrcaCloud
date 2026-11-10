@@ -60,6 +60,14 @@ nunca painel mais largo nem tela cheia. Usuário escolheu **tela própria**.
    verdes (+ caso do "Voltar").
 - [x] 6. typecheck verde, `check-ui-standard.sh` = 0 nos três `.tsx`, 35 testes verdes
 
+## Correção — 2026-11-10 (mão de obra fora)
+> Escondo a mão de obra (Servente, Carpinteiro) dos insumos de composição? Resposta: sim
+
+7. **`lib/orcamentoLinhas.ts`** — `ehMaoDeObra`: categoria "Mão de Obra" ou unidade **H** (no banco
+   a `category` dos insumos de composição vem vazia; a mão de obra SINAPI é em hora). Equipamento
+   (CHP/CHI) continua. **Pronto quando:** caso novo em `orcamentoLinhas.test.ts` verde.
+- [x] 7. teste verde
+
 ## Verificação
 1. typecheck, testes acima, `check-ui-standard.sh` nos `.tsx` tocados; CI (inclui build).
 2. Produção, sem gravar: aba Itens do PCO-014-003-0001 com os dois botões; painel com o piso em

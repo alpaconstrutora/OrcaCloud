@@ -15,7 +15,7 @@ import { generateOrderNumber } from './orderNumberingService';
 import { processService } from './processService';
 import { valorEfetivoDoItem, aplicarCotadoNosItens } from '../utils/pedidoItemValor';
 
-type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
+type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
 
 /**
  * Traduz a violação do índice único de `purchase_orders.number` (23505) para uma
@@ -118,7 +118,7 @@ export const orderService = {
                 .order('created_at', { ascending: false })
             : supabase
                 .from('purchase_orders')
-                .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
+                .select('id, number, project_id, supplier_id, empresa_id, organization_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
                 .order('created_at', { ascending: false });
 
         if (projectId) {
@@ -145,6 +145,18 @@ export const orderService = {
             if (sups) sups.forEach(s => { supplierMap[s.id] = { name: s.name, nickname: s.nickname }; });
         }
         const nameMode = appSettingsService.get().supplierNameDisplay;
+
+        // Nome da organização do pedido (coluna "Organização" da lista, pedido de
+        // 10/11/2026). Só o comprador: a RPC do fornecedor não traz `organization_id`.
+        const uniqueOrgIds = Array.from(new Set((orders || []).map(o => o.organization_id).filter(Boolean))) as string[];
+        const orgNameMap: Record<string, string> = {};
+        if (uniqueOrgIds.length > 0) {
+            const { data: orgs } = await supabase
+                .from('organizations')
+                .select('id, name')
+                .in('id', uniqueOrgIds);
+            if (orgs) orgs.forEach(o => { orgNameMap[o.id] = o.name; });
+        }
 
         // Fetch projects separately — same reason: avoid implicit FK join 404
         const uniqueProjectIds = Array.from(new Set((orders || []).map(o => o.project_id).filter(Boolean)));
@@ -184,7 +196,7 @@ export const orderService = {
             });
         }
 
-        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
+        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
         // Map database columns to type
         return (orders || []).map((item: DbOrderRow) => {
             const project = projectMap[item.project_id];
@@ -199,6 +211,8 @@ export const orderService = {
                 // a coluna Empreendimento (resolvida por id de OBRA) mostraria "—"
                 // para todo pedido de orçamento, mesmo tendo empreendimento.
                 linkedProjectId: project?.settings?.linkedProjectId,
+                organizationId: item.organization_id ?? undefined,
+                organizationName: item.organization_id ? orgNameMap[item.organization_id] : undefined,
                 supplierId: item.supplier_id,
                 supplierName: supplierMap[item.supplier_id] ? getSupplierDisplayName(supplierMap[item.supplier_id], nameMode) : '-', // From manual map
                 deliveryDate: item.delivery_date,

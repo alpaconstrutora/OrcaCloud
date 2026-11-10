@@ -99,6 +99,9 @@ export interface PurchaseOrder {
     projectId: string;
     projectName?: string;
     empresaId?: string;
+    /** Organização do pedido — só na leitura do comprador (lista de Pedidos de Compra). */
+    organizationId?: string;
+    organizationName?: string;
     /** Preenchido só pela RPC do portal (a RLS de `companies` barra o fornecedor). */
     comprador?: PurchaseOrderComprador;
     /** Idem: condições + parcelas, só pela RPC de detalhe do portal. */

@@ -19,6 +19,8 @@ import {
 import { TargetState } from './sync/types';
 import { empreendimentoProposalService } from './empreendimentoProposalService';
 import { empreendimentoAuditService } from './empreendimentoAuditService';
+import { empreendimentoTypeService } from './empreendimentoTypeService';
+import { estruturaDoTipo, type EstruturaDoTipo } from '../utils/empreendimentoTipos';
 
 // Resumo de divergências entre as unidades do empreendimento e suas properties no Comercial.
 export interface CommercialDivergenceSummary {
@@ -353,6 +355,46 @@ export const empreendimentoService = {
         }
 
         return map;
+    },
+
+    /**
+     * Prédio do Comercial (Venda) ou de Locações → estrutura do tipo do empreendimento e
+     * quadra/lote de cada imóvel do prédio (chave = id do imóvel em commercial_properties).
+     * Usado pela Tabela de Preços para trocar as colunas no LOTE. Só lê. Prédio cadastrado
+     * direto no Comercial (sem empreendimento) → TORRES, sem quadra/lote.
+     */
+    async loteDoPredio(
+        buildingId: string,
+        purpose: 'SALE' | 'RENTAL',
+    ): Promise<{ estrutura: EstruturaDoTipo; quadraLote: Record<string, { quadra: string | null; lote: string | null }> }> {
+        const { data: emp, error } = await supabase
+            .from('empreendimentos')
+            .select('id, organization_id, tipo')
+            .eq(purpose === 'RENTAL' ? 'commercial_rental_building_id' : 'commercial_building_id', buildingId)
+            .limit(1)
+            .maybeSingle();
+        if (error) throw new Error(`Failed to fetch empreendimento of building: ${error.message}`);
+        if (!emp) return { estrutura: 'TORRES', quadraLote: {} };
+
+        // REGRA #5: o tipo vale pela org do PRÓPRIO empreendimento, não pela do topo.
+        const tipos = await empreendimentoTypeService.list(emp.organization_id ?? undefined);
+        const estrutura = estruturaDoTipo(tipos, emp.tipo, emp.organization_id);
+        if (estrutura !== 'LOTE') return { estrutura, quadraLote: {} };
+
+        const towerIds = (await this.listTowers(emp.id)).map(t => t.id);
+        if (towerIds.length === 0) return { estrutura, quadraLote: {} };
+        const { data: units, error: unitsError } = await supabase
+            .from('empreendimento_units')
+            .select('quadra, lote, commercial_property_id, rental_property_id')
+            .in('tower_id', towerIds);
+        if (unitsError) throw new Error(`Failed to fetch units: ${unitsError.message}`);
+
+        const quadraLote: Record<string, { quadra: string | null; lote: string | null }> = {};
+        for (const u of (units ?? []) as { quadra: string | null; lote: string | null; commercial_property_id: string | null; rental_property_id: string | null }[]) {
+            const propertyId = purpose === 'RENTAL' ? u.rental_property_id : u.commercial_property_id;
+            if (propertyId) quadraLote[propertyId] = { quadra: u.quadra, lote: u.lote };
+        }
+        return { estrutura, quadraLote };
     },
 
     async getById(id: string, opts?: { includeChildren?: boolean }): Promise<Empreendimento | EmpreendimentoWithChildren | null> {

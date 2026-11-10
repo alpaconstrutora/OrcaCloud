@@ -13,6 +13,9 @@ import {
 } from '../services/rentalPricingRuleService';
 import { pricingRuleApplicationService } from '../services/pricingRuleApplicationService';
 import { describeRuleCell } from '../utils/pricingRuleCell';
+import { empreendimentoService } from '../services/empreendimentoService';
+import type { EstruturaDoTipo } from '../utils/empreendimentoTipos';
+import { colunasForaDaTabelaDePrecos } from '../utils/tabelaDePrecosColunas';
 import { IndexName } from '../services/contractIndexService';
 import type { PricingRuleApplication, Property, RentalPricingRule } from '../types';
 import { useConfirm } from './ui/confirm';
@@ -170,6 +173,10 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'photo',    label: 'Foto',               sortable: false },
     { key: 'unit',     label: 'Unidade',            sortable: true },
     { key: 'status',   label: 'Status',             sortable: true },
+    // Só no empreendimento do tipo LOTE — e lá Vagas/Banheiros/Pavimento/Posição
+    // saem (colunasForaDaTabelaDePrecos). Vêm de empreendimento_units.quadra/lote.
+    { key: 'quadra',   label: 'Quadra',             sortable: true },
+    { key: 'lote',     label: 'Nº do lote',         sortable: true },
     { key: 'privArea', label: 'Área privativa',     sortable: true },
     { key: 'bedrooms', label: 'Dormitórios',        sortable: true },
     { key: 'parking',  label: 'Vagas',              sortable: true },
@@ -191,7 +198,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão do redimensionamento de colunas (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    photo: 80, unit: 170, status: 120, privArea: 163, bedrooms: 148, parking: 111,
+    photo: 80, unit: 170, status: 120, quadra: 120, lote: 140, privArea: 163, bedrooms: 148, parking: 111,
     bathrooms: 137, floor: 140, position: 123, current: 162, price: 199, delta: 110,
     rules: 320, visibleToBroker: 192, showPrice: 150,
 };
@@ -204,6 +211,8 @@ const PRICE_TABLE_COLUMN_HEADERS: Record<string, { label: string; className: str
     photo: { label: 'Foto', className: 'px-6 py-2 border-r border-gray-100 relative overflow-hidden' },
     unit: { label: 'Unidade', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    quadra: { label: 'Quadra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
+    lote: { label: 'Nº do lote', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     privArea: { label: 'Área privativa', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
     bedrooms: { label: 'Dormitórios', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
     parking: { label: 'Vagas', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap overflow-hidden' },
@@ -247,6 +256,8 @@ function renderPriceTableCell(
         ruleBreakdown: Record<string, AdjustmentBreakdown> | null;
         /** property_id → registro do que o Aplicar gravou (fonte preferida). */
         ruleApplications: Record<string, PricingRuleApplication> | null;
+        /** property_id → quadra/lote da unidade do empreendimento (só no LOTE). */
+        quadraLote: Record<string, { quadra: string | null; lote: string | null }>;
     },
 ): React.ReactNode {
     switch (key) {
@@ -262,6 +273,10 @@ function renderPriceTableCell(
             return <span className="text-sm font-normal text-gray-700">{item.property_name || '—'}</span>;
         case 'status':
             return <UnitStatusBadge status={item.property_status} />;
+        case 'quadra':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{ctx.quadraLote[item.property_id]?.quadra || '—'}</span>;
+        case 'lote':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{ctx.quadraLote[item.property_id]?.lote || '—'}</span>;
         case 'privArea':
             return <span className="text-right text-sm font-normal text-gray-600 whitespace-nowrap block">{areaFmt(item.private_area)}</span>;
         case 'bedrooms':
@@ -372,11 +387,29 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const cfg = MODE_CONFIG[mode];
     const svc = cfg.service;
     // Colunas com labels do modo (o dropdown de configurar colunas mostra estes).
-    const columnsForConfig = React.useMemo<ColumnConfig[]>(() => COLUMNS.map(c =>
-        c.key === 'current' ? { ...c, label: cfg.currentLabel }
-        : c.key === 'price' ? { ...c, label: cfg.versionLabel }
-        : c
-    ), [cfg.currentLabel, cfg.versionLabel]);
+    // Estrutura do tipo do empreendimento do prédio: no LOTE a tabela troca
+    // Vagas/Banheiros/Pavimento/Posição por Quadra/Nº do lote. Só leitura,
+    // best-effort — sem vínculo ou com erro, fica a tabela de sempre (TORRES).
+    const [estrutura, setEstrutura] = React.useState<EstruturaDoTipo>('TORRES');
+    const [quadraLote, setQuadraLote] = React.useState<Record<string, { quadra: string | null; lote: string | null }>>({});
+    React.useEffect(() => {
+        let cancelled = false;
+        empreendimentoService.loteDoPredio(buildingId, mode === 'rental' ? 'RENTAL' : 'SALE')
+            .then(r => { if (!cancelled) { setEstrutura(r.estrutura); setQuadraLote(r.quadraLote); } })
+            .catch(err => {
+                console.warn('[PriceTableManager] tipo do empreendimento do prédio indisponível:', err);
+                if (!cancelled) { setEstrutura('TORRES'); setQuadraLote({}); }
+            });
+        return () => { cancelled = true; };
+    }, [buildingId, mode]);
+    const colunasFora = React.useMemo(() => colunasForaDaTabelaDePrecos(estrutura), [estrutura]);
+    const columnsForConfig = React.useMemo<ColumnConfig[]>(() => COLUMNS
+        .filter(c => !colunasFora.has(c.key))
+        .map(c =>
+            c.key === 'current' ? { ...c, label: cfg.currentLabel }
+            : c.key === 'price' ? { ...c, label: cfg.versionLabel }
+            : c
+        ), [cfg.currentLabel, cfg.versionLabel, colunasFora]);
     const confirm = useConfirm();
     const [tables, setTables] = React.useState<CommercialPriceTable[]>([]);
     const [selectedTableId, setSelectedTableId] = React.useState<string | null>(null);
@@ -397,10 +430,12 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>(`priceTable:${mode}:search`, '');
     const tableColumns = useTableColumns(COLUMNS, `priceTableColumns:${mode}`);
+    // O que o usuário escolheu ver, menos o que não existe no tipo do prédio.
+    const colunasNaTela = tableColumns.orderedVisibleColumns.filter(k => !colunasFora.has(k));
     const cols = useResizableColumns(DEFAULT_COL_WIDTHS, `priceTableColWidths:${mode}`);
     // Largura = soma exata das colunas visíveis + checkbox fixo de seleção (§6.1).
     const tableTotalWidth = COLUMNS
-        .filter(c => tableColumns.visibleColumns.includes(c.key))
+        .filter(c => colunasNaTela.includes(c.key))
         .reduce((sum, c) => sum + cols.getWidth(c.key), 0)
         + 40;
 
@@ -681,6 +716,8 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             switch (sortColumn) {
                 case 'unit':      return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
                 case 'status':    return (UNIT_STATUS_LABEL[a.property_status || ''] || '').localeCompare(UNIT_STATUS_LABEL[b.property_status || ''] || '', 'pt-BR') * dir;
+                case 'quadra':    return (quadraLote[a.property_id]?.quadra || '').localeCompare(quadraLote[b.property_id]?.quadra || '', 'pt-BR', { numeric: true }) * dir;
+                case 'lote':      return (quadraLote[a.property_id]?.lote || '').localeCompare(quadraLote[b.property_id]?.lote || '', 'pt-BR', { numeric: true }) * dir;
                 case 'privArea':  return (n(a.private_area) - n(b.private_area)) * dir;
                 case 'bedrooms':  return (n(a.bedrooms) - n(b.bedrooms)) * dir;
                 case 'parking':   return (n(a.parking_spaces) - n(b.parking_spaces)) * dir;
@@ -698,7 +735,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             }
         });
         return sorted;
-    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, ruleBreakdown, ruleApplications]);
+    }, [items, searchTerm, tableColumns.sortColumn, tableColumns.sortDirection, ruleBreakdown, ruleApplications, quadraLote]);
 
     if (loading) return <div className="flex justify-center py-16"><Loader2 className="w-8 h-8 animate-spin text-blue-600" /></div>;
 
@@ -900,7 +937,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                     <colgroup>
                                         {/* checkbox de seleção — largura fixa, sem data-col-key (não é redimensionável). */}
                                         <col style={{ width: '40px' }} />
-                                        {tableColumns.orderedVisibleColumns.map(key => (
+                                        {colunasNaTela.map(key => (
                                             <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
                                         ))}
                                     </colgroup>
@@ -916,7 +953,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                         : setSelectedIds(new Set(visibleItems.map(i => i.id)))}
                                                 />
                                             </th>
-                                            {tableColumns.orderedVisibleColumns.map(key => {
+                                            {colunasNaTela.map(key => {
                                                 const def = PRICE_TABLE_COLUMN_HEADERS[key];
                                                 if (!def) return null;
                                                 const label = key === 'current' ? cfg.currentLabel : key === 'price' ? cfg.versionLabel : def.label;
@@ -945,7 +982,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                             onChange={e => handleRowCheck(item.id, rowIndex, (e.nativeEvent as MouseEvent).shiftKey)}
                                                         />
                                                     </td>
-                                                    {tableColumns.orderedVisibleColumns.map(key => (
+                                                    {colunasNaTela.map(key => (
                                                         <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                             {renderPriceTableCell(key, item, {
                                                                 isDraft,
@@ -956,6 +993,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                                                 onToggleShowPrice: handleToggleShowPrice,
                                                                 ruleBreakdown,
                                                                 ruleApplications,
+                                                                quadraLote,
                                                             })}
                                                         </td>
                                                     ))}

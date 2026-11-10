@@ -42,7 +42,23 @@ régua de "Itens do pedido".
 - [x] 3. typecheck verde, `check-ui-standard.sh` = 0
 - [x] 4. nada a mudar
 - [x] 5. 63 testes verdes (formulário, linhas, Agrupar, preferências, guarda de cinza, guarda de org)
-- [ ] Conferência em produção (só leitura) depois do merge
+- [x] Conferência em produção (só leitura) depois do merge — #314: painel no detalhe e no Novo pedido
+
+## Correção — 2026-11-10 (painel → tela própria)
+> o drawer parece ter ficado pequeno. somente mostra duas colunas. Seria melhor um tela propria? avalie
+
+Avaliação: no print, o auto-ajuste de colunas (↔) levou Descrição a 500px (teto) e empurrou o
+resto para fora; mesmo nas larguras padrão a descrição SINAPI sai cortada em ~200px no Sheet de
+896px. A regra do `Sheet` (components/ui/sheet.tsx) manda: largura que não basta vira tela in-flow,
+nunca painel mais largo nem tela cheia. Usuário escolheu **tela própria**.
+
+6. **`components/suprimentos/PedidoOrcamentoTela.tsx`** (era `PedidoOrcamentoPicker`) — tela no
+   fluxo com "← Voltar", título, Cancelar/Adicionar no topo; `StandardTable` na largura da página com
+   chave nova de larguras. **`SupplyChainOrderForm`** troca a lista de itens pela tela e avisa o
+   detalhe (`onTelaOrcamento`); **`SupplyChainOrderDetails`** esconde "Itens do pedido" enquanto ela
+   está aberta. **Pronto quando:** typecheck verde, `check-ui-standard.sh` = 0, testes do formulário
+   verdes (+ caso do "Voltar").
+- [x] 6. typecheck verde, `check-ui-standard.sh` = 0 nos três `.tsx`, 35 testes verdes
 
 ## Verificação
 1. typecheck, testes acima, `check-ui-standard.sh` nos `.tsx` tocados; CI (inclui build).

@@ -74,8 +74,11 @@ export function montarLinhas(budget: BudgetEntry[], preco: Map<string, number>):
  * - `jaNoPedido`: o código já está neste pedido — editar a quantidade é na
  *   tabela "Itens do pedido", não incluir de novo.
  * - `aComprar`: orçada − comprada, nunca negativa.
- * - Mão de obra da composição (Servente, Carpinteiro…) fica de fora — não se
- *   compra em pedido (pedido do usuário em 10/11/2026). Ver `ehMaoDeObra`.
+ * - Pedido de compra é SÓ material (pedido do usuário em 10/11/2026): mão de
+ *   obra (Servente, Carpinteiro…) e hora de equipamento (escavadeira, caminhão)
+ *   ficam de fora — são contratados em Suprimentos › Contratos. Vale para
+ *   insumo de composição e para item de topo. Composição que fica sem nenhum
+ *   insumo de material some junto (título sem nada embaixo). Ver `naoEMaterial`.
  */
 export interface LinhaDoOrcamentoNoPedido extends LinhaDoOrcamento {
     comprada: number;
@@ -87,12 +90,23 @@ export interface LinhaDoOrcamentoNoPedido extends LinhaDoOrcamento {
 /**
  * Insumo de mão de obra. Nas composições gravadas no orçamento a `category`
  * vem vazia; o que marca a mão de obra SINAPI é a unidade H (hora) — "SERVENTE
- * COM ENCARGOS COMPLEMENTARES", "CARPINTEIRO DE FORMAS…". Equipamento vem em
- * CHP/CHI (custo horário) e NÃO entra aqui.
+ * COM ENCARGOS COMPLEMENTARES", "CARPINTEIRO DE FORMAS…".
  */
 export function ehMaoDeObra(item: { unit?: string; category?: string }): boolean {
     return item.category === SinapiCategory.MAO_DE_OBRA || (item.unit ?? '').trim().toUpperCase() === 'H';
 }
+
+/**
+ * Hora de equipamento: custo horário SINAPI — CHP (produtivo) e CHI
+ * (improdutivo) — "ESCAVADEIRA HIDRÁULICA…", "CAMINHÃO BASCULANTE…".
+ */
+export function ehHoraDeEquipamento(item: { unit?: string; category?: string }): boolean {
+    const un = (item.unit ?? '').trim().toUpperCase();
+    return item.category === SinapiCategory.EQUIPAMENTO || un === 'CHP' || un === 'CHI';
+}
+
+/** Não entra em pedido de compra: mão de obra ou hora de equipamento. */
+export const naoEMaterial = (item: { unit?: string; category?: string }) => ehMaoDeObra(item) || ehHoraDeEquipamento(item);
 
 export function linhasDoOrcamentoParaPedido(
     budget: BudgetEntry[],
@@ -100,11 +114,23 @@ export function linhasDoOrcamentoParaPedido(
     compradas: Map<string, number>,
     noPedido: Set<string>,
 ): LinhaDoOrcamentoNoPedido[] {
-    const maoDeObra = new Set<string>();
-    budget.forEach(e => e.sinapiItem?.composition?.forEach(c => { if (ehMaoDeObra(c)) maoDeObra.add(`${e.id}:${c.code}`); }));
+    // Chaves das linhas que não são material (a linha não carrega `category`).
+    const fora = new Set<string>();
+    const composicaoComMaterial = new Set<string>();
+    budget.forEach(e => {
+        const s = e.sinapiItem;
+        if (!s) return;
+        if (s.type !== SinapiType.COMPOSITION && naoEMaterial(s)) fora.add(e.id);
+        s.composition?.forEach(c => {
+            if (naoEMaterial(c)) fora.add(`${e.id}:${c.code}`);
+            else composicaoComMaterial.add(e.id);
+        });
+    });
     return montarLinhas(budget, preco)
         .filter(l => l.compositionCode || l.type !== SinapiType.SERVICE)
-        .filter(l => !maoDeObra.has(l.key))
+        .filter(l => !fora.has(l.key))
+        // Composição sem nenhum insumo de material: o título ficaria sozinho.
+        .filter(l => l.compositionCode || l.type !== SinapiType.COMPOSITION || composicaoComMaterial.has(l.key))
         .map(l => {
             const titulo = !l.compositionCode && l.type === SinapiType.COMPOSITION;
             const comprada = titulo ? 0 : (compradas.get(l.code) ?? 0);

@@ -68,6 +68,16 @@ nunca painel mais largo nem tela cheia. Usuário escolheu **tela própria**.
    (CHP/CHI) continua. **Pronto quando:** caso novo em `orcamentoLinhas.test.ts` verde.
 - [x] 7. teste verde
 
+## Correção — 2026-11-10 (só material)
+> Pedidos fica somente com materiais. Mão de obra e horas ( escavadeira e caminhão ) fica em suprimentos > contratos. Esconder também
+
+8. **`lib/orcamentoLinhas.ts`** — `ehHoraDeEquipamento` (CHP/CHI ou categoria Equipamento) e
+   `naoEMaterial`; vale para insumo de composição e item de topo; composição sem nenhum insumo de
+   material some (título sozinho). **`PedidoOrcamentoTela`** diz "Só materiais. Mão de obra e
+   equipamento por hora são contratados em Suprimentos › Contratos." **Pronto quando:** casos novos
+   em `orcamentoLinhas.test.ts` verdes.
+- [x] 8. 7 testes verdes; formulário 31 verdes
+
 ## Verificação
 1. typecheck, testes acima, `check-ui-standard.sh` nos `.tsx` tocados; CI (inclui build).
 2. Produção, sem gravar: aba Itens do PCO-014-003-0001 com os dois botões; painel com o piso em

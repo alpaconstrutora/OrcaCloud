@@ -124,6 +124,10 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
                         <p className="text-sm text-gray-500 mt-0.5">
                             Marque o que comprar. A quantidade sugerida é o que falta comprar; ajuste depois em "Itens do pedido".
                         </p>
+                        {/* Pedido é só material (10/11/2026): diz onde está o resto. */}
+                        <p className="text-xs text-gray-500 mt-1">
+                            Só materiais. Mão de obra e equipamento por hora são contratados em Suprimentos › Contratos.
+                        </p>
                     </div>
                 </div>
                 <div className="flex flex-wrap items-center gap-2 md:justify-end">
@@ -191,7 +195,7 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
                     title: orcamentoVazio ? 'O orçamento desta obra está vazio' : 'Nenhum material comprável no orçamento desta obra',
                     subtitle: orcamentoVazio
                         ? 'Esta lista vem do orçamento da obra, e ele ainda não tem nenhum item lançado. Use "+ Item avulso" para comprar o que não está previsto.'
-                        : 'O orçamento tem itens, mas nenhum insumo ou composição — só serviços, que não entram em pedido de compra. Use "+ Item avulso".',
+                        : 'O orçamento tem itens, mas nenhum material — só serviços, mão de obra ou equipamento por hora, que são contratados em Suprimentos › Contratos. Use "+ Item avulso" para material fora do orçamento.',
                 }}
             />
             {linhas.length === 0 && onItemAvulso && (

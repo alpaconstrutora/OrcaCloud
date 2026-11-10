@@ -5,6 +5,7 @@ import {
     preverPlano,
     montarPlanoNoNegocio,
     resumoDoPlano,
+    editarValorTotal,
     type PlanoComJuros,
     type CamposDoPlano,
     type NegocioDoPlano,
@@ -240,5 +241,54 @@ describe('resumoDoPlano', () => {
         expect(nbsp(resumoDoPlano(previa, 'Parcelas mensais'))).toBe('entrada de R$ 20.000,00 + 10× parcelas mensais de R$ 10.000,00');
         const sobra = preverPlano(negocio() as NegocioDoPlano, campos({ taxaMensal: 0 }));
         expect(nbsp(resumoDoPlano(sobra, 'Parcelas mensais'))).toBe('12× parcelas mensais (11× R$ 8.333,33 + 1× R$ 8.333,37)');
+    });
+});
+
+describe('Fix round 1 — Valor Total editado à mão depois dos juros', () => {
+    it('editar o Valor Total limpa o preço sem juros gravado; negócio sem juros não ganha a chave', () => {
+        expect(editarValorTotal({ price_before_interest: 120000 }, 130000)).toEqual({ contract_total_value: 130000, price_before_interest: null });
+        expect(editarValorTotal({}, 130000)).toEqual({ contract_total_value: 130000 });
+        expect('price_before_interest' in editarValorTotal({ price_before_interest: null }, 1)).toBe(false);
+    });
+
+    it('total editado depois dos juros → taxa 0 → remontar: o total digitado vale', () => {
+        const d1 = montar(negocio(), campos());
+        const d2 = { ...d1, ...editarValorTotal(d1, 130000) };
+        const previa = preverPlano(d2 as NegocioDoPlano, campos({ taxaMensal: 0 }));
+        expect(previa.base).toBe(130000);
+        const d3 = montar(d2, campos({ taxaMensal: 0 }));
+        expect(d3.contract_total_value).toBe(130000);
+        expect(d3.interest_rate_monthly).toBeNull();
+        expect(d3.amortization_system).toBeNull();
+        expect(d3.price_before_interest).toBeNull();
+        const valores = d3.custom_installments!.map(l => l.value);
+        expect(valores).toHaveLength(12);
+        expect(valores.slice(0, 11).every(v => v === 10833.33)).toBe(true);
+        expect(valores[11]).toBe(10833.37);
+    });
+
+    it('total editado depois dos juros → taxa > 0 → remontar: a base é o total digitado', () => {
+        const d1 = montar(negocio(), campos());
+        const d2 = { ...d1, ...editarValorTotal(d1, 130000) };
+        expect(preverPlano(d2 as NegocioDoPlano, campos()).base).toBe(130000);
+        const d3 = montar(d2, campos());
+        expect(d3.price_before_interest).toBe(130000);
+        expect(soma(d3.custom_installments!.map(l => l.principal!))).toBe(130000);
+        expect(d3.contract_total_value).toBe(soma(d3.custom_installments!.map(l => l.value)));
+        expect(d3.contract_total_value!).toBeGreaterThan(130000);
+    });
+
+    it('taxa 0 com preço sem juros digitado (campo visível): o digitado é a base e vira o total', () => {
+        const d1 = montar(negocio(), campos());
+        const d2 = montar(d1, campos({ taxaMensal: 0, precoSemJuros: 110000 }));
+        expect(d2.contract_total_value).toBe(110000);
+        expect(d2.price_before_interest).toBeNull();
+        expect(soma(d2.custom_installments!.map(l => l.value))).toBe(110000);
+    });
+
+    it('previa.base: sem juros e sem preço sem juros é o Valor Total; com juros é o preço sem juros', () => {
+        expect(preverPlano(negocio({ contract_total_value: 90000 }) as NegocioDoPlano, campos({ taxaMensal: 0 })).base).toBe(90000);
+        expect(preverPlano(negocio({ contract_total_value: 90000 }) as NegocioDoPlano, campos({ precoSemJuros: 80000 })).base).toBe(80000);
+        expect(preverPlano(negocio({ contract_total_value: 106618.53, price_before_interest: 100000 }) as NegocioDoPlano, campos()).base).toBe(100000);
     });
 });

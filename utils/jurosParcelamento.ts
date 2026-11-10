@@ -176,7 +176,11 @@ export interface CamposDoPlano {
     /** Taxa ao mês em % (`1` = 1% a.m.); 0 = sem juros. Só vale em venda. */
     taxaMensal: number;
     sistema: SistemaAmortizacao;
-    /** Preço sem juros digitado. Ausente = `price_before_interest ?? contract_total_value`. */
+    /**
+     * Preço sem juros digitado. Ausente = `price_before_interest ?? contract_total_value`.
+     * O componente só manda quando o campo está NA TELA (taxa > 0 ou negócio com
+     * `price_before_interest`): valor digitado em campo escondido não vale.
+     */
     precoSemJuros?: number;
 }
 
@@ -187,6 +191,13 @@ export type NegocioDoPlano = Partial<Pick<PropertyDeal,
 export interface PreviaDoPlano {
     entrada: number;
     blocos: BlocoPagamento[];
+    /**
+     * O valor SEM juros que o plano distribui (entrada + parcelas, antes dos
+     * juros): o preço sem juros, ou o Valor Total quando não há preço. É o que
+     * a validação do botão confere — não o `contract_total_value`, que com
+     * juros gravados já inclui os juros.
+     */
+    base: number;
     /** null = plano sem juros (o gerador simples). */
     juros: null | {
         taxaMensal: number;
@@ -221,6 +232,7 @@ export function preverPlano(deal: NegocioDoPlano, c: CamposDoPlano): PreviaDoPla
         return {
             entrada: r.entrada,
             blocos: r.blocos,
+            base: dois(precoSemJuros),
             juros: {
                 taxaMensal: taxa,
                 sistema: c.sistema,
@@ -232,9 +244,9 @@ export function preverPlano(deal: NegocioDoPlano, c: CamposDoPlano): PreviaDoPla
     }
     // Sem juros: exatamente o gerador de antes. A única diferença é a base de um
     // negócio que JÁ teve juros: o total gravado inclui os juros, então volta ao
-    // preço sem juros.
-    const total = venda && deal.price_before_interest != null
-        ? Number(deal.price_before_interest) || 0
+    // preço sem juros (o digitado no campo, que aparece nesse caso, ou o gravado).
+    const total = venda && (c.precoSemJuros != null || deal.price_before_interest != null)
+        ? Number(c.precoSemJuros ?? deal.price_before_interest) || 0
         : Number(deal.contract_total_value) || 0;
     const simples = montarPlanoRapido({
         total,
@@ -246,7 +258,24 @@ export function preverPlano(deal: NegocioDoPlano, c: CamposDoPlano): PreviaDoPla
         // Locação: a parcela é o aluguel mensal (`value`), não o total ÷ nº.
         valorParcelaFixo: deal.type === 'RENTAL' ? (Number(deal.value) || 0) : undefined,
     });
-    return { entrada: simples.entrada, blocos: simples.blocos, juros: null };
+    return { entrada: simples.entrada, blocos: simples.blocos, base: dois(total), juros: null };
+}
+
+/**
+ * Valor Total do Contrato editado À MÃO. Num negócio com juros, o preço sem
+ * juros gravado deixa de valer: o total digitado passa a ser a base da próxima
+ * montagem. Sem isto, um `price_before_interest` velho reescrevia em silêncio o
+ * total que o usuário acabou de digitar (achado da revisão da Task 3).
+ * Negócio sem juros não ganha a chave (nada novo no payload do `saveDeal`).
+ */
+export function editarValorTotal(
+    deal: Pick<PropertyDeal, 'price_before_interest'>,
+    valor: number | undefined,
+): Partial<PropertyDeal> {
+    return {
+        contract_total_value: valor,
+        ...(deal.price_before_interest != null ? { price_before_interest: null } : {}),
+    };
 }
 
 /**
@@ -256,7 +285,7 @@ export function preverPlano(deal: NegocioDoPlano, c: CamposDoPlano): PreviaDoPla
  * das linhas (`${idBase}-${i}-${k}`).
  */
 export function montarPlanoNoNegocio(deal: NegocioDoPlano, c: CamposDoPlano, idBase: string): Partial<PropertyDeal> {
-    const { entrada, blocos, juros } = preverPlano(deal, c);
+    const { entrada, blocos, juros, base } = preverPlano(deal, c);
     const linhas = blocos.flatMap((b, i) => expandirBloco(b, `${idBase}-${i}`));
     // Espelho para o gerador do contrato, que só sabe UMA série homogênea e lê
     // estes dois campos (ver geracaoContrato no DealModal).
@@ -274,15 +303,16 @@ export function montarPlanoNoNegocio(deal: NegocioDoPlano, c: CamposDoPlano, idB
             price_before_interest: juros.precoSemJuros,
             contract_total_value: juros.totalComJuros,
         };
-    } else if (venda && tinhaJuros) {
+    } else if (venda) {
         // Juros zerado num negócio que tinha juros: limpa as três colunas e o
-        // total volta ao preço sem juros.
+        // total volta à base usada (preço sem juros digitado ou gravado). Sem
+        // juros e sem preço sem juros, nada muda aqui — é o caminho de sempre.
         colunasDeJuros = {
-            interest_rate_monthly: null,
-            amortization_system: null,
-            price_before_interest: null,
-            ...(deal.price_before_interest != null
-                ? { contract_total_value: Number(deal.price_before_interest) || 0 }
+            ...(tinhaJuros
+                ? { interest_rate_monthly: null, amortization_system: null, price_before_interest: null }
+                : {}),
+            ...(c.precoSemJuros != null || deal.price_before_interest != null
+                ? { contract_total_value: base }
                 : {}),
         };
     }

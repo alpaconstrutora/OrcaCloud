@@ -7,7 +7,7 @@
 // face. A ficha da unidade, no Espelho de Vendas 3D dos portais do Corretor e do
 // Investidor, abre a vista da faixa que contém o andar dela.
 import React from 'react';
-import { Loader2, Mountain, Plus } from 'lucide-react';
+import { Check, Loader2, Mountain } from 'lucide-react';
 import SecaoTitulo from '../ui/SecaoTitulo';
 import Button from '../ui/Button';
 import ActionIconButton from '../ui/ActionIconButton';
@@ -25,6 +25,11 @@ interface Props {
   organizationId: string;
   /** Motivo do modo só leitura (o mesmo do TowerEditor). */
   somenteLeitura?: string;
+  /**
+   * Os andares das unidades da torre (`floor`). A faixa da vista nova já nasce preenchida com eles (do térreo, ou do
+   * primeiro andar com unidade, ao último): quem só quer UMA foto para a torre inteira escolhe a foto e salva.
+   */
+  andaresDaTorre?: readonly (number | null | undefined)[];
 }
 
 const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
@@ -37,16 +42,30 @@ const FACES: { valor: UnitSunOrientation | ''; rotulo: string }[] = [
   { valor: 'OESTE', rotulo: 'Oeste' },
 ];
 
-const vazio = () => ({ de: '', ate: '', face: '' as UnitSunOrientation | '', legenda: '' });
+/** A faixa sugerida: do térreo (garagem não tem janela) ao último andar com unidade; sem unidade com andar, vazia. */
+export function faixaSugerida(andares: readonly (number | null | undefined)[] | undefined): { de: string; ate: string } {
+  const validos = (andares ?? []).filter((n): n is number => typeof n === 'number' && Number.isInteger(n));
+  if (validos.length === 0) return { de: '', ate: '' };
+  const ate = Math.max(...validos);
+  const acimaDoSolo = validos.filter((n) => n >= 0);
+  return { de: String(acimaDoSolo.length > 0 ? Math.min(...acimaDoSolo) : Math.min(...validos)), ate: String(ate) };
+}
+const vazio = (andares?: readonly (number | null | undefined)[]) => ({ ...faixaSugerida(andares), face: '' as UnitSunOrientation | '', legenda: '' });
 /** "3", "-1" → número inteiro; vazio = null; outra coisa = NaN (o `problemaDaVista` recusa). */
 const andar = (texto: string): number | null => (texto.trim() === '' ? null : /^-?\d+$/.test(texto.trim()) ? Number(texto.trim()) : NaN);
 
-export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empreendimentoId, organizationId, somenteLeitura }) => {
+export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empreendimentoId, organizationId, somenteLeitura, andaresDaTorre }) => {
   const { showToast } = useToast();
   const confirm = useConfirm();
   const [vistas, setVistas] = React.useState<VistaDaTorre[] | null>(null);
   const [erro, setErro] = React.useState<string | null>(null);
-  const [form, setForm] = React.useState(vazio);
+  const [form, setForm] = React.useState(() => vazio(andaresDaTorre));
+  // As unidades chegam depois do card abrir: a sugestão entra quando chegar, sem passar por cima do que foi digitado.
+  const sugestao = faixaSugerida(andaresDaTorre);
+  const mexeuNaFaixa = React.useRef(false);
+  React.useEffect(() => {
+    if (!mexeuNaFaixa.current) setForm((f) => ({ ...f, de: sugestao.de, ate: sugestao.ate }));
+  }, [sugestao.de, sugestao.ate]);
   const [arquivo, setArquivo] = React.useState<File | null>(null);
   const [salvando, setSalvando] = React.useState(false);
 
@@ -83,7 +102,8 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
         arquivo,
       });
       setVistas((atual) => [...(atual ?? []), nova].sort((a, b) => a.andar_de - b.andar_de || a.andar_ate - b.andar_ate));
-      setForm(vazio());
+      mexeuNaFaixa.current = false;
+      setForm(vazio(andaresDaTorre));
       setArquivo(null);
       showToast(`Vista da ${towerName} gravada: ${rotuloDaVista(nova)}.`);
     } catch (e) {
@@ -139,15 +159,28 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
       {vistas && vistas.length === 0 && !erro && <p className="text-sm text-gray-500">Nenhuma vista cadastrada nesta torre.</p>}
 
       {!somenteLeitura && !erro && vistas && (
-        <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_220px] gap-4 rounded-[6px] border border-gray-100 bg-gray-50/40 p-3" data-testid="nova-vista">
+        <div className="grid grid-cols-1 md:grid-cols-[220px_minmax(0,1fr)] gap-4 rounded-[6px] border border-gray-100 bg-gray-50/40 p-3" data-testid="nova-vista">
+          {/* 10/11/2026: "carreguei as imagens mas não tem botão salvar e as imagens não permanecem". A foto vem
+              primeiro, a faixa já nasce preenchida com os andares da torre, e o que grava é um botão azul "Salvar vista". */}
+          <div className="space-y-1.5">
+            <p className={rotuloCls}>1. Foto da vista</p>
+            <ImageDropzone
+              value={previa}
+              onSelect={(f) => setArquivo(f)}
+              onRemove={() => setArquivo(null)}
+              uploading={salvando}
+              hint="Arraste a foto da vista aqui ou clique para selecionar"
+            />
+          </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 content-start">
+            <p className={`col-span-2 ${rotuloCls}`}>2. Andares que ela vale, e salvar</p>
             <div className="space-y-1.5">
               <label htmlFor={id('de')} className={rotuloCls}>Do andar</label>
-              <input id={id('de')} className={inputCls} inputMode="numeric" placeholder="ex: 0 (térreo)" value={form.de} onChange={(e) => setForm((f) => ({ ...f, de: e.target.value }))} />
+              <input id={id('de')} className={inputCls} inputMode="numeric" placeholder="ex: 0 (térreo)" value={form.de} onChange={(e) => { mexeuNaFaixa.current = true; setForm((f) => ({ ...f, de: e.target.value })); }} />
             </div>
             <div className="space-y-1.5">
               <label htmlFor={id('ate')} className={rotuloCls}>Até o andar</label>
-              <input id={id('ate')} className={inputCls} inputMode="numeric" placeholder="ex: 3" value={form.ate} onChange={(e) => setForm((f) => ({ ...f, ate: e.target.value }))} />
+              <input id={id('ate')} className={inputCls} inputMode="numeric" placeholder="ex: 3" value={form.ate} onChange={(e) => { mexeuNaFaixa.current = true; setForm((f) => ({ ...f, ate: e.target.value })); }} />
             </div>
             <div className="space-y-1.5">
               <label htmlFor={id('face')} className={rotuloCls}>Face da torre</label>
@@ -159,23 +192,17 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
               <label htmlFor={id('legenda')} className={rotuloCls}>Legenda (opcional)</label>
               <input id={id('legenda')} className={inputCls} placeholder="ex: Vista para a praça" maxLength={120} value={form.legenda} onChange={(e) => setForm((f) => ({ ...f, legenda: e.target.value }))} />
             </div>
-            <div className="col-span-2 flex items-center justify-end gap-3">
-              {motivo && <p className="text-xs text-gray-500" data-testid="nova-vista-motivo">{motivo}</p>}
+            <div className="col-span-2 flex flex-wrap items-center justify-end gap-3">
+              {motivo && <p className="text-xs text-gray-600" data-testid="nova-vista-motivo">{motivo}</p>}
+              {!motivo && <p className="text-xs font-medium text-amber-700" data-testid="nova-vista-por-salvar">A foto ainda não foi gravada. Clique em Salvar vista.</p>}
               <span title={motivo ?? undefined}>
-                <Button type="button" variant="secondary" disabled={!!motivo || salvando} onClick={adicionar}>
-                  {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-[15px] h-[15px]" />}
-                  Adicionar vista
+                <Button type="button" disabled={!!motivo || salvando} onClick={adicionar}>
+                  {salvando ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-[15px] h-[15px]" />}
+                  Salvar vista
                 </Button>
               </span>
             </div>
           </div>
-          <ImageDropzone
-            value={previa}
-            onSelect={(f) => setArquivo(f)}
-            onRemove={() => setArquivo(null)}
-            uploading={salvando}
-            hint="Arraste a foto da vista aqui ou clique para selecionar"
-          />
         </div>
       )}
     </div>

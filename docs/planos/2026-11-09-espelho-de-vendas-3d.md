@@ -228,6 +228,12 @@ Passa a ser `name || number`, como o espelho 2D.
 Mudou em relação ao plano aprovado: a ficha só mostra o botão quando o prédio tem alguma vista cadastrada (desligado,
 com o motivo, quando nenhuma cobre a unidade). Um botão sempre desligado em todo prédio sem vista seria só ruído.
 
+Corrigido depois de ir ao ar (10/11/2026), com o usuário tentando cadastrar: *"carreguei as imagens mas nao tem botão
+salvar ou algo do tipo e as imagens nao permanecem"*. A foto escolhida era só prévia até clicar num botão branco
+"Adicionar vista", desligado enquanto a faixa de andares estivesse vazia. Agora a foto vem primeiro, a faixa já nasce
+preenchida com os andares da torre (do térreo ao último com unidade), o botão é o azul "Salvar vista" e, com a foto
+escolhida, a tela avisa que ela ainda não foi gravada.
+
 ### F7 — Luz do dia
 
 | Arquivo | O que muda | Como sei que terminou |

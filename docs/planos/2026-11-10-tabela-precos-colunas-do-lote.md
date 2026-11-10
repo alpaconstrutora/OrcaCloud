@@ -49,3 +49,17 @@ Agora `EspelhoVendasTab` e `EspelhoLocacoesTab` recebem `estrutura` do `Empreend
 no LOTE, trocam Torre/Pav./Dormitórios/Vagas/Banheiros por Quadra/Nº do lote (Torre também sai:
 no lote é a torre implícita "Lote", sem informação). Conferido na tela: Lote Vale do Sol (Vendas e
 Locações) com Quadra "—"/Nº do lote "4B"; Bella Vista com as colunas de sempre.
+
+## Revisão 3 (10/11) — Portal do Corretor
+
+> implementar no Portal do Corretor tambem
+
+- `BrokerDevelopments` (tabela no desktop e cartões no celular): no LOTE, saem Dormitórios, Vagas,
+  Banheiros, Pavimento e Posição e entram Quadra e Nº do lote, logo depois de Unidade.
+- Quadra e Nº do lote ficam **fora** da configuração de colunas do portal, que é por org,
+  gravada em `broker_portal_price_columns` e vale para prédios e lotes juntos. O que o admin
+  escolheu continua valendo para os prédios.
+- Link do corretor (anon): RPC nova `fn_broker_portal_lote_do_predio(token, building)`, migration
+  `aplicar_20271110750000`, com a mesma cerca de `fn_broker_portal_get_price_table`.
+  Visão do app: `empreendimentoService.loteDoPredio`.
+- Sem a migration aplicada, a RPC falha, o front cai em TORRES e a tabela fica a de sempre.

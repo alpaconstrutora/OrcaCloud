@@ -1,5 +1,7 @@
 -- Colaborador sem CPF: texto vazio vira NULL no BANCO (pedido de 10/11/2026).
 -- Plano: docs/planos/2026-11-10-colaborador-sem-cpf.md
+-- Nasceu como aplicar_20271110950000; renomeada por colisão com
+-- aplicar_20271110950000_investidor_compartilhado. JÁ APLICADA no remoto em 10/11/2026.
 --
 -- idx_employees_cpf_unique (org_id, cpf) WHERE cpf IS NOT NULL só ignora NULL.
 -- Gravado como '' (ou só a máscara), o 2º colaborador sem CPF da mesma org batia

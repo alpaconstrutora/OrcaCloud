@@ -24,12 +24,15 @@ só ignora NULL, e o campo vazio ia como `''`: o 2º colaborador sem CPF da mesm
 
 - [x] **Serviço grava NULL** (`services/laborService.ts`, PR #317). Pronto quando: `laborServiceCpfVazio.test.ts`
   verde e produção servindo a mensagem "Já existe um colaborador com este CPF nesta organização.". Feito em 10/11.
-- [ ] **Trava no banco** (`supabase/migrations/aplicar_20271110950000_employees_cpf_vazio_null.sql`): gatilho
+- [x] **Trava no banco** (`supabase/migrations/aplicar_20271110970000_employees_cpf_vazio_null.sql`): gatilho
   `trg_employees_cpf_vazio_null` converte CPF sem dígito em NULL em qualquer INSERT/UPDATE, o que cobre a
   contratação do ATS e o cadastro do portal de treinamentos. Pronto quando: aplicada no remoto e
-  `pg_trigger` lista o gatilho. Aplicação no remoto é do usuário (escrita no banco barrada no modo automático).
-- [ ] **Registro antigo** (mesma migration, UPDATE final). Pronto quando:
+  `pg_trigger` lista o gatilho. Aplicada em 10/11 (o usuário pediu "Aplique você mesmo"). `pg_trigger` lista o
+  gatilho, e a ACL da função é só `postgres`/`service_role`. Prova numa transação desfeita: dois INSERTs na mesma
+  org, com `''` e com `'   .   .   -  '`, gravaram NULL sem colidir; `'000.000.001-91'` ficou como veio.
+- [x] **Registro antigo** (mesma migration, UPDATE final). Pronto quando:
   `SELECT count(*) FROM employees WHERE cpf IS NOT NULL AND regexp_replace(cpf,'\D','','g') = ''` dá 0.
+  Deu 0 em 10/11; o Josmar (`88c05928…`) ficou com `cpf` NULL.
 - [x] **Busca de Colaboradores** (`utils/buscaColaborador.ts` + `components/LaborEmployeeList.tsx`): o CPF só
   entra na comparação quando o termo tem dígito. Pronto quando: `buscaColaborador.test.ts` verde
   ("Cristiano" não casa com "Josmar").

@@ -93,6 +93,9 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
+    // Dias de atraso em coluna própria (pedido 09/11/2026) — ordenável, para
+    // achar o mais atrasado sem ler data por data.
+    { key: 'atraso', label: 'Atraso', sortable: true },
     // Recibo de pagamento (o credor assina) — antes de Status, como em Contas a
     // Receber: a tabela é larga e a coluna Ações costuma ficar fora da tela.
     { key: 'recibo', label: 'Recibo', sortable: true },
@@ -118,6 +121,7 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     obra: { label: 'Obra', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
     valor: { label: 'Valor', className: 'text-right px-6 py-2 border-r border-gray-100 overflow-hidden' },
     vencimento: { label: 'Vencimento', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    atraso: { label: 'Atraso', className: 'text-right px-6 py-2 border-r border-gray-100 overflow-hidden' },
     recibo: { label: 'Recibo', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
     status: { label: 'Status', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
     centro_custo: { label: 'Centro de Custo', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
@@ -126,8 +130,8 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    // Vencimento e Status em linha única (data · atraso; status · detalhe): mais largos.
-    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 200, recibo: 130, status: 240,
+    // Status em linha única (status · detalhe): mais largo.
+    credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, atraso: 110, recibo: 130, status: 240,
     centro_custo: 180, plano_contas: 180, imovel: 190, actions: 250,
 };
 
@@ -162,6 +166,15 @@ const hoje = () => { const d = new Date(); d.setHours(0, 0, 0, 0); return d; };
 function diasAtraso(dueDate: string): number {
     return Math.floor((hoje().getTime() - new Date(dueDate + 'T00:00:00').getTime()) / 86400000);
 }
+
+/** A linha está vencida? Pela data (situacaoDaLinha): o business_status antigo
+ *  AGUARDANDO_APROVACAO não vira VENCIDO na view. */
+const linhaVencida = (row: Payable): boolean =>
+    row.effective_status === 'VENCIDO' || (situacaoDaLinha(row).vencido && row.effective_status !== 'PAGO');
+
+/** Dias de atraso da linha; `null` quando não está vencida (coluna "—"). */
+const atrasoDaLinha = (row: Payable): number | null =>
+    linhaVencida(row) && row.due_date ? diasAtraso(row.due_date) : null;
 
 /** Linha com os nomes já resolvidos (Centro de Custo/Plano de Contas/Imóvel) —
  *  ver `rowsWithNames` no componente, que injeta esses três campos a partir
@@ -223,20 +236,19 @@ function renderParcelaCell(
                     <Money value={row.amount} />
                 </div>
             );
-        case 'vencimento': {
-            // Pela data (situacaoDaLinha): o business_status antigo AGUARDANDO_APROVACAO não vira VENCIDO na view.
-            const vencido = row.effective_status === 'VENCIDO' || (situacaoDaLinha(row).vencido && row.effective_status !== 'PAGO');
-            // Data e atraso na MESMA linha (pedido 09/11/2026): empilhados, a linha
-            // da tabela dobrava de altura só nas vencidas. `title` devolve o texto
-            // inteiro quando a coluna estreita corta o atraso.
-            const atraso = vencido && row.due_date ? `${diasAtraso(row.due_date)}d atraso` : null;
+        case 'vencimento':
+            // Só a data; os dias de atraso têm coluna própria ("Atraso").
             return (
-                <div
-                    className={`truncate text-center text-sm font-normal ${vencido ? 'text-red-600' : 'text-gray-600'}`}
-                    title={atraso ? `${formatDateBR(row.due_date)} · ${atraso}` : undefined}
-                >
+                <div className={`text-center text-sm font-normal ${linhaVencida(row) ? 'text-red-600' : 'text-gray-600'}`}>
                     {formatDateBR(row.due_date)}
-                    {atraso && <span className="text-red-500"> · {atraso}</span>}
+                </div>
+            );
+        case 'atraso': {
+            const dias = atrasoDaLinha(row);
+            if (dias === null) return <div className="text-right text-sm font-normal text-gray-400">—</div>;
+            return (
+                <div className="text-right text-sm font-normal text-red-600">
+                    {dias} {dias === 1 ? 'dia' : 'dias'}
                 </div>
             );
         }
@@ -651,6 +663,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     case 'obra':         return (r.obra_name ?? '').toLowerCase();
                     case 'valor':        return r.amount ?? 0;
                     case 'vencimento':   return r.due_date ?? '';
+                    // Em dia / sem vencimento = -1: ficam juntos na ponta oposta aos mais atrasados.
+                    case 'atraso':       return atrasoDaLinha(r) ?? -1;
                     case 'status':       return STATUS_PT[situacaoDaLinha(r).chave] ?? situacaoDaLinha(r).chave;
                     case 'centro_custo': return (r.cost_center_name ?? '').toLowerCase();
                     case 'plano_contas': return (r.plano_de_contas_name ?? '').toLowerCase();

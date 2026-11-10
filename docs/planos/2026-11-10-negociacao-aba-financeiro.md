@@ -164,15 +164,60 @@ seletores; fonte de 11 px; fecha a crítica.
   não visto: o "Lançar" do cabeçalho (exige venda já lançada).
   Fora do escopo, anotado: a aba Contrato ainda tem 2 azuis sólidos ("Gerar Documento do
   Contrato", "Gerar Contrato").
-- [ ] 5. audit
-- [ ] 6. polish
+- [x] 5. audit — relatório (o audit DOCUMENTA; as correções vão para o item 6). Nota 13/20
+  (A11y 2 · Desempenho 3 · Tema 3 · Responsivo 3 · Integridade 2), medido no dev local:
+  - P1: 4 campos sem nome acessível (valor da unidade na Composição, Valor Total, Condição de
+    pagamento, Data Efetiva — `<label>` sem `htmlFor`); abas sem `role="tablist"/"tab"`,
+    `aria-selected` nem setas; contraste < 4,5 — prefixos "R$" 2,60 e "BRL" 2,49, "Nenhum centro de
+    custo/Nenhuma conta vinculada" 2,48, "Total do contrato · 1 unidade" 4,44, "Análise de Crédito"
+    2,60; valor da unidade (Composição) sem indicador de foco.
+  - P2: CC e Plano de Contas no tamanho `md` (54px, `rounded-2xl`, borda quase invisível — §7.1.1
+    pede `size="sm"`); placeholder "0" dos juros 3,42; "BRL" × "R$"; em 390px o rodapé corta
+    "Salvar alterações" (termina em 416px numa tela de 386px — app interno é de computador).
+  - P3: "ANÁLISE DE CRÉDITO" em caixa alta/`font-black` (§21) e seta 1,47; `text-[11px]` em 2
+    lugares fora da aba (dica do lote em cinza-claro, status do contrato); H1 → H3 sem H2.
+  - Detector: 14 avisos de tamanho de fonte — 12× `text-[13px]` são falso positivo (o guia do app
+    prescreve 13px em botões; o DESIGN.md lido é o do Portal do Colaborador), 2× 11px reais (P3).
+  - Bom: tabela nova toda nomeada (aria-label), foco visível nas demais paradas, ordem de Tab
+    lógica, sem `dark:` (§33), tabela rola dentro do contêiner em 390px, conferência com espera.
+- [x] 6. polish — corrige o audit inteiro:
+  - Abas: `role="tablist"/"tab"`, `aria-selected`, Tab entra só na aba ativa, setas/Home/End
+    trocam de aba e levam o foco, anel azul no foco de teclado.
+  - Nome em todo campo: Valor Total, Condição de pagamento, Data Efetiva, Data do 1º Pagamento
+    (`htmlFor`), valor de cada unidade na Composição (`aria-label` + anel de foco), os 7 campos da
+    gaveta "Adicionar pagamento", "Calcular automaticamente" como grupo com `aria-pressed`.
+  - CC e Plano de Contas no gatilho h-9 (§7.1.1) com fundo BRANCO como os campos ao lado
+    (`CLASSE_SELETOR_DO_FORM` — o `size="sm"` é cinza e lia como desligado, §32); nome =
+    rótulo + valor por `labelledBy`, prop nova de `HierarchicalSelect` (repassada por
+    `CostCenterSelect`/`PlanoContasSelect`; opcional, nenhuma outra tela muda).
+  - `HierarchicalSelect` (todas as telas): foco azul no lugar do índigo; placeholder
+    `gray-500` (era `gray-400`, 2,48:1 → 4,84:1).
+  - "R$" no lugar de "BRL" (Valor Total e gaveta); contraste medido no dev local: "R$" 4,84,
+    placeholders 4,84, "Total do contrato · 1 unidade" 6,94, seta da Análise de crédito 4,84.
+  - Análise de crédito (`CreditAnalysisPanel`, só usado aqui): título "Análise de crédito" sem
+    caixa alta/`font-black` (§21), seta desenhada no lugar do "▲/▼", `aria-expanded`; documentos
+    marcáveis pelo TECLADO (eram `<div onClick>`); parecer com `aria-pressed`; anexo do laudo
+    alcançável por Tab; "Salvar análise" secundário (§17); âmbar/esmeralda 700 (AA).
+  - `text-[11px]` → `text-xs` (dica do lote, status do contrato); "Nº de parcelas" numa grafia só.
+  - Rodapé quebra linha em tela estreita: a 390px "Salvar alterações" desce para a 2ª linha,
+    inteiro (medido restringindo o rodapé a 390px; a janela não redimensiona).
+  - Conferido no dev local com escritas bloqueadas (só a sincronização geral do app tentou um
+    PATCH em `projects`, fora desta tela, bloqueado). `typecheck` ok; `check-ui-standard` sem
+    violação em DealModal e CreditAnalysisPanel (o ❌ de `HierarchicalSelect` é a busca
+    transitória, exceção já justificada no código); suíte: só `espelhoDoInvestidor` falha
+    (Windows, passa no CI) — os 2 do editor de plantas estouraram tempo sob carga e passam sozinhos.
 
 ## Desvios registrados
 
 - §25 pede "Salvar" desligado sem pendência. **Não aplicado no item 1:** o salvar desta tela
   reexecuta efeitos próprios (status do imóvel, tributos da venda —
   `services/commercialService.ts`, `saveDeal`), e desligar o botão sem mapear quem depende de
-  "salvar de novo" arrisca botão morto. Reavaliar no item 6.
+  "salvar de novo" arrisca botão morto. Reavaliado no item 6: **mantido**. O rodapé já diz o
+  estado ("Alterações não salvas" / "Salvo") pelo `SaveStatus`, e o efeito colateral do salvar
+  continua sem mapa de quem depende dele.
+- Fora do escopo, anotado no item 6: `components/ui/TabsBar.tsx` (53 telas) tem `tablist`/`tab`
+  mas não anda pelas setas — este trilho é próprio (tem o ponto com motivo) e ganhou as setas
+  aqui; levar ao componente é outra frente.
 
 ## Verificação
 

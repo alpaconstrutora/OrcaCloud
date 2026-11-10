@@ -45,6 +45,8 @@ interface Props {
      *  — só para o campo legado em texto (`FinancialOrderDetails`). */
     valueField?: 'id' | 'name';
     size?: 'md' | 'sm';
+    /** `id` do rótulo visível — ver HierarchicalSelect. */
+    labelledBy?: string;
     disabled?: boolean;
     /** Gatilho de célula de tabela — ver HierarchicalSelect. */
     triggerClassName?: string;
@@ -95,6 +97,7 @@ const CostCenterSelect: React.FC<Props> = ({
     costCenters, value, onChange, placeholder = '—', valueField = 'id', size, disabled,
     triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
+    labelledBy,
     clearLabel, clearValue, permitirGrupo,
 }) => {
     const organizations = useStore(s => s.organizations);
@@ -119,6 +122,7 @@ const CostCenterSelect: React.FC<Props> = ({
             fallbackLabel={fallbackLabel}
             clearLabel={clearLabel}
             clearValue={clearValue}
+            labelledBy={labelledBy}
         />
     );
 };

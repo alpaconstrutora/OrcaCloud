@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { ChevronDown, ChevronRight, ChevronsDownUp, ChevronsUpDown, Search } from 'lucide-react';
 import { getCodeLevel, getLevelStyle, sortByCode } from '../utils/codeHierarchy';
@@ -125,6 +125,10 @@ interface Props {
      *  catálogo sem código cuja ordem tem sentido (campos do .docx: Nome, CPF/CNPJ,
      *  endereço… — em ordem alfabética virariam "Bairro, CEP, CNPJ"). 19/10/2026. */
     manterOrdem?: boolean;
+    /** `id` do rótulo visível do campo. O gatilho é um botão: sem isto o leitor de
+     *  tela lê só o conteúdo ("Nenhuma conta vinculada, botão") e não diz QUAL campo
+     *  é. Com isto, lê rótulo + valor ("Plano de Contas, Nenhuma conta vinculada"). */
+    labelledBy?: string;
 }
 
 const HierarchicalSelect: React.FC<Props> = ({
@@ -147,7 +151,9 @@ const HierarchicalSelect: React.FC<Props> = ({
     clearLabel,
     clearValue = '',
     manterOrdem = false,
+    labelledBy,
 }) => {
+    const triggerId = useId();
     const [open, setOpen] = useState(false);
     // Busca transitória de propósito (exceção ao §3 do guia, que é para filtro
     // de TELA): limpa ao fechar; se persistisse, o seletor reabriria filtrado
@@ -362,7 +368,9 @@ const HierarchicalSelect: React.FC<Props> = ({
             disabled={disabled}
             aria-haspopup={panelVariant === 'drawer' ? 'dialog' : 'listbox'}
             aria-expanded={open}
-            className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
+            id={triggerId}
+            aria-labelledby={labelledBy ? `${labelledBy} ${triggerId}` : undefined}
+            className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                 triggerClassName ?? (size === 'sm'
                     ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
                     : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4')
@@ -387,7 +395,7 @@ const HierarchicalSelect: React.FC<Props> = ({
             ) : fallbackLabel ? (
                 <span className="text-sm font-normal text-gray-900 truncate flex-1 min-w-0" title={fallbackLabel}>{fallbackLabel}</span>
             ) : (
-                <span className="text-sm text-gray-400 truncate">{placeholder}</span>
+                <span className="text-sm text-gray-500 truncate">{placeholder}</span>
             )}
             <ChevronDown className={`w-4 h-4 text-gray-400 shrink-0 transition-transform ${open ? 'rotate-180' : ''}`} />
         </button>

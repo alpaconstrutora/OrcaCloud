@@ -115,8 +115,26 @@ function dadosDo(i: ImovelDoEstoque): DadosDaUnidade {
   };
 }
 
-/** As torres tiradas do próprio estoque: uma por bloco, só com os imóveis que têm andar. */
-function torresDoEstoque(imoveis: readonly ImovelDoEstoque[]): TorreDoEspelho[] {
+/** "Torre A", "BLOCO a" e "A" são a mesma torre: o nome sem o prefixo, o acento e a caixa. */
+const chaveDaTorre = (nome: string) =>
+  nome
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/^\s*(torre|bloco|bl\.?|edificio|ed\.?)\s+/, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+/**
+ * As torres tiradas do próprio estoque: uma por bloco, só com os imóveis que têm andar. O contorno enviado pela Planta
+ * mora na torre do Empreendimento: a torre do bloco leva o da torre de MESMO NOME (uma só candidata; duas = nenhuma).
+ */
+function torresDoEstoque(imoveis: readonly ImovelDoEstoque[], estrutura: readonly TorreDaEstrutura[]): TorreDoEspelho[] {
+  const contornoPeloNome = (nome: string) => {
+    const chave = chaveDaTorre(nome);
+    const candidatas = estrutura.filter((t) => chaveDaTorre(t.name) === chave);
+    return candidatas.length === 1 ? contornoDaLinha(candidatas[0]) : null;
+  };
   const porBloco = new Map<string, ImovelDoEstoque[]>();
   for (const i of imoveis) {
     if (andarDo(i) === null) continue;
@@ -131,6 +149,7 @@ function torresDoEstoque(imoveis: readonly ImovelDoEstoque[]): TorreDoEspelho[] 
       id: `bloco:${bloco}`,
       name: bloco ? rotuloDaTorre(bloco) : 'Torre',
       sort_order: k,
+      contorno: bloco ? contornoPeloNome(bloco) : null,
       units: lista.map((i, n) => ({
         id: i.id,
         name: nomeDo(i),
@@ -170,11 +189,11 @@ export function montarEspelhoDoEstoque(entrada: {
   );
   const dados = new Map(unidades.map((i) => [i.id, dadosDo(i)]));
 
+  const estrutura = (entrada.estrutura ?? []).filter((t) => !t.blueprint_quadra_uid);
   const colocados = (cena: CenaDoEspelho) => new Set(cena.prismas.map((p) => p.unitId).filter(Boolean)).size;
-  const cenaDoEstoque = montarCenaDoEspelho({ torres: torresDoEstoque(unidades), statusPorUnidade, hipoteses: entrada.hipoteses });
+  const cenaDoEstoque = montarCenaDoEspelho({ torres: torresDoEstoque(unidades, estrutura), statusPorUnidade, hipoteses: entrada.hipoteses });
   const doEstoque: EspelhoDoEstoque = { cena: cenaDoEstoque, dados, fonte: 'ESTOQUE', semPosicao: unidades.length - colocados(cenaDoEstoque) };
 
-  const estrutura = (entrada.estrutura ?? []).filter((t) => !t.blueprint_quadra_uid);
   const ligados = new Set(estrutura.flatMap((t) => t.units.map((u) => u.property_id)).filter((id): id is string => !!id && porId.has(id)));
   if (ligados.size === 0) return doEstoque;
 

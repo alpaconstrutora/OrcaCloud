@@ -13,10 +13,10 @@ import type { DadosDaUnidade } from '../../components/espelho3d/FichaDaUnidade';
 const webgl = vi.hoisted(() => ({ disponivel: true, cenaQuebra: false }));
 vi.mock('../../components/espelho3d/webglDisponivel', () => ({ webglDisponivel: () => webgl.disponivel, reduzMovimento: () => true }));
 vi.mock('../../components/espelho3d/Espelho3DCena', () => ({
-    default: (p: { destaque: string | null; selecionada: string | null; onSelecionar: (id: string | null) => void }) => {
+    default: (p: { destaque: string | null; selecionada: string | null; onSelecionar: (id: string | null) => void; luz?: { chave: string; janelas: { fracao: number } } }) => {
         if (webgl.cenaQuebra) throw new Error('contexto WebGL perdido');
         return (
-            <button type="button" data-testid="cena" data-destaque={p.destaque ?? ''} data-selecionada={p.selecionada ?? ''} onClick={() => p.onSelecionar('A-1-2')}>
+            <button type="button" data-testid="cena" data-destaque={p.destaque ?? ''} data-selecionada={p.selecionada ?? ''} data-luz={p.luz?.chave ?? ''} data-janelas={p.luz?.janelas.fracao ?? ''} onClick={() => p.onSelecionar('A-1-2')}>
                 desenho
             </button>
         );
@@ -72,6 +72,48 @@ describe('Espelho3D — legenda e destaque', () => {
     it('o desenho tem nome acessível com os números', () => {
         montar();
         expect(screen.getByRole('img', { name: 'Torres em 3D. 6 unidades: 3 disponíveis, 1 em negociação, 2 vendidas.' })).toBeTruthy();
+    });
+});
+
+// F7 (10/11/2026): a luz do dia.
+describe('Espelho3D — luz do dia', () => {
+    const luzes = () => within(screen.getByRole('radiogroup', { name: 'Luz do dia no desenho' })).getAllByRole('radio');
+
+    it('são quatro, na ordem do dia, e começa em "Dia"', async () => {
+        montar();
+        expect(luzes().map((b) => [b.textContent, b.getAttribute('aria-checked')])).toEqual([['Amanhecer', 'false'], ['Dia', 'true'], ['Entardecer', 'false'], ['Noite', 'false']]);
+        expect((await screen.findByTestId('cena')).getAttribute('data-luz')).toBe('dia');
+    });
+
+    it('escolher "Noite" troca a luz do desenho e o céu, e acende janelas; a legenda e as contagens não mudam', async () => {
+        montar();
+        const legendaAntes = screen.getByRole('radiogroup', { name: 'Destacar unidades por status' }).textContent;
+        fireEvent.click(screen.getByRole('radio', { name: 'Noite' }));
+        const cenaDepois = await screen.findByTestId('cena');
+        expect(cenaDepois.getAttribute('data-luz')).toBe('noite');
+        expect(Number(cenaDepois.getAttribute('data-janelas'))).toBeGreaterThan(0);
+        expect(screen.getByRole('radio', { name: 'Noite' }).getAttribute('aria-checked')).toBe('true');
+        expect(screen.getByRole('radio', { name: 'Dia' }).getAttribute('aria-checked')).toBe('false');
+        const moldura = screen.getByRole('img', { name: /Torres em 3D/ });
+        expect(moldura.getAttribute('data-luz')).toBe('noite');
+        expect(moldura.style.backgroundImage).toMatch(/linear-gradient/);
+        expect(screen.getByRole('radiogroup', { name: 'Destacar unidades por status' }).textContent).toBe(legendaAntes);
+    });
+
+    it('trocar a luz não fecha a ficha nem desfaz o destaque', async () => {
+        montar();
+        fireEvent.click(await screen.findByTestId('cena'));
+        fireEvent.click(screen.getByRole('radio', { name: /Vendidas/ }));
+        fireEvent.click(screen.getByRole('radio', { name: 'Entardecer' }));
+        expect(screen.getByRole('region', { name: 'Ficha da unidade 102' })).toBeTruthy();
+        expect(screen.getByTestId('cena').getAttribute('data-destaque')).toBe('sold');
+        expect(screen.getByTestId('cena').getAttribute('data-selecionada')).toBe('A-1-2');
+    });
+
+    it('sem WebGL não há desenho para iluminar: o seletor de luz não aparece', () => {
+        webgl.disponivel = false;
+        montar();
+        expect(screen.queryByRole('radiogroup', { name: 'Luz do dia no desenho' })).toBeNull();
     });
 });
 

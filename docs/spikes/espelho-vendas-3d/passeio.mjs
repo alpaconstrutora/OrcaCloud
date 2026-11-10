@@ -100,6 +100,18 @@ try {
   await page.keyboard.press('Escape');
   await page.waitForTimeout(300);
 
+  // 1d. F7: a luz do dia — os quatro momentos trocam o céu e a luz sem fechar a ficha nem mexer na legenda.
+  const legendaAntes = await page.getByRole('radiogroup', { name: 'Destacar unidades por status' }).innerText();
+  for (const [nome, chave] of [['Amanhecer', 'amanhecer'], ['Entardecer', 'entardecer'], ['Noite', 'noite']]) {
+    await page.getByRole('radio', { name: nome, exact: true }).click();
+    await page.waitForTimeout(700);
+    confere((await page.locator(`[role=img][data-luz=${chave}]`).count()) === 1 && !!(await fichaAberta(page)), `luz "${nome}": o desenho troca e a ficha continua aberta`);
+    await page.screenshot({ path: path.join(prints, `13-luz-${chave}.png`) });
+  }
+  confere((await page.getByRole('radiogroup', { name: 'Destacar unidades por status' }).innerText()) === legendaAntes, 'a legenda e as contagens são as mesmas em toda luz');
+  await page.getByRole('radio', { name: 'Dia', exact: true }).click();
+  await page.waitForTimeout(500);
+
   // 2. Arrastar gira a câmera e NÃO troca nem fecha a ficha.
   await page.mouse.move(caixa.x + caixa.width * 0.5, caixa.y + caixa.height * 0.5);
   await page.mouse.down();

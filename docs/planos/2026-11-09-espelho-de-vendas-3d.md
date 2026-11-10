@@ -232,8 +232,17 @@ com o motivo, quando nenhuma cobre a unidade). Um botão sempre desligado em tod
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| `utils/espelhoLuzDoDia.ts` (novo) | 4 presets (amanhecer, dia, entardecer, noite): sol, ambiente, céu, janelas. | Teste: a cor de status segue legível em todo preset. |
-| `Espelho3D.tsx`, `Espelho3DCena.tsx` | Rádios "Luz"; céu em gradiente CSS; à noite, `emissive` por hash estável do `unitId`. | Conferido no navegador; sem transição com `prefers-reduced-motion`. |
+| `utils/espelhoDeVendas3dLuz.ts` (novo) | Os quatro momentos (`LUZES_DO_DIA`: amanhecer, dia, entardecer, noite): céu, chão, ambiente, sol (cor, força, direção), contraluz, arestas e janelas acesas. "Dia" são os números da cena de antes. `corSobALuz` (a conta do material fosco, para a trava) e `janelaAcesa` (hash estável do id). | `npx vitest run __tests__/espelhoDeVendas3dLuz.test.ts` verde (36 casos): em toda luz, nas duas paletas, em três faces e com a unidade acesa ou não, cada status não escurece, mantém o matiz da legenda e fica distante dos outros e do piso neutro. |
+| `components/espelho3d/Espelho3DCena.tsx` | Luzes, chão e arestas vêm do preset. À noite o grupo de cada status se parte em dois (acesas e apagadas): a acesa emite a cor do PRÓPRIO status. A unidade escolhida fica sempre acesa. | Passeio do harness nas quatro luzes, sem erro de console. |
+| `components/espelho3d/Espelho3D.tsx` | Rádios "Luz do dia no desenho" (Amanhecer, Dia, Entardecer, Noite) ao lado da legenda, só quando há desenho; o céu é o gradiente do preset atrás do canvas transparente; a dica sobre o céu fica clara à noite. | 4 casos novos em `Espelho3D.test.tsx`: trocar a luz não fecha a ficha, não desfaz o destaque e não muda a legenda. |
+
+Mudou em relação ao plano aprovado (10/11/2026):
+- O arquivo é `utils/espelhoDeVendas3dLuz.ts` (ao lado de `espelhoDeVendas3dMalha.ts`), e não `lib/espelho3dLuz.ts`.
+- A janela acesa brilha na cor do status, e não num amarelo de janela: um amarelo por cima de "Em negociação"
+  (âmbar) e de "Disponível" (verde) era justamente o que a trava de legibilidade proíbe.
+- A luz colorida do amanhecer e do entardecer é fraca; quem carrega o clima é o céu. Luz laranja forte aproximava
+  "Vendida" (vermelho, no corretor) de "Reservada" (âmbar).
+- A escolha da luz não é guardada: todo mundo abre no "Dia".
 
 ## Estado
 
@@ -243,8 +252,8 @@ com o motivo, quando nenhuma cobre a unidade). Um botão sempre desligado em tod
 - [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
 - [ ] F4 — Portal do Investidor: em `main` (#294, `bda7f3f6`), no ar; migration `aplicar_20271110100000_investor_portal_espelho.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: as duas internas sem EXECUTE para a API; a do link para anon; a do app só authenticated; token inexistente → `valid=false`). FALTA conferir com um investidor ligado a uma obra com torres — hoje não há nenhum vínculo investidor ↔ obra no banco
 - [x] F5 — planta baixa por tipologia: #300 (`e48e216c`); migration `aplicar_20271110500000_empreendimento_tipologia_plantas.sql` aplicada em 10/11/2026 com autorização do usuário; as 8 plantas do Garden Cambuhy (Tipo 1 a 8) foram subidas pelo usuário e a ficha foi conferida em produção no Portal do Corretor (unidade de Tipo 3 com a planta carregada)
-- [ ] F6 — vista da janela: código pronto (branch `feat/espelho-3d-f6`); FALTA aplicar a migration `aplicar_20271110600000_empreendimento_tower_vistas.sql` (pede autorização própria) e cadastrar uma vista de verdade para conferir a ficha nos portais
-- [ ] F7 — luz do dia
+- [ ] F6 — vista da janela: #304 (`9f24410c`), no ar; migration `aplicar_20271110600000_empreendimento_tower_vistas.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: tabela com RLS e sem SELECT para anon; as duas funções com `vistas` e `plantas` e os privilégios de antes; VGV vendido do Bella Vista igual). FALTA cadastrar as vistas de verdade (o usuário faz depois) e conferir a ficha nos portais
+- [x] F7 — luz do dia (este PR): sem migration
 
 ## Riscos
 

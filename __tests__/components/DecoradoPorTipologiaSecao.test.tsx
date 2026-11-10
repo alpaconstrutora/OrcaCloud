@@ -87,6 +87,17 @@ describe('DecoradoPorTipologiaSecao', () => {
         expect(screen.getByTestId('novo-ambiente-motivo').textContent).toBe('Escolha a imagem do ambiente.');
     });
 
+    it('trocar de tipologia descarta o ambiente que estava sendo montado', async () => {
+        montar();
+        await screen.findByTestId('decorado-editor');
+        fireEvent.change(screen.getByTestId('novo-ambiente').querySelector('input[type=file]')!, { target: { files: [arquivo()] } });
+        fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Varanda' } });
+        expect(screen.getByTestId('novo-ambiente-por-salvar')).toBeTruthy();
+        fireEvent.click(screen.getByTestId('decorado-tipologia-tipo 2'));
+        expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('');
+        expect(screen.getByTestId('novo-ambiente-motivo').textContent).toBe('Escolha a imagem do ambiente.');
+    });
+
     it('subir o corte grava na hora, para a tipologia escolhida', async () => {
         servico.salvarCorte.mockResolvedValue(imagem({ id: 'c2', papel: 'CORTE', legenda: null, tipologia: 'Tipo 2', tipologia_chave: 'tipo 2', imagem_url: 'https://x/corte2.jpg' }));
         montar();

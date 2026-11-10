@@ -91,8 +91,14 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
   // A prévia da imagem escolhida para o ambiente novo (ainda não enviada).
   const previa = React.useMemo(() => (arquivo ? URL.createObjectURL(arquivo) : null), [arquivo]);
   React.useEffect(() => () => { if (previa) URL.revokeObjectURL(previa); }, [previa]);
-  // Trocar de tipologia descarta o ambiente que estava sendo montado.
-  React.useEffect(() => { setArquivo(null); setNome(''); }, [escolhida]);
+  // Trocar de tipologia descarta o ambiente que estava sendo montado. No CLIQUE, e não num efeito de `escolhida`: o
+  // efeito também rodava na primeira carga e, chegando depois da imagem escolhida, a apagava (teste instável no CI).
+  const escolher = (chave: string) => {
+    if (chave === escolhida) return;
+    setEscolhida(chave);
+    setArquivo(null);
+    setNome('');
+  };
 
   const tipologia = tipologias?.find((t) => t.chave === escolhida) ?? null;
   const { corte, ambientes } = tipologia ? decoradoDoCadastro(imagens, tipologia.chave) : { corte: null, ambientes: [] };
@@ -214,7 +220,7 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
                 type="button"
                 role="radio"
                 aria-checked={t.chave === escolhida}
-                onClick={() => setEscolhida(t.chave)}
+                onClick={() => escolher(t.chave)}
                 data-testid={`decorado-tipologia-${t.chave}`}
                 className={`h-9 px-3 rounded-[6px] border text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${t.chave === escolhida ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
               >

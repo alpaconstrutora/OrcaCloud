@@ -1,7 +1,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import SupplierSelect from './SupplierSelect';
-import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2, MoveHorizontal } from 'lucide-react';
+import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
@@ -18,9 +18,9 @@ import { sinapiService } from '../services/sinapiService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { costCenterService } from '../services/costCenterService';
-import MaterialSelectionModal from './MaterialSelectionModal';
+import PedidoOrcamentoPicker, { type ItemDoOrcamentoEscolhido } from './suprimentos/PedidoOrcamentoPicker';
 import DatabasePickerModal from './DatabasePickerModal';
-import { Supplier, BudgetEntry, SinapiType, SinapiItem, PaymentAccount, CostCenter, CompositionComponent } from '../types';
+import { Supplier, BudgetEntry, SinapiItem, PaymentAccount, CostCenter } from '../types';
 import { CostCenterV2 } from '../types/financial';
 import {
     obrasDoEmpreendimento,
@@ -63,6 +63,7 @@ interface AvulsoItem {
 // Todas ordenáveis (§6.3): cada uma carrega um valor único comparável.
 const AVULSO_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
+    { key: 'origem', label: 'Origem', sortable: true },
     { key: 'description', label: 'Descrição', sortable: true },
     { key: 'unit', label: 'Unid.', sortable: true },
     { key: 'quantity', label: 'Qtd.', sortable: true },
@@ -75,6 +76,7 @@ const AVULSO_COLUMNS: ColumnConfig[] = [
 
 const AVULSO_HEADERS: Record<string, { label: string; className: string }> = {
     code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    origem: { label: 'Origem', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
     description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100' },
     unit: { label: 'Unid.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
     quantity: { label: 'Qtd.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
@@ -84,41 +86,12 @@ const AVULSO_HEADERS: Record<string, { label: string; className: string }> = {
     quotedTotal: { label: 'Total cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
 };
 
-const MATERIAL_COLUMNS: ColumnConfig[] = [
-    { key: 'code', label: 'Código', sortable: true },
-    { key: 'description', label: 'Descrição', sortable: true },
-    { key: 'orcada', label: 'Qtd. orçada', sortable: true },
-    { key: 'comprada', label: 'Qtd. comprada', sortable: true },
-    { key: 'aComprar', label: 'Qtd. à comprar', sortable: true },
-    { key: 'unit', label: 'Unid.', sortable: true },
-    { key: 'price', label: 'Valor unit.', sortable: true },
-    { key: 'quotedPrice', label: 'Unit. cotação', sortable: true },
-    { key: 'pedido', label: 'Qtd. pedido', sortable: true },
-];
-
-const MATERIAL_HEADERS: Record<string, { label: string; className: string }> = {
-    code: { label: 'Código', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
-    description: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100' },
-    orcada: { label: 'Qtd. orçada', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-    comprada: { label: 'Qtd. comprada', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-    aComprar: { label: 'Qtd. à comprar', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-    unit: { label: 'Unid.', className: 'px-6 py-2 border-r border-gray-100 text-right' },
-    price: { label: 'Valor unit.', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-    quotedPrice: { label: 'Unit. cotação', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-    pedido: { label: 'Qtd. pedido', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
-};
-
 // Larguras padrão (§6.1) das duas tabelas desta aba. São ponto de partida; o
 // botão de auto-ajuste (§6.1.2) mede o conteúdo real — que é o que resolve a
 // Descrição, a única coluna que estoura (texto SINAPI de várias linhas).
 const DEFAULT_AVULSO_COL_WIDTHS: Record<string, number> = {
-    code: 120, description: 320, unit: 90, quantity: 90,
+    code: 120, origem: 120, description: 320, unit: 90, quantity: 90,
     unitPrice: 130, total: 130, quotedUnitPrice: 130, quotedTotal: 130, actions: 110,
-};
-
-const DEFAULT_MATERIAL_COL_WIDTHS: Record<string, number> = {
-    code: 130, description: 340, orcada: 120, comprada: 130,
-    aComprar: 130, unit: 90, price: 130, quotedPrice: 130, pedido: 130,
 };
 
 // Alinhamento da célula por coluna — o <td> sai de um `.map`, então não dá para
@@ -129,10 +102,20 @@ const AVULSO_ALIGN: Record<string, string> = {
     unitPrice: CELULA_A_DIREITA, total: CELULA_A_DIREITA,
     quotedUnitPrice: CELULA_A_DIREITA, quotedTotal: CELULA_A_DIREITA,
 };
-const MATERIAL_ALIGN: Record<string, string> = {
-    code: '', description: '', orcada: CELULA_A_DIREITA, comprada: CELULA_A_DIREITA,
-    aComprar: CELULA_A_DIREITA, unit: CELULA_A_DIREITA, price: CELULA_A_DIREITA, quotedPrice: CELULA_A_DIREITA, pedido: CELULA_A_DIREITA,
-};
+/** Quanto já foi pedido na obra, por código — pedidos não cancelados (inclui o
+ *  próprio pedido em edição). Alimenta "Qtd comprada"/"A comprar" do painel. */
+async function quantidadesCompradasNaObra(projectId: string): Promise<Map<string, number>> {
+    const orders = await orderService.listOrders(projectId);
+    const quantities = new Map<string, number>();
+    orders.forEach(order => {
+        if (order.status !== 'Cancelado') {
+            order.items.forEach(item => {
+                quantities.set(item.code, (quantities.get(item.code) || 0) + item.quantity);
+            });
+        }
+    });
+    return quantities;
+}
 
 // Ordena preservando o índice/linha original — a lista de avulsos é endereçada
 // por índice (editar/excluir), então o índice não pode vir da lista ordenada.
@@ -270,14 +253,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [quotedPrices, setQuotedPrices] = React.useState<Map<string, number | null>>(new Map());
     const [selectedMaterialsData, setSelectedMaterialsData] = React.useState<Map<string, SinapiItem>>(new Map());
 
-    // Composition Selection State
-    const [selectedCompositionItem, setSelectedCompositionItem] = React.useState<BudgetEntry | null>(null);
-    const [isMaterialModalOpen, setIsMaterialModalOpen] = React.useState(false);
+    // "+ Item do orçamento" — painel com o orçamento da obra (pedido de 10/11/2026;
+    // antes a tabela "Seleção de materiais da obra" ficava sempre aberta).
+    const [pickerOrcamentoAberto, setPickerOrcamentoAberto] = React.useState(false);
     const [formError, setFormError] = React.useState<string | null>(null);
 
     // Avulso Items State
     const [avulsoItems, setAvulsoItems] = React.useState<AvulsoItem[]>([]);
-    const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null }>({ open: false, editingIndex: null, initial: null });
+    // `codigoOrcamento`: editando um item do ORÇAMENTO na lista do Novo pedido —
+    // o mesmo modal, com código/descrição/unidade travados.
+    const [avulsoModalConfig, setAvulsoModalConfig] = React.useState<{ open: boolean; editingIndex: number | null; initial: AvulsoItem | null; codigoOrcamento?: string | null }>({ open: false, editingIndex: null, initial: null });
 
     // Load initial data
     React.useEffect(() => {
@@ -530,15 +515,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [versaoGravada]);
 
-    // Embutido: "+ Item avulso" grava o item direto no pedido, como editar e
-    // excluir na tabela "Itens do pedido" — a linha aparece lá na hora. Lê o
-    // pedido do servidor para não regravar itens com a lista deste formulário.
-    const incluirAvulsoNoPedido = async (item: AvulsoItem): Promise<string | null> => {
+    // Embutido: "+ Item avulso" e "+ Item do orçamento" gravam direto no pedido,
+    // como editar e excluir na tabela "Itens do pedido" — a linha aparece lá na
+    // hora. Lê o pedido do servidor para não regravar itens com a lista deste
+    // formulário.
+    const acrescentarAoPedido = async (novos: { code: string; description: string; unit: string; quantity: number; unitPrice: number; quotedUnitPrice?: number | null; avulso?: true }[]): Promise<string | null> => {
         if (!editingOrderId) return 'Pedido não encontrado.';
         try {
             const atual = await orderService.getOrderById(editingOrderId);
             if (!atual) return 'Não foi possível ler o pedido. Tente de novo.';
-            const novo = {
+            const itens = novos.map(item => ({
                 code: item.code,
                 description: item.description,
                 unit: item.unit,
@@ -547,17 +533,22 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 total: round2(item.quantity * item.unitPrice),
                 quotedUnitPrice: item.quotedUnitPrice ?? null,
                 quotedTotal: item.quotedUnitPrice == null ? null : round2(item.quantity * item.quotedUnitPrice),
-                avulso: true,
-            };
-            await orderService.updateOrder(editingOrderId, { items: [...atual.items, novo] }, atual.version);
+                ...(item.avulso ? { avulso: true as const } : {}),
+            }));
+            await orderService.updateOrder(editingOrderId, { items: [...atual.items, ...itens] }, atual.version);
+            // "Qtd comprada" do painel conta este pedido também.
+            if (selectedProjectId) {
+                quantidadesCompradasNaObra(selectedProjectId).then(setPurchasedQuantities).catch(() => { /* fica a anterior */ });
+            }
             onSave();
             return null;
         } catch (err: unknown) {
             const msg = err instanceof Error ? err.message : String(err);
-            console.error('[SupplyChainOrderForm] Erro ao incluir item avulso:', err);
-            return msg.startsWith('CONFLICT') ? msg.replace(/^CONFLICT:\s*/, '') : 'Erro ao incluir o item avulso.';
+            console.error('[SupplyChainOrderForm] Erro ao incluir item no pedido:', err);
+            return msg.startsWith('CONFLICT') ? msg.replace(/^CONFLICT:\s*/, '') : 'Erro ao incluir o item no pedido.';
         }
     };
+
     const [purchasedQuantities, setPurchasedQuantities] = React.useState<Map<string, number>>(new Map());
 
     // Helper to fetch and update prices for a budget
@@ -680,17 +671,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         // Load Existing Orders
         (async () => {
             try {
-                const orders = await orderService.listOrders(selectedProjectId);
+                const quantities = await quantidadesCompradasNaObra(selectedProjectId);
                 if (cancelled) return;
-                const quantities = new Map<string, number>();
-                orders.forEach(order => {
-                    if (order.status !== 'Cancelado') {
-                        order.items.forEach(item => {
-                            const current = quantities.get(item.code) || 0;
-                            quantities.set(item.code, current + item.quantity);
-                        });
-                    }
-                });
                 setPurchasedQuantities(quantities);
             } catch (err) {
                 console.error("Error loading orders:", err);
@@ -847,99 +829,50 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const totalReferencia = React.useMemo(() => totalReferenciaDoPedido(orderItems), [orderItems]);
     const algumItemCotado = React.useMemo(() => orderItems.some(temCotacao), [orderItems]);
 
-    const toggleItem = (code: string, remainingQty?: number, budgetItemId?: string) => {
-        const newSelected = new Set(selectedItems);
-        const newQuantities = new Map(customQuantities);
-        if (newSelected.has(code)) {
-            newSelected.delete(code);
-            newQuantities.delete(code);
-            setQuotedPrices(prev => { const next = new Map(prev); next.delete(code); return next; });
-        } else {
-            const budgetItem = projectData?.budget.find(b => b.id === budgetItemId);
-            if (budgetItem?.sinapiItem?.type === SinapiType.COMPOSITION) {
-                setSelectedCompositionItem(budgetItem);
-                setIsMaterialModalOpen(true);
-                return;
+    /**
+     * Itens escolhidos no painel "+ Item do orçamento" → estado do pedido. Guarda
+     * o que a antiga seleção fazia: insumo de composição entra por
+     * `selectedMaterialsData` (é de lá que `orderItems` o monta) e a data de
+     * entrega vazia é sugerida pelo cronograma do item do orçamento.
+     */
+    const incluirDoOrcamento = (itens: ItemDoOrcamentoEscolhido[]) => {
+        const sel = new Set(selectedItems);
+        const qtds = new Map(customQuantities);
+        const precos = new Map(customPrices);
+        const dados = new Map(selectedMaterialsData);
+        let dataSugerida: string | undefined;
+        itens.forEach(it => {
+            sel.add(it.code);
+            qtds.set(it.code, it.quantity);
+            precos.set(it.code, it.unitPrice);
+            if (it.compositionCode) {
+                dados.set(it.code, { code: it.code, description: it.description, unit: it.unit, price: it.unitPrice } as unknown as SinapiItem);
             }
-
-            newSelected.add(code);
-            if (!newQuantities.has(code)) {
-                newQuantities.set(code, Math.max(remainingQty ?? 1, 0));
-            }
-
-            if (budgetItemId && projectData?.settings?.schedule?.itemSchedules) {
-                const scheduleItem = projectData.settings.schedule.itemSchedules.find(
-                    (s: { id?: string; startDate?: string }) => s.id === budgetItemId
+            if (!dataSugerida) {
+                const agenda = projectData?.settings?.schedule?.itemSchedules?.find(
+                    (s: { id?: string; startDate?: string }) => s.id === it.budgetItemId
                 );
-                if (scheduleItem?.startDate && !deliveryDate) {
-                    setDeliveryDate(scheduleItem.startDate);
-                }
-            }
-        }
-        setSelectedItems(newSelected);
-        setCustomQuantities(newQuantities);
-    };
-
-    const handleCompositionSelection = (selectedInsumos: (CompositionComponent & { selectedQuantity: number })[]) => {
-        const newSelected = new Set(selectedItems);
-        const newQuantities = new Map(customQuantities);
-        const newData = new Map(selectedMaterialsData);
-
-        const newCodesToFetch: string[] = [];
-        selectedInsumos.forEach(insumo => {
-            newSelected.add(insumo.code);
-            const currentQty = newQuantities.get(insumo.code) || 0;
-            newQuantities.set(insumo.code, currentQty + insumo.selectedQuantity);
-            newData.set(insumo.code, insumo as unknown as SinapiItem);
-            
-            if (!customPrices.has(insumo.code) || customPrices.get(insumo.code) === 0) {
-                newCodesToFetch.push(insumo.code);
+                if (agenda?.startDate) dataSugerida = agenda.startDate;
             }
         });
-
-        setSelectedItems(newSelected);
-        setCustomQuantities(newQuantities);
-        setSelectedMaterialsData(newData);
-        setIsMaterialModalOpen(false);
-        setSelectedCompositionItem(null);
-
-        // Fetch prices for newly added insumos if they are missing
-        if (newCodesToFetch.length > 0 && projectData?.settings) {
-            const state = projectData.settings.state || 'SP';
-            const chargeType = projectData.settings.socialChargesMode || 'Sem Desoneração';
-            sinapiService.getItemsByCodes(newCodesToFetch, state, chargeType)
-                .then(items => {
-                    setCustomPrices(prev => {
-                        const next = new Map(prev);
-                        items.forEach(item => {
-                            if (item.price) next.set(item.code, item.price);
-                        });
-                        return next;
-                    });
-                })
-                .catch(console.error);
-        }
+        setSelectedItems(sel);
+        setCustomQuantities(qtds);
+        setCustomPrices(precos);
+        setSelectedMaterialsData(dados);
+        if (dataSugerida && !deliveryDate) setDeliveryDate(dataSugerida);
     };
 
-    const updateItemQuantity = (code: string, qty: number) => {
-        const newQuantities = new Map(customQuantities);
-        newQuantities.set(code, Math.max(0, qty));
-        setCustomQuantities(newQuantities);
+    /** Item do orçamento editado pelo modal (Novo pedido): quantidade, preço e cotação. */
+    const editarDoOrcamento = (code: string, item: AvulsoItem) => {
+        setCustomQuantities(prev => new Map(prev).set(code, Math.max(0, item.quantity)));
+        setCustomPrices(prev => new Map(prev).set(code, Math.max(0, item.unitPrice)));
+        setQuotedPrices(prev => new Map(prev).set(code, item.quotedUnitPrice == null ? null : Math.max(0, item.quotedUnitPrice)));
     };
 
-    const updateItemPrice = (code: string, price: number) => {
-        const newPrices = new Map(customPrices);
-        newPrices.set(code, Math.max(0, price));
-        setCustomPrices(newPrices);
-    };
-
-    // `null` = campo esvaziado = sem cotação (o fornecedor preenche depois).
-    const updateItemQuotedPrice = (code: string, price: number | null) => {
-        setQuotedPrices(prev => {
-            const next = new Map(prev);
-            next.set(code, price === null ? null : Math.max(0, price));
-            return next;
-        });
+    const removerDoOrcamento = (code: string) => {
+        setSelectedItems(prev => { const next = new Set(prev); next.delete(code); return next; });
+        setCustomQuantities(prev => { const next = new Map(prev); next.delete(code); return next; });
+        setQuotedPrices(prev => { const next = new Map(prev); next.delete(code); return next; });
     };
 
     const handleSaveOrder = async () => {
@@ -950,7 +883,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         }
 
         if (selectedItems.size === 0 && avulsoItems.length === 0) {
-            setFormError("Por favor, selecione pelo menos um material ou adicione um item avulso.");
+            setFormError("Inclua pelo menos um item — \"+ Item do orçamento\" ou \"+ Item avulso\".");
             return;
         }
 
@@ -1158,58 +1091,46 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const mostrarItens = !embedded || painel === 'itens';
     const mostrarFinanceiro = !embedded || painel === 'financeiro';
 
-    // Materiais compráveis da obra — o que a tabela "Seleção de Materiais da Obra"
-    // lista. Insumo e composição entram; SERVIÇO não, porque pedido de compra não
-    // compra serviço.
-    //
-    // Virou variável (em vez de filtrar dentro do JSX) porque a tela precisa saber
-    // se a lista está VAZIA. Antes, obra sem material comprável rendia o cabeçalho
-    // da tabela com NADA embaixo, sem uma palavra de explicação — e a seção parecia
-    // desativada. Foi exatamente essa a dúvida levantada pelo usuário em 2026-09-04.
-    const materiaisDaObra = React.useMemo(
-        () => (projectData?.budget ?? []).filter((item: BudgetEntry) =>
-            item.sinapiItem &&
-            (item.sinapiItem.type === SinapiType.INPUT || item.sinapiItem.type === SinapiType.COMPOSITION)
-        ),
-        [projectData]
-    );
-    // Distinguir as duas causas importa para quem está diagnosticando: "não lancei
-    // orçamento" e "lancei só serviços" pedem ações diferentes.
-    const orcamentoVazio = (projectData?.budget?.length ?? 0) === 0;
-
     // ── §3 — colunas e busca das duas tabelas desta aba ──
     // A busca é recortada pelo pedido (ou por "novo", na criação): filtro deixado
     // ligado num pedido não pode esvaziar a tabela de outro.
     const escopoBusca = editingOrderId ?? 'novo';
     const colunasAvulsos = useTableColumns(AVULSO_COLUMNS, 'pedidoAvulsosColumns');
-    const colunasMateriais = useTableColumns(MATERIAL_COLUMNS, 'pedidoMateriaisColumns');
     // §6.1 — larguras arrastáveis, persistidas por tabela.
     const larguraAvulsos = useResizableColumns(DEFAULT_AVULSO_COL_WIDTHS, 'pedidoAvulsosColWidths');
-    const larguraMateriais = useResizableColumns(DEFAULT_MATERIAL_COL_WIDTHS, 'pedidoMateriaisColWidths');
 
     // Soma exata das colunas visíveis — nunca w-full (§6.1).
     const chavesAvulsos = colunasAvulsos.orderedVisibleColumns.filter(k => k !== 'actions');
     const totalLarguraAvulsos = chavesAvulsos.reduce((s, k) => s + larguraAvulsos.getWidth(k), 0)
         + (colunasAvulsos.visibleColumns.includes('actions') ? larguraAvulsos.getWidth('actions') : 0);
-    const chavesMateriais = colunasMateriais.orderedVisibleColumns;
-    // +40 da coluna de checkbox, que é estrutural: não tem `data-col-key`, mas
-    // ocupa largura e precisa entrar na soma (§6.1.2).
-    const totalLarguraMateriais = chavesMateriais.reduce((s, k) => s + larguraMateriais.getWidth(k), 0) + 40;
     const [buscaAvulsos, setBuscaAvulsos] = usePersistedScopedSearch('pedidoAvulsos:busca', escopoBusca);
-    const [buscaMateriais, setBuscaMateriais] = usePersistedScopedSearch('pedidoMateriais:busca', escopoBusca);
 
     const termoAvulsos = buscaAvulsos.trim().toLowerCase();
+    // Novo pedido: uma lista só — itens do orçamento (estado da seleção) e
+    // avulsos. `idx` endereça o avulso; `null` = item do orçamento, endereçado
+    // pelo código.
+    const todasAsLinhas: { item: AvulsoItem; idx: number | null; origem: string }[] = [
+        ...orderItems
+            .filter(i => !('avulso' in i))
+            .map(i => ({
+                item: { code: i.code, description: i.description, unit: i.unit, quantity: i.quantity, unitPrice: i.unitPrice, quotedUnitPrice: i.quotedUnitPrice ?? null },
+                idx: null,
+                origem: 'Orçamento',
+            })),
+        ...avulsoItems.map((item, idx) => ({ item, idx: idx as number | null, origem: 'Avulso' })),
+    ];
+    const codigosNoPedido = React.useMemo(() => new Set(orderItems.map(i => i.code)), [orderItems]);
     const linhasAvulsos = ordenarLinhas(
-        avulsoItems
-            .map((item, idx) => ({ item, idx }))
+        todasAsLinhas
             .filter(({ item }) => !termoAvulsos
                 || (item.code || '').toLowerCase().includes(termoAvulsos)
                 || (item.description || '').toLowerCase().includes(termoAvulsos)),
         colunasAvulsos.sortColumn,
         colunasAvulsos.sortDirection,
-        ({ item }, coluna) => {
+        ({ item, origem }, coluna) => {
             switch (coluna) {
                 case 'code': return item.code ?? '';
+                case 'origem': return origem;
                 case 'description': return item.description ?? '';
                 case 'unit': return item.unit ?? '';
                 case 'quantity': return item.quantity ?? 0;
@@ -1241,112 +1162,6 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             default: return null;
         }
     };
-
-    // §7 — tipografia por tipo de dado. As três quantidades mantêm cores
-    // distintas porque é o que diferencia orçada / comprada / à comprar de
-    // relance; §7.1 vale para os dois campos editáveis.
-    const renderCelulaMaterial = (key: string, item: BudgetEntry): React.ReactNode => {
-        const code = item.sinapiItem!.code;
-        const comprada = purchasedQuantities.get(code) || 0;
-        const selecionado = selectedItems.has(code);
-        switch (key) {
-            case 'code':
-                return (
-                    <div className="flex items-center gap-2">
-                        {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                            <Layers className="w-3 h-3 text-blue-500 shrink-0" />
-                        )}
-                        <span className="text-sm font-normal text-gray-600">{code}</span>
-                    </div>
-                );
-            case 'description':
-                return (
-                    <div className="flex flex-col">
-                        <span className="text-sm font-normal text-gray-700">{item.sinapiItem!.description}</span>
-                        {item.sinapiItem?.type === SinapiType.COMPOSITION && (
-                            <span className="text-sm font-normal text-blue-600 mt-0.5">Clique para selecionar insumos</span>
-                        )}
-                    </div>
-                );
-            case 'orcada': return <span className="text-sm font-normal text-gray-600">{item.quantity}</span>;
-            case 'comprada': return <span className="text-sm font-normal text-blue-600">{comprada}</span>;
-            case 'aComprar': return <span className="text-sm font-normal text-green-600">{item.quantity - comprada}</span>;
-            case 'unit': return <span className="text-sm font-normal text-gray-600">{item.sinapiItem!.unit}</span>;
-            case 'price':
-                return selecionado ? (
-                    <div className="flex flex-col items-end gap-1">
-                        <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            value={customPrices.get(code) ?? item.sinapiItem!.price ?? 0}
-                            onChange={(e) => updateItemPrice(code, parseFloat(e.target.value) || 0)}
-                            className="w-28 text-right rounded-[6px] border border-emerald-300 p-1.5 text-sm font-normal text-emerald-700 bg-emerald-50 outline-none focus:ring-2 focus:ring-emerald-500 transition-all"
-                        />
-                        <span className="text-sm font-normal text-gray-400">Preço unit.</span>
-                    </div>
-                ) : (
-                    <span className="text-sm font-medium text-gray-800">{formatCurrency(item.sinapiItem!.price || 0)}</span>
-                );
-            // §7.1 — mesmo desenho do `price`. Vazio = sem cotação (fica para o
-            // fornecedor); o comprador pode preencher quando cotou por fora.
-            case 'quotedPrice':
-                return selecionado ? (
-                    <div className="flex flex-col items-end gap-1">
-                        <input
-                            type="number"
-                            min={0}
-                            step="any"
-                            placeholder="—"
-                            value={quotedPrices.get(code) ?? ''}
-                            onChange={(e) => updateItemQuotedPrice(code, e.target.value === '' ? null : (parseFloat(e.target.value) || 0))}
-                            className="w-28 text-right rounded-[6px] border border-amber-300 p-1.5 text-sm font-normal text-amber-700 bg-amber-50 outline-none focus:ring-2 focus:ring-amber-500 transition-all"
-                        />
-                        <span className="text-sm font-normal text-gray-400">Cotação</span>
-                    </div>
-                ) : (
-                    <span className="text-sm font-normal text-gray-300">—</span>
-                );
-            case 'pedido':
-                return selecionado ? (
-                    <input
-                        type="number"
-                        min={0}
-                        step="any"
-                        value={customQuantities.get(code) ?? 0}
-                        onChange={(e) => updateItemQuantity(code, parseFloat(e.target.value) || 0)}
-                        className="w-24 text-right rounded-[6px] border border-indigo-300 p-1.5 text-sm font-normal text-indigo-700 bg-indigo-50 outline-none focus:ring-2 focus:ring-indigo-500 transition-all"
-                    />
-                ) : (
-                    <span className="text-sm font-normal text-gray-300">—</span>
-                );
-            default: return null;
-        }
-    };
-
-    const termoMateriais = buscaMateriais.trim().toLowerCase();
-    const linhasMateriais = ordenarLinhas(
-        materiaisDaObra.filter((item: BudgetEntry) => !termoMateriais
-            || (item.sinapiItem!.code || '').toLowerCase().includes(termoMateriais)
-            || (item.sinapiItem!.description || '').toLowerCase().includes(termoMateriais)),
-        colunasMateriais.sortColumn,
-        colunasMateriais.sortDirection,
-        (item: BudgetEntry, coluna) => {
-            const comprada = purchasedQuantities.get(item.sinapiItem!.code) || 0;
-            switch (coluna) {
-                case 'code': return item.sinapiItem!.code ?? '';
-                case 'description': return item.sinapiItem!.description ?? '';
-                case 'orcada': return item.quantity ?? 0;
-                case 'comprada': return comprada;
-                case 'aComprar': return (item.quantity ?? 0) - comprada;
-                case 'unit': return item.sinapiItem!.unit ?? '';
-                case 'price': return customPrices.get(item.sinapiItem!.code) ?? item.sinapiItem!.price ?? 0;
-                case 'quotedPrice': return quotedPrices.get(item.sinapiItem!.code) ?? 0;
-                case 'pedido': return customQuantities.get(item.sinapiItem!.code) ?? 0;
-                default: return '';
-            }
-        },
-    );
 
     if (loading) {
         // §11 — na tela de edição o spinner é conteúdo de página; na criação
@@ -1740,6 +1555,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 avulsos — aqui fica só o "+ Item avulso", desenhado na
                                 régua dela (pedido de 10/11/2026). */}
                             {embedded && mostrarItens && selectedProjectId && barraItens && createPortal(
+                                <>
+                                {/* "+ Item do orçamento" abre o painel com o orçamento da obra
+                                    (pedido de 10/11/2026 — a tabela de seleção ficava sempre aberta). */}
+                                <button
+                                    type="button"
+                                    onClick={() => setPickerOrcamentoAberto(true)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" />
+                                    Item do orçamento
+                                </button>
                                 <button
                                     type="button"
                                     onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
@@ -1747,7 +1573,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 >
                                     <Plus className="w-[15px] h-[15px]" />
                                     Item avulso
-                                </button>,
+                                </button>
+                                </>,
                                 barraItens,
                             )}
 
@@ -1759,14 +1586,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     <div className="p-2 border-b border-gray-100 bg-white">
                                         <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
                                             <div className="flex items-center gap-2 px-2 shrink-0">
-                                                <Package className="w-4 h-4 shrink-0 text-orange-500" />
-                                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens avulsos</h3>
+                                                <Package className="w-4 h-4 shrink-0 text-blue-500" />
+                                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens do pedido</h3>
                                                 {/* §8 — contagem é texto simples, sem pílula/fundo/uppercase */}
-                                                {avulsoItems.length > 0 && (
+                                                {todasAsLinhas.length > 0 && (
                                                     <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
                                                         {termoAvulsos
-                                                            ? `${linhasAvulsos.length} de ${avulsoItems.length}`
-                                                            : `${avulsoItems.length} ${avulsoItems.length === 1 ? 'item' : 'itens'}`}
+                                                            ? `${linhasAvulsos.length} de ${todasAsLinhas.length}`
+                                                            : `${todasAsLinhas.length} ${todasAsLinhas.length === 1 ? 'item' : 'itens'}`}
                                                     </span>
                                                 )}
                                             </div>
@@ -1807,6 +1634,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 {/* §17 — variante compacta. O tom laranja marca que é a
                                                     ação desta seção, não a ação primária da tela. */}
                                                 <button
+                                    type="button"
+                                    onClick={() => setPickerOrcamentoAberto(true)}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white hover:bg-blue-50 text-blue-700 border border-blue-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" />
+                                    Item do orçamento
+                                </button>
+                                                <button
                                                     type="button"
                                                     onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
                                                     className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
@@ -1819,16 +1654,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </div>
 
                                     {/* §12 dentro do card acoplado: sem bg/border/rounded próprios */}
-                                    {avulsoItems.length === 0 ? (
+                                    {todasAsLinhas.length === 0 ? (
                                         <div className="text-center py-12">
                                             <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item avulso</h4>
-                                            <p className="text-sm text-gray-500">Use o botão acima para incluir itens que não estão no orçamento da obra.</p>
+                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item no pedido</h4>
+                                            <p className="text-sm text-gray-500">Use "+ Item do orçamento" para escolher do orçamento da obra, ou "+ Item avulso" para o que não está previsto.</p>
                                         </div>
                                     ) : linhasAvulsos.length === 0 ? (
                                         <div className="text-center py-12">
                                             <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item avulso encontrado</h4>
+                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum item encontrado</h4>
                                             <p className="text-sm text-gray-500">
                                                 Nada corresponde a <span className="font-semibold text-gray-700">“{buscaAvulsos.trim()}”</span>.
                                             </p>
@@ -1892,22 +1727,28 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                     </tr>
                                                 </thead>
                                                 <tbody className="divide-y divide-gray-200">
-                                                    {linhasAvulsos.map(({ item, idx }) => (
-                                                        <tr key={idx} className="hover:bg-blue-50/50 transition-colors">
+                                                    {linhasAvulsos.map(({ item, idx, origem }) => (
+                                                        <tr key={idx === null ? `orc:${item.code}` : `av:${idx}`} className="hover:bg-blue-50/50 transition-colors">
                                                             {colunasAvulsos.orderedVisibleColumns.filter(k => k !== 'actions').map(key => (
                                                                 <td
                                                                     key={key}
                                                                     className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${AVULSO_ALIGN[key] ?? ''}`}
                                                                 >
-                                                                    {renderCelulaAvulso(key, item)}
+                                                                    {key === 'origem'
+                                                                        ? <span className={`text-sm font-normal ${idx === null ? 'text-blue-700' : 'text-orange-700'}`}>{origem}</span>
+                                                                        : renderCelulaAvulso(key, item)}
                                                                 </td>
                                                             ))}
                                                             <td aria-hidden="true" className="border-r border-gray-100"></td>
                                                             {colunasAvulsos.visibleColumns.includes('actions') && (
                                                                 <td className="px-6 py-2.5 text-right">
                                                                     <div className="flex items-center justify-end gap-1.5">
-                                                                        <ActionIconButton kind="edit" size="sm" tone="attention" onClick={() => setAvulsoModalConfig({ open: true, editingIndex: idx, initial: item })} />
-                                                                        <ActionIconButton kind="delete" size="sm" onClick={() => setAvulsoItems(prev => prev.filter((_, i) => i !== idx))} />
+                                                                        <ActionIconButton kind="edit" size="sm" tone="attention" onClick={() => setAvulsoModalConfig(idx === null
+                                                                            ? { open: true, editingIndex: null, initial: item, codigoOrcamento: item.code }
+                                                                            : { open: true, editingIndex: idx, initial: item })} />
+                                                                        <ActionIconButton kind="delete" size="sm" onClick={() => idx === null
+                                                                            ? removerDoOrcamento(item.code)
+                                                                            : setAvulsoItems(prev => prev.filter((_, i) => i !== idx))} />
                                                                     </div>
                                                                 </td>
                                                             )}
@@ -1916,196 +1757,6 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 </tbody>
                                             </table>
                                         </div>
-                                    )}
-                                </div>
-                            )}
-
-                            {/* §5.2 — cabeçalho e tabela num card só; §16 escala compacta. */}
-                            {mostrarItens && projectData && (
-                                <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
-                                    {/* §5.2 — toolbar acoplada: busca + ajuste de colunas no mesmo
-                                        card da tabela, sem moldura própria. */}
-                                    <div className="p-2 border-b border-gray-100 bg-white">
-                                        <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
-                                            <div className="flex items-center gap-2 px-2 shrink-0">
-                                                <Package className="w-4 h-4 shrink-0 text-blue-500" />
-                                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap">Seleção de materiais da obra</h3>
-                                                {materiaisDaObra.length > 0 && (
-                                                    <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
-                                                        {termoMateriais
-                                                            ? `${linhasMateriais.length} de ${materiaisDaObra.length}`
-                                                            : `${materiaisDaObra.length} ${materiaisDaObra.length === 1 ? 'material' : 'materiais'}`}
-                                                    </span>
-                                                )}
-                                            </div>
-
-                                            <div className="flex-1 relative w-full">
-                                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                                <input
-                                                    type="text"
-                                                    placeholder="Buscar por código ou descrição..."
-                                                    className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                    value={buscaMateriais}
-                                                    onChange={e => setBuscaMateriais(e.target.value)}
-                                                />
-                                            </div>
-
-                                            <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0 self-end md:self-auto">
-                                                <ColumnConfigButton
-                                                    columns={MATERIAL_COLUMNS}
-                                                    visibleColumns={colunasMateriais.visibleColumns}
-                                                    showColumnConfig={colunasMateriais.showColumnConfig}
-                                                    onToggleShow={() => colunasMateriais.setShowColumnConfig(!colunasMateriais.showColumnConfig)}
-                                                    onToggleColumn={colunasMateriais.toggleColumn}
-                                                    onReset={colunasMateriais.resetColumns}
-                                                />
-                                                    {/* §6.1.2 — auto-ajuste SOB COMANDO: recalcular a cada busca faria
-                                                        as colunas dançarem enquanto o usuário digita. Duplo clique no
-                                                        divisor segue sendo "restaurar padrão". */}
-                                                    <button
-                                                        type="button"
-                                                        onClick={() => larguraMateriais.autoFit()}
-                                                        className="p-1.5 rounded-[6px] text-gray-400 hover:text-gray-600 transition-all"
-                                                        title="Ajustar largura das colunas ao conteúdo"
-                                                    >
-                                                        <MoveHorizontal className="w-4 h-4" />
-                                                    </button>
-                                            </div>
-                                        </div>
-                                    </div>
-
-                                    {/* §12 — sem material comprável a tabela não pode ficar só com o
-                                        cabeçalho: vazia sem explicação, a seção passa por desativada.
-                                        O texto diz QUAL das duas causas é, porque a ação é diferente
-                                        em cada uma. */}
-                                    {materiaisDaObra.length === 0 ? (
-                                        <div className="text-center py-12">
-                                            <Package className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                            <h4 className="text-base font-bold text-gray-900 mb-2">
-                                                {orcamentoVazio
-                                                    ? 'O orçamento desta obra está vazio'
-                                                    : 'Nenhum material comprável no orçamento desta obra'}
-                                            </h4>
-                                            <p className="text-sm text-gray-500 max-w-lg mx-auto leading-relaxed">
-                                                {orcamentoVazio
-                                                    ? 'Esta lista vem do orçamento da obra, e ele ainda não tem nenhum item lançado.'
-                                                    : 'O orçamento tem itens, mas nenhum insumo ou composição — só serviços, que não entram em pedido de compra.'}
-                                                {' '}Use <span className="font-semibold text-gray-700">+ Item avulso</span>, acima, para comprar algo que não está previsto no orçamento.
-                                            </p>
-                                        </div>
-                                    ) : linhasMateriais.length === 0 ? (
-                                        /* §12 — busca sem resultado é um vazio diferente de
-                                           "não há materiais", e o texto tem de dizer qual dos dois é. */
-                                        <div className="text-center py-12">
-                                            <Search className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                            <h4 className="text-base font-bold text-gray-900 mb-2">Nenhum material encontrado</h4>
-                                            <p className="text-sm text-gray-500">
-                                                Nada no orçamento desta obra corresponde a <span className="font-semibold text-gray-700">“{buscaMateriais.trim()}”</span>.
-                                            </p>
-                                            <button
-                                                type="button"
-                                                onClick={() => setBuscaMateriais('')}
-                                                className="mt-4 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
-                                            >
-                                                Limpar busca
-                                            </button>
-                                        </div>
-                                    ) : (
-                                    <div className="overflow-x-auto">
-                                        {/* min-w: nove colunas com o px-6 do §6.6 não cabem na
-                                            coluna de conteúdo (~820px com a sidebar). Rola dentro
-                                            do card — §15 — em vez de espremer a descrição, que foi
-                                            o que aconteceu com 900px. */}
-                                        {/* §6.1 — soma exata das colunas visíveis + os 40px da
-                                            coluna estrutural do checkbox; nunca w-full. */}
-                                        <table
-                                            ref={larguraMateriais.tableRef}
-                                            className="text-left border-collapse"
-                                            style={{ tableLayout: 'fixed', width: totalLarguraMateriais, minWidth: '100%' }}
-                                        >
-                                            <colgroup>
-                                                {/* checkbox: estrutural, sem data-col-key */}
-                                                <col style={{ width: '40px' }} />
-                                                {chavesMateriais.map(key => (
-                                                    <col key={key} data-col-key={key} style={{ width: `${larguraMateriais.getWidth(key)}px` }} />
-                                                ))}
-                                                {/* §6.1.1 — espaçador absorve a sobra. Esta tabela não
-                                                    tem coluna "Ações", então ele fecha a lista. */}
-                                                <col />
-                                            </colgroup>
-                                            {/* §6.2 sentence case · §6.6 px-6 + separador vertical.
-                                                As cores que marcavam "comprada"/"à comprar"/"pedido"
-                                                saíram do cabeçalho e ficaram nas CÉLULAS, onde
-                                                distinguem o dado: <thead> é text-gray-500 (§6).
-                                                O checkbox do cabeçalho era um "selecionar todos" que
-                                                nunca teve handler — clicava e não fazia nada. Removido;
-                                                a seleção continua linha a linha, que é o gesto real
-                                                (cada item leva quantidade e preço próprios). */}
-                                            <thead>
-                                                <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                                    {/* Coluna do checkbox: estrutural, fora da engrenagem
-                                                        e sem ordenação (§6.3 fala de coluna de DADO). */}
-                                                    <th aria-hidden="true" className="w-10 px-4 py-2 border-r border-gray-100"></th>
-                                                    {colunasMateriais.orderedVisibleColumns.map(key => {
-                                                        const def = MATERIAL_HEADERS[key];
-                                                        if (!def) return null;
-                                                        return (
-                                                            <SortableHeader
-                                                                key={key}
-                                                                colKey={key}
-                                                                label={def.label}
-                                                                uppercase={false}
-                                                                sortColumn={colunasMateriais.sortColumn}
-                                                                sortDirection={colunasMateriais.sortDirection}
-                                                                onSort={colunasMateriais.handleColumnSort}
-                                                                onMoveColumn={colunasMateriais.moveColumn}
-                                                                // overflow-hidden é obrigatório com ResizeHandle (§6.1).
-                                                                className={`${def.className} overflow-hidden`}
-                                                            >
-                                                                <larguraMateriais.ResizeHandle colKey={key} />
-                                                            </SortableHeader>
-                                                        );
-                                                    })}
-                                                    {/* §6.1.1 — espaçador nas TRÊS listas, mesma posição. */}
-                                                    <th aria-hidden="true" className="border-r border-gray-100" />
-                                                </tr>
-                                            </thead>
-                                            <tbody className="divide-y divide-gray-200">
-                                                {linhasMateriais.map((item: BudgetEntry) => {
-                                                    const code = item.sinapiItem!.code;
-                                                    const remaining = item.quantity - (purchasedQuantities.get(code) || 0);
-                                                    return (
-                                                        <tr
-                                                            key={item.id}
-                                                            className={`hover:bg-blue-50/50 transition-colors cursor-pointer ${selectedItems.has(code) ? 'bg-blue-50' : ''}`}
-                                                            onClick={() => toggleItem(code, remaining, item.id)}
-                                                        >
-                                                            <td className="w-10 px-4 py-2.5 border-r border-gray-100 text-center" onClick={(e) => e.stopPropagation()}>
-                                                                <input
-                                                                    type="checkbox"
-                                                                    checked={selectedItems.has(code)}
-                                                                    onChange={() => toggleItem(code, remaining, item.id)}
-                                                                    className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                                                                />
-                                                            </td>
-                                                            {colunasMateriais.orderedVisibleColumns.map(key => (
-                                                                <td
-                                                                    key={key}
-                                                                    className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0 ${MATERIAL_ALIGN[key] ?? ''} ${key === 'code' ? 'whitespace-nowrap' : ''}`}
-                                                                    // As duas colunas editáveis não podem propagar o clique
-                                                                    // para a linha: digitar no campo alternaria a seleção.
-                                                                    onClick={key === 'price' || key === 'quotedPrice' || key === 'pedido' ? (e) => e.stopPropagation() : undefined}
-                                                                >
-                                                                    {renderCelulaMaterial(key, item)}
-                                                                </td>
-                                                            ))}
-                                                            <td aria-hidden="true" className="border-r border-gray-100"></td>
-                                                        </tr>
-                                                    );
-                                                })}
-                                            </tbody>
-                                        </table>
-                                    </div>
                                     )}
                                 </div>
                             )}
@@ -2178,10 +1829,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     <AvulsoItemModal
                         projectData={projectData}
                         initial={avulsoModalConfig.initial}
+                        doOrcamento={!!avulsoModalConfig.codigoOrcamento}
                         onConfirm={async (item) => {
                             const { editingIndex } = avulsoModalConfig;
+                            if (avulsoModalConfig.codigoOrcamento) {
+                                editarDoOrcamento(avulsoModalConfig.codigoOrcamento, item);
+                                setAvulsoModalConfig({ open: false, editingIndex: null, initial: null });
+                                return;
+                            }
                             if (embedded && isEditing && editingIndex === null) {
-                                const erro = await incluirAvulsoNoPedido(item);
+                                const erro = await acrescentarAoPedido([{ ...item, avulso: true }]);
                                 if (erro) return erro;
                                 setAvulsoModalConfig({ open: false, editingIndex: null, initial: null });
                                 return;
@@ -2202,18 +1859,30 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     />
                 )}
 
-                {isMaterialModalOpen && selectedCompositionItem && (
-                    <MaterialSelectionModal
-                        isOpen={isMaterialModalOpen}
-                        onClose={() => {
-                            setIsMaterialModalOpen(false);
-                            setSelectedCompositionItem(null);
-                        }}
-                        onSelect={handleCompositionSelection}
-                        item={selectedCompositionItem.sinapiItem!}
-                        budgetQuantity={selectedCompositionItem.quantity}
-                        customPrices={customPrices}
-                    />
+                {/* Montado só aberto: o Sheet fechado continua no DOM, e com
+                    orçamento de centenas de linhas a tabela inteira ficaria
+                    desenhada escondida na aba Itens. */}
+                {pickerOrcamentoAberto && (
+                <PedidoOrcamentoPicker
+                    open={pickerOrcamentoAberto}
+                    onClose={() => setPickerOrcamentoAberto(false)}
+                    budget={projectData?.budget ?? []}
+                    precos={customPrices}
+                    compradas={purchasedQuantities}
+                    noPedido={codigosNoPedido}
+                    // O Novo pedido é uma camada z-[110]; o painel vem por cima.
+                    zIndex={embedded ? undefined : 130}
+                    onItemAvulso={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                    onAdd={async (itens) => {
+                        if (embedded && isEditing) {
+                            const erro = await acrescentarAoPedido(itens);
+                            if (erro) return erro;
+                        } else {
+                            incluirDoOrcamento(itens);
+                        }
+                        setPickerOrcamentoAberto(false);
+                    }}
+                />
                 )}
             </div>
         </div>
@@ -2223,6 +1892,9 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 interface AvulsoItemModalProps {
     projectData: ProjectData | null;
     initial: AvulsoItem | null;
+    /** Item do ORÇAMENTO (lista do Novo pedido): código, descrição e unidade vêm
+     *  do orçamento e ficam travados; quantidade, preço e cotação editam. */
+    doOrcamento?: boolean;
     /** Devolve a mensagem de erro (o modal continua aberto e a mostra) ou nada. */
     onConfirm: (item: AvulsoItem) => void | Promise<string | null | void>;
     onClose: () => void;
@@ -2336,7 +2008,7 @@ const displayCurrencyDigits = (digits: string) => {
     return (num / 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial, onConfirm, onClose }) => {
+const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial, doOrcamento = false, onConfirm, onClose }) => {
     const isEditing = initial !== null;
     const [form, setForm] = React.useState<AvulsoItem>(initial ?? EMPTY_FORM);
     const [priceDigits, setPriceDigits] = React.useState(() =>
@@ -2379,8 +2051,8 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-lg mx-4 overflow-hidden" onClick={(e) => e.stopPropagation()}>
                 <div className="px-8 py-6 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
                     <div>
-                        <h2 className="text-lg font-black text-gray-900">{isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
-                        <p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-0.5">Item não orçado</p>
+                        <h2 className="text-lg font-black text-gray-900">{doOrcamento ? 'Editar item do orçamento' : isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
+                        <p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-0.5">{doOrcamento ? 'Item do orçamento da obra' : 'Item não orçado'}</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-xl transition-all text-gray-400 hover:text-gray-600">
                         <X className="w-5 h-5" />
@@ -2388,7 +2060,8 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                 </div>
 
                 <div className="p-8 space-y-5">
-                    {/* Picker button */}
+                    {/* Picker button — item do orçamento já tem código e descrição. */}
+                    {!doOrcamento && (<>
                     <button
                         type="button"
                         onClick={() => setPickerOpen(true)}
@@ -2400,6 +2073,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     <p className="text-xs text-gray-400 -mt-3">Ou preencha os campos abaixo manualmente.</p>
 
                     <div className="h-px bg-gray-100" />
+                    </>)}
 
                     {/* Manual fields */}
                     <div className="grid grid-cols-2 gap-4">
@@ -2409,8 +2083,9 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                 type="text"
                                 value={form.code}
                                 onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))}
+                                readOnly={doOrcamento}
                                 placeholder="Ex: 00001"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none font-mono"
+                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400 outline-none font-mono read-only:bg-gray-50 read-only:cursor-not-allowed"
                             />
                         </div>
                         <div>
@@ -2421,7 +2096,8 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                     onChange={e => {
                                         if (e.target.value !== '__custom__') setForm(f => ({ ...f, unit: e.target.value }));
                                     }}
-                                    className="flex-1 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                    disabled={doOrcamento}
+                                    className="flex-1 rounded-xl border border-gray-200 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400 outline-none bg-white disabled:bg-gray-50 disabled:cursor-not-allowed"
                                 >
                                     <option value="">Selecione...</option>
                                     {units.map(u => <option key={u} value={u}>{u}</option>)}
@@ -2429,14 +2105,14 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                         <option value="__custom__">{form.unit}</option>
                                     )}
                                 </select>
-                                <button
+                                {!doOrcamento && <button
                                     type="button"
                                     onClick={() => setShowUnitManager(true)}
                                     title="Gerenciar unidades"
                                     className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
                                 >
                                     <Settings className="w-4 h-4" />
-                                </button>
+                                </button>}
                             </div>
                         </div>
                         <div className="col-span-2">
@@ -2445,9 +2121,14 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                 type="text"
                                 value={form.description}
                                 onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
+                                readOnly={doOrcamento}
                                 placeholder="Descrição do material ou serviço"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400 outline-none read-only:bg-gray-50 read-only:cursor-not-allowed"
                             />
+                            {/* §32 — travado diz o motivo; o valor continua escuro. */}
+                            {doOrcamento && (
+                                <p className="text-xs text-gray-500 mt-1">Código, descrição e unidade vêm do orçamento da obra — não mudam aqui.</p>
+                            )}
                         </div>
                         <div>
                             <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade *</label>

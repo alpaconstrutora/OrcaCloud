@@ -1,0 +1,50 @@
+# Pedido de Compra — "Seleção de materiais da obra" vira "+ Item do orçamento" com painel
+
+## Pedido original
+> a secão (Seleção de materiais da obra) inves de ficar sempre visivel ainda mais se for um orçamento que pode ter centenas de itens, é me;lhor ficar oculto e como em aficionar itens avulsos, criar um botão adicionar item do orçamento e então abre-se modal
+>
+> Sessão e7d28ecc · 2026-11-10
+
+Contexto do mesmo dia: o #311 tirou a tabela "Itens avulsos" repetida da aba Itens do detalhe
+(pedido: "Itens do pedido e Itens avulsos nao fica duplicado?") e levou o "+ Item avulso" para a
+régua de "Itens do pedido".
+
+## Decisões tomadas com o usuário
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 2026-11-10 | Onde muda — detalhe do pedido, Novo pedido ou os dois? | **Nos dois.** No Novo pedido, "Itens avulsos" vira "Itens do pedido" (orçamento + avulsos). |
+| 2026-11-10 | Composição no painel: insumos logo abaixo ou a janela de insumos? | **Insumos logo abaixo**, como em Solicitação de Compra › "Do orçamento". |
+
+## Plano — um item por arquivo
+1. **`lib/orcamentoLinhas.ts`** (+ `__tests__/orcamentoLinhas.test.ts`) — `montarLinhas` sai de
+   `SCOrcamentoPicker` sem mudar comportamento; `linhasDoOrcamentoParaPedido` tira serviço de topo,
+   marca a composição como título (não se marca), soma comprada/a comprar e marca o que já está no
+   pedido. **Pronto quando:** teste verde.
+2. **`components/suprimentos/PedidoOrcamentoPicker.tsx`** — `Sheet` 4xl no molde do
+   `SCOrcamentoPicker`; só exibe (orçamento, preços e compradas vêm do formulário); vazio com as duas
+   causas; erro de gravação aparece no painel. **Pronto quando:** `check-ui-standard.sh` = 0.
+3. **`components/SupplyChainOrderForm.tsx`** — sai a tabela de seleção e a janela de insumos
+   (`MaterialSelectionModal`); "+ Item do orçamento" ao lado de "+ Item avulso". Embutido: grava na
+   hora (`acrescentarAoPedido`, lê o pedido e grava com a versão lida). Novo pedido: lista única
+   "Itens do pedido" com Origem; item do orçamento edita no mesmo modal com código/descrição/unidade
+   travados (§32). Painel montado só aberto (o Sheet fechado fica no DOM).
+   **Pronto quando:** typecheck verde, `check-ui-standard.sh` = 0.
+4. **`components/SupplyChainOrderDetails.tsx`** — sem mudança: o ponto `barraItens` (#311) recebe os
+   dois botões.
+5. **Testes de componente** — `SupplyChainOrderFormItensEmbutido` (painel, item do pedido não
+   marcável, composição desdobrada, gravação sem `avulso` com quantidade a comprar) e
+   `SupplyChainOrderFormNovoItens` (lista única, edição travada, excluir, `createOrder`).
+   **Pronto quando:** verdes junto com os demais testes do formulário.
+
+## Estado
+- [x] 1. 5 testes verdes
+- [x] 2. `check-ui-standard.sh` = 0
+- [x] 3. typecheck verde, `check-ui-standard.sh` = 0
+- [x] 4. nada a mudar
+- [x] 5. 63 testes verdes (formulário, linhas, Agrupar, preferências, guarda de cinza, guarda de org)
+- [ ] Conferência em produção (só leitura) depois do merge
+
+## Verificação
+1. typecheck, testes acima, `check-ui-standard.sh` nos `.tsx` tocados; CI (inclui build).
+2. Produção, sem gravar: aba Itens do PCO-014-003-0001 com os dois botões; painel com o piso em
+   taco desdobrado e o item já no pedido sem checkbox; Novo pedido com obra escolhida abre o painel.

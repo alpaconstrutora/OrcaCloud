@@ -1678,6 +1678,33 @@ export const empreendimentoService = {
         }
     },
 
+    /**
+     * Empreendimento de UNIDADE ÚNICA (Lote, Casa, Chácara — 09/11/2026): a unidade mora numa torre
+     * implícita, para Espelho de Vendas, Comercial, Condomínio e Portal continuarem lendo unidade dentro
+     * de torre. Cria a torre e a unidade que faltarem; existindo, atualiza só `campos`. Só no clique de
+     * salvar — abrir a aba não grava nada. Mais de uma torre ou unidade = fora do molde: recusa, não escolhe.
+     */
+    async salvarUnidadeUnica(
+        empreendimentoId: string,
+        criar: { nomeDaTorre: string; nomeDaUnidade: string; tipologia: string },
+        campos: EmpreendimentoUnitUpdate,
+    ): Promise<{ tower: EmpreendimentoTower; unit: EmpreendimentoUnit }> {
+        const towers = await this.listTowers(empreendimentoId);
+        if (towers.length > 1) throw new Error(`O empreendimento tem ${towers.length} torres; a unidade única não sabe em qual gravar.`);
+        const tower = towers[0] ?? await this.createTower({
+            empreendimento_id: empreendimentoId, name: criar.nomeDaTorre, floors_count: 1, units_per_floor: 1, sort_order: 0,
+        });
+        const units = towers.length ? await this.listUnits(tower.id) : [];
+        if (units.length > 1) throw new Error(`A torre "${tower.name}" tem ${units.length} unidades; a unidade única não sabe qual atualizar.`);
+        const unit = units[0]
+            ? await this.updateUnit(units[0].id, campos)
+            : await this.createUnit({
+                tower_id: tower.id, ...campos, name: campos.name?.trim() || criar.nomeDaUnidade, typology: campos.typology || criar.tipologia,
+                status: 'DISPONIVEL', rental_status: 'DISPONIVEL', is_vendavel: true, sort_order: 0,
+            });
+        return { tower, unit };
+    },
+
     // ── Áreas comuns / lazer ─────────────────────────────────────────────────
     async listCommonAreas(empreendimentoId: string): Promise<EmpreendimentoCommonArea[]> {
         const { data, error } = await supabase

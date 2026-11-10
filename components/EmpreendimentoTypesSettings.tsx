@@ -7,6 +7,7 @@ import {
 } from '../services/empreendimentoTypeService';
 import { Building2, Plus, Check, X, Search, AlertCircle } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
+import { ESTRUTURAS_DO_TIPO, type EstruturaDoTipo } from '../utils/empreendimentoTipos';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext, useOrgWriteTarget, forEachTargetOrg, errorMessage, partialFailureNote, type WriteTarget } from '../hooks/useOrgContext';
 import { useToast } from '../hooks/useToast';
@@ -17,6 +18,8 @@ const TYPE_COLUMNS: ColumnConfig[] = [
     // A "Categoria" (vertical/horizontal/…) saiu em 14/10/2026: só o Motor de Áreas antigo a lia,
     // e ele foi removido (Fase 10 do plano docs/planos/2026-10-13-areas-nbr12721-na-planta.md).
     { key: 'cor',      label: 'Cor',       sortable: true },
+    // 09/11/2026: como a aba de unidades do empreendimento se monta (torres, lote ou imóvel único).
+    { key: 'estrutura', label: 'Unidades', sortable: true },
     { key: 'actions',  label: 'Ações',     sortable: false },
 ];
 
@@ -25,6 +28,7 @@ const TYPE_COLUMNS: ColumnConfig[] = [
 const TYPE_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     name: { label: 'Nome', sortable: true, className: 'px-6 py-2 border-r border-gray-100' },
     cor: { label: 'Cor', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    estrutura: { label: 'Unidades', sortable: true, className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
 };
 
 interface RenderTypeCellCtx {
@@ -34,10 +38,14 @@ interface RenderTypeCellCtx {
     handleUpdate: (id: string) => void;
     editColor: string;
     setEditColor: (v: string) => void;
+    editEstrutura: EstruturaDoTipo;
+    setEditEstrutura: (v: EstruturaDoTipo) => void;
     selectCls: string;
 }
 
 const rotuloDaCor = (cor: string) => COLOR_OPTIONS.find(c => c.key === cor)?.label ?? cor;
+const rotuloDaEstrutura = (e: string | undefined) => ESTRUTURAS_DO_TIPO.find(x => x.value === e)?.label ?? ESTRUTURAS_DO_TIPO[0].label;
+const DICA_DA_ESTRUTURA = 'Como a aba de unidades do empreendimento se monta: torres com pavimentos e unidades, ou uma unidade só — o próprio lote, ou uma casa/chácara sobre o terreno.';
 
 function renderEmpreendimentoTypeCell(key: string, type: EmpreendimentoTypeRecord, ctx: RenderTypeCellCtx): React.ReactNode {
     switch (key) {
@@ -73,6 +81,16 @@ function renderEmpreendimentoTypeCell(key: string, type: EmpreendimentoTypeRecor
                     ) : <span className={colorTextClass(type.color)}>{rotuloDaCor(type.color)}</span>}
                 </div>
             );
+        case 'estrutura':
+            return (
+                <div className="text-sm font-normal text-gray-700">
+                    {ctx.editingId === type.id ? (
+                        <select value={ctx.editEstrutura} onChange={e => ctx.setEditEstrutura(e.target.value as EstruturaDoTipo)} className={ctx.selectCls} title={DICA_DA_ESTRUTURA}>
+                            {ESTRUTURAS_DO_TIPO.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                        </select>
+                    ) : rotuloDaEstrutura(type.estrutura)}
+                </div>
+            );
         default:
             return null;
     }
@@ -99,6 +117,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     const [editingId, setEditingId] = React.useState<string | null>(null);
     const [editName, setEditName] = React.useState('');
     const [editColor, setEditColor] = React.useState('gray');
+    const [editEstrutura, setEditEstrutura] = React.useState<EstruturaDoTipo>('TORRES');
 
     const [searchTerm, setSearchTerm] = usePersistedState<string>('empreendimentoTypes:search', '');
     const tableColumns = useTableColumns(TYPE_COLUMNS, 'empreendimentoTypesColumns');
@@ -124,7 +143,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         if (!createTarget) { showToast('Selecione uma organização para criar um tipo de empreendimento.', 'error'); return; }
         const nome = editName.trim();
         const { ok, failed } = await forEachTargetOrg(createTarget, orgId =>
-            empreendimentoTypeService.create({ name: nome, color: editColor, description: null, organization_id: orgId }));
+            empreendimentoTypeService.create({ name: nome, color: editColor, estrutura: editEstrutura, description: null, organization_id: orgId }));
         if (ok === 0) {
             showToast(errorMessage(failed[0]?.error, 'Erro ao criar'), 'error');
             return;
@@ -138,7 +157,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
     const handleUpdate = async (id: string) => {
         if (!editName.trim()) return;
         try {
-            await empreendimentoTypeService.update(id, { name: editName.trim(), color: editColor });
+            await empreendimentoTypeService.update(id, { name: editName.trim(), color: editColor, estrutura: editEstrutura });
             showToast('Tipo de empreendimento atualizado com sucesso', 'success');
             cancelEdit();
             loadTypes();
@@ -175,6 +194,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         setEditingId(type.id);
         setEditName(type.name);
         setEditColor(type.color);
+        setEditEstrutura(type.estrutura ?? 'TORRES');
         setIsAdding(false);
     };
 
@@ -186,6 +206,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         setEditingId(null);
         setEditName('');
         setEditColor('gray');
+        setEditEstrutura('TORRES');
     };
 
     const cancelEdit = () => {
@@ -194,6 +215,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
         setEditingId(null);
         setEditName('');
         setEditColor('gray');
+        setEditEstrutura('TORRES');
     };
 
     const selectCls = 'h-8 px-2 rounded-[6px] border border-gray-200 text-sm font-normal bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all';
@@ -205,6 +227,10 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                 return tableColumns.sortDirection === 'asc'
                     ? rotuloDaCor(a.color).localeCompare(rotuloDaCor(b.color))
                     : rotuloDaCor(b.color).localeCompare(rotuloDaCor(a.color));
+            }
+            if (tableColumns.sortColumn === 'estrutura') {
+                const c = rotuloDaEstrutura(a.estrutura).localeCompare(rotuloDaEstrutura(b.estrutura));
+                return tableColumns.sortDirection === 'asc' ? c : -c;
             }
             if (tableColumns.sortColumn === 'name') {
                 return tableColumns.sortDirection === 'asc'
@@ -223,7 +249,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                     </div>
                     <div>
                         <h2 className="text-lg font-semibold text-gray-800">Tipos de Empreendimento</h2>
-                        <p className="text-sm text-gray-500 mt-1">Gerencie os tipos disponíveis no cadastro de Empreendimentos (Incorporação). A cor identifica o tipo nas listas.</p>
+                        <p className="text-sm text-gray-500 mt-1">Gerencie os tipos disponíveis no cadastro de Empreendimentos (Incorporação). A cor identifica o tipo nas listas; "Unidades" diz se o empreendimento tem torres e unidades ou uma unidade só (lote, casa, chácara).</p>
                     </div>
                 </div>
                 {!isAdding && !editingId && (
@@ -251,6 +277,9 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                         />
                         <select value={editColor} onChange={e => setEditColor(e.target.value)} className={selectCls}>
                             {COLOR_OPTIONS.map(c => <option key={c.key} value={c.key}>{c.label}</option>)}
+                        </select>
+                        <select value={editEstrutura} onChange={e => setEditEstrutura(e.target.value as EstruturaDoTipo)} className={selectCls} title={DICA_DA_ESTRUTURA} aria-label="Unidades">
+                            {ESTRUTURAS_DO_TIPO.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
                         </select>
                         <button onClick={handleAdd} className="p-1.5 text-green-600 hover:bg-green-100 rounded-[6px] transition-colors"><Check className="w-5 h-5" /></button>
                         <button onClick={cancelEdit} className="p-1.5 text-gray-400 hover:bg-gray-200 rounded-[6px] transition-colors"><X className="w-5 h-5" /></button>
@@ -329,7 +358,7 @@ const EmpreendimentoTypesSettings: React.FC = () => {
                                             <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                 {renderEmpreendimentoTypeCell(key, type, {
                                                     editingId, editName, setEditName, handleUpdate,
-                                                    editColor, setEditColor, selectCls,
+                                                    editColor, setEditColor, editEstrutura, setEditEstrutura, selectCls,
                                                 })}
                                             </td>
                                         ))}

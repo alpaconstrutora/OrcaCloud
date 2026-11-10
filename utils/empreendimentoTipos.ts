@@ -20,3 +20,31 @@ export function tiposUnicosPorSlug<T extends TipoComOrg>(tipos: T[], orgId?: str
     return true;
   }).map(t => escolhido.get(t.slug)!);
 }
+
+/**
+ * Como a aba de unidades do empreendimento se monta (09/11/2026) — `empreendimento_types.estrutura`.
+ * TORRES = torres → pavimentos → unidades; LOTE = a unidade é o próprio terreno; IMOVEL_UNICO = uma
+ * unidade sobre o terreno (casa, chácara). Plano: docs/planos/2026-11-09-empreendimento-unidade-unica.md.
+ */
+export type EstruturaDoTipo = 'TORRES' | 'LOTE' | 'IMOVEL_UNICO';
+
+export const ESTRUTURAS_DO_TIPO: { value: EstruturaDoTipo; label: string }[] = [
+  { value: 'TORRES', label: 'Torres e unidades' },
+  { value: 'LOTE', label: 'Lote (a unidade é o próprio terreno)' },
+  { value: 'IMOVEL_UNICO', label: 'Imóvel único (casa, chácara)' },
+];
+
+const ehEstrutura = (v: unknown): v is EstruturaDoTipo => v === 'TORRES' || v === 'LOTE' || v === 'IMOVEL_UNICO';
+
+/**
+ * A estrutura do tipo do empreendimento. O slug se repete entre orgs, então vale o registro da org do
+ * empreendimento, senão o de sistema (a mesma escolha de `tiposUnicosPorSlug`). Sem tipo, tipo fora
+ * do catálogo ou valor desconhecido → 'TORRES' (o comportamento de sempre).
+ */
+export function estruturaDoTipo<T extends TipoComOrg & { estrutura?: string | null }>(
+  tipos: T[], slug: string | null | undefined, orgId?: string | null,
+): EstruturaDoTipo {
+  if (!slug) return 'TORRES';
+  const tipo = tiposUnicosPorSlug(tipos.filter(t => t.slug === slug), orgId)[0];
+  return ehEstrutura(tipo?.estrutura) ? tipo.estrutura : 'TORRES';
+}

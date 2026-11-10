@@ -221,9 +221,11 @@ interface Props {
     organizationId: string;
     caracteristicas: EmpreendimentoUnitCharacteristic[];
     onManageCaracteristicas?: () => void;
+    /** Lote/Casa/Chácara (09/11/2026): a unidade é uma só e se cadastra na aba Lote/Unidade — aqui não nasce outra. */
+    unidadeUnica?: boolean;
 }
 
-export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, organizationId, caracteristicas, onManageCaracteristicas }) => {
+export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, organizationId, caracteristicas, onManageCaracteristicas, unidadeUnica = false }) => {
     const confirm = useConfirm();
     const { localToast, showToast } = useToast();
 
@@ -496,8 +498,10 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
 
                         <button
                             onClick={openCreate}
-                            disabled={towers.length === 0}
-                            title={towers.length === 0 ? 'Cadastre uma torre em Torres & Unidades primeiro' : 'Nova unidade'}
+                            disabled={unidadeUnica || towers.length === 0}
+                            title={unidadeUnica
+                                ? 'O tipo deste empreendimento tem uma unidade só — ela se cadastra na aba Lote/Unidade.'
+                                : towers.length === 0 ? 'Cadastre uma torre em Torres & Unidades primeiro' : 'Nova unidade'}
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50"
                         >
                             <Plus className="w-[15px] h-[15px]" /> Nova Unidade
@@ -515,7 +519,7 @@ export const CaracteristicasAdicionaisTab: React.FC<Props> = ({ empreendimento, 
                         <ListChecks className="w-12 h-12 text-gray-300 mx-auto mb-4" />
                         <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma unidade encontrada</h3>
                         <p className="text-sm text-gray-500">
-                            {search ? 'Tente ajustar sua busca.' : towers.length === 0 ? 'Cadastre uma torre na aba Torres & Unidades primeiro.' : 'Cadastre a primeira unidade no botão acima.'}
+                            {search ? 'Tente ajustar sua busca.' : unidadeUnica ? 'Cadastre a unidade na aba Lote/Unidade.' : towers.length === 0 ? 'Cadastre uma torre na aba Torres & Unidades primeiro.' : 'Cadastre a primeira unidade no botão acima.'}
                         </p>
                     </div>
                 ) : (

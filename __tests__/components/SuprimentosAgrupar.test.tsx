@@ -57,13 +57,13 @@ vi.mock('../../services/quotationService', () => ({ quotationService: { listRequ
 ]) } }));
 
 // ── Pedidos / Recebimento ───────────────────────────────────────────
-const pedido = (id: string, supplierName: string, status: string, total: number) => ({
-    id, number: `PC-${id}`, supplierName, status, projectName: 'Obra Garden', created_at: '2026-10-05T10:00:00Z',
+const pedido = (id: string, supplierName: string, status: string, total: number, organizationName = 'Alpa Construtora') => ({
+    id, number: `PC-${id}`, supplierName, status, organizationName, projectName: 'Obra Garden', created_at: '2026-10-05T10:00:00Z',
     deliveryDate: '2026-10-20', items: [{ total }],
 });
 vi.mock('../../services/orderService', () => ({ orderService: { listOrders: vi.fn(async () => [
     pedido('1', 'Cimentos Beta', 'Rascunho', 100), pedido('2', 'Areia Gama', 'Rascunho', 40),
-    pedido('3', 'Cimentos Beta', 'Rascunho', 60), pedido('4', 'Cimentos Beta', 'Confirmado', 10),
+    pedido('3', 'Cimentos Beta', 'Rascunho', 60), pedido('4', 'Cimentos Beta', 'Confirmado', 10, 'Garden SPE'),
 ]) } }));
 
 // ── Almoxarifado ────────────────────────────────────────────────────
@@ -137,6 +137,20 @@ describe('Suprimentos › Pedidos', () => {
         fireEvent.click(marcarTodos);
         // Só o pedido de Areia Gama (rascunho) está à vista e é selecionável.
         expect(screen.getByText(/^1 selecionado/)).toBeTruthy();
+    });
+});
+
+describe('Suprimentos › Pedidos › Organização', () => {
+    it('a lista mostra a organização de cada pedido e agrupa por ela', async () => {
+        render(<SupplyChainOrderList onCreateNew={() => {}} onViewDetails={() => {}} onViewLogistics={() => {}} />);
+        await screen.findByText('PC-1');
+        expect(screen.getByText('Organização', { selector: 'thead *' })).toBeTruthy();
+        expect(screen.getAllByText('Alpa Construtora', { selector: 'tbody span' })).toHaveLength(3);
+        expect(screen.getByText('Garden SPE', { selector: 'tbody span' })).toBeTruthy();
+
+        agrupar('Agrupar os pedidos', 'organizacao');
+        expect(pedacos('Alpa Construtora')).toMatch(/^Alpa Construtora 3 R\$\s?200,00$/);
+        expect(pedacos('Garden SPE')).toMatch(/^Garden SPE 1 R\$\s?10,00$/);
     });
 });
 

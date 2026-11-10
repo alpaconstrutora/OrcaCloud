@@ -20,6 +20,7 @@ const nfNumber = (accessKey: string | null | undefined) =>
 
 const COLUMNS: ColumnConfig[] = [
     { key: 'number', label: 'Número', sortable: true },
+    { key: 'organization', label: 'Organização', sortable: true },
     { key: 'empreendimento', label: 'Empreendimento', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'orcamento', label: 'Orçamento', sortable: true },
@@ -36,7 +37,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, empreendimento: 184, obra: 160, orcamento: 144, costCenter: 160, chartOfAccounts: 160, supplier: 200, status: 140, nfe: 160, date: 171, value: 141, items: 102, actions: 220,
+    number: 123, organization: 200, empreendimento: 184, obra: 160, orcamento: 144, costCenter: 160, chartOfAccounts: 160, supplier: 200, status: 140, nfe: 160, date: 171, value: 141, items: 102, actions: 220,
 };
 
 // Todos os status da união `PurchaseOrder['status']` — o `satisfies Record<...>`
@@ -53,9 +54,10 @@ const ORDER_STATUS_KEYS = {
 // busca — valores distintos das linhas carregadas (antes de busca/filtro), pelo
 // MESMO getAdvancedFilterValue que o filtro compara. Por isso é builder + useMemo.
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
-type CampoAgrupar = 'status' | 'fornecedor' | 'obra' | 'empreendimento' | 'centro_custo' | 'plano_contas' | 'data';
+type CampoAgrupar = 'status' | 'organizacao' | 'fornecedor' | 'obra' | 'empreendimento' | 'centro_custo' | 'plano_contas' | 'data';
 const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'status', label: 'Status' },
+    { value: 'organizacao', label: 'Organização' },
     { value: 'fornecedor', label: 'Fornecedor' },
     { value: 'obra', label: 'Obra' },
     { value: 'empreendimento', label: 'Empreendimento' },
@@ -64,7 +66,7 @@ const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'data', label: 'Data do pedido (mês)' },
 ];
 const SEM_GRUPO: Record<CampoAgrupar, string> = {
-    status: 'Sem status', fornecedor: 'Sem fornecedor', obra: 'Sem obra', empreendimento: 'Sem empreendimento',
+    status: 'Sem status', organizacao: 'Sem organização', fornecedor: 'Sem fornecedor', obra: 'Sem obra', empreendimento: 'Sem empreendimento',
     centro_custo: 'Sem centro de custo', plano_contas: 'Sem plano de contas', data: 'Sem data',
 };
 
@@ -75,6 +77,7 @@ function buildAdvancedFilterFields(
     const distinct = (key: string) => distinctOptions(orders, o => getAdvancedFilterValue(o, key, empreendimentoByProject));
     return [
         { key: 'number', label: 'Número', type: 'text' },
+        { key: 'organization', label: 'Organização', type: 'text', options: distinct('organization') },
         { key: 'supplier', label: 'Fornecedor', type: 'text', options: distinct('supplier') },
         { key: 'obra', label: 'Obra', type: 'text', options: distinct('obra') },
         { key: 'empreendimento', label: 'Empreendimento', type: 'text', options: distinct('empreendimento') },
@@ -92,6 +95,7 @@ function buildAdvancedFilterFields(
 // drag (ver filter abaixo, no componente).
 const ORDER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
     number: { label: 'Número', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organization: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     empreendimento: { label: 'Empreendimento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     orcamento: { label: 'Orçamento', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
@@ -139,6 +143,8 @@ function renderOrderCell(
     switch (key) {
         case 'number':
             return <span className="text-sm font-normal text-gray-600">{order.number || order.id.slice(0, 8)}</span>;
+        case 'organization':
+            return <span className="text-sm font-normal text-gray-700">{order.organizationName || '-'}</span>;
         case 'empreendimento':
             return <EmpreendimentoCell value={resolveOrderEmpreendimento(order, ctx.empreendimentoByProject)} />;
         case 'obra':
@@ -185,6 +191,7 @@ function getAdvancedFilterValue(
     switch (key) {
         case 'number': return order.number ?? '';
         case 'supplier': return order.supplierName ?? '';
+        case 'organization': return order.organizationName ?? '';
         case 'obra': return order.projectClassification === 'ORCAMENTO' ? (order.linkedProjectName || '') : (order.projectName || '');
         case 'empreendimento': return resolveOrderEmpreendimento(order, empreendimentoByProject)?.name ?? '';
         case 'costCenter': return order.costCenter ?? '';
@@ -373,6 +380,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                 }
                 if (tableColumns.sortColumn === 'costCenter') return (a.costCenter || '').localeCompare(b.costCenter || '') * dir;
                 if (tableColumns.sortColumn === 'chartOfAccounts') return (a.chartOfAccounts || '').localeCompare(b.chartOfAccounts || '') * dir;
+                if (tableColumns.sortColumn === 'organization') return (a.organizationName || '').localeCompare(b.organizationName || '') * dir;
                 if (tableColumns.sortColumn === 'supplier') return (a.supplierName || '').localeCompare(b.supplierName || '') * dir;
                 if (tableColumns.sortColumn === 'date') return (new Date(a.created_at || '').getTime() - new Date(b.created_at || '').getTime()) * dir;
                 if (tableColumns.sortColumn === 'value') return (calculateTotal(a) - calculateTotal(b)) * dir;
@@ -409,6 +417,7 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
         const chave = (o: any): ChaveDeGrupo => {
             switch (groupBy) {
                 case 'status': return chavePorNome(o.status);
+                case 'organizacao': return chavePorNome(o.organizationName);
                 case 'fornecedor': return chavePorNome(o.supplierName);
                 case 'obra': return chavePorNome(o.projectClassification === 'ORCAMENTO' ? o.linkedProjectName : o.projectName);
                 case 'empreendimento': return chavePorNome(resolveOrderEmpreendimento(o, empreendimentoByProject)?.name);

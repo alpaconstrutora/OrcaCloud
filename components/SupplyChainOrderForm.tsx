@@ -96,6 +96,14 @@ const DEFAULT_AVULSO_COL_WIDTHS: Record<string, number> = {
 
 // Alinhamento da célula por coluna — o <td> sai de um `.map`, então não dá para
 // escrever a classe direto em cada um.
+// Régua de formulário (§21 rótulo, §16/§30 campo h-9, §32 valor escuro) — a
+// mesma de Comercial › Gerenciar Negociação. Os campos eram `p-2.5 rounded-lg`
+// (~46px) e destoavam da Negociação (36px) — pedido do usuário em 10/11/2026.
+const ROTULO = 'block text-xs font-semibold text-slate-500';
+const CAMPO = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
+const AREA_DE_TEXTO = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-400 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all resize-none';
+const SELETOR_DO_FORM = 'h-9 bg-white border border-gray-200 rounded-[6px] pl-3 pr-2';
+
 const CELULA_A_DIREITA = 'text-right';
 const AVULSO_ALIGN: Record<string, string> = {
     code: '', description: '', unit: CELULA_A_DIREITA, quantity: CELULA_A_DIREITA,
@@ -1271,13 +1279,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         <div className={embedded ? 'space-y-6' : 'lg:col-span-2 space-y-6'}>
                             {/* ── Aba "Dados Gerais" (cabeçalho do pedido + alocação do gasto) ── */}
                             {mostrarDadosGerais && (
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <FileText className="w-4 h-4 text-blue-500" />
-                                    Dados Gerais
-                                </h3>
+                            <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 space-y-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <FileText className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Dados Gerais</h3>
+                                </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
                                     {/* Pedido novo: diz de onde vieram os campos já preenchidos. */}
                                     {!isEditing && origensAplicadas.length > 0 && (
                                         <p className="md:col-span-2 text-xs text-gray-500">
@@ -1299,17 +1307,20 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         Somente leitura: o formato vem da máscara em
                                         Configurações do Sistema › Nomenclatura. */}
                                     {isEditing && (
-                                        <div className="md:col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Número do Pedido</label>
+                                        <div className="md:col-span-2 space-y-1.5">
+                                            <label htmlFor="pedido-numero" className={ROTULO}>Número do Pedido</label>
                                             <div className="relative">
+                                                {/* §32 — só-leitura se diz pelo fundo e pelo botão
+                                                    de regerar; o valor continua escuro. */}
                                                 <input
+                                                    id="pedido-numero"
                                                     type="text"
                                                     readOnly
                                                     value={orderNumber ?? ''}
                                                     placeholder="Gerado ao salvar"
-                                                    className="w-full rounded-lg border border-gray-300 p-2.5 bg-gray-50 text-gray-500 font-mono outline-none"
+                                                    className={`${CAMPO} pr-11 bg-gray-50 font-mono cursor-default`}
                                                 />
-                                                <div className="absolute right-2 top-1/2 -translate-y-1/2">
+                                                <div className="absolute right-1 top-1/2 -translate-y-1/2">
                                                     <ActionIconButton
                                                         kind="settings"
                                                         icon={isRegeneratingNumber ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
@@ -1320,13 +1331,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 </div>
                                             </div>
                                             {numberLockReason && (
-                                                <p className="text-xs text-gray-400 mt-1">{numberLockReason}</p>
+                                                <p className="text-xs text-gray-500">{numberLockReason}</p>
                                             )}
                                             {/* O número guarda o empreendimento, que vem da obra.
                                                 Trocar a obra sem dizer nada deixaria o número
                                                 apontando para o empreendimento anterior. */}
                                             {obraMudou && (
-                                                <p className="text-xs text-amber-600 mt-1">
+                                                <p className="text-xs text-amber-600">
                                                     {numberLockReason
                                                         ? 'A obra mudou, mas o número continua o antigo — ele só pode ser regerado em Rascunho.'
                                                         : 'A obra mudou — o número é regerado pela máscara ao salvar.'}
@@ -1335,23 +1346,25 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </div>
                                     )}
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Fornecedor</label>
+                                    <div className="space-y-1.5">
+                                        <label className={ROTULO}>Fornecedor</label>
                                         <SupplierSelect
                                             suppliers={suppliers}
                                             value={selectedSupplierId}
                                             onChange={setSelectedSupplierId}
                                             placeholder="Selecione um fornecedor..."
+                                            size="sm"
+                                            triggerClassName={SELETOR_DO_FORM}
                                         />
                                     </div>
 
-                                    <div>
-                                        <label htmlFor="pedido-empreendimento" className="block text-sm font-medium text-gray-700 mb-1">Empreendimento</label>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="pedido-empreendimento" className={ROTULO}>Empreendimento</label>
                                         <select
                                             id="pedido-empreendimento"
                                             value={selectedEmpreendimentoId}
                                             onChange={(e) => handleEmpreendimentoChange(e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                            className={`${CAMPO} cursor-pointer`}
                                         >
                                             <option value="">Todos os empreendimentos</option>
                                             {empreendimentosOfertados.map(e => (
@@ -1362,13 +1375,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         </select>
                                     </div>
 
-                                    <div>
-                                        <label htmlFor="pedido-obra" className="block text-sm font-medium text-gray-700 mb-1">Obra</label>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="pedido-obra" className={ROTULO}>Obra</label>
                                         <select
                                             id="pedido-obra"
                                             value={selectedProjectId}
                                             onChange={(e) => trocarObra(e.target.value)}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                            className={`${CAMPO} cursor-pointer`}
                                         >
                                             <option value="">Selecione a obra...</option>
                                             {projectsDoEmpreendimento.map(p => (
@@ -1379,67 +1392,72 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             automática — sem esta linha o usuário só veria o
                                             botão de salvar desbotar. */}
                                         {!selectedProjectId && selectedEmpreendimentoId && (
-                                            <p className="mt-1 text-xs text-amber-600">
+                                            <p className="text-xs text-amber-600">
                                                 Este empreendimento tem mais de uma obra — escolha qual recebe o pedido.
                                             </p>
                                         )}
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Data de Entrega</label>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="pedido-data-entrega" className={ROTULO}>Data de Entrega</label>
                                         <input
+                                            id="pedido-data-entrega"
                                             type="date"
                                             value={deliveryDate}
                                             onChange={(e) => { mexeu('prazoEntregaDias'); setDeliveryDate(e.target.value); }}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className={CAMPO}
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Entrega</label>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="pedido-forma-entrega" className={ROTULO}>Forma de Entrega</label>
                                         <select
+                                            id="pedido-forma-entrega"
                                             value={deliveryMethod}
                                             onChange={(e) => { mexeu('deliveryMethod'); setDeliveryMethod(e.target.value); }}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                            className={`${CAMPO} cursor-pointer`}
                                         >
                                             {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                         </select>
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Local de Entrega</label>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="pedido-local-entrega" className={ROTULO}>Local de Entrega</label>
                                         <input
+                                            id="pedido-local-entrega"
                                             type="text"
                                             value={deliveryLocation}
                                             onChange={(e) => { mexeu('deliveryLocation'); setDeliveryLocation(e.target.value); }}
                                             placeholder="Ex: Almoxarifado / Canteiro Obra 1"
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className={CAMPO}
                                         />
                                     </div>
 
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
+                                    <div className="space-y-1.5">
+                                        <label htmlFor="pedido-forma-pagamento" className={ROTULO}>Forma de Pagamento</label>
                                         <select
+                                            id="pedido-forma-pagamento"
                                             value={paymentMethod}
                                             onChange={(e) => { mexeu('paymentMethod'); setPaymentMethod(e.target.value); }}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                            className={`${CAMPO} cursor-pointer`}
                                         >
                                             {FORMAS_PAGAMENTO_PEDIDO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                                         </select>
                                     </div>
 
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Notas / Observações</label>
+                                    <div className="md:col-span-2 space-y-1.5">
+                                        <label htmlFor="pedido-notas" className={ROTULO}>Notas / Observações</label>
                                         <textarea
+                                            id="pedido-notas"
                                             value={notes}
                                             onChange={(e) => { mexeu('notes'); setNotes(e.target.value); }}
                                             rows={3}
                                             placeholder="Ex: Entregar no portão lateral..."
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
+                                            className={AREA_DE_TEXTO}
                                         />
                                         {/* Desmarcado, a RPC do portal não entrega `notes` ao
                                             fornecedor e a área logada dele também esconde. */}
-                                        <label className="mt-2 flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer select-none">
+                                        <label className="pt-0.5 flex items-center gap-2 text-sm font-normal text-gray-700 cursor-pointer select-none">
                                             <input
                                                 type="checkbox"
                                                 checked={notesVisibleToSupplier}
@@ -1458,27 +1476,30 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 "Dados Gerais", que ficou longo demais para uma aba só;
                                 separados a pedido do usuário em 2026-09-04. ── */}
                             {mostrarFinanceiro && (
-                            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
-                                    <HandCoins className="w-4 h-4 text-emerald-500" />
-                                    Financeiro
-                                </h3>
+                            <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 space-y-8">
+                                <div className="space-y-4">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <HandCoins className="w-4 h-4 text-blue-600" />
+                                    <h3 className="text-sm font-semibold text-gray-900">Financeiro</h3>
+                                </div>
 
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100">
-                                    <div>
-                                        <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
-                                        <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-4">
+                                    <div className="space-y-1.5">
+                                        <span id="pedido-rotulo-condicao" className={ROTULO}>Condição de Pagamento</span>
+                                        <div role="group" aria-labelledby="pedido-rotulo-condicao" className="flex h-9 bg-white rounded-[6px] p-0.5 border border-gray-200">
                                             <button
                                                 type="button"
+                                                aria-pressed={paymentTermType === 'Vista'}
                                                 onClick={() => { mexeu('paymentTermType'); setPaymentTermType('Vista'); }}
-                                                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                                className={`flex-1 px-3 rounded-[4px] text-sm font-medium transition-all ${paymentTermType === 'Vista' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                             >
-                                                À Vista
+                                                À vista
                                             </button>
                                             <button
                                                 type="button"
+                                                aria-pressed={paymentTermType === 'Parcelado'}
                                                 onClick={() => { mexeu('paymentTermType'); setPaymentTermType('Parcelado'); }}
-                                                className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                                className={`flex-1 px-3 rounded-[4px] text-sm font-medium transition-all ${paymentTermType === 'Parcelado' ? 'bg-blue-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                             >
                                                 Parcelado
                                             </button>
@@ -1486,52 +1507,56 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     </div>
 
                                     {paymentTermType === 'Vista' ? (
-                                        <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
+                                        <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label htmlFor="pedido-prazo-dias" className={ROTULO}>Prazo de Pagamento (dias)</label>
                                             <div className="relative">
                                                 <input
+                                                    id="pedido-prazo-dias"
                                                     type="number"
                                                     min={0}
                                                     value={paymentDays}
                                                     onChange={(e) => { mexeu('paymentDays'); setPaymentDays(parseInt(e.target.value) || 0); }}
-                                                    className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
+                                                    className={`${CAMPO} pr-12`}
                                                 />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 pointer-events-none">dias</div>
                                             </div>
                                         </div>
                                     ) : (
-                                        <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
+                                        <div className="space-y-1.5 animate-in fade-in slide-in-from-left-2 duration-300">
+                                            <label htmlFor="pedido-parcelas" className={ROTULO}>Quantidade de Parcelas</label>
                                             <div className="relative">
                                                 <input
+                                                    id="pedido-parcelas"
                                                     type="number"
                                                     min={1}
                                                     value={paymentInstallments}
                                                     onChange={(e) => { mexeu('paymentInstallments'); setPaymentInstallments(parseInt(e.target.value) || 1); }}
-                                                    className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
+                                                    className={`${CAMPO} pr-12`}
                                                 />
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
+                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 pointer-events-none">×</div>
                                             </div>
                                         </div>
                                     )}
                                 </div>
+                                </div>
 
                                 {/* "Notas / Observações" passou para Dados Gerais (pedido do
                                     usuário em 2026-09-17). */}
-                                <div className="mt-8 space-y-6 pt-6 border-t border-gray-100">
-                                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.2em] flex items-center gap-3">
-                                        <Filter className="w-4 h-4 text-indigo-600" />
-                                        Alocação do Gasto
-                                    </h3>
-                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                                        <div className="space-y-3">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Conta de Pagamento</label>
+                                <div className="space-y-4">
+                                    <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                        <Filter className="w-4 h-4 text-blue-600" />
+                                        <h3 className="text-sm font-semibold text-gray-900">Alocação do Gasto</h3>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                                        <div className="space-y-1.5">
+                                            <label htmlFor="pedido-conta-pagamento" className={ROTULO}>Conta de Pagamento</label>
                                             <div className="relative group">
-                                                <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
+                                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors pointer-events-none" />
                                                 <select
+                                                    id="pedido-conta-pagamento"
                                                     value={bankAccount}
                                                     onChange={(e) => { mexeu('paymentAccountId'); setBankAccount(e.target.value); }}
-                                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
+                                                    className={`${CAMPO} pl-9 cursor-pointer`}
                                                 >
                                                     <option value="">Selecione uma conta...</option>
                                                     {accounts.map(acc => (
@@ -1540,24 +1565,28 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 </select>
                                             </div>
                                         </div>
-                                        <div className="space-y-3">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de custo</label>
+                                        <div className="space-y-1.5">
+                                            <label id="pedido-rotulo-cc" className={ROTULO}>Centro de custo</label>
                                             <CostCenterSelect
                                                 costCenters={costCenters}
                                                 value={costCenterId}
                                                 onChange={(v) => { mexeu('costCenterId'); setCostCenterId(v); }}
                                                 placeholder="Selecione o centro de custo..."
-                                                hoverCls="hover:bg-indigo-50"
+                                                hoverCls="hover:bg-blue-50"
+                                                triggerClassName={SELETOR_DO_FORM}
+                                                labelledBy="pedido-rotulo-cc"
                                             />
                                         </div>
-                                        <div className="space-y-3">
-                                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Plano de contas</label>
+                                        <div className="space-y-1.5">
+                                            <label id="pedido-rotulo-plano-contas" className={ROTULO}>Plano de contas</label>
                                             <PlanoContasSelect
                                                 planoContas={planoContas}
                                                 value={planoDeContasId}
                                                 onChange={(v) => { mexeu('planoDeContasId'); setPlanoDeContasId(v); }}
                                                 placeholder="Selecione o plano de contas..."
-                                                hoverCls="hover:bg-indigo-50"
+                                                hoverCls="hover:bg-blue-50"
+                                                triggerClassName={SELETOR_DO_FORM}
+                                                labelledBy="pedido-rotulo-plano-contas"
                                             />
                                         </div>
                                     </div>
@@ -2067,7 +2096,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                 <div className="px-8 py-6 bg-orange-50 border-b border-orange-100 flex items-center justify-between">
                     <div>
                         <h2 className="text-lg font-black text-gray-900">{doOrcamento ? 'Editar item do orçamento' : isEditing ? 'Editar Item Avulso' : 'Adicionar Item Avulso'}</h2>
-                        <p className="text-xs font-bold text-orange-500 uppercase tracking-widest mt-0.5">{doOrcamento ? 'Item do orçamento da obra' : 'Item não orçado'}</p>
+                        <p className="text-xs font-medium text-orange-600 mt-0.5">{doOrcamento ? 'Item do orçamento da obra' : 'Item não orçado'}</p>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-orange-100 rounded-xl transition-all text-gray-400 hover:text-gray-600">
                         <X className="w-5 h-5" />
@@ -2080,7 +2109,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     <button
                         type="button"
                         onClick={() => setPickerOpen(true)}
-                        className="w-full flex items-center justify-center gap-2 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 rounded-xl py-3 text-sm font-black uppercase tracking-wider transition-all"
+                        className="w-full flex items-center justify-center gap-1.5 h-9 bg-orange-50 hover:bg-orange-100 border border-orange-200 text-orange-700 rounded-[6px] text-[13px] font-medium transition-all active:scale-95"
                     >
                         <Search className="w-4 h-4" />
                         Buscar na base de dados
@@ -2091,20 +2120,20 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     </>)}
 
                     {/* Manual fields */}
-                    <div className="grid grid-cols-2 gap-4">
-                        <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Código <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span></label>
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                        <div className="space-y-1.5">
+                            <label className={ROTULO}>Código <span className="text-gray-300 font-normal normal-case tracking-normal">(opcional)</span></label>
                             <input
                                 type="text"
                                 value={form.code}
                                 onChange={(e) => setForm(f => ({ ...f, code: e.target.value }))}
                                 readOnly={doOrcamento}
                                 placeholder="Ex: 00001"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400 outline-none font-mono read-only:bg-gray-50 read-only:cursor-not-allowed"
+                                className={`${CAMPO} font-mono read-only:bg-gray-50 read-only:cursor-not-allowed`}
                             />
                         </div>
-                        <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Unidade *</label>
+                        <div className="space-y-1.5">
+                            <label className={ROTULO}>Unidade *</label>
                             <div className="flex gap-2">
                                 <select
                                     value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
@@ -2112,7 +2141,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                         if (e.target.value !== '__custom__') setForm(f => ({ ...f, unit: e.target.value }));
                                     }}
                                     disabled={doOrcamento}
-                                    className="flex-1 rounded-xl border border-gray-200 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400 outline-none bg-white disabled:bg-gray-50 disabled:cursor-not-allowed"
+                                    className={`${CAMPO} flex-1 min-w-0 cursor-pointer disabled:bg-gray-50 disabled:cursor-not-allowed`}
                                 >
                                     <option value="">Selecione...</option>
                                     {units.map(u => <option key={u} value={u}>{u}</option>)}
@@ -2124,29 +2153,29 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                     type="button"
                                     onClick={() => setShowUnitManager(true)}
                                     title="Gerenciar unidades"
-                                    className="p-2.5 rounded-xl border border-gray-200 text-gray-400 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
+                                    className="h-9 w-9 flex items-center justify-center rounded-[6px] border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-300 hover:bg-blue-50 transition-all shrink-0"
                                 >
                                     <Settings className="w-4 h-4" />
                                 </button>}
                             </div>
                         </div>
-                        <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Descrição *</label>
+                        <div className="col-span-2 space-y-1.5">
+                            <label className={ROTULO}>Descrição *</label>
                             <input
                                 type="text"
                                 value={form.description}
                                 onChange={(e) => setForm(f => ({ ...f, description: e.target.value }))}
                                 readOnly={doOrcamento}
                                 placeholder="Descrição do material ou serviço"
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm text-gray-900 focus:ring-2 focus:ring-orange-400 outline-none read-only:bg-gray-50 read-only:cursor-not-allowed"
+                                className={`${CAMPO} read-only:bg-gray-50 read-only:cursor-not-allowed`}
                             />
                             {/* §32 — travado diz o motivo; o valor continua escuro. */}
                             {doOrcamento && (
                                 <p className="text-xs text-gray-500 mt-1">Código, descrição e unidade vêm do orçamento da obra — não mudam aqui.</p>
                             )}
                         </div>
-                        <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Quantidade *</label>
+                        <div className="space-y-1.5">
+                            <label className={ROTULO}>Quantidade *</label>
                             <input
                                 type="number"
                                 min={0.001}
@@ -2154,13 +2183,13 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                 value={form.quantity}
                                 onChange={(e) => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
                                 onFocus={(e) => e.target.select()}
-                                className="w-full rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                                className={CAMPO}
                             />
                         </div>
-                        <div>
-                            <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço Unitário (R$)</label>
+                        <div className="space-y-1.5">
+                            <label className={ROTULO}>Preço Unitário (R$)</label>
                             <div className="relative">
-                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
+                                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500 pointer-events-none select-none">R$</span>
                                 <input
                                     type="text"
                                     inputMode="numeric"
@@ -2171,16 +2200,16 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                         setPriceDigits(trimmed);
                                         setForm(f => ({ ...f, unitPrice: fromCurrencyDigits(trimmed) }));
                                     }}
-                                    className="w-full pl-9 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
+                                    className={`${CAMPO} pl-9 text-right`}
                                 />
                             </div>
                         </div>
                     </div>
 
-                    <div>
-                        <label className="block text-form-label font-bold text-gray-500 uppercase tracking-wider mb-1.5">Preço unit. da cotação (R$)</label>
+                    <div className="space-y-1.5">
+                        <label className={ROTULO}>Preço unit. da cotação (R$)</label>
                         <div className="relative">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500 pointer-events-none select-none">R$</span>
                             <input
                                 type="text"
                                 inputMode="numeric"
@@ -2197,7 +2226,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                                     setQuotedDigits(trimmed);
                                     setForm(f => ({ ...f, quotedUnitPrice: fromCurrencyDigits(trimmed) }));
                                 }}
-                                className="w-full pl-9 rounded-xl border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold placeholder:font-normal placeholder:text-gray-300"
+                                className={`${CAMPO} pl-9 text-right placeholder:font-normal`}
                             />
                         </div>
                         <p className="text-xs text-gray-400 mt-1">Valor de referência acima; o cotado é o que o fornecedor cobra.</p>
@@ -2211,9 +2240,9 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     )}
 
                     {form.quantity > 0 && form.unitPrice > 0 && (
-                        <div className="flex justify-between items-center bg-orange-50 rounded-xl px-4 py-3">
-                            <span className="text-xs font-bold text-orange-700 uppercase tracking-wider">Total do Item</span>
-                            <span className="text-sm font-black text-orange-700">
+                        <div className="flex justify-between items-center bg-orange-50 rounded-[6px] px-4 py-2.5">
+                            <span className="text-sm font-medium text-orange-700">Total do item</span>
+                            <span className="text-sm font-semibold text-orange-700">
                                 {formatCurrency(form.quantity * form.unitPrice)}
                             </span>
                         </div>
@@ -2221,7 +2250,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                 </div>
 
                 <div className="px-8 pb-8 flex gap-3 justify-end">
-                    <button type="button" onClick={onClose} className="px-6 py-2.5 rounded-xl border border-gray-200 text-sm font-bold text-gray-600 hover:bg-gray-50 transition-all">
+                    <button type="button" onClick={onClose} className="h-9 px-3.5 rounded-[6px] border border-gray-200 text-[13px] font-medium text-gray-700 hover:bg-gray-50 transition-all">
                         Cancelar
                     </button>
                     <button
@@ -2229,7 +2258,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                         onClick={handleConfirm}
                         disabled={salvando}
                         title={salvando ? 'Gravando o item…' : undefined}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20 disabled:opacity-60 disabled:cursor-wait"
+                        className="flex items-center gap-1.5 h-9 px-3.5 rounded-[6px] bg-orange-500 hover:bg-orange-600 text-white text-[13px] font-medium transition-all active:scale-95 disabled:opacity-60 disabled:cursor-wait"
                     >
                         {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
                         {salvando ? 'Salvando…' : isEditing ? 'Salvar Alterações' : 'Adicionar Item'}

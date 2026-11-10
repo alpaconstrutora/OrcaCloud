@@ -34,6 +34,9 @@ const proposta = {
     total_value: 800000, status: 'APROVADA', units: [{ property_id: 'u-101', unit_name: '101' }],
 };
 
+// Prédio de apartamentos por padrão; o teste do LOTE troca a resposta.
+const loteDoPredio = vi.hoisted(() => vi.fn(async () => ({ estrutura: 'TORRES', quadraLote: {} as Record<string, { quadra: string | null; lote: string | null }> })));
+
 vi.mock('../../services/brokerPortalService', () => ({
     brokerPortalService: {
         // como a RPC real: sem current_price e com price 0 — o preço está na TABELA
@@ -47,6 +50,7 @@ vi.mock('../../services/brokerPortalService', () => ({
             items: [item(ap101), item(ap102), item(ap104), item(loja)],
         })),
         getRentalPriceTableByToken: vi.fn(async () => ({ table: null, items: [] })),
+        getLoteDoPredioByToken: loteDoPredio,
         getSalesPlansByToken: vi.fn(async () => []),
         getChatCanaisByToken: vi.fn(async () => []),
         getRankingByToken: vi.fn(async () => ({ posicao: 2, posicao_anterior: 1, total_corretores: 3, com_venda: 2, vendas: 2, volume: 1000000, enviadas: 3, vendas_do_lider: 3 })),
@@ -163,6 +167,17 @@ describe('BrokerPortalMobile', () => {
         const cesta = container.querySelector('[data-tour="cesta-barra"]') as HTMLElement;
         expect(within(cesta).getByText(/R\$\s*650\.000/)).toBeInTheDocument();
         expect(screen.getAllByRole('button', { name: 'Fazer proposta' }).length).toBeGreaterThan(2);
+    });
+
+    it('LOTE: o cartão mostra Quadra e Nº do lote, sem dormitórios, vagas nem pavimento (10/11/2026)', async () => {
+        loteDoPredio.mockResolvedValueOnce({ estrutura: 'LOTE', quadraLote: { 'u-104': { quadra: 'A', lote: '12' } } });
+        const user = userEvent.setup();
+        montar(['empreendimentos', 'propostas']);
+        await user.click(await screen.findByRole('button', { name: /010 - Galeria Altavista/ }));
+        const livre = (await screen.findByText('Apto 104')).closest('li')!;
+        expect(await within(livre).findByText(/Quadra A · Lote 12 · 78,5 m²/)).toBeInTheDocument();
+        expect(livre.textContent).not.toMatch(/dorm\.|vagas|pav\./);
+        expect(loteDoPredio).toHaveBeenCalledWith('tok-1', 'b-1');
     });
 
     it('"Fazer proposta" direto e voltar: a cesta que havia volta, a unidade avulsa não fica presa', async () => {

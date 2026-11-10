@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { CommercialPriceTable, CommercialPriceTableItem } from './commercialPriceTableService';
 import type { SalesPlan, PolicyValidation, SimulationPolicyInput } from './salesPlanService';
+import type { EstruturaDoTipo } from '../utils/empreendimentoTipos';
 
 export interface BrokerPortalToken {
     id: string;
@@ -251,6 +252,29 @@ export const brokerPortalService = {
             .from('broker_portal_price_columns')
             .upsert({ org_id: orgId, visible_columns: columns, updated_at: new Date().toISOString() }, { onConflict: 'org_id' });
         if (error) throw error;
+    },
+
+    /**
+     * Estrutura do tipo do empreendimento de um prédio + quadra/lote por imóvel,
+     * para o link do portal (anon). Espelho de empreendimentoService.loteDoPredio;
+     * no LOTE a tabela de preços troca as colunas de edificação por Quadra/Nº do lote.
+     * Token inválido ou prédio fora da cerca → TORRES (a tabela de sempre).
+     */
+    async getLoteDoPredioByToken(token: string, buildingId: string): Promise<{
+        estrutura: EstruturaDoTipo;
+        quadraLote: Record<string, { quadra: string | null; lote: string | null }>;
+    }> {
+        const { data, error } = await supabase.rpc('fn_broker_portal_lote_do_predio', {
+            p_token: token,
+            p_building_id: buildingId,
+        });
+        if (error) throw error;
+        const res = data as { valid: boolean; estrutura?: string; quadra_lote?: Record<string, { quadra: string | null; lote: string | null }> };
+        const e = res?.estrutura;
+        return {
+            estrutura: e === 'LOTE' || e === 'IMOVEL_UNICO' ? e : 'TORRES',
+            quadraLote: res?.quadra_lote ?? {},
+        };
     },
 
     /** Espelho anon de getPriceColumns — o link não tem sessão Supabase. */

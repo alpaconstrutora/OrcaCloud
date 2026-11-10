@@ -4,6 +4,9 @@ import { commercialPriceTableService } from '../../services/commercialPriceTable
 import type { CommercialPriceTable, CommercialPriceTableItem } from '../../services/commercialPriceTableService';
 import { rentalPriceTableService } from '../../services/rentalPriceTableService';
 import { brokerPortalService } from '../../services/brokerPortalService';
+import { empreendimentoService } from '../../services/empreendimentoService';
+import type { EstruturaDoTipo } from '../../utils/empreendimentoTipos';
+import { colunasForaDaTabelaDePrecos } from '../../utils/tabelaDePrecosColunas';
 import { formatMoney } from '../ui/Format';
 import { SortableHeader, ColumnConfigButton, useTableColumns } from '../ui/TableUtils';
 import type { ColumnConfig } from '../ui/TableUtils';
@@ -87,9 +90,12 @@ const areaFmt = (v: number | null | undefined) => (v != null ? `${v.toLocaleStri
 // varia é só a apresentação: aqui "Preço nesta versão" e "Visível p/ Corretor"
 // são leitura, não campo editável (a edição continua sendo lá).
 // Os labels de preço mudam com o eixo Venda/Locação, como no MODE_CONFIG de lá.
-// Exceção: no empreendimento do tipo LOTE, lá Quadra/Nº do lote trocam
-// Dormitórios/Vagas/Banheiros/Pavimento/Posição (10/11/2026); aqui ainda não — a RPC do
-// portal não traz quadra/lote.
+// LOTE (10/11/2026): como lá, Quadra/Nº do lote trocam Dormitórios/Vagas/
+// Banheiros/Pavimento/Posição no empreendimento cujo tipo é LOTE. Aqui Quadra e
+// Nº do lote ficam FORA da configuração de colunas (que é por org, gravada no
+// banco, e vale para prédios e lotes juntos): aparecem sempre que o prédio é um
+// lote, logo depois de Unidade. Origem: fn_broker_portal_lote_do_predio (link) /
+// empreendimentoService.loteDoPredio (visão do app).
 const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
     // Foto de capa da unidade — não ordenável (imagem não tem valor comparável).
     { key: 'photo',           label: 'Foto',               sortable: false },
@@ -118,6 +124,8 @@ const buildPriceColumnHeaders = (priceMode: 'sale' | 'rental'): Record<string, {
     photo: { label: 'Foto', sortable: false, className: 'px-6 py-2 border-r border-gray-100 w-16' },
     unit: { label: 'Unidade', className: 'px-6 py-2 border-r border-gray-100' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100' },
+    quadra: { label: 'Quadra', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
+    lote: { label: 'Nº do lote', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap' },
     privArea: { label: 'Área privativa', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     bedrooms: { label: 'Dormitórios', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
     parking: { label: 'Vagas', className: 'px-6 py-2 border-r border-gray-100 text-right whitespace-nowrap' },
@@ -154,7 +162,9 @@ const itemDelta = (i: CommercialPriceTableItem) => {
 // possa mapear `tableColumns.orderedVisibleColumns` (ordem arrastável) em vez de
 // repetir um bloco condicional fixo por coluna. `onEnlargePhoto` é o único handler
 // que a célula precisa (abre o lightbox); as demais colunas são só leitura.
-function renderPriceItemCell(key: string, item: CommercialPriceTableItem, ctx: { onEnlargePhoto: (url: string) => void }): React.ReactNode {
+type QuadraLote = Record<string, { quadra: string | null; lote: string | null }>;
+
+function renderPriceItemCell(key: string, item: CommercialPriceTableItem, ctx: { onEnlargePhoto: (url: string) => void; quadraLote: QuadraLote }): React.ReactNode {
     switch (key) {
         case 'photo':
             return (
@@ -176,6 +186,10 @@ function renderPriceItemCell(key: string, item: CommercialPriceTableItem, ctx: {
             return <span className="text-sm font-normal text-gray-700">{item.property_name || '—'}</span>;
         case 'status':
             return <UnitStatusBadge status={item.property_status} />;
+        case 'quadra':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{ctx.quadraLote[item.property_id]?.quadra || '—'}</span>;
+        case 'lote':
+            return <span className="text-sm font-normal text-gray-600 whitespace-nowrap">{ctx.quadraLote[item.property_id]?.lote || '—'}</span>;
         case 'privArea':
             return <span className="block text-right text-sm font-normal text-gray-600 whitespace-nowrap">{areaFmt(item.private_area)}</span>;
         case 'bedrooms':
@@ -213,7 +227,7 @@ function renderPriceItemCell(key: string, item: CommercialPriceTableItem, ctx: {
     }
 }
 
-type SortKey = 'unit' | 'status' | 'privArea' | 'bedrooms' | 'parking' | 'bathrooms' | 'floor'
+type SortKey = 'unit' | 'status' | 'quadra' | 'lote' | 'privArea' | 'bedrooms' | 'parking' | 'bathrooms' | 'floor'
     | 'position' | 'current' | 'price' | 'delta' | 'visibleToBroker' | 'showPrice';
 type BuildingSortKey = 'name' | 'units';
 
@@ -346,6 +360,33 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
         return () => { cancelled = true; };
     }, [selectedBuildingId, portalToken, priceMode]);
 
+    // Estrutura do tipo do empreendimento do prédio aberto + quadra/lote por imóvel.
+    // Só leitura, best-effort: sem vínculo ou com erro, fica a tabela de sempre.
+    const [estrutura, setEstrutura] = useState<EstruturaDoTipo>('TORRES');
+    const [quadraLote, setQuadraLote] = useState<QuadraLote>({});
+    useEffect(() => {
+        setEstrutura('TORRES');
+        setQuadraLote({});
+        if (!selectedBuildingId) return;
+        let cancelled = false;
+        (portalToken
+            ? brokerPortalService.getLoteDoPredioByToken(portalToken, selectedBuildingId)
+            : empreendimentoService.loteDoPredio(selectedBuildingId, priceMode === 'rental' ? 'RENTAL' : 'SALE'))
+            .then(r => { if (!cancelled) { setEstrutura(r.estrutura); setQuadraLote(r.quadraLote); } })
+            .catch(err => console.warn('[BrokerDevelopments] tipo do empreendimento do prédio indisponível:', err));
+        return () => { cancelled = true; };
+    }, [selectedBuildingId, portalToken, priceMode]);
+    const ehLote = estrutura === 'LOTE';
+    const colunasFora = useMemo(() => colunasForaDaTabelaDePrecos(estrutura), [estrutura]);
+    // O que o admin escolheu ver, menos o que não existe no tipo; no LOTE, Quadra
+    // e Nº do lote entram logo depois de Unidade (ver o comentário de buildColumns).
+    const colunasNaTela = useMemo(() => {
+        const base = tableColumns.orderedVisibleColumns.filter(k => !colunasFora.has(k));
+        if (!ehLote) return base;
+        const depois = base.indexOf('unit') + 1;
+        return [...base.slice(0, depois), 'quadra', 'lote', ...base.slice(depois)];
+    }, [tableColumns.orderedVisibleColumns, colunasFora, ehLote]);
+
     // Sem tabela ativa: cai nas unidades filhas com o preço vigente (nunca fica vazio
     // só porque o admin ainda não publicou uma versão da tabela de preços).
     const fallbackRows: CommercialPriceTableItem[] = useMemo(() => {
@@ -409,6 +450,8 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
         return [...rows].sort((a, b) => {
             switch (itemSort.col) {
                 case 'status': return (a.property_status || '').localeCompare(b.property_status || '', 'pt-BR') * dir;
+                case 'quadra': return (quadraLote[a.property_id]?.quadra || '').localeCompare(quadraLote[b.property_id]?.quadra || '', 'pt-BR', { numeric: true }) * dir;
+                case 'lote': return (quadraLote[a.property_id]?.lote || '').localeCompare(quadraLote[b.property_id]?.lote || '', 'pt-BR', { numeric: true }) * dir;
                 case 'privArea': return (n(a.private_area) - n(b.private_area)) * dir;
                 case 'bedrooms': return (n(a.bedrooms) - n(b.bedrooms)) * dir;
                 case 'parking': return (n(a.parking_spaces) - n(b.parking_spaces)) * dir;
@@ -423,7 +466,7 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 default: return (a.property_name || '').localeCompare(b.property_name || '', 'pt-BR', { numeric: true }) * dir;
             }
         });
-    }, [rows, itemSort]);
+    }, [rows, itemSort, quadraLote]);
 
     const handleBuildingSort = (col: string) => {
         setBuildingSort(prev => prev.col === col ? { col: col as BuildingSortKey, dir: prev.dir === 'asc' ? 'desc' : 'asc' } : { col: col as BuildingSortKey, dir: 'asc' });
@@ -564,12 +607,12 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
 
     // ── Detalhe no celular: cartões de unidade ──────────────────────────────
     if (compacto) {
-        const ver = (k: string) => visibleColumns.includes(k);
+        const ver = (k: string) => visibleColumns.includes(k) && !colunasFora.has(k);
         const ORDENS: { col: SortKey; label: string }[] = [
             { col: 'unit', label: 'Unidade' },
             { col: 'price', label: 'Preço' },
             { col: 'privArea', label: 'Área privativa' },
-            { col: 'floor', label: 'Pavimento' },
+            ehLote ? { col: 'lote', label: 'Nº do lote' } : { col: 'floor', label: 'Pavimento' },
             { col: 'status', label: 'Status' },
         ];
         return (
@@ -651,7 +694,10 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                             const motivoJuntar = !motivo && !podeJuntar
                                 ? `${UNIT_STATUS_LABEL[item.property_status || ''] || 'Indisponível'}: só proposta individual`
                                 : '';
+                            const ql = ehLote ? quadraLote[item.property_id] : undefined;
                             const ficha = [
+                                ql?.quadra ? `Quadra ${ql.quadra}` : null,
+                                ql?.lote ? `Lote ${ql.lote}` : null,
                                 ver('privArea') && item.private_area != null ? areaFmt(item.private_area) : null,
                                 ver('bedrooms') && item.bedrooms != null ? `${item.bedrooms} dorm.` : null,
                                 ver('parking') && item.parking_spaces != null ? `${item.parking_spaces} ${item.parking_spaces === 1 ? 'vaga' : 'vagas'}` : null,
@@ -816,13 +862,13 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                         <table className="w-full text-left border-collapse">
                             <thead>
                                 <tr className="bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
-                                    {tableColumns.orderedVisibleColumns.map(key => {
+                                    {colunasNaTela.map(key => {
                                         const def = priceColumnHeaders[key];
                                         if (!def) return null;
                                         return (
                                             <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} uppercase={false}
                                                 sortColumn={itemSort.col} sortDirection={itemSort.dir} onSort={handleItemSort}
-                                                onMoveColumn={tableColumns.moveColumn}
+                                                onMoveColumn={key === 'quadra' || key === 'lote' ? undefined : tableColumns.moveColumn}
                                                 className={def.className} />
                                         );
                                     })}
@@ -853,9 +899,9 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                                             className={`transition-colors group ${clickable ? 'hover:bg-blue-50/50' : 'opacity-60'}`}
                                             title={clickable ? undefined : 'Unidade não disponível no estoque atual'}
                                         >
-                                            {tableColumns.orderedVisibleColumns.map(key => (
+                                            {colunasNaTela.map(key => (
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                    {renderPriceItemCell(key, item, { onEnlargePhoto: setLightbox })}
+                                                    {renderPriceItemCell(key, item, { onEnlargePhoto: setLightbox, quadraLote })}
                                                 </td>
                                             ))}
                                             {onToggleUnit && (

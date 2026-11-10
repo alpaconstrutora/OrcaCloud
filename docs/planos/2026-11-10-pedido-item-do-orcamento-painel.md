@@ -78,6 +78,20 @@ nunca painel mais largo nem tela cheia. Usuário escolheu **tela própria**.
    em `orcamentoLinhas.test.ts` verdes.
 - [x] 8. 7 testes verdes; formulário 31 verdes
 
+## Correção — 2026-11-10 (composição dentro de composição)
+Proposta ao usuário: tirar também os serviços que não são por hora (carga/transporte em caminhão,
+montagem de armadura) — "Pode fazer". Antes de aplicar: no orçamento gravado a composição INTERNA
+vem **sem os próprios insumos** (ARMAÇÃO DE PILAR sem o aço, ARGAMASSA sem cimento e areia).
+Esconder a interna sumiria com o material. Feito o que a intenção pede ("só materiais"): descer.
+
+9. **`lib/orcamentoLinhas.ts`** — `materiaisDaComposicao` (desce nas internas com o coeficiente
+   acumulado, até 5 níveis, sem ciclo; mesmo material por dois caminhos soma; interna sem
+   detalhamento na base continua marcada "sem detalhamento"), `composicoesInternasAResolver`.
+   **`PedidoOrcamentoTela`** busca as internas em `sinapiService.getItemsByCodes` nível por nível e
+   depois o preço dos materiais. **Pronto quando:** `orcamentoLinhas.test.ts` e teste de tela
+   (argamassa → cimento) verdes.
+- [x] 9. 11 + 6 testes verdes; formulário 42 verdes
+
 ## Verificação
 1. typecheck, testes acima, `check-ui-standard.sh` nos `.tsx` tocados; CI (inclui build).
 2. Produção, sem gravar: aba Itens do PCO-014-003-0001 com os dois botões; painel com o piso em

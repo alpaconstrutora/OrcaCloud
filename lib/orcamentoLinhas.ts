@@ -1,4 +1,4 @@
-import { SinapiCategory, SinapiType, type BudgetEntry } from '../types/budget';
+import { SinapiCategory, SinapiType, type BudgetEntry, type CompositionComponent } from '../types/budget';
 
 /**
  * Linhas do orçamento da obra para os seletores de Suprimentos.
@@ -75,10 +75,10 @@ export function montarLinhas(budget: BudgetEntry[], preco: Map<string, number>):
  *   tabela "Itens do pedido", não incluir de novo.
  * - `aComprar`: orçada − comprada, nunca negativa.
  * - Pedido de compra é SÓ material (pedido do usuário em 10/11/2026): mão de
- *   obra (Servente, Carpinteiro…) e hora de equipamento (escavadeira, caminhão)
- *   ficam de fora — são contratados em Suprimentos › Contratos. Vale para
- *   insumo de composição e para item de topo. Composição que fica sem nenhum
- *   insumo de material some junto (título sem nada embaixo). Ver `naoEMaterial`.
+ *   obra (Servente, Carpinteiro…), hora de equipamento (escavadeira, caminhão)
+ *   e serviço ficam de fora — são contratados em Suprimentos › Contratos. A
+ *   composição interna (serviço) é aberta até o material — ver
+ *   `materiaisDaComposicao`. Composição sem nenhum material some junto.
  */
 export interface LinhaDoOrcamentoNoPedido extends LinhaDoOrcamento {
     comprada: number;
@@ -108,38 +108,110 @@ export function ehHoraDeEquipamento(item: { unit?: string; category?: string }):
 /** Não entra em pedido de compra: mão de obra ou hora de equipamento. */
 export const naoEMaterial = (item: { unit?: string; category?: string }) => ehMaoDeObra(item) || ehHoraDeEquipamento(item);
 
+/**
+ * Composição de composição (10/11/2026): no orçamento gravado, a composição
+ * INTERNA vem sem os próprios insumos — "ARMAÇÃO DE PILAR" (92759) não traz o
+ * aço, "ARGAMASSA TRAÇO 1:3" (87298) não traz cimento e areia. Esconder a
+ * interna (é serviço) sumiria com o material; o certo é DESCER até ele.
+ * `sub` = composição de cada código interno, lida da base SINAPI
+ * (`sinapiService.getItemsByCodes`) por quem chama.
+ */
+export type SubComposicoes = Map<string, CompositionComponent[]>;
+
+const PROFUNDIDADE_MAXIMA = 5;
+
+interface MaterialDaComposicao {
+    item: CompositionComponent;
+    /** Coeficiente acumulado: quanto deste material por 1 unidade da composição de topo. */
+    coef: number;
+    /** Composição interna sem detalhamento na base: fica como está, para nada sumir calado. */
+    semDetalhe: boolean;
+}
+
+/** Desce nas composições internas até o material; mão de obra e hora de equipamento ficam de fora. */
+export function materiaisDaComposicao(componentes: CompositionComponent[], sub: SubComposicoes): MaterialDaComposicao[] {
+    const porCodigo = new Map<string, MaterialDaComposicao>();
+    const descer = (lista: CompositionComponent[], fator: number, caminho: Set<string>) => {
+        for (const c of lista) {
+            if (naoEMaterial(c)) continue;
+            const coef = fator * (Number(c.quantity) || 0);
+            const filhos = c.type === SinapiType.COMPOSITION ? sub.get(c.code) : undefined;
+            if (c.type === SinapiType.COMPOSITION && filhos?.length && !caminho.has(c.code) && caminho.size < PROFUNDIDADE_MAXIMA) {
+                descer(filhos, coef, new Set(caminho).add(c.code));
+                continue;
+            }
+            const semDetalhe = c.type === SinapiType.COMPOSITION;
+            const atual = porCodigo.get(c.code);
+            if (atual) atual.coef += coef;
+            else porCodigo.set(c.code, { item: c, coef, semDetalhe });
+        }
+    };
+    descer(componentes, 1, new Set());
+    return [...porCodigo.values()];
+}
+
+/** Códigos de composição interna ainda sem detalhamento em `sub` — o que buscar na base SINAPI. */
+export function composicoesInternasAResolver(budget: BudgetEntry[], sub: SubComposicoes): string[] {
+    const faltam = new Set<string>();
+    const olhar = (lista: CompositionComponent[] | undefined) => lista?.forEach(c => {
+        if (naoEMaterial(c) || c.type !== SinapiType.COMPOSITION) return;
+        if (!sub.has(c.code)) faltam.add(c.code);
+    });
+    budget.forEach(e => olhar(e.sinapiItem?.composition));
+    sub.forEach(lista => olhar(lista));
+    return [...faltam];
+}
+
 export function linhasDoOrcamentoParaPedido(
     budget: BudgetEntry[],
     preco: Map<string, number>,
     compradas: Map<string, number>,
     noPedido: Set<string>,
+    sub: SubComposicoes = new Map(),
 ): LinhaDoOrcamentoNoPedido[] {
-    // Chaves das linhas que não são material (a linha não carrega `category`).
-    const fora = new Set<string>();
-    const composicaoComMaterial = new Set<string>();
-    budget.forEach(e => {
+    const linhas: LinhaDoOrcamento[] = [];
+    for (const e of budget) {
         const s = e.sinapiItem;
-        if (!s) return;
-        if (s.type !== SinapiType.COMPOSITION && naoEMaterial(s)) fora.add(e.id);
-        s.composition?.forEach(c => {
-            if (naoEMaterial(c)) fora.add(`${e.id}:${c.code}`);
-            else composicaoComMaterial.add(e.id);
+        if (!s || s.type === SinapiType.SERVICE) continue;
+        const base = { budgetItemId: e.id, budgetItemCode: s.code, budgetItemDescription: s.description };
+        if (s.type !== SinapiType.COMPOSITION) {
+            if (naoEMaterial(s)) continue;
+            linhas.push({
+                key: e.id, code: s.code, description: s.description, unit: s.unit,
+                quantity: Number(e.quantity) || 0,
+                price: preco.get(s.code) ?? (Number(s.price) || 0),
+                origem: 'Insumo do orçamento', type: s.type, ...base,
+            });
+            continue;
+        }
+        const materiais = materiaisDaComposicao(s.composition ?? [], sub);
+        // Composição sem nenhum material: o título ficaria sozinho.
+        if (materiais.length === 0) continue;
+        linhas.push({
+            key: e.id, code: s.code, description: s.description, unit: s.unit,
+            quantity: Number(e.quantity) || 0,
+            price: preco.get(s.code) ?? (Number(s.price) || 0),
+            origem: 'Composição do orçamento', type: s.type, ...base,
         });
+        for (const { item: c, coef, semDetalhe } of materiais) {
+            linhas.push({
+                key: `${e.id}:${c.code}`, code: c.code, description: c.description, unit: c.unit,
+                quantity: quatroCasas(coef * (Number(e.quantity) || 0)),
+                price: preco.get(c.code) ?? (Number(c.price) || 0),
+                origem: semDetalhe ? `Composição de ${s.code} (sem detalhamento)` : `Insumo de ${s.code}`,
+                type: c.type, compositionCode: s.code, ...base,
+            });
+        }
+    }
+    return linhas.map(l => {
+        const titulo = !l.compositionCode && l.type === SinapiType.COMPOSITION;
+        const comprada = titulo ? 0 : (compradas.get(l.code) ?? 0);
+        return {
+            ...l,
+            comprada,
+            aComprar: titulo ? 0 : Math.max(quatroCasas(l.quantity - comprada), 0),
+            titulo,
+            jaNoPedido: !titulo && noPedido.has(l.code),
+        };
     });
-    return montarLinhas(budget, preco)
-        .filter(l => l.compositionCode || l.type !== SinapiType.SERVICE)
-        .filter(l => !fora.has(l.key))
-        // Composição sem nenhum insumo de material: o título ficaria sozinho.
-        .filter(l => l.compositionCode || l.type !== SinapiType.COMPOSITION || composicaoComMaterial.has(l.key))
-        .map(l => {
-            const titulo = !l.compositionCode && l.type === SinapiType.COMPOSITION;
-            const comprada = titulo ? 0 : (compradas.get(l.code) ?? 0);
-            return {
-                ...l,
-                comprada,
-                aComprar: titulo ? 0 : Math.max(quatroCasas(l.quantity - comprada), 0),
-                titulo,
-                jaNoPedido: !titulo && noPedido.has(l.code),
-            };
-        });
 }

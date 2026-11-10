@@ -1572,6 +1572,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     compradas={purchasedQuantities}
                                     noPedido={codigosNoPedido}
                                     onItemAvulso={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                                    uf={projectData?.settings?.state || 'SP'}
+                                    desoneracao={projectData?.settings?.socialChargesMode || 'Sem Desoneração'}
                                     onAdd={async (itens) => {
                                         if (embedded && isEditing) {
                                             const erro = await acrescentarAoPedido(itens);

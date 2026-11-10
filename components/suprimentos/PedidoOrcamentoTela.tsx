@@ -2,7 +2,8 @@ import React from 'react';
 import { ArrowLeft, Calculator, AlertCircle, Loader2, Plus } from 'lucide-react';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import { formatMoney } from '../ui/Format';
-import { linhasDoOrcamentoParaPedido, type LinhaDoOrcamentoNoPedido } from '../../lib/orcamentoLinhas';
+import { composicoesInternasAResolver, linhasDoOrcamentoParaPedido, type LinhaDoOrcamentoNoPedido, type SubComposicoes } from '../../lib/orcamentoLinhas';
+import { sinapiService } from '../../services/sinapiService';
 import type { BudgetEntry } from '../../types/budget';
 
 /**
@@ -64,9 +65,12 @@ interface Props {
     onAdd: (itens: ItemDoOrcamentoEscolhido[]) => void | Promise<string | null | void>;
     /** Leva ao "+ Item avulso" quando o orçamento não tem o que comprar. */
     onItemAvulso?: () => void;
+    /** UF e desoneração da obra — preço SINAPI dos materiais das composições internas. */
+    uf?: string;
+    desoneracao?: string;
 }
 
-const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compradas, noPedido, onAdd, onItemAvulso }) => {
+const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compradas, noPedido, onAdd, onItemAvulso, uf, desoneracao }) => {
     const [selected, setSelected] = React.useState<Set<string>>(new Set());
     // §3.1: busca de seletor é transitória — voltar e abrir de novo não pode esconder linhas.
     const [busca, setBusca] = React.useState('');
@@ -77,9 +81,55 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
     // Aberta a partir de um botão no meio da página: a tela começa no topo.
     React.useEffect(() => { topoRef.current?.scrollIntoView?.({ block: 'start', behavior: 'smooth' }); }, []);
 
+    // Composição dentro de composição vem sem os insumos no orçamento gravado
+    // (ver `materiaisDaComposicao`): busca na base SINAPI, nível por nível, e
+    // depois o preço dos materiais que apareceram lá dentro.
+    const [sub, setSub] = React.useState<SubComposicoes>(new Map());
+    const [precosDasInternas, setPrecosDasInternas] = React.useState<Map<string, number>>(new Map());
+    const [abrindoComposicoes, setAbrindoComposicoes] = React.useState(true);
+    React.useEffect(() => {
+        let cancelado = false;
+        (async () => {
+            const mapa: SubComposicoes = new Map();
+            const extra = new Map<string, number>();
+            try {
+                for (let nivel = 0; nivel < 5; nivel++) {
+                    const faltam = composicoesInternasAResolver(budget, mapa);
+                    if (faltam.length === 0) break;
+                    const itens = await sinapiService.getItemsByCodes(faltam, uf, desoneracao);
+                    // Sem detalhamento na base = lista vazia: a interna fica como linha.
+                    faltam.forEach(code => mapa.set(code, itens.find(i => i.code === code)?.composition ?? []));
+                }
+                const semPreco = [...new Set(
+                    linhasDoOrcamentoParaPedido(budget, precos, new Map(), new Set(), mapa)
+                        .filter(l => l.compositionCode && !precos.has(l.code))
+                        .map(l => l.code),
+                )];
+                if (semPreco.length) {
+                    const itens = await sinapiService.getItemsByCodes(semPreco, uf, desoneracao);
+                    itens.forEach(i => { if (Number(i.price) > 0) extra.set(i.code, Number(i.price)); });
+                }
+            } catch (err) {
+                // Sem a base, as internas ficam "sem detalhamento" — não impede escolher.
+                console.warn('[PedidoOrcamentoTela] composições internas indisponíveis:', err);
+            } finally {
+                if (!cancelado) { setSub(mapa); setPrecosDasInternas(extra); setAbrindoComposicoes(false); }
+            }
+        })();
+        return () => { cancelado = true; };
+        // Uma vez por abertura: preços e orçamento já vieram prontos do formulário.
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [budget, uf, desoneracao]);
+
+    const precosTodos = React.useMemo(() => {
+        const m = new Map(precosDasInternas);
+        precos.forEach((v, k) => m.set(k, v));
+        return m;
+    }, [precos, precosDasInternas]);
+
     const linhas = React.useMemo(
-        () => linhasDoOrcamentoParaPedido(budget, precos, compradas, noPedido),
-        [budget, precos, compradas, noPedido],
+        () => linhasDoOrcamentoParaPedido(budget, precosTodos, compradas, noPedido, sub),
+        [budget, precosTodos, compradas, noPedido, sub],
     );
     const orcamentoVazio = budget.length === 0;
 
@@ -126,7 +176,7 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
                         </p>
                         {/* Pedido é só material (10/11/2026): diz onde está o resto. */}
                         <p className="text-xs text-gray-500 mt-1">
-                            Só materiais. Mão de obra e equipamento por hora são contratados em Suprimentos › Contratos.
+                            Só materiais — as composições são abertas até o material. Mão de obra, equipamento por hora e serviços são contratados em Suprimentos › Contratos.
                         </p>
                     </div>
                 </div>
@@ -165,6 +215,7 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
                 rows={linhas}
                 rowKey={l => l.key}
                 dense
+                loading={abrindoComposicoes}
                 search={busca}
                 onSearchChange={setBusca}
                 searchText={l => `${l.code} ${l.description} ${l.origem}`}

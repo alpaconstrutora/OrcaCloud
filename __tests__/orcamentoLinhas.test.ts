@@ -4,7 +4,8 @@
  * Plano: docs/planos/2026-11-10-pedido-item-do-orcamento-painel.md
  */
 import { describe, it, expect } from 'vitest';
-import { montarLinhas, linhasDoOrcamentoParaPedido } from '../lib/orcamentoLinhas';
+import { montarLinhas, linhasDoOrcamentoParaPedido, materiaisDaComposicao, composicoesInternasAResolver, type SubComposicoes } from '../lib/orcamentoLinhas';
+import type { CompositionComponent } from '../types/budget';
 import { SinapiType, type BudgetEntry } from '../types/budget';
 
 const ORCAMENTO = [
@@ -73,5 +74,54 @@ describe('linhasDoOrcamentoParaPedido', () => {
     it('marca o que já está neste pedido', () => {
         expect(por('COLA').jaNoPedido).toBe(true);
         expect(por('CIM').jaNoPedido).toBe(false);
+    });
+});
+
+describe('composição dentro de composição: desce até o material', () => {
+    const c = (code: string, unit: string, type: SinapiType, quantity: number, description = code) =>
+        ({ code, description, unit, type, quantity, price: 0 }) as unknown as CompositionComponent;
+    // Alvenaria (topo, 10 m2) → argamassa (interna) → cimento + areia + betoneira;
+    //                         → armação (interna, SEM detalhamento na base);
+    //                         → bloco (insumo direto) e servente (mão de obra).
+    const ALVENARIA = [{ id: 'a1', quantity: 10, sinapiItem: {
+        code: '100351', description: 'Alvenaria estrutural', unit: 'm2', price: 200, type: SinapiType.COMPOSITION,
+        composition: [
+            c('BLOCO', 'UN', SinapiType.INPUT, 12.5),
+            c('87298', 'M3', SinapiType.COMPOSITION, 0.02, 'ARGAMASSA TRAÇO 1:3'),
+            c('92759', 'KG', SinapiType.COMPOSITION, 1.5, 'ARMAÇÃO DE PILAR'),
+            c('88316', 'H', SinapiType.COMPOSITION, 0.8, 'SERVENTE'),
+        ],
+    } }] as unknown as BudgetEntry[];
+    const sub: SubComposicoes = new Map([
+        ['87298', [c('CIMENTO', 'KG', SinapiType.INPUT, 430), c('AREIA', 'M3', SinapiType.INPUT, 1.1), c('88831', 'CHI', SinapiType.COMPOSITION, 3.39)]],
+        ['92759', []],
+    ]);
+
+    it('a interna vira os materiais dela, com o coeficiente acumulado; hora e mão de obra saem', () => {
+        const mats = materiaisDaComposicao(ALVENARIA[0].sinapiItem!.composition!, sub);
+        const coef = Object.fromEntries(mats.map(m => [m.item.code, Math.round(m.coef * 10000) / 10000]));
+        expect(coef).toEqual({ BLOCO: 12.5, CIMENTO: 8.6, AREIA: 0.022, 92759: 1.5 });
+    });
+
+    it('interna sem detalhamento na base continua, marcada — nada some calado', () => {
+        const linhas = linhasDoOrcamentoParaPedido(ALVENARIA, new Map(), new Map(), new Set(), sub);
+        const armacao = linhas.find(l => l.code === '92759')!;
+        expect(armacao.origem).toBe('Composição de 100351 (sem detalhamento)');
+        expect(linhas.find(l => l.code === 'CIMENTO')).toMatchObject({ quantity: 86, origem: 'Insumo de 100351' });
+        expect(linhas.some(l => l.code === '87298' || l.code === '88831' || l.code === '88316')).toBe(false);
+    });
+
+    it('o mesmo material por dois caminhos soma numa linha só', () => {
+        const dupla = [c('87298', 'M3', SinapiType.COMPOSITION, 0.01), c('CIMENTO', 'KG', SinapiType.INPUT, 2)];
+        const mats = materiaisDaComposicao(dupla, sub);
+        expect(mats.filter(m => m.item.code === 'CIMENTO')).toHaveLength(1);
+        expect(mats.find(m => m.item.code === 'CIMENTO')!.coef).toBeCloseTo(6.3);
+    });
+
+    it('lista o que falta buscar na base, inclusive dentro do que já veio', () => {
+        expect(composicoesInternasAResolver(ALVENARIA, new Map()).sort()).toEqual(['87298', '92759']);
+        expect(composicoesInternasAResolver(ALVENARIA, sub)).toEqual([]);
+        const comNeta: SubComposicoes = new Map([...sub, ['87298', [c('94974', 'M3', SinapiType.COMPOSITION, 1)]]]);
+        expect(composicoesInternasAResolver(ALVENARIA, comNeta)).toEqual(['94974']);
     });
 });

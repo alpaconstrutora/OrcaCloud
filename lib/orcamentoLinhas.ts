@@ -105,8 +105,20 @@ export function ehHoraDeEquipamento(item: { unit?: string; category?: string }):
     return item.category === SinapiCategory.EQUIPAMENTO || un === 'CHP' || un === 'CHI';
 }
 
-/** Não entra em pedido de compra: mão de obra ou hora de equipamento. */
-export const naoEMaterial = (item: { unit?: string; category?: string }) => ehMaoDeObra(item) || ehHoraDeEquipamento(item);
+/**
+ * Cobrado por mês (MES, UN×MES): mensalista ("ENGENHEIRO CIVIL DE OBRA…
+ * (MENSALISTA)"), os encargos dele (EPI, ferramentas, seguro, exames,
+ * alimentação, transporte "– MENSALISTA") e locação (container, aprumador).
+ * Mão de obra ou contrato — nunca material (pedido do usuário em 10/11/2026).
+ */
+export function ehCobradoPorMes(item: { unit?: string }): boolean {
+    const un = (item.unit ?? '').trim().toUpperCase().replace(/\s+/g, '');
+    return un === 'MES' || un.endsWith('XMES') || un.endsWith('×MES');
+}
+
+/** Não entra em pedido de compra: mão de obra, hora de equipamento ou cobrança mensal. */
+export const naoEMaterial = (item: { unit?: string; category?: string }) =>
+    ehMaoDeObra(item) || ehHoraDeEquipamento(item) || ehCobradoPorMes(item);
 
 /**
  * Composição de composição (10/11/2026): no orçamento gravado, a composição

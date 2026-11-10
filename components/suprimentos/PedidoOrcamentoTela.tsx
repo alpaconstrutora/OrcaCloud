@@ -176,7 +176,7 @@ const PedidoOrcamentoTela: React.FC<Props> = ({ onVoltar, budget, precos, compra
                         </p>
                         {/* Pedido é só material (10/11/2026): diz onde está o resto. */}
                         <p className="text-xs text-gray-500 mt-1">
-                            Só materiais — as composições são abertas até o material. Mão de obra, equipamento por hora e serviços são contratados em Suprimentos › Contratos.
+                            Só materiais — as composições são abertas até o material. Mão de obra, mensalistas, equipamento por hora, locação e serviços são contratados em Suprimentos › Contratos.
                         </p>
                     </div>
                 </div>

@@ -1127,7 +1127,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             })),
         ...avulsoItems.map((item, idx) => ({ item, idx: idx as number | null, origem: 'Avulso' })),
     ];
-    const codigosNoPedido = React.useMemo(() => new Set(orderItems.map(i => i.code)), [orderItems]);
+    // "Já está no pedido" na tela do orçamento. Além da lista deste formulário,
+    // os itens GRAVADOS (embutido) e os ainda não classificados: a tela pode
+    // abrir antes de a classificação orçamento × avulso terminar, e aí item do
+    // pedido aparecia marcável — incluir de novo duplicava a linha (CI, 10/11/2026).
+    const codigosNoPedido = React.useMemo(() => new Set([
+        ...orderItems.map(i => i.code),
+        ...(itensGravados ?? []).map(i => i.code),
+        ...(itensCarregados ?? []).map(i => i.code),
+    ]), [orderItems, itensGravados, itensCarregados]);
     const linhasAvulsos = ordenarLinhas(
         todasAsLinhas
             .filter(({ item }) => !termoAvulsos

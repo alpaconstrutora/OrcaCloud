@@ -91,6 +91,16 @@ Esconder a interna sumiria com o material. Feito o que a intenção pede ("só m
    depois o preço dos materiais. **Pronto quando:** `orcamentoLinhas.test.ts` e teste de tela
    (argamassa → cimento) verdes.
 - [x] 9. 11 + 6 testes verdes; formulário 42 verdes
+- Produção (#328, só leitura, PC-008-008-0001): 160 linhas; aço, arame e concreto aparecem; argamassa,
+  montagem e transporte não; 0 "sem detalhamento". Sobraram itens por mês.
+
+## Correção — 2026-11-10 (cobrado por mês)
+Pergunta: mensalistas (engenheiro, técnico), encargos de mensalista (EPI/ferramentas/seguro/exames/
+alimentação/transporte) e locação (container, aprumador) — esconder? Resposta: **"Esconder os três"**.
+
+10. **`lib/orcamentoLinhas.ts`** — `ehCobradoPorMes` (unidade MES ou …XMES) entra em `naoEMaterial`.
+    **Pronto quando:** caso novo em `orcamentoLinhas.test.ts` verde (milheiro MIL continua).
+- [x] 10. 12 testes verdes
 
 ## Verificação
 1. typecheck, testes acima, `check-ui-standard.sh` nos `.tsx` tocados; CI (inclui build).

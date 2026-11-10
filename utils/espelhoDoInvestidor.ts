@@ -17,6 +17,7 @@ import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
 import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
 import { plantaDaUnidade, plantasPorChave, type PlantaDaTipologia } from './espelhoPlantaDaTipologia';
 import { rotuloDaVista, vistaDaUnidade, type VistaDaTorre } from './espelhoVistaDaJanela';
+import { decoradoParaAFicha, decoradosPorChave, type ImagemDoDecorado } from './espelhoDecoradoDaTipologia';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade } from './espelhoDeVendas3dMalha';
 
@@ -66,6 +67,8 @@ export interface ObraDoEspelho {
   torres: TorreDoInvestidor[];
   /** As plantas por tipologia dos empreendimentos desta obra (F5). Ausente antes da migration. */
   plantas?: PlantaDaTipologia[] | null;
+  /** O decorado por tipologia dos empreendimentos desta obra (F8). Ausente antes da migration. */
+  decorado?: ImagemDoDecorado[] | null;
 }
 
 export interface ResumoDoInvestidor {
@@ -100,6 +103,7 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
   const ocultas = new Set<string>();
   const pavimentosPorTorre = new Map<string, EmpreendimentoFloor[]>();
   const plantas = plantasPorChave(obra.plantas);
+  const decorados = decoradosPorChave(obra.decorado);
   // Sem nenhuma vista na obra a ficha nem fala nisso (`vista` fica de fora).
   const obraTemVista = (obra.torres ?? []).some((t) => (t.vistas ?? []).length > 0);
   let unidades = 0;
@@ -133,6 +137,7 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
             dados.set(u.id, {
               tipologia: u.typology,
               plantaUrl: plantaDaUnidade(plantas, u.typology),
+              ...decoradoParaAFicha(decorados, u.typology),
               ...(obraTemVista
                 ? (() => {
                     const v = vistaDaUnidade(t.vistas, u.floor, u.sun_orientation, { id: u.id, nome: u.name });

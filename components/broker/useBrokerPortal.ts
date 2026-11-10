@@ -338,7 +338,7 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
         let vivo = true;
         Promise.resolve()
             .then(() => portalToken ? espelhoDeVendasService.estruturaPorToken(portalToken) : espelhoDeVendasService.estruturaDoApp(predioDoEspelho!))
-            .catch((err): EstruturaDoEspelho => { console.warn('[BrokerPortal] estrutura do espelho 3D indisponível — desenhando pelo estoque:', err); return { torres: [], plantas: [] }; })
+            .catch((err): EstruturaDoEspelho => { console.warn('[BrokerPortal] estrutura do espelho 3D indisponível — desenhando pelo estoque:', err); return { torres: [], plantas: [], decorado: [] }; })
             .then(e => { if (vivo) setEstrutura({ chave: chaveDaEstrutura, ...e }); });
         return () => { vivo = false; };
     }, [estoqueEm3d, chaveDaEstrutura, estruturaPronta, portalToken, predioDoEspelho]);
@@ -351,6 +351,8 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
             estrutura: estrutura!.torres.filter(t => t.commercial_building_id === predioDoEspelho),
             // A planta da tipologia (F5): as do empreendimento deste prédio.
             plantas: estrutura!.plantas.filter(p => p.commercial_building_id === predioDoEspelho),
+            // O decorado da tipologia (F8): o do empreendimento deste prédio.
+            decorado: estrutura!.decorado.filter(d => d.commercial_building_id === predioDoEspelho),
         });
     }, [estoqueEm3d, predioDoEspelho, estruturaPronta, estrutura, visibleUnits, dealsDoMapa]);
 

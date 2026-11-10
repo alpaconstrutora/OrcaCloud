@@ -9,6 +9,9 @@
 
 import { SALE_STATUS_COLORS, type SaleUnitStatus } from '../lib/salesAnalysis';
 import { contagemPorStatus, type PrismaDoEspelho } from './espelhoDeVendas3d';
+import type { DecoradoDaFicha } from './espelhoDecoradoDaTipologia';
+
+export type { DecoradoDaFicha };
 
 /** A cor e os nomes de cada status. O corretor e o investidor trazem a sua; esta é a da Análise de Vendas. */
 export type PaletaDoEspelho = Record<SaleUnitStatus, { cor: string; rotulo: string; plural: string }>;
@@ -38,6 +41,11 @@ export interface DadosDaUnidade {
    * `null` = o prédio tem, mas nenhuma cobre o andar/face desta unidade (botão desligado, com o motivo).
    */
   vista?: VistaDaFicha | null;
+  /**
+   * O decorado da tipologia (F8): o corte 3D mobiliado e as imagens dos ambientes. `undefined` = o prédio não tem
+   * decorado (a ficha nem fala nisso); `null` = tem, mas não desta tipologia (botão desligado, com o motivo).
+   */
+  decorado?: DecoradoDaFicha | null;
 }
 
 export interface VistaDaFicha {

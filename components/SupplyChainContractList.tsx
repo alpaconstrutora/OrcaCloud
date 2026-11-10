@@ -28,7 +28,7 @@ import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     number: 123, title: 260, project: 180, empreendimento: 184, supplier: 230, date: 170, status: 130, value: 150,
-    costCenter: 170, planoContas: 170, actions: 200,
+    costCenter: 170, planoContas: 170, actions: 120,
 };
 
 const COLUMNS: ColumnConfig[] = [
@@ -732,13 +732,8 @@ const SupplyChainContractList: React.FC<SupplyChainContractListProps> = ({
                                         <td aria-hidden="true" className="border-r border-gray-100"></td>
                                         <td className="px-6 py-2.5 text-right">
                                             <div className="flex items-center justify-end gap-1.5" onClick={(e) => e.stopPropagation()}>
-                                                <button
-                                                    onClick={(e) => { e.stopPropagation(); onViewDetails(contract.id); }}
-                                                    className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-[6px] transition-all"
-                                                >
-                                                    Ver Detalhes
-                                                </button>
-                                                {/* Mesma página do "Ver Detalhes" — ver o comentário da grade. */}
+                                                {/* Sem "Ver Detalhes" ao lado: abria a mesma página que o lápis (10/11/2026).
+                                                    Ver o comentário da grade. */}
                                                 <ActionIconButton kind="edit" title="Ajustar Contrato" onClick={(e) => { e.stopPropagation(); onViewDetails(contract.id); }} />
                                                 <InlineDisclosureMenu
                                                     menuItems={[

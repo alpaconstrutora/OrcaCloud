@@ -45,3 +45,14 @@ Fora do escopo: o `onEdit` `@deprecated` do `ContractDetailView` no `AppRouter` 
 - 10/11/2026 — itens 1, 2 e 3 feitos. Teste novo falhou antes da mudança e passa
   depois; `tsc` sem erro; `check-ui-standard.sh` nos 3 arquivos e
   `check-org-selector-guard.sh` limpos. Não conferido no navegador.
+
+## Pedido de 10/11/2026 (mesma sessão, após o #302 no ar)
+
+> aprovado.
+> faça mais um ajuste do lado do lapis existe botão ver detalhes com a mesma funcao do lapis. Exclui-lo e manter apenas o lapis
+
+4. **`components/SupplyChainContractList.tsx`** — sai o botão "Ver Detalhes" da coluna
+   Ações da tabela (a grade não tinha); a largura padrão da coluna cai de 200 para
+   120 px (lápis + menu ⋯ + padding). Quem já redimensionou a coluna mantém a largura salva.
+   *Pronto quando:* o teste do lápis confirma que a linha não tem "Ver Detalhes".
+   — Feito: teste passa, `tsc` sem erro, `check-ui-standard.sh` limpo. Não conferido no navegador.

@@ -124,6 +124,8 @@ describe('Suprimentos › Contratos', () => {
         const linha = (await screen.findByText('Pintura')).closest('tr')!;
         fireEvent.click(within(linha).getByTitle('Ajustar Contrato'));
         expect(onViewDetails).toHaveBeenCalledWith('2');
+        // "Ver Detalhes" ao lado abria a mesma página — saiu (10/11/2026).
+        expect(within(linha).queryByText('Ver Detalhes')).toBeNull();
     });
 });
 

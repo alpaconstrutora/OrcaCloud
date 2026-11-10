@@ -89,10 +89,16 @@ export const UnidadeUnicaEditor: React.FC<Props> = ({
     () => (unit ? unitFormFromRecord(unit) : { ...emptyUnitFormValues(), name: empreendimento.name, typology: criar.tipologia }),
     [unit, empreendimento.name], // eslint-disable-line react-hooks/exhaustive-deps
   );
-  const [loteForm, setLoteForm] = React.useState<LoteForm>(loteSalvo);
-  const [imovelForm, setImovelForm] = React.useState<UnitFormValues>(imovelSalvo);
-  React.useEffect(() => { setLoteForm(loteSalvo); }, [loteSalvo]);
-  React.useEffect(() => { setImovelForm(imovelSalvo); }, [imovelSalvo]);
+  // A edição guarda de qual "salvo" partiu: quando o salvo muda (unidade chegou do banco,
+  // ou acabou de ser gravada), o formulário volta a ele NO MESMO render. Antes era um
+  // useEffect que copiava depois — havia um render com o salvo novo e o form velho, e o
+  // "Salvar unidade" piscava ligado (o CI do #298 pegou esse quadro).
+  const [loteEdicao, setLoteEdicao] = React.useState<{ de: LoteForm; form: LoteForm } | null>(null);
+  const [imovelEdicao, setImovelEdicao] = React.useState<{ de: UnitFormValues; form: UnitFormValues } | null>(null);
+  const loteForm = loteEdicao?.de === loteSalvo ? loteEdicao.form : loteSalvo;
+  const imovelForm = imovelEdicao?.de === imovelSalvo ? imovelEdicao.form : imovelSalvo;
+  const setLoteForm = (f: (p: LoteForm) => LoteForm) => setLoteEdicao({ de: loteSalvo, form: f(loteForm) });
+  const setImovelForm = (f: (p: UnitFormValues) => UnitFormValues) => setImovelEdicao({ de: imovelSalvo, form: f(imovelForm) });
   const [erroNome, setErroNome] = React.useState<string | undefined>();
   const [saving, setSaving] = React.useState(false);
 

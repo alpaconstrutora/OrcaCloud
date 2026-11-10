@@ -176,7 +176,7 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     const r = montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [torreA] });
     expect(r.fonte).toBe('ESTOQUE');
     expect(r.cena.torres.map((t) => [t.nome, t.origem])).toEqual([['Torre A', 'PLANTA'], ['Torre B', 'ESQUEMATICA']]);
-    // Misturada com uma esquemática, a torre é posta lado a lado — mas com a FORMA do desenho (13,5 m × 26 m).
+    // Misturada com uma esquemática, a torre fica onde o desenho a pôs, com a FORMA do desenho (13,5 m × 26 m).
     const c = r.cena.torres[0].caixa;
     expect([c.maxX - c.minX, c.maxY - c.minY]).toEqual([13500, 26000]);
     // As duas com contorno: ficam onde o desenho as pôs.

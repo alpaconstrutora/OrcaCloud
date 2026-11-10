@@ -10,8 +10,8 @@
 // unidade cair no mesmo lugar nos dois.
 //
 // O CONTORNO (decisão do usuário: híbrido): o do Bloco da Planta quando a torre o tem; sem ele, um retângulo
-// ESQUEMÁTICO com a área do maior andar. Com todas as torres vindas da Planta valem as coordenadas do desenho; com
-// alguma esquemática, as torres ficam lado a lado. As folgas do esquemático são hipóteses editáveis
+// ESQUEMÁTICO com a área do maior andar. As torres vindas da Planta ficam nas coordenadas do desenho; as esquemáticas
+// vão lado a lado, à direita delas (10/11/2026 — antes uma esquemática punha TODAS lado a lado). As folgas do esquemático são hipóteses editáveis
 // (`HIPOTESES_PADRAO_DO_ESPELHO`), nunca constante escondida. Puro.
 //
 // ⚠️ Só `import type` do kernel da Planta: este arquivo entra no pacote dos portais.
@@ -223,24 +223,28 @@ export function montarCenaDoEspelho(entrada: EntradaDaCena): CenaDoEspelho {
     });
   }
 
-  // Todas da Planta: as coordenadas do desenho (as torres já estão onde o projeto as pôs). Senão, lado a lado.
-  const ladoALado = montadas.some((m) => m.origem === 'ESQUEMATICA');
+  // As da Planta ficam nas coordenadas do desenho (já estão onde o projeto as pôs, uma em relação à outra); só as
+  // esquemáticas vão lado a lado, à direita do grupo da Planta. Até 10/11/2026 bastava UMA esquemática para TODAS irem
+  // lado a lado — no Garden Cambuhy a "Lote" de outro empreendimento da mesma obra separava as duas torres do projeto.
+  const daPlanta = montadas.filter((m) => m.origem === 'PLANTA');
+  const grupo = daPlanta.length > 0 ? caixaDe(daPlanta.flatMap((m) => m.anel)) : null;
   const prismas: PrismaDoEspelho[] = [];
   const naCena: TorreNaCena[] = [];
-  let cursor = 0;
+  let cursor = grupo ? grupo.maxX : 0;
   let anterior: TorreMontada | null = null;
   for (const m of montadas) {
     let anel = m.anel;
-    if (ladoALado) {
+    if (m.origem === 'ESQUEMATICA') {
       const c = caixaDe(anel);
       if (anterior) {
         const declarada = distanciaDoPar(entrada.distancias ?? [], anterior.t.id, m.t.id);
         cursor += declarada != null ? Math.round(declarada * 1000) : h.afastamentoEntreTorresMm;
-      }
+      } else if (grupo) cursor += h.afastamentoEntreTorresMm;
       const dx = cursor - c.minX;
-      const dy = -c.minY;
+      const dy = (grupo ? grupo.minY : 0) - c.minY;
       anel = anel.map((p) => ({ x: p.x + dx, y: p.y + dy }));
       cursor += c.maxX - c.minX;
+      anterior = m;
     }
     const daTorre = m.pisos.flatMap((piso) => prismasDoPiso(m, piso, anel, statusDe, entrada.unidadesOcultas, avisos));
     prismas.push(...daTorre);
@@ -254,7 +258,6 @@ export function montarCenaDoEspelho(entrada: EntradaDaCena): CenaDoEspelho {
       pisos: m.pisos.length,
       unidades: daTorre.filter((p) => p.unitId).length,
     });
-    anterior = m;
   }
 
   const caixa =

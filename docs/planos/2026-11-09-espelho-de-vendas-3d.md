@@ -121,6 +121,14 @@ Mudou em relação ao plano aprovado (10/11/2026):
 - O aviso de contorno desatualizado mora na Planta (painel do bloco), e não no `TowerEditor`: é lá que se sabe se o
   desenho mudou, e é lá que se reenvia.
 
+Corrigido depois de ir ao ar (10/11/2026, print do usuário do Portal do Investidor do Garden Cambuhy: *"veja que foi
+gerado errado. tudo separado"*, com o print da Planta do mesmo empreendimento): a obra do Garden traz também a torre
+"Lote" do "021 - Lote Vale do Sol", ligado à MESMA obra e sem contorno. A regra era "uma esquemática põe TODAS lado a
+lado", e as Torres A e B — encostadas na Planta — saíam separadas. Agora as torres da Planta ficam sempre nas
+coordenadas do desenho e só as esquemáticas vão lado a lado, à direita do grupo (`montarCenaDoEspelho`). Provado com o
+JSON real da função do investidor: A→B = (0, 26 000) mm no desenho e na cena (antes, (23 500, 0)). Fica com o usuário
+decidir se o "Lote Vale do Sol" é mesmo dessa obra.
+
 ### F2 — Componente `<Espelho3D>` (`components/espelho3d/`)
 
 | Arquivo | O que muda | Como sei que terminou |

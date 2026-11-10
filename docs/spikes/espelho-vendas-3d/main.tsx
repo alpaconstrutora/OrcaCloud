@@ -6,7 +6,8 @@
  *   npx vite --port 3147 → http://localhost:3147/docs/spikes/espelho-vendas-3d/index.html
  *   ?torres=1 mostra só a torre esquemática; ?sem3d=1 força a tela sem WebGL;
  *   ?corretor=1 monta o Estoque do Portal do Corretor (seletor 2D | 3D + desenho pelo estoque, F3);
- *   ?investidor=1 monta a aba Espelho de Vendas do Portal do Investidor (F4), com o serviço trocado por dados de mentira.
+ *   ?investidor=1 monta a aba Espelho de Vendas do Portal do Investidor (F4), com o serviço trocado por dados de mentira;
+ *   ?investidor=1&obra=<url> troca os dados de mentira por uma obra real gravada em JSON (nunca no git).
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -156,7 +157,11 @@ function HarnessDoInvestidor() {
       ],
     }],
   });
-  investorPortalTokenService.getEspelho = async () => [obra('p1', 'Bella Vista', 9, 4, 6_840_000), obra('p2', 'Galeria Altavista', 3, 6, 1_250_000)];
+  // `?obra=<url de um JSON>` reproduz uma obra real (a saída de `fn_espelho_de_vendas_das_obras`, salva à parte e fora
+  // do git): foi assim que se viu o Garden Cambuhy com as torres separadas (10/11/2026).
+  const real = q.get('obra');
+  investorPortalTokenService.getEspelho = async () =>
+    real ? [await (await fetch(real)).json()] : [obra('p1', 'Bella Vista', 9, 4, 6_840_000), obra('p2', 'Galeria Altavista', 3, 6, 1_250_000)];
   return (
     <div className="max-w-6xl mx-auto">
       <PortalEspelho portalToken="harness" />

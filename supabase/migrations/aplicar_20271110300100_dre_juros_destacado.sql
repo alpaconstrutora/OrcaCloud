@@ -77,7 +77,7 @@
 -- a parcela inteira vai para juros e o principal fica 0. `amount > 0` evita
 -- uma "linha de juros" negativa em título de valor zero/negativo.
 CREATE OR REPLACE VIEW public.v_internal_transactions_dre
-WITH (security_invoker = true) AS
+WITH (security_invoker = on) AS
 SELECT
   it.id,
   it.organization_id,

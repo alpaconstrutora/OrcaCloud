@@ -96,10 +96,23 @@ espelhamento do 3D da Planta). A cor não vai no prisma: o prisma leva o `status
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| `Espelho3D.tsx` | Casca: legenda com contagens, "Destacar" por rádios, lista alternativa por andar navegável por teclado, altura fixa. Props `cena`, `onSelecionar`, `acoesDaFicha?`, `mostrarPreco`, `cores`. | Teste RTL com a cena mockada: legenda, teclado, ficha. |
-| `FichaDaUnidade.tsx` | Dados + foto de capa, com `DetailField`/`StatusPill` do `PortalKit`. | Teste RTL. |
-| `Espelho3DCena.tsx` (lazy) | `<Canvas>` + `OrbitControls`; geometria mesclada por status; picking por raycast (`faceIndex` → unidade); `ehClique`; `frameloop="demand"`. | Teste puro do mapa face→unidade; conferido no navegador. |
-| `webglDisponivel.ts` | Sem WebGL → só a lista. | Teste RTL do fallback. |
+| `utils/espelhoDeVendas3dMalha.ts` (novo) | O que a cena e a casca combinam, sem three: `gruposDoEspelho` (uma malha por status + a dos pisos sem unidade; subsolo fora do desenho), `iniciosDasFaces`/`prismaDaFace` (de qual unidade é o triângulo tocado), `PALETA_PADRAO_DO_ESPELHO`, `resumoDoEspelho`. | `npx vitest run __tests__/espelhoDeVendas3dMalha.test.ts` verde (7 casos). |
+| `lib/salesAnalysis.ts`, `components/sales/SalesAnalysisOverview.tsx` | A paleta de status (`SALE_STATUS_COLORS`) sai do componente da Análise e passa a morar na lib: o donut e o espelho pintam com a mesma. | `salesAnalysis.test` e `SalesUnitMirror.test` seguem verdes. |
+| `components/espelho3d/Espelho3D.tsx` (novo) | Casca: a legenda com contagens É o controle "Destacar" (rádios, desligado com o motivo quando é zero); desenho em altura fixa (`h-[60vh] min-h-[360px]`); ficha ao lado; lista por andar com roving tabindex. Props `cena`, `dados`, `paleta`, `mostrarPreco`, `acoesDaFicha`, `onSelecionar`. | `npx vitest run __tests__/components/Espelho3D.test.tsx` verde (13 casos). |
+| `components/espelho3d/FichaDaUnidade.tsx` (novo) | Torre, andar, status (quadrado da legenda + nome), foto de capa, tipologia, área, dormitórios, banheiros, vagas, preço (só com `mostrarPreco`), ações de quem chama. | Coberta pelo teste da casca. |
+| `components/espelho3d/Espelho3DCena.tsx` (novo, lazy) | `<Canvas flat frameloop="demand">` + `OrbitControls`; uma malha por status; toque por raycast (`faceIndex` → unidade) com `ehClique`; enquadramento pelo formato da tela; escolhida com contorno escuro; apagado translúcido no destaque. | `node docs/spikes/espelho-vendas-3d/passeio.mjs` com exit 0. |
+| `components/espelho3d/webglDisponivel.ts` (novo) | Sem WebGL, ou se o desenho quebrar depois de montado, a lista por andar é a tela. | Teste da casca (2 casos) + passo "sem WebGL" do passeio. |
+| `docs/spikes/espelho-vendas-3d/` (novo) | Harness (`index.html`, `main.tsx`: Torre A com contorno em L, Torre B esquemática) e `passeio.mjs`. | Passeio verde contra servidor novo. |
+
+Mudou em relação ao plano aprovado (09/11/2026):
+- A ficha NÃO usa `StatusPill`/`DetailField` do `PortalKit`: o Estoque do corretor é tela do app (§8, status em
+  texto) e só o investidor está na exceção do §24. O status na ficha é o quadrado da legenda + o nome, cor
+  semântica, igual nos dois.
+- A legenda e o "Destacar" são um controle só (a contagem ao lado de cada status), em vez de dois.
+- `Espelho3DCena.tsx` leva `@ts-nocheck`, como `Blueprint3DViewer.tsx`: os tipos intrínsecos do
+  `@react-three/fiber` estão fora do programa TS do projeto. O que dá para tipar ficou em
+  `utils/espelhoDeVendas3dMalha.ts`; a cena se confere pelo passeio do harness.
+- O subsolo não entra no desenho 3D (aparece na lista por andar).
 
 ### F3 — Portal do Corretor: seletor "2D | 3D" no Estoque
 
@@ -144,9 +157,9 @@ espelhamento do 3D da Planta). A cor não vai no prisma: o prisma leva o `status
 
 ## Estado
 
-- [x] F1a — modelo puro da cena (PR desta frente)
+- [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
 - [ ] F1b — contorno materializado na torre
-- [ ] F2 — componente `<Espelho3D>`
+- [x] F2 — componente `<Espelho3D>` (PR da branch `feat/espelho-3d-f2`; ainda sem tela que o use — entra na F3)
 - [ ] F3 — Portal do Corretor
 - [ ] F4 — Portal do Investidor
 - [ ] F5 — planta baixa por tipologia

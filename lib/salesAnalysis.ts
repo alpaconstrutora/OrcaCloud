@@ -64,6 +64,19 @@ export const saleDealStage = (status?: string | null): SaleDealStage => {
 /** As cinco categorias da composição. Soma = unidades do balde. */
 export type SaleUnitStatus = 'sold' | 'reserved' | 'available' | 'exchanged' | 'other';
 
+/** Status da unidade — paleta validada em 27/10/2026 (trio cromático PASS,
+ *  ΔE 7,9 protan como em Locações: a legenda com números é a codificação
+ *  secundária). Vendida em azul, não no vermelho do texto "Vendido" da tabela:
+ *  num gráfico o vermelho lê como alarme. Mora aqui (09/11/2026) porque o donut
+ *  da Análise e o Espelho de Vendas 3D pintam com a mesma. */
+export const SALE_STATUS_COLORS: Record<SaleUnitStatus, string> = {
+    sold: '#2563eb',
+    reserved: '#d97706',
+    available: '#059669',
+    exchanged: '#94a3b8',
+    other: '#cbd5e1',
+};
+
 /** Status do cadastro, com as grafias em português que ainda existem na base
  *  (mesma normalização de `salesDashboardService`). */
 const statusDoCadastro = (s?: string | null): string => {

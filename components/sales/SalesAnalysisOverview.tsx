@@ -10,6 +10,7 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import SalesUnitMirror, { type SalesMirrorDestaque } from './SalesUnitMirror';
 import type { SalesAnalysisScope, SaleMirrorCell, MonthBucket } from '../../lib/salesAnalysis';
+import { SALE_STATUS_COLORS } from '../../lib/salesAnalysis';
 import {
     moneyBRL, compactAxis, niceTicks, percent1, decimalBR, orDash, plural,
     GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_DIMENSION, END_LABEL,
@@ -63,17 +64,8 @@ const LIMIAR = {
 /** Até quantos meses com venda a série vira lista (guia §28.5). */
 const POUCOS_MESES = 2;
 
-/** Status da unidade — paleta validada em 27/10/2026 (trio cromático PASS,
- *  ΔE 7,9 protan como em Locações: a legenda com números é a codificação
- *  secundária). Vendida em azul, não no vermelho do texto "Vendido" da tabela:
- *  num gráfico o vermelho lê como alarme. */
-const STATUS_COLORS = {
-    sold: '#2563eb',
-    reserved: '#d97706',
-    available: '#059669',
-    exchanged: '#94a3b8',
-    other: '#cbd5e1',
-} as const;
+/** Status da unidade — a paleta mora em `lib/salesAnalysis` (o Espelho 3D usa a mesma). */
+const STATUS_COLORS = SALE_STATUS_COLORS;
 
 /** Desconto com sinal e vírgula: "−4,1%" / "+2,0%". */
 const variacaoPct = (v: number) => `${v < 0 ? '−' : v > 0 ? '+' : ''}${decimalBR(Math.abs(v) * 100, 1)}%`;

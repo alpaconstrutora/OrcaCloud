@@ -66,8 +66,10 @@ Trocar a organização do investidor leva o link junto (gatilho atualiza
 - [x] **Lista** (`InvestorList`) — link gerado na organização DONA; coluna Obra
       Vinculada sem filtro de organização; subtítulo "Disponível em todas as
       organizações" quando marcado.
-- [ ] **Conferido em produção** — marcar o Tiago, gerar link novo (o atual venceu)
-      e ver a obra do Garden no portal.
+- [x] **Conferido em produção** — marcar o Tiago, gerar link novo (o atual venceu)
+      e ver a obra do Garden no portal. **Feito em 10/11**: Tiago marcado, 5
+      destinos (inclui a SPE Garden), link novo da Alpa até 08/02/2027; com esse
+      link, espelho e resumo do portal devolvem 1 obra — Garden Cambuhy.
 
 ## Fora do escopo (anotado)
 

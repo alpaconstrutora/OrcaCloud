@@ -1,5 +1,5 @@
 import React from 'react';
-import { TrendingUp, PieChart as PieChartIcon, Building2, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal } from 'lucide-react';
+import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
 import { projectService, ProjectData } from '../services/projectService';
@@ -35,9 +35,10 @@ import PortalFinance from './investor/portal/PortalFinance';
 import PortalFiscal from './investor/portal/PortalFiscal';
 import PortalAnnouncements from './investor/portal/PortalAnnouncements';
 import PortalSpes, { PortalSpe } from './investor/portal/PortalSpes';
+import PortalEspelho from './investor/portal/PortalEspelho';
 
 interface InvestorDashboardProps {
-    activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
+    activeTab?: 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios' | 'espelho';
     settings: ProjectSettings;
     organizationId?: string;
     budget?: BudgetEntry[];
@@ -52,7 +53,7 @@ interface InvestorDashboardProps {
     overrideEnabledTabIds?: string[];
 }
 
-type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios';
+type TabId = 'dashboard' | 'holdings' | 'opportunities' | 'reports' | 'simulator' | 'financeiro' | 'fiscal' | 'comunicados' | 'spe' | 'relatorios' | 'espelho';
 
 // ⚠️ Um nome por aba, para o gestor e para o investidor. Havia dois vocabulários
 // ("Evolução"/"Cotas" no app, "Resumo"/"Carteira" no portal) e o gestor não
@@ -67,6 +68,7 @@ const TABS = [
     { id: 'reports', label: 'Documentos', icon: <FileText className="w-4 h-4" /> },
     { id: 'comunicados', label: 'Comunicados', icon: <Bell className="w-4 h-4" /> },
     { id: 'spe', label: 'SPE', icon: <LayoutGrid className="w-4 h-4" /> },
+    { id: 'espelho', label: 'Espelho de Vendas', icon: <Boxes className="w-4 h-4" /> },
     { id: 'relatorios', label: 'Relatórios', icon: <RefreshCw className="w-4 h-4" /> },
 ] as const;
 
@@ -74,6 +76,13 @@ const TABS = [
 // visão do gestor e a do investidor é o CONTEÚDO (leitura x administração), não
 // a lista de abas — quem decide o que o investidor vê é `investorPortalTabs`.
 const PUBLIC_RENDERABLE_TAB_IDS: TabId[] = TABS.map(t => t.id as TabId);
+
+/**
+ * Abas que NASCEM DESLIGADAS para o investidor (decisão de 09/11/2026, Espelho de
+ * Vendas 3D): o gestor liga por investidor em "Configurar abas". Investidor nunca
+ * configurado vê todas MENOS estas; quem já tem a lista gravada não a tem lá.
+ */
+const ABAS_QUE_NASCEM_DESLIGADAS: TabId[] = ['espelho'];
 
 const TAB_TITLES: Record<TabId, string> = {
     dashboard: 'Meu Patrimônio',
@@ -85,6 +94,7 @@ const TAB_TITLES: Record<TabId, string> = {
     simulator: 'Inteligência de Investimento',
     comunicados: 'Comunicados',
     spe: 'Gestão de SPEs',
+    espelho: 'Espelho de Vendas',
     relatorios: 'Relatórios Mensais',
 };
 
@@ -150,7 +160,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
         // configuração. Enquanto isto foi `saved.length > 0 ? saved : todas`, o
         // gestor que desligava todas as abas via o portal voltar com TODAS —
         // o oposto do que pediu. Só `undefined`/`null` significa "nunca configurado".
-        return Array.isArray(saved) ? saved : TABS.map(t => t.id as string);
+        return Array.isArray(saved) ? saved : TABS.map(t => t.id as string).filter(id => !ABAS_QUE_NASCEM_DESLIGADAS.includes(id as TabId));
     };
     const [enabledTabIds, setEnabledTabIds] = React.useState<string[]>(deriveTabIds);
 
@@ -1062,6 +1072,11 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                             isAdmin={isAdmin}
                         />
                     )
+                )}
+                {activeTab === 'espelho' && (
+                    // Uma tela só para o link e para o app: é leitura, e a função do
+                    // banco decide quem pode ver as obras deste investidor.
+                    <PortalEspelho portalToken={portalToken} investorId={investorProfile?.id} />
                 )}
                 {activeTab === 'relatorios' && (
                     isPublicExperience ? (

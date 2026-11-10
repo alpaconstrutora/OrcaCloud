@@ -5,7 +5,8 @@
  *
  *   npx vite --port 3147 → http://localhost:3147/docs/spikes/espelho-vendas-3d/index.html
  *   ?torres=1 mostra só a torre esquemática; ?sem3d=1 força a tela sem WebGL;
- *   ?corretor=1 monta o Estoque do Portal do Corretor (seletor 2D | 3D + desenho pelo estoque, F3).
+ *   ?corretor=1 monta o Estoque do Portal do Corretor (seletor 2D | 3D + desenho pelo estoque, F3);
+ *   ?investidor=1 monta a aba Espelho de Vendas do Portal do Investidor (F4), com o serviço trocado por dados de mentira.
  */
 import React from 'react';
 import { createRoot } from 'react-dom/client';
@@ -14,6 +15,9 @@ import type { DadosDaUnidade } from '../../../components/espelho3d/FichaDaUnidad
 import { montarCenaDoEspelho, type TorreDoEspelho } from '../../../utils/espelhoDeVendas3d';
 import { EstoqueEm3D, SeletorDaVisaoDoEstoque, type EstoqueEm3DState } from '../../../components/broker/EstoqueEm3D';
 import { montarEspelhoDoEstoque, type ImovelDoEstoque } from '../../../utils/espelhoDoEstoque';
+import PortalEspelho from '../../../components/investor/portal/PortalEspelho';
+import { investorPortalTokenService } from '../../../services/investorPortalTokenService';
+import type { ObraDoEspelho } from '../../../utils/espelhoDoInvestidor';
 
 const q = new URLSearchParams(location.search);
 if (q.get('sem3d')) HTMLCanvasElement.prototype.getContext = (() => null) as never;
@@ -108,4 +112,32 @@ function HarnessDoCorretor() {
   );
 }
 
-createRoot(document.getElementById('raiz')!).render(q.get('corretor') ? <HarnessDoCorretor /> : <Harness />);
+/** A aba do investidor (F4): duas obras; a função do banco é trocada por dados de mentira — nada vai à rede. */
+function HarnessDoInvestidor() {
+  const obra = (id: string, nome: string, andares: number, porAndar: number, vgv: number): ObraDoEspelho => ({
+    project_id: id,
+    project_name: nome,
+    vgv_vendido: vgv,
+    torres: [{
+      id: `t-${id}`, name: 'Torre Única', sort_order: 0, floors_count: andares + 1, units_per_floor: porAndar, pe_direito_padrao_m: 3, elevacao_terreo_m: null,
+      ordem_das_unidades_na_planta: 'POSICAO', blueprint_quadra_uid: null, distancias_entre_torres: null, floors: [],
+      units: [
+        { id: `${id}-salao`, name: 'Salão de festas', floor: 0, floor_tipo: 'TERREO', typology: null, private_area: 180, bedrooms: null, bathrooms: null, parking_spaces: null, position_type: null, sun_orientation: null, sort_order: 0, vaga_na_planta: null, is_vendavel: false, price: null, status: 'available' },
+        ...Array.from({ length: andares * porAndar }, (_, i) => {
+          const n = Math.floor(i / porAndar) + 1;
+          const k = (i % porAndar) + 1;
+          const st = ['sold', 'available', 'sold', 'reserved', 'available', 'sold', 'exchanged'][(n * 3 + k * 5) % 7];
+          return { id: `${id}-${n}0${k}`, name: `${n}0${k}`, floor: n, floor_tipo: 'TIPO' as const, typology: k % 2 ? '3 quartos' : '2 quartos', private_area: k % 2 ? 92.4 : 68, bedrooms: k % 2 ? 3 : 2, bathrooms: 2, parking_spaces: 1, position_type: null, sun_orientation: null, sort_order: k, vaga_na_planta: null, is_vendavel: true, price: 420_000 + n * 8_000 + k * 12_000, status: st };
+        }),
+      ],
+    }],
+  });
+  investorPortalTokenService.getEspelho = async () => [obra('p1', 'Bella Vista', 9, 4, 6_840_000), obra('p2', 'Galeria Altavista', 3, 6, 1_250_000)];
+  return (
+    <div className="max-w-6xl mx-auto">
+      <PortalEspelho portalToken="harness" />
+    </div>
+  );
+}
+
+createRoot(document.getElementById('raiz')!).render(q.get('corretor') ? <HarnessDoCorretor /> : q.get('investidor') ? <HarnessDoInvestidor /> : <Harness />);

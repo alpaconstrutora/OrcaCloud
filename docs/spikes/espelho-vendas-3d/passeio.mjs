@@ -135,6 +135,29 @@ try {
   await page.getByRole('button', { name: '2D', exact: true }).click();
   confere((await page.locator('canvas').count()) === 0, 'corretor: o seletor volta ao 2D');
   await page.context().close();
+
+  // 7. A aba do investidor (F4): faixa de VGV, troca de obra, ficha com preço e sem ação.
+  page = await abrir(`${URL_DO_HARNESS}?investidor=1`, { width: 1366, height: 900 });
+  await page.waitForSelector('canvas', { timeout: 30000 });
+  await page.waitForTimeout(2500);
+  confere((await page.getByText('VGV vendido').count()) === 1 && (await page.getByText(/R\$\s?6\.840\.000/).count()) === 1, 'investidor: a faixa mostra o VGV vendido da obra');
+  await page.getByRole('button', { name: /Unidades por andar/ }).click();
+  await page.getByRole('button', { name: /^Unidade 101, / }).click();
+  const fichaDoInvestidor = page.locator(FICHA).first();
+  const textoDaFicha = await fichaDoInvestidor.innerText();
+  confere(/Preço de tabela/.test(textoDaFicha) && (await fichaDoInvestidor.locator('button').count()) === 1, 'investidor: a ficha tem o preço de tabela e nenhuma ação');
+  await page.screenshot({ path: path.join(prints, '09-investidor.png') });
+  await page.getByRole('button', { name: 'Galeria Altavista' }).click();
+  await page.waitForTimeout(1500);
+  confere((await page.getByText(/R\$\s?1\.250\.000/).count()) === 1 && (await page.locator(FICHA).count()) === 0, 'investidor: trocar de obra troca os números e fecha a ficha');
+  await page.context().close();
+
+  page = await abrir(`${URL_DO_HARNESS}?investidor=1`, { width: 390, height: 844 });
+  await page.waitForSelector('canvas', { timeout: 30000 });
+  await page.waitForTimeout(2000);
+  confere(!(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)), 'investidor: no celular (390 px) a página não rola de lado');
+  await page.screenshot({ path: path.join(prints, '10-investidor-celular.png'), fullPage: true });
+  await page.context().close();
 } finally {
   await browser.close();
 }

@@ -87,10 +87,22 @@ espelhamento do 3D da Planta). A cor não vai no prisma: o prisma leva o `status
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| `supabase/migrations/aplicar_<prefixo>_torre_contorno_na_planta.sql` (novo) | `empreendimento_towers` ganha `contorno_na_planta jsonb` (anel em mm), `contorno_frente jsonb`, `contorno_norte_deg numeric`, `contorno_atualizado_em timestamptz`. | Colunas existem no banco (`information_schema.columns`); `migrationsPrefixo.test` verde. |
-| `types/empreendimento.ts`, `services/empreendimentoService.ts` (`TOWER_COLS`) | As quatro colunas no tipo e na lista de `select`. | `getById` devolve o contorno gravado. |
-| `components/blueprint/BlueprintEditor.tsx` | Onde `ajusteAoEmpreendimento.papeis` existe: enviar o contorno (`Bloco.pontos`), a frente (`referenciasDosBlocos`) e o norte de cada papel TORRE para a torre (`empreendimentoService.updateTower`), por ação explícita e ao publicar. | Enviar numa planta com 2 torres grava as 2 linhas; reabrir o Empreendimento mostra `contorno_atualizado_em`. |
-| `components/empreendimento/TowerEditor.tsx` | Mostra "Contorno da Planta: enviado em …" ou "ainda não enviado". | Visível na tela da torre. |
+| `supabase/migrations/aplicar_20271110200000_torre_contorno_na_planta.sql` (novo) | `empreendimento_towers` ganha `contorno_na_planta jsonb` (anel em mm), `contorno_frente jsonb`, `contorno_norte_deg numeric`, `contorno_atualizado_em timestamptz` (+ CHECK de que o contorno é lista). Reescreve `fn_broker_portal_get_espelho` e `fn_espelho_de_vendas_das_obras` com o MESMO corpo mais as três chaves do contorno. | Aplicada no banco: as 4 colunas existem; privilégios das duas funções iguais aos de antes; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `utils/espelhoContornoDaTorre.ts` (novo) | `contornosDasTorres` (do modelo aberto: um contorno por torre, do bloco de TORRE casado com ela), `contornoDaLinha` (do jsonb do banco para a cena; fora do formato = null, torre esquemática), `mesmoContorno`. | `npx vitest run __tests__/espelhoContornoDaTorre.test.ts` verde (10 casos). |
+| `services/espelhoDeVendasService.ts` | `contornosGravados(torreIds)` (tolerante à coluna ausente), `gravarContornos(lista)` (confere a linha que voltou: UPDATE barrado pela RLS não dá erro) e `estruturaDoPredio` passa a trazer o contorno. | Typecheck; coberto pelos testes de quem usa. |
+| `utils/espelhoDoEstoque.ts`, `utils/espelhoDoInvestidor.ts` | A torre leva `contorno: contornoDaLinha(t)`. | Casos novos nos dois testes: com contorno → origem `PLANTA` nas coordenadas do desenho; sem ele ou estragado → `ESQUEMATICA`. |
+| `components/blueprint/BlueprintEditor.tsx` | `contornosDaPlanta` (dos papéis do ajuste ao Empreendimento), `contornosNoBanco` (o que cada torre tem gravado) e `contornoNoEspelho` para o painel do bloco: quantas torres estão com o contorno diferente do desenho, quando foi o último envio, e o envio. | `BlueprintEditor.test.tsx` segue verde; enviar numa planta com torres grava as linhas (conferido no banco). |
+| `components/blueprint/PainelBlocoSelecionado.tsx` | No trecho do Empreendimento: a situação do contorno nos portais ("nunca enviado", "o desenho mudou desde …", "é o deste desenho") e o botão "Enviar contorno ao Espelho 3D", desligado com o motivo quando não há o que enviar; o erro de gravação aparece no painel. | `npx vitest run __tests__/components/PainelBlocoSelecionadoContorno.test.tsx` verde (5 casos). |
+| `__tests__/espelhoDoInvestidor.test.ts` | A trava do texto vale também para a migration que reescreve as funções: só entram as chaves do contorno; unidade do investidor com as mesmas 16 chaves; a do corretor sem preço nem status. | 3 casos novos passam. |
+
+Mudou em relação ao plano aprovado (10/11/2026):
+- As colunas NÃO entraram em `TOWER_COLS` de `empreendimentoService` (usada em toda leitura de torre): o contorno
+  é lido à parte, tolerante à coluna ausente. Assim o código pode ir ao ar antes da migration sem derrubar nenhuma
+  tela de torre.
+- O envio é só pela ação explícita no painel do bloco; "ao publicar" ficou de fora (o painel mostra quando o desenho
+  mudou desde o último envio, que é o risco que o envio automático cobriria).
+- O aviso de contorno desatualizado mora na Planta (painel do bloco), e não no `TowerEditor`: é lá que se sabe se o
+  desenho mudou, e é lá que se reenvia.
 
 ### F2 — Componente `<Espelho3D>` (`components/espelho3d/`)
 
@@ -201,10 +213,10 @@ conferida no harness, com dados de mentira.
 ## Estado
 
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
-- [ ] F1b — contorno materializado na torre
+- [ ] F1b — contorno materializado na torre: código pronto (branch `feat/espelho-3d-f1b`); FALTA aplicar a migration `aplicar_20271110200000_torre_contorno_na_planta.sql` e enviar o contorno de uma planta real para conferir nos portais
 - [x] F2 — componente `<Espelho3D>` (PR #287)
 - [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
-- [ ] F4 — Portal do Investidor: código pronto (branch `feat/espelho-3d-f4`); FALTA aplicar a migration `aplicar_20271110100000_investor_portal_espelho.sql` (a aplicação por mim foi barrada em 10/11/2026) e conferir com um investidor ligado a uma obra com torres
+- [ ] F4 — Portal do Investidor: em `main` (#294, `bda7f3f6`), no ar; migration `aplicar_20271110100000_investor_portal_espelho.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: as duas internas sem EXECUTE para a API; a do link para anon; a do app só authenticated; token inexistente → `valid=false`). FALTA conferir com um investidor ligado a uma obra com torres — hoje não há nenhum vínculo investidor ↔ obra no banco
 - [ ] F5 — planta baixa por tipologia
 - [ ] F6 — vista da janela
 - [ ] F7 — luz do dia

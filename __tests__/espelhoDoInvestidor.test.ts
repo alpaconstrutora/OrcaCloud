@@ -72,6 +72,13 @@ describe('montarEspelhoDoInvestidor', () => {
     expect(x.resumo.foraDoDesenho).toBe(1);
   });
 
+  it('torre com o contorno enviado pela Planta sai com a forma do desenho', () => {
+    const anel = [{ x: 0, y: 0 }, { x: 26000, y: 0 }, { x: 26000, y: 12000 }, { x: 14000, y: 12000 }, { x: 14000, y: 22000 }, { x: 0, y: 22000 }];
+    const x = montarEspelhoDoInvestidor({ ...OBRA, torres: [{ ...OBRA.torres[0], contorno_na_planta: anel, contorno_frente: null, contorno_norte_deg: null }] });
+    expect(x.cena.torres[0]).toMatchObject({ origem: 'PLANTA', caixa: { minX: 0, minY: 0, maxX: 26000, maxY: 22000 } });
+    expect(r.cena.torres[0].origem).toBe('ESQUEMATICA');
+  });
+
   it('obra sem torre: cena vazia e números zerados, sem estourar', () => {
     const x = montarEspelhoDoInvestidor({ project_id: 'p', project_name: 'X', vgv_vendido: null, torres: [] });
     expect(x.cena.prismas).toEqual([]);
@@ -89,10 +96,11 @@ describe('montarEspelhoDoInvestidor', () => {
  * O que a função do banco pode entregar ao investidor. O CI não tem credencial do banco: a trava é no TEXTO da
  * migration (como `segurancaMigrations.test.ts`); a postura real foi conferida no banco ao aplicar.
  */
+/** A migration sem os comentários de linha. */
+const lerMigration = (arquivo: string) => fs.readFileSync(path.join(process.cwd(), 'supabase', 'migrations', arquivo), 'utf-8').replace(/^\s*--.*$/gm, ' ');
+
 describe('fn_investor_portal_get_espelho — o que sai do banco', () => {
-  const sql = fs
-    .readFileSync(path.join(process.cwd(), 'supabase', 'migrations', 'aplicar_20271110100000_investor_portal_espelho.sql'), 'utf-8')
-    .replace(/^\s*--.*$/gm, ' ');
+  const sql = lerMigration('aplicar_20271110100000_investor_portal_espelho.sql');
   /** As chaves de todo `jsonb_build_object` da migration: é tudo o que chega ao navegador. */
   const chaves = [...sql.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
 
@@ -134,5 +142,41 @@ describe('fn_investor_portal_get_espelho — o que sai do banco', () => {
     expect(sql).not.toMatch(/GRANT[^;]*fn_obras_do_investidor/);
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_investor_portal_get_espelho\(TEXT\) TO anon, authenticated;/);
     expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_investor_get_espelho\(UUID\) TO authenticated;/);
+  });
+});
+
+/**
+ * F1b (10/11/2026): a migration do contorno REESCREVE `fn_espelho_de_vendas_das_obras` (e a do corretor) para trazer
+ * o contorno da torre. É a definição que vale no banco — a mesma trava tem de valer para ela.
+ */
+describe('migration do contorno da torre — as funções reescritas continuam sem dado de pessoa', () => {
+  const sql = lerMigration('aplicar_20271110200000_torre_contorno_na_planta.sql');
+  const chaves = [...sql.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
+
+  it('entram só as três chaves do contorno; nada de negociação, comprador ou corretor', () => {
+    expect(chaves.filter((k) => k.startsWith('contorno_')).sort()).toEqual([
+      'contorno_frente', 'contorno_frente', 'contorno_na_planta', 'contorno_na_planta', 'contorno_norte_deg', 'contorno_norte_deg',
+    ]);
+    expect(chaves.filter((k) => /client|buyer|comprador|cliente|deal|negoc|broker|corretor|document|cpf|cnpj|email|phone|contract/.test(k))).toEqual([]);
+  });
+
+  it('a unidade do investidor segue com as mesmas 16 chaves, e a do corretor sem preço nem status', () => {
+    const doInvestidor = sql.slice(sql.lastIndexOf("'units', COALESCE"), sql.indexOf('FROM unidades u WHERE u.tower_id = t.id'));
+    expect([...doInvestidor.matchAll(/'([a-z_]+)'\s*,/g)].map((m) => m[1]).filter((k) => k !== 'units').sort()).toEqual([
+      'bathrooms', 'bedrooms', 'floor', 'floor_tipo', 'id', 'is_vendavel', 'name', 'parking_spaces', 'position_type', 'price',
+      'private_area', 'sort_order', 'status', 'sun_orientation', 'typology', 'vaga_na_planta',
+    ]);
+    const doCorretor = sql.slice(sql.indexOf("'units', COALESCE"), sql.indexOf('FROM public.empreendimento_units u\n                        WHERE u.tower_id = tw.id'));
+    const chavesDoCorretor = [...doCorretor.matchAll(/'([a-z_]+)'\s*,/g)].map((m) => m[1]);
+    expect(chavesDoCorretor).toContain('property_id');
+    expect(chavesDoCorretor.filter((k) => k === 'price' || k === 'status')).toEqual([]);
+  });
+
+  it('"vendida" continua sendo as etapas da regra do front, e as internas seguem sem GRANT', () => {
+    const listas = [...sql.matchAll(/n\.status IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
+    expect(listas.length).toBe(2);
+    for (const l of listas) expect(l).toEqual(ETAPAS_VENDIDA);
+    expect(sql).not.toMatch(/GRANT[^;]*fn_espelho_de_vendas_das_obras/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_broker_portal_get_espelho\(TEXT\) TO anon, authenticated;/);
   });
 });

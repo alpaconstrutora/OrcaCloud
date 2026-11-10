@@ -612,6 +612,8 @@ import { blueprintWebhookService, type EntregaDeWebhook, type Webhook as Webhook
 import { blueprintApiTokenService, urlBaseDaApi, type TokenDaApi } from '../../services/blueprintApiTokenService';
 import type { UsoDeMaterial } from '../../utils/blueprintMateriais';
 import { empreendimentoService } from '../../services/empreendimentoService';
+import { espelhoDeVendasService, type ContornoGravado } from '../../services/espelhoDeVendasService';
+import { contornosDasTorres, mesmoContorno } from '../../utils/espelhoContornoDaTorre';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { planejarCasaNoWorker, useCasaAutomatica } from '../../hooks/useCasaAutomatica';
@@ -9223,6 +9225,51 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     return m;
   }, [editor.model, norteDoDesenho]);
   /**
+   * O CONTORNO DAS TORRES NO ESPELHO DE VENDAS 3D (F1b, 10/11/2026 — plano docs/planos/2026-11-09-espelho-de-vendas-3d.md).
+   * Os portais do corretor e do investidor desenham a torre em 3D, e a forma de verdade só existe aqui: o contorno do
+   * bloco casado com a torre. Eles não abrem o estudo, então a Planta ENVIA o contorno ao Empreendimento (o botão no
+   * painel do bloco). `contornosNoBanco` é o que cada torre tem gravado — o botão só liga quando o desenho mudou.
+   */
+  const contornosDaPlanta = useMemo(
+    () => (ajusteAoEmpreendimento ? contornosDasTorres(editor.model.blocos ?? [], ajusteAoEmpreendimento.papeis, referenciasDosBlocos) : []),
+    [ajusteAoEmpreendimento, editor.model.blocos, referenciasDosBlocos],
+  );
+  const torresComContorno = contornosDaPlanta.map((c) => c.torreId).sort().join(',');
+  const [contornosNoBanco, setContornosNoBanco] = useState<Map<string, ContornoGravado> | null>(null);
+  useEffect(() => {
+    if (!torresComContorno) {
+      setContornosNoBanco(null);
+      return;
+    }
+    let vivo = true;
+    espelhoDeVendasService
+      .contornosGravados(torresComContorno.split(','))
+      .then((m) => vivo && setContornosNoBanco(m))
+      .catch((e) => {
+        console.warn('[planta] contorno das torres no Empreendimento indisponível:', e);
+        if (vivo) setContornosNoBanco(null);
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [torresComContorno]);
+  const contornoNoEspelho = useMemo(() => {
+    if (contornosDaPlanta.length === 0) return undefined;
+    const pendentes = contornosDaPlanta.filter((c) => !mesmoContorno(c.contorno, contornosNoBanco?.get(c.torreId)?.contorno));
+    const envios = [...(contornosNoBanco?.values() ?? [])].map((g) => g.atualizadoEm).filter((d): d is string => !!d).sort();
+    return {
+      total: contornosDaPlanta.length,
+      pendentes: pendentes.length,
+      enviadoEm: envios.length > 0 ? envios[envios.length - 1] : null,
+      onEnviar: async () => {
+        await espelhoDeVendasService.gravarContornos(pendentes);
+        // Relê do banco: "enviado" é o que ficou gravado, não o que eu mandei.
+        setContornosNoBanco(await espelhoDeVendasService.contornosGravados(contornosDaPlanta.map((c) => c.torreId)));
+        return `Contorno de ${pendentes.length === 1 ? `"${pendentes[0].torre}"` : `${pendentes.length} torres`} enviado ao Empreendimento — é a forma do prédio no Espelho de Vendas 3D dos portais.`;
+      },
+    };
+  }, [contornosDaPlanta, contornosNoBanco]);
+  /**
    * O PAVIMENTO `indice` (1 = o de baixo) do bloco, arrumado: as unidades, as fatias (a k é a unidade k) e a vaga de
    * cada uma. O 3D, a planta baixa e o arrasto usam o mesmo — o que se arrasta é o que se vê.
    */
@@ -11524,6 +11571,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   distancias: papel ? ajusteAoEmpreendimento.distancias.filter((d) => d.torreA === papel.torre || d.torreB === papel.torre) : [],
                   avisos: [...(estruturasDaCasa ?? []).flatMap((e) => e.avisos), ...ajusteAoEmpreendimento.avisos],
                   pendentes: ajusteAoEmpreendimento.comandos.length,
+                  contorno: contornoNoEspelho,
                   onAjustar: async () => {
                     const n = ajusteAoEmpreendimento.comandos.length;
                     if (n === 0) return 'Os blocos já seguem as torres do Empreendimento.';

@@ -25,6 +25,7 @@ import type { SaleUnitStatus } from '../lib/salesAnalysis';
 import type { Property } from '../types/imovib';
 import type { EmpreendimentoFloor, EmpreendimentoUnit, FloorTipo, OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
+import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade, PaletaDoEspelho } from './espelhoDeVendas3dMalha';
 import { negocioAtivoDaUnidade, statusEfetivoDaUnidade, type NegocioDaUnidade } from './statusEfetivoDaUnidade';
@@ -34,7 +35,7 @@ export type ImovelDoEstoque = Pick<Property, 'id' | 'name' | 'type' | 'status'> 
   Partial<Pick<Property, 'number' | 'parent_id' | 'block' | 'floor' | 'specs' | 'private_area' | 'area' | 'typology' | 'bedrooms' | 'bathrooms' | 'parking_spaces' | 'position_type' | 'price' | 'current_price' | 'images'>>;
 
 /** Uma torre do Empreendimento como o portal a recebe (RPC `fn_broker_portal_get_espelho`, ou as tabelas no app). */
-export interface TorreDaEstrutura {
+export interface TorreDaEstrutura extends LinhaComContorno {
   id: string;
   name: string;
   /** O prédio do estoque (`commercial_properties` BUILDING) do empreendimento desta torre. */
@@ -190,6 +191,8 @@ export function montarEspelhoDoEstoque(entrada: {
       pe_direito_padrao_m: t.pe_direito_padrao_m,
       elevacao_terreo_m: t.elevacao_terreo_m,
       ordem_das_unidades_na_planta: t.ordem_das_unidades_na_planta ?? undefined,
+      // O contorno enviado pela Planta (F1b); sem ele a torre sai esquemática.
+      contorno: contornoDaLinha(t),
       units: t.units.map((u) => {
         const visivel = !!u.property_id && porId.has(u.property_id);
         // A unidade que o corretor não vê guarda o lugar com um id próprio, que nunca casa com um imóvel.

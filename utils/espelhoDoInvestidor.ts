@@ -14,6 +14,7 @@
 import type { SaleUnitStatus } from '../lib/salesAnalysis';
 import type { EmpreendimentoFloor, EmpreendimentoUnit, FloorTipo, OrdemDasUnidadesNaPlanta } from '../types/empreendimento';
 import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
+import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade } from './espelhoDeVendas3dMalha';
 
@@ -38,7 +39,7 @@ export interface UnidadeDoInvestidor {
   status: string | null;
 }
 
-export interface TorreDoInvestidor {
+export interface TorreDoInvestidor extends LinhaComContorno {
   id: string;
   name: string;
   sort_order: number | null;
@@ -110,6 +111,8 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
         pe_direito_padrao_m: t.pe_direito_padrao_m,
         elevacao_terreo_m: t.elevacao_terreo_m,
         ordem_das_unidades_na_planta: t.ordem_das_unidades_na_planta ?? undefined,
+        // O contorno enviado pela Planta (F1b); sem ele a torre sai esquemática.
+        contorno: contornoDaLinha(t),
         units: (t.units ?? []).map((u) => {
           const status = statusDoInvestidor(u.status);
           const preco = numero(u.price);

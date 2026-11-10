@@ -5,10 +5,15 @@
 //
 // DUAS FONTES para a forma da torre, nesta ordem:
 //  1. EMPREENDIMENTO — as torres, os pavimentos e as unidades de Incorporação › Empreendimento, quando o prédio tem
-//     alguma unidade ligada a um imóvel que o corretor vê. É a mesma estrutura do 3D da Planta (pé-direito, elevação,
-//     posição das unidades no andar).
+//     unidade ligada a imóvel que o corretor vê. É a mesma estrutura do 3D da Planta (pé-direito, elevação, posição
+//     das unidades no andar).
 //  2. ESTOQUE — o bloco e o andar do próprio imóvel. Em 09/11/2026 só 3 dos 9 prédios do estoque tinham o
 //     Empreendimento ligado (27 de 88 unidades): sem esta fonte o 3D ficaria desligado para quase todos.
+//
+// ⚠️ VALE A FONTE QUE ACHA LUGAR PARA MAIS IMÓVEIS (10/11/2026). A primeira versão ficava com o Empreendimento
+// sempre que houvesse UMA unidade ligada. No Garden Cambuhy, em produção, só 17 dos 41 imóveis estavam ligados: a
+// Torre B saiu inteira neutra, 20 unidades do estoque sumiram do 3D e a legenda dizia "Vendidas 0" com 4 vendidas
+// no 2D ao lado. O estoque, com bloco e andar em todos os 41, desenhava tudo. O Empreendimento só vence no empate.
 //
 // Nos dois casos o prisma é chaveado pelo id do IMÓVEL: é com ele que o portal abre a proposta e a cesta.
 //
@@ -164,55 +169,56 @@ export function montarEspelhoDoEstoque(entrada: {
   );
   const dados = new Map(unidades.map((i) => [i.id, dadosDo(i)]));
 
+  const colocados = (cena: CenaDoEspelho) => new Set(cena.prismas.map((p) => p.unitId).filter(Boolean)).size;
+  const cenaDoEstoque = montarCenaDoEspelho({ torres: torresDoEstoque(unidades), statusPorUnidade, hipoteses: entrada.hipoteses });
+  const doEstoque: EspelhoDoEstoque = { cena: cenaDoEstoque, dados, fonte: 'ESTOQUE', semPosicao: unidades.length - colocados(cenaDoEstoque) };
+
   const estrutura = (entrada.estrutura ?? []).filter((t) => !t.blueprint_quadra_uid);
   const ligados = new Set(estrutura.flatMap((t) => t.units.map((u) => u.property_id)).filter((id): id is string => !!id && porId.has(id)));
-  if (ligados.size > 0) {
-    const ocultas = new Set<string>();
-    const pavimentosPorTorre = new Map<string, EmpreendimentoFloor[]>();
-    const torres: TorreDoEspelho[] = estrutura.map((t) => {
-      pavimentosPorTorre.set(t.id, t.floors ?? []);
-      return {
-        id: t.id,
-        name: t.name,
-        sort_order: t.sort_order ?? 0,
-        floors_count: t.floors_count ?? undefined,
-        units_per_floor: t.units_per_floor,
-        pe_direito_padrao_m: t.pe_direito_padrao_m,
-        elevacao_terreo_m: t.elevacao_terreo_m,
-        ordem_das_unidades_na_planta: t.ordem_das_unidades_na_planta ?? undefined,
-        units: t.units.map((u) => {
-          const visivel = !!u.property_id && porId.has(u.property_id);
-          // A unidade que o corretor não vê guarda o lugar com um id próprio, que nunca casa com um imóvel.
-          const id = visivel ? u.property_id! : `oculta:${u.id}`;
-          if (!visivel) ocultas.add(id);
-          return {
-            id,
-            name: u.name,
-            floor: u.floor ?? undefined,
-            floor_tipo: u.floor_tipo,
-            private_area: u.private_area ?? undefined,
-            position_type: u.position_type,
-            sun_orientation: u.sun_orientation,
-            status: 'DISPONIVEL' as const,
-            sort_order: u.sort_order ?? 0,
-            vaga_na_planta: u.vaga_na_planta,
-          };
-        }),
-      };
-    });
-    const cena = montarCenaDoEspelho({
-      torres,
-      pavimentosPorTorre,
-      statusPorUnidade,
-      unidadesOcultas: ocultas,
-      distancias: lerDistancias(estrutura[0]?.distancias_entre_torres),
-      hipoteses: entrada.hipoteses,
-    });
-    const naCena = new Set(cena.prismas.map((p) => p.unitId).filter(Boolean));
-    return { cena, dados, fonte: 'EMPREENDIMENTO', semPosicao: unidades.filter((i) => !naCena.has(i.id)).length };
-  }
+  if (ligados.size === 0) return doEstoque;
 
-  const cena = montarCenaDoEspelho({ torres: torresDoEstoque(unidades), statusPorUnidade, hipoteses: entrada.hipoteses });
-  const naCena = new Set(cena.prismas.map((p) => p.unitId).filter(Boolean));
-  return { cena, dados, fonte: 'ESTOQUE', semPosicao: unidades.filter((i) => !naCena.has(i.id)).length };
+  const ocultas = new Set<string>();
+  const pavimentosPorTorre = new Map<string, EmpreendimentoFloor[]>();
+  const torres: TorreDoEspelho[] = estrutura.map((t) => {
+    pavimentosPorTorre.set(t.id, t.floors ?? []);
+    return {
+      id: t.id,
+      name: t.name,
+      sort_order: t.sort_order ?? 0,
+      floors_count: t.floors_count ?? undefined,
+      units_per_floor: t.units_per_floor,
+      pe_direito_padrao_m: t.pe_direito_padrao_m,
+      elevacao_terreo_m: t.elevacao_terreo_m,
+      ordem_das_unidades_na_planta: t.ordem_das_unidades_na_planta ?? undefined,
+      units: t.units.map((u) => {
+        const visivel = !!u.property_id && porId.has(u.property_id);
+        // A unidade que o corretor não vê guarda o lugar com um id próprio, que nunca casa com um imóvel.
+        const id = visivel ? u.property_id! : `oculta:${u.id}`;
+        if (!visivel) ocultas.add(id);
+        return {
+          id,
+          name: u.name,
+          floor: u.floor ?? undefined,
+          floor_tipo: u.floor_tipo,
+          private_area: u.private_area ?? undefined,
+          position_type: u.position_type,
+          sun_orientation: u.sun_orientation,
+          status: 'DISPONIVEL' as const,
+          sort_order: u.sort_order ?? 0,
+          vaga_na_planta: u.vaga_na_planta,
+        };
+      }),
+    };
+  });
+  const cena = montarCenaDoEspelho({
+    torres,
+    pavimentosPorTorre,
+    statusPorUnidade,
+    unidadesOcultas: ocultas,
+    distancias: lerDistancias(estrutura[0]?.distancias_entre_torres),
+    hipoteses: entrada.hipoteses,
+  });
+  // Empate fica com o Empreendimento: é a forma de verdade (pé-direito, elevação, posição no andar).
+  if (colocados(cena) < colocados(cenaDoEstoque)) return doEstoque;
+  return { cena, dados, fonte: 'EMPREENDIMENTO', semPosicao: unidades.length - colocados(cena) };
 }

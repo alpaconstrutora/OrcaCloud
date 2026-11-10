@@ -133,9 +133,26 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     expect(doAndar2.filter((p) => !p.unitId)).toHaveLength(1);
   });
 
-  it('imóvel do estoque sem unidade na torre é contado como sem posição', () => {
-    const r = montarEspelhoDoEstoque({ imoveis: [...ESTOQUE.slice(0, 3), imovel('999', 9)], negocios: [], estrutura: ESTRUTURA });
+  it('imóvel do estoque sem unidade na torre (e sem andar) é contado como sem posição', () => {
+    const r = montarEspelhoDoEstoque({ imoveis: [...ESTOQUE.slice(0, 3), imovel('999', undefined)], negocios: [], estrutura: ESTRUTURA });
+    expect(r.fonte).toBe('EMPREENDIMENTO');
     expect(r.semPosicao).toBe(1);
+  });
+
+  // 10/11/2026, Garden Cambuhy em produção: 17 dos 41 imóveis ligados ao Empreendimento, todos os 41 com bloco e
+  // andar. Com o Empreendimento, a Torre B saía neutra e 20 unidades sumiam do 3D ("Vendidas 0" com 4 no 2D).
+  it('prédio ligado só em parte: vale a fonte que acha lugar para MAIS imóveis — aqui, o estoque', () => {
+    const r = montarEspelhoDoEstoque({ imoveis: [...ESTOQUE.slice(0, 3), imovel('901', 9, { status: 'SOLD' as never })], negocios: [], estrutura: ESTRUTURA });
+    expect(r.fonte).toBe('ESTOQUE');
+    expect(r.semPosicao).toBe(0);
+    expect(r.cena.prismas.find((p) => p.unitId === '901')!.status).toBe('sold');
+    expect(r.cena.prismas.every((p) => !p.unitId || p.status)).toBe(true);
+  });
+
+  it('empate de cobertura fica com o Empreendimento (a forma de verdade)', () => {
+    const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
+    expect(r.fonte).toBe('EMPREENDIMENTO');
+    expect(r.semPosicao).toBe(0);
   });
 
   it('estrutura sem nenhuma unidade ligada ao que o corretor vê: cai no estoque', () => {

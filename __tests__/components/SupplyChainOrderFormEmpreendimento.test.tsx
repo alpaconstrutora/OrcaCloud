@@ -274,4 +274,23 @@ describe('Pedido › Dados Gerais › trocar o empreendimento', () => {
         expect(seletor(/^Obra$/).value).toBe('obra-1');
         expect(botaoSalvar().disabled).toBe(false);
     });
+
+    it('com o ponto do cabeçalho (ao lado de "Negociar"), o "Salvar alterações" é desenhado lá e grava', async () => {
+        const barra = document.createElement('div');
+        barra.setAttribute('data-testid', 'barra-do-cabecalho');
+        document.body.appendChild(barra);
+        render(
+            <ConfirmProvider>
+                <SupplyChainOrderForm embedded painel="dados" editingOrderId="ord-1" barraDeAcoes={barra} onBack={() => {}} onSave={() => {}} />
+            </ConfirmProvider>
+        );
+        await esperarPedidoCarregado();
+
+        expect(barra.contains(botaoSalvar())).toBe(true);
+        expect(screen.getAllByRole('button', { name: /salvar alterações/i })).toHaveLength(1);
+
+        fireEvent.click(botaoSalvar());
+        await waitFor(() => expect(orderService.updateOrder).toHaveBeenCalled());
+        barra.remove();
+    });
 });

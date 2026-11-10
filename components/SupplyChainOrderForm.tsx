@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 import SupplierSelect from './SupplierSelect';
 import { ArrowLeft, Save, Building2, Package, Search, Calendar, FileText, CheckCircle2, Filter, HandCoins, Layers, AlertCircle, X, Plus, Pencil, Settings, RefreshCw, Loader2, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
@@ -160,9 +161,13 @@ interface SupplyChainOrderFormProps {
     embedded?: boolean;
     /** Qual grupo de painéis renderizar quando embutido. */
     painel?: 'dados' | 'itens' | 'financeiro';
+    /** Embutido: ponto do cabeçalho do detalhe onde o "Salvar alterações" é
+     *  desenhado, ao lado de "Negociar" (pedido de 10/11/2026). Sem ele, o botão
+     *  fica acima do formulário, como antes. */
+    barraDeAcoes?: HTMLElement | null;
 }
 
-const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados' }) => {
+const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados', barraDeAcoes }) => {
     const { orgId: contextOrgId } = useOrgContext();
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
@@ -1077,6 +1082,23 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         itensAvulsos: avulsoItems.length,
     });
 
+    const botaoSalvarEmbutido = (
+        <>
+            {motivoSalvar && (
+                <span className="text-xs text-amber-600">{motivoSalvar}</span>
+            )}
+            <button
+                onClick={handleSaveOrder}
+                disabled={!!motivoSalvar}
+                title={motivoSalvar ?? undefined}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
+            >
+                <Save className="w-[15px] h-[15px]" />
+                Salvar alterações
+            </button>
+        </>
+    );
+
     const mostrarItens = !embedded || painel === 'itens';
     const mostrarFinanceiro = !embedded || painel === 'financeiro';
 
@@ -1297,22 +1319,15 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     : 'relative bg-white rounded-2xl md:rounded-[3rem] shadow-2xl w-full h-full flex flex-col animate-in zoom-in-95 duration-300 overflow-hidden border border-white/20'
             }>
 
-                {/* Embutido: o cabeçalho é do detalhe; aqui fica só a ação de gravar. */}
+                {/* Embutido: o cabeçalho é do detalhe; aqui fica só a ação de gravar —
+                    desenhada no cabeçalho, ao lado de "Negociar", quando o detalhe
+                    entrega o ponto (`barraDeAcoes`). */}
                 {embedded ? (
-                    <div className="flex items-center justify-end gap-3">
-                        {motivoSalvar && (
-                            <span className="text-xs text-amber-600">{motivoSalvar}</span>
-                        )}
-                        <button
-                            onClick={handleSaveOrder}
-                            disabled={!!motivoSalvar}
-                            title={motivoSalvar ?? undefined}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
-                        >
-                            <Save className="w-[15px] h-[15px]" />
-                            Salvar alterações
-                        </button>
-                    </div>
+                    barraDeAcoes ? createPortal(botaoSalvarEmbutido, barraDeAcoes) : (
+                        <div className="flex items-center justify-end gap-3">
+                            {botaoSalvarEmbutido}
+                        </div>
+                    )
                 ) : (
                     <div className="bg-gray-50/50 border-b border-gray-100 flex items-center justify-between shrink-0 px-4 py-5 md:px-8 md:py-7 lg:px-12 lg:py-10">
                         <div className="flex items-center gap-6">

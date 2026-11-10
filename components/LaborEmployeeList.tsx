@@ -10,6 +10,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { agruparLinhas, chavePorNome, chavePorRotulo, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
+import { casaBuscaColaborador } from '../utils/buscaColaborador';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 
 const LABOR_EMPLOYEE_COLUMNS: ColumnConfig[] = [
@@ -226,7 +227,7 @@ const LaborEmployeeList: React.FC<LaborEmployeeListProps> = ({ employees, organi
         employees
             .filter(e => filterStatus === 'ALL' || e.status === filterStatus)
             .filter(e => filterContract === 'ALL' || e.contract_type === filterContract)
-            .filter(e => !search || e.name.toLowerCase().includes(search.toLowerCase()) || e.role.toLowerCase().includes(search.toLowerCase()) || (e.cpf || '').replace(/\D/g, '').includes(search.replace(/\D/g, ''))),
+            .filter(e => casaBuscaColaborador(e, search)),
         advancedFilters.rules, ADVANCED_FILTER_FIELDS, getAdvancedFilterValue,
     )
         .sort((a, b) => {

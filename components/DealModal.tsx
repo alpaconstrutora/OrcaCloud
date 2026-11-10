@@ -509,7 +509,7 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                             <dt className="text-gray-400">Cliente</dt>
                             <dd className="text-gray-700 truncate" title={clienteLabel}>{clienteLabel || '—'}</dd>
                         </dl>
-                        <p className="text-[11px] text-gray-400">Cliente é do negócio, igual em toda a série — para alterar, use a aba Dados do Cliente.</p>
+                        <p className="text-xs text-gray-500">Cliente é do negócio, igual em toda a série — para alterar, use a aba Dados do Cliente.</p>
                     </div>
 
                     {/* Prévia: cada parcela com origem, vencimento (atual → novo, se o
@@ -581,6 +581,13 @@ const MONTADOR_INTOCADO: CamposDoMontador = { entrada: null, parcelas: null, tip
  * e o olho não sabia qual era o próximo passo (crítica de design, item 4).
  */
 const BOTAO_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 border border-blue-200 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed';
+
+/**
+ * Gatilho de Centro de Custo e Plano de Contas (§7.1.1) na régua dos campos ao lado
+ * (h-9, fundo branco). O `size="sm"` padrão tem fundo cinza — ao lado de campos
+ * brancos, lia como campo desligado (guia §32: valor de campo nunca em cinza).
+ */
+const CLASSE_SELETOR_DO_FORM = 'h-9 bg-white border border-gray-200 rounded-[6px] pl-3 pr-2';
 
 const CLASSE_CAMPO_DA_LINHA = 'h-8 px-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
 
@@ -2606,7 +2613,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (!target.toDate && !maxCount) {
             setGenerateResult({
                 ok: false,
-                msg: 'O contrato não tem data de fim de vigência e o "Nº de Parcelas" está vazio — sem um dos dois a série não tem onde terminar. '
+                msg: 'O contrato não tem data de fim de vigência e o "Nº de parcelas" está vazio — sem um dos dois a série não tem onde terminar. '
                     + 'Preencha o "Número de Parcelas" na aba Financeiro, ou a data de fim na aba Contrato.',
             });
             return;
@@ -3007,6 +3014,21 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         formData.contract_number
     );
 
+    /** Setas/Home/End no trilho de abas: troca a aba e leva o foco junto (ativação automática). */
+    const moverEntreAbas = (e: React.KeyboardEvent<HTMLDivElement>) => {
+        const i = tabs.findIndex(t => t.id === activeTab);
+        const destino = e.key === 'ArrowRight' ? (i + 1) % tabs.length
+            : e.key === 'ArrowLeft' ? (i - 1 + tabs.length) % tabs.length
+            : e.key === 'Home' ? 0
+            : e.key === 'End' ? tabs.length - 1
+            : -1;
+        if (destino < 0) return;
+        e.preventDefault();
+        const id = tabs[destino].id;
+        setActiveTab(id);
+        document.getElementById(`deal-aba-${id}`)?.focus();
+    };
+
     const tabs: { id: TabId; label: string; icon: React.ReactNode; badge?: boolean }[] = [
         {
             id: 'cliente',
@@ -3109,7 +3131,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     bg-white text-blue-600 shadow-sm; flex-wrap, nunca overflow-x-auto. */}
                 <div className="px-8 shrink-0">
                     <div className="flex items-center bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        {/* Padrão de abas do WAI-ARIA: o leitor de tela anuncia "aba, 3 de 8,
+                            selecionada"; Tab entra só na aba ativa e as setas (Home/End)
+                            andam entre elas — antes eram 8 botões soltos (audit, 10/11/2026). */}
+                        <div
+                            role="tablist"
+                            aria-label="Seções da negociação"
+                            onKeyDown={moverEntreAbas}
+                            className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full"
+                        >
                             {tabs.map((tab) => {
                                 const isActive = activeTab === tab.id;
                                 // Ponto de atenção por aba: vermelho = obrigatório faltando,
@@ -3128,9 +3158,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <button
                                         key={tab.id}
                                         type="button"
+                                        role="tab"
+                                        id={`deal-aba-${tab.id}`}
+                                        aria-selected={isActive}
+                                        tabIndex={isActive ? 0 : -1}
                                         onClick={() => setActiveTab(tab.id)}
                                         title={motivo ?? undefined}
-                                        className={`relative flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                        className={`relative flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                                             isActive
                                                 ? 'bg-white text-blue-600 shadow-sm'
                                                 : 'text-gray-700 hover:text-gray-900'
@@ -3723,11 +3757,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             )}
                                                         </div>
                                                         <div className="relative shrink-0">
-                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-400">R$</span>
+                                                            <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-xs text-gray-500">R$</span>
                                                             <MoneyCentsInput
                                                                 value={u.value || ''}
                                                                 onChange={(v) => setUnitValue(u.property_id, v === '' ? 0 : Number(v))}
-                                                                className="w-40 h-9 pl-9 pr-3 bg-white border border-gray-200 focus:border-blue-500 rounded-[6px] outline-none text-sm text-right text-gray-700 transition-all"
+                                                                aria-label={`Valor de ${prop?.name || 'unidade removida'}`}
+                                                                className="w-40 h-9 pl-9 pr-3 bg-white border border-gray-200 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 rounded-[6px] outline-none text-sm text-right text-gray-700 transition-all"
                                                                 placeholder="0,00"
                                                             />
                                                         </div>
@@ -3735,7 +3770,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 );
                                             })}
                                             <div className="flex items-center justify-between px-4 py-3 bg-blue-50">
-                                                <span className="text-sm font-normal text-gray-500">
+                                                <span className="text-sm font-normal text-gray-600">
                                                     {formData.type === 'RENTAL' ? 'Valor mensal sugerido' : 'Total do contrato'} · {dealUnits.length} {dealUnits.length === 1 ? 'unidade' : 'unidades'}
                                                 </span>
                                                 <span className="text-lg font-bold text-gray-900">
@@ -3753,10 +3788,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     divergir da soma de tabela. */}
                                 {usaTrioFinanceiro && (
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
+                                        <label htmlFor="deal-valor-total" className="text-xs font-semibold text-slate-500">Valor Total do Contrato</label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                            <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500">R$</span>
                                             <MoneyCentsInput
+                                                id="deal-valor-total"
                                                 value={formData.contract_total_value ?? ''}
                                                 onChange={(v) => setFormData(prev => ({
                                                     ...prev,
@@ -3764,7 +3800,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                     // e o total digitado vira a base da próxima montagem.
                                                     ...editarValorTotal(prev, v === '' ? undefined : Number(v)),
                                                 }))}
-                                                className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                className="w-full h-9 pl-9 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                 placeholder="0,00"
                                             />
                                         </div>
@@ -3792,8 +3828,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     da gaveta, da edição em lote e da coluna da aba Parcelas. Desde
                                     10/11/2026 (decisão do usuário) "forma" é só o MEIO de pagamento. */}
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Condição de pagamento</label>
+                                    <label htmlFor="deal-condicao" className="text-xs font-semibold text-slate-500">Condição de pagamento</label>
                                     <select
+                                        id="deal-condicao"
                                         value={formData.payment_method}
                                         onChange={(e) => {
                                             const method = e.target.value;
@@ -3818,10 +3855,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
 
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-slate-500">Data Efetiva</label>
+                                        <label htmlFor="deal-data-efetiva" className="text-xs font-semibold text-slate-500">Data Efetiva</label>
                                         <div className="relative">
-                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                            <Calendar aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                             <input
+                                                id="deal-data-efetiva"
                                                 type="date"
                                                 value={formData.date}
                                                 onChange={(e) => setFormData({ ...formData, date: e.target.value })}
@@ -3835,9 +3873,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         reforços e chaves (decisão do usuário, 10/11/2026). */}
                                     {!seriePrincipal && (
                                     <div className="space-y-1.5">
-                                        <label className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
+                                        <label htmlFor="deal-primeiro-pagamento" className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
                                         <div className="relative">
-                                            <Calendar className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-400" />
+                                            <Calendar aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
                                             {/* A data é gravada a cada tecla (nada se perde se o
                                                 usuário clicar direto em Salvar), mas a PERGUNTA de
                                                 recalcular as parcelas só sai no blur/Enter. Ligada ao
@@ -3845,6 +3883,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 data dispara a cada segmento e, ao digitar o ano,
                                                 "0002" já é uma data válida. */}
                                             <input
+                                                id="deal-primeiro-pagamento"
                                                 type="date"
                                                 value={formData.payment_due_date || ''}
                                                 onFocus={() => { dueDateAoFocar.current = formData.payment_due_date || ''; }}
@@ -3866,24 +3905,28 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     herdadas por TODAS as parcelas — na aba Parcelas
                                     aparecem só como colunas de leitura. */}
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Centro de Custo</label>
+                                    <label id="deal-rotulo-cc" className="text-xs font-semibold text-slate-500">Centro de Custo</label>
                                     <CostCenterSelect
                                         costCenters={costCenters}
                                         value={formData.cost_center_id || ''}
                                         onChange={(v) => setFormData({ ...formData, cost_center_id: v || null })}
                                         placeholder="Nenhum centro de custo vinculado"
                                         hoverCls="hover:bg-blue-50"
+                                        triggerClassName={CLASSE_SELETOR_DO_FORM}
+                                        labelledBy="deal-rotulo-cc"
                                     />
                                 </div>
 
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Plano de Contas</label>
+                                    <label id="deal-rotulo-plano-contas" className="text-xs font-semibold text-slate-500">Plano de Contas</label>
                                     <PlanoContasSelect
                                         planoContas={planoContas}
                                         value={formData.plano_de_contas_id || ''}
                                         onChange={(v) => setFormData({ ...formData, plano_de_contas_id: v || null })}
                                         placeholder="Nenhuma conta vinculada"
                                         hoverCls="hover:bg-blue-50"
+                                        triggerClassName={CLASSE_SELETOR_DO_FORM}
+                                        labelledBy="deal-rotulo-plano-contas"
                                     />
                                 </div>
 
@@ -3949,7 +3992,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         type="number" min="0" step="0.01" placeholder="0"
                                                         value={taxaJurosTexto}
                                                         onChange={(e) => mudarJuros('taxa', e.target.value)}
-                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                                     />
                                                 </div>
                                                 {taxaJuros > 0 && (
@@ -5249,7 +5292,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                         />
                                                                     </div>
                                                                 </div>
-                                                                <p className="text-[11px] text-emerald-700/80">
+                                                                <p className="text-xs text-emerald-700">
                                                                     Status: {linkedContract.status}
                                                                     {numberLockReason ? ` · ${numberLockReason}` : ''}
                                                                 </p>
@@ -5362,7 +5405,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                 {/* Rodapé — §17: ação primária compacta (h-9, sentence case, sem
                     shadow-xl/ring/uppercase); secundárias no mesmo h-9. */}
-                <div className="px-8 py-4 border-t border-gray-100 bg-white flex items-center justify-between gap-4 shrink-0">
+                <div className="px-8 py-4 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between gap-x-4 gap-y-2 shrink-0">
                     {/* O aviso fixo "Aprovação sistêmica obrigatória…" saiu em 10/11/2026:
                         não estava ligado a regra nenhuma. A conferência real com o Plano de
                         vendas fica embaixo da tabela do plano (aba Financeiro). */}
@@ -5370,7 +5413,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         {isEditMode && <SaveStatus dirty={dirty} savedAt={savedAt} />}
                     </div>
 
-                    <div className="flex items-center gap-2 shrink-0">
+                    <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
                         {formData.id && (
                             <button
                                 type="button"
@@ -5443,8 +5486,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     <SheetPanel className="p-6 space-y-4">
                         {!editandoSerie && (<>
                         <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500">Tipo de pagamento</label>
+                            <label htmlFor="bloco-tipo" className="text-xs font-semibold text-slate-500">Tipo de pagamento</label>
                             <select
+                                id="bloco-tipo"
                                 value={blocoForm.tipo}
                                 onChange={(e) => setBlocoForm(prev => ({ ...prev, tipo: e.target.value }))}
                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
@@ -5453,7 +5497,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     <option key={t.id} value={t.code}>{t.name}</option>
                                 ))}
                             </select>
-                            <span className="block text-xs text-gray-400 px-1">
+                            <span className="block text-xs text-gray-500 px-1">
                                 {geraSerie
                                     ? `Gera uma série: uma parcela a cada ${intervaloDoTipo} ${intervaloDoTipo === 1 ? 'mês' : 'meses'}.`
                                     : 'Pagamento único.'}
@@ -5462,8 +5506,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                         {geraSerie && (
                             <div className="flex flex-wrap items-center gap-3">
-                                <label className="text-xs font-semibold text-slate-500">Calcular automaticamente</label>
-                                <div className="flex items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
+                                <span id="bloco-calcular" className="text-xs font-semibold text-slate-500">Calcular automaticamente</span>
+                                <div role="group" aria-labelledby="bloco-calcular" className="flex items-center bg-white p-1 rounded-[10px] border border-gray-200 shadow-sm gap-1 w-fit">
                                     {([
                                         { id: 'PARCELA' as const, label: rotuloParcela },
                                         { id: 'NUMERO' as const, label: 'Nº de parcelas' },
@@ -5473,6 +5517,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             key={op.id}
                                             type="button"
                                             onClick={() => { setCampoDerivado(op.id); setBlocoForm(prev => recalcularBloco(prev, op.id)); }}
+                                            aria-pressed={campoDerivado === op.id}
                                             className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${campoDerivado === op.id ? 'bg-blue-50 text-blue-600' : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             {op.label}
@@ -5484,16 +5529,17 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
                         <div className={geraSerie ? 'grid grid-cols-3 gap-4' : 'grid grid-cols-1 gap-4'}>
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold text-slate-500">
+                                <label htmlFor="bloco-valor" className="text-xs font-semibold text-slate-500">
                                     {geraSerie ? (formData.type === 'RENTAL' ? 'Valor mensal' : 'Valor da parcela') : 'Valor'}
                                 </label>
                                 <div className="relative">
-                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                    <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500">R$</span>
                                     <MoneyCentsInput
+                                        id="bloco-valor"
                                         readOnly={geraSerie && campoDerivado === 'PARCELA'}
                                         value={blocoForm.valorParcela}
                                         onChange={(v) => setBlocoForm(prev => recalcularBloco({ ...prev, valorParcela: v }, campoDerivado))}
-                                        className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${geraSerie && campoDerivado === 'PARCELA'
+                                        className={`w-full h-9 pl-9 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${geraSerie && campoDerivado === 'PARCELA'
                                             ? 'bg-gray-50 text-gray-800 cursor-default'
                                             : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
                                         placeholder="0,00"
@@ -5504,8 +5550,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             {geraSerie && (
                                 <>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-slate-500">Nº de Parcelas</label>
+                                        <label htmlFor="bloco-quantidade" className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
                                         <input
+                                            id="bloco-quantidade"
                                             type="number"
                                             min="1"
                                             step="1"
@@ -5519,14 +5566,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         />
                                     </div>
                                     <div className="space-y-2">
-                                        <label className="text-xs font-semibold text-slate-500">Subtotal do bloco</label>
+                                        <label htmlFor="bloco-subtotal" className="text-xs font-semibold text-slate-500">Subtotal do bloco</label>
                                         <div className="relative">
-                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
+                                            <span aria-hidden="true" className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500">R$</span>
                                             <MoneyCentsInput
+                                                id="bloco-subtotal"
                                                 readOnly={campoDerivado === 'SUBTOTAL'}
                                                 value={blocoForm.subtotal}
                                                 onChange={(v) => setBlocoForm(prev => recalcularBloco({ ...prev, subtotal: v }, campoDerivado))}
-                                                className={`w-full h-9 pl-12 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'SUBTOTAL'
+                                                className={`w-full h-9 pl-9 pr-3 border border-gray-200 rounded-[6px] text-sm font-medium outline-none transition-all ${campoDerivado === 'SUBTOTAL'
                                                     ? 'bg-gray-50 text-gray-800 cursor-default'
                                                     : 'bg-white text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500'}`}
                                                 placeholder="0,00"
@@ -5541,14 +5589,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             fecha. Dizemos o quanto falta em vez de reescrever um valor
                             que o usuário digitou. */}
                         {geraSerie && campoDerivado === 'NUMERO' && Math.abs(sobraDoBloco) >= 0.01 && (
-                            <span className="block text-xs text-gray-400 px-1">
+                            <span className="block text-xs text-gray-500 px-1">
                                 {Math.max(0, Math.floor(Number(blocoForm.quantidade) || 0))} × {fmtMoeda(parseFloat(blocoForm.valorParcela) || 0)} = {fmtMoeda((parseFloat(blocoForm.valorParcela) || 0) * Math.max(0, Math.floor(Number(blocoForm.quantidade) || 0)))} · {sobraDoBloco > 0 ? 'faltam' : 'sobram'} {fmtMoeda(Math.abs(sobraDoBloco))} para o subtotal
                             </span>
                         )}
 
                         {blocoForm.tipo === 'SINAL' ? (
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold text-slate-500">Vencimento</label>
+                                <span className="block text-xs font-semibold text-slate-500">Vencimento</span>
                                 <p className="text-sm font-normal text-gray-700">{fmtDateBR(formData.date) || '—'}</p>
                                 <span className="block text-xs text-gray-500 px-1">
                                     O sinal vence na Data Efetiva da negociação — a data que a proposta imprime na linha "Entrada". Para mudar, feche esta gaveta e altere a Data Efetiva nas condições da aba Financeiro.
@@ -5556,10 +5604,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             </div>
                         ) : (
                             <div className="space-y-2">
-                                <label className="text-xs font-semibold text-slate-500">
+                                <label htmlFor="bloco-vencimento" className="text-xs font-semibold text-slate-500">
                                     {geraSerie ? 'Vencimento da 1ª parcela' : 'Vencimento'}
                                 </label>
                                 <input
+                                    id="bloco-vencimento"
                                     type="date"
                                     value={blocoForm.primeiroVencimento}
                                     onChange={(e) => setBlocoForm(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
@@ -5570,8 +5619,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </>)}
 
                         <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500">Forma de pagamento (opcional)</label>
+                            <label htmlFor="bloco-forma" className="text-xs font-semibold text-slate-500">Forma de pagamento (opcional)</label>
                             <select
+                                id="bloco-forma"
                                 value={blocoForm.paymentType}
                                 onChange={(e) => setBlocoForm(prev => ({ ...prev, paymentType: e.target.value as typeof prev.paymentType }))}
                                 className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-700 outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
@@ -5586,8 +5636,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-xs font-semibold text-slate-500">Descrição (opcional)</label>
+                            <label htmlFor="bloco-descricao" className="text-xs font-semibold text-slate-500">Descrição (opcional)</label>
                             <input
+                                id="bloco-descricao"
                                 type="text"
                                 value={blocoForm.notes}
                                 onChange={(e) => setBlocoForm(prev => ({ ...prev, notes: e.target.value }))}

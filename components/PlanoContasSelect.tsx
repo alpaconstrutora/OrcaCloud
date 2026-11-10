@@ -31,6 +31,8 @@ interface Props {
     /** Texto do campo vazio e da primeira linha ("limpar") do drawer. */
     placeholder?: string;
     size?: 'md' | 'sm';
+    /** `id` do rótulo visível — ver HierarchicalSelect. */
+    labelledBy?: string;
     disabled?: boolean;
     /** Gatilho de célula de tabela — ver HierarchicalSelect. */
     triggerClassName?: string;
@@ -91,6 +93,7 @@ const PlanoContasSelect: React.FC<Props> = ({
     planoContas, value, onChange, placeholder = '—', size, disabled,
     triggerClassName, compact, fallbackLabel,
     hoverCls = 'hover:bg-gray-50',
+    labelledBy,
     clearLabel, clearValue,
 }) => {
     const organizations = useStore(s => s.organizations);
@@ -116,6 +119,7 @@ const PlanoContasSelect: React.FC<Props> = ({
             fallbackLabel={fallbackLabel}
             clearLabel={clearLabel}
             clearValue={clearValue}
+            labelledBy={labelledBy}
         />
     );
 };

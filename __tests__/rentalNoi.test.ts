@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeNoi, portfolioNoi, capRate, type NoiNode } from '../lib/rentalNoi';
+import { computeNoi, portfolioNoi, capRate, expenseByPropertyFromEmpreendimentos, type NoiNode } from '../lib/rentalNoi';
 
 const nodes: NoiNode[] = [
     { id: 'ed-1', parent_id: null },
@@ -104,5 +104,44 @@ describe('capRate', () => {
 
     it('sem patrimônio é null, não Infinity', () => {
         expect(capRate(120_000, 0)).toBeNull();
+    });
+});
+
+describe('expenseByPropertyFromEmpreendimentos — despesa do Centro de Custo do empreendimento', () => {
+    it('edifício do empreendimento na carteira: a despesa vai inteira para ele e sobe no rollup', () => {
+        const despesa = expenseByPropertyFromEmpreendimentos(new Map([['emp-1', 900]]), [
+            { id: 'ed-1', empreendimentoId: 'emp-1', isBuilding: true },
+            { id: 'u-101', empreendimentoId: 'emp-1', private_area: 50 },
+            { id: 'u-102', empreendimentoId: 'emp-1', private_area: 50 },
+        ]);
+        expect([...despesa]).toEqual([['ed-1', 900]]);
+        const ed = computeNoi(nodes, new Map([['u-101', 1_000], ['u-102', 1_000]]), despesa).get('ed-1')!;
+        expect(ed.noi).toBe(1_100);
+    });
+
+    it('sem edifício: rateia pela área privativa, e a soma fecha no centavo', () => {
+        const despesa = expenseByPropertyFromEmpreendimentos(new Map([['emp-1', 100]]), [
+            { id: 'a', empreendimentoId: 'emp-1', private_area: 30 },
+            { id: 'b', empreendimentoId: 'emp-1', private_area: 70 },
+        ]);
+        expect(despesa.get('a')).toBe(30);
+        expect(despesa.get('b')).toBe(70);
+    });
+
+    it('sem área cadastrada: divide igual', () => {
+        const despesa = expenseByPropertyFromEmpreendimentos(new Map([['emp-1', 100]]), [
+            { id: 'a', empreendimentoId: 'emp-1' },
+            { id: 'b', empreendimentoId: 'emp-1' },
+            { id: 'c', empreendimentoId: 'emp-1' },
+        ]);
+        expect([...despesa.values()].reduce((s, v) => s + v, 0)).toBeCloseTo(100, 2);
+        expect(despesa.get('b')).toBe(33.33);
+    });
+
+    it('empreendimento sem imóvel na carteira fica fora; o de outro empreendimento não se mistura', () => {
+        const despesa = expenseByPropertyFromEmpreendimentos(new Map([['emp-1', 500], ['emp-obra', 80_000]]), [
+            { id: 'a', empreendimentoId: 'emp-1' },
+        ]);
+        expect([...despesa]).toEqual([['a', 500]]);
     });
 });

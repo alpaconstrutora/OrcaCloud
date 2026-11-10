@@ -29,9 +29,6 @@ vi.mock('../../services/supplierService', () => ({
 vi.mock('../../services/appSettingsService', () => ({
     appSettingsService: { get: () => ({ supplierNameDisplay: 'razao_social' }) },
 }));
-vi.mock('../../services/propertyExpenseService', () => ({
-    propertyExpenseService: { allocationSummary: vi.fn(async () => new Map()) },
-}));
 vi.mock('../../services/payableService', () => ({
     payableService: { updateStatus: svc.updateStatus, remove: vi.fn(), darBaixa: svc.darBaixa },
     payableParty: (p: { party_name?: string; entity_name?: string }) => p.party_name || p.entity_name || '—',
@@ -39,7 +36,6 @@ vi.mock('../../services/payableService', () => ({
 vi.mock('../../services/financialReceiptService', () => ({
     financialReceiptService: { listarAtivosDaOrg: svc.listarAtivosDaOrg, baixarPdf: svc.baixarPdf },
 }));
-vi.mock('../../components/financeiro/ApropriarImovelSheet', () => ({ default: () => null }));
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => vi.fn(async () => true) }));
 
 import ContasPagarParcelas from '../../components/ContasPagarParcelas';

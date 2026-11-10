@@ -1,18 +1,16 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-    AlertCircle, Building2, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, Filter, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
+    AlertCircle, Check, ChevronDown, ChevronRight, Download, ExternalLink, FileText, Filter, Landmark, Loader2, MoveHorizontal, Paperclip, Plus, Receipt, RefreshCw, Search, Tag, Undo2, X,
 } from 'lucide-react';
 import type { Payable, PayableBusinessStatus, CostCenter } from '../types/financial';
 import { payableService, payableParty, STATUS_ASAAS_TRAVA_TITULO } from '../services/payableService';
 import { financialRegistryService } from '../services/financialRegistryService';
-import { propertyExpenseService } from '../services/propertyExpenseService';
 import { supplierService, getSupplierDisplayName } from '../services/supplierService';
 import { appSettingsService } from '../services/appSettingsService';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { Money, formatMoney, formatDateBR } from './ui/Format';
 import { useConfirm } from './ui/confirm';
 import ActionIconButton from './ui/ActionIconButton';
-import ApropriarImovelSheet from './financeiro/ApropriarImovelSheet';
 import BaixaRecebivelSheet, { type DadosDaBaixa, type TituloDaBaixa } from './financeiro/BaixaRecebivelSheet';
 import { financialReceiptService, type ReciboAtivo } from '../services/financialReceiptService';
 import { mensagemResultadoBaixa } from '../utils/baixaRecebivel';
@@ -105,9 +103,9 @@ const PARCELAS_COLUMNS: ColumnConfig[] = [
     // no client — vw_payables só expõe os UUIDs.
     { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
     { key: 'plano_contas', label: 'Plano de Contas', sortable: true },
-    // Imóvel apropriado (Fase 2 — OPEX). Vazio é informação, não lacuna: é a
-    // despesa que ainda não entrou em NOI nenhum.
-    { key: 'imovel', label: 'Imóvel', sortable: true },
+    // Sem coluna Imóvel (removida 09/11/2026): o empreendimento da despesa já
+    // vem do Centro de Custo (cost_centers_v2.empreendimento_id), e a
+    // apropriação a imóvel nunca foi usada (0 linhas em produção).
 ];
 
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
@@ -126,13 +124,12 @@ const PARCELAS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolea
     status: { label: 'Status', className: 'text-center px-6 py-2 border-r border-gray-100 overflow-hidden' },
     centro_custo: { label: 'Centro de Custo', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
     plano_contas: { label: 'Plano de Contas', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    imovel: { label: 'Imóvel', className: 'text-left px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
 
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
     // Status em linha única (status · detalhe): mais largo.
     credor: 200, descricao: 260, origem: 150, obra: 160, valor: 140, vencimento: 150, atraso: 110, recibo: 130, status: 240,
-    centro_custo: 180, plano_contas: 180, imovel: 190, actions: 250,
+    centro_custo: 180, plano_contas: 180, actions: 250,
 };
 
 /* 26/10/2026: "Previsto" saiu — todo título em aberto está aguardando aprovação,
@@ -176,10 +173,10 @@ const linhaVencida = (row: Payable): boolean =>
 const atrasoDaLinha = (row: Payable): number | null =>
     linhaVencida(row) && row.due_date ? diasAtraso(row.due_date) : null;
 
-/** Linha com os nomes já resolvidos (Centro de Custo/Plano de Contas/Imóvel) —
+/** Linha com os nomes já resolvidos (Centro de Custo/Plano de Contas) —
  *  ver `rowsWithNames` no componente, que injeta esses três campos a partir
  *  dos UUIDs que `vw_payables` expõe. */
-type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; imovel_label: string; recibo_numero: number | null };
+type ParcelaRow = Payable & { cost_center_name: string; plano_de_contas_name: string; recibo_numero: number | null };
 
 /** Folha reúne vários colaboradores num título: não há um credor para assinar.
  *  DARF é pago à Receita: o comprovante é a própria guia paga (anexo do DARF). */
@@ -193,12 +190,9 @@ const MOTIVO_ESTORNO_DARF_CONCILIADO = 'Conciliado com o extrato — desfaça a 
 // em vez de repetir um bloco condicional fixo por coluna (padrão de ClientList.tsx).
 // (Sem a tag literal de célula neste comentário: o awk do check-ui-standard.sh
 //  lê comentário como código e abriria a §7 daqui até o primeiro fechamento real.)
-// `alocacoes === null` distingue "apropriação indisponível nesta sessão" de
-// "nenhuma linha apropriada" — por isso entra como parâmetro à parte da linha.
 function renderParcelaCell(
     key: string,
     row: ParcelaRow,
-    alocacoes: Map<string, { propertyIds: string[]; names: string[] }> | null,
 ): React.ReactNode {
     switch (key) {
         /* ⚠️ `truncate` PRECISA de `block` (§6.1.2). Num <span> inline o
@@ -269,20 +263,6 @@ function renderParcelaCell(
                 return <span className="text-sm font-normal text-gray-700" title="Os tributos do DARF têm planos de contas diferentes — veja a composição">Vários</span>;
             }
             return <span className="block truncate text-sm font-normal text-gray-700" title={row.plano_de_contas_name || undefined}>{row.plano_de_contas_name || '—'}</span>;
-        case 'imovel':
-            // DARF não se apropria a imóvel (é guia de tributos, não despesa do imóvel).
-            if (row.darf) return <span className="text-sm font-normal text-gray-400">—</span>;
-            return (
-                <span className="block truncate text-sm font-normal text-gray-700">
-                    {alocacoes === null ? (
-                        <span className="text-gray-400" title="Apropriação por imóvel indisponível nesta sessão — não é o mesmo que 'não apropriado'.">n/d</span>
-                    ) : row.imovel_label ? (
-                        row.imovel_label
-                    ) : (
-                        <span className="text-gray-400" title="Ainda não apropriada — esta despesa não entra em NOI nenhum.">—</span>
-                    )}
-                </span>
-            );
         default:
             return null;
     }
@@ -366,20 +346,19 @@ function motivoNaoEditar(row: Payable, sp?: SupplierPayment): string | null {
 }
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
-type CampoAgrupar = 'credor' | 'origem' | 'obra' | 'centro_custo' | 'plano_contas' | 'imovel' | 'vencimento' | 'status';
+type CampoAgrupar = 'credor' | 'origem' | 'obra' | 'centro_custo' | 'plano_contas' | 'vencimento' | 'status';
 const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'credor', label: 'Credor' },
     { value: 'origem', label: 'Origem' },
     { value: 'obra', label: 'Obra' },
     { value: 'centro_custo', label: 'Centro de Custo' },
     { value: 'plano_contas', label: 'Plano de Contas' },
-    { value: 'imovel', label: 'Imóvel' },
     { value: 'vencimento', label: 'Vencimento (mês)' },
     { value: 'status', label: 'Status' },
 ];
 const SEM_GRUPO: Record<CampoAgrupar, string> = {
     credor: 'Sem credor', origem: 'Sem origem', obra: 'Sem obra', centro_custo: 'Sem centro de custo',
-    plano_contas: 'Sem plano de contas', imovel: 'Sem imóvel', vencimento: 'Sem vencimento', status: 'Sem status',
+    plano_contas: 'Sem plano de contas', vencimento: 'Sem vencimento', status: 'Sem status',
 };
 function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
     switch (campo) {
@@ -392,7 +371,6 @@ function chaveDoGrupo(campo: CampoAgrupar, r: ParcelaRow): ChaveDeGrupo {
         case 'obra': return chavePorNome(r.obra_name);
         case 'centro_custo': return chavePorNome(r.cost_center_name);
         case 'plano_contas': return chavePorNome(r.plano_de_contas_name);
-        case 'imovel': return chavePorNome(r.imovel_label);
         case 'vencimento': return chavePorMes(r.due_date);
         case 'status': return chavePorRotulo(situacaoDaLinha(r).chave, STATUS_PT);
     }
@@ -418,21 +396,22 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const [baixaProgresso, setBaixaProgresso] = useState<string | null>(null);
     const [recibos, setRecibos] = useState<Map<string, ReciboAtivo>>(new Map());
     const [gerandoRecibo, setGerandoRecibo] = useState<string | null>(null);
-    // Seleção múltipla: existe para apropriar despesa a imóvel em lote (IPTU de
-    // 12 meses num clique só). Esta é a ÚNICA visão de Contas a Pagar com id de
-    // `internal_transactions` — a de Notas Fiscais lê `invoices`, e passar id de
-    // nota para a RPC de rateio falharia só no uso real.
+    // Seleção múltipla: baixa em lote. Esta é a ÚNICA visão de Contas a Pagar
+    // com id de `internal_transactions` — a de Notas Fiscais lê `invoices`.
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = useState<number | null>(null);
     const zerarAncora = useCallback(() => setLastCheckedIndex(null), []);
     const agrupamento = useAgrupamento<CampoAgrupar>('contasPagarParcelas:groupBy', zerarAncora);
-    const { campo: groupBy, agrupando, recolhidos } = agrupamento;
+    const { recolhidos } = agrupamento;
+    // Campo guardado que saiu da lista (ex.: 'imovel', removido em 09/11/2026)
+    // vale como sem agrupamento — senão chaveDoGrupo não acha o caso.
+    const groupBy: CampoAgrupar | 'none' = OPCOES_AGRUPAR.some(o => o.value === agrupamento.campo) ? agrupamento.campo : 'none';
+    const agrupando = groupBy !== 'none';
     // Deep-link (§ efeito abaixo): linha destacada por alguns segundos + as refs
     // das <tr> para rolar até ela.
     const [highlightId, setHighlightId] = useState<string | null>(null);
     const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
     const limpouFiltrosRef = useRef(false);
-    const [apropriando, setApropriando] = useState<{ organizationId: string; payables: Payable[] } | null>(null);
     // Duas dimensões DIFERENTES (ver migration 20270822000013) — carregadas uma
     // vez para resolver os UUIDs de vw_payables em nome.
     const [costCenters, setCostCenters] = useState<CostCenter[]>([]);
@@ -471,48 +450,14 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         return payableParty(row);
     }, [supplierById]);
 
-    /**
-     * Apropriação por imóvel das linhas carregadas. `null` = migration ainda não
-     * aplicada (ou RLS barrando): a coluna some inteira, em vez de mentir "—"
-     * para tudo e sugerir que nada está apropriado.
-     */
-    const [alocacoes, setAlocacoes] = useState<Map<string, { propertyIds: string[]; names: string[] }> | null>(null);
-    // A linha DARF é sintética (id do DARF, não de internal_transactions): fica fora.
-    const idsCarregados = useMemo(() => rows.filter(r => !r.darf).map(r => r.id).join(','), [rows]);
-
-    // Guarda de resposta fora de ordem: trocar de organização no topo com a
-    // consulta anterior em voo não pode deixar a apropriação da org velha na tela.
-    const alocacoesSeq = useRef(0);
-    const recarregarAlocacoes = React.useCallback(() => {
-        const ids = idsCarregados ? idsCarregados.split(',') : [];
-        const seq = ++alocacoesSeq.current;
-        propertyExpenseService.allocationSummary(ids, organizationId)
-            .then(res => { if (seq === alocacoesSeq.current) setAlocacoes(res); })
-            .catch(err => {
-                console.error('[ContasPagarParcelas] Erro ao carregar apropriação por imóvel:', err);
-                if (seq === alocacoesSeq.current) setAlocacoes(null);
-            });
-    }, [idsCarregados, organizationId]);
-
-    useEffect(() => { recarregarAlocacoes(); }, [recarregarAlocacoes]);
-
-    /** Rótulo do imóvel: 1 alocação = o nome; N = rateio entre unidades. */
-    const imovelLabel = React.useCallback((id: string): string => {
-        const entry = alocacoes?.get(id);
-        if (!entry || entry.propertyIds.length === 0) return '';
-        if (entry.propertyIds.length === 1) return entry.names[0];
-        return `Rateado · ${entry.propertyIds.length} imóveis`;
-    }, [alocacoes]);
-
     /** Injeta os nomes resolvidos — a view só traz os UUIDs. */
     const rowsWithNames = useMemo(() => rows.map(r => ({
         ...r,
         cost_center_name: r.cost_center_id ? (costCenterNameById.get(r.cost_center_id) ?? '') : '',
         plano_de_contas_name: r.plano_de_contas_id ? (planoContasNameById.get(r.plano_de_contas_id) ?? '') : '',
-        imovel_label: imovelLabel(r.id),
         credor_display: credorDisplay(r),
         recibo_numero: recibos.get(r.id)?.receipt_number ?? null,
-    })), [rows, costCenterNameById, planoContasNameById, imovelLabel, credorDisplay, recibos]);
+    })), [rows, costCenterNameById, planoContasNameById, credorDisplay, recibos]);
 
     // Recibos ativos de pagamento da organização — depois da lista, sem segurar
     // a tabela. Uma consulta só (sem ids na URL), com guarda de resposta fora de
@@ -644,7 +589,6 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     || (r.project_name ?? '').toLowerCase().includes(termo)
                     || (r.cost_center_name ?? '').toLowerCase().includes(termo)
                     || (r.plano_de_contas_name ?? '').toLowerCase().includes(termo)
-                    || (r.imovel_label ?? '').toLowerCase().includes(termo)
                     // DARF: "PIS" ou o nº do documento acham a linha da guia.
                     || (r.darf?.busca ?? '').toLowerCase().includes(termo);
                 if (!hit) return false;
@@ -668,7 +612,6 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     case 'status':       return STATUS_PT[situacaoDaLinha(r).chave] ?? situacaoDaLinha(r).chave;
                     case 'centro_custo': return (r.cost_center_name ?? '').toLowerCase();
                     case 'plano_contas': return (r.plano_de_contas_name ?? '').toLowerCase();
-                    case 'imovel':       return (r.imovel_label ?? '').toLowerCase();
                     case 'recibo':       return r.recibo_numero ?? -1;
                     default:             return '';
                 }
@@ -682,7 +625,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         }
         return result;
         // Depende de `rowsWithNames`, NÃO de `rows`: os nomes resolvidos (centro de
-        // custo, plano de contas, imóvel apropriado) chegam por consulta assíncrona
+        // custo, plano de contas) chegam por consulta assíncrona
         // depois das linhas. Com `rows` na lista, o memo não recalculava quando eles
         // chegavam e as colunas ficavam em branco para sempre.
     }, [rowsWithNames, search, statusFiltro, origemFiltro, vencDe, vencAte, vencAno, vencMes, ocultarFuturos, tableColumns.sortColumn, tableColumns.sortDirection]);
@@ -782,8 +725,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [focusId, loading, rows, filtered, linhasNaTela, currentPage, pageSize]);
 
-    /** Cancelado não tem despesa a apropriar — o NOI já o ignora. Parcela PAGA
-     *  entra: despesa paga é exatamente a que precisa cair no OPEX. */
+    /** Cancelado fica fora da seleção: não há o que baixar. */
     const isSelectable = (row: Payable) => row.effective_status !== 'CANCELADO';
     const selectableVisible = useMemo(() => filtered.filter(isSelectable), [filtered]);  // recorte inteiro — base do lote
     // Interseção da seleção com o recorte: se o filtro mudou, o que sumiu da
@@ -798,20 +740,6 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const selectablePage = useMemo(() => pageRows.filter(isSelectable), [pageRows]);
     const allVisibleSelected = selectablePage.length > 0 && selectablePage.every(r => selectedIds.has(r.id));
     const selectedTotal = selectedVisible.reduce((s, r) => s + (r.amount ?? 0), 0);
-
-    /**
-     * Org do lote, derivada dos PRÓPRIOS lançamentos — não da prop, que vem
-     * `undefined` em "Todas as organizações" (REGRA #5: derivar da entidade
-     * aberta, nunca bloquear a tela). Seleção que mistura organizações não pode
-     * apropriar: o seletor de imóveis da Sheet é de uma org só.
-     */
-    const orgDoLote = useMemo(() => {
-        const orgs = new Set(selectedVisible.filter(r => !r.darf).map(r => r.organization_id));
-        return orgs.size === 1 ? [...orgs][0] : null;
-    }, [selectedVisible]);
-    /** DARF não se apropria a imóvel: fica fora do lote de apropriação. */
-    const apropriaveisDoLote = selectedVisible.filter(r => !r.darf);
-    const darfsForaDaApropriacao = selectedVisible.length - apropriaveisDoLote.length;
 
     function toggleRow(id: string) {
         setSelectedIds(prev => {
@@ -1383,7 +1311,7 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                 <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
                                                     {key === 'recibo' ? renderReciboCell(row)
                                                         : key === 'status' ? renderStatusCell(row)
-                                                        : renderParcelaCell(key, row, alocacoes)}
+                                                        : renderParcelaCell(key, row)}
                                                 </td>
                                             ))}
                                             {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
@@ -1488,16 +1416,6 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                             kind="history"
                                                             title="Histórico de pagamentos pela Asaas"
                                                             onClick={() => setHistoricoAsaas(row)}
-                                                        />
-                                                    )}
-                                                    {/* Apropriar a imóvel — a mesma Sheet do lote, com um
-                                                        lançamento só. Cancelada não tem o que apropriar. */}
-                                                    {isSelectable(row) && !row.darf && (
-                                                        <ActionIconButton
-                                                            kind="settings"
-                                                            title="Apropriar a imóvel"
-                                                            icon={<Building2 className="w-4 h-4" />}
-                                                            onClick={() => setApropriando({ organizationId: row.organization_id, payables: [row] })}
                                                         />
                                                     )}
                                                     {row.darf && (
@@ -1674,19 +1592,6 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                     Dar baixa{selecionadasEmAberto.length && selecionadasEmAberto.length !== selectedVisible.length ? ` (${selecionadasEmAberto.length})` : ''}
                 </button>
                 <button
-                    onClick={() => orgDoLote && setApropriando({ organizationId: orgDoLote, payables: apropriaveisDoLote })}
-                    disabled={!orgDoLote}
-                    title={apropriaveisDoLote.length === 0
-                        ? 'DARF não se apropria a imóvel.'
-                        : orgDoLote
-                            ? `Apropriar as parcelas selecionadas a um imóvel${darfsForaDaApropriacao ? ` — ${darfsForaDaApropriacao} DARF fica${darfsForaDaApropriacao === 1 ? '' : 'm'} de fora` : ''}`
-                            : 'A seleção mistura organizações. Filtre por uma organização para apropriar.'}
-                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 rounded-[6px] text-[13px] font-medium hover:bg-blue-50 disabled:opacity-60 disabled:cursor-not-allowed transition-all active:scale-95"
-                >
-                    <Building2 className="w-3.5 h-3.5" />
-                    Apropriar a imóvel
-                </button>
-                <button
                     onClick={clearSelection}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-500 rounded-[6px] text-[13px] font-medium hover:bg-blue-400 transition-all active:scale-95"
                 >
@@ -1755,20 +1660,6 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
             />
         )}
 
-        {apropriando && (
-            <ApropriarImovelSheet
-                organizationId={apropriando.organizationId}
-                payables={apropriando.payables.map(p => ({ id: p.id, amount: p.amount, description: p.description }))}
-                onClose={() => setApropriando(null)}
-                onDone={message => {
-                    setApropriando(null);
-                    clearSelection();
-                    // Recarrega só o resumo da apropriação, não a lista inteira (§22).
-                    recarregarAlocacoes();
-                    notify(message);
-                }}
-            />
-        )}
         </>
     );
 }

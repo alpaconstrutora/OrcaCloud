@@ -23,14 +23,10 @@ vi.mock('../../services/supplierService', () => ({
 vi.mock('../../services/appSettingsService', () => ({
     appSettingsService: { get: () => ({ supplierNameDisplay: 'razao_social' }) },
 }));
-vi.mock('../../services/propertyExpenseService', () => ({
-    propertyExpenseService: { allocationSummary: vi.fn(async () => new Map()) },
-}));
 vi.mock('../../services/payableService', () => ({
     payableService: { updateStatus: vi.fn(), remove: vi.fn() },
     payableParty: (p: { party_name?: string; entity_name?: string }) => p.party_name || p.entity_name || '—',
 }));
-vi.mock('../../components/financeiro/ApropriarImovelSheet', () => ({ default: () => null }));
 vi.mock('../../services/financialReceiptService', () => ({
     financialReceiptService: { listarAtivosDaOrg: vi.fn(async () => new Map()), baixarPdf: vi.fn() },
 }));

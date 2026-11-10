@@ -160,6 +160,35 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     expect(r.cena.prismas.every((p) => !p.unitId || p.status)).toBe(true);
   });
 
+  // 10/11/2026, Garden Cambuhy em produção: contorno das Torres A e B enviado pela Planta e gravado, mas o 3D do
+  // corretor seguia esquemático — a fonte que valia era o estoque, e as torres dela (pelo bloco) não liam o contorno.
+  it('fonte do estoque: a torre do bloco leva o contorno da torre de mesmo nome no Empreendimento', () => {
+    const anel = [{ x: 2281, y: 6342 }, { x: 2281, y: 32342 }, { x: 15781, y: 32342 }, { x: 15781, y: 6342 }];
+    const torreA = { ...ESTRUTURA[0], name: 'Torre A', contorno_na_planta: anel, contorno_frente: { x: 0, y: -1 }, contorno_norte_deg: null };
+    const imoveis = [...ESTOQUE.slice(0, 3), imovel('901', 9), imovel('B11', 1, { block: 'B' })];
+    const r = montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [torreA] });
+    expect(r.fonte).toBe('ESTOQUE');
+    expect(r.cena.torres.map((t) => [t.nome, t.origem])).toEqual([['Torre A', 'PLANTA'], ['Torre B', 'ESQUEMATICA']]);
+    // Misturada com uma esquemática, a torre é posta lado a lado — mas com a FORMA do desenho (13,5 m × 26 m).
+    const c = r.cena.torres[0].caixa;
+    expect([c.maxX - c.minX, c.maxY - c.minY]).toEqual([13500, 26000]);
+    // As duas com contorno: ficam onde o desenho as pôs.
+    const torreB = { ...torreA, id: 'tw2', name: 'Torre B', contorno_na_planta: anel.map((q) => ({ x: q.x, y: q.y + 26000 })) };
+    const duas = montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [torreA, torreB] });
+    expect(duas.fonte).toBe('ESTOQUE');
+    expect(duas.cena.torres.map((t) => t.origem)).toEqual(['PLANTA', 'PLANTA']);
+    expect(duas.cena.torres[1].caixa).toMatchObject({ minX: 2281, minY: 32342, maxX: 15781, maxY: 58342 });
+  });
+
+  it('fonte do estoque: o nome casa sem "Torre"/"Bloco", acento ou caixa; dois candidatos = nenhum (esquemática)', () => {
+    const anel = [{ x: 0, y: 0 }, { x: 10000, y: 0 }, { x: 10000, y: 20000 }, { x: 0, y: 20000 }];
+    const com = (name: string, id = 'tw1') => ({ ...ESTRUTURA[0], id, name, contorno_na_planta: anel });
+    const imoveis = [...ESTOQUE.slice(0, 3), imovel('901', 9)];
+    expect(montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [com('BLOCO a')] }).cena.torres[0].origem).toBe('PLANTA');
+    expect(montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [com('Torre Sol')] }).cena.torres[0].origem).toBe('ESQUEMATICA');
+    expect(montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [com('Torre A'), com('Bloco A', 'tw2')] }).cena.torres[0].origem).toBe('ESQUEMATICA');
+  });
+
   it('empate de cobertura fica com o Empreendimento (a forma de verdade)', () => {
     const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
     expect(r.fonte).toBe('EMPREENDIMENTO');

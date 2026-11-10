@@ -200,12 +200,21 @@ SQL:
 
 ## Estado
 
-- [ ] Task 1 — motor Price/SAC
-- [ ] Task 2 — colunas (migration aplicada)
-- [ ] Task 3 — tela Montar plano
-- [ ] Task 4 — contrato e Contas a Receber
-- [ ] Task 5 — DRE/Balancete
-- [ ] Task 6 — fechamento
+- [x] Task 1 — motor Price/SAC (`utils/jurosParcelamento.ts`)
+- [x] Task 2 — colunas: migration `aplicar_20271110300000_negociacao_juros_parcelamento.sql` **aplicada em produção em 10/11/2026** (5 colunas conferidas; FK `ON DELETE SET NULL`). Prefixo trocado de `20271109950000`, que colidiu com `broker_portal_espelho`.
+- [x] Task 3 — tela Montar plano (Juros a.m., Sistema, Preço sem juros; sugestão do Plano de vendas só em venda sem plano)
+- [x] Task 4 — contrato e Contas a Receber (contrato novo **e** existente passam a valer o total com juros; zerar os juros devolve o valor sem juros)
+- [x] Task 5 — DRE/Balancete: migration `aplicar_20271110300100_dre_juros_destacado.sql` **aplicada em produção em 10/11/2026**. Assinatura md5 linha a linha de `fn_dre`/`fn_balancete`/`fn_dre_summary` idêntica antes/depois (7 orgs × 2 regimes × 12 meses); Σ view = Σ tabela. Reversão: `supabase/manual/reverter_20271110300100_dre_juros_destacado.sql`.
+  - [ ] `scripts/teste-dre-juros-destacado.sql` (cenários com juros, INSERT dentro de BEGIN/ROLLBACK) — **não rodado**: aguarda liberação do usuário para INSERT de teste em produção.
+- [ ] Task 6 — fechamento (PR, CI, merge, conferir produção)
+
+### Pendências conhecidas (depois do merge)
+
+- Relatórios que agrupam por categoria fora da DRE/Balancete ainda deixam os juros na categoria da venda: `vw_fact_financial_tx` (ÒPURA, Central da Obra, `fn_bi_trend`), `vw_fpa_budget_vs_actual`, `vw_journal_entries`, `fn_fi_ledger` (Inteligência Financeira).
+- Balancete: o total de "lançamentos" somado em `BalanceteReport.tsx` conta 2× cada parcela com juros (uma linha por categoria).
+- SAC gera blocos de 1×: `installment_value`/`installments` da negociação ficam desatualizados no contrato.
+- "Ajustar valor" no `ContractDetailView` e regerar o cronograma no `ContractModal` perdem a parte de juros sem aviso.
+- Aviso "org sem Receita Financeira" sem teste de componente.
 
 ## Verificação de ponta a ponta
 

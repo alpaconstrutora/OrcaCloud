@@ -20,7 +20,8 @@
 - Colunas `quadra` e `lote` entram no catálogo da tabela; quem decide o que aparece é
   `colunasForaDaTabelaDePrecos(estrutura)` (utils): LOTE esconde Vagas/Banheiros/Pavimento/Posição,
   o resto esconde Quadra/Nº do lote. Vale também para o dropdown de colunas e a largura da tabela.
-- Dormitórios fica (não foi pedido).
+- Dormitórios fica (não foi pedido). **Revisto no mesmo dia:** o usuário viu a tabela no ar e
+  apontou Dormitórios sobrando — saiu também no LOTE (casa/chácara mantêm).
 - Mesmo componente serve Locações: lá vale a mesma regra, pelo vínculo de locação.
 - Portal do Corretor (`BrokerDevelopments.tsx`, "espelho" das colunas) fica fora: lê por RPC de
   portal e não traz quadra/lote. Anotado no comentário de lá.

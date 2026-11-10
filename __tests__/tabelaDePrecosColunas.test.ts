@@ -33,8 +33,8 @@ beforeEach(() => {
 });
 
 describe('colunasForaDaTabelaDePrecos', () => {
-  it('no LOTE esconde Vagas, Banheiros, Pavimento e Posição', () => {
-    expect([...colunasForaDaTabelaDePrecos('LOTE')].sort()).toEqual(['bathrooms', 'floor', 'parking', 'position']);
+  it('no LOTE esconde Dormitórios, Vagas, Banheiros, Pavimento e Posição', () => {
+    expect([...colunasForaDaTabelaDePrecos('LOTE')].sort()).toEqual(['bathrooms', 'bedrooms', 'floor', 'parking', 'position']);
   });
 
   it('fora do LOTE esconde Quadra e Nº do lote (prédio, casa, chácara)', () => {

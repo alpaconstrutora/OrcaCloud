@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 /**
- * Gerenciar Negociação › Financeiro › "Lançar no Financeiro" com plano COM JUROS
+ * Gerenciar Negociação › Parcelas › "Lançar no Financeiro" com plano COM JUROS
+ * (o botão saiu da aba Financeiro em 10/11/2026 — docs/planos/2026-11-10-negociacao-aba-financeiro.md, item 4)
  * (plano docs/planos/2026-11-10-juros-parcelamento-pendencias.md, item 5).
  *
  * Org sem a Conta Financeira "Receita Financeira": o sync lança os juros sem
@@ -75,7 +76,7 @@ const comJuros = {
 
 const abrir = () => render(
     <DealModal isOpen onClose={() => {}} defaultType="SALE" organizationId={ORG}
-        initialTab="pagamento" initialData={comJuros as never} />,
+        initialTab="parcelas" initialData={comJuros as never} />,
 );
 const AVISO = /não tem a Conta Financeira "Receita Financeira"/;
 

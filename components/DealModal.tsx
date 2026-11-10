@@ -574,6 +574,14 @@ const assinaturaDoForm = (d: unknown) => JSON.stringify(d, (_k, v) =>
 type CamposDoMontador = { entrada: string | null; parcelas: string | null; tipo: string | null; primeiroVencimento: string | null };
 const MONTADOR_INTOCADO: CamposDoMontador = { entrada: null, parcelas: null, tipo: null, primeiroVencimento: null };
 
+/**
+ * Botão secundário da negociação. §17: "Salvar alterações" é o ÚNICO azul sólido
+ * da tela; até 10/11/2026 a aba Financeiro tinha cinco (Adicionar pagamento,
+ * Montar/Substituir plano, Lançar no Financeiro, Ver plano de pagamento, Salvar)
+ * e o olho não sabia qual era o próximo passo (crítica de design, item 4).
+ */
+const BOTAO_SECUNDARIO = 'flex items-center gap-1.5 h-9 px-3.5 bg-white text-blue-700 border border-blue-200 rounded-[6px] hover:bg-blue-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed';
+
 const CLASSE_CAMPO_DA_LINHA = 'h-8 px-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
 
 /**
@@ -2915,6 +2923,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         }
     };
 
+    /** "Lançar no Financeiro" — ação da aba Parcelas (cabeçalho e estado vazio). */
+    const botaoLancar = () => (
+        <button
+            type="button"
+            disabled={lancandoNoFinanceiro || !formData.id}
+            onClick={handleLancarNoFinanceiro}
+            title={!formData.id ? 'Salve a negociação para lançar — a cobrança sai do contrato dela.' : undefined}
+            className={BOTAO_SECUNDARIO}
+        >
+            {lancandoNoFinanceiro
+                ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                : <DollarSign className="w-[15px] h-[15px]" />}
+            {lancandoNoFinanceiro
+                ? 'Lançando…'
+                : dirty && formData.id ? 'Salvar e lançar no Financeiro' : 'Lançar no Financeiro'}
+        </button>
+    );
+
     /** Voltar/Cancelar, seta do cabeçalho e fundo: perguntam antes de descartar (§25). */
     const handleRequestClose = async () => {
         if (dirty && !(await confirm(CONFIRMAR_SAIDA))) return;
@@ -3803,6 +3829,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
+                                    {/* Só sem série no plano (à vista, ou plano ainda vazio): com série, a
+                                        1ª data mora na própria linha da tabela, que recalcula a série
+                                        inteira — este campo deslocava as parcelas mês a mês, ignorando
+                                        reforços e chaves (decisão do usuário, 10/11/2026). */}
+                                    {!seriePrincipal && (
                                     <div className="space-y-1.5">
                                         <label className="text-xs font-semibold text-slate-500">Data do 1º Pagamento</label>
                                         <div className="relative">
@@ -3824,6 +3855,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             />
                                         </div>
                                     </div>
+                                    )}
 
 
                                 {/* Dimensões contábeis do negócio. São DUAS coisas
@@ -3897,7 +3929,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <button
                                                 type="button"
                                                 onClick={() => abrirNovoBloco()}
-                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
+                                                className={BOTAO_SECUNDARIO}
                                             >
                                                 <Plus className="w-[15px] h-[15px]" />
                                                 Adicionar pagamento
@@ -4030,7 +4062,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         <button
                                                             type="button"
                                                             onClick={() => { void montarPlano(); }}
-                                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                                            className={`${BOTAO_SECUNDARIO} shrink-0`}
                                                         >
                                                             <Layers className="w-[15px] h-[15px]" />
                                                             Montar plano
@@ -4220,38 +4252,25 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </>
                                         )}
 
-                                        {/* Lançar em Contas a Receber. Só venda: aluguel é
-                                            faturado pela série recorrente do contrato ("Gerar
-                                            parcelas"), e lançar o plano aqui criaria uma segunda
-                                            série do mesmo aluguel — a trava está em
-                                            contractService.syncContractToFinance. */}
-                                        {/* O lançamento lê o plano DA TELA e grava no contrato: com
-                                            alterações não salvas, Contas a Receber ficaria diferente
-                                            da negociação gravada. Por isso salva antes (rótulo diz),
-                                            e negociação nova — que fecha ao salvar — espera o 1º salvar. */}
+                                        {/* "Lançar no Financeiro" morava aqui e passou a ser a ação da aba
+                                            Parcelas (item 4 do plano): aqui fica só a situação e o caminho.
+                                            Só venda — aluguel é faturado pela série recorrente do contrato
+                                            ("Gerar parcelas"); lançar o plano criaria uma segunda série. */}
                                         {formData.type === 'SALE' && linhasDoPlano.length > 0 && (
-                                            <div className="flex items-center justify-end gap-3 pt-1">
-                                                <span className="text-xs text-gray-500">
-                                                    {!formData.id
-                                                        ? 'Salve a negociação para lançar — a cobrança sai do contrato dela.'
-                                                        : dirty
-                                                            ? 'Há alterações não salvas: a negociação é salva antes do lançamento.'
-                                                            : 'A cobrança é do contrato — sem contrato, ele é criado a partir desta negociação.'}
-                                                </span>
+                                            <p className="flex items-center justify-end gap-2 pt-1 text-xs text-gray-500">
+                                                {contractEntries.length > 0
+                                                    ? (contractEntries.length === 1
+                                                        ? 'Contas a Receber tem 1 cobrança deste plano.'
+                                                        : `Contas a Receber tem ${contractEntries.length} cobranças deste plano.`)
+                                                    : 'Plano ainda não lançado em Contas a Receber.'}
                                                 <button
                                                     type="button"
-                                                    disabled={lancandoNoFinanceiro || !formData.id}
-                                                    onClick={handleLancarNoFinanceiro}
-                                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                    onClick={() => setActiveTab('parcelas')}
+                                                    className="font-medium text-blue-700 hover:underline"
                                                 >
-                                                    {lancandoNoFinanceiro
-                                                        ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
-                                                        : <DollarSign className="w-[15px] h-[15px]" />}
-                                                    {lancandoNoFinanceiro
-                                                        ? 'Lançando…'
-                                                        : dirty && formData.id ? 'Salvar e lançar no Financeiro' : 'Lançar no Financeiro'}
+                                                    {contractEntries.length > 0 ? 'Ver na aba Parcelas' : 'Lançar pela aba Parcelas'}
                                                 </button>
-                                            </div>
+                                            </p>
                                         )}
                                     </div>
                                 )}
@@ -4331,19 +4350,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 )}
                             </div>
 
-                            {/* O Plano de Pagamento saiu daqui para a aba PARCELAS:
-                                esta aba define as CONDIÇÕES (valor, datas, forma, entrada);
-                                a lista de parcelas é outra tarefa e pedia a largura toda. */}
-                            {formData.payment_method === 'INSTALLMENTS' && (
-                                <button
-                                    type="button"
-                                    onClick={() => setActiveTab('parcelas')}
-                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
-                                >
-                                    <DollarSign className="w-[15px] h-[15px]" />
-                                    Ver plano de pagamento
-                                </button>
-                            )}
 
                             {/* Análise de Crédito — veio da aba Contrato: decidir a forma de
                                 pagamento (à vista, parcelado, financiado) depende de saber se
@@ -4594,8 +4600,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 mexiam num rascunho que não existe mais. Hoje a linha
                                                 da tabela É a cobrança — edite a célula, exclua a
                                                 linha, ou refaça a série em "Gerar parcelas". */}
+                                            {/* Venda já lançada: relançar o plano (substitui as PREVISTAS;
+                                                pagas e conciliadas ficam). Sem nada lançado, o convite é o
+                                                do estado vazio, logo abaixo — não dois botões iguais. */}
+                                            {formData.type === 'SALE' && linhasDoPlano.length > 0 && contractEntries.length > 0 && botaoLancar()}
                                             <button type="button" onClick={() => handleOpenGenerateModal()} disabled={loading}
-                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50">
+                                                className={BOTAO_SECUNDARIO}>
                                                 <Plus className="w-[15px] h-[15px]" />
                                                 {loading ? 'Verificando…' : 'Gerar parcelas'}
                                             </button>
@@ -4619,19 +4629,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                             ? 'O plano de pagamento (aba Financeiro) tem 1 parcela, ainda não lançada.'
                                                             : `O plano de pagamento (aba Financeiro) tem ${parcelasDoPlano} parcelas, ainda não lançadas.`}
                                                     </p>
-                                                    <button
-                                                        type="button"
-                                                        disabled={lancandoNoFinanceiro || !formData.id}
-                                                        onClick={handleLancarNoFinanceiro}
-                                                        className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
-                                                    >
-                                                        {lancandoNoFinanceiro
-                                                            ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
-                                                            : <DollarSign className="w-[15px] h-[15px]" />}
-                                                        {lancandoNoFinanceiro
-                                                            ? 'Lançando…'
-                                                            : dirty && formData.id ? 'Salvar e lançar no Financeiro' : 'Lançar no Financeiro'}
-                                                    </button>
+                                                    <div className="mt-4 flex justify-center">{botaoLancar()}</div>
                                                     {!formData.id && (
                                                         <p className="mt-2 text-xs text-gray-500">Salve a negociação para lançar — a cobrança sai do contrato dela.</p>
                                                     )}

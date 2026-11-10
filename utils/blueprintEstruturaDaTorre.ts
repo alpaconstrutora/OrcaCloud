@@ -184,7 +184,7 @@ function unidadesDoAndar(t: TorreParaEstrutura, andar: number): UnidadeDoPiso[] 
 const ALTURA_MIN_MM = 2000;
 const ALTURA_MAX_MM = 15000;
 /** Para CALCULAR a elevação onde nada diz o pé-direito: o padrão do bloco de massa. */
-const PE_DIREITO_DO_CALCULO_MM = 3000;
+export const PE_DIREITO_DO_CALCULO_MM = 3000;
 const fmtElev = (mm: number) => `${mm < 0 ? '-' : '+'}${(Math.abs(mm) / 1000).toFixed(2).replace('.', ',')}`;
 const fmtM = (mm: number) => (mm / 1000).toFixed(2).replace('.', ',');
 

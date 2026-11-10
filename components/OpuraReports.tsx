@@ -450,12 +450,14 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
         switch (key) {
             case 'label':
                 return (
-                    <div className="flex items-center gap-3 min-w-0" style={{ paddingLeft: r.depth * 24 }}>
-                        {r.isGroup && (
+                    // Na árvore, toda linha reserva o espaço do chevron: sem isso o recuo do
+                    // filho era "comido" pelo chevron do grupo e o código ficava alinhado ao do pai.
+                    <div className="flex items-center gap-3 min-w-0" style={{ paddingLeft: r.depth * 28 }}>
+                        {r.isGroup ? (
                             r.collapsed
                                 ? <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
                                 : <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        )}
+                        ) : isTree && <span className="w-3.5 flex-shrink-0" aria-hidden />}
                         {r.code && <span className="text-sm font-normal text-gray-400 tabular-nums flex-shrink-0">{r.code}</span>}
                         <span
                             className={`block truncate text-sm font-normal ${r.isGroup ? 'text-gray-900' : r.synthetic ? 'text-gray-500 italic' : 'text-gray-700'}`}

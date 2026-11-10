@@ -1,15 +1,20 @@
 import { supabase } from '../lib/supabase';
-import { computeNoi, portfolioNoi, capRate, type NoiNode, type NoiResult } from '../lib/rentalNoi';
+import { computeNoi, portfolioNoi, capRate, expenseByPropertyFromEmpreendimentos, type NoiNode, type NoiResult } from '../lib/rentalNoi';
 import { sumPortfolioValue } from '../lib/rentalPortfolio';
-import { propertyExpenseService } from './propertyExpenseService';
+import { fetchAllPages, type RangeableQuery } from '../lib/supabasePaginate';
+import { empreendimentoService } from './empreendimentoService';
 
 /**
  * NOI, margem e cap rate da carteira de locação (Fase 2 do plano
  * docs/planos/2026-08-06-kpis-locacao-primitivas.md).
  *
- * Devolve `null` quando a apropriação de despesa por imóvel ainda não existe no
- * banco — sem ela o NOI seria só a receita disfarçada de resultado, que é pior
- * que não mostrar nada. Mesmo contrato da Fase 1: `null` ≠ zero.
+ * Despesa = títulos de Contas a Pagar cujo Centro de Custo pertence a um
+ * empreendimento, levados aos imóveis dele (plano
+ * docs/planos/2026-11-10-noi-despesa-pelo-centro-de-custo.md). Antes vinha de
+ * `property_expense_allocations`, a apropriação manual por imóvel — que nunca
+ * foi usada (0 linhas) e saiu de Contas a Pagar no PR #289.
+ *
+ * `null` = falha ao calcular (com `throwOnError`, lança). `null` ≠ zero.
  */
 
 /** Imóvel como o cálculo de NOI o enxerga. Compatível de propósito com
@@ -20,6 +25,9 @@ export interface NoiPropertyRow {
     price?: number | null;
     initial_price?: number | null;
     purpose?: string | null;
+    /** Base do rateio da despesa do empreendimento entre os imóveis dele. */
+    private_area?: number | null;
+    area?: number | null;
 }
 
 export interface RentalNoiMetrics {
@@ -64,17 +72,11 @@ export const rentalNoiService = {
         opts?: { throwOnError?: boolean },
     ): Promise<RentalNoiMetrics | null> {
         try {
-            const expenseByProperty = await propertyExpenseService.expenseByProperty(
-                organizationId, from, to
-            );
-            // null = migration não aplicada. Sem despesa apropriada não há NOI.
-            if (expenseByProperty === null) return null;
-
             let propertiesData: NoiPropertyRow[] = carteira ?? [];
             if (!carteira) {
                 let propertiesQuery = supabase
                     .from('commercial_properties')
-                    .select('id, parent_id, price, initial_price, purpose');
+                    .select('id, parent_id, price, initial_price, purpose, private_area, area');
                 if (organizationId) propertiesQuery = propertiesQuery.eq('organization_id', organizationId);
 
                 const { data, error: propertiesError } = await propertiesQuery;
@@ -116,6 +118,7 @@ export const rentalNoiService = {
             }
 
             const nodes = properties as NoiNode[];
+            const expenseByProperty = await despesaPorImovel(organizationId, from, to, properties);
             const byProperty = computeNoi(nodes, revenueByProperty, expenseByProperty);
             const total = portfolioNoi(nodes, byProperty);
 
@@ -143,6 +146,74 @@ export const rentalNoiService = {
             return null;
         }
     },
+};
+
+const CHUNK = 150;   // ids por `.in(...)` — mesma folga de URL do propertyExpenseService
+
+const chunk = <T,>(arr: T[], size: number): T[][] => {
+    const out: T[][] = [];
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size));
+    return out;
+};
+
+/**
+ * Despesa da janela por imóvel da carteira, a partir do Centro de Custo.
+ *
+ * Empreendimento do Centro de Custo = o vínculo direto; sem ele, o da obra do
+ * Centro de Custo — a mesma regra da coluna Empreendimento em Centro de Custo
+ * (CostCenterModule.empreendimentoOf). Título cancelado não é despesa.
+ */
+const despesaPorImovel = async (
+    organizationId: string | null | undefined,
+    from: string | undefined,
+    to: string | undefined,
+    carteira: NoiPropertyRow[],
+): Promise<Map<string, number>> => {
+    if (carteira.length === 0) return new Map();
+
+    let ccQuery = supabase.from('cost_centers_v2').select('id, empreendimento_id, project_id');
+    if (organizationId) ccQuery = ccQuery.eq('organization_id', organizationId);
+    const { data: ccs, error: ccError } = await ccQuery;
+    if (ccError) throw ccError;
+
+    const ccRows = (ccs || []) as { id: string; empreendimento_id: string | null; project_id: string | null }[];
+    const precisaDaObra = ccRows.some(c => !c.empreendimento_id && c.project_id);
+    const empPorObra = precisaDaObra ? await empreendimentoService.mapObrasToEmpreendimentos(organizationId) : {};
+    const empPorCc = new Map<string, string>();
+    for (const c of ccRows) {
+        const emp = c.empreendimento_id ?? (c.project_id ? empPorObra[c.project_id]?.id : undefined);
+        if (emp) empPorCc.set(c.id, emp);
+    }
+    if (empPorCc.size === 0) return new Map();
+
+    const despesaPorEmp = new Map<string, number>();
+    for (const ids of chunk([...empPorCc.keys()], CHUNK)) {
+        const { data, error } = await fetchAllPages<{ cost_center_id: string; amount: number }>(() => {
+            let q = supabase
+                .from('vw_payables')
+                .select('cost_center_id, amount')
+                .in('cost_center_id', ids)
+                .neq('effective_status', 'CANCELADO')
+                .order('id');
+            if (organizationId) q = q.eq('organization_id', organizationId);
+            if (from) q = q.gte('due_date', from);
+            if (to) q = q.lte('due_date', to);
+            return q as unknown as RangeableQuery<{ cost_center_id: string; amount: number }>;
+        });
+        if (error) throw error;
+        for (const row of data) {
+            const emp = empPorCc.get(row.cost_center_id);
+            if (emp) despesaPorEmp.set(emp, (despesaPorEmp.get(emp) ?? 0) + (Number(row.amount) || 0));
+        }
+    }
+    if (despesaPorEmp.size === 0) return new Map();
+
+    const vinculo = await empreendimentoService.mapPropertiesToEmpreendimentos(organizationId);
+    const imoveis = carteira.flatMap(p => {
+        const v = vinculo[p.id];
+        return v ? [{ id: p.id, empreendimentoId: v.id, isBuilding: v.isBuilding, private_area: p.private_area, area: p.area }] : [];
+    });
+    return expenseByPropertyFromEmpreendimentos(despesaPorEmp, imoveis);
 };
 
 /**

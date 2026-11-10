@@ -163,7 +163,7 @@ export interface RentalAnalysisScope {
     /** `null` = despesa por imóvel indisponível.
      *  `capRate` = NOI anualizado ÷ patrimônio; `null` sem patrimônio ou sem
      *  saber quantos meses a janela do NOI cobre (`noiMonthsInWindow`).
-     *  `expenseRecorded` = há despesa apropriada aos imóveis do balde na
+     *  `expenseRecorded` = há despesa (Centro de Custo do empreendimento) nos imóveis do balde na
      *  janela. Sem ela o NOI é a receita com outro nome e a margem sai 100% —
      *  uma boa notícia falsa; quem exibe mostra "—" (ver `noiMeasured`). */
     noi: {
@@ -583,7 +583,7 @@ export const groupRentalAnalysis = (
     };
 };
 
-/** NOI só é medida com despesa apropriada aos imóveis na janela. Sem ela o
+/** NOI só é medida com despesa nos imóveis na janela (Centro de Custo do empreendimento). Sem ela o
  *  número é a receita com outro nome e a margem sai 100% — quem exibe mostra
  *  "—" e diz por quê. Um lugar só para essa regra (KPI, detalhamento, tabela). */
 export const noiMeasured = (noi: RentalAnalysisScope['noi']): boolean =>

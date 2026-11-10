@@ -517,13 +517,13 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                         sub={`${orDash(scope.financial.rate, percent1)} de ${moneyBRL(scope.financial.potential)} potencial`}
                         acao={scope.unitStatus.available > 0 ? { label: 'Ver imóveis disponíveis', onClick: () => onNavigate('imoveis') } : undefined} />
                     {/* NOI acumulado no ano — o rótulo diz o período, porque o
-                        vizinho é a receita MENSAL. Sem despesa apropriada aos
+                        vizinho é a receita MENSAL. Sem despesa lançada nos
                         imóveis, o NOI é a receita com outro nome: "—" e o motivo. */}
                     <KpiCard destaque label="NOI no ano" icon={<TrendingUp />}
                         value={pNoi?.value ?? (noiOk ? moneyBRL(scope.noi!.noi) : '—')}
-                        sub={pNoi?.sub ?? (scope.noi ? (noiOk ? `margem ${orDash(scope.noi.margin, percent1)}` : 'sem despesa lançada nos imóveis') : 'despesa por imóvel indisponível')}
+                        sub={pNoi?.sub ?? (scope.noi ? (noiOk ? `margem ${orDash(scope.noi.margin, percent1)}` : 'sem despesa no centro de custo do empreendimento') : 'despesa indisponível')}
                         tom={noiOk && scope.noi!.noi < 0 ? 'alerta' : 'neutro'}
-                        acao={scope.noi && !noiOk ? { label: 'Apropriar despesas', onClick: () => onNavigate('contas-a-pagar') } : undefined} />
+                        acao={scope.noi && !noiOk ? { label: 'Ver Contas a Pagar', onClick: () => onNavigate('contas-a-pagar') } : undefined} />
                     <KpiCard destaque label="WALE da carteira" icon={<Calendar />}
                         value={pEx?.value ?? orDash(ex?.wale.years, anos1)}
                         sub={pEx?.sub ?? (ex ? `prazo médio de ${ex.wale.counted} de ${plural(ex.activeContracts, 'contrato vigente', 'contratos vigentes')}` : undefined)} />
@@ -600,8 +600,8 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                     )}
                     {scope.noi && !noiOk && (
                         <p className="text-xs text-gray-600">
-                            NOI sem base: nenhuma despesa foi apropriada aos imóveis no ano. Sem despesa, o NOI seria
-                            a própria receita, com margem de 100%. Aproprie as despesas em Financeiro › Contas a Pagar.
+                            NOI sem base: nenhuma despesa do ano foi lançada com centro de custo vinculado ao empreendimento. Sem despesa, o NOI seria
+                            a própria receita, com margem de 100%. Vincule o centro de custo ao empreendimento em Minha Organização › Centro de Custo.
                         </p>
                     )}
                     {ex && ex.renewal.rate == null && ex.contractsConsidered > 0 && (
@@ -730,7 +730,7 @@ const RentalAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectE
                     )}
 
                     {/* Rentabilidade (Fase 2) — o bloco que responde "quanto RENDE", e
-                        não "quanto fatura". Só existe com despesa apropriada por imóvel;
+                        não "quanto fatura". Só existe com despesa no centro de custo do empreendimento;
                         sem ela o NOI seria a receita com outro nome. */}
                     {scope.noi && (
                         <div className="mb-3">

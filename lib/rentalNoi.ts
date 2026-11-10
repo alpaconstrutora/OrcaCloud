@@ -8,6 +8,8 @@
  * inalcançável, e só dava para mostrar rental yield BRUTO.
  */
 
+import { allocateProrated } from './rentalAllocation';
+
 export interface NoiNode {
     id: string;
     parent_id?: string | null;
@@ -139,3 +141,46 @@ export const portfolioNoi = (
  */
 export const capRate = (annualNoi: number, marketValue: number): number | null =>
     marketValue > 0 ? annualNoi / marketValue : null;
+
+/** Imóvel da carteira com o vínculo ao empreendimento e a área (base do rateio). */
+export interface ImovelDoEmpreendimento {
+    id: string;
+    empreendimentoId: string;
+    /** true = edifício-pai do empreendimento, não uma unidade. */
+    isBuilding?: boolean;
+    private_area?: number | null;
+    area?: number | null;
+}
+
+/**
+ * Despesa por imóvel a partir da despesa por EMPREENDIMENTO (a que vem do
+ * Centro de Custo do lançamento — plano docs/planos/2026-11-10-noi-despesa-pelo-centro-de-custo.md).
+ *
+ * - Edifício do empreendimento na carteira: a despesa vai inteira para ele, e o
+ *   rollup de `computeNoi` a leva junto com as unidades.
+ * - Sem edifício: rateio entre os imóveis do empreendimento pela área
+ *   privativa (igual, sem área) — o mesmo `allocateProrated` da apropriação.
+ * - Empreendimento sem imóvel na carteira: fica fora (não há NOI para ela).
+ */
+export const expenseByPropertyFromEmpreendimentos = (
+    expenseByEmpreendimento: Map<string, number>,
+    imoveis: ImovelDoEmpreendimento[],
+): Map<string, number> => {
+    const porEmp = new Map<string, ImovelDoEmpreendimento[]>();
+    for (const imovel of imoveis) {
+        const lista = porEmp.get(imovel.empreendimentoId);
+        if (lista) lista.push(imovel); else porEmp.set(imovel.empreendimentoId, [imovel]);
+    }
+
+    const out = new Map<string, number>();
+    const somar = (id: string, valor: number) => out.set(id, (out.get(id) ?? 0) + valor);
+
+    for (const [empId, total] of expenseByEmpreendimento) {
+        const doEmp = porEmp.get(empId) ?? [];
+        if (doEmp.length === 0 || !total) continue;
+        const edificio = doEmp.find(i => i.isBuilding);
+        if (edificio) { somar(edificio.id, total); continue; }
+        for (const a of allocateProrated(doEmp, total).allocations) somar(a.property_id, a.amount);
+    }
+    return out;
+};

@@ -763,7 +763,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
     );
     // Contratos de locação vencendo em 30 dias — badge da aba Renovações.
     const [renewalsBadge, setRenewalsBadge] = useState(0);
-    // `null` = apropriação de despesa por imóvel ainda não existe no banco.
+    // `null` = NOI não calculado (falha). Despesa vem do Centro de Custo do empreendimento.
     // Sem ela o "NOI" seria a receita disfarçada de resultado — pior que ocultar.
     // Aqui interessa sobretudo o `byProperty`: é dele que sai o NOI de cada
     // empreendimento, sem uma segunda consulta por balde.

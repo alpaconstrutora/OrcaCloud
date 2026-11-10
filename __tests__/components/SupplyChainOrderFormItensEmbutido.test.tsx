@@ -31,6 +31,11 @@ const ORCAMENTO = [
         composition: [{ code: 'INS-A', description: 'Taco de madeira', unit: 'M2', price: 120, type: 'INPUT', quantity: 2 }],
     } },
     { id: 'b4', quantity: 1, sinapiItem: { code: 'SRV-1', description: 'Limpeza final', unit: 'VB', price: 900, type: 'SERVICE' } },
+    // Composição com composição interna (argamassa) — no orçamento a interna vem sem insumos.
+    { id: 'b5', quantity: 10, sinapiItem: {
+        code: 'ALV-1', description: 'Alvenaria de bloco', unit: 'M2', price: 120, type: 'COMPOSITION',
+        composition: [{ code: '87298', description: 'ARGAMASSA TRAÇO 1:3', unit: 'M3', price: 0, type: 'COMPOSITION', quantity: 0.02 }],
+    } },
 ];
 
 const ITENS_V3 = [
@@ -84,6 +89,7 @@ vi.mock('../../components/MaterialSelectionModal', () => ({ default: () => null 
 vi.mock('../../components/DatabasePickerModal', () => ({ default: () => null }));
 
 import { orderService } from '../../services/orderService';
+import { sinapiService } from '../../services/sinapiService';
 import SupplyChainOrderForm from '../../components/SupplyChainOrderForm';
 import { ConfirmProvider } from '../../components/ui/confirm';
 
@@ -116,6 +122,8 @@ describe('Pedido › aba Itens: uma lista só', () => {
     let barraSalvar: HTMLElement;
     beforeEach(() => {
         vi.clearAllMocks();
+        // `clearAllMocks` não desfaz implementação trocada num caso.
+        vi.mocked(sinapiService.getItemsByCodes).mockImplementation(async () => []);
         document.body.innerHTML = '';
         barraItens = barra('barra-itens');
         barraSalvar = barra('barra-salvar');
@@ -143,6 +151,24 @@ describe('Pedido › aba Itens: uma lista só', () => {
         expect(within(await linha('Taco de madeira')).getAllByText('6')).toHaveLength(2); // orçada e a comprar
         // "Qtd comprada" conta o próprio pedido: Concreto 5 de 5 → nada a comprar.
         expect(within(await linha('Brita 1')).getAllByText('8').length).toBeGreaterThan(0);
+    });
+
+    it('composição interna é aberta pela base SINAPI até o material (argamassa → cimento), com preço da base', async () => {
+        vi.mocked(sinapiService.getItemsByCodes).mockImplementation(async (codes: string[]) => [
+            ...(codes.includes('87298') ? [{ code: '87298', composition: [
+                { code: 'CIMENTO', description: 'Cimento Portland CP II', unit: 'KG', type: 'INPUT', quantity: 430, price: 0 },
+                { code: '88831', description: 'BETONEIRA', unit: 'CHI', type: 'COMPOSITION', quantity: 3.39, price: 0 },
+            ] }] : []),
+            ...(codes.includes('CIMENTO') ? [{ code: 'CIMENTO', price: 0.9 }] : []),
+        ] as never);
+        montar(barraItens, barraSalvar);
+        fireEvent.click(await within(barraItens).findByRole('button', { name: /Item do orçamento/ }));
+
+        const cimento = (await screen.findByText('Cimento Portland CP II')).closest('tr')!;
+        expect(within(cimento).getAllByText('86').length).toBeGreaterThan(0); // 10 × 0,02 × 430
+        expect(within(cimento).getByText(/0,90/)).toBeTruthy();
+        expect(screen.queryByText('ARGAMASSA TRAÇO 1:3')).toBeNull();
+        expect(screen.queryByText('BETONEIRA')).toBeNull();
     });
 
     it('incluir do orçamento grava na hora: itens lidos + os marcados, sem "avulso", quantidade = a comprar', async () => {

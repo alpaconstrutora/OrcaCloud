@@ -199,6 +199,70 @@ describe('Espelho3D — ficha', () => {
         expect(screen.queryByRole('button', { name: 'Vista da janela' })).toBeNull();
     });
 
+    // F8 (10/11/2026): o "Ver decorado".
+    const DECORADO = {
+        imagens: [
+            { url: 'https://x/corte.jpg', titulo: 'Corte 3D mobiliado', origem: 'ENVIADA' as const },
+            { url: 'https://x/sala.jpg', titulo: 'Sala', origem: 'ENVIADA' as const },
+            { url: 'https://x/suite.jpg', titulo: 'Suíte', origem: 'ENVIADA' as const },
+        ],
+    };
+
+    it('unidade com decorado: o corte vem primeiro, as setas e o teclado passam as imagens, e o selo está sempre lá', async () => {
+        montar({ dados: new Map<string, DadosDaUnidade>([['A-1-2', { tipologia: 'Tipo 1', decorado: DECORADO }]]) });
+        fireEvent.click(await screen.findByTestId('cena'));
+        fireEvent.click(screen.getByRole('button', { name: 'Ver decorado' }));
+        const dialogo = screen.getByRole('dialog');
+        const imagem = () => within(dialogo).getByTestId('decorado-imagem');
+        expect(imagem().getAttribute('src')).toBe('https://x/corte.jpg');
+        expect(within(dialogo).getByTestId('decorado-selo').textContent).toBe('Imagem ilustrativa');
+        expect(within(dialogo).getByTestId('decorado-posicao').textContent).toContain('1 de 3');
+
+        fireEvent.click(within(dialogo).getByRole('button', { name: 'Próxima imagem' }));
+        expect(imagem().getAttribute('src')).toBe('https://x/sala.jpg');
+        expect(within(dialogo).getByTestId('decorado-selo').textContent).toBe('Imagem ilustrativa');
+        fireEvent.keyDown(window, { key: 'ArrowRight' });
+        expect(imagem().getAttribute('src')).toBe('https://x/suite.jpg');
+        // Depois da última volta à primeira; a seta para trás volta.
+        fireEvent.keyDown(window, { key: 'ArrowRight' });
+        expect(imagem().getAttribute('src')).toBe('https://x/corte.jpg');
+        fireEvent.keyDown(window, { key: 'ArrowLeft' });
+        expect(imagem().getAttribute('src')).toBe('https://x/suite.jpg');
+        // A miniatura escolhe direto.
+        fireEvent.click(within(dialogo).getByRole('tab', { name: 'Sala' }));
+        expect(imagem().getAttribute('src')).toBe('https://x/sala.jpg');
+
+        fireEvent.click(within(dialogo).getByRole('button', { name: 'Fechar o decorado' }));
+        expect(screen.queryByRole('dialog')).toBeNull();
+    });
+
+    it('o corte gerado pela Planta (F9) leva o selo próprio', async () => {
+        const daPlanta = { imagens: [{ url: 'https://x/corte.png', titulo: 'Corte 3D mobiliado', origem: 'PLANTA' as const }] };
+        montar({ dados: new Map<string, DadosDaUnidade>([['A-1-2', { decorado: daPlanta }]]) });
+        fireEvent.click(await screen.findByTestId('cena'));
+        fireEvent.click(screen.getByRole('button', { name: 'Ver decorado' }));
+        const dialogo = screen.getByRole('dialog');
+        expect(within(dialogo).getByTestId('decorado-selo').textContent).toBe('Gerado do projeto · mobiliário ilustrativo');
+        // Uma imagem só: sem setas nem "1 de 1".
+        expect(within(dialogo).queryByRole('button', { name: 'Próxima imagem' })).toBeNull();
+        expect(within(dialogo).queryByTestId('decorado-posicao')).toBeNull();
+    });
+
+    it('o prédio tem decorado mas não desta tipologia: o botão fica desligado e diz por quê', async () => {
+        montar({ dados: new Map<string, DadosDaUnidade>([['A-1-2', { tipologia: 'Tipo 4', decorado: null }]]) });
+        fireEvent.click(await screen.findByTestId('cena'));
+        const botao = screen.getByRole('button', { name: 'Ver decorado' });
+        expect(botao).toBeDisabled();
+        expect(botao.parentElement!.getAttribute('title')).toBe('A tipologia Tipo 4 ainda não tem decorado cadastrado.');
+        expect(screen.getByTestId('ficha-decorado-motivo').textContent).toBe('A tipologia Tipo 4 ainda não tem decorado cadastrado.');
+    });
+
+    it('prédio sem nenhum decorado: a ficha nem fala em decorado', async () => {
+        montar();
+        fireEvent.click(await screen.findByTestId('cena'));
+        expect(screen.queryByRole('button', { name: 'Ver decorado' })).toBeNull();
+    });
+
     it('fechar a ficha tira a seleção', async () => {
         montar();
         fireEvent.click(await screen.findByTestId('cena'));

@@ -98,6 +98,13 @@ describe('montarEspelhoDoInvestidor', () => {
     expect(montarEspelhoDoInvestidor({ ...OBRA, plantas: null }).dados.get('202')!.plantaUrl).toBeNull();
   });
 
+  it('a ficha leva o decorado da tipologia da unidade (F8); obra sem decorado nem fala nisso', () => {
+    const decorado = [{ tipologia: '2 QUARTOS', tipologia_chave: '2 quartos', papel: 'AMBIENTE' as const, legenda: 'Suíte', ordem: 0, imagem_url: 'https://x/suite.jpg', origem: 'ENVIADA' as const }];
+    const com = montarEspelhoDoInvestidor({ ...OBRA, decorado });
+    expect(com.dados.get('202')!.decorado).toEqual({ imagens: [{ url: 'https://x/suite.jpg', titulo: 'Suíte', origem: 'ENVIADA' }] });
+    expect('decorado' in montarEspelhoDoInvestidor({ ...OBRA, decorado: null }).dados.get('202')!).toBe(false);
+  });
+
   it('unidade vendável sem andar conta nos números e é dita fora do desenho', () => {
     const obra = { ...OBRA, torres: [{ ...OBRA.torres[0], units: [...OBRA.torres[0].units, unidade('Lote 9', null)] }] };
     const x = montarEspelhoDoInvestidor(obra);
@@ -367,6 +374,73 @@ describe('migration da vista por unidade — coluna presa à torre, funções se
       expect(funcao(sql, nome)).toMatch(/'unit_name', \(SELECT vu\.name FROM public\.empreendimento_units vu WHERE vu\.id = v\.unit_id\)/);
     }
     expect(chavesDe(sql).filter((k) => /client|buyer|comprador|cliente|deal|negoc|broker|corretor|document|cpf|cnpj|email|phone|contract/.test(k))).toEqual([]);
+  });
+
+  it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {
+    const doInvestidor = sql.slice(sql.lastIndexOf("'units', COALESCE"), sql.indexOf('FROM unidades u WHERE u.tower_id = t.id'));
+    expect([...doInvestidor.matchAll(/'([a-z_]+)'\s*,/g)].map((m) => m[1]).filter((k) => k !== 'units').sort()).toEqual([
+      'bathrooms', 'bedrooms', 'floor', 'floor_tipo', 'id', 'is_vendavel', 'name', 'parking_spaces', 'position_type', 'price',
+      'private_area', 'sort_order', 'status', 'sun_orientation', 'typology', 'vaga_na_planta',
+    ]);
+    const listas = [...sql.matchAll(/n\.status IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
+    expect(listas.length).toBe(2);
+    for (const l of listas) expect(l).toEqual(ETAPAS_VENDIDA);
+    expect(sql).not.toMatch(/GRANT[^;]*fn_espelho_de_vendas_das_obras/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_broker_portal_get_espelho\(TEXT\) TO anon, authenticated;/);
+  });
+});
+
+/**
+ * F8 (10/11/2026): o "Ver decorado" por tipologia. A migration cria a tabela do decorado e reescreve mais uma vez as
+ * duas funções do espelho para trazerem `decorado`. É a definição que vale no banco — a mesma trava vale para ela.
+ */
+describe('migration do decorado por tipologia — tabela fechada, funções sem dado de pessoa', () => {
+  const sql = lerMigration('aplicar_20271110990000_empreendimento_tipologia_decorado.sql');
+  const anterior = lerMigration('aplicar_20271110800000_vista_da_janela_por_unidade.sql');
+  const chavesDe = (texto: string) => [...texto.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
+  const funcao = (texto: string, nome: string) => {
+    const i = texto.indexOf(`CREATE OR REPLACE FUNCTION public.${nome}`);
+    return texto.slice(i, texto.indexOf('$X$;', i));
+  };
+
+  it('a tabela nasce com RLS, policy só para authenticated pela organização do empreendimento, e fechada para anon', () => {
+    expect(sql).toMatch(/ALTER TABLE public\.empreendimento_tipologia_decorado ENABLE ROW LEVEL SECURITY;/);
+    expect(sql).toMatch(/CREATE POLICY org_access_empr_tipologia_decorado ON public\.empreendimento_tipologia_decorado\s+FOR ALL TO authenticated/);
+    expect(sql.match(/e\.organization_id IN \(SELECT public\.empr_user_org_ids\(\)\)/g)).toHaveLength(2);
+    expect(sql).toMatch(/REVOKE ALL ON TABLE public\.empreendimento_tipologia_decorado FROM anon;/);
+    expect(sql).not.toMatch(/GRANT[^;]*empreendimento_tipologia_decorado[^;]*anon/);
+  });
+
+  it('um corte por tipologia, ambiente sempre com nome, e a origem PLANTA só no corte', () => {
+    expect(sql).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_empreendimento_tipologia_decorado_um_corte\s+ON public\.empreendimento_tipologia_decorado \(empreendimento_id, tipologia_chave\) WHERE papel = 'CORTE'/);
+    expect(sql).toMatch(/CHECK \(papel IN \('CORTE', 'AMBIENTE'\)\)/);
+    // CHECK aceita NULL: o nome do ambiente tem de ser exigido com IS NOT NULL.
+    expect(sql).toMatch(/CHECK \(papel <> 'AMBIENTE' OR \(legenda IS NOT NULL AND btrim\(legenda\) <> ''\)\)/);
+    expect(sql).toMatch(/CHECK \(origem = 'ENVIADA' OR papel = 'CORTE'\)/);
+  });
+
+  it('nas duas funções entra só o decorado, nenhuma chave de antes sai, e a assinatura da Planta fica no banco', () => {
+    const novas = (nome: string) => {
+      const antes = chavesDe(funcao(anterior, nome));
+      const depois = chavesDe(funcao(sql, nome));
+      for (const k of antes) expect(depois).toContain(k);
+      return [...new Set(depois.filter((k) => !antes.includes(k)))].sort();
+    };
+    // `tipologia`, `imagem_url`, `legenda` etc. já eram chaves (da planta e da vista): só as do decorado são novas.
+    expect(novas('fn_broker_portal_get_espelho')).toEqual(['decorado', 'ordem', 'origem', 'papel']);
+    expect(novas('fn_espelho_de_vendas_das_obras')).toEqual(['decorado', 'ordem', 'origem', 'papel']);
+    for (const nome of ['fn_broker_portal_get_espelho', 'fn_espelho_de_vendas_das_obras']) {
+      expect(funcao(sql, nome)).not.toMatch(/planta_assinatura|planta_estudo_id|imagem_path|created_by/);
+      expect(chavesDe(funcao(sql, nome))).toContain('plantas');
+    }
+    expect(chavesDe(sql).filter((k) => /client|buyer|comprador|cliente|deal|negoc|broker|corretor|document|cpf|cnpj|email|phone|contract/.test(k))).toEqual([]);
+  });
+
+  it('o decorado do corretor é só o dos prédios que ele vê (o mesmo `visiveis` das plantas)', () => {
+    const doCorretor = funcao(sql, 'fn_broker_portal_get_espelho');
+    const trecho = doCorretor.slice(doCorretor.indexOf("'decorado'"), doCorretor.indexOf("'torres'"));
+    expect(trecho).toMatch(/e3\.commercial_building_id IN \(\s*SELECT COALESCE\(p\.parent_id, p\.id\)\s+FROM public\.commercial_properties p\s+WHERE p\.id IN \(SELECT id FROM visiveis\)/);
+    expect(funcao(sql, 'fn_espelho_de_vendas_das_obras')).toMatch(/dc\.empreendimento_id IN \(SELECT t\.empreendimento_id FROM torres t WHERE t\.obra_id = pr\.id\)/);
   });
 
   it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {

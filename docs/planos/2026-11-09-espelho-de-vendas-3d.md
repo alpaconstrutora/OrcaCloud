@@ -290,7 +290,7 @@ descritivo; ver Riscos).
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| `supabase/migrations/aplicar_<prefixo>_empreendimento_tipologia_decorado.sql` (novo; prefixo conferido contra todos os nomes no dia) | Tabela `empreendimento_tipologia_decorado (empreendimento_id, tipologia, tipologia_chave, papel, legenda, ordem, imagem_url, imagem_path, origem, planta_assinatura, planta_estudo_id)`: `papel` `CORTE` \| `AMBIENTE` (CHECK); índice único parcial — um `CORTE` por tipologia; `AMBIENTE` exige `legenda`; `origem` `ENVIADA` \| `PLANTA` (padrão `ENVIADA`; `PLANTA` e as duas colunas `planta_*` são preenchidas pela F9 — nascem aqui para a F9 não precisar de migration). RLS pela organização do empreendimento (a regra da F5); fechada para anon. Imagem no bucket `empreendimento-midia` (`…/decorado/`). Reescreve `fn_broker_portal_get_espelho` e `fn_espelho_de_vendas_das_obras` com o MESMO corpo da migration vigente mais a chave `decorado` (lista de `{ tipologia_chave, papel, legenda, ordem, imagem_url, origem }`) ao lado de `plantas`. | Aplicada no banco (com autorização própria do usuário): a verificação embutida passa; privilégios das duas funções iguais aos de antes; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `supabase/migrations/aplicar_20271110990000_empreendimento_tipologia_decorado.sql` (novo) | Tabela `empreendimento_tipologia_decorado (empreendimento_id, tipologia, tipologia_chave, papel, legenda, ordem, imagem_url, imagem_path, origem, planta_assinatura, planta_estudo_id)`: `papel` `CORTE` \| `AMBIENTE` (CHECK); índice único parcial — um `CORTE` por tipologia; `AMBIENTE` exige `legenda`; `origem` `ENVIADA` \| `PLANTA` (padrão `ENVIADA`; `PLANTA` e as duas colunas `planta_*` são preenchidas pela F9 — nascem aqui para a F9 não precisar de migration). RLS pela organização do empreendimento (a regra da F5); fechada para anon. Imagem no bucket `empreendimento-midia` (`…/decorado/`). Reescreve `fn_broker_portal_get_espelho` e `fn_espelho_de_vendas_das_obras` com o MESMO corpo da migration vigente mais a chave `decorado` (lista de `{ tipologia_chave, papel, legenda, ordem, imagem_url, origem }`) ao lado de `plantas`. | Aplicada no banco (com autorização própria do usuário): a verificação embutida passa; privilégios das duas funções iguais aos de antes; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
 | `utils/espelhoDecoradoDaTipologia.ts` (novo) | `decoradoDaUnidade(decorados, tipologia)` → `{ corte, ambientes }` (casando por `chaveDaTipologia` da F5; ambientes pela `ordem`, empate pela legenda) ou `null`; `rotuloDoSelo(origem)` ("Imagem ilustrativa" / "Gerado do projeto · mobiliário ilustrativo"); `problemaDoDecorado` (o que falta para salvar). | `npx vitest run __tests__/espelhoDecoradoDaTipologia.test.ts` verde: casa com acento/caixa diferentes; só ambientes sem corte; só corte; ordem; tipologia sem decorado → `null`; prédio sem nenhum → ausente. |
 | `services/empreendimentoTipologiaDecoradoService.ts` (novo) | `listar`, `doPredio`, `salvar` (sobe a imagem, grava, confere a linha que voltou e apaga o arquivo solto se não ficou — o padrão da F5/F6), `remover`, `reordenar`. Tolerante à tabela ausente ("falta aplicar a migration", com o motivo). | Typecheck; coberto pelos testes de quem usa. |
 | `components/empreendimento/DecoradoPorTipologiaSecao.tsx` (novo) + `TowerEditor.tsx` | Seção "Decorado por tipologia" logo abaixo de "Plantas por tipologia": um cartão por tipologia (a mesma lista de `tipologiasDoEmpreendimento`), com o lugar do corte 3D e a lista de ambientes (miniatura, legenda, subir/descer, remover). Foto primeiro, legenda depois, botão azul "Salvar imagem" e o aviso "ainda não foi gravada" enquanto não salvar (lição do #315). Texto fixo no cartão: "Nos portais, toda imagem aparece com o selo 'Imagem ilustrativa'". | `npx vitest run __tests__/components/DecoradoPorTipologiaSecao.test.tsx` verde (salvar desligado dizendo o que falta; ambiente sem legenda não salva; aviso de não gravada; reordenar); subir o corte e dois ambientes de um Tipo do Garden Cambuhy e conferir as linhas no banco. |
@@ -299,6 +299,29 @@ descritivo; ver Riscos).
 | `components/espelho3d/FichaDaUnidade.tsx` (+ `components/espelho3d/DecoradoDaUnidade.tsx` novo, se a ficha passar de ~250 linhas) | Botão "Ver decorado" ao lado de "Vista da janela", desligado com o motivo no `title` e escrito embaixo quando a tipologia não tem. O diálogo (`Modal` 2xl): imagem grande, setas e miniaturas, ← → do teclado, legenda e "2 de 5"; o corte é sempre a primeira; selo de `rotuloDoSelo` sobre a imagem, legível em qualquer fundo. Trocar de unidade fecha. | Casos novos em `__tests__/components/Espelho3D.test.tsx`: botão some sem decorado no prédio; desligado com motivo; ordem corte → ambientes; setas e teclado; selo sempre presente. Passeio do harness: "o decorado não ocupa a tela inteira". |
 | `docs/spikes/espelho-vendas-3d/main.tsx`, `passeio.mjs` | Decorado de mentira numa tipologia do harness (corte + 3 ambientes) e o passo do passeio. | `node docs/spikes/espelho-vendas-3d/passeio.mjs` com exit 0. |
 | `__tests__/espelhoDoInvestidor.test.ts` | A trava do texto vale para a migration nova: tabela com RLS e fechada para anon; nas funções só entra a chave `decorado` e nenhuma de antes sai; `planta_assinatura` e `planta_estudo_id` não saem para o portal; unidade do investidor com as mesmas 16 chaves. | Casos novos passam. |
+
+Pedido de execução, 10/11/2026 (mesma sessão):
+
+> Faça a f8
+> Já deixo autorizado aplicações no banco
+
+Mudou em relação ao plano (10/11/2026):
+- O prefixo planejado `20271110970000` estava tomado pelo PR aberto `feat/colaborador-cpf-vazio-banco`; ficou
+  `20271110990000`. As duas funções do espelho foram geradas por script a partir de `aplicar_20271110800000`, depois
+  de conferir que o corpo no banco era IGUAL ao do arquivo (o #316, `aplicar_20271110950000`, só reescreveu os embrulhos
+  do investidor). É a 6ª reescrita das duas.
+- `decoradoParaAFicha` decide o "ausente × null" da ficha (o mesmo contrato da vista da F6), e o decorado de dois
+  empreendimentos no mesmo prédio com a mesma tipologia NÃO se mistura: vale o do primeiro (como a planta).
+- O cadastro escolhe a tipologia num seletor (uma tipologia aberta por vez) em vez de um cartão por tipologia: com
+  corte, lista de ambientes e formulário, oito cartões abertos (o Garden tem Tipo 1–8) eram uma parede.
+- O corte grava ao escolher a imagem (como a planta: não há outro campo); o ambiente tem o botão azul "Salvar
+  ambiente" porque precisa do nome.
+- Até 12 ambientes por tipologia (`MAXIMO_DE_AMBIENTES`), conferido no front.
+- Achado no passeio do harness, não nos testes: a imagem do diálogo não tinha caixa própria e, sem tamanho intrínseco
+  (SVG), sumia com altura 0 — agora a caixa tem altura fixa e a imagem cabe nela; o passeio mede a altura.
+- Testes: `__tests__/espelhoDecoradoDaTipologia.test.ts` (12), `__tests__/components/DecoradoPorTipologiaSecao.test.tsx`
+  (9), 4 casos novos em `Espelho3D.test.tsx`, 1 em `espelhoDoEstoque.test.ts` e 1 + 5 da trava em
+  `espelhoDoInvestidor.test.ts`; passeio do harness com 8 conferências novas.
 
 Fora desta fase, de propósito: gerar imagem por IA dentro do app (custo por imagem e o risco do selo ficar de fora
 na hora de exportar) e o "balão por andar sobre a foto da fachada" do vídeo — o desenho 3D com status vivo já faz
@@ -331,7 +354,7 @@ Ordem: F8 primeiro (ela cria a tabela, o lugar na ficha e o selo); a F9 sem a F8
 - [x] F5 — planta baixa por tipologia: #300 (`e48e216c`); migration `aplicar_20271110500000_empreendimento_tipologia_plantas.sql` aplicada em 10/11/2026 com autorização do usuário; as 8 plantas do Garden Cambuhy (Tipo 1 a 8) foram subidas pelo usuário e a ficha foi conferida em produção no Portal do Corretor (unidade de Tipo 3 com a planta carregada)
 - [x] F6 — vista da janela: #304 (`9f24410c`) + "Salvar vista" #315 (`90e63e9e`) + vista de uma unidade #320 (`62791e5e`); migrations `aplicar_20271110600000_empreendimento_tower_vistas.sql` e `aplicar_20271110800000_vista_da_janela_por_unidade.sql` APLICADAS em 10/11/2026 com autorização do usuário. Vistas do Garden Cambuhy cadastradas pelo usuário (Torre A, andares 0–3; Torre B, 0–3) e ficha conferida em produção no Portal do Corretor: 101 e 105 abrem a vista; 505 com o botão desligado e o motivo
 - [x] F7 — luz do dia: #309 (`8c4af0fb`), sem migration
-- [ ] F8 — "Ver decorado" com imagens enviadas por tipologia: não iniciada
+- [ ] F8 — "Ver decorado" com imagens enviadas por tipologia: código neste PR; migration `aplicar_20271110990000_empreendimento_tipologia_decorado.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: RLS ligada, anon sem SELECT, a interna sem EXECUTE para a API, a do corretor para anon, e num bloco desfeito o banco recusa ambiente sem nome, ambiente com origem PLANTA e segundo corte). FALTA: subir um decorado de verdade no Garden Cambuhy e conferir a ficha nos portais em produção
 - [ ] F9 — corte 3D gerado pela Planta: não iniciada (depende da F8)
 
 ## Riscos

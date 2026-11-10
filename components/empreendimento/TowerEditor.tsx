@@ -26,6 +26,7 @@ import {
 import UnitEditor from './UnitEditor';
 import TerrenoSecao from './TerrenoSecao';
 import PlantasPorTipologiaSecao from './PlantasPorTipologiaSecao';
+import DecoradoPorTipologiaSecao from './DecoradoPorTipologiaSecao';
 import VistasDaTorreSecao from './VistasDaTorreSecao';
 // Os testes e quem mais validava a localização importavam daqui.
 export { problemaDaLocalizacao } from './TerrenoSecao';
@@ -447,6 +448,17 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       {/* Plantas por tipologia (Espelho de Vendas 3D, F5 — 10/11/2026): só com o empreendimento em mãos e torre cadastrada. */}
       {empreendimento && towers.length > 0 && (
         <PlantasPorTipologiaSecao
+          empreendimentoId={empreendimentoId}
+          organizationId={organizationId}
+          buildingId={empreendimento.commercial_building_id}
+          somenteLeitura={somenteLeitura}
+          recarga={unitsByTower}
+        />
+      )}
+
+      {/* Decorado por tipologia (Espelho de Vendas 3D, F8 — 10/11/2026): o corte 3D mobiliado e os ambientes. */}
+      {empreendimento && towers.length > 0 && (
+        <DecoradoPorTipologiaSecao
           empreendimentoId={empreendimentoId}
           organizationId={organizationId}
           buildingId={empreendimento.commercial_building_id}

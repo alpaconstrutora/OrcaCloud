@@ -36,6 +36,19 @@ const VISTA_DE_EXEMPLO = `data:image/svg+xml;utf8,${encodeURIComponent(
   '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 340"><rect width="600" height="340" fill="#bfdbfe"/><circle cx="470" cy="80" r="34" fill="#fde68a"/><path d="M0 250L120 150L220 220L340 110L470 210L600 140V340H0Z" fill="#64748b"/><path d="M0 290L600 260V340H0Z" fill="#166534"/></svg>',
 )}`;
 
+/** F8: o decorado de mentira só da tipologia "3 quartos" (corte + 2 ambientes); a de 2 quartos mostra o botão desligado. */
+const imagemDeExemplo = (fundo: string, texto: string) =>
+  `data:image/svg+xml;utf8,${encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 400"><rect width="640" height="400" fill="${fundo}"/><rect x="60" y="60" width="520" height="280" fill="none" stroke="#78350f" stroke-width="6"/><text x="320" y="210" font-family="sans-serif" font-size="32" text-anchor="middle" fill="#78350f">${texto}</text></svg>`,
+  )}`;
+const DECORADO_3Q = {
+  imagens: [
+    { url: imagemDeExemplo('#fef3c7', 'Corte 3D mobiliado'), titulo: 'Corte 3D mobiliado', origem: 'ENVIADA' as const },
+    { url: imagemDeExemplo('#fde68a', 'Sala'), titulo: 'Sala', origem: 'ENVIADA' as const },
+    { url: imagemDeExemplo('#fcd34d', 'Suíte'), titulo: 'Suíte', origem: 'ENVIADA' as const },
+  ],
+};
+
 function torre(id: string, nome: string, andares: number, porAndar: number, areas: number[], extra: Partial<TorreDoEspelho> = {}): TorreDoEspelho {
   const units = [];
   for (let n = 1; n <= andares; n++) {
@@ -43,7 +56,7 @@ function torre(id: string, nome: string, andares: number, porAndar: number, area
       const uid = `${id}-${n}-${k + 1}`;
       const area = areas[k % areas.length];
       units.push({ id: uid, name: `${n}0${k + 1}`, floor: n, floor_tipo: 'TIPO' as const, private_area: area, status: STATUS[(n * 3 + k * 5) % STATUS.length] as never, sort_order: k });
-      dados.set(uid, { tipologia: area > 100 ? '3 quartos' : '2 quartos', plantaUrl: plantaDeExemplo(area > 100 ? 3 : 2), vista: n >= 4 ? { url: VISTA_DE_EXEMPLO, legenda: 'Vista para a serra', cobre: '4º ao 19º pavimento · qualquer face' } : null, areaPrivativaM2: area, dormitorios: area > 100 ? 3 : 2, banheiros: 2, vagas: area > 100 ? 2 : 1, preco: Math.round(area * (9000 + n * 120)) });
+      dados.set(uid, { tipologia: area > 100 ? '3 quartos' : '2 quartos', plantaUrl: plantaDeExemplo(area > 100 ? 3 : 2), vista: n >= 4 ? { url: VISTA_DE_EXEMPLO, legenda: 'Vista para a serra', cobre: '4º ao 19º pavimento · qualquer face' } : null, decorado: area > 100 ? DECORADO_3Q : null, areaPrivativaM2: area, dormitorios: area > 100 ? 3 : 2, banheiros: 2, vagas: area > 100 ? 2 : 1, preco: Math.round(area * (9000 + n * 120)) });
     }
   }
   return { id, name: nome, sort_order: 0, pe_direito_padrao_m: 3, units: units as never, ...extra };

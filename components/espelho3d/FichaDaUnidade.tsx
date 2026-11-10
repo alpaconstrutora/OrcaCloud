@@ -1,7 +1,8 @@
 import React from 'react';
-import { Maximize2, Mountain, X } from 'lucide-react';
+import { Maximize2, Mountain, Sofa, X } from 'lucide-react';
 import Button from '../ui/Button';
 import { Modal } from '../ui/modal';
+import DecoradoDaUnidade from './DecoradoDaUnidade';
 import type { PrismaDoEspelho } from '../../utils/espelhoDeVendas3d';
 import type { DadosDaUnidade, PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
 
@@ -37,11 +38,16 @@ export const FichaDaUnidade: React.FC<{
 }> = ({ prisma, dados, paleta, mostrarPreco, acoes, onFechar }) => {
     const status = prisma.status ? paleta[prisma.status] : null;
     // A planta (F5) e a vista da janela (F6) ampliadas: um diálogo no centro, nunca tela cheia. Trocar de unidade fecha.
-    const [ampliada, setAmpliada] = React.useState<'planta' | 'vista' | null>(null);
+    // O decorado (F8) abre o seu próprio diálogo, com as imagens uma a uma.
+    const [ampliada, setAmpliada] = React.useState<'planta' | 'vista' | 'decorado' | null>(null);
     React.useEffect(() => setAmpliada(null), [prisma.chave]);
     const tituloDaPlanta = dados?.tipologia ? `Planta da tipologia ${dados.tipologia}` : 'Planta da unidade';
     const vista = dados?.vista;
     const SEM_VISTA = 'Não há foto de vista cadastrada para o andar desta unidade.';
+    const decorado = dados?.decorado;
+    const semDecorado = dados?.tipologia
+        ? `A tipologia ${dados.tipologia} ainda não tem decorado cadastrado.`
+        : 'Esta unidade não tem tipologia no cadastro: o decorado é escolhido pela tipologia.';
     const noDialogo =
         ampliada === 'planta' && dados?.plantaUrl
             ? { titulo: tituloDaPlanta, url: dados.plantaUrl, rodape: null as string | null, fechar: 'Fechar a planta' }
@@ -105,20 +111,38 @@ export const FichaDaUnidade: React.FC<{
                 </div>
             )}
 
-            {/* Só quando o prédio tem alguma vista cadastrada; sem a do andar desta unidade, o botão diz por quê. */}
-            {vista !== undefined && (
-                <div className="mt-3">
-                    <span title={vista ? undefined : SEM_VISTA} className="inline-block">
-                        <Button type="button" variant="secondary" disabled={!vista} onClick={() => setAmpliada('vista')} data-testid="ficha-vista">
-                            <Mountain className="w-[15px] h-[15px]" />
-                            Vista da janela
-                        </Button>
-                    </span>
-                    {!vista && <p className="mt-1.5 text-xs text-gray-500">{SEM_VISTA}</p>}
+            {/* Cada botão só aparece quando o prédio tem alguma vista/decorado cadastrado; sem o desta unidade, diz por quê
+                (escrito embaixo também: em tablet não há hover). */}
+            {(vista !== undefined || decorado !== undefined) && (
+                <div className="mt-3 space-y-1.5">
+                    <div className="flex flex-wrap gap-2">
+                        {vista !== undefined && (
+                            <span title={vista ? undefined : SEM_VISTA} className="inline-block">
+                                <Button type="button" variant="secondary" disabled={!vista} onClick={() => setAmpliada('vista')} data-testid="ficha-vista">
+                                    <Mountain className="w-[15px] h-[15px]" />
+                                    Vista da janela
+                                </Button>
+                            </span>
+                        )}
+                        {decorado !== undefined && (
+                            <span title={decorado ? undefined : semDecorado} className="inline-block">
+                                <Button type="button" variant="secondary" disabled={!decorado} onClick={() => setAmpliada('decorado')} data-testid="ficha-decorado">
+                                    <Sofa className="w-[15px] h-[15px]" />
+                                    Ver decorado
+                                </Button>
+                            </span>
+                        )}
+                    </div>
+                    {vista === null && <p className="text-xs text-gray-500">{SEM_VISTA}</p>}
+                    {decorado === null && <p className="text-xs text-gray-500" data-testid="ficha-decorado-motivo">{semDecorado}</p>}
                 </div>
             )}
 
             {acoes && <div className="mt-4 flex flex-wrap gap-2">{acoes}</div>}
+
+            {ampliada === 'decorado' && decorado && (
+                <DecoradoDaUnidade decorado={decorado} subtitulo={`Unidade ${prisma.rotulo} · ${prisma.torre}`} onFechar={() => setAmpliada(null)} />
+            )}
 
             {noDialogo && (
                 <Modal open onClose={() => setAmpliada(null)} size="2xl" className="!rounded-[10px]">

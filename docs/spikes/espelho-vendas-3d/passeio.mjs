@@ -133,6 +133,45 @@ try {
   const pelaLista = await fichaAberta(page);
   confere(!!pelaLista && pelaLista !== ficha, `escolher na lista abre a ficha dela (${pelaLista ?? 'nenhuma'})`);
   await page.screenshot({ path: path.join(prints, '05-lista.png'), fullPage: true });
+
+  // 3b. F8: o "Ver decorado". No harness só a tipologia de 3 quartos tem decorado: anda pela lista até achar uma
+  // unidade com o botão ligado (abre o diálogo) e outra com ele desligado (diz por quê).
+  const unidadesDaLista = page.locator('#espelho3d-lista button');
+  let viuLigado = false;
+  let viuDesligado = false;
+  for (let i = 0; i < Math.min(12, naLista) && !(viuLigado && viuDesligado); i++) {
+    await unidadesDaLista.nth(i).click();
+    await page.waitForTimeout(150);
+    const botao = page.getByRole('button', { name: 'Ver decorado' });
+    if ((await botao.count()) !== 1) continue;
+    if (!(await botao.isEnabled())) {
+      if (viuDesligado) continue;
+      viuDesligado = true;
+      confere((await page.getByTestId('ficha-decorado-motivo').innerText()).includes('ainda não tem decorado'), 'tipologia sem decorado: o botão "Ver decorado" desligado diz por quê');
+      continue;
+    }
+    if (viuLigado) continue;
+    viuLigado = true;
+    await botao.click();
+    await page.waitForTimeout(400);
+    const dlg = page.getByRole('dialog');
+    confere((await dlg.getByTestId('decorado-selo').innerText()) === 'Imagem ilustrativa', 'o decorado abre com o selo "Imagem ilustrativa"');
+    const vp = page.viewportSize();
+    const caixaDoDecorado = await page.locator('[role=dialog] > div').nth(1).boundingBox();
+    confere(!!caixaDoDecorado && caixaDoDecorado.width < vp.width * 0.9 && caixaDoDecorado.height < vp.height, `o decorado não ocupa a tela inteira (${Math.round(caixaDoDecorado?.width ?? 0)}×${Math.round(caixaDoDecorado?.height ?? 0)} em ${vp.width}×${vp.height})`);
+    // O jsdom não mede: só aqui se vê a imagem com altura (sem caixa própria ela sumia, com 0 px).
+    const caixaDaImagem = await dlg.getByTestId('decorado-imagem').boundingBox();
+    confere(!!caixaDaImagem && caixaDaImagem.height >= 200 && caixaDaImagem.width >= 200, `a imagem do decorado aparece grande (${Math.round(caixaDaImagem?.width ?? 0)}×${Math.round(caixaDaImagem?.height ?? 0)})`);
+    await page.screenshot({ path: path.join(prints, '14-decorado-corte.png') });
+    await page.keyboard.press('ArrowRight');
+    await page.waitForTimeout(300);
+    confere((await dlg.getByTestId('decorado-posicao').innerText()).includes('2 de 3'), 'a seta do teclado passa para o 2º de 3 (o 1º é o corte)');
+    await page.screenshot({ path: path.join(prints, '15-decorado-ambiente.png') });
+    await page.keyboard.press('Escape');
+    await page.waitForTimeout(300);
+    confere((await page.getByRole('dialog').count()) === 0 && !!(await fichaAberta(page)), 'Esc fecha o decorado e a ficha continua aberta');
+  }
+  confere(viuLigado && viuDesligado, 'a lista teve unidade com decorado e unidade sem');
   await page.context().close();
 
   // 4. Celular: o desenho cabe e a página não rola de lado.

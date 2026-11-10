@@ -208,6 +208,18 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     expect(montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [] }).dados.get('202')!.plantaUrl).toBeNull();
   });
 
+  // F8 (10/11/2026): o decorado é do empreendimento, por tipologia — a do IMÓVEL, como a planta.
+  it('a ficha leva o decorado da tipologia do imóvel; tipologia sem decorado = null; prédio sem decorado = ausente', () => {
+    const decorado = [
+      { tipologia: '2 Quartos', tipologia_chave: '2 quartos', papel: 'AMBIENTE' as const, legenda: 'Sala', ordem: 0, imagem_url: 'https://x/sala.jpg', origem: 'ENVIADA' as const },
+      { tipologia: '2 Quartos', tipologia_chave: '2 quartos', papel: 'CORTE' as const, legenda: null, ordem: 0, imagem_url: 'https://x/corte.jpg', origem: 'ENVIADA' as const },
+    ];
+    const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [], estrutura: ESTRUTURA, decorado });
+    expect(r.dados.get('202')!.decorado!.imagens.map((i) => i.url)).toEqual(['https://x/corte.jpg', 'https://x/sala.jpg']);
+    expect(r.dados.get('101')!.decorado).toBeNull();
+    expect('decorado' in montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [] }).dados.get('202')!).toBe(false);
+  });
+
   // F6 (10/11/2026): a vista da janela é da torre do Empreendimento, por faixa de andares.
   describe('vista da janela', () => {
     const vistas = [

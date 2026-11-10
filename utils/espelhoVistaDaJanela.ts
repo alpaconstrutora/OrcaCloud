@@ -3,7 +3,8 @@
  * docs/planos/2026-11-09-espelho-de-vendas-3d.md.
  *
  * A foto do que se vê da janela é cadastrada por TORRE, para uma faixa de andares e, se quiser, uma face (orientação
- * solar). A ficha da unidade mostra a vista da faixa que contém o andar dela. Puro.
+ * solar) — ou para UMA UNIDADE específica (a de canto, a que dá para o vizinho). A ficha da unidade mostra a vista
+ * dela quando há; senão, a da faixa que contém o andar dela. Puro.
  */
 import type { UnitSunOrientation } from '../types/empreendimento';
 
@@ -19,6 +20,32 @@ export interface VistaDaTorre {
   imagem_url: string;
   imagem_path?: string;
   legenda?: string | null;
+  /**
+   * A vista é de UMA unidade (`empreendimento_units.id`), e não de uma faixa: só ela a recebe, e ela vence qualquer
+   * faixa. null/ausente = vista de faixa. `unit_name` vem junto para o imóvel do estoque sem unidade ligada, que só
+   * tem o nome para se achar.
+   */
+  unit_id?: string | null;
+  unit_name?: string | null;
+}
+
+/** Quem pede a vista: a unidade do Empreendimento (id) ou, para o imóvel sem unidade ligada, só o nome. */
+export interface UnidadeQuePedeAVista {
+  id?: string | null;
+  nome?: string | null;
+}
+
+const chaveDoNome = (nome: string | null | undefined) => String(nome ?? '').replace(/\s+/g, ' ').trim().toLowerCase();
+
+/** A vista cadastrada para ESTA unidade: pelo id; sem id (imóvel sem unidade ligada), pelo nome. */
+function vistaSoDaUnidade(vistas: readonly VistaDaTorre[], unidade: UnidadeQuePedeAVista | null | undefined): VistaDaTorre | null {
+  if (!unidade) return null;
+  const nome = chaveDoNome(unidade.nome);
+  for (const v of vistas) {
+    if (!v.unit_id || !v.imagem_url) continue;
+    if (unidade.id ? v.unit_id === unidade.id : !!nome && chaveDoNome(v.unit_name) === nome) return v;
+  }
+  return null;
 }
 
 const ORIENTACOES: readonly UnitSunOrientation[] = ['NORTE', 'SUL', 'LESTE', 'OESTE'];
@@ -34,18 +61,24 @@ export function orientacaoDoImovel(valor: string | null | undefined): UnitSunOri
 const inteiro = (v: unknown): v is number => typeof v === 'number' && Number.isInteger(v);
 
 /**
- * A vista da unidade: das faixas que contêm o andar, a da MESMA face vence a de qualquer face; depois, a mais
- * estreita; no empate, a primeira da lista. Vista de outra face nunca serve. Sem andar ou sem faixa = null.
+ * A vista da unidade. A cadastrada para ELA vence tudo. Senão, das faixas que contêm o andar, a da MESMA face vence
+ * a de qualquer face; depois, a mais estreita; no empate, a primeira da lista. Vista de outra face nunca serve, e
+ * vista de outra unidade também não. Sem andar ou sem faixa = null.
  */
 export function vistaDaUnidade(
   vistas: readonly VistaDaTorre[] | null | undefined,
   andar: number | null | undefined,
   orientacao: UnitSunOrientation | null | undefined,
+  unidade?: UnidadeQuePedeAVista | null,
 ): VistaDaTorre | null {
+  const soDela = vistaSoDaUnidade(vistas ?? [], unidade);
+  if (soDela) return soDela;
   if (!inteiro(andar)) return null;
   let melhor: VistaDaTorre | null = null;
   let notaDaMelhor: [number, number] | null = null;
   for (const v of vistas ?? []) {
+    // A vista de uma unidade não é faixa: não serve para as vizinhas do andar.
+    if (v.unit_id) continue;
     if (!v.imagem_url || !inteiro(v.andar_de) || !inteiro(v.andar_ate) || v.andar_de > v.andar_ate) continue;
     if (andar < v.andar_de || andar > v.andar_ate) continue;
     if (v.orientacao && v.orientacao !== orientacao) continue;
@@ -63,7 +96,8 @@ const nomeDoAndar = (n: number) => (n === 0 ? 'Térreo' : n < 0 ? `${-n}º subso
 const FACE: Record<UnitSunOrientation, string> = { NORTE: 'Norte', SUL: 'Sul', LESTE: 'Leste', OESTE: 'Oeste' };
 
 /** "4º ao 12º pavimento · face Norte" — o que a vista cobre, para a lista do cadastro e a legenda do diálogo. */
-export function rotuloDaVista(v: Pick<VistaDaTorre, 'andar_de' | 'andar_ate' | 'orientacao'>): string {
+export function rotuloDaVista(v: Pick<VistaDaTorre, 'andar_de' | 'andar_ate' | 'orientacao' | 'unit_id' | 'unit_name'>): string {
+  if (v.unit_id) return `Unidade ${v.unit_name?.trim() || 'específica'}`;
   const faixa =
     v.andar_de === v.andar_ate
       ? nomeDoAndar(v.andar_de)

@@ -26,10 +26,17 @@ interface Props {
   /** Motivo do modo só leitura (o mesmo do TowerEditor). */
   somenteLeitura?: string;
   /**
-   * Os andares das unidades da torre (`floor`). A faixa da vista nova já nasce preenchida com eles (do térreo, ou do
-   * primeiro andar com unidade, ao último): quem só quer UMA foto para a torre inteira escolhe a foto e salva.
+   * As unidades da torre. Servem para duas coisas: a faixa da vista nova já nasce preenchida com os andares delas (do
+   * térreo, ou do primeiro andar com unidade, ao último) — quem só quer UMA foto para a torre inteira escolhe a foto
+   * e salva; e a vista pode ser de UMA unidade específica, escolhida nesta lista.
    */
-  andaresDaTorre?: readonly (number | null | undefined)[];
+  unidadesDaTorre?: readonly UnidadeDaTorre[];
+}
+
+export interface UnidadeDaTorre {
+  id: string;
+  name: string;
+  floor?: number | null;
 }
 
 const inputCls = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 transition-all';
@@ -50,11 +57,19 @@ export function faixaSugerida(andares: readonly (number | null | undefined)[] | 
   const acimaDoSolo = validos.filter((n) => n >= 0);
   return { de: String(acimaDoSolo.length > 0 ? Math.min(...acimaDoSolo) : Math.min(...validos)), ate: String(ate) };
 }
-const vazio = (andares?: readonly (number | null | undefined)[]) => ({ ...faixaSugerida(andares), face: '' as UnitSunOrientation | '', legenda: '' });
+const vazio = (andares?: readonly (number | null | undefined)[]) => ({ ...faixaSugerida(andares), unidade: '', face: '' as UnitSunOrientation | '', legenda: '' });
+const nomeDoAndar = (n: number | null | undefined) => (n === null || n === undefined ? 'sem andar' : n === 0 ? 'Térreo' : n < 0 ? `${-n}º subsolo` : `${n}º pavimento`);
+/** Faixas primeiro (de baixo para cima), depois as vistas de unidade. */
+const emOrdem = (a: VistaDaTorre, b: VistaDaTorre) => Number(!!a.unit_id) - Number(!!b.unit_id) || a.andar_de - b.andar_de || a.andar_ate - b.andar_ate || String(a.unit_name ?? '').localeCompare(String(b.unit_name ?? ''), 'pt-BR', { numeric: true });
 /** "3", "-1" → número inteiro; vazio = null; outra coisa = NaN (o `problemaDaVista` recusa). */
 const andar = (texto: string): number | null => (texto.trim() === '' ? null : /^-?\d+$/.test(texto.trim()) ? Number(texto.trim()) : NaN);
 
-export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empreendimentoId, organizationId, somenteLeitura, andaresDaTorre }) => {
+export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empreendimentoId, organizationId, somenteLeitura, unidadesDaTorre }) => {
+  const andaresDaTorre = React.useMemo(() => (unidadesDaTorre ?? []).map((u) => u.floor), [unidadesDaTorre]);
+  const unidadesEmOrdem = React.useMemo(
+    () => [...(unidadesDaTorre ?? [])].sort((a, b) => (a.floor ?? -999) - (b.floor ?? -999) || a.name.localeCompare(b.name, 'pt-BR', { numeric: true })),
+    [unidadesDaTorre],
+  );
   const { showToast } = useToast();
   const confirm = useConfirm();
   const [vistas, setVistas] = React.useState<VistaDaTorre[] | null>(null);
@@ -78,7 +93,7 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
     setErro(null);
     empreendimentoTowerVistasService
       .listar(towerId)
-      .then((lista) => { if (vivo) setVistas(lista); })
+      .then((lista) => { if (vivo) setVistas([...lista].sort(emOrdem)); })
       .catch((e: unknown) => {
         if (!vivo) return;
         setVistas([]);
@@ -87,8 +102,11 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
     return () => { vivo = false; };
   }, [towerId]);
 
-  const faixa = { andar_de: andar(form.de), andar_ate: andar(form.ate) };
-  const motivo = !arquivo ? 'Escolha a foto da vista.' : problemaDaVista(faixa);
+  // A vista é de UMA unidade (escolhida em "Vale para") ou de uma faixa de andares.
+  const unidade = form.unidade ? unidadesEmOrdem.find((u) => u.id === form.unidade) ?? null : null;
+  const comVista = new Set((vistas ?? []).map((v) => v.unit_id).filter(Boolean));
+  const faixa = unidade ? { andar_de: unidade.floor ?? 0, andar_ate: unidade.floor ?? 0 } : { andar_de: andar(form.de), andar_ate: andar(form.ate) };
+  const motivo = !arquivo ? 'Escolha a foto da vista.' : unidade ? null : problemaDaVista(faixa);
 
   const adicionar = async () => {
     if (motivo || !arquivo) return;
@@ -97,11 +115,13 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
       const nova = await empreendimentoTowerVistasService.adicionar({
         organizationId, empreendimentoId, towerId,
         andar_de: faixa.andar_de!, andar_ate: faixa.andar_ate!,
-        orientacao: form.face || null,
+        // A face só faz sentido na faixa: a vista da unidade é dela, olhe para onde olhar.
+        orientacao: unidade ? null : form.face || null,
         legenda: form.legenda.trim() || null,
         arquivo,
+        ...(unidade ? { unidade: { id: unidade.id, name: unidade.name } } : {}),
       });
-      setVistas((atual) => [...(atual ?? []), nova].sort((a, b) => a.andar_de - b.andar_de || a.andar_ate - b.andar_ate));
+      setVistas((atual) => [...(atual ?? []), nova].sort(emOrdem));
       mexeuNaFaixa.current = false;
       setForm(vazio(andaresDaTorre));
       setArquivo(null);
@@ -116,7 +136,9 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
   const remover = async (v: VistaDaTorre) => {
     const ok = await confirm({
       title: 'Remover esta vista?',
-      message: `${rotuloDaVista(v)}. A ficha das unidades dessa faixa deixa de abrir a vista da janela nos portais do Corretor e do Investidor.`,
+      message: v.unit_id
+        ? `${rotuloDaVista(v)}. A ficha dela volta a abrir a vista da faixa do andar (se houver) nos portais do Corretor e do Investidor.`
+        : `${rotuloDaVista(v)}. A ficha das unidades dessa faixa deixa de abrir a vista da janela nos portais do Corretor e do Investidor.`,
       confirmLabel: 'Remover vista',
       variant: 'danger',
     });
@@ -136,7 +158,7 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
     <div className="space-y-3" data-testid={`vistas-da-torre-${towerId}`}>
       <SecaoTitulo icon={Mountain} titulo="Vista da janela" resumo={vistas && vistas.length > 0 ? `${vistas.length} foto(s)` : undefined} />
       <p className="text-xs text-gray-500">
-        A foto do que se vê da janela, por faixa de andares. A ficha da unidade abre a vista da faixa do andar dela no Espelho de Vendas 3D dos portais do Corretor e do Investidor. Se duas faixas servem, vale a da mesma face e, depois, a mais estreita.
+        A foto do que se vê da janela, por faixa de andares ou de uma unidade específica. A ficha da unidade, no Espelho de Vendas 3D dos portais do Corretor e do Investidor, abre a vista dela quando há; senão, a da faixa do andar. Se duas faixas servem, vale a da mesma face e, depois, a mais estreita.
       </p>
 
       {vistas === null && <p className="flex items-center gap-2 text-sm text-gray-500"><Loader2 className="w-4 h-4 animate-spin" /> Carregando vistas…</p>}
@@ -173,7 +195,29 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
             />
           </div>
           <div className="grid grid-cols-2 gap-x-4 gap-y-3 content-start">
-            <p className={`col-span-2 ${rotuloCls}`}>2. Andares que ela vale, e salvar</p>
+            <p className={`col-span-2 ${rotuloCls}`}>2. Para quem ela vale, e salvar</p>
+            {/* 10/11/2026: "não seria melhor também opção para vincular a vista da janela com uma unidade específica?" */}
+            <div className="col-span-2 space-y-1.5">
+              <label htmlFor={id('vale')} className={rotuloCls}>Vale para</label>
+              <select id={id('vale')} className={inputCls} value={form.unidade} onChange={(e) => setForm((f) => ({ ...f, unidade: e.target.value }))}>
+                <option value="">Uma faixa de andares</option>
+                {unidadesEmOrdem.length > 0 && (
+                  <optgroup label="Uma unidade só">
+                    {unidadesEmOrdem.map((u) => (
+                      <option key={u.id} value={u.id} disabled={comVista.has(u.id)}>
+                        {u.name} · {nomeDoAndar(u.floor)}{comVista.has(u.id) ? ' (já tem vista)' : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                )}
+              </select>
+            </div>
+            {unidade && (
+              <p className="col-span-2 text-xs text-gray-600" data-testid="nova-vista-da-unidade">
+                Só a unidade {unidade.name} abre esta foto, no lugar da vista da faixa do andar dela.
+              </p>
+            )}
+            {!unidade && <>
             <div className="space-y-1.5">
               <label htmlFor={id('de')} className={rotuloCls}>Do andar</label>
               <input id={id('de')} className={inputCls} inputMode="numeric" placeholder="ex: 0 (térreo)" value={form.de} onChange={(e) => { mexeuNaFaixa.current = true; setForm((f) => ({ ...f, de: e.target.value })); }} />
@@ -188,7 +232,8 @@ export const VistasDaTorreSecao: React.FC<Props> = ({ towerId, towerName, empree
                 {FACES.map((f) => <option key={f.valor} value={f.valor}>{f.rotulo}</option>)}
               </select>
             </div>
-            <div className="space-y-1.5">
+            </>}
+            <div className={`space-y-1.5 ${unidade ? 'col-span-2' : ''}`}>
               <label htmlFor={id('legenda')} className={rotuloCls}>Legenda (opcional)</label>
               <input id={id('legenda')} className={inputCls} placeholder="ex: Vista para a praça" maxLength={120} value={form.legenda} onChange={(e) => setForm((f) => ({ ...f, legenda: e.target.value }))} />
             </div>

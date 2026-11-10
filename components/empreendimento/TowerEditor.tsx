@@ -376,7 +376,7 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   {/* Vista da janela (Espelho de Vendas 3D, F6 — 10/11/2026): só com o empreendimento em mãos. */}
                   {empreendimento && (
                     <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Vista da janela" data-testid="secao-vistas">
-                      <VistasDaTorreSecao towerId={tower.id} towerName={tower.name} empreendimentoId={empreendimentoId} organizationId={organizationId} somenteLeitura={somenteLeitura} andaresDaTorre={(unitsByTower[tower.id] ?? []).map((u) => u.floor)} />
+                      <VistasDaTorreSecao towerId={tower.id} towerName={tower.name} empreendimentoId={empreendimentoId} organizationId={organizationId} somenteLeitura={somenteLeitura} unidadesDaTorre={unitsByTower[tower.id]} />
                     </section>
                   )}
                 </fieldset>

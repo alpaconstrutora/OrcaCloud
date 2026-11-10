@@ -50,6 +50,41 @@ describe('vistaDaUnidade', () => {
   });
 });
 
+// 10/11/2026, o usuário: "não seria melhor também opção para vincular a vista da janela com uma unidade específica?"
+describe('vistaDaUnidade — vista de uma unidade específica', () => {
+  const daUnidade = (id: string, unit_id: string, unit_name: string): VistaDaTorre => ({ ...vista(id, 3, 3), unit_id, unit_name });
+  const vistas = [vista('faixa', 0, 9), vista('norte', 0, 9, 'NORTE'), daUnidade('canto', 'u304', '304')];
+
+  it('a vista da unidade vence qualquer faixa, mesmo a da mesma face', () => {
+    expect(vistaDaUnidade(vistas, 3, 'NORTE', { id: 'u304', nome: '304' })?.id).toBe('canto');
+  });
+
+  it('a vizinha do mesmo andar NÃO recebe a vista da unidade: fica com a faixa', () => {
+    expect(vistaDaUnidade(vistas, 3, null, { id: 'u303', nome: '303' })?.id).toBe('faixa');
+    expect(vistaDaUnidade([daUnidade('canto', 'u304', '304')], 3, null, { id: 'u303', nome: '303' })).toBeNull();
+  });
+
+  it('unidade com id casa só pelo id — o nome igual de outra unidade não serve', () => {
+    expect(vistaDaUnidade([daUnidade('canto', 'u304', '304')], 3, null, { id: 'outra', nome: '304' })).toBeNull();
+  });
+
+  it('imóvel do estoque sem unidade ligada (sem id) casa pelo nome, sem ligar para espaço e caixa', () => {
+    expect(vistaDaUnidade(vistas, 3, null, { nome: ' 304 ' })?.id).toBe('canto');
+    expect(vistaDaUnidade([daUnidade('cob', 'u1', 'Cobertura A')], 9, null, { nome: 'cobertura  a' })?.id).toBe('cob');
+    expect(vistaDaUnidade(vistas, 3, null, { nome: '' })?.id).toBe('faixa');
+  });
+
+  it('a vista da unidade vale mesmo sem andar cadastrado; quem não diz a unidade segue só pelas faixas', () => {
+    expect(vistaDaUnidade([daUnidade('canto', 'u304', '304')], null, null, { id: 'u304' })?.id).toBe('canto');
+    expect(vistaDaUnidade(vistas, 3, null)?.id).toBe('faixa');
+  });
+
+  it('o rótulo diz a unidade', () => {
+    expect(rotuloDaVista(daUnidade('canto', 'u304', '304'))).toBe('Unidade 304');
+    expect(rotuloDaVista({ ...vista('x', 1, 1), unit_id: 'u', unit_name: null })).toBe('Unidade específica');
+  });
+});
+
 describe('orientacaoDoImovel', () => {
   it('traduz a orientação do imóvel do estoque (inglês) para a do Empreendimento', () => {
     expect(['NORTH', 'SOUTH', 'EAST', 'WEST'].map(orientacaoDoImovel)).toEqual(['NORTE', 'SUL', 'LESTE', 'OESTE']);

@@ -28,6 +28,7 @@ import {
     type BlocoPagamento,
 } from '../utils/paymentPlan';
 import SaveStatus from './ui/SaveStatus';
+import { textoDaRegra } from '../utils/politicaDeVendasTexto';
 import { registrarPendencia, CONFIRMAR_SAIDA } from '../lib/guardaDeSaida';
 // Parcelamento COM JUROS (Price/SAC) do "Montar plano" — venda. Testado em
 // __tests__/jurosParcelamento.test.ts.
@@ -438,7 +439,6 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
                                 <option value="">Nenhuma (limpar de todas)</option>
                                 <option value="PIX">PIX</option>
                                 <option value="TED">TED</option>
-                                <option value="DOC">DOC</option>
                                 <option value="DINHEIRO">Dinheiro</option>
                                 <option value="CHEQUE">Cheque</option>
                                 <option value="PERMUTA">Permuta</option>
@@ -888,6 +888,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         return linhas;
     }, [formData.down_payment, formData.down_payment_installment_type, formData.down_payment_payment_type,
         formData.down_payment_notes, formData.payment_due_date, formData.date, formData.custom_installments]);
+
+    /** Quantas parcelas o plano tem (o sinal conta como uma). */
+    const parcelasDoPlano = linhasDoPlano.reduce((t, l) => t + Math.max(1, l.bloco.quantidade || 1), 0);
 
     /** Total − sinal − parcelas do cronograma. Positivo = falta distribuir. */
     const saldoPlano = saldoDoPlano(
@@ -3006,7 +3009,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             id: 'parcelas',
             label: 'Parcelas',
             icon: <Layers className="w-4 h-4" />,
-            badge: (formData.custom_installments?.length ?? 0) > 0,
+            // Ponto = há plano e NADA em Contas a Receber ainda. Antes acendia só
+            // por haver plano, ao lado de um vazio "Nenhuma parcela no plano".
+            badge: linhasDoPlano.length > 0 && contractEntries.length === 0 && !loadingEntries,
         },
         {
             id: 'partes',
@@ -3083,19 +3088,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 const isActive = activeTab === tab.id;
                                 // Ponto de atenção por aba: vermelho = obrigatório faltando,
                                 // âmbar/azul = informativo. Mantém o sinal sem virar pílula (§8).
-                                const dot = tab.id === 'cliente' && hasMissingClient ? 'bg-red-400'
-                                    : tab.id === 'unidade' && hasMissingProperty ? 'bg-red-400'
-                                    : tab.id === 'partes' && hasBroker ? 'bg-amber-400'
-                                    : tab.id === 'contrato' && hasContratoContent ? 'bg-blue-400'
+                                // Cada ponto diz o motivo em texto (title + leitor de tela) —
+                                // a cor sozinha não dizia nada a quem não decorou a legenda.
+                                const [dot, motivo] = tab.id === 'cliente' && hasMissingClient ? ['bg-red-400', 'Falta o cliente']
+                                    : tab.id === 'unidade' && hasMissingProperty ? ['bg-red-400', 'Falta a unidade']
+                                    : tab.id === 'partes' && hasBroker ? ['bg-amber-400', 'Com corretor vinculado']
+                                    : tab.id === 'contrato' && hasContratoContent ? ['bg-blue-400', 'Contrato em andamento']
                                     // Sem contrato gerado não há a que prender a garantia — vermelho.
-                                    : tab.id === 'garantias' && !linkedContract ? 'bg-red-400'
-                                    : tab.id === 'parcelas' && tab.badge ? 'bg-blue-400'
-                                    : null;
+                                    : tab.id === 'garantias' && !linkedContract ? ['bg-red-400', 'Gere o contrato antes']
+                                    : tab.id === 'parcelas' && tab.badge ? ['bg-amber-400', 'Plano ainda não lançado em Contas a Receber']
+                                    : [null, null];
                                 return (
                                     <button
                                         key={tab.id}
                                         type="button"
                                         onClick={() => setActiveTab(tab.id)}
+                                        title={motivo ?? undefined}
                                         className={`relative flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                             isActive
                                                 ? 'bg-white text-blue-600 shadow-sm'
@@ -3104,7 +3112,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     >
                                         {tab.icon}
                                         {tab.label}
-                                        {dot && <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
+                                        {dot && <span aria-hidden="true" className={`w-1.5 h-1.5 rounded-full shrink-0 ${dot}`} />}
+                                        {motivo && <span className="sr-only">({motivo})</span>}
                                     </button>
                                 );
                             })}
@@ -3752,9 +3761,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     </div>
                                 )}
 
-                                {/* Forma de Pagamento */}
+                                {/* Condição de pagamento — À vista / Parcelado / Financiamento…
+                                    Era "Forma de Pagamento", o mesmo nome do campo PIX/TED/Dinheiro
+                                    da gaveta, da edição em lote e da coluna da aba Parcelas. Desde
+                                    10/11/2026 (decisão do usuário) "forma" é só o MEIO de pagamento. */}
                                 <div className="space-y-1.5">
-                                    <label className="text-xs font-semibold text-slate-500">Forma de Pagamento</label>
+                                    <label className="text-xs font-semibold text-slate-500">Condição de pagamento</label>
                                     <select
                                         value={formData.payment_method}
                                         onChange={(e) => {
@@ -3767,8 +3779,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         }}
                                         className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
                                     >
-                                        <option value="CASH">À Vista</option>
-                                        <option value="INSTALLMENTS">Parcelado Direto / Mensalidade</option>
+                                        <option value="CASH">À vista</option>
+                                        <option value="INSTALLMENTS">{formData.type === 'RENTAL' ? 'Mensalidade' : 'Parcelado direto'}</option>
                                         {formData.type === 'SALE' && (
                                             <>
                                                 <option value="FINANCING">Financiamento</option>
@@ -4199,7 +4211,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                 {c.verdict === 'ALLOWED'
                                                                     ? <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                                                                     : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
-                                                                <span>{c.message}</span>
+                                                                <span>{textoDaRegra(c)}</span>
                                                             </li>
                                                         ))}
                                                     </ul>
@@ -4468,7 +4480,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             <option value="">Forma Pagto.</option>
                                             <option value="PIX">PIX</option>
                                             <option value="TED">TED</option>
-                                            <option value="DOC">DOC</option>
                                             <option value="DINHEIRO">Dinheiro</option>
                                             <option value="CHEQUE">Cheque</option>
                                             <option value="PERMUTA">Permuta</option>
@@ -4597,10 +4608,39 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         /* Empty state — §12 (sem moldura própria dentro do card) */
                                         <div className="text-center py-12">
                                             <FileText className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma parcela no plano</h3>
-                                            <p className="text-sm text-gray-500">
-                                                Use "Gerar parcelas" para criar o cronograma, ou "Parcela avulsa" para lançar uma cobrança isolada.
-                                            </p>
+                                            <h3 className="text-lg font-bold text-gray-900 mb-2">Nenhuma cobrança em Contas a Receber</h3>
+                                            {formData.type === 'SALE' && parcelasDoPlano > 0 ? (
+                                                /* O plano existe (aba Financeiro) e não foi lançado: dizer
+                                                   isso e oferecer o lançamento aqui mesmo. Antes: "Nenhuma
+                                                   parcela no plano", com o plano montado na aba ao lado. */
+                                                <>
+                                                    <p className="text-sm text-gray-500">
+                                                        {parcelasDoPlano === 1
+                                                            ? 'O plano de pagamento (aba Financeiro) tem 1 parcela, ainda não lançada.'
+                                                            : `O plano de pagamento (aba Financeiro) tem ${parcelasDoPlano} parcelas, ainda não lançadas.`}
+                                                    </p>
+                                                    <button
+                                                        type="button"
+                                                        disabled={lancandoNoFinanceiro || !formData.id}
+                                                        onClick={handleLancarNoFinanceiro}
+                                                        className="mt-4 inline-flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
+                                                    >
+                                                        {lancandoNoFinanceiro
+                                                            ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                                                            : <DollarSign className="w-[15px] h-[15px]" />}
+                                                        {lancandoNoFinanceiro
+                                                            ? 'Lançando…'
+                                                            : dirty && formData.id ? 'Salvar e lançar no Financeiro' : 'Lançar no Financeiro'}
+                                                    </button>
+                                                    {!formData.id && (
+                                                        <p className="mt-2 text-xs text-gray-500">Salve a negociação para lançar — a cobrança sai do contrato dela.</p>
+                                                    )}
+                                                </>
+                                            ) : (
+                                                <p className="text-sm text-gray-500">
+                                                    Use "Gerar parcelas" para criar as cobranças a partir do contrato.
+                                                </p>
+                                            )}
                                         </div>
                                     ) : (
                                         <div className="overflow-auto max-h-[60vh]">
@@ -5512,8 +5552,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             <div className="space-y-2">
                                 <label className="text-xs font-semibold text-slate-500">Vencimento</label>
                                 <p className="text-sm font-normal text-gray-700">{fmtDateBR(formData.date) || '—'}</p>
-                                <span className="block text-xs text-gray-400 px-1">
-                                    O sinal usa a Data Efetiva da negociação — é a data que a proposta imprime na linha "Entrada". Para mudar, altere a Data Efetiva abaixo.
+                                <span className="block text-xs text-gray-500 px-1">
+                                    O sinal vence na Data Efetiva da negociação — a data que a proposta imprime na linha "Entrada". Para mudar, feche esta gaveta e altere a Data Efetiva nas condições da aba Financeiro.
                                 </span>
                             </div>
                         ) : (
@@ -5541,7 +5581,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 <option value="">Não informada</option>
                                 <option value="PIX">PIX</option>
                                 <option value="TED">TED</option>
-                                <option value="DOC">DOC</option>
                                 <option value="DINHEIRO">Dinheiro</option>
                                 <option value="CHEQUE">Cheque</option>
                                 <option value="PERMUTA">Permuta</option>

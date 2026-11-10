@@ -11,6 +11,10 @@ export interface PaymentInstallment {
     transactionId?: string;
     /** Nº do recibo de recebimento ATIVO (`financial_receipts`), quando já emitido. */
     receiptNumber?: number | null;
+    /** Parcela de venda com juros (Price/SAC): parte de juros embutida em `value`. */
+    interest?: number;
+    /** Parcela de venda com juros (Price/SAC): parte de principal (`value - interest`). */
+    principal?: number;
     dealId?: string;
     dealType?: 'SALE' | 'RENTAL' | 'SERVICE';
     clientId?: string;

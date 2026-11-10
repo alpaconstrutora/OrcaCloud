@@ -368,6 +368,15 @@ export interface PropertyDeal {
      *  em parcelas já lançadas, confirmado pelo usuário.
      *  Coluna própria porque `value` é reescrita pela soma das unidades. */
     contract_total_value?: number;
+    /** Venda parcelada com juros: taxa mensal em % (ex.: 1.5 = 1,5% a.m.). Gravada
+     *  pelo "Montar plano" do DealModal (Financeiro); nula = sem juros. */
+    interest_rate_monthly?: number | null;
+    /** Sistema de amortização do parcelamento com juros (Price = parcela fixa;
+     *  SAC = amortização constante). Nulo = sem juros. */
+    amortization_system?: 'PRICE' | 'SAC' | null;
+    /** Saldo financiado ANTES dos juros — base que o "Montar plano" usa para
+     *  refazer o cálculo ao reabrir a negociação. */
+    price_before_interest?: number | null;
     down_payment?: number;
     /** Forma de pagamento, tipo de parcela e observação da Entrada — mesmos campos por parcela em custom_installments, espelhados aqui porque a Entrada não é um item do array (é o campo down_payment). */
     down_payment_payment_type?: PaymentInstallment['paymentType'];

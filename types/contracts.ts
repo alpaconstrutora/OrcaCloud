@@ -178,6 +178,11 @@ export interface ContractInstallment {
      */
     installment_type?: string | null;
     payment_type?: string | null;
+    /** Parcela com juros (Price/SAC): parte de juros embutida em `value`.
+     *  Vai para `internal_transactions.interest_amount` ao lançar em Contas a Receber. */
+    interest?: number | null;
+    /** Parcela com juros (Price/SAC): parte de principal (`value - interest`). */
+    principal?: number | null;
 }
 
 export interface ContractItem {

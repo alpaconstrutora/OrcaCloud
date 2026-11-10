@@ -51,12 +51,14 @@ Decisões de desenho aprovadas com o plano:
 ## Estado
 - [x] PR 1 — código `49d9a4dc` (PR #276); migration `aplicar_20271109400000` APLICADA (coluna conferida em 09/11);
   tela conferida no dev server com os movimentos reais de outubro.
-  - [ ] Edge `asaas-conta` publicada (usuário — `functions deploy` é barrado para o agente)
-  - [ ] backfill de `saldo_apos`: zerar `extrato_sincronizado_ate` da conta Asaas de produção e sincronizar
-  - [ ] CI verde + merge
+  - [x] Edge `asaas-conta` publicada pelo usuário (09/11, v8; sem credencial = 401)
+  - [x] backfill de `saldo_apos` (autorizado 09/11): cursor zerado + sincronização pelo caminho do cron — 7/7 linhas,
+    0 duplicadas; cadeia 500,00 → 2.138,35 = saldo da Asaas. O dia 22/10 (PIX −200, devolução +200, PIX −200)
+    mostrou que a ordem do dia precisa da abertura da véspera → `67e9e08c`
+  - [x] CI verde + merge (#276 → `97474645`); produção serve `9747464` (conferir-producao.sh)
 - [x] PR 2 — código `67a9ec2b` (PR #278, empilhado no #276); 124 testes, tsc e check-ui verdes.
-  - [ ] migration `aplicar_20271109400100` (aplicação barrada para o agente pelo auto mode — usuário aplica)
-  - [ ] Edge `asaas-payment` publicada
+  - [x] migration `aplicar_20271109400100` aplicada pelo usuário (09/11; gatilhos, CHECK e mensagem conferidos)
+  - [x] Edge `asaas-payment` publicada pelo usuário (09/11, v23; sem credencial = 401)
   - [ ] chave PIX da conta Sicredi cadastrada por gestor (quarentena 24 h para quem cadastrou)
   - [ ] saque real de R$ 1,00 junto com o usuário
 

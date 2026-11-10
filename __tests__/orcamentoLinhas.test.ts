@@ -103,6 +103,23 @@ describe('composição dentro de composição: desce até o material', () => {
         expect(coef).toEqual({ BLOCO: 12.5, CIMENTO: 8.6, AREIA: 0.022, 92759: 1.5 });
     });
 
+    it('cobrado por mês sai: mensalista, encargos do mensalista e locação (MES, UNXMES)', () => {
+        const comMensais = [
+            ...ALVENARIA,
+            { id: 'm1', quantity: 12, sinapiItem: { code: '40811', description: 'ENGENHEIRO CIVIL DE OBRA JUNIOR (MENSALISTA)', unit: 'MES', price: 9000, type: SinapiType.INPUT } },
+            { id: 'm2', quantity: 6, sinapiItem: { code: '10775', description: 'LOCACAO DE CONTAINER', unit: 'MES', price: 800, type: SinapiType.INPUT } },
+            { id: 'm3', quantity: 12, sinapiItem: {
+                code: '100321', description: 'TÉCNICO EM SEGURANÇA DO TRABALHO COM ENCARGOS COMPLEMENTARES', unit: 'MES', price: 7000, type: SinapiType.COMPOSITION,
+                composition: [c('40944', 'MES', SinapiType.INPUT, 1), c('43494', 'MES', SinapiType.INPUT, 1, 'EPI - FAMILIA ALMOXARIFE - MENSALISTA')],
+            } },
+            { id: 'm4', quantity: 2, sinapiItem: { code: '40275', description: 'LOCACAO DE VIGA SANDUICHE', unit: 'UNXMES', price: 30, type: SinapiType.INPUT } },
+            { id: 'm5', quantity: 5, sinapiItem: { code: '4385', description: 'PARALELEPIPEDO GRANITICO', unit: 'MIL', price: 1500, type: SinapiType.INPUT } },
+        ] as unknown as BudgetEntry[];
+        const codigos = linhasDoOrcamentoParaPedido(comMensais, new Map(), new Map(), new Set(), sub).map(l => l.code);
+        ['40811', '10775', '100321', '40944', '43494', '40275'].forEach(cod => expect(codigos).not.toContain(cod));
+        expect(codigos).toContain('4385'); // milheiro é material
+    });
+
     it('interna sem detalhamento na base continua, marcada — nada some calado', () => {
         const linhas = linhasDoOrcamentoParaPedido(ALVENARIA, new Map(), new Map(), new Set(), sub);
         const armacao = linhas.find(l => l.code === '92759')!;

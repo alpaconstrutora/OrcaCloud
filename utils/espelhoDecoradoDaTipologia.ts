@@ -27,6 +27,8 @@ export interface ImagemDoDecorado {
   imagem_url: string;
   imagem_path?: string;
   origem: OrigemDoDecorado;
+  /** Quando a imagem foi gravada (só o cadastro lê; os portais não recebem). */
+  updated_at?: string | null;
 }
 
 /** O que a ficha mostra: o corte primeiro, depois os ambientes na ordem cadastrada. */

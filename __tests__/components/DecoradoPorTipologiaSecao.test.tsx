@@ -87,6 +87,17 @@ describe('DecoradoPorTipologiaSecao', () => {
         expect(screen.getByTestId('novo-ambiente-motivo').textContent).toBe('Escolha a imagem do ambiente.');
     });
 
+    it('trocar de tipologia descarta o ambiente que estava sendo montado', async () => {
+        montar();
+        await screen.findByTestId('decorado-editor');
+        fireEvent.change(screen.getByTestId('novo-ambiente').querySelector('input[type=file]')!, { target: { files: [arquivo()] } });
+        fireEvent.change(screen.getByLabelText('Nome'), { target: { value: 'Varanda' } });
+        expect(screen.getByTestId('novo-ambiente-por-salvar')).toBeTruthy();
+        fireEvent.click(screen.getByTestId('decorado-tipologia-tipo 2'));
+        expect((screen.getByLabelText('Nome') as HTMLInputElement).value).toBe('');
+        expect(screen.getByTestId('novo-ambiente-motivo').textContent).toBe('Escolha a imagem do ambiente.');
+    });
+
     it('subir o corte grava na hora, para a tipologia escolhida', async () => {
         servico.salvarCorte.mockResolvedValue(imagem({ id: 'c2', papel: 'CORTE', legenda: null, tipologia: 'Tipo 2', tipologia_chave: 'tipo 2', imagem_url: 'https://x/corte2.jpg' }));
         montar();
@@ -97,6 +108,19 @@ describe('DecoradoPorTipologiaSecao', () => {
         await waitFor(() => expect(servico.salvarCorte).toHaveBeenCalledWith({ organizationId: 'o1', empreendimentoId: 'e1', tipologia: 'Tipo 2', arquivo: f, anterior: null }));
         await waitFor(() => expect(screen.getByTestId('decorado-tipologia-tipo 2').textContent).toContain('corte'));
         expect(showToast).toHaveBeenCalledWith('Corte 3D da tipologia Tipo 2 gravado.');
+    });
+
+    it('F9: o corte gerado pela Planta diz de onde veio, e trocar por imagem pede confirmação', async () => {
+        servico.listar.mockResolvedValue([SALA, imagem({ id: 'cp', papel: 'CORTE', legenda: null, origem: 'PLANTA', updated_at: '2026-11-10T12:00:00Z' })]);
+        confirmar.mockResolvedValue(false);
+        montar();
+        const editor = await screen.findByTestId('decorado-editor');
+        expect(screen.getByTestId('decorado-origem-do-corte').textContent).toBe('Gerado da Planta em 10/11/2026');
+        fireEvent.change(editor.querySelector('input[type=file]')!, { target: { files: [new File(['x'], 'c.png', { type: 'image/png' })] } });
+        await waitFor(() => expect(confirmar).toHaveBeenCalled());
+        expect(confirmar.mock.calls[0][0].title).toBe('Trocar o corte gerado pela Planta da tipologia Tipo 1?');
+        // Recusou: nada gravado.
+        expect(servico.salvarCorte).not.toHaveBeenCalled();
     });
 
     it('descer um ambiente troca a ordem na tela e grava a nova ordem; o primeiro não sobe, dizendo por quê', async () => {

@@ -91,8 +91,14 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
   // A prévia da imagem escolhida para o ambiente novo (ainda não enviada).
   const previa = React.useMemo(() => (arquivo ? URL.createObjectURL(arquivo) : null), [arquivo]);
   React.useEffect(() => () => { if (previa) URL.revokeObjectURL(previa); }, [previa]);
-  // Trocar de tipologia descarta o ambiente que estava sendo montado.
-  React.useEffect(() => { setArquivo(null); setNome(''); }, [escolhida]);
+  // Trocar de tipologia descarta o ambiente que estava sendo montado. No CLIQUE, e não num efeito de `escolhida`: o
+  // efeito também rodava na primeira carga e, chegando depois da imagem escolhida, a apagava (teste instável no CI).
+  const escolher = (chave: string) => {
+    if (chave === escolhida) return;
+    setEscolhida(chave);
+    setArquivo(null);
+    setNome('');
+  };
 
   const tipologia = tipologias?.find((t) => t.chave === escolhida) ?? null;
   const { corte, ambientes } = tipologia ? decoradoDoCadastro(imagens, tipologia.chave) : { corte: null, ambientes: [] };
@@ -103,6 +109,16 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
 
   const enviarCorte = async (f: File) => {
     if (!tipologia) return;
+    // F9: o corte gerado pela Planta só é trocado por uma imagem com confirmação — a Planta deixa de mostrar "em dia".
+    if (corte?.origem === 'PLANTA') {
+      const ok = await confirm({
+        title: `Trocar o corte gerado pela Planta da tipologia ${tipologia.rotulo}?`,
+        message: 'A imagem escolhida substitui o corte que a Planta gerou. Para voltar ao da Planta, envie de novo pela tela Unidades do estudo.',
+        confirmLabel: 'Trocar corte',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
     setEnviandoCorte(true);
     try {
       const salvo = await empreendimentoTipologiaDecoradoService.salvarCorte({ organizationId, empreendimentoId, tipologia: tipologia.rotulo, arquivo: f, anterior: corte });
@@ -204,7 +220,7 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
                 type="button"
                 role="radio"
                 aria-checked={t.chave === escolhida}
-                onClick={() => setEscolhida(t.chave)}
+                onClick={() => escolher(t.chave)}
                 data-testid={`decorado-tipologia-${t.chave}`}
                 className={`h-9 px-3 rounded-[6px] border text-sm transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${t.chave === escolhida ? 'border-blue-600 bg-blue-50 text-blue-700 font-medium' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-300'}`}
               >
@@ -228,7 +244,13 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
                     hint={somenteLeitura ? 'Sem corte' : 'Arraste o corte 3D aqui ou clique para selecionar'}
                   />
                 </span>
-                <p className="text-xs text-gray-500">A vista de cima da unidade sem teto, com os móveis. Grava ao escolher a imagem; é a primeira que a ficha mostra.</p>
+                {corte && (
+                  <p className="text-xs text-gray-700" data-testid="decorado-origem-do-corte">
+                    {corte.origem === 'PLANTA' ? 'Gerado da Planta' : 'Imagem enviada'}
+                    {corte.updated_at ? ` em ${new Date(corte.updated_at).toLocaleDateString('pt-BR')}` : ''}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500">A vista de cima da unidade sem teto, com os móveis. Grava ao escolher a imagem; é a primeira que a ficha mostra. O estudo da Planta também pode gerar e enviar o corte (tela Unidades).</p>
                 {tipologia.unidades === 0 && <p className="text-xs text-amber-700">Nenhuma unidade usa mais esta tipologia: o decorado dela não aparece em ficha nenhuma.</p>}
               </div>
 

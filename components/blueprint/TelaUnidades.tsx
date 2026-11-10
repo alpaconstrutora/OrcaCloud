@@ -22,6 +22,10 @@ import {
 } from '../../utils/blueprintUnidades';
 import { numeroSugerido, planoDeRepeticaoDaUnidade, ROTULO_DO_MODO, type ModoDeRepeticao } from '../../utils/blueprintGrupos';
 import ActionIconButton from '../ui/ActionIconButton';
+import EnviarCorteDaUnidade from './EnviarCorteDaUnidade';
+import { assinaturaDoDecorado, situacaoDoCorte, textoDaSituacao, type CorteGravado, type SituacaoDoCorte } from '../../utils/espelhoDecoradoDaPlanta';
+import { chaveDaTipologia } from '../../utils/espelhoPlantaDaTipologia';
+import type { ImagemDoDecorado } from '../../utils/espelhoDecoradoDaTipologia';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
 
 interface Props {
@@ -37,7 +41,23 @@ interface Props {
    * — e diz por quê. `null`/ausente = não calculada (mesma queda, sem motivo).
    */
   fracoesNbr12721?: { porNumero: Map<string, { decimal: number; milesimos: number }> | null; motivo: string | null } | null;
-  /** `null` = o estudo não está ligado a um empreendimento — o botão explica. */
+  /**
+   * O CORTE 3D NO ESPELHO DE VENDAS (F9, 10/11/2026): presente, a tabela ganha a coluna com a situação do corte de
+   * cada unidade nos portais e o botão de enviar. `empreendimento: null` = o estudo não está ligado a um
+   * Empreendimento — a coluna e o botão dizem isso. Ausente = sem coluna (uso fora do editor).
+   */
+  espelho?: EspelhoNaTelaUnidades;
+}
+
+export interface EspelhoNaTelaUnidades {
+  empreendimento: { id: string; nome: string; organizationId: string } | null;
+  /** As chaves das tipologias do cadastro do Empreendimento; `null` = ainda carregando (não recusa por tipologia). */
+  tipologiasDoEmpreendimento: ReadonlySet<string> | null;
+  /** O corte gravado por chave de tipologia (com a origem e a assinatura da Planta). */
+  cortes: ReadonlyMap<string, ImagemDoDecorado & CorteGravado>;
+  estudoId: string | null;
+  /** Depois de enviar: relê os cortes do banco ("enviado" é o que ficou gravado). */
+  onRecarregar: () => void;
 }
 
 type Linha = QuadroDeUnidades['unidades'][number];
@@ -52,6 +72,7 @@ const COLUNAS: StandardTableColumn[] = [
   { key: 'fracaoIdeal', label: 'Fração ideal', width: 150, align: 'right' },
   { key: 'geminadaCom', label: 'Geminada com', width: 150, sortable: false },
 ];
+const COLUNA_DO_ESPELHO: StandardTableColumn = { key: 'espelho', label: 'Corte no Espelho 3D', width: 240, sortable: false };
 
 const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
   { key: 'nome', label: 'Pavimento', width: 160 },
@@ -63,13 +84,45 @@ const COLUNAS_PAVIMENTO: StandardTableColumn[] = [
 
 const fmt = (m2: number) => m2.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
-export default function TelaUnidades({ model, quadro, onRun, onRunBatch, erro, fracoesNbr12721 }: Props) {
+export default function TelaUnidades({ model, quadro, onRun, onRunBatch, erro, fracoesNbr12721, espelho }: Props) {
   const fracaoNbr = fracoesNbr12721?.porNumero ?? null;
   // O rótulo diz QUAL fração: a do Quadro IV-B (com coeficiente) ou a estimada — nunca "Fração ideal" sem qualificação.
   const colunas = useMemo(
-    () => COLUNAS.map((c) => (c.key === 'fracaoIdeal' ? { ...c, label: fracaoNbr ? 'Fração ideal (NBR 12721)' : 'Fração estimada (sem coeficiente)', width: 190 } : c)),
-    [fracaoNbr],
+    () => [
+      ...COLUNAS.map((c) => (c.key === 'fracaoIdeal' ? { ...c, label: fracaoNbr ? 'Fração ideal (NBR 12721)' : 'Fração estimada (sem coeficiente)', width: 190 } : c)),
+      ...(espelho ? [COLUNA_DO_ESPELHO] : []),
+    ],
+    [fracaoNbr, espelho],
   );
+  /** F9: a situação do corte de cada unidade nos portais — e o que impede de enviar. */
+  const doEspelho = useMemo(() => {
+    const out = new Map<string, { situacao: SituacaoDoCorte; motivo: string | null }>();
+    if (!espelho) return out;
+    const numeroPorUid = new Map((model.unidades ?? []).map((u) => [u.uid, u.numero]));
+    for (const u of quadro.unidades) {
+      const assinatura = assinaturaDoDecorado(model, u.id);
+      const chave = chaveDaTipologia(u.tipologia);
+      const situacao = situacaoDoCorte({
+        temEmpreendimento: !!espelho.empreendimento,
+        tipologia: u.tipologia,
+        tipologiaNoEmpreendimento: !chave || !espelho.tipologiasDoEmpreendimento || espelho.tipologiasDoEmpreendimento.has(chave),
+        assinaturaAtual: assinatura,
+        gravado: (chave && espelho.cortes.get(chave)) || null,
+        numeroPorUid,
+      });
+      const motivo =
+        situacao.tipo === 'SEM_EMPREENDIMENTO' || situacao.tipo === 'TIPOLOGIA_FORA'
+          ? textoDaSituacao(situacao)
+          : !u.tipologia
+            ? 'Preencha a tipologia: o corte vai para o decorado da tipologia.'
+            : !assinatura
+              ? 'Componha a unidade (ambientes num pavimento só, com paredes em volta) para gerar o corte.'
+              : null;
+      out.set(u.id, { situacao, motivo });
+    }
+    return out;
+  }, [espelho, model, quadro.unidades]);
+  const [enviandoCorte, setEnviandoCorte] = useState<string | null>(null);
   const [novoNumero, setNovoNumero] = useState('');
   const [aviso, setAviso] = useState<string | null>(null);
   /** REPETIR UNIDADE (E2.3): a linha escolhida, o lado e o número da cópia. */
@@ -179,6 +232,16 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, erro, f
       }
       case 'geminadaCom':
         return <span className="text-sm text-gray-600">{u.geminadaCom.length ? u.geminadaCom.map(numeroDe).join(', ') : '—'}</span>;
+      case 'espelho': {
+        const e = doEspelho.get(u.id);
+        if (!e) return null;
+        const atencao = e.situacao.tipo === 'DESATUALIZADO' || e.situacao.tipo === 'TIPOLOGIA_FORA';
+        return (
+          <span className={`text-xs ${atencao ? 'text-amber-700' : e.situacao.tipo === 'EM_DIA' ? 'text-emerald-700' : 'text-gray-600'}`} data-testid={`corte-situacao-${u.numero}`}>
+            {textoDaSituacao(e.situacao)}
+          </span>
+        );
+      }
       default:
         return null;
     }
@@ -269,9 +332,21 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, erro, f
         searchText={(u) => `${u.numero} ${u.tipologia ?? ''} ${u.ambientes.map((s) => s.name ?? '').join(' ')}`}
         searchPlaceholder="Buscar unidade ou ambiente…"
         actions={{
-          width: 96,
+          width: espelho ? 132 : 96,
           render: (u) => (
             <div className="flex items-center gap-1">
+              {espelho && (
+                // Botão desligado esconde o title (pointer-events-none): o motivo vai no span.
+                <span title={doEspelho.get(u.id)?.motivo ?? undefined}>
+                  <ActionIconButton
+                    kind="share"
+                    title={`Enviar o corte 3D da unidade ${u.numero} ao Espelho de Vendas`}
+                    aria-label={`Enviar o corte 3D da unidade ${u.numero} ao Espelho de Vendas`}
+                    disabled={!!doEspelho.get(u.id)?.motivo}
+                    onClick={() => setEnviandoCorte(u.id)}
+                  />
+                </span>
+              )}
               <ActionIconButton kind="duplicate" title={`Repetir a unidade ${u.numero} (espelhada ou deslocada)`} aria-label={`Repetir a unidade ${u.numero}`} onClick={() => abrirRepeticao(u)} disabled={u.ambientes.length === 0} />
               <ActionIconButton kind="delete" title={`Excluir a unidade ${u.numero} (os ambientes ficam)`} onClick={() => tentar({ type: 'DeleteUnidade', unidadeId: u.id })} />
             </div>
@@ -329,6 +404,19 @@ export default function TelaUnidades({ model, quadro, onRun, onRunBatch, erro, f
         searchPlaceholder="Buscar pavimento…"
         empty={{ title: 'Sem pavimentos' }}
       />
+
+      {espelho?.empreendimento && enviandoCorte && doEspelho.get(enviandoCorte) && (
+        <EnviarCorteDaUnidade
+          model={model}
+          unidadeId={enviandoCorte}
+          empreendimento={espelho.empreendimento}
+          estudoId={espelho.estudoId}
+          corteAtual={espelho.cortes.get(chaveDaTipologia(quadro.unidades.find((u) => u.id === enviandoCorte)?.tipologia)) ?? null}
+          situacao={doEspelho.get(enviandoCorte)!.situacao}
+          onFechar={() => setEnviandoCorte(null)}
+          onEnviado={espelho.onRecarregar}
+        />
+      )}
     </div>
   );
 }

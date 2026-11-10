@@ -23,6 +23,15 @@
         "value": "inter",
         "createdAt": "2026-10-28T18:26:46.543Z",
         "reason": "Inter é a fonte do app inteiro e do DESIGN.md ('Inter — a mesma do app, já carregada'); trocar seria redesign do mundo visual, fora do escopo"
+      },
+      {
+        "rule": "ai-color-palette",
+        "value": "*",
+        "files": [
+          "docs/spikes/decorado-da-planta/index.html"
+        ],
+        "createdAt": "2026-11-10T21:21:43.565Z",
+        "reason": "Claude: harness de teste da F9; o arquivo só usa bg-gray-50 e o /index.css do app, sem roxo/ciano nem gradiente (conferido por grep)"
       }
     ]
   }

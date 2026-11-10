@@ -14,6 +14,7 @@ import { supabase } from '../../lib/supabase';
 import { empreendimentoService, buildCommercialAddressFields } from '../../services/empreendimentoService';
 import { commercialService } from '../../services/commercialService';
 import { Empreendimento, EmpreendimentoUnit } from '../../types';
+import type { EstruturaDoTipo } from '../../utils/empreendimentoTipos';
 import ActionIconButton from '../ui/ActionIconButton';
 import { useConfirm } from '../ui/confirm';
 import {
@@ -29,6 +30,9 @@ const textColor = (style?: string) => style?.split(' ').find(c => c.startsWith('
 
 interface Props {
   empreendimento: Empreendimento;
+  /** No LOTE a unidade é o terreno: a tabela troca Torre/Pav./Dormitórios/Vagas/Banheiros
+   *  por Quadra/Nº do lote (mesma regra da Tabela de Preços, #298/#305). */
+  estrutura?: EstruturaDoTipo;
 }
 
 type UnitWithTower = EmpreendimentoUnit & { _tower_name: string; _tower_project_id?: string | null };
@@ -43,7 +47,8 @@ interface CommercialSnap {
 
 const fmt = (v: number) => v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 
-export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e }) => {
+export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e, estrutura = 'TORRES' }) => {
+  const ehLote = estrutura === 'LOTE';
   // Sempre o org do próprio empreendimento — nunca o seletor global (que pode estar
   // em "Todas as Organizações" = string vazia, causando erro de uuid).
   const organizationId = e.organization_id;
@@ -397,12 +402,22 @@ export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e }) => {
             <thead>
               <tr className="border-b border-gray-200 text-gray-500 font-semibold text-xs bg-gray-50">
                 <th className="py-2 px-4">Unidade</th>
-                <th className="py-2 px-4">Torre</th>
-                <th className="py-2 px-4">Pav.</th>
-                <th className="py-2 px-4">Área priv.</th>
-                <th className="py-2 px-4">Dormitórios</th>
-                <th className="py-2 px-4">Vagas</th>
-                <th className="py-2 px-4">Banheiros</th>
+                {ehLote ? (
+                  <>
+                    <th className="py-2 px-4">Quadra</th>
+                    <th className="py-2 px-4">Nº do lote</th>
+                    <th className="py-2 px-4">Área priv.</th>
+                  </>
+                ) : (
+                  <>
+                    <th className="py-2 px-4">Torre</th>
+                    <th className="py-2 px-4">Pav.</th>
+                    <th className="py-2 px-4">Área priv.</th>
+                    <th className="py-2 px-4">Dormitórios</th>
+                    <th className="py-2 px-4">Vagas</th>
+                    <th className="py-2 px-4">Banheiros</th>
+                  </>
+                )}
                 <th className="py-2 px-4">Status (Empr.)</th>
                 <th className="py-2 px-4">Status (Locação)</th>
                 <th className="py-2 px-4 text-right text-table-header font-semibold text-gray-500">Ações</th>
@@ -420,12 +435,22 @@ export const EspelhoLocacoesTab: React.FC<Props> = ({ empreendimento: e }) => {
                 return (
                   <tr key={u.id} className={`border-b border-gray-50 hover:bg-gray-50/30 ${isOrphan ? 'bg-rose-50/40' : ''}`}>
                     <td className="py-2.5 px-4 text-sm font-normal text-gray-700">{u.name}</td>
-                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u._tower_name}</td>
-                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>
-                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
-                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
-                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
-                    <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
+                    {ehLote ? (
+                      <>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.quadra || '—'}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.lote || '—'}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u._tower_name}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.floor ?? '—'}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.private_area != null ? `${u.private_area} m²` : '—'}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bedrooms ?? '—'}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.parking_spaces ?? '—'}</td>
+                        <td className="py-2.5 px-4 text-sm font-normal text-gray-600">{u.bathrooms ?? '—'}</td>
+                      </>
+                    )}
                     <td className="py-2.5 px-4">
                       <span className={`text-sm font-normal ${textColor(RENTAL_STATUS_STYLE[emprRentalStatus])}`}>
                         {RENTAL_STATUS_LABEL[emprRentalStatus]}

@@ -39,3 +39,13 @@
   Vagas/Banheiros/Pavimento/Posição, e o menu de colunas mostra só as 13 do lote;
   007 - Bella Vista segue com as colunas de sempre
 - [ ] PR mesclado
+
+## Revisão 2 (10/11) — Espelho de Vendas e de Locações do Empreendimento
+
+> voce diz que corrigiu mas nao corrigiu. veja print
+
+O print era Empreendimento › **Espelho de Vendas** — outra tabela, que o #298/#305 não cobriam.
+Agora `EspelhoVendasTab` e `EspelhoLocacoesTab` recebem `estrutura` do `EmpreendimentoDetail` e,
+no LOTE, trocam Torre/Pav./Dormitórios/Vagas/Banheiros por Quadra/Nº do lote (Torre também sai:
+no lote é a torre implícita "Lote", sem informação). Conferido na tela: Lote Vale do Sol (Vendas e
+Locações) com Quadra "—"/Nº do lote "4B"; Bella Vista com as colunas de sempre.

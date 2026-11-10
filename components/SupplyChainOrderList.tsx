@@ -1,5 +1,5 @@
 import React from 'react';
-import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, AlertTriangle, FileCheck, X, RefreshCw, MoveHorizontal } from 'lucide-react';
+import { Package, Plus, Search, Filter, LayoutDashboard, Table2, ArrowRight, Clock, Truck, DollarSign, Calendar, Copy, Trash2, AlertCircle, AlertTriangle, FileCheck, X, RefreshCw, MoveHorizontal, SlidersHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { supabase } from '../lib/supabase';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -204,6 +204,7 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { PurchaseOrder } from '../types';
 import { ehFob, rotuloStatusLogistico } from '../utils/formaEntrega';
+import PreferenciasPedidoSheet from './suprimentos/PreferenciasPedidoSheet';
 
 interface SupplyChainOrderListProps {
     onCreateNew: () => void;
@@ -236,6 +237,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
     const advancedFields = React.useMemo(() => buildAdvancedFilterFields(orders, empreendimentoByProject), [orders, empreendimentoByProject]);
     const advancedFilters = useAdvancedFilters(advancedFields, 'supplyChainOrderFilters:advanced');
     const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+    // Preferências: padrões do pedido NOVO (empresa + pessoal). Plano 2026-11-09-pedido-compra-preferencias.
+    const [preferenciasAbertas, setPreferenciasAbertas] = React.useState(false);
     const confirm = useConfirm();
     // Pedido → número(s) da NF-e vinculada (mais de uma NF-e por pedido é possível
     // em entregas parciais). Vazio/ausente = sem NF-e.
@@ -518,6 +521,15 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas cotações e pedidos de materiais com precisão executiva.</p>
                 </div>
                 <div className="flex items-center gap-3">
+                    <button
+                        type="button"
+                        onClick={() => setPreferenciasAbertas(true)}
+                        title="Padrões que já vêm preenchidos em todo pedido novo"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                    >
+                        <SlidersHorizontal className="w-[15px] h-[15px]" />
+                        Preferências
+                    </button>
                     <button
                         onClick={onCreateNew}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
@@ -969,6 +981,8 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
             )}
             </div>
         </div>
+
+        <PreferenciasPedidoSheet open={preferenciasAbertas} onClose={() => setPreferenciasAbertas(false)} notify={notify} />
 
         {/* Notification toast */}
         {notification && (

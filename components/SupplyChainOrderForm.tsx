@@ -33,6 +33,8 @@ import { round2 } from '../utils/financialMath';
 import { formatCurrency } from '../utils/financialMath';
 import { temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 import { FORMA_ENTREGA_PADRAO, FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
+import { pedidoPreferenciasService } from '../services/pedidoPreferenciasService';
+import { FORMAS_PAGAMENTO_PEDIDO, ROTULO_ORIGEM, camposAPreencher, dataPrevistaDeEntrega, resolverPadroes, type CampoPadrao, type OrigemDoPadrao, type PadroesDoPedido } from '../lib/pedidoPreferencias';
 
 interface AvulsoItem {
     code: string; description: string; unit: string; quantity: number; unitPrice: number;
@@ -183,7 +185,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     // Sheet nem modal.
     //
     const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
-    const [projects, setProjects] = React.useState<{ id: string; name: string; settings?: { classification?: string } }[]>([]);
+    const [projects, setProjects] = React.useState<{ id: string; name: string; organization_id?: string | null; settings?: { classification?: string } }[]>([]);
     const [accounts, setAccounts] = React.useState<PaymentAccount[]>([]);
     const [costCenters, setCostCenters] = React.useState<CostCenterV2[]>([]);
     // Plano de Contas (tabela `plano_de_contas` — dimensão canônica, distinta de
@@ -220,6 +222,18 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const [planoDeContasId, setPlanoDeContasId] = React.useState('');
     const [deliveryMethod, setDeliveryMethod] = React.useState(FORMA_ENTREGA_PADRAO);
     const [deliveryLocation, setDeliveryLocation] = React.useState('Canteiro de Obras');
+
+    // Preferências (Suprimentos › Pedidos › Preferências, plano 2026-11-09-pedido-compra-preferencias):
+    // padrões do pedido NOVO. `mexidos` = campos que o usuário alterou — o padrão nunca os
+    // sobrescreve. `autoPreenchidos` = o que o padrão escreveu e pode reescrever ou limpar quando a
+    // organização do pedido muda (trocar para uma obra de outra empresa).
+    const mexidos = React.useRef(new Set<CampoPadrao>());
+    const autoPreenchidos = React.useRef(new Set<CampoPadrao>());
+    const [origensAplicadas, setOrigensAplicadas] = React.useState<OrigemDoPadrao[]>([]);
+    const mexeu = (campo: CampoPadrao) => {
+        mexidos.current.add(campo);
+        autoPreenchidos.current.delete(campo);
+    };
 
     const [projectData, setProjectData] = React.useState<ProjectData | null>(null);
     const [selectedItems, setSelectedItems] = React.useState<Set<string>>(new Set());
@@ -284,6 +298,60 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
         })();
         return () => { cancelled = true; };
     }, [contextOrgId]);
+
+    // Organização do pedido novo = a da obra escolhida; sem obra, a do topo.
+    const orgDoPedido = projects.find(p => p.id === selectedProjectId)?.organization_id ?? contextOrgId ?? null;
+
+    React.useEffect(() => {
+        if (isEditing || loading || !orgDoPedido) return;
+        let cancelado = false;
+        pedidoPreferenciasService.ler(orgDoPedido)
+            .then(({ empresa, pessoal }) => {
+                if (cancelado) return;
+                const { valores, origem } = resolverPadroes(empresa, pessoal);
+                const aplicar = camposAPreencher(valores, mexidos.current);
+
+                // O que o padrão da organização anterior escreveu e o desta não define sai do
+                // formulário (centro de custo/conta de outra empresa não servem aqui).
+                for (const campo of [...autoPreenchidos.current]) {
+                    if (campo in aplicar) continue;
+                    if (campo === 'planoDeContasId') setPlanoDeContasId('');
+                    if (campo === 'costCenterId') setCostCenterId('');
+                    if (campo === 'paymentAccountId') setBankAccount('');
+                    if (campo === 'prazoEntregaDias') setDeliveryDate('');
+                    if (campo === 'notes') setNotes('');
+                    autoPreenchidos.current.delete(campo);
+                }
+
+                const escritos = new Set<CampoPadrao>();
+                const v = aplicar as Required<PadroesDoPedido>;
+                if (aplicar.planoDeContasId !== undefined) { setPlanoDeContasId(v.planoDeContasId); escritos.add('planoDeContasId'); }
+                if (aplicar.costCenterId !== undefined) { setCostCenterId(v.costCenterId); escritos.add('costCenterId'); }
+                if (aplicar.paymentTermType !== undefined) { setPaymentTermType(v.paymentTermType); escritos.add('paymentTermType'); }
+                if (aplicar.paymentDays !== undefined) { setPaymentDays(v.paymentDays); escritos.add('paymentDays'); }
+                if (aplicar.paymentInstallments !== undefined) { setPaymentInstallments(v.paymentInstallments); escritos.add('paymentInstallments'); }
+                if (aplicar.paymentMethod !== undefined) { setPaymentMethod(v.paymentMethod); escritos.add('paymentMethod'); }
+                if (aplicar.paymentAccountId !== undefined) {
+                    // O pedido grava o NOME da conta; conta que não está na lista não é chutada.
+                    const conta = accounts.find(a => a.id === v.paymentAccountId);
+                    if (conta) { setBankAccount(conta.name); escritos.add('paymentAccountId'); }
+                }
+                if (aplicar.deliveryMethod !== undefined) { setDeliveryMethod(v.deliveryMethod); escritos.add('deliveryMethod'); }
+                if (aplicar.deliveryLocation !== undefined) { setDeliveryLocation(v.deliveryLocation); escritos.add('deliveryLocation'); }
+                if (aplicar.prazoEntregaDias !== undefined) { setDeliveryDate(dataPrevistaDeEntrega(v.prazoEntregaDias)); escritos.add('prazoEntregaDias'); }
+                if (aplicar.notes !== undefined) { setNotes(v.notes); escritos.add('notes'); }
+                if (aplicar.notesVisibleToSupplier !== undefined) { setNotesVisibleToSupplier(v.notesVisibleToSupplier); escritos.add('notesVisibleToSupplier'); }
+
+                escritos.forEach(c => autoPreenchidos.current.add(c));
+                // Aviso só do que veio de preferência gravada (o padrão do sistema é o de sempre).
+                const origens = new Set<OrigemDoPadrao>();
+                escritos.forEach(c => { const o = origem[c]; if (o && o !== 'SISTEMA') origens.add(o); });
+                setOrigensAplicadas([...origens]);
+            })
+            // Sem preferência legível o pedido nasce como sempre nasceu — não trava o formulário.
+            .catch(e => console.warn('[SupplyChainOrderForm] preferências do pedido:', e));
+        return () => { cancelado = true; };
+    }, [isEditing, loading, orgDoPedido, accounts]);
 
     /**
      * Itens do pedido como vieram do banco, ainda sem classificar.
@@ -1285,6 +1353,12 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                 </h3>
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    {/* Pedido novo: diz de onde vieram os campos já preenchidos. */}
+                                    {!isEditing && origensAplicadas.length > 0 && (
+                                        <p className="md:col-span-2 text-xs text-gray-500">
+                                            Preenchido com {origensAplicadas.map(o => ROTULO_ORIGEM[o]).join(' e ')} (Pedidos de Compra › Preferências). O que você alterar aqui fica como está.
+                                        </p>
+                                    )}
                                     {/* Número — só na edição (pedido novo recebe o número ao salvar).
                                         Somente leitura: o formato vem da máscara em
                                         Configurações do Sistema › Nomenclatura. */}
@@ -1380,7 +1454,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <input
                                             type="date"
                                             value={deliveryDate}
-                                            onChange={(e) => setDeliveryDate(e.target.value)}
+                                            onChange={(e) => { mexeu('prazoEntregaDias'); setDeliveryDate(e.target.value); }}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
                                     </div>
@@ -1389,7 +1463,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Entrega</label>
                                         <select
                                             value={deliveryMethod}
-                                            onChange={(e) => setDeliveryMethod(e.target.value)}
+                                            onChange={(e) => { mexeu('deliveryMethod'); setDeliveryMethod(e.target.value); }}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
                                             {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
@@ -1401,7 +1475,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <input
                                             type="text"
                                             value={deliveryLocation}
-                                            onChange={(e) => setDeliveryLocation(e.target.value)}
+                                            onChange={(e) => { mexeu('deliveryLocation'); setDeliveryLocation(e.target.value); }}
                                             placeholder="Ex: Almoxarifado / Canteiro Obra 1"
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
@@ -1411,15 +1485,10 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento</label>
                                         <select
                                             value={paymentMethod}
-                                            onChange={(e) => setPaymentMethod(e.target.value)}
+                                            onChange={(e) => { mexeu('paymentMethod'); setPaymentMethod(e.target.value); }}
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
-                                            <option value="Boleto">Boleto Bancário</option>
-                                            <option value="Pix">Pix</option>
-                                            <option value="Cartão de Crédito">Cartão de Crédito</option>
-                                            <option value="Cartão de Débito">Cartão de Débito</option>
-                                            <option value="Transferência">Transferência Bancária</option>
-                                            <option value="Dinheiro">Dinheiro</option>
+                                            {FORMAS_PAGAMENTO_PEDIDO.map(f => <option key={f.value} value={f.value}>{f.label}</option>)}
                                         </select>
                                     </div>
 
@@ -1427,7 +1496,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Notas / Observações</label>
                                         <textarea
                                             value={notes}
-                                            onChange={(e) => setNotes(e.target.value)}
+                                            onChange={(e) => { mexeu('notes'); setNotes(e.target.value); }}
                                             rows={3}
                                             placeholder="Ex: Entregar no portão lateral..."
                                             className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none resize-none"
@@ -1438,7 +1507,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             <input
                                                 type="checkbox"
                                                 checked={notesVisibleToSupplier}
-                                                onChange={(e) => setNotesVisibleToSupplier(e.target.checked)}
+                                                onChange={(e) => { mexeu('notesVisibleToSupplier'); setNotesVisibleToSupplier(e.target.checked); }}
                                                 className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"
                                             />
                                             Visível para o fornecedor
@@ -1465,14 +1534,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <div className="flex bg-white rounded-lg p-1 border border-gray-200">
                                             <button
                                                 type="button"
-                                                onClick={() => setPaymentTermType('Vista')}
+                                                onClick={() => { mexeu('paymentTermType'); setPaymentTermType('Vista'); }}
                                                 className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                             >
                                                 À Vista
                                             </button>
                                             <button
                                                 type="button"
-                                                onClick={() => setPaymentTermType('Parcelado')}
+                                                onClick={() => { mexeu('paymentTermType'); setPaymentTermType('Parcelado'); }}
                                                 className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                             >
                                                 Parcelado
@@ -1488,7 +1557,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                     type="number"
                                                     min={0}
                                                     value={paymentDays}
-                                                    onChange={(e) => setPaymentDays(parseInt(e.target.value) || 0)}
+                                                    onChange={(e) => { mexeu('paymentDays'); setPaymentDays(parseInt(e.target.value) || 0); }}
                                                     className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                 />
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
@@ -1502,7 +1571,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                     type="number"
                                                     min={1}
                                                     value={paymentInstallments}
-                                                    onChange={(e) => setPaymentInstallments(parseInt(e.target.value) || 1)}
+                                                    onChange={(e) => { mexeu('paymentInstallments'); setPaymentInstallments(parseInt(e.target.value) || 1); }}
                                                     className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                 />
                                                 <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
@@ -1525,7 +1594,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                                 <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
                                                 <select
                                                     value={bankAccount}
-                                                    onChange={(e) => setBankAccount(e.target.value)}
+                                                    onChange={(e) => { mexeu('paymentAccountId'); setBankAccount(e.target.value); }}
                                                     className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
                                                 >
                                                     <option value="">Selecione uma conta...</option>
@@ -1540,7 +1609,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             <CostCenterSelect
                                                 costCenters={costCenters}
                                                 value={costCenterId}
-                                                onChange={setCostCenterId}
+                                                onChange={(v) => { mexeu('costCenterId'); setCostCenterId(v); }}
                                                 placeholder="Selecione o centro de custo..."
                                                 hoverCls="hover:bg-indigo-50"
                                             />
@@ -1550,7 +1619,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                             <PlanoContasSelect
                                                 planoContas={planoContas}
                                                 value={planoDeContasId}
-                                                onChange={setPlanoDeContasId}
+                                                onChange={(v) => { mexeu('planoDeContasId'); setPlanoDeContasId(v); }}
                                                 placeholder="Selecione o plano de contas..."
                                                 hoverCls="hover:bg-indigo-50"
                                             />

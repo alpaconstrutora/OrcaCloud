@@ -717,6 +717,21 @@ export interface SSTRegulatoryDoc {
     updated_at?: string;
 }
 
+// CPF é opcional. Sem dígito nenhum ('' do campo vazio, só máscara) grava NULL:
+// o índice `idx_employees_cpf_unique (org_id, cpf) WHERE cpf IS NOT NULL` só
+// ignora NULL, e '' fazia o 2º colaborador sem CPF da org bater em duplicidade.
+function normalizarCpf<T extends { cpf?: string | null }>(dados: T): T {
+    if (!('cpf' in dados)) return dados;
+    return { ...dados, cpf: (dados.cpf ?? '').replace(/\D/g, '') ? dados.cpf : null };
+}
+
+function erroDeEmployee(error: { code?: string; message?: string }): unknown {
+    if (error.code === '23505' && error.message?.includes('idx_employees_cpf_unique')) {
+        return new Error('Já existe um colaborador com este CPF nesta organização.');
+    }
+    return error;
+}
+
 // ============================================================
 // SERVICE
 // ============================================================
@@ -788,13 +803,13 @@ export const laborService = {
     },
 
     async createEmployee(employee: Omit<Employee, 'id' | 'created_at' | 'updated_at'>): Promise<Employee> {
-        const payload = { ...employee, cnh_categoria: employee.cnh_categoria || null };
+        const payload = normalizarCpf({ ...employee, cnh_categoria: employee.cnh_categoria || null });
         const { data, error } = await supabase
             .from('employees')
             .insert(payload)
             .select()
             .single();
-        if (error) throw error;
+        if (error) throw erroDeEmployee(error);
 
         // Auto-cria período aquisitivo para CLT com data de admissão
         if (data && employee.contract_type === 'CLT' && employee.hire_date) {
@@ -817,11 +832,11 @@ export const laborService = {
         }
         const { data, error } = await supabase
             .from('employees')
-            .update(cleanUpdates)
+            .update(normalizarCpf(cleanUpdates))
             .eq('id', id)
             .select()
             .single();
-        if (error) throw error;
+        if (error) throw erroDeEmployee(error);
         return data;
     },
 

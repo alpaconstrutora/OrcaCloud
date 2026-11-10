@@ -95,13 +95,26 @@ describe('ContasPagarParcelas — vencimentos futuros', () => {
         expect(screen.queryByText('Parcela futura')).toBeNull();
     });
 
-    it('vencida: data e atraso na mesma linha (um único bloco, sem div empilhada)', () => {
+    it('coluna Atraso: dias na vencida, "—" na em dia; a data fica sozinha no Vencimento', () => {
         renderTela();
-        const atraso = screen.getByText(/d atraso/);
-        // O atraso é <span> dentro do bloco da data — antes era uma <div> abaixo dela.
-        expect(atraso.tagName).toBe('SPAN');
-        const celula = atraso.parentElement!;
-        expect(celula.textContent).toMatch(/^10\/01\/2020 · \d+d atraso$/);
-        expect(celula.getAttribute('title')).toBe(celula.textContent);
+        expect(screen.getByRole('columnheader', { name: /Atraso/ })).toBeTruthy();
+        const celulaDias = screen.getByText(/^\d+ dias$/);
+        expect(celulaDias.closest('td')).toBeTruthy();
+        // Vencimento: só a data, sem o atraso empilhado/colado.
+        expect(screen.getByText('10/01/2020').textContent).toBe('10/01/2020');
+        expect(screen.queryByText(/d atraso/)).toBeNull();
+    });
+
+    it('ordenar por Atraso: o mais atrasado primeiro (desc), em dia por último', () => {
+        window.localStorage.setItem('contasPagarParcelasColumns', JSON.stringify({ sortColumn: 'atraso', sortDirection: 'desc' }));
+        renderTela({
+            rows: [
+                ...ROWS,
+                linha({ id: 'p4', description: 'Parcela mais vencida', due_date: '2019-01-10', effective_status: 'VENCIDO' }),
+            ],
+        });
+        const ordem = screen.getAllByText(/^Parcela /).map(e => e.textContent);
+        expect(ordem.indexOf('Parcela mais vencida')).toBeLessThan(ordem.indexOf('Parcela vencida'));
+        expect(ordem.indexOf('Parcela vencida')).toBeLessThan(ordem.indexOf('Parcela futura'));
     });
 });

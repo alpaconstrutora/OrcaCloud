@@ -413,6 +413,26 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
     };
   }, [state.showPanel]);
 
+  // Posição do painel (portal, `position: fixed`) — ancorado à direita do botão.
+  // Até 09/11/2026 era `absolute` dentro da toolbar acoplada, que é `overflow-hidden`
+  // (§5.2): com poucas linhas na tabela o card ficava baixo e cortava o painel — a
+  // 2ª regra (justo a do E/OU) sumia. Mesma razão do FilterPopover (§5.4).
+  const [pos, setPos] = React.useState<{ top: number; right: number } | null>(null);
+  const atualizarPos = React.useCallback(() => {
+    const r = panelRef.current?.getBoundingClientRect();
+    if (r) setPos({ top: r.bottom + 8, right: Math.max(8, window.innerWidth - r.right) });
+  }, []);
+  React.useLayoutEffect(() => {
+    if (!state.showPanel) return;
+    atualizarPos();
+    window.addEventListener('resize', atualizarPos);
+    window.addEventListener('scroll', atualizarPos, true);
+    return () => {
+      window.removeEventListener('resize', atualizarPos);
+      window.removeEventListener('scroll', atualizarPos, true);
+    };
+  }, [state.showPanel, atualizarPos]);
+
   const fieldByKey = new Map(fields.map(f => [f.key, f]));
 
   return (
@@ -438,8 +458,16 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
         )}
       </button>
 
-      {state.showPanel && (
-        <div className="absolute right-0 top-full mt-2 bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-50 min-w-[490px]">
+      {state.showPanel && createPortal(
+        <div
+          {...{ [PORTAL_ATTR]: '' }}
+          role="dialog"
+          aria-label="Filtro avançado"
+          style={{ position: 'fixed', top: pos?.top ?? -9999, right: pos?.right ?? -9999 }}
+          // z abaixo da lista de valores (z-[10000]), que abre por cima do painel.
+          // Sem overflow próprio: cortaria o menu "Filtros salvos", que abre dentro dele.
+          className="bg-white rounded-xl border border-gray-200 shadow-lg p-4 z-[9000] min-w-[490px]"
+        >
           <div className="flex items-center justify-between mb-3">
             <span className="text-xs font-bold text-gray-700 uppercase tracking-wider">Filtros</span>
             <div className="relative">
@@ -610,7 +638,8 @@ export const AdvancedFilterPanel: React.FC<AdvancedFilterPanelProps> = ({ fields
               </button>
             )}
           </div>
-        </div>
+        </div>,
+        document.body,
       )}
     </div>
   );

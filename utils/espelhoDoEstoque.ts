@@ -210,7 +210,13 @@ export function montarEspelhoDoEstoque(entrada: {
       const ligada = daUnidade.get(i.id);
       const doBloco = ligada ? null : todas.filter((t) => chaveDaTorre(t.name) === chaveDaTorre(String(i.block ?? '')));
       const torre = ligada?.torre ?? (doBloco?.length === 1 ? doBloco[0] : null);
-      const v = vistaDaUnidade(torre?.vistas, ligada?.unidade.floor ?? andarDo(i), ligada?.unidade.sun_orientation ?? orientacaoDoImovel(i.sun_orientation));
+      const v = vistaDaUnidade(
+        torre?.vistas,
+        ligada?.unidade.floor ?? andarDo(i),
+        ligada?.unidade.sun_orientation ?? orientacaoDoImovel(i.sun_orientation),
+        // A vista de UMA unidade: pelo id da unidade ligada; o imóvel sem ligação só tem o nome para se achar.
+        ligada ? { id: ligada.unidade.id, nome: ligada.unidade.name } : { nome: i.name },
+      );
       dados.get(i.id)!.vista = v ? { url: v.imagem_url, legenda: v.legenda ?? null, cobre: rotuloDaVista(v) } : null;
     }
   }

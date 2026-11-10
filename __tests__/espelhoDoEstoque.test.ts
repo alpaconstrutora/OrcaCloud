@@ -240,6 +240,23 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
       expect(r.dados.get('B11')!.vista).toBeNull();
     });
 
+    // 10/11/2026: a vista de UMA unidade vence a faixa, e só ela a recebe.
+    it('vista de uma unidade: a ligada acha pelo id; o imóvel sem unidade ligada (Garden) acha pelo nome', () => {
+      const daUnidade = { andar_de: 1, andar_ate: 1, orientacao: null, imagem_url: 'https://x/so-da-102.jpg', legenda: null, unit_id: 'u102', unit_name: '102' };
+      const torre: TorreDaEstrutura[] = [{ ...comVistas[0], name: 'Torre A', vistas: [...vistas, daUnidade] }];
+      const ligados = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: torre });
+      expect(ligados.dados.get('102')!.vista).toEqual({ url: 'https://x/so-da-102.jpg', legenda: null, cobre: 'Unidade 102' });
+      // A vizinha do mesmo andar segue com a faixa.
+      expect(ligados.dados.get('101')!.vista?.url).toBe('https://x/baixo.jpg');
+
+      // Sem ligação nenhuma (property_id nulo): o imóvel "102" do bloco A acha a vista pelo nome.
+      const semLigacao: TorreDaEstrutura[] = [{ ...torre[0], units: torre[0].units.map((u) => ({ ...u, property_id: null })) }];
+      const peloNome = montarEspelhoDoEstoque({ imoveis: [imovel('p1', 1, { name: '102' }), imovel('p2', 1, { name: '101' })], negocios: [], estrutura: semLigacao });
+      expect(peloNome.fonte).toBe('ESTOQUE');
+      expect(peloNome.dados.get('p1')!.vista?.url).toBe('https://x/so-da-102.jpg');
+      expect(peloNome.dados.get('p2')!.vista?.url).toBe('https://x/baixo.jpg');
+    });
+
     it('nenhuma vista no prédio: `vista` nem aparece nos dados (a ficha não fala nisso)', () => {
       const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
       expect('vista' in r.dados.get('101')!).toBe(false);

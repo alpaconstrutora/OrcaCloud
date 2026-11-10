@@ -19,6 +19,8 @@ import VistasDaTorreSecao, { faixaSugerida } from '../../components/empreendimen
 
 const BAIXOS: VistaDaTorre = { id: 'v1', tower_id: 't1', andar_de: 0, andar_ate: 3, orientacao: null, imagem_url: 'https://x/baixos.jpg', imagem_path: 'o1/e1/vistas/baixos.jpg', legenda: 'Vista para a praça' };
 const arquivo = () => new File(['x'], 'vista.jpg', { type: 'image/jpeg' });
+/** Uma unidade por andar dado (null = sem andar). */
+const unidades = (andares: (number | null)[]) => andares.map((floor, i) => ({ id: `u${i}`, name: `${floor ?? 'S/N'}0${i}`, floor }));
 
 const montar = (over: Partial<React.ComponentProps<typeof VistasDaTorreSecao>> = {}) =>
     render(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" {...over} />);
@@ -86,7 +88,7 @@ describe('VistasDaTorreSecao', () => {
     // 10/11/2026, o usuário: "carreguei as imagens mas nao tem botão salvar ou algo do tipo e as imagens nao permanecem".
     it('com os andares da torre, a faixa já nasce preenchida: escolher a foto liga o "Salvar vista" e avisa que falta salvar', async () => {
         servico.adicionar.mockResolvedValue({ ...BAIXOS, id: 'v9', andar_de: 0, andar_ate: 3 });
-        montar({ andaresDaTorre: [-2, -1, 0, 0, 1, 2, 3, null] });
+        montar({ unidadesDaTorre: unidades([-2, -1, 0, 0, 1, 2, 3, null]) });
         await screen.findByTestId('vista-gravada');
         // Do térreo (garagem não tem janela) ao último andar.
         expect((screen.getByLabelText('Do andar') as HTMLInputElement).value).toBe('0');
@@ -104,10 +106,10 @@ describe('VistasDaTorreSecao', () => {
         const { rerender } = montar();
         await screen.findByTestId('vista-gravada');
         expect((screen.getByLabelText('Do andar') as HTMLInputElement).value).toBe('');
-        rerender(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" andaresDaTorre={[1, 5]} />);
+        rerender(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" unidadesDaTorre={unidades([1, 5])} />);
         expect((screen.getByLabelText('Até o andar') as HTMLInputElement).value).toBe('5');
         preencher('2', '4');
-        rerender(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" andaresDaTorre={[1, 9]} />);
+        rerender(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" unidadesDaTorre={unidades([1, 9])} />);
         expect((screen.getByLabelText('Até o andar') as HTMLInputElement).value).toBe('4');
     });
 
@@ -125,6 +127,63 @@ describe('VistasDaTorreSecao', () => {
         preencher('-1', '0');
         fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
         await waitFor(() => expect(servico.adicionar).toHaveBeenCalledWith(expect.objectContaining({ andar_de: -1, andar_ate: 0, orientacao: null, legenda: null })));
+    });
+
+    // 10/11/2026, o usuário: "não seria melhor também opção para vincular a vista da janela com uma unidade específica?"
+    describe('vista de uma unidade específica', () => {
+        const TORRE = [{ id: 'u303', name: '303', floor: 3 }, { id: 'u304', name: '304', floor: 3 }, { id: 'u101', name: '101', floor: 1 }];
+        const DA_304: VistaDaTorre = { id: 'v304', tower_id: 't1', andar_de: 3, andar_ate: 3, orientacao: null, imagem_url: 'https://x/304.jpg', imagem_path: 'p', legenda: null, unit_id: 'u304', unit_name: '304' };
+
+        it('"Vale para" lista as unidades da torre por andar; escolher uma esconde a faixa e a face e grava a vista SÓ dela', async () => {
+            servico.adicionar.mockResolvedValue(DA_304);
+            montar({ unidadesDaTorre: TORRE });
+            await screen.findByTestId('vista-gravada');
+            const vale = screen.getByLabelText('Vale para') as HTMLSelectElement;
+            expect([...vale.options].map((o) => o.textContent)).toEqual(['Uma faixa de andares', '101 · 1º pavimento', '303 · 3º pavimento', '304 · 3º pavimento']);
+            const f = escolherFoto();
+            fireEvent.change(vale, { target: { value: 'u304' } });
+            expect(screen.queryByLabelText('Do andar')).toBeNull();
+            expect(screen.queryByLabelText('Face da torre')).toBeNull();
+            expect(screen.getByTestId('nova-vista-da-unidade').textContent).toMatch(/Só a unidade 304 abre esta foto/);
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
+            await waitFor(() => expect(servico.adicionar).toHaveBeenCalledWith({
+                organizationId: 'o1', empreendimentoId: 'e1', towerId: 't1', andar_de: 3, andar_ate: 3, orientacao: null, legenda: null, arquivo: f, unidade: { id: 'u304', name: '304' },
+            }));
+            // Na lista, a vista da unidade vem depois das faixas e diz de quem é.
+            await waitFor(() => expect(screen.getAllByTestId('vista-gravada')).toHaveLength(2));
+            expect(within(screen.getAllByTestId('vista-gravada')[1]).getByText('Unidade 304')).toBeTruthy();
+            expect(showToast).toHaveBeenCalledWith('Vista da Torre A gravada: Unidade 304.');
+            // E o formulário volta para a faixa.
+            expect((screen.getByLabelText('Vale para') as HTMLSelectElement).value).toBe('');
+        });
+
+        it('unidade que já tem vista fica desligada na lista, dizendo por quê', async () => {
+            servico.listar.mockResolvedValue([BAIXOS, DA_304]);
+            montar({ unidadesDaTorre: TORRE });
+            await screen.findAllByTestId('vista-gravada');
+            const opcao = [...(screen.getByLabelText('Vale para') as HTMLSelectElement).options].find((o) => o.value === 'u304')!;
+            expect(opcao.disabled).toBe(true);
+            expect(opcao.textContent).toBe('304 · 3º pavimento (já tem vista)');
+        });
+
+        it('a vista de faixa segue como antes: sem `unidade` no que vai para o serviço', async () => {
+            servico.adicionar.mockResolvedValue({ ...BAIXOS, id: 'v8' });
+            montar({ unidadesDaTorre: TORRE });
+            await screen.findByTestId('vista-gravada');
+            escolherFoto();
+            fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
+            await waitFor(() => expect(servico.adicionar).toHaveBeenCalledTimes(1));
+            expect('unidade' in servico.adicionar.mock.calls[0][0]).toBe(false);
+        });
+
+        it('remover a vista de uma unidade diz que a ficha dela volta para a faixa', async () => {
+            confirmar.mockResolvedValue(false);
+            servico.listar.mockResolvedValue([DA_304]);
+            montar({ unidadesDaTorre: TORRE });
+            fireEvent.click(within(await screen.findByTestId('vista-gravada')).getByTitle('Remover vista'));
+            await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(1));
+            expect(String(confirmar.mock.calls[0][0].message)).toMatch(/Unidade 304\. A ficha dela volta a abrir a vista da faixa/);
+        });
     });
 
     it('falhou ao gravar: o motivo aparece como erro, nada entra na lista e o que foi digitado fica', async () => {

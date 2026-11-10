@@ -135,7 +135,7 @@ export function montarEspelhoDoInvestidor(obra: ObraDoEspelho, hipoteses?: Parti
               plantaUrl: plantaDaUnidade(plantas, u.typology),
               ...(obraTemVista
                 ? (() => {
-                    const v = vistaDaUnidade(t.vistas, u.floor, u.sun_orientation);
+                    const v = vistaDaUnidade(t.vistas, u.floor, u.sun_orientation, { id: u.id, nome: u.name });
                     return { vista: v ? { url: v.imagem_url, legenda: v.legenda ?? null, cobre: rotuloDaVista(v) } : null };
                   })()
                 : {}),

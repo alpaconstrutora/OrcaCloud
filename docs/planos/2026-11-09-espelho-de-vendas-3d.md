@@ -234,6 +234,19 @@ salvar ou algo do tipo e as imagens nao permanecem"*. A foto escolhida era só p
 preenchida com os andares da torre (do térreo ao último com unidade), o botão é o azul "Salvar vista" e, com a foto
 escolhida, a tela avisa que ela ainda não foi gravada.
 
+#### F6 — complemento: vista de uma unidade específica (10/11/2026)
+
+Pedido do usuário, com a F6 no ar: *"não seria melhor também opção para vincular a vista da janela com uma unidade
+específica?"*. A unidade de canto, ou a que dá para o vizinho, tem vista diferente das outras do mesmo andar.
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `supabase/migrations/aplicar_20271110800000_vista_da_janela_por_unidade.sql` (novo) | `empreendimento_tower_vistas.unit_id` (NULL = vista de faixa), índice único (uma vista por unidade) e gatilho que recusa unidade de OUTRA torre (a RLS olha a torre). Reescreve as duas funções do espelho com o MESMO corpo mais `unit_id` e `unit_name` em cada vista. | Aplicada no banco: a verificação embutida passa; privilégios das duas funções iguais aos de antes. |
+| `utils/espelhoVistaDaJanela.ts` | `vistaDaUnidade(…, unidade)`: a vista cadastrada para a unidade vence qualquer faixa, e só ela a recebe. Casa pelo id; o imóvel do estoque sem unidade ligada, pelo nome. | 6 casos novos em `espelhoVistaDaJanela.test.ts`. |
+| `services/empreendimentoTowerVistasService.ts` | Lê `unit_id` e o nome da unidade, tolerante à coluna ausente (cai para as vistas de faixa); `adicionar` aceita `unidade`; "já tem uma vista" e "falta aplicar a migration" com o motivo. | Typecheck; coberto pelos testes de quem usa. |
+| `components/empreendimento/VistasDaTorreSecao.tsx`, `TowerEditor.tsx` | Campo "Vale para": "Uma faixa de andares" ou uma unidade da torre (a que já tem vista fica desligada, dizendo por quê). Escolhida a unidade, somem a faixa e a face. | 4 casos novos em `VistasDaTorreSecao.test.tsx`. |
+| `utils/espelhoDoEstoque.ts`, `utils/espelhoDoInvestidor.ts` | Passam a unidade a `vistaDaUnidade`. | 1 caso novo em cada teste. |
+
 ### F7 — Luz do dia
 
 | Arquivo | O que muda | Como sei que terminou |

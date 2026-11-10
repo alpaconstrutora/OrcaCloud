@@ -76,6 +76,21 @@ describe('montarEspelhoDoInvestidor', () => {
     expect('vista' in r.dados.get('202')!).toBe(false);
   });
 
+  it('a vista cadastrada para UMA unidade vence a faixa, e a vizinha do andar fica com a faixa', () => {
+    const comVista = montarEspelhoDoInvestidor({
+      ...OBRA,
+      torres: [{
+        ...OBRA.torres[0],
+        vistas: [
+          { andar_de: 2, andar_ate: 3, orientacao: null, imagem_url: 'https://x/alto.jpg', legenda: null },
+          { andar_de: 2, andar_ate: 2, orientacao: null, imagem_url: 'https://x/so-da-202.jpg', legenda: 'Canto', unit_id: '202', unit_name: '202' },
+        ],
+      }],
+    });
+    expect(comVista.dados.get('202')!.vista).toEqual({ url: 'https://x/so-da-202.jpg', legenda: 'Canto', cobre: 'Unidade 202' });
+    expect(comVista.dados.get('201')!.vista?.url).toBe('https://x/alto.jpg');
+  });
+
   // F5 (10/11/2026): a planta baixa da tipologia, que vem com a obra.
   it('a ficha leva a planta da tipologia da unidade quando a obra a traz', () => {
     const comPlantas = montarEspelhoDoInvestidor({ ...OBRA, plantas: [{ tipologia: '2 QUARTOS', tipologia_chave: '2 quartos', imagem_url: 'https://x/2q.png' }] });
@@ -300,6 +315,58 @@ describe('migration das vistas da janela — tabela fechada, funções sem dado 
   it('a vista sai pela torre que a função já entregava (nenhuma torre nova entra por causa dela)', () => {
     expect(funcao(sql, 'fn_broker_portal_get_espelho')).toMatch(/FROM public\.empreendimento_tower_vistas v\s+WHERE v\.tower_id = tw\.id/);
     expect(funcao(sql, 'fn_espelho_de_vendas_das_obras')).toMatch(/FROM public\.empreendimento_tower_vistas v\s+WHERE v\.tower_id = t\.id/);
+  });
+
+  it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {
+    const doInvestidor = sql.slice(sql.lastIndexOf("'units', COALESCE"), sql.indexOf('FROM unidades u WHERE u.tower_id = t.id'));
+    expect([...doInvestidor.matchAll(/'([a-z_]+)'\s*,/g)].map((m) => m[1]).filter((k) => k !== 'units').sort()).toEqual([
+      'bathrooms', 'bedrooms', 'floor', 'floor_tipo', 'id', 'is_vendavel', 'name', 'parking_spaces', 'position_type', 'price',
+      'private_area', 'sort_order', 'status', 'sun_orientation', 'typology', 'vaga_na_planta',
+    ]);
+    const listas = [...sql.matchAll(/n\.status IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
+    expect(listas.length).toBe(2);
+    for (const l of listas) expect(l).toEqual(ETAPAS_VENDIDA);
+    expect(sql).not.toMatch(/GRANT[^;]*fn_espelho_de_vendas_das_obras/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_broker_portal_get_espelho\(TEXT\) TO anon, authenticated;/);
+  });
+});
+
+/**
+ * 10/11/2026: a vista da janela de uma unidade específica. A migration põe `unit_id` na vista e reescreve as duas
+ * funções do espelho para dizerem de que unidade a vista é.
+ */
+describe('migration da vista por unidade — coluna presa à torre, funções sem dado de pessoa', () => {
+  const sql = lerMigration('aplicar_20271110800000_vista_da_janela_por_unidade.sql');
+  const anterior = lerMigration('aplicar_20271110600000_empreendimento_tower_vistas.sql');
+  const chavesDe = (texto: string) => [...texto.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
+  const funcao = (texto: string, nome: string) => {
+    const i = texto.indexOf(`CREATE OR REPLACE FUNCTION public.${nome}`);
+    return texto.slice(i, texto.indexOf('$X$;', i));
+  };
+
+  it('a coluna aponta para a unidade, uma vista por unidade, e um gatilho recusa unidade de OUTRA torre', () => {
+    expect(sql).toMatch(/ADD COLUMN IF NOT EXISTS unit_id UUID REFERENCES public\.empreendimento_units\(id\) ON DELETE CASCADE/);
+    expect(sql).toMatch(/CREATE UNIQUE INDEX IF NOT EXISTS uq_empreendimento_tower_vistas_unit\s+ON public\.empreendimento_tower_vistas \(unit_id\) WHERE unit_id IS NOT NULL/);
+    expect(sql).toMatch(/u\.id = NEW\.unit_id AND u\.tower_id = NEW\.tower_id/);
+    expect(sql).toMatch(/BEFORE INSERT OR UPDATE OF unit_id, tower_id ON public\.empreendimento_tower_vistas/);
+  });
+
+  it('a função do gatilho não é chamável pela API', () => {
+    for (const papel of ['PUBLIC', 'anon', 'authenticated']) {
+      expect(sql).toContain(`REVOKE ALL ON FUNCTION public.fn_empreendimento_tower_vistas_unidade_da_torre() FROM ${papel};`);
+    }
+    expect(sql).not.toMatch(/GRANT[^;]*fn_empreendimento_tower_vistas_unidade_da_torre/);
+  });
+
+  it('nas duas funções entram só `unit_id` e `unit_name` da vista, e nenhuma chave de antes sai', () => {
+    for (const nome of ['fn_broker_portal_get_espelho', 'fn_espelho_de_vendas_das_obras']) {
+      const antes = chavesDe(funcao(anterior, nome));
+      const depois = chavesDe(funcao(sql, nome));
+      for (const k of antes) expect(depois).toContain(k);
+      expect([...new Set(depois.filter((k) => !antes.includes(k)))].sort()).toEqual(['unit_id', 'unit_name']);
+      expect(funcao(sql, nome)).toMatch(/'unit_name', \(SELECT vu\.name FROM public\.empreendimento_units vu WHERE vu\.id = v\.unit_id\)/);
+    }
+    expect(chavesDe(sql).filter((k) => /client|buyer|comprador|cliente|deal|negoc|broker|corretor|document|cpf|cnpj|email|phone|contract/.test(k))).toEqual([]);
   });
 
   it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {

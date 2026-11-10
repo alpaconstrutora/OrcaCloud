@@ -138,16 +138,35 @@ describe('montarCenaDoEspelho — o contorno', () => {
     expect(cena.torres[0].caixa.minY).toBe(20000);
   });
 
-  it('alguma torre sem contorno: lado a lado, sem sobrepor, com o afastamento da hipótese', () => {
+  it('alguma torre sem contorno: a da Planta fica onde o desenho a pôs; a esquemática vai ao lado, sem sobrepor', () => {
     const cena = montarCenaDoEspelho({ torres: [torre('A', { contorno: { anel: CONTORNO } }), torre('B', { sort_order: 1 })] });
     const [a, b] = cena.torres;
     expect(a.origem).toBe('PLANTA');
     expect(b.origem).toBe('ESQUEMATICA');
-    expect(a.caixa).toMatchObject({ minX: 0, minY: 0, maxX: 11000, maxY: 16000 });
-    expect(b.caixa.minX).toBe(11000 + HIPOTESES_PADRAO_DO_ESPELHO.afastamentoEntreTorresMm);
+    expect(a.caixa).toMatchObject({ minX: 50000, minY: 20000, maxX: 61000, maxY: 36000 });
+    expect(b.caixa.minX).toBe(61000 + HIPOTESES_PADRAO_DO_ESPELHO.afastamentoEntreTorresMm);
+    expect(b.caixa.minY).toBe(20000);
     // Os prismas acompanham a torre.
     const xsDeB = cena.prismas.filter((p) => p.torreId === 'B').map((p) => caixa(p.anel).minX);
     expect(Math.min(...xsDeB)).toBe(b.caixa.minX);
+  });
+
+  // 10/11/2026, Portal do Investidor do Garden Cambuhy: a obra trazia Torre A e Torre B com o contorno da Planta
+  // (encostadas, uma atrás da outra) e a "Lote" de OUTRO empreendimento ligado à mesma obra, sem contorno. Bastava
+  // ela para TODAS irem lado a lado — as duas torres do projeto saíam separadas, e o desenho não batia com a Planta.
+  it('duas da Planta e uma esquemática: as da Planta mantêm a posição uma em relação à outra; a esquemática fica fora delas', () => {
+    const anelA = [{ x: 2281, y: 6342 }, { x: 15781, y: 6342 }, { x: 15781, y: 32342 }, { x: 2281, y: 32342 }];
+    const anelB = anelA.map((p) => ({ x: p.x, y: p.y + 26000 }));
+    const cena = montarCenaDoEspelho({
+      torres: [torre('L', { name: 'Lote', sort_order: -1 }), torre('A', { contorno: { anel: anelA } }), torre('B', { sort_order: 1, contorno: { anel: anelB } })],
+    });
+    const porId = Object.fromEntries(cena.torres.map((t) => [t.torreId, t]));
+    expect(porId.A.caixa).toMatchObject({ minX: 2281, minY: 6342, maxX: 15781, maxY: 32342 });
+    expect(porId.B.caixa).toMatchObject({ minX: 2281, minY: 32342, maxX: 15781, maxY: 58342 });
+    expect(porId.L.origem).toBe('ESQUEMATICA');
+    // Fora da caixa do grupo da Planta, à direita, com o afastamento da hipótese.
+    expect(porId.L.caixa.minX).toBe(15781 + HIPOTESES_PADRAO_DO_ESPELHO.afastamentoEntreTorresMm);
+    expect(porId.L.caixa.minY).toBe(6342);
   });
 
   it('a distância declarada entre as duas torres vale no lugar do afastamento padrão', () => {

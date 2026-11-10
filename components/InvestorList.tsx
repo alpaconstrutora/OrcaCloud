@@ -204,8 +204,11 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
         await performDelete(id);
     };
 
-    const handleOpenModal = (investor?: Investor) => {
-        setSelectedInvestor(investor);
+    const handleOpenModal = (investor?: InvestorRow) => {
+        // A linha traz `_projectNames` (só de exibição); o modal copia initialData
+        // inteiro para o formulário, então entrega o investidor sem ele.
+        const { _projectNames, ...puro } = investor ?? {};
+        setSelectedInvestor(investor ? (puro as Investor) : undefined);
         setIsModalOpen(true);
     };
 

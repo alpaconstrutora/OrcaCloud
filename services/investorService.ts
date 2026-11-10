@@ -95,6 +95,11 @@ export const investorService = {
             // Só normaliza email se foi explicitamente fornecido (evita apagar em updates parciais)
             ...(investor.email !== undefined && { email: investor.email?.trim() || null }),
         };
+        // Campos `_*` são derivados de tela (ex.: `_projectNames` da InvestorList),
+        // nunca coluna — o PostgREST rejeitaria o PATCH/INSERT inteiro.
+        for (const key of Object.keys(payload)) {
+            if (key.startsWith('_')) delete payload[key];
+        }
         if (investor.id) {
             if (payload.document !== undefined) {
                 await assertDocumentNotDuplicated('investor', payload.document as string, investor.id);

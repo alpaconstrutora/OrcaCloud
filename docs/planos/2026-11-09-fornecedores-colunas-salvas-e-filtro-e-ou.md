@@ -76,4 +76,4 @@ Sessão de 09/11/2026 (VS Code):
 - **Pronto quando:** teste com o painel dentro de um contêiner `overflow: hidden` de 40 px
   (painel fora dele, 2ª regra visível); em produção, com 1 linha na tabela, as duas regras
   aparecem inteiras.
-- [ ] feito
+- [x] feito (PR #285, 4cb75f7; conferido em produção 09/11/2026: filtro com 1 linha na tabela, painel inteiro com "Onde", o seletor OU e as duas regras; filtros do usuário restaurados)

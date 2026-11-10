@@ -149,7 +149,10 @@ seletores; fonte de 11 px; fecha a crítica.
   oferece "Lançar no Financeiro" (o texto antigo citava "Parcela avulsa", botão que saiu em
   02/08); frases da política montadas pela regra (`utils/politicaDeVendasTexto.ts`, testada),
   com acento, R$/% brasileiros e o que fazer. Conferido no dev local com escritas bloqueadas.
-  Fica para depois: a Simulação do corretor ainda mostra a mensagem crua do servidor.
+  Simulação do corretor (pedido do usuário, 10/11/2026: "Na sequência corrigir simulação do
+  corretor"): `BrokerProposalSimulator` usa `textoDaRegra(c, 'corretor')` — mesmos números, ação
+  no vocabulário da Simulação ("escolha outro plano", "aumente a entrada", "reduza o desconto").
+  Não conferida na tela: só abre no Portal do Corretor e nenhum plano de vendas está ativo.
 - [ ] 4. distill
 - [ ] 5. audit
 - [ ] 6. polish

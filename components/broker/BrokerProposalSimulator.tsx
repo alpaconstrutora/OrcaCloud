@@ -8,6 +8,7 @@ import {
 import { brokerPortalService } from '../../services/brokerPortalService';
 import { allocateProRata } from '../../services/brokerService';
 import MoneyCentsInput from '../ui/MoneyCentsInput';
+import { textoDaRegra } from '../../utils/politicaDeVendasTexto';
 
 interface BrokerProposalSimulatorProps {
     /**
@@ -652,7 +653,10 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                 <ul className="space-y-1">
                                     {policy.checks.map((c, i) => (
                                         <li key={i} className="text-xs font-medium flex items-start gap-1.5">
-                                            <span className="opacity-60">•</span> {c.message}
+                                            {/* A frase vem da regra (acentos, R$ e % no formato brasileiro, o
+                                                que fazer na Simulação) — a do servidor vinha sem acento e com
+                                                número cru. Mesma função da negociação, com o público do portal. */}
+                                            <span className="opacity-60">•</span> {textoDaRegra(c, 'corretor')}
                                         </li>
                                     ))}
                                 </ul>

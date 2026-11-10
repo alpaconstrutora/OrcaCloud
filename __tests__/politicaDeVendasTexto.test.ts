@@ -42,3 +42,24 @@ describe('textoDaRegra', () => {
             .toBe('Prazo 60x acima do maximo 48x.');
     });
 });
+
+describe('textoDaRegra › Simulação do corretor (Portal do Corretor)', () => {
+    // Mesmos números; a AÇÃO muda: o corretor não abre Venda de Ativos e fala
+    // com o vocabulário da Simulação (Entrada, Parcelas mensais, Desconto).
+    it('o que fazer na linguagem da Simulação', () => {
+        expect(textoDaRegra({ rule: 'plan_status', verdict: 'BLOCKED', message: 'x', limit: null, value: null }, 'corretor'))
+            .toBe('Este plano de vendas não está ativo — escolha outro plano.');
+        expect(textoDaRegra({ rule: 'plan_validity', verdict: 'BLOCKED', message: 'x', limit: null, value: null }, 'corretor'))
+            .toBe('Este plano de vendas está fora do período de vigência — escolha outro plano.');
+        expect(textoDaRegra({ rule: 'min_down_payment', verdict: 'NEEDS_APPROVAL', message: 'x', limit: 20, value: 10 }, 'corretor'))
+            .toBe('Entrada de 10% abaixo do mínimo de 20% — aumente a entrada.');
+        expect(textoDaRegra({ rule: 'max_installments', verdict: 'NEEDS_APPROVAL', message: 'x', limit: 48, value: 60 }, 'corretor'))
+            .toBe('Prazo de 60× acima do máximo de 48× — reduza as parcelas mensais.');
+        expect(textoDaRegra({ rule: 'max_discount', verdict: 'NEEDS_APPROVAL', message: 'x', limit: 5, value: 7 }, 'corretor'))
+            .toBe('Desconto de 7% acima do máximo de 5% — reduza o desconto.');
+        expect(nb(textoDaRegra({ rule: 'min_installment_value', verdict: 'WARN', message: 'x', limit: 1000, value: 833.33 }, 'corretor')))
+            .toBe('Parcela de R$ 833,33 abaixo do mínimo de R$ 1.000,00 — reduza as parcelas mensais.');
+        expect(textoDaRegra({ rule: 'max_intermediary', verdict: 'WARN', message: 'x', limit: 2, value: 4 }, 'corretor'))
+            .toBe('4 intermediárias acima do máximo de 2 — reduza as intermediárias.');
+    });
+});

@@ -3491,6 +3491,20 @@ moldura.
 > `SupplierModal.tsx`, `ClientModal.tsx`, `ProjectModal.tsx` etc. ainda usam
 > `space-y-2`/`gap-6`/`space-y-10` — ao tocar em qualquer formulário, aplicar
 > esta régua.
+> ✅ **2026-11-10 — Suprimentos › Pedido de Compra** (`SupplyChainOrderForm.tsx`:
+> abas Dados Gerais e Financeiro + modal de item avulso), a pedido do usuário com
+> print lado a lado da Negociação: os campos eram `p-2.5 rounded-lg` sem altura
+> fixa (**~46px** contra os 36px da Negociação). A régua virou constantes no topo
+> do arquivo (`ROTULO`, `CAMPO`, `AREA_DE_TEXTO`, `SELETOR_DO_FORM`), e os
+> seletores de drawer (Fornecedor, Centro de custo, Plano de contas) recebem
+> `triggerClassName` — o padrão `md` deles ainda é o gatilho antigo `py-4
+> rounded-2xl`. ⚠️ Rótulo em `space-y-1.5` precisa de `block`: `<label>` é
+> inline e ignora a margem que o `space-y` põe nele.
+> ℹ️ Varredura de 10/11/2026 (`<input>`/`<select>` com `p-2.5`/`py-3`/`p-3`/`p-4`
+> e sem `h-*`): **~535 campos em 80 arquivos** ainda no campo alto; os maiores
+> são `ProjectModal` (65), `OpuraDocsModule` (57), `AppraisalModule` (24),
+> `investor/OpportunityForm` (23), `OpuraCnoModule` (22), `OpuraAssetsModule`
+> (21) e `documents/DocumentBatchEditModal` (18).
 > ✅ **Componente do título de seção: `components/ui/SecaoTitulo.tsx`** (ícone +
 > `h3` + `resumo` opcional + `acoes` à direita, já com `border-b pb-3`). Criado
 > em 2026-10-14 para Comercial › Empreendimentos › Torres & Unidades, onde cada

@@ -147,8 +147,8 @@ describe('Pedido novo recebe as Preferências', () => {
         expect(screen.getByText(/Preenchido com/).textContent).toMatch(/seu padrão e padrão da empresa|padrão da empresa e seu padrão/);
 
         // Condição à vista com o prazo do padrão.
-        fireEvent.click(screen.getByRole('button', { name: 'À Vista' }));
-        expect(campo('Prazo de Pagamento (Dias)').value).toBe('45');
+        fireEvent.click(screen.getByRole('button', { name: 'À vista' }));
+        expect(campo('Prazo de Pagamento (dias)').value).toBe('45');
     });
 
     it('escolher a obra NÃO troca o local de entrega que veio das Preferências pelo endereço da obra', async () => {

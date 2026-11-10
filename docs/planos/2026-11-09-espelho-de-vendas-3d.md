@@ -191,9 +191,22 @@ conferida no harness, com dados de mentira.
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| migration | Tabela `empreendimento_tipologia_plantas` (empreendimento + tipologia normalizada, RLS por org); bucket público de imagem `empreendimento-midia`. | Upload e leitura funcionam; RLS conferida. |
-| `components/empreendimento/TowerEditor.tsx` | Lista as tipologias distintas das unidades, com e sem planta; upload. | Subir uma planta e vê-la na lista. |
-| RPCs de F3/F4 + `FichaDaUnidade.tsx` | `plantas[]` no retorno; a ficha mostra a planta. | Ficha de unidade com tipologia cadastrada mostra a imagem nos dois portais. |
+| `supabase/migrations/aplicar_20271110500000_empreendimento_tipologia_plantas.sql` (novo) | Tabela `empreendimento_tipologia_plantas` (empreendimento + `tipologia_chave` única; RLS pela organização do empreendimento, a mesma regra de `empreendimento_towers`; fechada para anon). Bucket público de imagem `empreendimento-midia` (5 MB; JPG, PNG, WebP), com policies só para `authenticated` da organização — sem SELECT para anon, para ninguém de fora LISTAR o bucket. Reescreve `fn_broker_portal_get_espelho` e `fn_espelho_de_vendas_das_obras` com o MESMO corpo mais a chave `plantas`; no investidor, a tipologia da unidade cai na do imóvel do estoque quando a unidade não tem a sua. | Aplicada no banco: a verificação embutida passa; privilégios das duas funções iguais aos de antes; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `utils/espelhoPlantaDaTipologia.ts` (novo) | `chaveDaTipologia` (sem acento, caixa, espaço sobrando), `plantasPorChave`, `plantaDaUnidade`, `tipologiasDoEmpreendimento` (a lista do cadastro: tipologias das unidades e dos imóveis do prédio, com a planta; a planta órfã no fim). | `npx vitest run __tests__/espelhoPlantaDaTipologia.test.ts` verde (11 casos). |
+| `services/empreendimentoTipologiaPlantasService.ts` (novo) | `listar`, `doPredio`, `tipologiasNoCadastro`, `salvar` (sobe a imagem, grava por `empreendimento_id,tipologia_chave`, confere a linha que voltou e apaga o arquivo solto se a linha não ficou), `remover`. | Typecheck; coberto pelos testes de quem usa. |
+| `components/empreendimento/PlantasPorTipologiaSecao.tsx` (novo) + `TowerEditor.tsx` | Seção "Plantas por tipologia" em Torres & Unidades (com o empreendimento em mãos e torre cadastrada): um cartão por tipologia com o `<ImageDropzone>`; não se digita tipologia. | `npx vitest run __tests__/components/PlantasPorTipologiaSecao.test.tsx` verde (8 casos); subir uma planta no Garden Cambuhy e vê-la na lista. |
+| `services/espelhoDeVendasService.ts`, `components/broker/useBrokerPortal.ts` | `estruturaPorToken` e a nova `estruturaDoApp` devolvem `{ torres, plantas }`; o portal passa as plantas do prédio escolhido a `montarEspelhoDoEstoque`. | Typecheck; ficha no Estoque › 3D mostra a planta. |
+| `utils/espelhoDoEstoque.ts`, `utils/espelhoDoInvestidor.ts`, `utils/espelhoDeVendas3dMalha.ts` | `DadosDaUnidade.plantaUrl`: a planta da tipologia do imóvel (corretor) ou da unidade (investidor; a obra traz `plantas`). | Casos novos nos dois testes. |
+| `components/espelho3d/FichaDaUnidade.tsx` | Trecho "Planta da tipologia …" com a miniatura; tocar amplia num diálogo central (`Modal`, nunca tela cheia), Esc fecha. | 2 casos novos em `Espelho3D.test.tsx`; passeio do harness: "a planta ampliada não ocupa a tela inteira". |
+| `__tests__/espelhoDoInvestidor.test.ts` | A trava do texto vale para a migration nova: tabela com RLS e fechada para anon; bucket sem policy para anon; nas funções só entram as chaves da planta; plantas do corretor só dos prédios que ele vê; unidade do investidor com as mesmas 16 chaves. | 5 casos novos passam. |
+
+Mudou em relação ao plano aprovado (10/11/2026):
+- O cadastro é uma seção própria abaixo das torres, e não dentro da aba Unidades de cada torre: a planta é do
+  EMPREENDIMENTO (vale para todas as torres), e as tipologias vêm das duas fontes — em produção, o Garden Cambuhy tem
+  Tipo 1–4 nas unidades do Empreendimento e Tipo 1–8 nos imóveis do estoque.
+- As policies do bucket não foram copiadas de `commercial-property-photos`: lá há SELECT para anon (lista o bucket);
+  aqui a URL pública serve a imagem e só membro da organização lista.
+- Limite de 5 MB e JPG/PNG/WebP: é o que o `<ImageDropzone>` anuncia e aceita.
 
 ### F6 — Vista da janela
 
@@ -217,7 +230,7 @@ conferida no harness, com dados de mentira.
 - [x] F2 — componente `<Espelho3D>` (PR #287)
 - [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
 - [ ] F4 — Portal do Investidor: em `main` (#294, `bda7f3f6`), no ar; migration `aplicar_20271110100000_investor_portal_espelho.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: as duas internas sem EXECUTE para a API; a do link para anon; a do app só authenticated; token inexistente → `valid=false`). FALTA conferir com um investidor ligado a uma obra com torres — hoje não há nenhum vínculo investidor ↔ obra no banco
-- [ ] F5 — planta baixa por tipologia
+- [ ] F5 — planta baixa por tipologia: migration `aplicar_20271110500000_empreendimento_tipologia_plantas.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: tabela com RLS e sem SELECT para anon; 5 policies só para authenticated; bucket público de 5 MB; as duas funções com `plantas` e os privilégios de antes; VGV vendido do Bella Vista igual ao de antes, R$ 3.255.000). FALTA subir as plantas de verdade (o Garden Cambuhy tem Tipo 1 a 8) e conferir a ficha nos portais
 - [ ] F6 — vista da janela
 - [ ] F7 — luz do dia
 

@@ -1,5 +1,6 @@
 import React from 'react';
-import { X } from 'lucide-react';
+import { Maximize2, X } from 'lucide-react';
+import { Modal } from '../ui/modal';
 import type { PrismaDoEspelho } from '../../utils/espelhoDeVendas3d';
 import type { DadosDaUnidade, PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
 
@@ -34,6 +35,10 @@ export const FichaDaUnidade: React.FC<{
     onFechar: () => void;
 }> = ({ prisma, dados, paleta, mostrarPreco, acoes, onFechar }) => {
     const status = prisma.status ? paleta[prisma.status] : null;
+    // A planta ampliada (F5): um diálogo no centro, nunca tela cheia. Trocar de unidade fecha.
+    const [plantaAberta, setPlantaAberta] = React.useState(false);
+    React.useEffect(() => setPlantaAberta(false), [prisma.chave]);
+    const tituloDaPlanta = dados?.tipologia ? `Planta da tipologia ${dados.tipologia}` : 'Planta da unidade';
     return (
         <section aria-label={`Ficha da unidade ${prisma.rotulo ?? ''}`} className="rounded-[10px] border border-gray-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
@@ -72,7 +77,49 @@ export const FichaDaUnidade: React.FC<{
                 {mostrarPreco && <Linha rotulo="Preço de tabela">{temNumero(dados?.preco) ? brl(dados.preco) : '—'}</Linha>}
             </dl>
 
+            {dados?.plantaUrl && (
+                <div className="mt-3">
+                    <p className="text-[13px] text-gray-500">{tituloDaPlanta}</p>
+                    <button
+                        type="button"
+                        onClick={() => setPlantaAberta(true)}
+                        aria-label={`Ampliar a ${tituloDaPlanta.toLowerCase()}`}
+                        title="Ampliar a planta"
+                        data-testid="ficha-planta"
+                        className="group relative mt-1.5 block w-full rounded-[6px] border border-gray-200 bg-white overflow-hidden focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                    >
+                        <img src={dados.plantaUrl} alt={tituloDaPlanta} className="w-full h-40 object-contain" />
+                        <span aria-hidden="true" className="absolute right-1.5 bottom-1.5 w-7 h-7 inline-flex items-center justify-center rounded-[6px] bg-white/90 border border-gray-200 text-gray-600 group-hover:text-gray-900">
+                            <Maximize2 className="w-3.5 h-3.5" />
+                        </span>
+                    </button>
+                </div>
+            )}
+
             {acoes && <div className="mt-4 flex flex-wrap gap-2">{acoes}</div>}
+
+            {dados?.plantaUrl && (
+                <Modal open={plantaAberta} onClose={() => setPlantaAberta(false)} size="2xl" className="!rounded-[10px]">
+                    <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100">
+                        <div className="min-w-0">
+                            <p className="text-sm font-semibold text-gray-900 truncate">{tituloDaPlanta}</p>
+                            <p className="text-[13px] text-gray-500 truncate">Unidade {prisma.rotulo} · {prisma.torre}</p>
+                        </div>
+                        <button
+                            type="button"
+                            onClick={() => setPlantaAberta(false)}
+                            aria-label="Fechar a planta"
+                            title="Fechar a planta"
+                            className="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                        >
+                            <X className="w-4 h-4" />
+                        </button>
+                    </div>
+                    <div className="p-4 overflow-auto bg-white">
+                        <img src={dados.plantaUrl} alt={tituloDaPlanta} className="mx-auto max-w-full max-h-[70vh] object-contain" />
+                    </div>
+                </Modal>
+            )}
         </section>
     );
 };

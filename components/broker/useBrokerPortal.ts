@@ -13,8 +13,8 @@ import type { BrokerUnit, BrokerProposal, BrokerProfile, BrokerCommission } from
 import { useOrgContext } from '../../hooks/useOrgContext';
 import type { PropertyDeal } from '../../types/imovib';
 import { usePersistedState } from '../ui/TableUtils';
-import { espelhoDeVendasService } from '../../services/espelhoDeVendasService';
-import { montarEspelhoDoEstoque, type TorreDaEstrutura } from '../../utils/espelhoDoEstoque';
+import { espelhoDeVendasService, type EstruturaDoEspelho } from '../../services/espelhoDeVendasService';
+import { montarEspelhoDoEstoque } from '../../utils/espelhoDoEstoque';
 
 /**
  * Comportamento do Portal do Corretor — uma fonte só para as duas cascas
@@ -331,15 +331,15 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
     // as do prédio escolhido. Falha (ou função ainda não aplicada) = sem estrutura:
     // o desenho sai do estoque — nunca derruba a aba.
     const chaveDaEstrutura = portalToken ? 'link' : predioDoEspelho ? `predio:${predioDoEspelho}` : null;
-    const [estrutura, setEstrutura] = useState<{ chave: string; torres: TorreDaEstrutura[] } | null>(null);
+    const [estrutura, setEstrutura] = useState<({ chave: string } & EstruturaDoEspelho) | null>(null);
     const estruturaPronta = !!chaveDaEstrutura && estrutura?.chave === chaveDaEstrutura;
     React.useEffect(() => {
         if (!estoqueEm3d || !chaveDaEstrutura || estruturaPronta) return;
         let vivo = true;
         Promise.resolve()
-            .then(() => portalToken ? espelhoDeVendasService.estruturaPorToken(portalToken) : espelhoDeVendasService.estruturaDoPredio(predioDoEspelho!))
-            .catch(err => { console.warn('[BrokerPortal] estrutura do espelho 3D indisponível — desenhando pelo estoque:', err); return [] as TorreDaEstrutura[]; })
-            .then(torres => { if (vivo) setEstrutura({ chave: chaveDaEstrutura, torres }); });
+            .then(() => portalToken ? espelhoDeVendasService.estruturaPorToken(portalToken) : espelhoDeVendasService.estruturaDoApp(predioDoEspelho!))
+            .catch((err): EstruturaDoEspelho => { console.warn('[BrokerPortal] estrutura do espelho 3D indisponível — desenhando pelo estoque:', err); return { torres: [], plantas: [] }; })
+            .then(e => { if (vivo) setEstrutura({ chave: chaveDaEstrutura, ...e }); });
         return () => { vivo = false; };
     }, [estoqueEm3d, chaveDaEstrutura, estruturaPronta, portalToken, predioDoEspelho]);
 
@@ -349,6 +349,8 @@ export function useBrokerPortal({ profile, activeTab = 'analytics', organization
             imoveis: visibleUnits.filter(u => u.parent_id === predioDoEspelho),
             negocios: dealsDoMapa,
             estrutura: estrutura!.torres.filter(t => t.commercial_building_id === predioDoEspelho),
+            // A planta da tipologia (F5): as do empreendimento deste prédio.
+            plantas: estrutura!.plantas.filter(p => p.commercial_building_id === predioDoEspelho),
         });
     }, [estoqueEm3d, predioDoEspelho, estruturaPronta, estrutura, visibleUnits, dealsDoMapa]);
 

@@ -3,6 +3,8 @@ import type { EmpreendimentoFloor } from '../types/empreendimento';
 import type { TorreDaEstrutura, UnidadeDaEstrutura } from '../utils/espelhoDoEstoque';
 import { contornoDaLinha, type ContornoParaATorre, type LinhaComContorno } from '../utils/espelhoContornoDaTorre';
 import type { ContornoDaTorre } from '../utils/espelhoDeVendas3d';
+import type { PlantaDaTipologia } from '../utils/espelhoPlantaDaTipologia';
+import { empreendimentoTipologiaPlantasService } from './empreendimentoTipologiaPlantasService';
 
 /**
  * ESPELHO DE VENDAS 3D (F3, 09/11/2026) — a estrutura das torres do Empreendimento
@@ -32,15 +34,34 @@ export interface ContornoGravado {
     contorno: Required<ContornoDaTorre>;
     atualizadoEm: string | null;
 }
+/** O que o 3D do Estoque precisa além do próprio estoque: as torres e as plantas por tipologia (F5). */
+export interface EstruturaDoEspelho {
+    torres: TorreDaEstrutura[];
+    plantas: PlantaDaTipologia[];
+}
 type LinhaDaUnidade = Omit<UnidadeDaEstrutura, 'property_id'> & { tower_id: string; commercial_property_id: string | null };
 
 export const espelhoDeVendasService = {
-    /** Todas as torres dos prédios que o corretor do token vê. Token inválido ou função ausente = []. */
-    async estruturaPorToken(token: string): Promise<TorreDaEstrutura[]> {
+    /**
+     * Todas as torres dos prédios que o corretor do token vê, e as plantas por
+     * tipologia deles. Token inválido = vazio. `plantas` ausente (função de antes
+     * da F5) = sem planta.
+     */
+    async estruturaPorToken(token: string): Promise<EstruturaDoEspelho> {
         const { data, error } = await supabase.rpc('fn_broker_portal_get_espelho', { p_token: token });
         if (error) throw error;
-        const res = data as { valid?: boolean; torres?: TorreDaEstrutura[] } | null;
-        return res?.valid ? (res.torres ?? []) : [];
+        const res = data as { valid?: boolean; torres?: TorreDaEstrutura[]; plantas?: PlantaDaTipologia[] } | null;
+        return res?.valid ? { torres: res.torres ?? [], plantas: res.plantas ?? [] } : { torres: [], plantas: [] };
+    },
+
+    /** O mesmo que `estruturaPorToken`, DENTRO do app: as torres e as plantas do prédio escolhido. */
+    async estruturaDoApp(buildingId: string): Promise<EstruturaDoEspelho> {
+        const [torres, plantas] = await Promise.all([
+            this.estruturaDoPredio(buildingId),
+            // Sem planta (ou sem a tabela) a ficha só não mostra o trecho — nunca derruba o desenho.
+            empreendimentoTipologiaPlantasService.doPredio(buildingId).catch(() => [] as PlantaDaTipologia[]),
+        ]);
+        return { torres, plantas };
     },
 
     /** As torres do empreendimento ligado a um prédio do estoque (`commercial_properties` BUILDING). */

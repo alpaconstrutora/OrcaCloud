@@ -25,6 +25,7 @@ import {
 } from '../../types';
 import UnitEditor from './UnitEditor';
 import TerrenoSecao from './TerrenoSecao';
+import PlantasPorTipologiaSecao from './PlantasPorTipologiaSecao';
 // Os testes e quem mais validava a localização importavam daqui.
 export { problemaDaLocalizacao } from './TerrenoSecao';
 import FloorEditor, { fmtElevacao, lerElevacao, lerPeDireito } from './FloorEditor';
@@ -435,6 +436,17 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
       })()}
 
       </section>
+
+      {/* Plantas por tipologia (Espelho de Vendas 3D, F5 — 10/11/2026): só com o empreendimento em mãos e torre cadastrada. */}
+      {empreendimento && towers.length > 0 && (
+        <PlantasPorTipologiaSecao
+          empreendimentoId={empreendimentoId}
+          organizationId={organizationId}
+          buildingId={empreendimento.commercial_building_id}
+          somenteLeitura={somenteLeitura}
+          recarga={unitsByTower}
+        />
+      )}
 
       {/* Painel: Nova torre. O conteúdo só existe aberto — o Sheet fechado mantém os
           filhos no DOM, e campos invisíveis ainda recebem Tab e leitor de tela. */}

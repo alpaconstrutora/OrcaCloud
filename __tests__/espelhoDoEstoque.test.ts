@@ -189,6 +189,18 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     expect(montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: [com('Torre A'), com('Bloco A', 'tw2')] }).cena.torres[0].origem).toBe('ESQUEMATICA');
   });
 
+  // F5 (10/11/2026): a planta é do empreendimento, por tipologia; a tipologia do corretor é a do IMÓVEL.
+  it('a ficha leva a planta da tipologia do imóvel, nas duas fontes; sem tipologia ou sem planta, nada', () => {
+    const plantas = [{ tipologia: '2 Quartos', tipologia_chave: '2 quartos', imagem_url: 'https://x/2q.png' }];
+    const peloEmpreendimento = montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [], estrutura: ESTRUTURA, plantas });
+    expect(peloEmpreendimento.dados.get('202')!.plantaUrl).toBe('https://x/2q.png');
+    expect(peloEmpreendimento.dados.get('101')!.plantaUrl).toBeNull();
+    const peloEstoque = montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [], plantas });
+    expect(peloEstoque.fonte).toBe('ESTOQUE');
+    expect(peloEstoque.dados.get('202')!.plantaUrl).toBe('https://x/2q.png');
+    expect(montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [] }).dados.get('202')!.plantaUrl).toBeNull();
+  });
+
   it('empate de cobertura fica com o Empreendimento (a forma de verdade)', () => {
     const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
     expect(r.fonte).toBe('EMPREENDIMENTO');

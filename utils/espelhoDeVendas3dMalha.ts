@@ -31,6 +31,8 @@ export interface DadosDaUnidade {
   /** Preço de tabela; só aparece com `mostrarPreco`. */
   preco?: number | null;
   fotoUrl?: string | null;
+  /** A planta baixa da tipologia da unidade (F5); sem ela a ficha não mostra o trecho. */
+  plantaUrl?: string | null;
 }
 
 /** A ordem da legenda: o que está à venda primeiro. */

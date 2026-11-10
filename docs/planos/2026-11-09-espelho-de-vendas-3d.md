@@ -118,10 +118,25 @@ Mudou em relação ao plano aprovado (09/11/2026):
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| migration `fn_broker_portal_get_espelho(p_token text) → jsonb` | Mesma validação/visibilidade de `fn_broker_portal_get_units`; torres + floors + units (geometria e `property_id`), **sem preço**; deduplicado por `unit_id`. | Chamada com token válido devolve as torres; com token inválido, `valid=false`; `segurancaMigrations.test` verde. |
-| `services/brokerPortalService.ts` | `getEspelhoByToken`. | Coberto por teste do hook. |
-| `components/broker/useBrokerPortal.ts` | `visaoDoEstoque` persistida + `cenaDoEspelho`; status = o do 2D (`statusEfetivoDaUnidade` + `negocioAtivoDaUnidade`) pelo adaptador `statusDoEspelho`. | Teste de paridade com `saleUnitClassifier` numa matriz de casos. |
-| `components/BrokerPortal.tsx`, `components/broker/BrokerPortalMobile.tsx` | Seletor 2D\|3D; ficha com Proposta e cesta; 3D desligado com motivo sem vínculo ou em Locação; faixa "Sem posição na torre (N)". | Playwright pelo link: Estoque → 3D → unidade → ficha → Proposta; 390 px. |
+| `utils/espelhoDoEstoque.ts` (novo) | `montarEspelhoDoEstoque({ imoveis, negocios, estrutura })` → `{ cena, dados, fonte, semPosicao }`: a forma da torre vem do Empreendimento quando o prédio tem unidade ligada a imóvel que o corretor vê; senão do próprio estoque (bloco e andar do imóvel). Prisma chaveado pelo id do IMÓVEL. `statusDoEspelhoDoCorretor` (o status efetivo do 2D) e `PALETA_DO_CORRETOR` (vendida vermelha). | `npx vitest run __tests__/espelhoDoEstoque.test.ts` verde (15 casos, com a matriz de paridade com `saleUnitClassifier`). |
+| `utils/espelhoDeVendas3d.ts` | `unidadesOcultas`: a unidade que o corretor não vê guarda o lugar na torre, neutra (sem id, nome nem status). | Caso novo em `__tests__/espelhoDeVendas3d.test.ts`. |
+| `supabase/migrations/aplicar_20271109950000_broker_portal_espelho.sql` (novo) | `fn_broker_portal_get_espelho(p_token text) → jsonb`: mesma validação/visibilidade de `fn_broker_portal_get_units`; torres + pavimentos + unidades (só geometria; `property_id` só do imóvel visível), **sem preço nem status**. `REVOKE` de PUBLIC e anon + `GRANT` a anon/authenticated + verificação embutida. | Aplicada no banco; token inexistente devolve `valid=false`; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `services/espelhoDeVendasService.ts` (novo) | `estruturaPorToken` (RPC, pelo link) e `estruturaDoPredio` (tabelas, dentro do app), no mesmo formato. | Coberto pelo hook; erro ou função ausente = desenho pelo estoque. |
+| `components/broker/useBrokerPortal.ts` | `visaoDoEstoque` persistida, `motivoSem3d` (Locação; "Geral" com mais de um prédio), `estoqueEm3d`, `espelhoDoEstoque`. Carrega a estrutura só quando o 3D abre. | Typecheck; testes do portal seguem verdes. |
+| `components/broker/EstoqueEm3D.tsx` (novo) | `SeletorDaVisaoDoEstoque` (3D desligado com o motivo) e `EstoqueEm3D`: `<Espelho3D>` com a paleta do corretor, preço, e a ficha com Fazer proposta, Reservar (48h) e Somar à proposta; unidade não disponível diz por quê; conta os imóveis sem lugar na torre. | `npx vitest run __tests__/components/EstoqueEm3D.test.tsx` verde (9 casos). |
+| `components/BrokerPortal.tsx`, `components/broker/BrokerPortalMobile.tsx` | O seletor ao lado da finalidade (computador) e sob o filtro (celular); o 3D no lugar do `PropertyUnitMap` quando ligado. | Passeio do harness (`?corretor=1`) com exit 0; conferência em produção depois do merge. |
+
+Mudou em relação ao plano aprovado (09/11/2026):
+- **O 3D não depende do Empreendimento.** Medido no banco em 09/11/2026: 3 dos 21 empreendimentos têm prédio no
+  estoque, 27 das 88 unidades têm imóvel ligado, e 59 imóveis do estoque não têm unidade no Empreendimento; o único
+  token de corretor ativo vê 13 imóveis, nenhum ligado a torre. Só com a estrutura do Empreendimento o 3D ficaria
+  desligado para quase todo o estoque. Por isso a segunda fonte: o bloco e o andar do próprio imóvel.
+- A RPC devolve TODAS as unidades da torre (a que o corretor não vê vem sem `property_id`), para a torre sair
+  inteira; o plano dizia "só unidades visíveis".
+- O código vai ao ar antes da migration sem quebrar: sem a função, o desenho sai do estoque.
+- O prefixo `20271109900000` já estava em uso em `main` (`empreendimento_tipo_estrutura`); ficou `20271109950000`.
+- A paleta do corretor não passou pelo validador do §28.4 (o script não está nesta máquina): a contagem na
+  legenda é a codificação secundária.
 
 ### F4 — Portal do Investidor: aba "Espelho de Vendas"
 
@@ -159,8 +174,8 @@ Mudou em relação ao plano aprovado (09/11/2026):
 
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
 - [ ] F1b — contorno materializado na torre
-- [x] F2 — componente `<Espelho3D>` (PR da branch `feat/espelho-3d-f2`; ainda sem tela que o use — entra na F3)
-- [ ] F3 — Portal do Corretor
+- [x] F2 — componente `<Espelho3D>` (PR #287)
+- [ ] F3 — Portal do Corretor: código pronto (PR da branch `feat/espelho-3d-f3`); falta aplicar a migration `aplicar_20271109950000_broker_portal_espelho.sql` e conferir em produção
 - [ ] F4 — Portal do Investidor
 - [ ] F5 — planta baixa por tipologia
 - [ ] F6 — vista da janela

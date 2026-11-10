@@ -117,6 +117,24 @@ try {
   confere(semCanvas && /não desenha 3D/.test(aviso) && abertas > 0, `sem WebGL: sem canvas, com o aviso e a lista aberta (${abertas} unidades)`);
   await page.screenshot({ path: path.join(prints, '07-sem-webgl.png') });
   await page.context().close();
+
+  // 6. O Estoque do corretor (F3): cores do corretor, ficha com as ações, e a contagem dos sem andar.
+  page = await abrir(`${URL_DO_HARNESS}?corretor=1`, { width: 1366, height: 900 });
+  await page.waitForSelector('canvas', { timeout: 30000 });
+  await page.waitForTimeout(2500);
+  const semAndar = await page.getByText(/3 unidades do estoque não têm andar/).count();
+  confere(semAndar === 1, 'corretor: a tela conta os 3 imóveis sem andar');
+  await page.getByRole('button', { name: /Unidades por andar/ }).click();
+  await page.getByRole('button', { name: /^Unidade 101, Torre A, / }).click();
+  await page.screenshot({ path: path.join(prints, '08-corretor.png') });
+  const temProposta = await page.getByRole('button', { name: 'Fazer proposta' }).count();
+  if (temProposta) await page.getByRole('button', { name: 'Fazer proposta' }).click();
+  const avisoDoCorretor = await page.getByTestId('aviso').innerText();
+  const semAcao = await page.getByText('Esta unidade não está disponível para reserva nem proposta.').count();
+  confere(temProposta ? avisoDoCorretor === 'proposta: A101' : semAcao === 1, `corretor: a ficha da 101 ${temProposta ? 'abre a proposta do imóvel A101' : 'diz que a unidade não está disponível'}`);
+  await page.getByRole('button', { name: '2D', exact: true }).click();
+  confere((await page.locator('canvas').count()) === 0, 'corretor: o seletor volta ao 2D');
+  await page.context().close();
 } finally {
   await browser.close();
 }

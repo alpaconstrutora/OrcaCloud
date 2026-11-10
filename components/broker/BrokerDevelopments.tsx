@@ -87,6 +87,9 @@ const areaFmt = (v: number | null | undefined) => (v != null ? `${v.toLocaleStri
 // varia é só a apresentação: aqui "Preço nesta versão" e "Visível p/ Corretor"
 // são leitura, não campo editável (a edição continua sendo lá).
 // Os labels de preço mudam com o eixo Venda/Locação, como no MODE_CONFIG de lá.
+// Exceção: no empreendimento do tipo LOTE, lá Quadra/Nº do lote trocam
+// Vagas/Banheiros/Pavimento/Posição (10/11/2026); aqui ainda não — a RPC do
+// portal não traz quadra/lote.
 const buildColumns = (priceMode: 'sale' | 'rental'): ColumnConfig[] => [
     // Foto de capa da unidade — não ordenável (imagem não tem valor comparável).
     { key: 'photo',           label: 'Foto',               sortable: false },

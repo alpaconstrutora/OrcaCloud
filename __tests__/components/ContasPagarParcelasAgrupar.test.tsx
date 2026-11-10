@@ -22,14 +22,10 @@ vi.mock('../../services/supplierService', () => ({
 vi.mock('../../services/appSettingsService', () => ({
     appSettingsService: { get: () => ({ supplierNameDisplay: 'razao_social' }) },
 }));
-vi.mock('../../services/propertyExpenseService', () => ({
-    propertyExpenseService: { allocationSummary: vi.fn(async () => new Map()) },
-}));
 vi.mock('../../services/payableService', () => ({
     payableService: { updateStatus: vi.fn(), remove: vi.fn() },
     payableParty: (p: { party_name?: string; entity_name?: string }) => p.party_name || p.entity_name || '—',
 }));
-vi.mock('../../components/financeiro/ApropriarImovelSheet', () => ({ default: () => null }));
 vi.mock('../../services/financialReceiptService', () => ({
     financialReceiptService: { listarAtivosDaOrg: vi.fn(async () => new Map()), baixarPdf: vi.fn() },
 }));
@@ -113,6 +109,14 @@ describe('ContasPagarParcelas — Agrupar com paginação', () => {
         renderTela({ rows: [linha({ id: 'x1', party_name: undefined, description: 'Sem ninguém' }), linha({ id: 'x2', party_name: 'Zeta', description: 'Com Zeta' })] });
         fireEvent.change(screen.getByTitle('Agrupar as parcelas'), { target: { value: 'credor' } });
         expect(cabecalhos().map(c => c.split(' ')[0] + (c.startsWith('Sem') ? ' credor' : ''))).toEqual(['Zeta', 'Sem credor']);
+    });
+
+    it('agrupamento guardado por um campo que saiu da lista ("imovel") abre sem agrupar', () => {
+        window.localStorage.setItem('contasPagarParcelas:groupBy', JSON.stringify('imovel'));
+        renderTela({ rows: ROWS.slice(150) });
+        expect(cabecalhos()).toHaveLength(0);
+        expect(linhasDeDado()).toBe(5);
+        expect(screen.queryByRole('columnheader', { name: /Imóvel/ })).toBeNull();
     });
 
     it('recolher o grupo grande traz os demais para a página 1', () => {

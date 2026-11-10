@@ -479,10 +479,10 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
         <MapaRegulatorioEditor empreendimentoId={e.id} organizationId={e.organization_id} />
       )}
       {tab === 'comercial' && (
-        <EspelhoVendasTab empreendimento={e} />
+        <EspelhoVendasTab empreendimento={e} estrutura={estrutura} />
       )}
       {tab === 'locacoes' && (
-        <EspelhoLocacoesTab empreendimento={e} />
+        <EspelhoLocacoesTab empreendimento={e} estrutura={estrutura} />
       )}
       {tab === 'sync' && (
         <div className="space-y-6">

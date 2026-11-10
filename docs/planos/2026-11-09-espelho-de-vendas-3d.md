@@ -151,10 +151,29 @@ Bella Vista 9/9 → Empreendimento; os outros seis com andar → estoque; "Lote 
 
 | Arquivo | O que muda | Como sei que terminou |
 |---|---|---|
-| migration `fn_investor_portal_get_espelho(p_token text) → jsonb` (+ gêmea logada) | token → `investor_participations.project_id` → torres por `COALESCE(tw.project_id, e.project_id)`; `status` (regra "com contrato") e `price` por unidade; `resumo { vgv_vendido, vgv_estoque, contagem }`. Lista explícita de colunas. | Teste de texto: nenhum campo de comprador no retorno; resposta da rede conferida. |
-| `services/investorPortalTokenService.ts` | `getEspelhoByToken`. | — |
-| `components/InvestorDashboard.tsx` | Aba `espelho` em `TABS`, `TAB_TITLES`, `Promise.all`, carregamento logado e barra do celular; nasce desligada. | Aba aparece só para quem o gestor ligou. |
-| `components/investor/portal/PortalEspelho.tsx` (novo) | `KpiStrip` de VGV + seletor de obra + `<Espelho3D>` sem ações. | `PortalEspelho.test.tsx`; KPIs batem com Venda de Ativos › Análise. |
+| `supabase/migrations/aplicar_20271110100000_investor_portal_espelho.sql` (novo) | Quatro funções: `fn_espelho_de_vendas_das_obras(org, obras[])` e `fn_obras_do_investidor(investidor, org)` — internas, sem EXECUTE para a API; `fn_investor_portal_get_espelho(p_token)` — o link (anon + authenticated, autoriza pelo token); `fn_investor_get_espelho(p_investor_id)` — o app logado (só authenticated; autoriza equipe da organização do investidor, superadmin ou o próprio investidor pelo e-mail). Devolve por obra: torres, pavimentos, unidades (geometria, ficha, `status` já resolvido, `price` de tabela) e `vgv_vendido` somado. Nada de negociação nem de comprador. | Aplicada no banco e conferida (privilégios, token inexistente → `valid=false`); `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `utils/espelhoDoInvestidor.ts` (novo) | `montarEspelhoDoInvestidor(obra)` → `{ cena, dados, resumo }`: unidade não vendável guarda o lugar, neutra; resumo com vendidas/vendáveis, VGV vendido (do banco), VGV em estoque (preço de tabela do que não foi vendido nem permutado), sem preço e fora do desenho. | `npx vitest run __tests__/espelhoDoInvestidor.test.ts` verde (12 casos). |
+| `__tests__/espelhoDoInvestidor.test.ts` (novo) | Trava o TEXTO da migration: nenhuma chave de negociação/comprador/corretor/imóvel no retorno; as chaves da unidade são exatamente as combinadas; "vendida" são as `ETAPAS_VENDIDA` do front; a ordem do CASE é a de `saleUnitClassifier.statusOf`; internas sem GRANT. | Os 5 casos da trava passam. |
+| `services/investorPortalTokenService.ts` | `getEspelho({ token } \| { investorId })`; função ausente ou sem permissão = []. | Coberto por `PortalEspelho.test.tsx`. |
+| `components/investor/portal/PortalEspelho.tsx` (novo) | A aba: carrega o próprio dado, `KpiStrip` (unidades vendidas, VGV vendido, VGV em estoque), abas de obra quando há mais de uma, `<Espelho3D mostrarPreco moldura={false}>` sem ações; estados de carregando, erro com "Tentar de novo" e vazio. | `npx vitest run __tests__/components/PortalEspelho.test.tsx` verde (8 casos); passeio do harness (`?investidor=1`) com exit 0. |
+| `components/InvestorDashboard.tsx` | Aba `espelho` ("Espelho de Vendas") em `TABS`, `TabId`, `TAB_TITLES` e no conteúdo — a mesma tela para o link e para o app. `ABAS_QUE_NASCEM_DESLIGADAS`: investidor nunca configurado vê todas menos ela; o gestor liga em "Configurar abas". | Typecheck; a aba aparece para o gestor e não para o investidor até ser ligada. |
+| `components/espelho3d/Espelho3D.tsx` | Prop `moldura` (padrão true): o portal do investidor já tem o card. | Testes do componente seguem verdes. |
+
+Mudou em relação ao plano aprovado (10/11/2026):
+- O STATUS é resolvido no banco (e não no navegador com a lista de negociações): assim nenhuma negociação, nem o id
+  dela, chega ao investidor. A regra é a mesma de `saleUnitClassifier.statusOf`, presa pelo teste do texto da migration.
+- A aba carrega o próprio dado, fora do `Promise.all` do portal: quem não abre o espelho não paga por ele, e erro
+  aqui não derruba as outras abas.
+- Uma função para o link e outra para o app logado, em vez de "gestor lendo as tabelas": a mesma tela nos dois.
+- As obras do investidor incluem as de SPE em que ele é sócio, além de participação e do vínculo antigo.
+- A forma da torre é só a do Empreendimento (o investidor chega à unidade pela obra → torre); não há a segunda
+  fonte do corretor.
+
+⚠️ **Não dá para conferir com dado real hoje** (medido em 10/11/2026): há 1 investidor cadastrado, nenhum link de
+portal ativo e NENHUM vínculo de investidor com obra (0 participações, 0 sócios de SPE, 0 obras com `investor_id`).
+O corpo da função foi provado por leitura contra as quatro obras com torre (Bella Vista: 7 vendidas, 1 em
+negociação, 1 disponível, VGV vendido R$ 3.255.000; as chaves da unidade são só as 16 combinadas). A tela foi
+conferida no harness, com dados de mentira.
 
 ### F5 — Planta baixa por tipologia
 
@@ -184,8 +203,8 @@ Bella Vista 9/9 → Empreendimento; os outros seis com andar → estoque; "Lote 
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
 - [ ] F1b — contorno materializado na torre
 - [x] F2 — componente `<Espelho3D>` (PR #287)
-- [ ] F3 — Portal do Corretor: código pronto (branch `feat/espelho-3d-f3`); migration `aplicar_20271109950000_broker_portal_espelho.sql` APLICADA em 09/11/2026 (conferido: sem EXECUTE para PUBLIC, anon e authenticated executam, token inexistente → `valid=false`, token ativo → `valid=true` com 0 torres, como medido antes); em `main` (#290, `7debce99`) e conferido em produção em 10/11/2026 — achou o defeito da fonte por cobertura, corrigido no PR seguinte; falta reconferir o Garden depois dele
-- [ ] F4 — Portal do Investidor
+- [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
+- [ ] F4 — Portal do Investidor: código pronto (branch `feat/espelho-3d-f4`); FALTA aplicar a migration `aplicar_20271110100000_investor_portal_espelho.sql` (a aplicação por mim foi barrada em 10/11/2026) e conferir com um investidor ligado a uma obra com torres
 - [ ] F5 — planta baixa por tipologia
 - [ ] F6 — vista da janela
 - [ ] F7 — luz do dia

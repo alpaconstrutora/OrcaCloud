@@ -32,6 +32,8 @@ export interface Espelho3DProps {
     /** Os botões da ficha (Proposta, cesta…); quem não age (o investidor) não passa. */
     acoesDaFicha?: (prisma: PrismaDoEspelho) => React.ReactNode;
     onSelecionar?: (unitId: string | null) => void;
+    /** false = sem o card em volta (quem chama já tem o seu — o Portal do Investidor). */
+    moldura?: boolean;
 }
 
 /** O desenho falhou depois de montado (contexto WebGL perdido, placa sem suporte): a lista assume. */
@@ -70,7 +72,8 @@ function torresDaLista(cena: CenaDoEspelho): TorreDaLista[] {
 const frase = (p: PrismaDoEspelho, paleta: PaletaDoEspelho) =>
     `Unidade ${p.rotulo}, ${p.torre}, ${p.nomeDoAndar}${p.status ? `, ${paleta[p.status].rotulo}` : ''}`;
 
-export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALETA_PADRAO_DO_ESPELHO, mostrarPreco, acoesDaFicha, onSelecionar }) => {
+export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALETA_PADRAO_DO_ESPELHO, mostrarPreco, acoesDaFicha, onSelecionar, moldura = true }) => {
+    const card = moldura ? 'bg-white rounded-[10px] border border-gray-100 shadow-sm p-4' : '';
     const [destaque, setDestaque] = React.useState<SaleUnitStatus | null>(null);
     const [selecionada, setSelecionada] = React.useState<string | null>(null);
     const [desenha3d, setDesenha3d] = React.useState(webglDisponivel);
@@ -127,7 +130,7 @@ export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALE
 
     if (total === 0) {
         return (
-            <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+            <div className={card}>
                 <p className="min-h-[160px] flex items-center justify-center text-sm text-gray-500 text-center">
                     Nenhuma unidade para mostrar no espelho.{cena.avisos.length > 0 ? ` ${cena.avisos[0]}` : ''}
                 </p>
@@ -136,7 +139,7 @@ export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALE
     }
 
     return (
-        <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
+        <div className={card}>
             <div role="radiogroup" aria-label="Destacar unidades por status" className="flex flex-wrap items-center gap-1.5">
                 {status.map((k) => {
                     const n = contagem[k];

@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import type { InterestRole } from './investorPortalService';
+import type { ObraDoEspelho } from '../utils/espelhoDoInvestidor';
 
 export interface InvestorPortalToken {
     id: string;
@@ -116,6 +117,28 @@ export const investorPortalTokenService = {
             throw error;
         }
         return (data as any)?.spes ?? [];
+    },
+
+    /**
+     * Espelho de Vendas 3D (F4, 10/11/2026): as obras do investidor com torres,
+     * unidades (status já resolvido + preço de tabela) e o VGV vendido. Pelo link
+     * (`token`) ou, no app logado, pelo investidor — a função do banco confere se
+     * quem chama é da equipe da organização dele, superadmin ou o próprio.
+     * Token inválido, sem permissão ou função ausente = [] (a aba mostra o vazio).
+     */
+    async getEspelho(acesso: { token: string } | { investorId: string }): Promise<ObraDoEspelho[]> {
+        const { data, error } = 'token' in acesso
+            ? await supabase.rpc('fn_investor_portal_get_espelho', { p_token: acesso.token })
+            : await supabase.rpc('fn_investor_get_espelho', { p_investor_id: acesso.investorId });
+        if (error) {
+            if (error.code === 'PGRST202' || /not find the function/i.test(error.message ?? '')) {
+                console.warn('Função do espelho do investidor ausente — a aba fica vazia até a migration ser aplicada.');
+                return [];
+            }
+            throw error;
+        }
+        const res = data as { valid?: boolean; obras?: ObraDoEspelho[] } | null;
+        return res?.valid ? (res.obras ?? []) : [];
     },
 
     async getMilestonesByToken(token: string): Promise<any[]> {

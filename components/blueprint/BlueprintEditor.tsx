@@ -938,7 +938,12 @@ import { useBlueprintArmadura } from '../../hooks/useBlueprintArmadura';
 import { armaduraDoModelo, armaduraManualDe } from '../../utils/blueprintArmadura';
 import TelaArmadura from './TelaArmadura';
 import TelaQuantitativos from './TelaQuantitativos';
-import TelaUnidades from './TelaUnidades';
+import TelaUnidades, { type EspelhoNaTelaUnidades } from './TelaUnidades';
+import { empreendimentoTipologiaDecoradoService } from '../../services/empreendimentoTipologiaDecoradoService';
+import { empreendimentoTipologiaPlantasService } from '../../services/empreendimentoTipologiaPlantasService';
+import { chaveDaTipologia } from '../../utils/espelhoPlantaDaTipologia';
+import type { ImagemDoDecorado } from '../../utils/espelhoDecoradoDaTipologia';
+import type { CorteGravado } from '../../utils/espelhoDecoradoDaPlanta';
 import TelaAreasNbr12721 from './TelaAreasNbr12721';
 import type { TelaDoLinkDireto } from './telasDoLinkDireto';
 import { blueprintNbr12721Service } from '../../services/blueprintNbr12721Service';
@@ -9270,6 +9275,49 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     };
   }, [contornosDaPlanta, contornosNoBanco]);
   /**
+   * O CORTE 3D DA UNIDADE NO ESPELHO DE VENDAS (F9, 10/11/2026 — plano docs/planos/2026-11-09-espelho-de-vendas-3d.md).
+   * A Tela Unidades envia o corte de uma unidade para o decorado da tipologia dela no Empreendimento ligado ao estudo
+   * (o mesmo encadeamento da casa e do loteamento: vinculado → o da zona → o da obra). Lê as tipologias do cadastro
+   * e os cortes gravados só com a tela aberta.
+   */
+  const empreendimentoDoDecorado = useMemo(() => {
+    const id = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido;
+    return empreendimentos.find((e) => e.id === id) ?? null;
+  }, [empreendimentoVinculado, zona.empreendimentoId, empreendimentoSugerido, empreendimentos]);
+  const [decoradoNoBanco, setDecoradoNoBanco] = useState<{ empreendimentoId: string; tipologias: Set<string> | null; cortes: Map<string, ImagemDoDecorado & CorteGravado> } | null>(null);
+  const [recargaDoDecorado, setRecargaDoDecorado] = useState(0);
+  useEffect(() => {
+    if (telaAberta !== 'unidades' || !empreendimentoDoDecorado) return;
+    let vivo = true;
+    const e = empreendimentoDoDecorado;
+    Promise.all([
+      empreendimentoTipologiaPlantasService
+        .tipologiasNoCadastro(e.id, e.commercial_building_id)
+        .then((t) => new Set([...t.unidades, ...t.imoveis].map(chaveDaTipologia).filter(Boolean)))
+        .catch(() => null),
+      empreendimentoTipologiaDecoradoService.cortesDoEmpreendimento(e.id),
+    ])
+      .then(([tipologias, cortes]) => vivo && setDecoradoNoBanco({ empreendimentoId: e.id, tipologias, cortes }))
+      .catch((err) => {
+        console.warn('[planta] cortes do Espelho de Vendas 3D indisponíveis:', err);
+        if (vivo) setDecoradoNoBanco({ empreendimentoId: e.id, tipologias: null, cortes: new Map() });
+      });
+    return () => {
+      vivo = false;
+    };
+  }, [telaAberta, empreendimentoDoDecorado, recargaDoDecorado]);
+  const espelhoNaTelaUnidades = useMemo<EspelhoNaTelaUnidades>(() => {
+    const e = empreendimentoDoDecorado;
+    const lido = e && decoradoNoBanco?.empreendimentoId === e.id ? decoradoNoBanco : null;
+    return {
+      empreendimento: e ? { id: e.id, nome: e.name, organizationId: e.organization_id } : null,
+      tipologiasDoEmpreendimento: lido?.tipologias ?? null,
+      cortes: lido?.cortes ?? new Map(),
+      estudoId: study.id,
+      onRecarregar: () => setRecargaDoDecorado((n) => n + 1),
+    };
+  }, [empreendimentoDoDecorado, decoradoNoBanco, study.id]);
+  /**
    * O PAVIMENTO `indice` (1 = o de baixo) do bloco, arrumado: as unidades, as fatias (a k é a unidade k) e a vaga de
    * cada uma. O 3D, a planta baixa e o arrasto usam o mesmo — o que se arrasta é o que se vê.
    */
@@ -13292,6 +13340,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               onRunBatch={(cs) => editor.runBatch(cs)}
               erro={editor.lastError}
               fracoesNbr12721={fracoesNbr12721}
+              espelho={espelhoNaTelaUnidades}
             />
           </div>
         </div>

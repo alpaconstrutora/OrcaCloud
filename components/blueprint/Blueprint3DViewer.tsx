@@ -250,6 +250,11 @@ interface Props {
   /** E10.3: a caixa de corte ligada desde o início (METRO, Y para cima) — o harness e a vista que a pede. */
   caixaDeCorteInicial?: import('../../utils/blueprint3dSelecao').CaixaDeCorte | null;
   /**
+   * SÓ O DESENHO (F9 do Espelho de Vendas 3D, 10/11/2026): sem a barra de botões, o painel e o contorno da caixa de
+   * corte e a dica de navegação — a prévia do corte da unidade mostra o que vai para a imagem. A órbita continua.
+   */
+  semControles?: boolean;
+  /**
    * VER O CORTE NO 3D (13/10/2026): o plano de um corte do desenho (espaço do DESENHO,
    * mantém `normal·p + constante ≥ 0` — `corteNo3d`). Recorta junto com a caixa de corte;
    * um selo "Corte A no 3D · Ver tudo" chama `onSairDoCorte`.
@@ -3040,7 +3045,7 @@ export default function Blueprint3DViewer(props: Props) {
 
   return (
     <div className="relative h-full w-full overflow-hidden bg-slate-50">
-      <div className="absolute right-4 top-4 z-10 flex flex-col gap-2">
+      <div className={`absolute right-4 top-4 z-10 flex flex-col gap-2${props.semControles ? ' hidden' : ''}`}>
         <div className="flex rounded-lg border border-slate-200 bg-white p-1 shadow-sm">
           <button
             onClick={() => setTokenDeEnquadrar((t) => t + 1)}
@@ -3097,7 +3102,7 @@ export default function Blueprint3DViewer(props: Props) {
       )}
 
       {caixa && (
-        <div className="absolute right-4 top-16 z-10 w-56 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-600 shadow-sm" data-testid="caixa-de-corte">
+        <div className={`absolute right-4 top-16 z-10 w-56 rounded-lg border border-slate-200 bg-white p-2 text-[11px] text-slate-600 shadow-sm${props.semControles ? ' hidden' : ''}`} data-testid="caixa-de-corte">
           <p className="mb-1 font-semibold text-slate-700">Caixa de corte</p>
           {([['Leste–oeste (X)', 0], ['Altura (Y)', 1], ['Norte–sul (Z)', 2]] as const).map(([rotulo, eixo]) => (
             <div key={eixo} className="mb-1">
@@ -3120,7 +3125,7 @@ export default function Blueprint3DViewer(props: Props) {
         </div>
       )}
 
-      <div className="pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur">
+      <div className={`pointer-events-none absolute bottom-4 left-1/2 z-10 -translate-x-1/2 rounded-full border border-slate-200 bg-white/80 px-3 py-1.5 text-xs text-slate-500 shadow-sm backdrop-blur${props.semControles ? ' hidden' : ''}`}>
         {/* A DICA TEM DE DIZER O QUE VALE AGORA. Em modo de percorrer, "arraste
             para orbitar" está simplesmente errado — a órbita saiu de cena —, e
             uma instrução falsa é pior que nenhuma: quem a segue conclui que
@@ -3226,7 +3231,7 @@ export default function Blueprint3DViewer(props: Props) {
         })()}
         {props.referencias?.map((r) => <ReferenciaIfc key={r.chave} {...r} />)}
         </Recortado>
-        {caixa && (
+        {caixa && !props.semControles && (
           <group userData={{ naoCapturar: true }}>
             <ContornoDaCaixa caixa={caixa} />
           </group>

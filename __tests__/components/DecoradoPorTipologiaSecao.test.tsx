@@ -99,6 +99,19 @@ describe('DecoradoPorTipologiaSecao', () => {
         expect(showToast).toHaveBeenCalledWith('Corte 3D da tipologia Tipo 2 gravado.');
     });
 
+    it('F9: o corte gerado pela Planta diz de onde veio, e trocar por imagem pede confirmação', async () => {
+        servico.listar.mockResolvedValue([SALA, imagem({ id: 'cp', papel: 'CORTE', legenda: null, origem: 'PLANTA', updated_at: '2026-11-10T12:00:00Z' })]);
+        confirmar.mockResolvedValue(false);
+        montar();
+        const editor = await screen.findByTestId('decorado-editor');
+        expect(screen.getByTestId('decorado-origem-do-corte').textContent).toBe('Gerado da Planta em 10/11/2026');
+        fireEvent.change(editor.querySelector('input[type=file]')!, { target: { files: [new File(['x'], 'c.png', { type: 'image/png' })] } });
+        await waitFor(() => expect(confirmar).toHaveBeenCalled());
+        expect(confirmar.mock.calls[0][0].title).toBe('Trocar o corte gerado pela Planta da tipologia Tipo 1?');
+        // Recusou: nada gravado.
+        expect(servico.salvarCorte).not.toHaveBeenCalled();
+    });
+
     it('descer um ambiente troca a ordem na tela e grava a nova ordem; o primeiro não sobe, dizendo por quê', async () => {
         servico.reordenar.mockResolvedValue(undefined);
         montar();

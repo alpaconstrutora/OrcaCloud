@@ -103,6 +103,16 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
 
   const enviarCorte = async (f: File) => {
     if (!tipologia) return;
+    // F9: o corte gerado pela Planta só é trocado por uma imagem com confirmação — a Planta deixa de mostrar "em dia".
+    if (corte?.origem === 'PLANTA') {
+      const ok = await confirm({
+        title: `Trocar o corte gerado pela Planta da tipologia ${tipologia.rotulo}?`,
+        message: 'A imagem escolhida substitui o corte que a Planta gerou. Para voltar ao da Planta, envie de novo pela tela Unidades do estudo.',
+        confirmLabel: 'Trocar corte',
+        variant: 'danger',
+      });
+      if (!ok) return;
+    }
     setEnviandoCorte(true);
     try {
       const salvo = await empreendimentoTipologiaDecoradoService.salvarCorte({ organizationId, empreendimentoId, tipologia: tipologia.rotulo, arquivo: f, anterior: corte });
@@ -228,7 +238,13 @@ export const DecoradoPorTipologiaSecao: React.FC<Props> = ({ empreendimentoId, o
                     hint={somenteLeitura ? 'Sem corte' : 'Arraste o corte 3D aqui ou clique para selecionar'}
                   />
                 </span>
-                <p className="text-xs text-gray-500">A vista de cima da unidade sem teto, com os móveis. Grava ao escolher a imagem; é a primeira que a ficha mostra.</p>
+                {corte && (
+                  <p className="text-xs text-gray-700" data-testid="decorado-origem-do-corte">
+                    {corte.origem === 'PLANTA' ? 'Gerado da Planta' : 'Imagem enviada'}
+                    {corte.updated_at ? ` em ${new Date(corte.updated_at).toLocaleDateString('pt-BR')}` : ''}
+                  </p>
+                )}
+                <p className="text-xs text-gray-500">A vista de cima da unidade sem teto, com os móveis. Grava ao escolher a imagem; é a primeira que a ficha mostra. O estudo da Planta também pode gerar e enviar o corte (tela Unidades).</p>
                 {tipologia.unidades === 0 && <p className="text-xs text-amber-700">Nenhuma unidade usa mais esta tipologia: o decorado dela não aparece em ficha nenhuma.</p>}
               </div>
 

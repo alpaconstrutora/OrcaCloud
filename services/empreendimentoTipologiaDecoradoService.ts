@@ -2,6 +2,7 @@ import { supabase } from '../lib/supabase';
 import { storageService } from './storageService';
 import { chaveDaTipologia } from '../utils/espelhoPlantaDaTipologia';
 import { emOrdemDeDecorado, problemaDoAmbiente, type ImagemDoDecorado } from '../utils/espelhoDecoradoDaTipologia';
+import type { CorteGravado } from '../utils/espelhoDecoradoDaPlanta';
 
 /**
  * "VER DECORADO" POR TIPOLOGIA (Espelho de Vendas 3D, F8 — 10/11/2026). Plano:
@@ -14,7 +15,7 @@ import { emOrdemDeDecorado, problemaDoAmbiente, type ImagemDoDecorado } from '..
  */
 
 const BUCKET = 'empreendimento-midia';
-const COLS = 'id, empreendimento_id, tipologia, tipologia_chave, papel, legenda, ordem, imagem_url, imagem_path, origem';
+const COLS = 'id, empreendimento_id, tipologia, tipologia_chave, papel, legenda, ordem, imagem_url, imagem_path, origem, updated_at';
 // Os mesmos limites que o <ImageDropzone> anuncia ("JPG, PNG ou WEBP · até 5 MB").
 const TAMANHO_MAXIMO = 5 * 1024 * 1024;
 const TIPOS_DE_IMAGEM = ['image/jpeg', 'image/png', 'image/webp'];
@@ -130,6 +131,64 @@ export const empreendimentoTipologiaDecoradoService = {
             if (error) throw new Error(`Não foi possível mudar a ordem dos ambientes: ${error.message}`);
             if (!data || data.length === 0) throw new Error(`A ordem dos ambientes não foi gravada — ${SEM_PERMISSAO}`);
         }
+    },
+
+    /**
+     * F9: os CORTES do empreendimento com a origem e a assinatura da Planta, por chave de tipologia — para a Tela
+     * Unidades dizer se o corte de cada tipologia é o deste desenho. Só o editor lê `planta_*` (os portais não).
+     * Sem a tabela = mapa vazio.
+     */
+    async cortesDoEmpreendimento(empreendimentoId: string): Promise<Map<string, ImagemDoDecorado & CorteGravado>> {
+        const out = new Map<string, ImagemDoDecorado & CorteGravado>();
+        const { data, error } = await supabase
+            .from('empreendimento_tipologia_decorado')
+            .select(`${COLS}, planta_assinatura, planta_estudo_id, updated_at`)
+            .eq('empreendimento_id', empreendimentoId)
+            .eq('papel', 'CORTE');
+        if (error) {
+            if (tabelaDoDecoradoAusente(error)) return out;
+            throw error;
+        }
+        for (const c of (data ?? []) as unknown as (ImagemDoDecorado & CorteGravado)[]) out.set(c.tipologia_chave, c);
+        return out;
+    },
+
+    /**
+     * F9: grava o corte GERADO pela Planta no lugar do corte da tipologia (origem PLANTA, com a assinatura do desenho e
+     * o estudo). O arquivo antigo só é apagado depois que a linha nova voltou. Confere a linha (ver `salvarCorte`).
+     */
+    async gravarCorteDaPlanta(entrada: {
+        organizationId: string;
+        empreendimentoId: string;
+        tipologia: string;
+        png: Blob;
+        assinatura: string;
+        estudoId: string | null;
+        anterior?: ImagemDoDecorado | null;
+    }): Promise<ImagemDoDecorado> {
+        const tipologia = entrada.tipologia.replace(/\s+/g, ' ').trim();
+        const chave = chaveDaTipologia(tipologia);
+        if (!chave) throw new Error('O corte precisa de uma tipologia.');
+        const nomeDoArquivo = `corte-${chave.replace(/[^a-z0-9]+/g, '-')}.png`;
+        const arquivo = new File([entrada.png], nomeDoArquivo, { type: 'image/png' });
+        conferirArquivo(arquivo, 'A imagem do corte');
+        const { path, url } = await subir(entrada.organizationId, entrada.empreendimentoId, arquivo);
+
+        const linha = { imagem_url: url, imagem_path: path, origem: 'PLANTA', planta_assinatura: entrada.assinatura, planta_estudo_id: entrada.estudoId, updated_at: new Date().toISOString() };
+        const { data, error } = entrada.anterior?.id
+            ? await supabase.from('empreendimento_tipologia_decorado').update(linha).eq('id', entrada.anterior.id).select(COLS)
+            : await supabase.from('empreendimento_tipologia_decorado')
+                .insert({ ...linha, empreendimento_id: entrada.empreendimentoId, tipologia, tipologia_chave: chave, papel: 'CORTE', ordem: 0, legenda: null })
+                .select(COLS);
+        if (error || !data || data.length === 0) {
+            await storageService.remove(BUCKET, [path]).catch(() => undefined);
+            if (tabelaDoDecoradoAusente(error)) throw new Error(FALTA_A_MIGRATION);
+            if (error?.code === '23505') throw new Error(`A tipologia ${tipologia} ganhou um corte enquanto isto era enviado. Feche e abra de novo para trocar o atual.`);
+            if (error) throw new Error(`Não foi possível gravar o corte da tipologia ${tipologia}: ${error.message}`);
+            throw new Error(`O corte da tipologia ${tipologia} não foi gravado — ${SEM_PERMISSAO}`);
+        }
+        if (entrada.anterior?.imagem_path && entrada.anterior.imagem_path !== path) await apagarArquivo(entrada.anterior.imagem_path);
+        return data[0] as unknown as ImagemDoDecorado;
     },
 
     /** Remove a imagem (linha e arquivo). Confere que a linha saiu. */

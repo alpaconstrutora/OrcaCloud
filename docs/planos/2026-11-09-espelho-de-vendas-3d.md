@@ -344,6 +344,36 @@ envia para o lugar do corte da F8, com `origem = PLANTA`. Os ambientes (as image
 
 Ordem: F8 primeiro (ela cria a tabela, o lugar na ficha e o selo); a F9 sem a F8 não tem onde aparecer.
 
+Pedido de execução, 10/11/2026 (mesma sessão, com a F8 no ar e a conferência dela pendente):
+
+> pode comecar f9. Depois voltamos para concluir f8
+
+O que foi feito (sem migration: `origem`, `planta_assinatura` e `planta_estudo_id` nasceram na F8):
+
+| Arquivo | O que mudou | Como sei que terminou |
+|---|---|---|
+| `utils/espelhoDecoradoDaPlanta.ts` (novo) | `cenaDoDecorado` (o que esconder, a caixa de corte, o ponto de vista e, sem móvel na unidade, a CÓPIA do modelo mobiliada com o kit de `mobiliarDoAmbiente`), `assinaturaDoDecorado` (`<uid da unidade>|<fnv1a>`), `pontoDeVistaDoCorte` (encaixa os 8 cantos da caixa), `situacaoDoCorte` / `textoDaSituacao`, `HIPOTESES_DO_CORTE_DECORADO`. | `npx vitest run __tests__/espelhoDecoradoDaPlanta.test.ts` verde (12 casos). |
+| `components/blueprint/EnviarCorteDaUnidade.tsx` (novo) | Diálogo central com a PRÉVIA no próprio 3D da Planta (o que se vê é o que vai), "Olhar de" (4 cantos), "Paredes" (1,20 m / 2,20 m / inteiras), "Mobiliar com o kit sugerido"; "Enviar ao Espelho 3D" captura 1600 × 1000 e grava; trocar um corte de outra origem pede confirmação. | Passeio do harness `docs/spikes/decorado-da-planta` com exit 0. |
+| `components/blueprint/Blueprint3DViewer.tsx` | Prop `semControles`: sem a barra, o painel e o contorno da caixa de corte e a dica — só na prévia; a aba 3D não muda. | `BlueprintEditor.test.tsx` segue verde; print da prévia sem painel. |
+| `components/blueprint/TelaUnidades.tsx` + `BlueprintEditor.tsx` | Coluna "Corte no Espelho 3D" (a situação de cada unidade) e o botão de enviar, desligado com o motivo; o editor resolve o Empreendimento (vinculado → zona → obra) e lê as tipologias do cadastro e os cortes só com a tela aberta. | `npx vitest run __tests__/components/TelaUnidadesDecorado.test.tsx` verde (6 casos). |
+| `services/empreendimentoTipologiaDecoradoService.ts` | `cortesDoEmpreendimento` (com `planta_*`, só o editor lê) e `gravarCorteDaPlanta`. | Typecheck; coberto pelo harness (o envio é trocado lá). |
+| `components/empreendimento/DecoradoPorTipologiaSecao.tsx` | O cartão do corte diz "Gerado da Planta em …" / "Imagem enviada em …"; trocar o corte da Planta por imagem pede confirmação. | 1 caso novo em `DecoradoPorTipologiaSecao.test.tsx`. |
+| `docs/spikes/decorado-da-planta/` (novo) | Harness: pavimento com a 101 (sala + suíte, portas e janelas, sem móvel) e a 102 com um sofá; o envio só guarda o PNG. `passeio.mjs`. | Exit 0: prévia no formato 1,6, kit sugerido, trocar lado e altura, PNG 1600 × 1000 com desenho (não fundo só), assinatura, 0 erros de console. |
+
+Mudou em relação ao plano (10/11/2026):
+- Não há cena própria nem `RetratoDoDecorado.tsx`: o `Blueprint3DViewer` já recebia `ocultos`, caixa de corte, ponto de
+  vista e captura em PNG. A F9 calcula esses quatro e reaproveita o desenho — e a prévia é ao vivo, no diálogo.
+- O kit sugerido entra na CÓPIA como peça comum (`sugerido: false`): sugerida, o 3D a desenha verde e translúcida
+  (visto no harness). O estudo não muda.
+- Duplex fica de fora ("ocupa dois pavimentos": envia a imagem pela F8).
+- A assinatura começa pelo uid da unidade: o banco guarda UM corte por tipologia, e a coluna diz "Enviado da unidade
+  102" quando o corte da tipologia veio de outra unidade.
+- O enquadramento pela esfera em volta da caixa sobrava ~40 % (visto no harness); agora encaixa os 8 cantos.
+
+⚠️ Sem dado real para conferir: em 10/11/2026 nenhum dos 121 ramos de estudo em produção tem unidade composta
+(`draft_payload` sem `unidades`). Conferir de verdade pede compor uma unidade com tipologia num estudo ligado a um
+Empreendimento que tenha essa tipologia.
+
 ## Estado
 
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
@@ -355,7 +385,7 @@ Ordem: F8 primeiro (ela cria a tabela, o lugar na ficha e o selo); a F9 sem a F8
 - [x] F6 — vista da janela: #304 (`9f24410c`) + "Salvar vista" #315 (`90e63e9e`) + vista de uma unidade #320 (`62791e5e`); migrations `aplicar_20271110600000_empreendimento_tower_vistas.sql` e `aplicar_20271110800000_vista_da_janela_por_unidade.sql` APLICADAS em 10/11/2026 com autorização do usuário. Vistas do Garden Cambuhy cadastradas pelo usuário (Torre A, andares 0–3; Torre B, 0–3) e ficha conferida em produção no Portal do Corretor: 101 e 105 abrem a vista; 505 com o botão desligado e o motivo
 - [x] F7 — luz do dia: #309 (`8c4af0fb`), sem migration
 - [ ] F8 — "Ver decorado" com imagens enviadas por tipologia: código neste PR; migration `aplicar_20271110990000_empreendimento_tipologia_decorado.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: RLS ligada, anon sem SELECT, a interna sem EXECUTE para a API, a do corretor para anon, e num bloco desfeito o banco recusa ambiente sem nome, ambiente com origem PLANTA e segundo corte). FALTA: subir um decorado de verdade no Garden Cambuhy e conferir a ficha nos portais em produção
-- [ ] F9 — corte 3D gerado pela Planta: não iniciada (depende da F8)
+- [ ] F9 — corte 3D gerado pela Planta: código neste PR, sem migration; harness verde. FALTA conferir num estudo real (nenhum tem unidade composta hoje) e ver o corte na ficha dos portais com o selo "Gerado do projeto"
 
 ## Riscos
 

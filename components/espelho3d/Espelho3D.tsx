@@ -4,6 +4,7 @@ import type { SaleUnitStatus } from '../../lib/salesAnalysis';
 import { rotuloDoAndar } from '../../lib/rentalUnitMirror';
 import { contagemPorStatus, type CenaDoEspelho, type PrismaDoEspelho } from '../../utils/espelhoDeVendas3d';
 import { ORDEM_DOS_STATUS, PALETA_PADRAO_DO_ESPELHO, resumoDoEspelho, type PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
+import { LUZES_DO_DIA, LUZ_PADRAO, ORDEM_DAS_LUZES, type LuzDoDia } from '../../utils/espelhoDeVendas3dLuz';
 import { FichaDaUnidade, type DadosDaUnidade } from './FichaDaUnidade';
 import { webglDisponivel } from './webglDisponivel';
 
@@ -76,6 +77,9 @@ export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALE
     const card = moldura ? 'bg-white rounded-[10px] border border-gray-100 shadow-sm p-4' : '';
     const [destaque, setDestaque] = React.useState<SaleUnitStatus | null>(null);
     const [selecionada, setSelecionada] = React.useState<string | null>(null);
+    // A luz do dia (F7): só muda o desenho — céu, sol e, à noite, as unidades acesas. O status segue na cor da legenda.
+    const [luz, setLuz] = React.useState<LuzDoDia>(LUZ_PADRAO);
+    const presetDeLuz = LUZES_DO_DIA[luz];
     const [desenha3d, setDesenha3d] = React.useState(webglDisponivel);
     const [desenhoFalhou, setDesenhoFalhou] = React.useState(false);
     const [listaAberta, setListaAberta] = React.useState(() => !desenha3d);
@@ -140,6 +144,7 @@ export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALE
 
     return (
         <div className={card}>
+            <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2">
             <div role="radiogroup" aria-label="Destacar unidades por status" className="flex flex-wrap items-center gap-1.5">
                 {status.map((k) => {
                     const n = contagem[k];
@@ -163,10 +168,36 @@ export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALE
                     );
                 })}
             </div>
+            {desenha3d && (
+                <div role="radiogroup" aria-label="Luz do dia no desenho" className="inline-flex items-center rounded-[6px] border border-gray-200 bg-white p-0.5">
+                    {ORDEM_DAS_LUZES.map((k) => {
+                        const on = luz === k;
+                        return (
+                            <button
+                                key={k}
+                                type="button"
+                                role="radio"
+                                aria-checked={on}
+                                title={`Ver as torres com a luz de: ${LUZES_DO_DIA[k].rotulo.toLowerCase()}`}
+                                onClick={() => setLuz(k)}
+                                className={`h-7 px-2.5 rounded-[4px] text-[13px] font-medium whitespace-nowrap transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${
+                                    on ? 'bg-gray-900 text-white' : 'text-gray-700 hover:bg-gray-100'
+                                }`}
+                            >
+                                {LUZES_DO_DIA[k].rotulo}
+                            </button>
+                        );
+                    })}
+                </div>
+            )}
+            </div>
 
             <div className="mt-3 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem]">
                 {desenha3d ? (
-                    <div role="img" aria-label={`Torres em 3D. ${resumo}`} className="relative h-[60vh] min-h-[360px] overflow-hidden rounded-[10px] border border-gray-100 bg-gradient-to-b from-sky-50 to-white">
+                    <div role="img" aria-label={`Torres em 3D. ${resumo}`} className="relative h-[60vh] min-h-[360px] overflow-hidden rounded-[10px] border border-gray-100"
+                        data-luz={luz}
+                        style={{ backgroundImage: `linear-gradient(to bottom, ${presetDeLuz.ceu.alto}, ${presetDeLuz.ceu.horizonte})` }}
+                    >
                         <SeODesenhoFalhar
                             onFalha={() => {
                                 setDesenha3d(false);
@@ -175,10 +206,10 @@ export const Espelho3D: React.FC<Espelho3DProps> = ({ cena, dados, paleta = PALE
                             }}
                         >
                             <Suspense fallback={<p className="absolute inset-0 flex items-center justify-center text-sm text-gray-500">Carregando o desenho 3D…</p>}>
-                                <Cena cena={cena} paleta={paleta} destaque={destaque} selecionada={selecionada} onSelecionar={selecionar} />
+                                <Cena cena={cena} paleta={paleta} destaque={destaque} selecionada={selecionada} onSelecionar={selecionar} luz={presetDeLuz} />
                             </Suspense>
                         </SeODesenhoFalhar>
-                        <p aria-hidden="true" className="pointer-events-none absolute bottom-2 left-3 text-xs text-gray-500">Arraste para girar · role ou pince para aproximar · toque numa unidade</p>
+                        <p aria-hidden="true" className={`pointer-events-none absolute bottom-2 left-3 text-xs ${presetDeLuz.textoSobreOCeu === 'claro' ? 'text-slate-200' : 'text-gray-500'}`}>Arraste para girar · role ou pince para aproximar · toque numa unidade</p>
                     </div>
                 ) : (
                     <p role="status" className="rounded-[10px] border border-gray-100 bg-gray-50 p-4 text-sm text-gray-700">

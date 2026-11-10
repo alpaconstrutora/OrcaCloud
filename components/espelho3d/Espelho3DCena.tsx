@@ -31,6 +31,7 @@ import {
   type ChaveDoGrupo,
   type PaletaDoEspelho,
 } from '../../utils/espelhoDeVendas3dMalha';
+import { janelaAcesa, LUZES_DO_DIA, LUZ_PADRAO, type PresetDeLuz } from '../../utils/espelhoDeVendas3dLuz';
 import { reduzMovimento } from './webglDisponivel';
 
 export interface Espelho3DCenaProps {
@@ -40,6 +41,8 @@ export interface Espelho3DCenaProps {
   destaque: SaleUnitStatus | null;
   selecionada: string | null;
   onSelecionar: (unitId: string | null) => void;
+  /** A luz do dia (F7): sol, ambiente, chão, arestas e, à noite, as unidades acesas. Ausente = dia. */
+  luz?: PresetDeLuz;
 }
 
 /** mm do modelo → metros da cena. */
@@ -87,12 +90,15 @@ const Enquadrar: React.FC<{ alvo: [number, number, number]; raioDaCena: number }
 
 interface MalhaDoGrupo {
   chave: ChaveDoGrupo;
+  /** À noite o grupo de cada status se parte em dois: as unidades acesas (que emitem a cor do status) e as outras. */
+  acesa: boolean;
   prismas: PrismaDoEspelho[];
   geometria: THREE.BufferGeometry;
   inicios: number[];
 }
 
-const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, selecionada, onSelecionar }) => {
+const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, selecionada, onSelecionar, luz = LUZES_DO_DIA[LUZ_PADRAO] }) => {
+  const fracaoAcesa = luz.janelas.fracao;
   const cx = (cena.caixa.minX + cena.caixa.maxX) / 2;
   const cy = (cena.caixa.minY + cena.caixa.maxY) / 2;
   const largura = (cena.caixa.maxX - cena.caixa.minX) * M;
@@ -107,17 +113,22 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
     const ms: MalhaDoGrupo[] = [];
     const linhas: THREE.BufferGeometry[] = [];
     for (const g of gruposDoEspelho(cena.prismas)) {
-      const partes = g.prismas.map((p) => geometriaDoPrisma(p, cx, cy));
-      for (const parte of partes) linhas.push(new THREE.EdgesGeometry(parte));
-      const geometria = mergeGeometries(partes, false);
-      if (!geometria) continue;
-      ms.push({ chave: g.chave, prismas: g.prismas, geometria, inicios: iniciosDasFaces(partes.map((x) => x.attributes.position.count / 3)) });
-      for (const parte of partes) parte.dispose();
+      // O piso sem unidade nunca acende; de dia ninguém acende (um grupo só por status, como sempre foi).
+      const acesas = g.chave === 'piso' ? [] : g.prismas.filter((p) => janelaAcesa(p.unitId, fracaoAcesa));
+      const partesDoGrupo = acesas.length > 0 ? [g.prismas.filter((p) => !acesas.includes(p)), acesas] : [g.prismas];
+      partesDoGrupo.forEach((prismas, k) => {
+        if (prismas.length === 0) return;
+        const partes = prismas.map((p) => geometriaDoPrisma(p, cx, cy));
+        for (const parte of partes) linhas.push(new THREE.EdgesGeometry(parte));
+        const geometria = mergeGeometries(partes, false);
+        if (geometria) ms.push({ chave: g.chave, acesa: k === 1, prismas, geometria, inicios: iniciosDasFaces(partes.map((x) => x.attributes.position.count / 3)) });
+        for (const parte of partes) parte.dispose();
+      });
     }
     const juntas = linhas.length > 0 ? mergeGeometries(linhas, false) : null;
     for (const l of linhas) l.dispose();
     return { malhas: ms, arestas: juntas };
-  }, [cena.prismas, cx, cy]);
+  }, [cena.prismas, cx, cy, fracaoAcesa]);
   useEffect(
     () => () => {
       for (const m of malhas) m.geometria.dispose();
@@ -155,19 +166,20 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
       gl={{ antialias: true, alpha: true }}
     >
       <Enquadrar alvo={alvo} raioDaCena={raioDaCena} />
-      <ambientLight intensity={2.1} />
-      <directionalLight position={[raio, raio * 2, raio * 0.8]} intensity={1.5} />
-      <directionalLight position={[-raio, raio, -raio]} intensity={0.5} />
+      {/* A luz do dia (F7): os números moram em `utils/espelhoDeVendas3dLuz.ts`, com a trava de que o status segue legível. */}
+      <ambientLight color={luz.ambiente.cor} intensity={luz.ambiente.intensidade} />
+      <directionalLight color={luz.sol.cor} position={[raio * luz.sol.direcao[0], raio * luz.sol.direcao[1], raio * luz.sol.direcao[2]]} intensity={luz.sol.intensidade} />
+      <directionalLight color={luz.contraluz.cor} position={[-raio * luz.sol.direcao[0], raio, -raio * luz.sol.direcao[2]]} intensity={luz.contraluz.intensidade} />
 
       {/* O chão: só dá a referência de onde a torre pousa. */}
       <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
         <circleGeometry args={[raio * 1.6, 64]} />
-        <meshBasicMaterial color="#e8edf3" />
+        <meshBasicMaterial color={luz.chao} />
       </mesh>
 
       {malhas.map((m) => (
         <mesh
-          key={m.chave}
+          key={`${m.chave}:${m.acesa ? 'acesa' : 'apagada'}`}
           geometry={m.geometria}
           onPointerDown={(e) => {
             inicioDoToque.current = { x: e.clientX, y: e.clientY };
@@ -181,13 +193,23 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
           }}
         >
           {/* O apagado fica translúcido e não esconde: a unidade em destaque do outro lado da torre aparece através dele. */}
-          <meshStandardMaterial color={corDe(m.chave)} roughness={0.85} metalness={0} transparent={apagado(m.chave)} opacity={apagado(m.chave) ? 0.28 : 1} depthWrite={!apagado(m.chave)} />
+          {/* A unidade acesa emite a cor do PRÓPRIO status: à noite ela brilha e continua sendo lida pela legenda. */}
+          <meshStandardMaterial
+            color={corDe(m.chave)}
+            emissive={m.acesa && !apagado(m.chave) ? corDe(m.chave) : '#000000'}
+            emissiveIntensity={m.acesa ? luz.janelas.brilho : 0}
+            roughness={0.85}
+            metalness={0}
+            transparent={apagado(m.chave)}
+            opacity={apagado(m.chave) ? 0.28 : 1}
+            depthWrite={!apagado(m.chave)}
+          />
         </mesh>
       ))}
 
       {arestas && (
         <lineSegments geometry={arestas}>
-          <lineBasicMaterial color="#ffffff" transparent opacity={0.85} />
+          <lineBasicMaterial color={luz.arestas.cor} transparent opacity={luz.arestas.opacidade} />
         </lineSegments>
       )}
 
@@ -198,6 +220,9 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
           <mesh geometry={daSelecionada.geometria} renderOrder={5}>
             <meshStandardMaterial
               color={daSelecionada.p.status ? paleta[daSelecionada.p.status].cor : COR_DO_PISO_SEM_UNIDADE}
+              // À noite a escolhida fica sempre acesa: é a que a pessoa está olhando.
+              emissive={daSelecionada.p.status && luz.janelas.brilho > 0 ? paleta[daSelecionada.p.status].cor : '#000000'}
+              emissiveIntensity={luz.janelas.brilho}
               roughness={0.85}
               transparent
               polygonOffset
@@ -206,7 +231,7 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
             />
           </mesh>
           <lineSegments geometry={daSelecionada.contorno} renderOrder={10}>
-            <lineBasicMaterial color="#0f172a" depthTest={false} transparent />
+            <lineBasicMaterial color={luz.textoSobreOCeu === 'claro' ? '#ffffff' : '#0f172a'} depthTest={false} transparent />
           </lineSegments>
         </group>
       )}

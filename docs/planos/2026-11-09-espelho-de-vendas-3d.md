@@ -24,6 +24,21 @@ Perguntei para quem é a tela na primeira versão. Resposta, 09/11/2026:
 > 1. Corretor ou vendedor atendendo o cliente (recomendo): fica no Portal do Corretor e funciona em tablet, celular e TV do estande. É o uso do vídeo, e o corretor já enxerga estoque e preço.
 > 2. investidor, Portal do investidor
 
+### Pedido de 10/11/2026 — "Ver decorado" (F8 e F9)
+
+Sessão: 55997973-a400-4cc1-9c2d-3a4a7714d48b · 10/11/2026, com as sete fases já no ar.
+
+> assista esse video e analise: https://www.instagram.com/reel/Dfia8V0vTp0/?utm_source=ig_web_copy_link&psln=NTc4MTIwNjQ2YQ==
+
+O vídeo (16 s, post pago da Higgsfield, perfil lynam_up) é um site de venda de uma torre de alto padrão: a foto
+da fachada com um balão de unidades disponíveis em cada andar ao passar o cursor; o toque abre o **corte 3D da
+unidade mobiliada** (vista de cima, sem teto, com a ficha ao lado) e depois as **imagens de cada ambiente
+decorado** com o nome embaixo (Primary Bedroom, Great Room, Spa Bath). Na análise: o mapa por andar e a ficha
+nós já temos e melhores (status vivo do banco, não uma foto); o que falta é o corte 3D mobiliado e as imagens
+dos ambientes — e imagem gerada por IA na venda precisa do aviso "imagem ilustrativa" (CDC, arts. 30 e 37).
+
+> Outra frente avançou e fez implementação no espelho de vendas 3d. Verifique novamente e faça uma nova fase do plano
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -33,6 +48,8 @@ Perguntei para quem é a tela na primeira versão. Resposta, 09/11/2026:
 | 09/11/2026 | O que o investidor vê de cada unidade? | **Status e preço**: cor por status, preço de tabela por unidade, VGV vendido e em estoque. Sem nome de comprador. |
 | 09/11/2026 | O que entra na ficha na 1ª versão? | **Tudo do vídeo**: dados, foto de capa, planta baixa por tipologia, vista da janela por andar, luz do dia. |
 | 09/11/2026 | Plano em 7 fases (um PR cada) | Aprovado, com os três pontos assumidos abaixo. |
+| 10/11/2026 | De onde vêm o corte 3D mobiliado e as imagens dos ambientes ("Ver decorado")? | **Os dois, em etapas**: F8 com imagens enviadas pela incorporadora por tipologia (render do arquiteto ou gerado fora do app); F9 com o corte gerado pela Planta, que substitui a imagem do corte quando a tipologia estiver desenhada. |
+| 10/11/2026 | Quem vê o "Ver decorado"? | **Corretor e Investidor**: a ficha é a mesma nos dois portais; as imagens não mostram preço nem pessoa. |
 
 Pontos assumidos na aprovação do plano (o usuário aprovou sem corrigir):
 
@@ -263,6 +280,47 @@ Mudou em relação ao plano aprovado (10/11/2026):
   "Vendida" (vermelho, no corretor) de "Reservada" (âmbar).
 - A escolha da luz não é guardada: todo mundo abre no "Dia".
 
+### F8 — "Ver decorado": corte 3D e ambientes por tipologia (imagens enviadas)
+
+Na ficha da unidade, ao lado de "Vista da janela", o botão "Ver decorado" abre um diálogo central (nunca tela
+cheia) com o corte 3D mobiliado da tipologia e as imagens dos ambientes, uma de cada vez, com o nome do ambiente
+embaixo. As imagens são cadastradas uma vez por tipologia do empreendimento, como as plantas da F5. Toda imagem
+aparece com o selo **"Imagem ilustrativa"** por cima — sempre, sem opção de desligar (decorado não é memorial
+descritivo; ver Riscos).
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `supabase/migrations/aplicar_<prefixo>_empreendimento_tipologia_decorado.sql` (novo; prefixo conferido contra todos os nomes no dia) | Tabela `empreendimento_tipologia_decorado (empreendimento_id, tipologia, tipologia_chave, papel, legenda, ordem, imagem_url, imagem_path, origem, planta_assinatura, planta_estudo_id)`: `papel` `CORTE` \| `AMBIENTE` (CHECK); índice único parcial — um `CORTE` por tipologia; `AMBIENTE` exige `legenda`; `origem` `ENVIADA` \| `PLANTA` (padrão `ENVIADA`; `PLANTA` e as duas colunas `planta_*` são preenchidas pela F9 — nascem aqui para a F9 não precisar de migration). RLS pela organização do empreendimento (a regra da F5); fechada para anon. Imagem no bucket `empreendimento-midia` (`…/decorado/`). Reescreve `fn_broker_portal_get_espelho` e `fn_espelho_de_vendas_das_obras` com o MESMO corpo da migration vigente mais a chave `decorado` (lista de `{ tipologia_chave, papel, legenda, ordem, imagem_url, origem }`) ao lado de `plantas`. | Aplicada no banco (com autorização própria do usuário): a verificação embutida passa; privilégios das duas funções iguais aos de antes; `segurancaMigrations.test` e `migrationsPrefixo.test` verdes. |
+| `utils/espelhoDecoradoDaTipologia.ts` (novo) | `decoradoDaUnidade(decorados, tipologia)` → `{ corte, ambientes }` (casando por `chaveDaTipologia` da F5; ambientes pela `ordem`, empate pela legenda) ou `null`; `rotuloDoSelo(origem)` ("Imagem ilustrativa" / "Gerado do projeto · mobiliário ilustrativo"); `problemaDoDecorado` (o que falta para salvar). | `npx vitest run __tests__/espelhoDecoradoDaTipologia.test.ts` verde: casa com acento/caixa diferentes; só ambientes sem corte; só corte; ordem; tipologia sem decorado → `null`; prédio sem nenhum → ausente. |
+| `services/empreendimentoTipologiaDecoradoService.ts` (novo) | `listar`, `doPredio`, `salvar` (sobe a imagem, grava, confere a linha que voltou e apaga o arquivo solto se não ficou — o padrão da F5/F6), `remover`, `reordenar`. Tolerante à tabela ausente ("falta aplicar a migration", com o motivo). | Typecheck; coberto pelos testes de quem usa. |
+| `components/empreendimento/DecoradoPorTipologiaSecao.tsx` (novo) + `TowerEditor.tsx` | Seção "Decorado por tipologia" logo abaixo de "Plantas por tipologia": um cartão por tipologia (a mesma lista de `tipologiasDoEmpreendimento`), com o lugar do corte 3D e a lista de ambientes (miniatura, legenda, subir/descer, remover). Foto primeiro, legenda depois, botão azul "Salvar imagem" e o aviso "ainda não foi gravada" enquanto não salvar (lição do #315). Texto fixo no cartão: "Nos portais, toda imagem aparece com o selo 'Imagem ilustrativa'". | `npx vitest run __tests__/components/DecoradoPorTipologiaSecao.test.tsx` verde (salvar desligado dizendo o que falta; ambiente sem legenda não salva; aviso de não gravada; reordenar); subir o corte e dois ambientes de um Tipo do Garden Cambuhy e conferir as linhas no banco. |
+| `services/espelhoDeVendasService.ts`, `components/broker/useBrokerPortal.ts` | `estruturaPorToken` e `estruturaDoApp` devolvem também `decorado` (tolerante à chave ausente); o portal passa a lista a `montarEspelhoDoEstoque`. | Typecheck. |
+| `utils/espelhoDoEstoque.ts`, `utils/espelhoDoInvestidor.ts`, `utils/espelhoDeVendas3dMalha.ts` | `DadosDaUnidade.decorado`: ausente = o prédio não tem decorado (a ficha nem fala nisso); `null` = tem, mas não desta tipologia; senão `{ corte, ambientes }`. No investidor, a tipologia que já cai na do imóvel (F5) vale aqui também. | 1 caso novo em cada teste. |
+| `components/espelho3d/FichaDaUnidade.tsx` (+ `components/espelho3d/DecoradoDaUnidade.tsx` novo, se a ficha passar de ~250 linhas) | Botão "Ver decorado" ao lado de "Vista da janela", desligado com o motivo no `title` e escrito embaixo quando a tipologia não tem. O diálogo (`Modal` 2xl): imagem grande, setas e miniaturas, ← → do teclado, legenda e "2 de 5"; o corte é sempre a primeira; selo de `rotuloDoSelo` sobre a imagem, legível em qualquer fundo. Trocar de unidade fecha. | Casos novos em `__tests__/components/Espelho3D.test.tsx`: botão some sem decorado no prédio; desligado com motivo; ordem corte → ambientes; setas e teclado; selo sempre presente. Passeio do harness: "o decorado não ocupa a tela inteira". |
+| `docs/spikes/espelho-vendas-3d/main.tsx`, `passeio.mjs` | Decorado de mentira numa tipologia do harness (corte + 3 ambientes) e o passo do passeio. | `node docs/spikes/espelho-vendas-3d/passeio.mjs` com exit 0. |
+| `__tests__/espelhoDoInvestidor.test.ts` | A trava do texto vale para a migration nova: tabela com RLS e fechada para anon; nas funções só entra a chave `decorado` e nenhuma de antes sai; `planta_assinatura` e `planta_estudo_id` não saem para o portal; unidade do investidor com as mesmas 16 chaves. | Casos novos passam. |
+
+Fora desta fase, de propósito: gerar imagem por IA dentro do app (custo por imagem e o risco do selo ficar de fora
+na hora de exportar) e o "balão por andar sobre a foto da fachada" do vídeo — o desenho 3D com status vivo já faz
+isso melhor.
+
+### F9 — Corte 3D gerado pela Planta
+
+A Planta já tem a unidade autônoma como objeto (`Unidade` em `utils/blueprintKernel/model.ts`: número, `tipologia`,
+as etiquetas dos ambientes que a compõem) e os móveis como componentes do kernel (`FamiliaDeComponente`:
+mobiliário, louça, bancada, armário). A F9 tira dali o corte 3D mobiliado de UMA unidade de cada tipologia e o
+envia para o lugar do corte da F8, com `origem = PLANTA`. Os ambientes (as imagens decoradas) continuam enviados.
+
+| Arquivo | O que muda | Como sei que terminou |
+|---|---|---|
+| `utils/espelhoDecoradoDaPlanta.ts` (novo, puro) | `cenaDoDecorado(model, unidadeId)` → paredes dos ambientes da unidade até o pé-direito, sem laje nem teto; pisos por ambiente; vãos de porta e janela; os componentes dentro dos ambientes; caixa e enquadramento de cima a ~45°. `assinaturaDoDecorado` (muda quando parede, vão, componente ou etiqueta da unidade muda — para o "o desenho mudou desde o envio"). `problemaDoDecorado` (unidade sem ambiente, sem tipologia, tipologia que o Empreendimento não tem, sem parede). Reaproveita as peças do 3D da Planta (`utils/blueprint3dPecas.ts`) — o levantamento da fase confirma quais servem antes de escrever. | `npx vitest run __tests__/espelhoDecoradoDaPlanta.test.ts` verde: só os ambientes da unidade entram (a vizinha fica fora); parede geminada uma vez só; componente fora da unidade fora; assinatura estável com a mesma geometria e diferente ao mover uma parede ou um móvel; cada problema com o motivo. |
+| `components/blueprint/RetratoDoDecorado.tsx` (novo, `React.lazy`) | Renderiza a cena fora da tela num canvas de tamanho fixo, com a luz "Dia" de `LUZES_DO_DIA` (F7), e devolve o PNG. Sem WebGL → não há botão (motivo escrito). | Passeio de um harness da Planta: o PNG sai com o tamanho combinado e não é uma imagem vazia (conferência de pixels). |
+| `components/blueprint/TelaUnidades.tsx` + `BlueprintEditor.tsx` | Em cada unidade com tipologia, quando o estudo está ligado a um Empreendimento (pela zona, `blueprint_study_urban_context.empreendimento_id`, como na F1b): a situação do corte nos portais ("nunca enviado", "o desenho mudou desde …", "é o deste desenho", "a tipologia usa imagem enviada") e o botão "Enviar corte ao Espelho 3D", desligado com o motivo. Uma unidade por tipologia: enviar outra unidade do mesmo tipo troca a do tipo, avisando antes. | `npx vitest run __tests__/components/TelaUnidadesDecorado.test.tsx` verde (cada situação e cada motivo); enviar numa planta real com unidade tipificada e conferir a linha no banco (`origem = PLANTA`, assinatura e estudo). |
+| `services/empreendimentoTipologiaDecoradoService.ts` | `gravarCorteDaPlanta({ empreendimentoId, tipologia, png, assinatura, estudoId })`: troca o `CORTE` da tipologia (o arquivo antigo é apagado só depois que a linha nova voltou). | Typecheck; coberto pelo teste da tela. |
+| `components/empreendimento/DecoradoPorTipologiaSecao.tsx` | O cartão diz de onde veio o corte ("Enviado" / "Gerado da Planta em …") e, no gerado, "trocar" sobe uma imagem por cima, avisando que o gerado será substituído. | Caso novo no teste da seção. |
+
+Ordem: F8 primeiro (ela cria a tabela, o lugar na ficha e o selo); a F9 sem a F8 não tem onde aparecer.
+
 ## Estado
 
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
@@ -271,8 +329,10 @@ Mudou em relação ao plano aprovado (10/11/2026):
 - [x] F3 — Portal do Corretor: #290 (`7debce99`) + correção da fonte por cobertura #292 (`c5f65dc7`); migration `aplicar_20271109950000_broker_portal_espelho.sql` aplicada em 09/11/2026; reconferido em produção em 10/11/2026 (Garden Cambuhy: 34 unidades — 23 disponíveis, 7 reservadas, 4 vendidas — igual ao banco). Não conferidos em produção: celular e acesso por link
 - [ ] F4 — Portal do Investidor: em `main` (#294, `bda7f3f6`), no ar; migration `aplicar_20271110100000_investor_portal_espelho.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: as duas internas sem EXECUTE para a API; a do link para anon; a do app só authenticated; token inexistente → `valid=false`). FALTA conferir com um investidor ligado a uma obra com torres — hoje não há nenhum vínculo investidor ↔ obra no banco
 - [x] F5 — planta baixa por tipologia: #300 (`e48e216c`); migration `aplicar_20271110500000_empreendimento_tipologia_plantas.sql` aplicada em 10/11/2026 com autorização do usuário; as 8 plantas do Garden Cambuhy (Tipo 1 a 8) foram subidas pelo usuário e a ficha foi conferida em produção no Portal do Corretor (unidade de Tipo 3 com a planta carregada)
-- [ ] F6 — vista da janela: #304 (`9f24410c`), no ar; migration `aplicar_20271110600000_empreendimento_tower_vistas.sql` APLICADA em 10/11/2026 com autorização do usuário (conferido: tabela com RLS e sem SELECT para anon; as duas funções com `vistas` e `plantas` e os privilégios de antes; VGV vendido do Bella Vista igual). FALTA cadastrar as vistas de verdade (o usuário faz depois) e conferir a ficha nos portais
-- [x] F7 — luz do dia (este PR): sem migration
+- [x] F6 — vista da janela: #304 (`9f24410c`) + "Salvar vista" #315 (`90e63e9e`) + vista de uma unidade #320 (`62791e5e`); migrations `aplicar_20271110600000_empreendimento_tower_vistas.sql` e `aplicar_20271110800000_vista_da_janela_por_unidade.sql` APLICADAS em 10/11/2026 com autorização do usuário. Vistas do Garden Cambuhy cadastradas pelo usuário (Torre A, andares 0–3; Torre B, 0–3) e ficha conferida em produção no Portal do Corretor: 101 e 105 abrem a vista; 505 com o botão desligado e o motivo
+- [x] F7 — luz do dia: #309 (`8c4af0fb`), sem migration
+- [ ] F8 — "Ver decorado" com imagens enviadas por tipologia: não iniciada
+- [ ] F9 — corte 3D gerado pela Planta: não iniciada (depende da F8)
 
 ## Riscos
 
@@ -280,6 +340,11 @@ Mudou em relação ao plano aprovado (10/11/2026):
 - Celular com 400–600 unidades → validar a geometria mesclada; plano B `InstancedMesh` no esquemático.
 - Regra de status em três lugares (TS do corretor, TS da Análise, SQL do investidor) → fixture único de casos.
 - F6 depende de o usuário ter as imagens de vista; sem elas o botão fica desligado com o motivo.
+- F8/F9: decorado e corte são material de venda, não memorial descritivo. Mostrar sem aviso o que não será
+  entregue (móvel, acabamento, vista) pode ser publicidade enganosa (CDC, arts. 30 e 37) e vira obrigação do
+  incorporador → selo "Imagem ilustrativa" sempre sobre a imagem, sem opção de desligar, e trava no teste da ficha.
+- F9: a unidade desenhada na Planta pode divergir da tipologia vendida (estudo antigo, outra versão) → o envio é
+  ação explícita por unidade, o cartão mostra a data e o estudo de origem, e "o desenho mudou desde …" aparece na Planta.
 
 ## Verificação
 

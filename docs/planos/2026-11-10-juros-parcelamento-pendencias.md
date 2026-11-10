@@ -44,7 +44,11 @@ repetir o `CASE`.
   pivot (todas as dimensões de categoria), `fn_bi_trend`, aging, entries, FP&A,
   balancete e entries_without_project; teste BEGIN/ROLLBACK com título de 2099 prova a
   separação em cada um. Reversão em `supabase/manual/`.
-- [x] escrito · [ ] aplicado · [ ] conferido
+- [x] escrito · [x] aplicado (10/11, autorizado pelo usuário) · [x] conferido:
+  teste ANTES 10 de 25 (separações vermelhas, invariantes verdes) → DEPOIS 25 de 25; rollback
+  sem resto (0 títulos/orçamentos de teste); md5 antes × depois IDÊNTICO nas 7 orgs (fato,
+  pivô em 7 dimensões, bi_trend, aging, lançamentos, sem obra, balancete, FP&A); ACL igual
+  à de antes (authenticated + service_role, sem anon).
 
 ### 2. Balancete — total de lançamentos
 - **Muda:** `BalanceteLine.n_partes_juros`; `BalanceteReport` total = Σ(n − n_partes_juros).
@@ -82,9 +86,7 @@ repetir o `CASE`.
 
 ## Estado
 
-Plano escrito em 10/11/2026. Itens 2–6 feitos (front + testes). Item 1: migration escrita,
-**não aplicada** — aplicar e rodar o teste BEGIN/ROLLBACK em produção esperam autorização do
-usuário. Produção em 10/11: 0 títulos com juros, então antes × depois tem de sair idêntico.
+10/11/2026: itens 1–6 feitos. Migration aplicada e conferida em produção (item 1). PR #299.
 
 ### Revisão independente (10/11) — 6 achados, todos corrigidos
 1. `fn_opura_entries` no detalhe "— Sem categoria-pai" devolvia o mesmo id 2× (principal e

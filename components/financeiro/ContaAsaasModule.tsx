@@ -166,15 +166,17 @@ export default function ContaAsaasModule() {
 
     // Saldo ao vivo + a receber. Falha não esvazia a tela: o saldo gravado
     // (última leitura do cron) continua nos cards, com a hora.
-    const carregarResumo = useCallback(async (id: string) => {
+    const carregarResumo = useCallback(async (id: string): Promise<ResumoContaAsaas | null> => {
         setErroResumo(null);
         try {
             const r = await asaasContaService.resumo(id);
             setResumo(r);
             setContas(prev => prev.map(c => c.payment_account_id === id ? { ...c, saldo: r.saldo, saldo_em: r.saldo_em } : c));
+            return r;
         } catch (e) {
             setResumo(null);
             setErroResumo(e instanceof Error ? e.message : String(e));
+            return null;
         }
     }, []);
 
@@ -230,8 +232,18 @@ export default function ContaAsaasModule() {
         if (!conta) return;
         setOcupado('saldo');
         setMsg(null);
-        await carregarResumo(conta.payment_account_id);
+        const antes = resumo?.saldo ?? conta.saldo;
+        const r = await carregarResumo(conta.payment_account_id);
         setOcupado(null);
+        // Sem este aviso, leitura que não muda o saldo parece clique ignorado.
+        // A falha já aparece na faixa de erro do resumo.
+        if (r) {
+            const mudou = antes != null && r.saldo != null && Math.abs(r.saldo - antes) >= 0.005;
+            setMsg({
+                tipo: 'ok',
+                texto: `Saldo lido na Asaas em ${dataHora(r.saldo_em)}: ${formatMoney(r.saldo)}${mudou ? ` (antes ${formatMoney(antes)})` : ' — sem alteração desde a última leitura'}.`,
+            });
+        }
     }
 
     async function sincronizar() {

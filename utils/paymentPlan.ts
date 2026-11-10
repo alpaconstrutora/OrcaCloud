@@ -265,6 +265,83 @@ export function montarPlanoRapido(p: PlanoRapido): { entrada: number; blocos: Bl
 }
 
 /**
+ * Uma SÉRIE do plano como a tabela da aba Financeiro a mostra: blocos do mesmo
+ * tipo, na mesma cadência, numa linha só — mesmo com blocos de outro tipo
+ * intercalados por data. Três casos que `agruparPlano` devolve partidos:
+ * a sobra do arredondamento vira um bloco de 1× no fim (59 + 1); no SAC cada
+ * parcela tem valor próprio (um bloco por parcela); e um reforço semestral cai
+ * no meio das mensais por data, partindo a série mensal em pedaços.
+ */
+export interface SerieDoPlano {
+    tipo: string;
+    primeiroVencimento: string;
+    /** Meses entre parcelas; 0 = linha de parcela única. */
+    intervaloMeses: number;
+    parcelas: number;
+    subtotal: number;
+    valorPrimeira: number;
+    valorUltima: number;
+    /** Índices, em `blocos`, dos blocos que formam a série (em ordem de data). */
+    membros: number[];
+}
+
+export function agruparSeries(blocos: BlocoPagamento[]): SerieDoPlano[] {
+    const ordem = (blocos || [])
+        .map((b, i) => ({ b, i }))
+        .filter(({ b }) => b && b.primeiroVencimento && b.quantidade > 0)
+        .sort((x, y) => x.b.primeiroVencimento.localeCompare(y.b.primeiroVencimento) || x.i - y.i);
+
+    const series: (SerieDoPlano & { ultimoVencimento: string })[] = [];
+    for (const { b, i } of ordem) {
+        const qtd = Math.max(1, Math.floor(b.quantidade));
+        const passoDoBloco = qtd > 1 ? (b.intervaloMeses || 0) : 0;
+        const ultimoDoBloco = somarMeses(b.primeiroVencimento, passoDoBloco * (qtd - 1));
+        // A última série DO MESMO TIPO, não a imediatamente anterior (reforços intercalados).
+        const atual = [...series].reverse().find(s => s.tipo === b.tipo);
+        if (atual) {
+            const passo = mesesEntre(atual.ultimoVencimento, b.primeiroVencimento);
+            const cadenciaOk = passo > 0
+                && (atual.intervaloMeses === 0 || passo === atual.intervaloMeses)
+                && (passoDoBloco === 0 || passoDoBloco === passo);
+            if (cadenciaOk) {
+                atual.intervaloMeses = passo;
+                atual.parcelas += qtd;
+                atual.subtotal = dois(atual.subtotal + subtotalDoBloco(b));
+                atual.valorUltima = b.valorParcela;
+                atual.ultimoVencimento = ultimoDoBloco;
+                atual.membros.push(i);
+                continue;
+            }
+        }
+        series.push({
+            tipo: b.tipo,
+            primeiroVencimento: b.primeiroVencimento,
+            intervaloMeses: passoDoBloco,
+            parcelas: qtd,
+            subtotal: subtotalDoBloco(b),
+            valorPrimeira: b.valorParcela,
+            valorUltima: b.valorParcela,
+            membros: [i],
+            ultimoVencimento: ultimoDoBloco,
+        });
+    }
+    return series.map(({ ultimoVencimento: _u, ...s }) => s);
+}
+
+/**
+ * A série PRINCIPAL — a que fecha a conta na tabela do plano: entre as de 2+
+ * parcelas, a de maior subtotal (a mesma escolha do `blocoParaGerador`). -1 se
+ * o plano não tem série.
+ */
+export function indiceDaSeriePrincipal(series: SerieDoPlano[]): number {
+    let melhor = -1;
+    series.forEach((s, i) => {
+        if (s.parcelas > 1 && (melhor === -1 || s.subtotal > series[melhor].subtotal)) melhor = i;
+    });
+    return melhor;
+}
+
+/**
  * O inverso do `montarPlanoRapido`: a série principal de um plano já gravado,
  * para o montador da aba Financeiro abrir com ela em vez de "12×" fixo.
  *
@@ -272,54 +349,14 @@ export function montarPlanoRapido(p: PlanoRapido): { entrada: number; blocos: Bl
  * virava "Substituir plano" — num plano de sinal + 60 parcelas, um clique
  * trocava tudo por 12× sem entrada (crítica de design da aba, 10/11/2026).
  *
- * Blocos do mesmo tipo, na mesma cadência, contam como UMA série — mesmo com
- * blocos de outro tipo intercalados por data: a sobra do arredondamento vira um bloco de 1× no fim (59 + 1), e no
- * SAC cada parcela tem valor próprio, então `agruparPlano` devolve um bloco
- * por parcela. Entre as séries (2+ parcelas), vale a de maior subtotal — a
- * mesma escolha do `blocoParaGerador`. Sem série nenhuma, `null`.
+ * A série é a de `agruparSeries` (sobra 1×, SAC e reforços intercalados numa
+ * linha só); vale a principal (`indiceDaSeriePrincipal`). Sem série, `null`.
  */
 export function serieDoPlanoGravado(
     blocos: BlocoPagamento[],
 ): { parcelas: number; tipo: string; primeiroVencimento: string } | null {
-    const ordenados = [...(blocos || [])]
-        .filter(b => b && b.primeiroVencimento && b.quantidade > 0)
-        .sort((a, b) => a.primeiroVencimento.localeCompare(b.primeiroVencimento));
-
-    type Serie = { tipo: string; primeiroVencimento: string; ultimoVencimento: string; intervalo: number; parcelas: number; subtotal: number };
-    const series: Serie[] = [];
-    for (const b of ordenados) {
-        const qtd = Math.max(1, Math.floor(b.quantidade));
-        const passoDoBloco = qtd > 1 ? (b.intervaloMeses || 0) : 0;
-        const ultimoDoBloco = somarMeses(b.primeiroVencimento, passoDoBloco * (qtd - 1));
-        // A última série DO MESMO TIPO, não a imediatamente anterior: num plano
-        // expandido, um reforço semestral cai no meio das mensais por data e
-        // `agruparPlano` parte a série mensal em pedaços em volta dele.
-        const atual = [...series].reverse().find(s => s.tipo === b.tipo);
-        if (atual) {
-            const passo = mesesEntre(atual.ultimoVencimento, b.primeiroVencimento);
-            const cadenciaOk = passo > 0
-                && (atual.intervalo === 0 || passo === atual.intervalo)
-                && (passoDoBloco === 0 || passoDoBloco === passo);
-            if (cadenciaOk) {
-                atual.intervalo = passo;
-                atual.parcelas += qtd;
-                atual.subtotal += subtotalDoBloco(b);
-                atual.ultimoVencimento = ultimoDoBloco;
-                continue;
-            }
-        }
-        series.push({
-            tipo: b.tipo,
-            primeiroVencimento: b.primeiroVencimento,
-            ultimoVencimento: ultimoDoBloco,
-            intervalo: passoDoBloco,
-            parcelas: qtd,
-            subtotal: subtotalDoBloco(b),
-        });
-    }
-
-    const comSerie = series.filter(s => s.parcelas > 1);
-    if (comSerie.length === 0) return null;
-    const maior = comSerie.reduce((a, s) => (s.subtotal > a.subtotal ? s : a));
-    return { parcelas: maior.parcelas, tipo: maior.tipo, primeiroVencimento: maior.primeiroVencimento };
+    const series = agruparSeries(blocos);
+    const p = indiceDaSeriePrincipal(series);
+    if (p < 0) return null;
+    return { parcelas: series[p].parcelas, tipo: series[p].tipo, primeiroVencimento: series[p].primeiroVencimento };
 }

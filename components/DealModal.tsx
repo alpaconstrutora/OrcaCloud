@@ -23,7 +23,8 @@ import {
     saldoDoPlano,
     somarDias,
     somarMeses,
-    serieDoPlanoGravado,
+    agruparSeries,
+    indiceDaSeriePrincipal,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
 import SaveStatus from './ui/SaveStatus';
@@ -40,10 +41,12 @@ import {
     espelhoDoPlano,
     planoComoSchedule as planoDaNegociacaoComoSchedule,
     atualizacaoDoContratoPeloPlano,
+    replanejarSerie,
     type CamposDoPlano,
+    type SerieAlvo,
     type SistemaAmortizacao,
 } from '../utils/jurosParcelamento';
-import { salesPlanService } from '../services/salesPlanService';
+import { salesPlanService, type SalesPlan, type PolicyValidation, type Verdict } from '../services/salesPlanService';
 import { clientService } from '../services/clientService';
 import { organizationService } from '../services/organizationService';
 import { financialRegistryService } from '../services/financialRegistryService';
@@ -571,6 +574,80 @@ const assinaturaDoForm = (d: unknown) => JSON.stringify(d, (_k, v) =>
 type CamposDoMontador = { entrada: string | null; parcelas: string | null; tipo: string | null; primeiroVencimento: string | null };
 const MONTADOR_INTOCADO: CamposDoMontador = { entrada: null, parcelas: null, tipo: null, primeiroVencimento: null };
 
+const CLASSE_CAMPO_DA_LINHA = 'h-8 px-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all';
+
+/**
+ * Campo editado NA LINHA da tabela do plano (aba Financeiro). Estado local:
+ * confirma no Enter ou ao sair do campo, nunca a cada tecla — cada confirmação
+ * recalcula a série, e o campo de data dispara a cada segmento ("0002" já é
+ * uma data válida no meio da digitação). Escape volta ao valor de antes.
+ */
+const CampoDaLinha: React.FC<{
+    tipo: 'number' | 'date';
+    valor: string;
+    rotulo: string;
+    /** `false` = recusado (ex.: passaria do total): o campo volta ao valor de antes. */
+    onConfirmar: (v: string) => boolean;
+    className?: string;
+}> = ({ tipo, valor, rotulo, onConfirmar, className = '' }) => {
+    const [texto, setTexto] = useState(valor);
+    useEffect(() => { setTexto(valor); }, [valor]);
+    return (
+        <input
+            type={tipo}
+            aria-label={rotulo}
+            value={texto}
+            {...(tipo === 'number' ? { min: 1, step: 1 } : {})}
+            onChange={e => setTexto(e.target.value)}
+            onBlur={() => { if (texto !== valor && !onConfirmar(texto)) setTexto(valor); }}
+            onKeyDown={e => {
+                if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                if (e.key === 'Escape') setTexto(valor);
+            }}
+            className={`${CLASSE_CAMPO_DA_LINHA} ${className}`}
+        />
+    );
+};
+
+/** Valor em R$ editado na linha (sinal, reforço, chaves) — mesma regra do `CampoDaLinha`. */
+const ValorDaLinha: React.FC<{ valor: number; rotulo: string; onConfirmar: (v: number) => boolean }> = ({ valor, rotulo, onConfirmar }) => {
+    const inicial = valor.toFixed(2);
+    const [texto, setTexto] = useState(inicial);
+    useEffect(() => { setTexto(inicial); }, [inicial]);
+    const confirmar = () => {
+        const n = parseFloat(texto) || 0;
+        if (!(texto !== inicial && n > 0 && onConfirmar(n))) setTexto(inicial);
+    };
+    return (
+        <div className="relative inline-block">
+            <span className="absolute left-2 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500">R$</span>
+            <MoneyCentsInput
+                aria-label={rotulo}
+                value={texto}
+                onChange={setTexto}
+                onBlur={confirmar}
+                onKeyDown={e => {
+                    if (e.key === 'Enter') { e.preventDefault(); e.currentTarget.blur(); }
+                    if (e.key === 'Escape') setTexto(inicial);
+                }}
+                className={`${CLASSE_CAMPO_DA_LINHA} w-36 pl-8 text-right`}
+            />
+        </div>
+    );
+};
+
+/** Veredito do Plano de vendas (`fn_validate_sales_simulation`) — os rótulos da Simulação do corretor. */
+const ROTULO_DO_VEREDITO: Record<Verdict, string> = {
+    ALLOWED: 'Dentro da política', WARN: 'Permitido com alerta',
+    NEEDS_APPROVAL: 'Exige aprovação', BLOCKED: 'Bloqueado',
+};
+const COR_DO_VEREDITO: Record<Verdict, string> = {
+    ALLOWED: 'bg-emerald-50 border-emerald-200 text-emerald-800',
+    WARN: 'bg-amber-50 border-amber-200 text-amber-900',
+    NEEDS_APPROVAL: 'bg-orange-50 border-orange-200 text-orange-900',
+    BLOCKED: 'bg-red-50 border-red-200 text-red-800',
+};
+
 interface DealModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -952,6 +1029,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         { taxa: null, sistema: null, preco: null },
     );
     const [sugestaoJuros, setSugestaoJuros] = useState<{ taxa: number; plano: string } | null>(null);
+    /**
+     * O Plano de vendas ATIVO do empreendimento, quando há exatamente um: dá a
+     * linha de partida da venda sem plano (entrada mínima, máximo de parcelas) e
+     * a conferência do plano contra a política (`fn_validate_sales_simulation`).
+     */
+    const [planoDeVendas, setPlanoDeVendas] = useState<SalesPlan | null>(null);
     useEffect(() => {
         if (isOpen) {
             setPlanoJuros({ taxa: null, sistema: null, preco: null });
@@ -984,19 +1067,21 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         () => sortPaymentTypes(paymentTypes.filter(t => t.active !== false && t.generates_series)),
         [paymentTypes],
     );
-    /** A série principal do plano gravado — o ponto de partida do montador. */
-    const serieGravada = useMemo(
-        () => serieDoPlanoGravado(linhasDoPlano.filter(l => !l.ehSinal).map(l => l.bloco)),
-        [linhasDoPlano],
-    );
-    /** Os campos do montador como a tela mostra: o digitado, senão o plano gravado. */
+    /**
+     * Os campos da linha de partida (venda SEM plano) como a tela mostra: o
+     * digitado, senão o Plano de vendas (entrada mínima, máximo de parcelas),
+     * senão o padrão (sem entrada, 12× mensal). Com plano montado a linha de
+     * partida some — o plano se edita na própria tabela.
+     */
+    const baseDaEntrada = Number(formData.price_before_interest ?? formData.contract_total_value) || 0;
     const planoRapido = {
         entrada: planoRapidoDigitado.entrada
-            ?? (ehVenda && (Number(formData.down_payment) || 0) > 0 ? Number(formData.down_payment).toFixed(2) : ''),
-        parcelas: planoRapidoDigitado.parcelas ?? String(serieGravada?.parcelas ?? 12),
-        tipo: planoRapidoDigitado.tipo
-            ?? (serieGravada && tiposDeSerie.some(t => t.code === serieGravada.tipo) ? serieGravada.tipo : 'MENSAL'),
-        primeiroVencimento: planoRapidoDigitado.primeiroVencimento ?? (serieGravada?.primeiroVencimento || ''),
+            ?? (ehVenda && planoDeVendas && planoDeVendas.min_down_payment_pct > 0 && baseDaEntrada > 0
+                ? (baseDaEntrada * planoDeVendas.min_down_payment_pct / 100).toFixed(2)
+                : ''),
+        parcelas: planoRapidoDigitado.parcelas ?? String((ehVenda && planoDeVendas?.max_installments) || 12),
+        tipo: planoRapidoDigitado.tipo ?? 'MENSAL',
+        primeiroVencimento: planoRapidoDigitado.primeiroVencimento ?? '',
     };
     /** Os campos do painel, já em números. */
     const camposDoPlano = (): CamposDoPlano => ({
@@ -1061,32 +1146,171 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         setFormData(prev => ({ ...prev, ...montarPlanoNoNegocio(prev, campos, idBase) }));
     };
 
+    // ── Tabela do plano: uma linha por SÉRIE; a principal fecha a conta ─────
+    // Desenho aprovado em 10/11/2026 (docs/planos/2026-11-10-negociacao-aba-
+    // financeiro.md, item 2): o painel "Montar plano" saiu; o plano se edita na
+    // própria tabela. Os índices de cada série apontam para `linhasDoPlano` — a
+    // gaveta e o salvar continuam bloco a bloco, como antes.
+    const seriesDaTabela = useMemo(() => agruparSeries(linhasDoPlano.map(l => l.bloco)), [linhasDoPlano]);
+    const idxSeriePrincipal = useMemo(() => indiceDaSeriePrincipal(seriesDaTabela), [seriesDaTabela]);
+    const seriePrincipal = idxSeriePrincipal >= 0 ? seriesDaTabela[idxSeriePrincipal] : null;
+    /** Os blocos (objetos de `linhasDoPlano`) que formam a série principal. */
+    const membrosDaPrincipal = () => new Set((seriePrincipal?.membros || []).map(i => linhasDoPlano[i]?.bloco));
+
+    /** Juros em vigor para recalcular a série: o digitado na faixa, senão o gravado. */
+    const jurosDoPlano = (j: typeof planoJuros = planoJuros) => {
+        const texto = j.taxa ?? (formData.interest_rate_monthly != null ? String(formData.interest_rate_monthly) : '');
+        const taxa = ehVenda ? Math.max(0, parseFloat(texto) || 0) : 0;
+        const comPreco = ehVenda && (taxa > 0 || formData.price_before_interest != null);
+        return {
+            taxaMensal: taxa,
+            sistema: (j.sistema ?? formData.amortization_system ?? 'PRICE') as SistemaAmortizacao,
+            ...(comPreco && j.preco !== null ? { precoSemJuros: parseFloat(j.preco) || 0 } : {}),
+        };
+    };
+
+    /**
+     * Recalcula a série principal para fechar a conta (`replanejarSerie`):
+     * `alteracao` é o que mudou NELA (nº, periodicidade, 1º vencimento); `sinal`,
+     * `outros` e `juros`, o que mudou em volta. `false` = recusado (o sinal e as
+     * demais linhas já cobrem o total) — o aviso já foi dado.
+     */
+    const replanejarPrincipal = (
+        alteracao: Partial<SerieAlvo>,
+        opcoes: { sinal?: number; outros?: BlocoPagamento[]; juros?: ReturnType<typeof jurosDoPlano> } = {},
+    ): boolean => {
+        if (!seriePrincipal) return false;
+        const membros = membrosDaPrincipal();
+        const primeiro = linhasDoPlano[seriePrincipal.membros[0]]?.bloco;
+        const r = replanejarSerie(
+            formData,
+            opcoes.sinal ?? (Number(formData.down_payment) || 0),
+            opcoes.outros ?? linhasDoPlano.filter(l => !l.ehSinal && !membros.has(l.bloco)).map(l => l.bloco),
+            {
+                parcelas: seriePrincipal.parcelas,
+                tipo: seriePrincipal.tipo,
+                intervaloMeses: seriePrincipal.intervaloMeses || intervalMonthsForType(paymentTypes, seriePrincipal.tipo) || 1,
+                primeiroVencimento: seriePrincipal.primeiroVencimento,
+                paymentType: primeiro?.paymentType,
+                notes: primeiro?.notes,
+                ...alteracao,
+            },
+            opcoes.juros ?? jurosDoPlano(),
+            `plano-${Date.now()}`,
+        );
+        if (!r.ok) {
+            notifyError(r.motivo + (r.excesso > 0 ? ` Passam do total em ${fmtMoeda(r.excesso)}.` : ''));
+            return false;
+        }
+        setFormData(prev => ({ ...prev, ...r.patch }));
+        return true;
+    };
+
+    /**
+     * Grava a lista de blocos do cronograma (sem o sinal). Se a série principal
+     * continua nela, é ela que fecha a conta de novo sobre o resto; sem série
+     * principal (ou se ela acabou de sair), grava como está e o saldo aparece.
+     */
+    const aplicarEFechar = (naoSinal: BlocoPagamento[], sinal = Number(formData.down_payment) || 0): boolean => {
+        const membros = membrosDaPrincipal();
+        if (membros.size > 0 && naoSinal.some(b => membros.has(b))) {
+            return replanejarPrincipal({}, { sinal, outros: naoSinal.filter(b => !membros.has(b)) });
+        }
+        aplicarBlocos(naoSinal);
+        return true;
+    };
+
+    /** Remove linhas da tabela (índices de `linhasDoPlano`); a série principal fecha de novo. */
+    const removerLinhas = (idxs: number[]) => {
+        const sai = new Set(idxs.map(i => linhasDoPlano[i]?.bloco));
+        const tiraSinal = idxs.some(i => linhasDoPlano[i]?.ehSinal);
+        const ok = aplicarEFechar(blocosNaoSinal().filter(b => !sai.has(b)), tiraSinal ? 0 : undefined);
+        if (ok && tiraSinal) {
+            setFormData(prev => ({ ...prev, down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined }));
+        }
+    };
+
+    /** Valor digitado na linha (sinal, reforço, chaves…): a série principal fecha de novo. */
+    const mudarValorDaLinha = (idx: number, valor: number): boolean => {
+        const linha = linhasDoPlano[idx];
+        if (!linha || !(valor > 0)) return false;
+        if (linha.ehSinal) {
+            if (!aplicarEFechar(blocosNaoSinal(), valor)) return false;
+            setFormData(prev => ({ ...prev, down_payment: valor, down_payment_installment_type: prev.down_payment_installment_type || 'SINAL' }));
+            return true;
+        }
+        // Valor mudou: a decomposição de juros do bloco deixa de ser conhecida.
+        const { juros: _j, principal: _p, ...semJuros } = linha.bloco;
+        const novo: BlocoPagamento = { ...semJuros, valorParcela: valor };
+        return aplicarEFechar(blocosNaoSinal().map(b => (b === linha.bloco ? novo : b)));
+    };
+
+    /** Faixa de juros: muda taxa, sistema ou preço sem juros e a série fecha de novo. */
+    const mudarJuros = (campo: keyof typeof planoJuros, valor: string) => {
+        const novo = { ...planoJuros, [campo]: valor } as typeof planoJuros;
+        setPlanoJuros(novo);
+        if (seriePrincipal) replanejarPrincipal({}, { juros: jurosDoPlano(novo) });
+    };
+
+    // Gaveta em modo "detalhe da série": só forma de pagamento e observação,
+    // aplicadas a TODA a série principal (nº, periodicidade e 1º vencimento se
+    // editam na linha; o valor é calculado).
+    const [editandoSerie, setEditandoSerie] = useState(false);
+    const abrirDetalheDaSerie = () => {
+        const primeiro = seriePrincipal ? linhasDoPlano[seriePrincipal.membros[0]]?.bloco : undefined;
+        if (!primeiro) return;
+        setEditandoSerie(true);
+        setBlocoEditandoIdx(null);
+        setBlocoForm({
+            ...emptyBlocoForm(),
+            tipo: primeiro.tipo,
+            paymentType: primeiro.paymentType || '',
+            notes: primeiro.notes || '',
+        });
+        setBlocoSheetOpen(true);
+    };
+    const fecharGaveta = () => {
+        setBlocoSheetOpen(false);
+        setBlocoEditandoIdx(null);
+        setEditandoSerie(false);
+    };
+
     const salvarBloco = () => {
+        if (editandoSerie) {
+            const membros = membrosDaPrincipal();
+            const detalhe = { paymentType: blocoForm.paymentType || undefined, notes: blocoForm.notes || undefined };
+            // Mesmos valores e datas: a decomposição de juros vem junto.
+            aplicarBlocos(blocosNaoSinal().map(b => (membros.has(b) ? { ...b, ...detalhe } : b)));
+            fecharGaveta();
+            return;
+        }
+
         const quantidade = geraSerie ? Math.max(1, Math.floor(Number(blocoForm.quantidade) || 1)) : 1;
         const valorParcela = parseFloat(blocoForm.valorParcela) || 0;
         if (valorParcela <= 0) { notifyError('Informe o valor do pagamento.'); return; }
         if (blocoForm.tipo !== 'SINAL' && !blocoForm.primeiroVencimento) { notifyError('Informe a data de vencimento.'); return; }
 
         const editandoSinal = blocoEditandoIdx !== null && !!linhasDoPlano[blocoEditandoIdx]?.ehSinal;
+        const original = blocoEditandoIdx !== null && !editandoSinal ? linhasDoPlano[blocoEditandoIdx]?.bloco : undefined;
         // Só a forma de pagamento/observação mudou (mesmos nº, valor, 1º
         // vencimento e intervalo): os juros/principal do bloco original vêm
         // junto. Mudou parcela de verdade: a decomposição deixa de ser conhecida.
-        const novo: BlocoPagamento = manterJurosDoBlocoEditado(
-            blocoEditandoIdx !== null && !editandoSinal ? linhasDoPlano[blocoEditandoIdx]?.bloco : undefined,
-            {
-                tipo: blocoForm.tipo,
-                quantidade,
-                valorParcela,
-                primeiroVencimento: blocoForm.primeiroVencimento,
-                intervaloMeses: geraSerie ? intervaloDoTipo : null,
-                paymentType: blocoForm.paymentType || undefined,
-                notes: blocoForm.notes || undefined,
-            },
-        );
+        const novo: BlocoPagamento = manterJurosDoBlocoEditado(original, {
+            tipo: blocoForm.tipo,
+            quantidade,
+            valorParcela,
+            primeiroVencimento: blocoForm.primeiroVencimento,
+            intervaloMeses: geraSerie ? intervaloDoTipo : null,
+            paymentType: blocoForm.paymentType || undefined,
+            notes: blocoForm.notes || undefined,
+        });
 
         const atuais = blocosNaoSinal();
 
         if (novo.tipo === 'SINAL') {
+            // Virou sinal um bloco que era do cronograma: ele sai da lista.
+            const lista = original ? atuais.filter(b => b !== original) : atuais;
+            if (!aplicarEFechar(lista, valorParcela)) return;
             setFormData(prev => ({
                 ...prev,
                 down_payment: valorParcela,
@@ -1094,24 +1318,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 down_payment_payment_type: blocoForm.paymentType || undefined,
                 down_payment_notes: blocoForm.notes || undefined,
             }));
-            // Virou sinal um bloco que era do cronograma: ele sai da lista.
-            if (blocoEditandoIdx !== null && !editandoSinal) {
-                const offset = temSinalNoPlano ? 1 : 0;
-                aplicarBlocos(atuais.filter((_, i) => i !== blocoEditandoIdx - offset));
-            }
         } else {
-            const offset = temSinalNoPlano ? 1 : 0;
-            const idxNaLista = blocoEditandoIdx === null || editandoSinal ? -1 : blocoEditandoIdx - offset;
-            aplicarBlocos(idxNaLista >= 0
-                ? atuais.map((b, i) => (i === idxNaLista ? novo : b))
-                : [...atuais, novo]);
+            const lista = original ? atuais.map(b => (b === original ? novo : b)) : [...atuais, novo];
             // Editar o sinal trocando o tipo para outro: o campo tem de zerar.
+            if (!aplicarEFechar(lista, editandoSinal ? 0 : undefined)) return;
             if (editandoSinal) {
                 setFormData(prev => ({ ...prev, down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined }));
             }
         }
-        setBlocoSheetOpen(false);
-        setBlocoEditandoIdx(null);
+        fecharGaveta();
     };
 
     /**
@@ -1265,17 +1480,6 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         } finally {
             setLancandoNoFinanceiro(false);
         }
-    };
-
-    const removerBloco = (idx: number) => {
-        const linha = linhasDoPlano[idx];
-        if (!linha) return;
-        if (linha.ehSinal) {
-            setFormData(prev => ({ ...prev, down_payment: 0, down_payment_installment_type: undefined, down_payment_notes: undefined }));
-            return;
-        }
-        const offset = temSinalNoPlano ? 1 : 0;
-        aplicarBlocos(blocosNaoSinal().filter((_, i) => i !== idx - offset));
     };
 
     const [properties, setProperties] = useState<Property[]>([]);
@@ -1789,6 +1993,48 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             : { ...prev, contract_total_value: Number(unitsTotal.toFixed(2)) }));
     }, [isOpen, formData.type, formData.contract_total_value, unitsTotal]);
 
+    /**
+     * Conferência do plano com o Plano de vendas (venda com UM plano ativo e
+     * série principal). O SERVIDOR decide (`fn_validate_sales_simulation`) —
+     * mesmos campos da Simulação do corretor: entrada %, nº e valor da série,
+     * desconto sobre o preço de tabela das unidades, intermediárias (reforços:
+     * as outras séries, menos sinal e chaves). Espera 400 ms entre mudanças.
+     */
+    const [politica, setPolitica] = useState<PolicyValidation | null>(null);
+    const entradaDaPolitica = useMemo(() => {
+        if (!ehVenda || !planoDeVendas || !seriePrincipal) return null;
+        const base = Number(formData.price_before_interest ?? formData.contract_total_value) || 0;
+        if (base <= 0) return null;
+        const tabela = dealUnits.reduce((t, u) => t + (Number(properties.find(p => p.id === u.property_id)?.price) || 0), 0);
+        const negociado = Number(formData.value) || 0;
+        return {
+            down_payment_pct: arredonda2(((Number(formData.down_payment) || 0) / base) * 100),
+            installments: seriePrincipal.parcelas,
+            discount_pct: tabela > 0 && negociado > 0 ? Math.max(0, arredonda2(((tabela - negociado) / tabela) * 100)) : 0,
+            installment_value: seriePrincipal.valorPrimeira,
+            intermediary_count: seriesDaTabela
+                .filter((s, i) => i !== idxSeriePrincipal && s.tipo !== 'SINAL' && s.tipo !== 'CHAVES'
+                    && !s.membros.some(m => linhasDoPlano[m]?.ehSinal))
+                .reduce((t, s) => t + s.parcelas, 0),
+        };
+    }, [ehVenda, planoDeVendas, seriePrincipal, seriesDaTabela, idxSeriePrincipal, linhasDoPlano,
+        formData.price_before_interest, formData.contract_total_value, formData.down_payment, formData.value, dealUnits, properties]);
+    const chaveDaPolitica = entradaDaPolitica ? JSON.stringify(entradaDaPolitica) : '';
+    useEffect(() => {
+        if (!isOpen || !planoDeVendas || !entradaDaPolitica) { setPolitica(null); return; }
+        let vivo = true;
+        const t = setTimeout(() => {
+            salesPlanService.validateSimulation(planoDeVendas.id, entradaDaPolitica)
+                .then(v => { if (vivo) setPolitica(v); })
+                .catch(err => {
+                    console.error('[DealModal] Erro ao conferir o plano com a política de vendas:', err);
+                    if (vivo) setPolitica(null);
+                });
+        }, 400);
+        return () => { vivo = false; clearTimeout(t); };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [isOpen, planoDeVendas?.id, chaveDaPolitica]);
+
     /** Preço de referência da unidade conforme o eixo (locação usa rental_price). */
     const referenceValueOf = (p: Property | undefined) =>
         !p ? 0 : (formData.type === 'RENTAL' ? (p.rental_price ?? p.price ?? 0) : (p.price ?? 0));
@@ -1920,6 +2166,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     useEffect(() => {
         if (!isOpen || formData.type !== 'SALE' || !empreendimentoDaUnidade) {
             setSugestaoJuros(null);
+            setPlanoDeVendas(null);
             return;
         }
         let vivo = true;
@@ -1927,13 +2174,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             .then(planos => {
                 if (!vivo) return;
                 const comJuros = planos.filter(p => (Number(p.interest_rate_monthly) || 0) > 0);
+                setPlanoDeVendas(planos.length === 1 ? planos[0] : null);
                 setSugestaoJuros(comJuros.length === 1
                     ? { taxa: Number(comJuros[0].interest_rate_monthly), plano: comJuros[0].name }
                     : null);
             })
             .catch(err => {
                 console.error('[DealModal] Erro ao carregar o plano de vendas do empreendimento:', err);
-                if (vivo) setSugestaoJuros(null);
+                if (vivo) { setSugestaoJuros(null); setPlanoDeVendas(null); }
             });
         return () => { vivo = false; };
     }, [isOpen, formData.type, empreendimentoDaUnidade]);
@@ -3621,141 +3869,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 </div>
                                 </div>
 
-                                {/* Parcelado → montar o plano aqui mesmo. Os campos são o
-                                    ponto de partida; o Plano de pagamento (logo abaixo) continua
-                                    sendo a lista que vale, editável bloco a bloco. */}
-                                {formData.payment_method === 'INSTALLMENTS' && usaTrioFinanceiro && (
-                                    <div className="space-y-2 p-4 bg-gray-50 border border-gray-100 rounded-[10px]">
-                                        <label className="text-xs font-semibold text-slate-500">Montar plano de pagamento</label>
-                                        {/* Venda: 5 campos; +Sistema com taxa > 0; +Preço sem juros com
-                                            taxa > 0 ou preço sem juros gravado. Os dois entram à direita,
-                                            sem empurrar o campo que está sendo digitado. */}
-                                        <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${!ehVenda
-                                            ? 'md:grid-cols-3'
-                                            : taxaJuros > 0 && mostrarPrecoSemJuros
-                                                ? 'md:grid-cols-4 xl:grid-cols-7'
-                                                : taxaJuros > 0 || mostrarPrecoSemJuros
-                                                    ? 'md:grid-cols-3 xl:grid-cols-6'
-                                                    : 'md:grid-cols-3 xl:grid-cols-5'}`}>
-                                            {formData.type === 'SALE' && (
-                                                <div className="space-y-1.5">
-                                                    <label className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                        <MoneyCentsInput
-                                                            placeholder="0,00"
-                                                            value={planoRapido.entrada}
-                                                            onChange={(v) => setPlanoRapido(prev => ({ ...prev, entrada: v }))}
-                                                            className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
-                                                <input
-                                                    type="number" min="1" step="1" placeholder="12"
-                                                    value={planoRapido.parcelas}
-                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, parcelas: e.target.value }))}
-                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-slate-500">Periodicidade</label>
-                                                <select
-                                                    value={planoRapido.tipo}
-                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, tipo: e.target.value }))}
-                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                                >
-                                                    {tiposDeSerie.map(t => (
-                                                        <option key={t.id} value={t.code}>{t.name}</option>
-                                                    ))}
-                                                </select>
-                                            </div>
-                                            <div className="space-y-1.5">
-                                                <label className="text-xs font-semibold text-slate-500">1º vencimento</label>
-                                                <input
-                                                    type="date"
-                                                    value={planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || ''}
-                                                    onChange={(e) => setPlanoRapido(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
-                                                    className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                />
-                                            </div>
-                                            {/* Juros (só venda). Vazio/0 = o plano de sempre (total ÷ nº).
-                                                Com taxa, aparecem Sistema e Preço sem juros — a base dos
-                                                juros, que fica gravada para remontar sem juros sobre juros. */}
-                                            {ehVenda && (
-                                                <div className="space-y-1.5">
-                                                    <label htmlFor="plano-juros-taxa" className="text-xs font-semibold text-slate-500">Juros a.m. (%)</label>
-                                                    <input
-                                                        id="plano-juros-taxa"
-                                                        type="number" min="0" step="0.01" placeholder="0"
-                                                        value={taxaJurosTexto}
-                                                        onChange={(e) => setPlanoJuros(prev => ({ ...prev, taxa: e.target.value }))}
-                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                    />
-                                                    {jurosVemDoPlanoDeVendas && sugestaoJuros && (
-                                                        <span className="block text-xs text-gray-500 px-1">Do plano de vendas {sugestaoJuros.plano}.</span>
-                                                    )}
-                                                </div>
-                                            )}
-                                            {ehVenda && taxaJuros > 0 && (
-                                                <div className="space-y-1.5">
-                                                    <label htmlFor="plano-juros-sistema" className="text-xs font-semibold text-slate-500">Sistema</label>
-                                                    <select
-                                                        id="plano-juros-sistema"
-                                                        value={sistemaJuros}
-                                                        onChange={(e) => setPlanoJuros(prev => ({ ...prev, sistema: e.target.value as SistemaAmortizacao }))}
-                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                                                    >
-                                                        <option value="PRICE">Price (fixa)</option>
-                                                        <option value="SAC">SAC (decrescente)</option>
-                                                    </select>
-                                                </div>
-                                            )}
-                                            {mostrarPrecoSemJuros && (
-                                                <div className="space-y-1.5">
-                                                    <label htmlFor="plano-juros-preco" className="text-xs font-semibold text-slate-500">Preço sem juros</label>
-                                                    <div className="relative">
-                                                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-400">BRL</span>
-                                                        <MoneyCentsInput
-                                                            id="plano-juros-preco"
-                                                            placeholder="0,00"
-                                                            value={precoSemJurosExibido}
-                                                            onChange={(v) => setPlanoJuros(prev => ({ ...prev, preco: v }))}
-                                                            className="w-full h-9 pl-12 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </div>
-                                        <div className="flex flex-col md:flex-row md:items-center justify-between gap-2 pt-1">
-                                            <span className="text-xs text-gray-500">
-                                                {faltaBaseDoPlano
-                                                    ? `Informe ${faltaBaseDoPlano} para calcular as parcelas.`
-                                                    : `Vai gerar: ${resumoPlanoRapido}.`}
-                                            </span>
-                                            <button
-                                                type="button"
-                                                onClick={() => { void montarPlano(); }}
-                                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
-                                            >
-                                                <Layers className="w-[15px] h-[15px]" />
-                                                {linhasDoPlano.length > 0 ? 'Substituir plano' : 'Montar plano'}
-                                            </button>
-                                        </div>
-                                    </div>
-                                )}
-
                                 {/* ── PLANO DE PAGAMENTO ──────────────────────────────────
-                                    Uma venda não é uma série homogênea: é sinal + série mensal
-                                    + reforços + parcela nas chaves. Cada bloco entra aqui e o
-                                    saldo desce até fechar. A lista é a ÚNICA verdade do plano —
-                                    o trio (parcela × nº × subtotal) vive dentro do formulário
-                                    de cada bloco, não solto na aba, para os números não se
-                                    contradizerem. Persistência: Sinal em `down_payment`, o
-                                    resto expandido em `custom_installments` (ver
-                                    utils/paymentPlan.ts). */}
+                                    Uma tabela, um plano (desenho aprovado em 10/11/2026 —
+                                    docs/planos/2026-11-10-negociacao-aba-financeiro.md, item 2).
+                                    O painel "Montar plano" saiu: juros numa faixa acima; uma
+                                    linha por SÉRIE; a série principal se edita na linha (nº,
+                                    periodicidade, 1º vencimento) e FECHA a conta; as demais
+                                    linhas têm o valor editável. Venda sem plano começa por uma
+                                    linha de partida. Persistência: Sinal em `down_payment`, o
+                                    resto expandido em `custom_installments` (utils/paymentPlan.ts). */}
                                 {usaTrioFinanceiro && (
                                     <div className="space-y-2">
                                         <div className="flex items-center justify-between">
@@ -3770,28 +3892,165 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             </button>
                                         </div>
 
-                                        {linhasDoPlano.length === 0 ? (
-                                            <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center">
-                                                <p className="text-sm text-gray-400">
-                                                    Nenhum pagamento no plano — comece pelo sinal ou por uma série de parcelas.
+                                        {/* Faixa de juros (só venda). Com série principal, mudar a taxa,
+                                            o sistema ou o preço sem juros recalcula a série na hora; sem
+                                            plano, vale para o "Montar plano" da linha de partida. */}
+                                        {ehVenda && (formData.payment_method === 'INSTALLMENTS' || formData.interest_rate_monthly != null)
+                                            && (linhasDoPlano.length === 0 || seriePrincipal) && (
+                                            <div className="flex flex-wrap items-end gap-x-6 gap-y-3 px-4 py-3 bg-gray-50 border border-gray-100 rounded-[10px]">
+                                                <div className="space-y-1.5 w-32">
+                                                    <label htmlFor="plano-juros-taxa" className="text-xs font-semibold text-slate-500">Juros a.m. (%)</label>
+                                                    <input
+                                                        id="plano-juros-taxa"
+                                                        type="number" min="0" step="0.01" placeholder="0"
+                                                        value={taxaJurosTexto}
+                                                        onChange={(e) => mudarJuros('taxa', e.target.value)}
+                                                        className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                    />
+                                                </div>
+                                                {taxaJuros > 0 && (
+                                                    <div className="space-y-1.5 w-44">
+                                                        <label htmlFor="plano-juros-sistema" className="text-xs font-semibold text-slate-500">Sistema</label>
+                                                        <select
+                                                            id="plano-juros-sistema"
+                                                            value={sistemaJuros}
+                                                            onChange={(e) => mudarJuros('sistema', e.target.value)}
+                                                            className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                                        >
+                                                            <option value="PRICE">Price (fixa)</option>
+                                                            <option value="SAC">SAC (decrescente)</option>
+                                                        </select>
+                                                    </div>
+                                                )}
+                                                {mostrarPrecoSemJuros && (
+                                                    <div className="space-y-1.5 w-48">
+                                                        <label htmlFor="plano-juros-preco" className="text-xs font-semibold text-slate-500">Preço sem juros</label>
+                                                        <div className="relative">
+                                                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500">R$</span>
+                                                            <MoneyCentsInput
+                                                                id="plano-juros-preco"
+                                                                placeholder="0,00"
+                                                                value={precoSemJurosExibido}
+                                                                onChange={(v) => mudarJuros('preco', v)}
+                                                                className="w-full h-9 pl-10 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                                <p className="flex-1 min-w-[14rem] pb-2 text-xs text-gray-500">
+                                                    {jurosVemDoPlanoDeVendas && sugestaoJuros
+                                                        ? `Taxa do plano de vendas ${sugestaoJuros.plano}.`
+                                                        : taxaJuros > 0
+                                                            ? 'Os juros incidem sobre a série principal; sinal e demais linhas entram pelo valor.'
+                                                            : 'Sem juros: a série divide o saldo em partes iguais.'}
                                                 </p>
                                             </div>
+                                        )}
+
+                                        {linhasDoPlano.length === 0 ? (
+                                            formData.payment_method === 'INSTALLMENTS' ? (
+                                                /* Linha de partida — venda/locação sem plano. Valores do
+                                                   Plano de vendas quando há (entrada mínima, máximo de
+                                                   parcelas); "Montar plano" cria Sinal + série e, dali em
+                                                   diante, o plano se edita na tabela. */
+                                                <div className="p-4 bg-white rounded-[10px] border border-dashed border-gray-200 space-y-4">
+                                                    <p className="text-sm text-gray-700">
+                                                        {planoDeVendas
+                                                            ? `Ponto de partida do plano de vendas ${planoDeVendas.name} — ajuste e monte. Depois, edite na própria tabela.`
+                                                            : 'Monte o plano a partir da entrada e das parcelas. Depois, edite na própria tabela.'}
+                                                    </p>
+                                                    <div className={`grid grid-cols-2 gap-x-6 gap-y-4 ${ehVenda ? 'md:grid-cols-4' : 'md:grid-cols-3'}`}>
+                                                        {ehVenda && (
+                                                            <div className="space-y-1.5">
+                                                                <label htmlFor="plano-partida-entrada" className="text-xs font-semibold text-slate-500">Entrada (opcional)</label>
+                                                                <div className="relative">
+                                                                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-normal text-gray-500">R$</span>
+                                                                    <MoneyCentsInput
+                                                                        id="plano-partida-entrada"
+                                                                        placeholder="0,00"
+                                                                        value={planoRapido.entrada}
+                                                                        onChange={(v) => setPlanoRapido(prev => ({ ...prev, entrada: v }))}
+                                                                        className="w-full h-9 pl-10 pr-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                                    />
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                        <div className="space-y-1.5">
+                                                            <label htmlFor="plano-partida-parcelas" className="text-xs font-semibold text-slate-500">Nº de parcelas</label>
+                                                            <input
+                                                                id="plano-partida-parcelas"
+                                                                type="number" min="1" step="1" placeholder="12"
+                                                                value={planoRapido.parcelas}
+                                                                onChange={(e) => setPlanoRapido(prev => ({ ...prev, parcelas: e.target.value }))}
+                                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label htmlFor="plano-partida-tipo" className="text-xs font-semibold text-slate-500">Periodicidade</label>
+                                                            <select
+                                                                id="plano-partida-tipo"
+                                                                value={planoRapido.tipo}
+                                                                onChange={(e) => setPlanoRapido(prev => ({ ...prev, tipo: e.target.value }))}
+                                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all cursor-pointer"
+                                                            >
+                                                                {tiposDeSerie.map(t => (
+                                                                    <option key={t.id} value={t.code}>{t.name}</option>
+                                                                ))}
+                                                            </select>
+                                                        </div>
+                                                        <div className="space-y-1.5">
+                                                            <label htmlFor="plano-partida-vencimento" className="text-xs font-semibold text-slate-500">1º vencimento</label>
+                                                            <input
+                                                                id="plano-partida-vencimento"
+                                                                type="date"
+                                                                value={planoRapido.primeiroVencimento || formData.payment_due_date || formData.date || ''}
+                                                                onChange={(e) => setPlanoRapido(prev => ({ ...prev, primeiroVencimento: e.target.value }))}
+                                                                className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                                                            />
+                                                        </div>
+                                                    </div>
+                                                    <div className="flex flex-col md:flex-row md:items-center justify-between gap-2">
+                                                        <span className="text-xs text-gray-500">
+                                                            {faltaBaseDoPlano
+                                                                ? `Informe ${faltaBaseDoPlano} para calcular as parcelas.`
+                                                                : `Vai gerar: ${resumoPlanoRapido}.`}
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => { void montarPlano(); }}
+                                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0"
+                                                        >
+                                                            <Layers className="w-[15px] h-[15px]" />
+                                                            Montar plano
+                                                        </button>
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="p-6 bg-white rounded-[10px] border border-dashed border-gray-200 text-center">
+                                                    <p className="text-sm text-gray-500">
+                                                        Nenhum pagamento no plano — comece pelo sinal ou por uma série de parcelas.
+                                                    </p>
+                                                </div>
+                                            )
                                         ) : (
+                                            <>
                                             <div className="bg-white rounded-[10px] border border-gray-100 overflow-hidden">
                                                 {/* Tabela do plano, como o usuário lê uma proposta (pedido de
                                                     2026-09-21): Parcela / Quantidade / Valor / Tipo / Descrição.
-                                                    "Parcela" numera sequencialmente através dos blocos
-                                                    (Parcela 1 · Parcelas 2–9 · Parcela 10). Tabela dentro de
-                                                    modal: §6.9 (px-3, texto livre px-4), §6.2, §7, §7.2. */}
+                                                    Uma linha por SÉRIE (`agruparSeries`): a sobra 1× do
+                                                    arredondamento, o SAC e a série partida por reforços viram
+                                                    uma linha só. A série principal (fundo azul-claro) se edita
+                                                    na linha e fecha a conta. Tabela dentro de modal: §6.9
+                                                    (px-3, texto livre px-4), §6.2, §7, §7.1, §7.2. */}
                                                 {(() => {
                                                     let proxima = 1;
-                                                    const numeradas = linhasDoPlano.map(l => {
+                                                    const numeradas = seriesDaTabela.map((s, i) => {
                                                         const de = proxima;
-                                                        const ate = de + Math.max(1, l.bloco.quantidade) - 1;
+                                                        const ate = de + Math.max(1, s.parcelas) - 1;
                                                         proxima = ate + 1;
-                                                        return { ...l, rotulo: de === ate ? `Parcela ${de}` : `Parcelas ${de}–${ate}` };
+                                                        return { s, i, rotulo: de === ate ? `Parcela ${de}` : `Parcelas ${de}–${ate}` };
                                                     });
-                                                    const totalPlano = numeradas.reduce((t, l) => t + subtotalDoBloco(l.bloco), 0);
+                                                    const totalPlano = seriesDaTabela.reduce((t, s) => t + s.subtotal, 0);
                                                     const TH = 'px-3 py-2 border-r border-gray-100 whitespace-nowrap';
                                                     const TD = 'px-3 py-2.5 border-r border-gray-100 last:border-r-0';
                                                     return (
@@ -3809,26 +4068,85 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                     </tr>
                                                                 </thead>
                                                                 <tbody className="divide-y divide-gray-200">
-                                                                    {numeradas.map((l, i) => {
-                                                                        const tipo = labelForInstallmentType(paymentTypes, l.bloco.tipo) || l.bloco.tipo;
+                                                                    {numeradas.map(({ s, i, rotulo }) => {
+                                                                        const principal = i === idxSeriePrincipal;
+                                                                        const unico = s.membros.length === 1 ? s.membros[0] : null;
+                                                                        const primeiroBloco = linhasDoPlano[s.membros[0]]?.bloco;
+                                                                        const tipo = labelForInstallmentType(paymentTypes, s.tipo) || s.tipo;
+                                                                        const valorTexto = Math.abs(s.valorPrimeira - s.valorUltima) < 0.005
+                                                                            ? fmtMoeda(s.valorPrimeira)
+                                                                            : `${fmtMoeda(s.valorPrimeira)} → ${fmtMoeda(s.valorUltima)}`;
                                                                         return (
-                                                                            <tr key={l.chave} className="hover:bg-blue-50/50 transition-colors">
-                                                                                <td className={`${TD} text-sm font-normal text-gray-700 whitespace-nowrap`}>{l.rotulo}</td>
-                                                                                <td className={`${TD} text-sm font-normal text-gray-600 text-right`}>{l.bloco.quantidade}</td>
-                                                                                <td className={`${TD} text-sm font-medium text-gray-800 text-right whitespace-nowrap`}>{fmtMoeda(l.bloco.valorParcela)}</td>
+                                                                            <tr key={`${s.tipo}-${s.primeiroVencimento}-${i}`} className={principal ? 'bg-blue-50' : 'hover:bg-blue-50/50 transition-colors'}>
+                                                                                <td className={`${TD} text-sm font-normal text-gray-700 whitespace-nowrap`}>{rotulo}</td>
+                                                                                <td className={`${TD} text-sm font-normal text-gray-600 text-right`}>
+                                                                                    {principal ? (
+                                                                                        <CampoDaLinha
+                                                                                            tipo="number"
+                                                                                            valor={String(s.parcelas)}
+                                                                                            rotulo={`Nº de parcelas — ${tipo}`}
+                                                                                            onConfirmar={(v) => {
+                                                                                                const n = Math.floor(Number(v));
+                                                                                                return n >= 1 && (n === s.parcelas || replanejarPrincipal({ parcelas: n }));
+                                                                                            }}
+                                                                                            className="w-20 text-right"
+                                                                                        />
+                                                                                    ) : s.parcelas}
+                                                                                </td>
+                                                                                <td className={`${TD} text-sm font-normal text-gray-800 text-right whitespace-nowrap`}>
+                                                                                    {!principal && unico !== null ? (
+                                                                                        <ValorDaLinha
+                                                                                            valor={s.valorPrimeira}
+                                                                                            rotulo={`Valor — ${rotulo}`}
+                                                                                            onConfirmar={(v) => mudarValorDaLinha(unico, v)}
+                                                                                        />
+                                                                                    ) : valorTexto}
+                                                                                </td>
                                                                                 <td className={`${TD} text-sm font-normal text-gray-700`}>
-                                                                                    <span className="block truncate" title={tipo}>{tipo}</span>
+                                                                                    {principal ? (
+                                                                                        <select
+                                                                                            aria-label="Periodicidade da série"
+                                                                                            value={s.tipo}
+                                                                                            onChange={(e) => replanejarPrincipal({
+                                                                                                tipo: e.target.value,
+                                                                                                intervaloMeses: intervalMonthsForType(paymentTypes, e.target.value) || 1,
+                                                                                            })}
+                                                                                            className={`${CLASSE_CAMPO_DA_LINHA} cursor-pointer`}
+                                                                                        >
+                                                                                            {!tiposDeSerie.some(t => t.code === s.tipo) && <option value={s.tipo}>{tipo}</option>}
+                                                                                            {tiposDeSerie.map(t => (
+                                                                                                <option key={t.id} value={t.code}>{t.name}</option>
+                                                                                            ))}
+                                                                                        </select>
+                                                                                    ) : (
+                                                                                        <span className="block truncate" title={tipo}>{tipo}</span>
+                                                                                    )}
                                                                                 </td>
                                                                                 <td className="px-4 py-2.5 border-r border-gray-100 text-sm font-normal text-gray-600">
-                                                                                    <span className="block truncate" title={l.bloco.notes || ''}>{l.bloco.notes || '—'}</span>
+                                                                                    <span className="block truncate" title={primeiroBloco?.notes || ''}>{primeiroBloco?.notes || '—'}</span>
                                                                                 </td>
                                                                                 <td className={`${TD} text-sm font-normal text-gray-600 whitespace-nowrap`}>
-                                                                                    {fmtDateBR(l.bloco.primeiroVencimento)}
+                                                                                    {principal ? (
+                                                                                        <CampoDaLinha
+                                                                                            tipo="date"
+                                                                                            valor={s.primeiroVencimento}
+                                                                                            rotulo="1º vencimento da série"
+                                                                                            onConfirmar={(v) => !!v && replanejarPrincipal({ primeiroVencimento: v })}
+                                                                                        />
+                                                                                    ) : fmtDateBR(s.primeiroVencimento)}
                                                                                 </td>
                                                                                 <td className="px-3 py-2.5 text-right">
                                                                                     <div className="flex items-center justify-end gap-1.5">
-                                                                                        <ActionIconButton kind="edit" title="Editar pagamento" onClick={() => abrirEdicaoBloco(i)} />
-                                                                                        <ActionIconButton kind="delete" title="Remover do plano" onClick={() => removerBloco(i)} />
+                                                                                        {principal ? (
+                                                                                            <ActionIconButton kind="edit" title="Forma de pagamento e descrição da série" onClick={abrirDetalheDaSerie} />
+                                                                                        ) : unico !== null && (
+                                                                                            <ActionIconButton kind="edit" title="Editar pagamento" onClick={() => abrirEdicaoBloco(unico)} />
+                                                                                        )}
+                                                                                        <ActionIconButton
+                                                                                            kind="delete"
+                                                                                            title={principal ? 'Remover a série do plano' : 'Remover do plano'}
+                                                                                            onClick={() => removerLinhas(s.membros)}
+                                                                                        />
                                                                                     </div>
                                                                                 </td>
                                                                             </tr>
@@ -3836,27 +4154,58 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                     })}
                                                                 </tbody>
                                                                 <tfoot>
+                                                                    {/* Total e saldo numa linha só (antes eram duas faixas). */}
                                                                     <tr className="bg-gray-50 border-t border-gray-200">
-                                                                        <td className="px-3 py-2.5 text-sm font-normal text-gray-500" colSpan={2}>Total do plano</td>
-                                                                        <td className="px-3 py-2.5 text-sm font-medium text-gray-800 text-right whitespace-nowrap">{fmtMoeda(totalPlano)}</td>
-                                                                        <td colSpan={4}></td>
+                                                                        <td className="px-3 py-2.5 text-sm font-normal text-gray-600" colSpan={2}>Total do plano</td>
+                                                                        <td className="px-3 py-2.5 text-sm font-medium text-gray-900 text-right whitespace-nowrap">{fmtMoeda(totalPlano)}</td>
+                                                                        <td className="px-3 py-2.5 text-sm font-medium text-right" colSpan={4}>
+                                                                            <span className={saldoPlano === 0 ? 'text-emerald-700' : 'text-amber-800'}>
+                                                                                {saldoPlano === 0
+                                                                                    ? 'Plano fechado'
+                                                                                    : saldoPlano > 0
+                                                                                        ? `Faltam ${fmtMoeda(saldoPlano)} para fechar`
+                                                                                        : `Excede o total em ${fmtMoeda(-saldoPlano)}`}
+                                                                            </span>
+                                                                        </td>
                                                                     </tr>
                                                                 </tfoot>
                                                             </table>
                                                         </div>
                                                     );
                                                 })()}
-                                                <div className={`flex items-center justify-between px-4 py-3 ${saldoPlano === 0 ? 'bg-emerald-50' : saldoPlano < 0 ? 'bg-amber-50' : 'bg-gray-50'}`}>
-                                                    <span className="text-sm font-normal text-gray-500">
-                                                        {saldoPlano === 0
-                                                            ? 'Plano fechado'
-                                                            : saldoPlano > 0 ? 'Saldo a distribuir' : 'O plano excede o total'}
-                                                    </span>
-                                                    <span className={`text-lg font-bold ${saldoPlano === 0 ? 'text-emerald-700' : saldoPlano < 0 ? 'text-amber-700' : 'text-gray-900'}`}>
-                                                        {fmtMoeda(Math.abs(saldoPlano))}
-                                                    </span>
-                                                </div>
                                             </div>
+                                            {seriePrincipal && (
+                                                <p className="px-1 text-xs text-gray-500">
+                                                    {formData.type === 'RENTAL'
+                                                        ? 'A série é o aluguel: o valor vem do contrato, e mudar o nº de parcelas muda o fim.'
+                                                        : `A série "${labelForInstallmentType(paymentTypes, seriePrincipal.tipo) || seriePrincipal.tipo}" (fundo azul) fecha o total: o valor das parcelas é calculado sobre o que sobra do sinal e das demais linhas. Mude o nº, a periodicidade ou o 1º vencimento na própria linha.`}
+                                                </p>
+                                            )}
+
+                                            {/* Conferência com o Plano de vendas — o SERVIDOR decide
+                                                (fn_validate_sales_simulation); a tela só mostra. Substitui o
+                                                aviso fixo "Aprovação sistêmica…" que ficava no rodapé. */}
+                                            {politica && politica.checks.length > 0 && planoDeVendas && (
+                                                <div role="status" className={`rounded-[10px] border px-4 py-3 ${COR_DO_VEREDITO[politica.overall]}`}>
+                                                    <p className="flex items-center gap-2 text-sm font-medium">
+                                                        {politica.overall === 'ALLOWED'
+                                                            ? <ShieldCheck className="w-4 h-4 shrink-0" />
+                                                            : <AlertCircle className="w-4 h-4 shrink-0" />}
+                                                        {ROTULO_DO_VEREDITO[politica.overall]} · plano de vendas {planoDeVendas.name}
+                                                    </p>
+                                                    <ul className="mt-1.5 space-y-1">
+                                                        {politica.checks.map((c, k) => (
+                                                            <li key={k} className="flex items-start gap-2 text-sm font-normal">
+                                                                {c.verdict === 'ALLOWED'
+                                                                    ? <Check className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                                                                    : <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />}
+                                                                <span>{c.message}</span>
+                                                            </li>
+                                                        ))}
+                                                    </ul>
+                                                </div>
+                                            )}
+                                            </>
                                         )}
 
                                         {/* Lançar em Contas a Receber. Só venda: aluguel é
@@ -4976,15 +5325,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 {/* Rodapé — §17: ação primária compacta (h-9, sentence case, sem
                     shadow-xl/ring/uppercase); secundárias no mesmo h-9. */}
                 <div className="px-8 py-4 border-t border-gray-100 bg-white flex items-center justify-between gap-4 shrink-0">
-                    <div className="flex items-center gap-2 text-gray-400 min-w-0">
-                        <Info className="w-4 h-4 shrink-0" />
-                        <p className="text-sm font-normal max-w-md truncate">
-                            Aprovação sistêmica obrigatória para fechamentos acima da margem de tabela permitida.
-                        </p>
+                    {/* O aviso fixo "Aprovação sistêmica obrigatória…" saiu em 10/11/2026:
+                        não estava ligado a regra nenhuma. A conferência real com o Plano de
+                        vendas fica embaixo da tabela do plano (aba Financeiro). */}
+                    <div className="min-w-0">
+                        {isEditMode && <SaveStatus dirty={dirty} savedAt={savedAt} />}
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
-                        {isEditMode && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-2" />}
                         {formData.id && (
                             <button
                                 type="button"
@@ -5041,11 +5389,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     vive, com o seletor de qual dos três o sistema calcula — solto
                     na aba ele competia com a lista do plano e os dois números
                     podiam se contradizer. */}
-                <Sheet open={blocoSheetOpen} onClose={() => { setBlocoSheetOpen(false); setBlocoEditandoIdx(null); }} size="md">
-                    <SheetHeader onClose={() => { setBlocoSheetOpen(false); setBlocoEditandoIdx(null); }}>
-                        <SheetTitle>{blocoEditandoIdx === null ? 'Adicionar pagamento' : 'Editar pagamento'}</SheetTitle>
+                <Sheet open={blocoSheetOpen} onClose={fecharGaveta} size="md">
+                    <SheetHeader onClose={fecharGaveta}>
+                        <SheetTitle>{editandoSerie ? 'Forma de pagamento da série' : blocoEditandoIdx === null ? 'Adicionar pagamento' : 'Editar pagamento'}</SheetTitle>
                         <SheetDescription>
-                            {saldoPlano > 0
+                            {editandoSerie
+                                ? 'Vale para todas as parcelas da série. Nº, periodicidade e 1º vencimento se editam na própria linha; o valor é calculado para fechar o total.'
+                                : saldoPlano > 0
                                 ? `Faltam ${fmtMoeda(saldoPlano)} para fechar o Valor Total do Contrato.`
                                 : saldoPlano < 0
                                     ? `O plano já excede o total em ${fmtMoeda(Math.abs(saldoPlano))}.`
@@ -5053,6 +5403,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </SheetDescription>
                     </SheetHeader>
                     <SheetPanel className="p-6 space-y-4">
+                        {!editandoSerie && (<>
                         <div className="space-y-2">
                             <label className="text-xs font-semibold text-slate-500">Tipo de pagamento</label>
                             <select
@@ -5178,6 +5529,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 />
                             </div>
                         )}
+                        </>)}
 
                         <div className="space-y-2">
                             <label className="text-xs font-semibold text-slate-500">Forma de pagamento (opcional)</label>
@@ -5210,7 +5562,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     <SheetFooter>
                         <button
                             type="button"
-                            onClick={() => { setBlocoSheetOpen(false); setBlocoEditandoIdx(null); }}
+                            onClick={fecharGaveta}
                             className="h-9 px-3.5 rounded-[6px] text-sm font-medium bg-gray-50 text-gray-600 hover:bg-gray-100 transition-all"
                         >
                             Cancelar
@@ -5221,7 +5573,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
                             <Check className="w-[15px] h-[15px]" />
-                            {blocoEditandoIdx === null ? 'Adicionar ao plano' : 'Salvar pagamento'}
+                            {editandoSerie ? 'Aplicar à série' : blocoEditandoIdx === null ? 'Adicionar ao plano' : 'Salvar pagamento'}
                         </button>
                     </SheetFooter>
                 </Sheet>

@@ -10,6 +10,8 @@ import {
     blocoParaGerador,
     montarPlanoRapido,
     serieDoPlanoGravado,
+    agruparSeries,
+    indiceDaSeriePrincipal,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
 import { PaymentInstallment } from '../types/financial';
@@ -335,5 +337,37 @@ describe('serieDoPlanoGravado', () => {
             bloco({ tipo: 'CHAVES', quantidade: 1, intervaloMeses: null, primeiroVencimento: '2027-01-10' }),
             bloco({ tipo: 'AVULSA', quantidade: 1, intervaloMeses: null, primeiroVencimento: '2027-05-10' }),
         ])).toBeNull();
+    });
+});
+
+describe('agruparSeries', () => {
+    // A tabela do plano (aba Financeiro) mostra UMA linha por série, não um bloco
+    // por linha: a sobra 1× do arredondamento, o SAC (1 bloco por parcela) e a
+    // série partida por reforços intercalados viram uma linha só.
+    it('sobra 1× entra na série: uma linha, valor da primeira e da última, índices dos blocos', () => {
+        const blocos = montarPlanoRapido({ total: 80000, entrada: 30000, parcelas: 60, tipo: 'MENSAL', intervaloMeses: 1, primeiroVencimento: '2026-11-10' }).blocos;
+        const series = agruparSeries(blocos);
+        expect(series).toHaveLength(1);
+        expect(series[0]).toMatchObject({ tipo: 'MENSAL', parcelas: 60, primeiroVencimento: '2026-11-10', intervaloMeses: 1, valorPrimeira: 833.33, valorUltima: 833.53, membros: [0, 1] });
+        expect(series[0].subtotal).toBe(50000);
+    });
+
+    it('reforços intercalados: mensal numa linha, semestral noutra, na ordem da 1ª data', () => {
+        const linhas = [
+            bloco({ tipo: 'MENSAL', quantidade: 24, valorParcela: 2000, primeiroVencimento: '2026-12-10', intervaloMeses: 1 }),
+            bloco({ tipo: 'SEMESTRAL', quantidade: 4, valorParcela: 5000, primeiroVencimento: '2027-06-10', intervaloMeses: 6 }),
+            bloco({ tipo: 'CHAVES', quantidade: 1, valorParcela: 40000, primeiroVencimento: '2028-12-10', intervaloMeses: null }),
+        ].flatMap((b, i) => expandirBloco(b, `m${i}`));
+        const blocos = agruparPlano(linhas);
+        const series = agruparSeries(blocos);
+        expect(series.map(s => [s.tipo, s.parcelas])).toEqual([['MENSAL', 24], ['SEMESTRAL', 4], ['CHAVES', 1]]);
+        // Os índices cobrem TODOS os blocos, cada um uma vez só.
+        expect(series.flatMap(s => s.membros).sort((a, b) => a - b)).toEqual(blocos.map((_, i) => i));
+        expect(indiceDaSeriePrincipal(series)).toBe(0);
+    });
+
+    it('sem série de 2+ parcelas não há principal', () => {
+        const series = agruparSeries([bloco({ tipo: 'CHAVES', quantidade: 1, intervaloMeses: null })]);
+        expect(indiceDaSeriePrincipal(series)).toBe(-1);
     });
 });

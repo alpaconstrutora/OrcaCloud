@@ -34,7 +34,9 @@ import {
     resumoDoPlano,
     precoSemJurosPadrao,
     editarValorTotal,
-    valorDoContratoPeloPlano,
+    manterJurosDoBlocoEditado,
+    planoComoSchedule as planoDaNegociacaoComoSchedule,
+    atualizacaoDoContratoPeloPlano,
     type CamposDoPlano,
     type SistemaAmortizacao,
 } from '../utils/jurosParcelamento';
@@ -1000,17 +1002,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (valorParcela <= 0) { notifyError('Informe o valor do pagamento.'); return; }
         if (blocoForm.tipo !== 'SINAL' && !blocoForm.primeiroVencimento) { notifyError('Informe a data de vencimento.'); return; }
 
-        const novo: BlocoPagamento = {
-            tipo: blocoForm.tipo,
-            quantidade,
-            valorParcela,
-            primeiroVencimento: blocoForm.primeiroVencimento,
-            intervaloMeses: geraSerie ? intervaloDoTipo : null,
-            paymentType: blocoForm.paymentType || undefined,
-            notes: blocoForm.notes || undefined,
-        };
-
         const editandoSinal = blocoEditandoIdx !== null && !!linhasDoPlano[blocoEditandoIdx]?.ehSinal;
+        // Só a forma de pagamento/observação mudou (mesmos nº, valor, 1º
+        // vencimento e intervalo): os juros/principal do bloco original vêm
+        // junto. Mudou parcela de verdade: a decomposição deixa de ser conhecida.
+        const novo: BlocoPagamento = manterJurosDoBlocoEditado(
+            blocoEditandoIdx !== null && !editandoSinal ? linhasDoPlano[blocoEditandoIdx]?.bloco : undefined,
+            {
+                tipo: blocoForm.tipo,
+                quantidade,
+                valorParcela,
+                primeiroVencimento: blocoForm.primeiroVencimento,
+                intervaloMeses: geraSerie ? intervaloDoTipo : null,
+                paymentType: blocoForm.paymentType || undefined,
+                notes: blocoForm.notes || undefined,
+            },
+        );
+
         const atuais = blocosNaoSinal();
 
         if (novo.tipo === 'SINAL') {
@@ -1062,32 +1070,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const [lancandoNoFinanceiro, setLancandoNoFinanceiro] = useState(false);
 
     /**
-     * O plano no formato `payment_schedule` do contrato: sinal + cronograma, por
-     * data. Leva junto o TIPO de cada parcela (Sinal/Mensal/Chaves…) e a forma de
-     * pagamento — sem isso a coluna "Tipo" da aba Parcelas nascia vazia e o
-     * usuário teria de reclassificar à mão o que o plano já sabia.
-     * Parcela com juros (Price/SAC) leva `interest`/`principal`: o sync do contrato
-     * grava a parte de juros no título (`interest_amount`) para a DRE separá-la.
+     * O plano no formato `payment_schedule` do contrato (sinal + cronograma, por
+     * data, com tipo, forma de pagamento e, com juros, `interest`/`principal`).
+     * A regra é pura e testada: `planoComoSchedule` de utils/jurosParcelamento.
      */
-    const planoComoSchedule = () => [
-        ...((Number(formData.down_payment) || 0) > 0 && formData.date
-            ? [{
-                date: formData.date,
-                value: Number(formData.down_payment) || 0,
-                installment_type: formData.down_payment_installment_type || 'SINAL',
-                payment_type: formData.down_payment_payment_type ?? null,
-            }]
-            : []),
-        ...(formData.custom_installments || []).map(i => ({
-            date: i.dueDate,
-            value: Number(i.value) || 0,
-            installment_type: i.installmentType ?? null,
-            payment_type: i.paymentType ?? null,
-            ...(typeof i.interest === 'number' ? { interest: i.interest, principal: i.principal ?? null } : {}),
-        })),
-    ]
-        .filter(i => i.date && i.value > 0)
-        .sort((a, b) => a.date.localeCompare(b.date));
+    const planoComoSchedule = () => planoDaNegociacaoComoSchedule(formData);
 
     /**
      * Grava o plano no contrato e devolve quantas parcelas ficaram em Contas a
@@ -1098,17 +1085,19 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * recorrente" e deixava o usuário sem saída.
      */
     const aplicarPlanoNoContrato = async (contrato: Contract): Promise<number> => {
-        await contractService.updateContract(contrato.id, {
-            payment_schedule: planoComoSchedule(),
-            payment_term_type: 'Parcelado',
-            // As dimensões contábeis do cabeçalho da negociação vão junto: é
-            // delas que a parcela herda Centro de Custo e Plano de Contas.
-            ...(formData.cost_center_id ? { cost_center_id: formData.cost_center_id } : {}),
-            ...(formData.plano_de_contas_id ? { plano_de_contas_id: formData.plano_de_contas_id } : {}),
-            // Venda com juros: o contrato passa a valer o total com juros, também
-            // quando já existia antes do plano (ver valorDoContratoPeloPlano).
-            ...valorDoContratoPeloPlano(formData),
-        });
+        // Venda SEM juros agora: o contrato pode ter ficado no total COM juros de
+        // um lançamento anterior (juros zerado depois de lançar). Só o
+        // `payment_schedule` gravado sabe — lido na hora, porque o objeto do
+        // contrato que a tela tem não o traz e fica velho após o 1º lançamento.
+        // Com juros (o valor vai de qualquer jeito) e locação: não precisa ler.
+        const precisaDoCronogramaAtual = formData.type === 'SALE' && !((Number(formData.interest_rate_monthly) || 0) > 0);
+        const cronogramaAtual = precisaDoCronogramaAtual
+            ? await contractService.getPaymentSchedule(contrato.id).catch(() => contrato.payment_schedule)
+            : undefined;
+        // Cronograma, prazo Parcelado, Centro de Custo/Plano de Contas do cabeçalho
+        // (a parcela herda deles) e, em venda, o valor do contrato — ver
+        // atualizacaoDoContratoPeloPlano/valorDoContratoPeloPlano.
+        await contractService.updateContract(contrato.id, atualizacaoDoContratoPeloPlano(formData, cronogramaAtual));
         // Conferir o resultado em vez de confiar: a propagação tem um portão
         // (podeFaturarContratoComercial) que, quando barra, só escreve no
         // console. Sem esta leitura, o usuário veria "lançado" e Contas a

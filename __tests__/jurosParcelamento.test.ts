@@ -7,6 +7,9 @@ import {
     resumoDoPlano,
     editarValorTotal,
     valorDoContratoPeloPlano,
+    manterJurosDoBlocoEditado,
+    planoComoSchedule,
+    atualizacaoDoContratoPeloPlano,
     type PlanoComJuros,
     type CamposDoPlano,
     type NegocioDoPlano,
@@ -179,6 +182,58 @@ describe('montarPlanoNoNegocio — juros na negociação', () => {
         expect(linhas[11].principal).toBeGreaterThan(0);
     });
 
+    it('editar bloco só na forma de pagamento/observação mantém o destaque (Price)', () => {
+        const d1 = montar(negocio(), campos());
+        const blocos = agruparPlano(d1.custom_installments!);
+        // O que o Sheet devolve ao trocar só a forma de pagamento: mesmos nº,
+        // valor, 1º vencimento e intervalo; o formulário não tem juros.
+        const doSheet = {
+            tipo: 'MENSAL', quantidade: 11, valorParcela: 8884.88, primeiroVencimento: '2026-12-10',
+            intervaloMeses: 1, paymentType: 'BOLETO' as const, notes: 'boleto bancário',
+        };
+        const editado = manterJurosDoBlocoEditado(blocos[0], doSheet);
+        expect(editado.paymentType).toBe('BOLETO');
+        expect(editado.notes).toBe('boleto bancário');
+        const linhas = blocos.map((b, i) => (i === 0 ? editado : b)).flatMap((b, i) => expandirBloco(b, `e-${i}`));
+        expect(linhas.map(l => l.interest)).toEqual(d1.custom_installments!.map(l => l.interest));
+        expect(linhas.map(l => l.principal)).toEqual(d1.custom_installments!.map(l => l.principal));
+        expect(linhas.slice(0, 11).every(l => l.paymentType === 'BOLETO')).toBe(true);
+    });
+
+    it('SAC (N blocos de 1×): trocar a forma de pagamento de um bloco mantém o destaque', () => {
+        const d1 = montar(negocio({ contract_total_value: 120000 }), campos({ sistema: 'SAC' }));
+        const blocos = agruparPlano(d1.custom_installments!);
+        expect(blocos[0].quantidade).toBe(1);
+        // Bloco de 1× vem de agruparPlano com intervalo null; o Sheet devolve o
+        // intervalo do tipo (MENSAL = 1). Numa parcela só o intervalo não importa.
+        expect(blocos[0].intervaloMeses).toBeNull();
+        const doSheet = {
+            tipo: 'MENSAL', quantidade: 1, valorParcela: blocos[0].valorParcela,
+            primeiroVencimento: blocos[0].primeiroVencimento, intervaloMeses: 1, paymentType: 'PIX' as const,
+        };
+        const editado = manterJurosDoBlocoEditado(blocos[0], doSheet);
+        expect(editado.juros).toEqual(blocos[0].juros);
+        expect(editado.principal).toEqual(blocos[0].principal);
+    });
+
+    it('editar bloco mudando nº, valor, 1º vencimento ou intervalo limpa o destaque', () => {
+        const d1 = montar(negocio(), campos());
+        const [b0] = agruparPlano(d1.custom_installments!);
+        const base = { tipo: 'MENSAL', quantidade: 11, valorParcela: 8884.88, primeiroVencimento: '2026-12-10', intervaloMeses: 1 };
+        for (const mudou of [
+            { quantidade: 10 },
+            { valorParcela: 9000 },
+            { primeiroVencimento: '2027-01-10' },
+            { intervaloMeses: 2 },
+        ]) {
+            const editado = manterJurosDoBlocoEditado(b0, { ...base, ...mudou });
+            expect(editado).not.toHaveProperty('juros');
+            expect(editado).not.toHaveProperty('principal');
+        }
+        // Bloco novo (sem original) ou original sem juros: nada a carregar.
+        expect(manterJurosDoBlocoEditado(undefined, base)).not.toHaveProperty('juros');
+    });
+
     it('negócio sem juros: idêntico ao gerador simples, sem nenhuma coluna nova no patch', () => {
         const c = campos({ taxaMensal: 0, entrada: 20000 });
         const patch = montarPlanoNoNegocio(negocio({ contract_total_value: 120000 }) as NegocioDoPlano, c, 'plano-t');
@@ -307,5 +362,80 @@ describe('valorDoContratoPeloPlano — contrato existente ao lançar o plano', (
 
     it('locação: nunca (original_value do recorrente é o valor da parcela)', () => {
         expect(valorDoContratoPeloPlano({ type: 'RENTAL', interest_rate_monthly: 1, contract_total_value: 30000 })).toEqual({});
+    });
+
+    it('juros zerado DEPOIS de lançar: o contrato volta ao total sem juros', () => {
+        const comJuros = montar(negocio({ contract_total_value: 120000 }), campos({ entrada: 20000 }));
+        // O que foi lançado: o cronograma do contrato tem parcelas com juros.
+        const cronogramaDoContrato = planoComoSchedule(comJuros);
+        expect(valorDoContratoPeloPlano(comJuros, cronogramaDoContrato)).toEqual({ original_value: 126618.53 });
+        const zerado = montar(comJuros, campos({ entrada: 20000, taxaMensal: 0 }));
+        expect(zerado.contract_total_value).toBe(120000);
+        expect(valorDoContratoPeloPlano(zerado, cronogramaDoContrato)).toEqual({ original_value: 120000 });
+    });
+
+    it('venda que nunca teve juros: nada muda, nem com o cronograma do contrato em mãos', () => {
+        const d = montar(negocio({ contract_total_value: 120000 }), campos({ entrada: 20000, taxaMensal: 0 }));
+        expect(valorDoContratoPeloPlano(d, planoComoSchedule(d))).toEqual({});
+        expect(valorDoContratoPeloPlano(d, [])).toEqual({});
+        expect(valorDoContratoPeloPlano(d, [{ date: '2026-12-10', value: 1000, interest: 0, principal: 1000 }])).toEqual({});
+    });
+
+    it('locação com cronograma antigo com juros: continua nunca', () => {
+        expect(valorDoContratoPeloPlano(
+            { type: 'RENTAL', contract_total_value: 30000 },
+            [{ date: '2026-12-10', value: 2500, interest: 100 }],
+        )).toEqual({});
+    });
+});
+
+describe('planoComoSchedule / atualizacaoDoContratoPeloPlano — o elo DealModal → contrato', () => {
+    it('com juros: cada parcela leva interest/principal, o sinal não, e o contrato vale o total com juros', () => {
+        const d = {
+            ...montar(negocio({ contract_total_value: 120000 }), campos({ entrada: 20000 })),
+            down_payment_payment_type: 'PIX' as const,
+            cost_center_id: 'cc-1',
+            plano_de_contas_id: 'pc-1',
+        };
+        const payload = atualizacaoDoContratoPeloPlano(d, undefined);
+        expect(payload.payment_term_type).toBe('Parcelado');
+        expect(payload.cost_center_id).toBe('cc-1');
+        expect(payload.plano_de_contas_id).toBe('pc-1');
+        expect(payload.original_value).toBe(126618.53);
+        const linhas = payload.payment_schedule!;
+        expect(linhas).toHaveLength(13);
+        // Sinal na Data Efetiva, sem juros.
+        expect(linhas[0]).toEqual({ date: '2026-11-10', value: 20000, installment_type: 'SINAL', payment_type: 'PIX' });
+        // Parcelas: uma linha por parcela do plano, com a decomposição dela.
+        const parcelas = d.custom_installments!;
+        linhas.slice(1).forEach((l, k) => {
+            expect(l.date).toBe(parcelas[k].dueDate);
+            expect(l.value).toBe(parcelas[k].value);
+            expect(l.interest).toBe(parcelas[k].interest);
+            expect(l.principal).toBe(parcelas[k].principal);
+            expect(dois(l.interest! + l.principal!)).toBe(l.value);
+        });
+        expect(soma(linhas.map(l => l.value))).toBe(126618.53);
+        expect(soma(linhas.slice(1).map(l => l.principal!))).toBe(100000);
+    });
+
+    it('sem juros: nenhuma linha leva interest/principal e o valor do contrato não vai', () => {
+        const d = montar(negocio({ contract_total_value: 120000 }), campos({ entrada: 20000, taxaMensal: 0 }));
+        const payload = atualizacaoDoContratoPeloPlano(d, []);
+        expect(payload.payment_schedule!.some(l => 'interest' in l || 'principal' in l)).toBe(false);
+        expect(payload).not.toHaveProperty('original_value');
+        expect(payload).not.toHaveProperty('cost_center_id');
+    });
+
+    it('ordena por data e descarta linha sem data ou sem valor', () => {
+        const linhas = planoComoSchedule({
+            date: '2026-11-10', down_payment: 0,
+            custom_installments: [
+                { id: 'b', dueDate: '2027-01-10', value: 10 },
+                { id: 'a', dueDate: '2026-12-10', value: 10 },
+                { id: 'z', dueDate: '2027-02-10', value: 0 },
+            ] as PropertyDeal['custom_installments'],
+        });
+        expect(linhas.map(l => l.date)).toEqual(['2026-12-10', '2027-01-10']);
     });
 });

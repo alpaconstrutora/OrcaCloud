@@ -25,6 +25,7 @@ import {
     subtotalDoBloco,
 } from './paymentPlan';
 import type { PropertyDeal } from '../types/imovib';
+import type { Contract, ContractInstallment } from '../types/contracts';
 
 export type SistemaAmortizacao = 'PRICE' | 'SAC';
 
@@ -335,6 +336,34 @@ export function montarPlanoNoNegocio(deal: NegocioDoPlano, c: CamposDoPlano, idB
     };
 }
 
+/**
+ * Bloco salvo no Sheet "Editar pagamento" (`salvarBloco` do DealModal). O
+ * formulário do Sheet não tem juros, então o bloco novo nasce sem `juros`/
+ * `principal` — a decomposição deixa de ser conhecida quando o bloco muda de
+ * verdade (nº, valor, 1º vencimento ou intervalo). Mas quem só troca a forma de
+ * pagamento ou a observação (o caminho natural depois do "Montar plano", que não
+ * escolhe Boleto/PIX; no SAC são N blocos de 1×) não mudou parcela nenhuma: o
+ * destaque do bloco original vem junto. Sem isto os títulos iam a Contas a
+ * Receber sem juros e a DRE punha a parcela inteira na receita da venda.
+ * Bloco de 1×: o intervalo não importa (`agruparPlano` o devolve `null`, o Sheet
+ * devolve o do tipo).
+ */
+export function manterJurosDoBlocoEditado(
+    original: BlocoPagamento | undefined,
+    novo: BlocoPagamento,
+): BlocoPagamento {
+    if (!original?.juros || !original.principal) return novo;
+    const n = Math.max(1, Math.floor(novo.quantidade || 1));
+    const mesmasParcelas = n === Math.max(1, Math.floor(original.quantidade || 1))
+        && original.juros.length === n && original.principal.length === n
+        && Math.abs((Number(novo.valorParcela) || 0) - (Number(original.valorParcela) || 0)) < 0.005
+        && (novo.primeiroVencimento || '') === (original.primeiroVencimento || '')
+        && (n === 1 || (novo.intervaloMeses || 0) === (original.intervaloMeses || 0));
+    return mesmasParcelas
+        ? { ...novo, juros: [...original.juros], principal: [...original.principal] }
+        : novo;
+}
+
 const fmtMoeda = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 const fmtTaxa = (n: number) => n.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
 
@@ -365,6 +394,9 @@ export function resumoDoPlano(previa: PreviaDoPlano, rotuloTipo: string): string
     return (entrada > 0 ? `entrada de ${fmtMoeda(entrada)} + ` : '') + parcelas;
 }
 
+/** O que importa do `payment_schedule` gravado: se alguma linha tinha juros. */
+export type CronogramaDoContrato = ReadonlyArray<Pick<ContractInstallment, 'interest'>>;
+
 /**
  * Valor do contrato que o "Lançar no Financeiro" / "Gerar no contrato" manda junto
  * com o plano (`aplicarPlanoNoContrato` do DealModal). Decisão do usuário: o valor
@@ -372,15 +404,88 @@ export function resumoDoPlano(previa: PreviaDoPlano, rotuloTipo: string): string
  * assim; este é o caso do contrato que já existia antes do plano com juros — ele
  * ficava no preço à vista enquanto as parcelas somavam o total com juros.
  *
- * Vazio sem juros (nada muda) e em locação (aluguel nunca tem juros, e o
+ * Venda sem juros: vazio (nada muda) — EXCETO quando o `payment_schedule` atual do
+ * contrato (`cronogramaAtualDoContrato`, gravado antes desta atualização) tinha
+ * juros: aí o juro foi zerado depois de lançar e o contrato volta ao total sem
+ * juros (revisão final, I-2). Locação: nunca (aluguel não tem juros, e o
  * `original_value` do recorrente é o valor da PARCELA). `updateContract` recalcula
  * `current_value` por `valorAtualDoContrato` — original + aditivos + reajuste
  * acumulado —, então o reajuste já aplicado continua somado.
  */
 export function valorDoContratoPeloPlano(
     deal: Partial<Pick<PropertyDeal, 'type' | 'interest_rate_monthly' | 'contract_total_value'>>,
+    cronogramaAtualDoContrato?: CronogramaDoContrato,
 ): { original_value?: number } {
     if (deal.type === 'RENTAL') return {};
     const total = Number(deal.contract_total_value) || 0;
-    return (Number(deal.interest_rate_monthly) || 0) > 0 && total > 0 ? { original_value: total } : {};
+    if (total <= 0) return {};
+    if ((Number(deal.interest_rate_monthly) || 0) > 0) return { original_value: total };
+    // Juros zerado DEPOIS de lançar: o contrato ficou no total COM juros do
+    // lançamento anterior, e o cronograma novo soma o total sem juros. Só o
+    // `payment_schedule` gravado sabe que houve juros (a negociação zerada não
+    // guarda rastro), então é ele que decide. Venda que nunca teve juros: nada.
+    const contratoTeveJuros = (cronogramaAtualDoContrato || []).some(l => (Number(l?.interest) || 0) > 0);
+    return contratoTeveJuros ? { original_value: total } : {};
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// O elo negociação → contrato ("Lançar no Financeiro" / "Gerar no contrato" do
+// DealModal, `aplicarPlanoNoContrato`). Puro para ser testado: o componente só
+// lê o cronograma atual do contrato e manda o resultado ao `updateContract`.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Os campos da negociação que viram o `payment_schedule` do contrato. */
+export type NegocioDoCronograma = Partial<Pick<PropertyDeal,
+    'date' | 'down_payment' | 'down_payment_installment_type' | 'down_payment_payment_type' | 'custom_installments'>>;
+
+/**
+ * O plano no formato `payment_schedule` do contrato: sinal + cronograma, por
+ * data. Leva junto o TIPO de cada parcela (Sinal/Mensal/Chaves…) e a forma de
+ * pagamento — sem isso a coluna "Tipo" da aba Parcelas nascia vazia e o
+ * usuário teria de reclassificar à mão o que o plano já sabia.
+ * Parcela com juros (Price/SAC) leva `interest`/`principal`: o sync do contrato
+ * grava a parte de juros no título (`interest_amount`) para a DRE separá-la.
+ * O sinal nunca tem juros.
+ */
+export function planoComoSchedule(deal: NegocioDoCronograma): ContractInstallment[] {
+    return [
+        ...((Number(deal.down_payment) || 0) > 0 && deal.date
+            ? [{
+                date: deal.date,
+                value: Number(deal.down_payment) || 0,
+                installment_type: deal.down_payment_installment_type || 'SINAL',
+                payment_type: deal.down_payment_payment_type ?? null,
+            }]
+            : []),
+        ...(deal.custom_installments || []).map(i => ({
+            date: i.dueDate,
+            value: Number(i.value) || 0,
+            installment_type: i.installmentType ?? null,
+            payment_type: i.paymentType ?? null,
+            ...(typeof i.interest === 'number' ? { interest: i.interest, principal: i.principal ?? null } : {}),
+        })),
+    ]
+        .filter(i => i.date && i.value > 0)
+        .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * O `updateContract` inteiro de `aplicarPlanoNoContrato`: cronograma, prazo
+ * Parcelado, as dimensões contábeis do cabeçalho da negociação (é delas que a
+ * parcela herda Centro de Custo e Plano de Contas) e, em venda, o valor do
+ * contrato (`valorDoContratoPeloPlano`). `cronogramaAtualDoContrato` é o
+ * `payment_schedule` gravado ANTES desta atualização (ver lá por quê).
+ */
+export function atualizacaoDoContratoPeloPlano(
+    deal: NegocioDoCronograma & Partial<Pick<PropertyDeal,
+        'type' | 'interest_rate_monthly' | 'contract_total_value' | 'cost_center_id' | 'plano_de_contas_id'>>,
+    cronogramaAtualDoContrato: CronogramaDoContrato | undefined,
+): Partial<Contract> {
+    return {
+        payment_schedule: planoComoSchedule(deal),
+        payment_term_type: 'Parcelado',
+        ...(deal.cost_center_id ? { cost_center_id: deal.cost_center_id } : {}),
+        ...(deal.plano_de_contas_id ? { plano_de_contas_id: deal.plano_de_contas_id } : {}),
+        ...valorDoContratoPeloPlano(deal, cronogramaAtualDoContrato),
+    };
 }

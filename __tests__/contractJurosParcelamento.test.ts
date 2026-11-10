@@ -61,7 +61,14 @@ vi.mock('../services/financialCategoryResolver', () => ({
 }));
 
 import { contractService } from '../services/contractService';
-import { montarPlanoNoNegocio, valorDoContratoPeloPlano, type CamposDoPlano, type NegocioDoPlano } from '../utils/jurosParcelamento';
+import {
+    montarPlanoNoNegocio,
+    valorDoContratoPeloPlano,
+    planoComoSchedule,
+    atualizacaoDoContratoPeloPlano,
+    type CamposDoPlano,
+    type NegocioDoPlano,
+} from '../utils/jurosParcelamento';
 import type { Contract } from '../types';
 
 const venda = {
@@ -222,5 +229,51 @@ describe('contrato existente recebe o plano com juros', () => {
         await contractService.updateContract('c1', atualizacao({ ...campos, taxaMensal: 0 }));
         expect(gravado()).not.toHaveProperty('original_value');
         expect(gravado()).not.toHaveProperty('current_value');
+    });
+
+    /**
+     * O payload inteiro que o DealModal manda (`atualizacaoDoContratoPeloPlano`,
+     * usado por `aplicarPlanoNoContrato`): o elo negociação → contrato.
+     */
+    it('o payload do DealModal leva interest/principal em cada parcela e o total com juros', async () => {
+        const d = { ...negocio, ...montarPlanoNoNegocio(negocio, campos, 'p') };
+        await contractService.updateContract('c1', atualizacaoDoContratoPeloPlano(d, undefined));
+        const g = gravado();
+        expect(g.original_value).toBe(126618.53);
+        expect(g.payment_term_type).toBe('Parcelado');
+        const linhas = g.payment_schedule as Array<Record<string, unknown>>;
+        expect(linhas).toHaveLength(13);
+        expect(linhas[0]).not.toHaveProperty('interest');
+        expect(linhas.slice(1).every(l => typeof l.interest === 'number' && typeof l.principal === 'number')).toBe(true);
+        expect(linhas.slice(1).map(l => l.interest)).toEqual(d.custom_installments!.map(i => i.interest));
+        expect(linhas.slice(1).map(l => l.principal)).toEqual(d.custom_installments!.map(i => i.principal));
+    });
+
+    it('juros zerado depois de lançar: o contrato volta a 120.000 (cronograma e títulos somam 120.000)', async () => {
+        const comJuros = { ...negocio, ...montarPlanoNoNegocio(negocio, campos, 'p') };
+        // 1º Lançar: o contrato passou a valer o total com juros e o cronograma dele tem juros.
+        const lancado = planoComoSchedule(comJuros);
+        contratoRow = { ...contratoRow!, original_value: 126618.53, current_value: 127118.53, payment_schedule: lancado };
+        // Zera a taxa e remonta; 2º Lançar.
+        const zerado = { ...comJuros, ...montarPlanoNoNegocio(comJuros, { ...campos, taxaMensal: 0 }, 'p2') };
+        await contractService.updateContract('c1', atualizacaoDoContratoPeloPlano(zerado, await contractService.getPaymentSchedule('c1')));
+        const g = gravado();
+        expect(g.original_value).toBe(120000);
+        expect(g.current_value).toBe(120500);
+        const soma = (g.payment_schedule as Array<{ value: number }>).reduce((s, l) => s + l.value, 0);
+        expect(Number(soma.toFixed(2))).toBe(120000);
+    });
+
+    it('venda que nunca teve juros (controle): o valor do contrato não vai, mesmo lendo o cronograma', async () => {
+        const semJuros = { ...negocio, ...montarPlanoNoNegocio(negocio, { ...campos, taxaMensal: 0 }, 'p') };
+        contratoRow = { ...contratoRow!, payment_schedule: planoComoSchedule(semJuros) };
+        await contractService.updateContract('c1', atualizacaoDoContratoPeloPlano(semJuros, await contractService.getPaymentSchedule('c1')));
+        expect(gravado()).not.toHaveProperty('original_value');
+        expect(gravado()).not.toHaveProperty('current_value');
+    });
+
+    it('getPaymentSchedule: contrato sem cronograma devolve lista vazia', async () => {
+        contratoRow = { ...contratoRow!, payment_schedule: null };
+        expect(await contractService.getPaymentSchedule('c1')).toEqual([]);
     });
 });

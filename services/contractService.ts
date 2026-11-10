@@ -1540,6 +1540,23 @@ export const contractService = {
         }
     },
 
+    /**
+     * Só o `payment_schedule` gravado agora — lido na hora, não do objeto que a
+     * tela tem em mãos (`getContractByDealId`/cadeia de renovação não o trazem, e
+     * o da tela fica velho depois do primeiro "Lançar no Financeiro"). Usado por
+     * `aplicarPlanoNoContrato` do DealModal para saber se o contrato já recebeu
+     * um plano com juros (ver `valorDoContratoPeloPlano`).
+     */
+    getPaymentSchedule: async (id: string): Promise<ContractInstallment[]> => {
+        const { data, error } = await supabase
+            .from('contracts')
+            .select('payment_schedule')
+            .eq('id', id)
+            .maybeSingle();
+        if (error) throw error;
+        return ((data as { payment_schedule?: ContractInstallment[] | null } | null)?.payment_schedule) ?? [];
+    },
+
     // Cria (ou retorna se já existir) um contrato a partir de uma negociação
     // comercial. `domain` decide o tipo: 'VENDAS' (compra e venda avulsa) ou
     // 'LOCACAO' (contrato recorrente de aluguel, com reajuste anual). Idempotente

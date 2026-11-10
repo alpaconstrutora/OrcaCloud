@@ -9,6 +9,7 @@ import {
     motivoNaoAjustaContrato,
     vencimentoSugerido,
     motivoParaComplementar,
+    comNovoValor,
     type ParcelaConferida,
 } from '../utils/conferenciaParcelasContrato';
 
@@ -274,5 +275,57 @@ describe('contrato fechado (pontos adiados do PR #183)', () => {
         for (const status of ['Ativo', 'Assinado', 'Suspenso', undefined]) {
             expect(motivoContratoFechado({ ...cts042, status })).toBeNull();
         }
+    });
+});
+
+// Venda com juros Price/SAC (plano 2026-11-10-juros-parcelamento-pendencias, item 4):
+// corrigir não pode apagar os juros do plano em silêncio.
+describe('venda com juros: a correção preserva os juros', () => {
+    // Price 1% a.m.: 8.884,88 = 1.000,00 de juros + 7.884,88 de principal.
+    const cronoJuros = [
+        { date: '2026-12-10', value: 8884.88, interest: 1000, principal: 7884.88 },
+        { date: '2027-01-10', value: 8884.88, interest: 921.15, principal: 7963.73 },
+    ];
+    const gerador = { parcelas: 3, periodicidade: 'Mensal' as const, primeiroVencimento: '2026-11-10', entrada: 0, vencimentoEntrada: '2026-11-10' };
+
+    it('Distribuir: a diferença vai para o principal; os juros ficam', () => {
+        const r = planoDeDistribuicao(cronoJuros, [parcela(1, 8884.88), parcela(2, 8884.88)], 100, new Set());
+        if ('motivo' in r) throw new Error(r.motivo);
+        expect(r.cronograma[0]).toMatchObject({ value: 8934.88, interest: 1000, principal: 7934.88 });
+        expect(r.cronograma[1]).toMatchObject({ value: 8934.88, interest: 921.15, principal: 8013.73 });
+    });
+
+    it('valor alterado à mão no título: juros ficam, principal acompanha (base da correção)', () => {
+        const base = baseParaCorrecao({ payment_term_type: 'Parcelado' }, cronoJuros, [parcela(1, 8800), parcela(2, 8884.88)]);
+        expect(base.cronograma[0]).toMatchObject({ value: 8800, interest: 1000, principal: 7800 });
+    });
+
+    it('Gerar parcelas recusa — diz que apagaria os juros e onde refazer o plano', () => {
+        const r = planoDoGerador(17769.76, cronoJuros, [parcela(1, 8884.88), parcela(2, 8884.88)], gerador, new Set());
+        expect(r).toEqual({ motivo: expect.stringMatching(/juros.*Montar plano/s) });
+    });
+
+    it('Gerar parcelas recusa também com o plano ainda NÃO lançado (sem títulos)', () => {
+        const r = planoDoGerador(17769.76, cronoJuros, [], gerador, new Set());
+        expect(r).toEqual({ motivo: expect.stringMatching(/juros/) });
+    });
+
+    it('Gerar parcelas segue liberado quando só as PAGAS têm juros', () => {
+        const crono = [cronoJuros[0], { date: '2027-01-10', value: 8884.88 }];
+        const r = planoDoGerador(17769.76, crono, [parcela(1, 8884.88, pago), parcela(2, 8884.88)], gerador, new Set());
+        if ('motivo' in r) throw new Error(r.motivo);
+        // A paga mantém a decomposição dela.
+        expect(r.cronograma[0]).toMatchObject({ value: 8884.88, interest: 1000, principal: 7884.88 });
+    });
+});
+
+describe('comNovoValor — linha editada à mão no ContractModal', () => {
+    it('com juros: juros ficam, principal = valor − juros; abaixo dos juros, juros = valor', () => {
+        const l = { date: '2026-12-10', value: 8884.88, interest: 1000, principal: 7884.88 };
+        expect(comNovoValor(l, 9000)).toMatchObject({ value: 9000, interest: 1000, principal: 8000 });
+        expect(comNovoValor(l, 500)).toMatchObject({ value: 500, interest: 500, principal: 0 });
+    });
+    it('sem juros: só o valor muda', () => {
+        expect(comNovoValor({ date: '2026-12-10', value: 100 }, 150)).toEqual({ date: '2026-12-10', value: 150 });
     });
 });

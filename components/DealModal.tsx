@@ -21,7 +21,6 @@ import {
     expandirBloco,
     subtotalDoBloco,
     saldoDoPlano,
-    blocoParaGerador,
     somarDias,
     somarMeses,
     type BlocoPagamento,
@@ -35,6 +34,7 @@ import {
     precoSemJurosPadrao,
     editarValorTotal,
     manterJurosDoBlocoEditado,
+    espelhoDoPlano,
     planoComoSchedule as planoDaNegociacaoComoSchedule,
     atualizacaoDoContratoPeloPlano,
     type CamposDoPlano,
@@ -876,7 +876,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         // Espelho para o gerador do contrato, que só sabe UMA série homogênea e
         // lê estes dois campos (ver geracaoContrato). Sem isso o modal "Gerar
         // parcelas" volta a mostrar "—".
-        const espelho = blocoParaGerador(blocos);
+        const espelho = espelhoDoPlano(blocos);
         setFormData(prev => ({
             ...prev,
             custom_installments: linhas,

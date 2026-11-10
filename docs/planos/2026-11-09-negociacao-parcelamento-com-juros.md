@@ -206,9 +206,12 @@ SQL:
 - [x] Task 4 — contrato e Contas a Receber (contrato novo **e** existente passam a valer o total com juros; zerar os juros devolve o valor sem juros)
 - [x] Task 5 — DRE/Balancete: migration `aplicar_20271110300100_dre_juros_destacado.sql` **aplicada em produção em 10/11/2026**. Assinatura md5 linha a linha de `fn_dre`/`fn_balancete`/`fn_dre_summary` idêntica antes/depois (7 orgs × 2 regimes × 12 meses); Σ view = Σ tabela. Reversão: `supabase/manual/reverter_20271110300100_dre_juros_destacado.sql`.
   - [x] `scripts/teste-dre-juros-destacado.sql` (cenários com juros, INSERT dentro de BEGIN/ROLLBACK) — rodado em produção em 10/11/2026 com liberação do usuário: **40 de 40 verificações ok** (separação 7.884,88 / 1.000,00 nos dois regimes, CANCELLED, `LEAST` com 9.999, sem categoria, fn_dre_summary/balancete/SPE/obras com total inalterado). Rollback conferido: 0 títulos de 2099 depois.
-- [ ] Task 6 — fechamento (PR, CI, merge, conferir produção)
+- [x] Task 6 — fechamento (PR, CI, merge, conferir produção) — PR #295, merge 10e78318, produção conferida em 10/11
 
 ### Pendências conhecidas (depois do merge)
+
+> 10/11/2026: o usuário pediu "Resolva essas pendências" — tratadas em
+> `docs/planos/2026-11-10-juros-parcelamento-pendencias.md` (lista abaixo mantida como registro).
 
 - Relatórios que agrupam por categoria fora da DRE/Balancete ainda deixam os juros na categoria da venda: `vw_fact_financial_tx` (ÒPURA, Central da Obra, `fn_bi_trend`), `vw_fpa_budget_vs_actual`, `vw_journal_entries`, `fn_fi_ledger` (Inteligência Financeira).
 - Balancete: o total de "lançamentos" somado em `BalanceteReport.tsx` conta 2× cada parcela com juros (uma linha por categoria).

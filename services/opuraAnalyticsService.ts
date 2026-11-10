@@ -174,6 +174,12 @@ export interface OpuraPivotRow {
   debit_previsto: number;
   net_realizado: number;
   vencido: number;
+  /**
+   * Títulos cuja parte PRINCIPAL caiu nesta linha. Σ qtd_titulos = nº de títulos;
+   * Σ qtd contaria 2× a parcela com juros nas dimensões de categoria (principal e
+   * juros em linhas diferentes). Ausente antes da migration aplicar_20271110400000.
+   */
+  qtd_titulos?: number;
 }
 
 export const opuraAnalyticsService = {

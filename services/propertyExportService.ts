@@ -32,6 +32,17 @@ const fmtTaxa = (n: number) => `${n.toLocaleString('pt-BR', { minimumFractionDig
  * que a tabela do Plano de Pagamento soma. Sem essas linhas o cliente via dois
  * totais que não batiam e nenhuma menção a juros.
  */
+/**
+ * 'YYYY-MM-DD' → 'DD/MM/YYYY' sem passar por `new Date`: `new Date('2026-12-01')`
+ * é meia-noite UTC, que no Brasil (UTC−3) ainda é 30/11 — a proposta saía com a
+ * Data Prevista um dia antes. Outro formato cai no `toLocaleDateString` de antes.
+ */
+function dataBR(data: string | null | undefined): string {
+    if (!data) return '—';
+    const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(data);
+    return m ? `${m[3]}/${m[2]}/${m[1]}` : new Date(data).toLocaleDateString('pt-BR');
+}
+
 export function condicoesDaProposta(deal: PropertyDeal): string[][] {
     const isRental = deal.type === 'RENTAL';
     const mensal = deal.installment_value || 0;
@@ -53,7 +64,7 @@ export function condicoesDaProposta(deal: PropertyDeal): string[][] {
             condicoes.push(['Valor Total com juros', fmtCurrency(Number(deal.contract_total_value) || 0)]);
         }
     }
-    condicoes.push(['Data Prevista', new Date(deal.date).toLocaleDateString('pt-BR')]);
+    condicoes.push(['Data Prevista', dataBR(deal.date)]);
     condicoes.push(['Status Atual', deal.status]);
     return condicoes;
 }

@@ -37,6 +37,8 @@ import {
     TIPO_ENTRADA,
     type ParametrosCronograma,
 } from '../utils/contractInstallments';
+// Editar o valor de uma linha com juros (Price/SAC): juros ficam, principal acompanha.
+import { comNovoValor } from '../utils/conferenciaParcelasContrato';
 import { DEFAULT_PAYMENT_TYPES, labelForInstallmentType } from '../constants/paymentTypes';
 import { MODOS_VALOR_PARCELA, modoValorParcela } from '../utils/contratoParcelaVariavel';
 
@@ -1569,7 +1571,17 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                     const fmt = (v: number) => v.toLocaleString('pt-BR', { minimumFractionDigits: 2 });
                                     const rotuloTipo = (tipo?: string | null) =>
                                         tipo === TIPO_ENTRADA ? 'Entrada' : (labelForInstallmentType(DEFAULT_PAYMENT_TYPES, tipo ?? undefined) || '—');
-                                    const campo = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200';
+                                    const campo = 'w-full px-3 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/10 focus:border-blue-500 transition-all hover:border-blue-200 disabled:bg-slate-50 disabled:cursor-not-allowed';
+                                    // Venda com juros (Price/SAC): as linhas vêm do "Montar plano" da
+                                    // negociação, com juros/principal por parcela. Estes campos regeram
+                                    // parcelas IGUAIS e SEM juros — mexer neles apagaria os juros em
+                                    // silêncio (plano 2026-11-10-juros-parcelamento-pendencias, item 4).
+                                    // Ficam travados, com o motivo escrito abaixo.
+                                    const cronogramaComJuros = installmentSchedule.some(l => (Number(l.interest) || 0) > 0);
+                                    const jurosDoCronograma = installmentSchedule.reduce((t, l) => t + (Number(l.interest) || 0), 0);
+                                    const motivoJuros = cronogramaComJuros
+                                        ? 'As parcelas têm juros (Price/SAC) do plano da negociação — mudar entrada, nº, periodicidade ou vencimento aqui regeraria parcelas sem juros. Refaça em Gerenciar Negociação › Financeiro › "Montar plano".'
+                                        : undefined;
                                     return (
                                     <div className="space-y-4 animate-in fade-in slide-in-from-left-2 duration-300 col-span-full">
                                         {/* O que o usuário pensa: entrada + N parcelas de X em X meses. Os
@@ -1585,6 +1597,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                         placeholder="0,00"
                                                         value={gerador.entrada || ''}
                                                         onChange={(v) => atualizarGerador({ entrada: v === '' ? 0 : Number(v) })}
+                                                        disabled={cronogramaComJuros}
+                                                        title={motivoJuros}
                                                         className={`${campo} pl-9`}
                                                     />
                                                 </div>
@@ -1594,7 +1608,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 <input
                                                     type="date"
                                                     value={gerador.vencimentoEntrada}
-                                                    disabled={!(gerador.entrada > 0)}
+                                                    disabled={cronogramaComJuros || !(gerador.entrada > 0)}
+                                                    title={motivoJuros}
                                                     onChange={(e) => atualizarGerador({ vencimentoEntrada: e.target.value })}
                                                     className={`${campo} text-gray-900 disabled:cursor-not-allowed`}
                                                 />
@@ -1608,6 +1623,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                         step="1"
                                                         value={gerador.parcelas}
                                                         onChange={(e) => atualizarGerador({ parcelas: Math.max(1, parseInt(e.target.value) || 1) })}
+                                                        disabled={cronogramaComJuros}
+                                                        title={motivoJuros}
                                                         className={campo}
                                                     />
                                                     <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-400">X</span>
@@ -1618,6 +1635,8 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                 <select
                                                     value={gerador.periodicidade}
                                                     onChange={(e) => atualizarGerador({ periodicidade: e.target.value as GeradorParcelas['periodicidade'] })}
+                                                    disabled={cronogramaComJuros}
+                                                    title={motivoJuros}
                                                     className={`${campo} appearance-none cursor-pointer`}
                                                 >
                                                     {PERIODICIDADES_CONTRATO.map(p => (
@@ -1631,16 +1650,24 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     type="date"
                                                     value={gerador.primeiroVencimento}
                                                     onChange={(e) => atualizarGerador({ primeiroVencimento: e.target.value })}
+                                                    disabled={cronogramaComJuros}
+                                                    title={motivoJuros}
                                                     className={campo}
                                                 />
                                             </div>
                                         </div>
+                                        {cronogramaComJuros ? (
+                                        <p className="text-xs text-gray-600 ml-1">
+                                            {parcelasDoPlano.length} parcelas com juros (R$ {fmt(jurosDoCronograma)} de juros no total). {motivoJuros}
+                                        </p>
+                                        ) : (
                                         <p className="text-xs text-gray-500 ml-1">
                                             {gerador.entrada > 0 ? `Entrada de R$ ${fmt(Math.min(gerador.entrada, total))} + ` : ''}
                                             {gerador.parcelas}× {gerador.periodicidade.toLowerCase()} de R$ {fmt(valorParcela)}
                                             {total <= 0 ? ' — informe o Valor Original para calcular as parcelas.' : ''}
                                             {gerador.entrada >= total && total > 0 ? ' — a entrada cobre o valor todo; as parcelas ficaram zeradas.' : ''}
                                         </p>
+                                        )}
 
                                         {/* Embutido (Financeiro › Dados Gerais): a lista das parcelas mora
                                             só na sub-aba Parcelas (pedido de 24/10/2026 — aparecia nos dois
@@ -1664,7 +1691,9 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     <button
                                                         type="button"
                                                         onClick={() => regerarCronograma(gerador)}
-                                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium"
+                                                        disabled={cronogramaComJuros}
+                                                        title={motivoJuros}
+                                                        className="text-xs text-blue-600 hover:text-blue-800 font-medium disabled:text-gray-500 disabled:cursor-not-allowed disabled:hover:text-gray-500"
                                                     >
                                                         Redistribuir igualmente
                                                     </button>
@@ -1695,7 +1724,7 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                                     value={inst.value}
                                                                     onChange={v => {
                                                                         const updated = [...installmentSchedule];
-                                                                        updated[i] = { ...updated[i], value: v === '' ? 0 : Number(v) };
+                                                                        updated[i] = comNovoValor(updated[i], v === '' ? 0 : Number(v));
                                                                         setInstallmentSchedule(updated);
                                                                     }}
                                                                     className="w-full px-3 py-1.5 bg-white border border-gray-200 rounded-[6px] text-sm text-right font-semibold focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"

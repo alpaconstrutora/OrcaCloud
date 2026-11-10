@@ -664,6 +664,13 @@ export interface BalanceteLine {
     debitos:       number;
     saldo_liquido: number;
     n_transacoes:  number;
+    /**
+     * Linhas desta categoria que são a PARTE DE JUROS de um título (venda
+     * parcelada com juros). O título já conta 1 vez na categoria da parte
+     * principal — o total geral de lançamentos desconta estas. Ausente antes da
+     * migration aplicar_20271110400000 (tratar como 0).
+     */
+    n_partes_juros?: number;
 }
 
 // ────────────────────────────────────────────────────────────

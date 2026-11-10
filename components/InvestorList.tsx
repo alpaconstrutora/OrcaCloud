@@ -74,7 +74,9 @@ function renderInvestorCell(key: string, investor: Investor, investorProjects: a
                     </div>
                     <div>
                         <p className="text-sm font-normal text-gray-900">{investor.name}</p>
-                        <p className="text-xs font-medium text-gray-400">Perfil investidor</p>
+                        <p className="text-xs font-medium text-gray-400">
+                            {investor.is_shared ? 'Disponível em todas as organizações' : 'Perfil investidor'}
+                        </p>
                     </div>
                 </div>
             );
@@ -156,13 +158,13 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
     const loadData = async () => {
         setIsLoading(true);
         try {
-            let projectsQuery = supabase
+            // Sem filtro de organização: a obra vinculada pode ser de outra
+            // organização do grupo (investidor da Alpa numa obra da SPE). A coluna
+            // só mostra obras ligadas aos investidores listados, e a RLS recorta.
+            const projectsQuery = supabase
                 .from('projects')
                 .select('id, name, investor_id, settings')
                 .filter('settings->>classification', 'eq', 'OBRA');
-            if (organizationId) {
-                projectsQuery = projectsQuery.filter('settings->>organizationId', 'eq', organizationId);
-            }
             const [investorsData, { data: projectsData }] = await Promise.all([
                 investorService.listInvestors(organizationId),
                 projectsQuery
@@ -242,10 +244,13 @@ const InvestorList: React.FC<InvestorListProps> = ({ onInvestorsChange, organiza
     };
 
     const handleGenerateToken = async () => {
-        if (!tokenModal || !orgId) return;
+        // O link nasce na organização DONA do investidor (a RPC recusa outra) —
+        // não na do topo, que pode ser um destino do compartilhamento.
+        const tokenOrgId = tokenModal?.investor.organization_id ?? orgId;
+        if (!tokenModal || !tokenOrgId) return;
         setTokenLoading(true);
         try {
-            await investorPortalTokenService.generateToken(tokenModal.investor.id, orgId);
+            await investorPortalTokenService.generateToken(tokenModal.investor.id, tokenOrgId);
             const tok = await investorPortalTokenService.getTokenForInvestor(tokenModal.investor.id);
             setTokenModal(prev => prev ? { ...prev, token: tok } : null);
         } catch (e) {

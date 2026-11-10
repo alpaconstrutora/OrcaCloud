@@ -1,11 +1,12 @@
 import React from 'react';
-import { User, Mail, Phone, FileText, Building2 } from 'lucide-react';
+import { User, Mail, Phone, FileText, Building2, AlertCircle } from 'lucide-react';
 import { Investor } from '../services/investorService';
 import { projectService } from '../services/projectService';
 import { investorContributionsService } from '../services/investorContributionsService';
 import ContributionsManager from './investor/ContributionsManager';
 import { Sheet, SheetHeader, SheetTitle, SheetPanel, SheetFooter } from './ui/sheet';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { useWritableOrganizations, useDefaultWriteOrgId } from '../hooks/useOrgContext';
 
 interface InvestorModalProps {
     isOpen: boolean;
@@ -18,6 +19,11 @@ interface InvestorModalProps {
 const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit, initialData, organizationId }) => {
     const [isSubmitting, setIsSubmitting] = React.useState(false);
     const [dirty, setDirty] = React.useState(false);
+    const [formError, setFormError] = React.useState<string | null>(null);
+    // Só as organizações em que o usuário pode gravar (a lista crua do store
+    // inclui as que ele só enxerga, e gravar nelas dá 42501).
+    const writableOrganizations = useWritableOrganizations();
+    const defaultWriteOrgId = useDefaultWriteOrgId();
     const [formData, setFormData] = React.useState<Partial<Investor>>({
         name: '',
         email: '',
@@ -81,27 +87,36 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
     React.useEffect(() => {
         if (!isOpen) return;
         setDirty(false);
+        setFormError(null);
         if (initialData) {
             // Ensure organization_id is always set (fixes legacy investors with null org_id)
-            setFormData({ ...initialData, organization_id: initialData.organization_id ?? organizationId });
+            setFormData({ ...initialData, organization_id: initialData.organization_id ?? organizationId ?? defaultWriteOrgId ?? undefined });
         } else {
             setFormData({
                 name: '',
                 email: '',
                 phone: '',
                 document: '',
-                organization_id: organizationId,
+                organization_id: organizationId ?? defaultWriteOrgId ?? undefined,
+                is_shared: false,
             });
             setSelectedProjectIds(new Set());
         }
-    }, [initialData, isOpen, organizationId]);
+    }, [initialData, isOpen, organizationId, defaultWriteOrgId]);
 
     const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!formData.name) {
-            alert("Nome é obrigatório.");
+            setFormError('Informe o nome do investidor.');
             return;
         }
+        // Todo investidor tem uma organização DONA — inclusive o compartilhado,
+        // que é dono + `is_shared` (REGRA #5: "Todas" nunca é organização nula).
+        if (!formData.organization_id) {
+            setFormError('Escolha a organização dona deste investidor. Para deixá-lo disponível nas demais, marque "Disponível em todas as organizações".');
+            return;
+        }
+        setFormError(null);
 
         // We need to handle the submit slightly differently to include project updates
         // Since onSubmit prop implies just saving the investor, we might need to intercept it 
@@ -268,6 +283,49 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                 </div>
                             </div>
                         </div>
+
+                        <div>
+                            {/* Organização = DONA do cadastro; compartilhar é uma marcação à
+                                parte (mesmo par do SupplierForm). Marcado, o investidor aparece
+                                nas organizações de quem marcou e o Portal do Investidor mostra as
+                                obras vinculadas a ele nelas — ver
+                                aplicar_20271110950000_investidor_compartilhado.sql. */}
+                            <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
+                            <div className="relative">
+                                <Building2 className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                <select
+                                    className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 bg-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                    value={formData.organization_id || ''}
+                                    onChange={(e) => update({ organization_id: e.target.value || undefined })}
+                                >
+                                    <option value="">Selecione…</option>
+                                    {writableOrganizations.map(org => (
+                                        <option key={org.id} value={org.id}>{org.name}</option>
+                                    ))}
+                                </select>
+                            </div>
+                            <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    className="mt-0.5 w-4 h-4 rounded border-gray-300 text-purple-600 focus:ring-purple-500 cursor-pointer"
+                                    checked={!!formData.is_shared}
+                                    onChange={(e) => update({ is_shared: e.target.checked })}
+                                />
+                                <span className="text-xs font-medium text-gray-500 leading-snug">
+                                    Disponível em todas as organizações
+                                    <span className="block text-gray-400 font-normal">
+                                        Continua pertencendo à organização acima, que é quem pode editá-lo. O Portal do Investidor passa a mostrar as obras vinculadas a ele em todas as organizações.
+                                    </span>
+                                </span>
+                            </label>
+                        </div>
+
+                        {formError && (
+                            <div className="flex items-start gap-2 rounded-[6px] border border-rose-200 bg-rose-50 px-3 py-2.5 text-rose-700">
+                                <AlertCircle className="w-4 h-4 mt-0.5 shrink-0" />
+                                <p className="text-sm font-medium leading-snug">{formError}</p>
+                            </div>
+                        )}
 
                         {/* Project Linking Section */}
                         <div className="pt-4 border-t border-gray-100">

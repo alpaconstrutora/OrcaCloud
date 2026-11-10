@@ -138,6 +138,15 @@ Mudou em relação ao plano aprovado (09/11/2026):
 - A paleta do corretor não passou pelo validador do §28.4 (o script não está nesta máquina): a contagem na
   legenda é a codificação secundária.
 
+Conferência em produção (10/11/2026, portal aberto pela equipe como o corretor "geraldo", prédio 011 - Garden
+Cambuhy): o seletor aparece, o 3D abre, o toque numa unidade abre a ficha certa (Unidade 202, Torre A, Tipo 4,
+127 m², R$ 1.029.641) com Fazer proposta, Reservar (48h) e Somar à proposta. **Defeito achado:** a legenda dizia
+9 disponíveis + 5 reservadas (14) enquanto o 2D mostrava 34 unidades e 4 vendidas; a Torre B saiu inteira neutra e
+a tela avisava "20 unidades … só no espelho 2D". Causa: bastava UMA unidade ligada para o Empreendimento vencer, e
+no Garden só 17 dos 41 imóveis estão ligados (os 41 têm bloco e andar). Correção (PR seguinte): vale a fonte que
+acha lugar para mais imóveis; o Empreendimento só vence no empate. Por prédio, hoje: Garden 17/41 ligados → estoque;
+Bella Vista 9/9 → Empreendimento; os outros seis com andar → estoque; "Lote Vale do Sol" sem andar → sem 3D.
+
 ### F4 — Portal do Investidor: aba "Espelho de Vendas"
 
 | Arquivo | O que muda | Como sei que terminou |
@@ -175,7 +184,7 @@ Mudou em relação ao plano aprovado (09/11/2026):
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
 - [ ] F1b — contorno materializado na torre
 - [x] F2 — componente `<Espelho3D>` (PR #287)
-- [ ] F3 — Portal do Corretor: código pronto (branch `feat/espelho-3d-f3`); migration `aplicar_20271109950000_broker_portal_espelho.sql` APLICADA em 09/11/2026 (conferido: sem EXECUTE para PUBLIC, anon e authenticated executam, token inexistente → `valid=false`, token ativo → `valid=true` com 0 torres, como medido antes); falta o merge e conferir em produção
+- [ ] F3 — Portal do Corretor: código pronto (branch `feat/espelho-3d-f3`); migration `aplicar_20271109950000_broker_portal_espelho.sql` APLICADA em 09/11/2026 (conferido: sem EXECUTE para PUBLIC, anon e authenticated executam, token inexistente → `valid=false`, token ativo → `valid=true` com 0 torres, como medido antes); em `main` (#290, `7debce99`) e conferido em produção em 10/11/2026 — achou o defeito da fonte por cobertura, corrigido no PR seguinte; falta reconferir o Garden depois dele
 - [ ] F4 — Portal do Investidor
 - [ ] F5 — planta baixa por tipologia
 - [ ] F6 — vista da janela

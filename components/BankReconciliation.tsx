@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import {
     Upload, Search, CheckCircle2, AlertCircle,
     ArrowRightLeft, FileText, Download, Trash2, Check,
@@ -3089,74 +3090,64 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     overflow-x-auto: com 9 abas, rolagem horizontal (mesmo sem scrollbar
                     visível) corta texto no meio sem nenhum indício de que há mais abas —
                     quebra de linha garante que todas ficam sempre visíveis. */}
-                <div role="navigation" aria-label="Abas da Conciliação Bancária" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    <button
+                <div role="tablist" onKeyDown={moverEntreAbas} aria-label="Abas da Conciliação Bancária" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    <button type="button" role="tab" aria-selected={activeView === 'dashboard'} tabIndex={activeView === 'dashboard' ? 0 : -1}
                         onClick={() => setActiveView('dashboard')}
-                        aria-current={activeView === 'dashboard' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'dashboard' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Dashboard
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'statement'} tabIndex={activeView === 'statement' ? 0 : -1}
                         onClick={() => setActiveView('statement')}
-                        aria-current={activeView === 'statement' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'statement' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Extrato
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'center'} tabIndex={activeView === 'center' ? 0 : -1}
                         onClick={() => setActiveView('center')}
-                        aria-current={activeView === 'center' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'center' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Central
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'divergences'} tabIndex={activeView === 'divergences' ? 0 : -1}
                         onClick={() => setActiveView('divergences')}
-                        aria-current={activeView === 'divergences' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'divergences' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Divergências
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'anomalies'} tabIndex={activeView === 'anomalies' ? 0 : -1}
                         onClick={() => setActiveView('anomalies')}
-                        aria-current={activeView === 'anomalies' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'anomalies' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Anomalias
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'pending'} tabIndex={activeView === 'pending' ? 0 : -1}
                         onClick={() => setActiveView('pending')}
-                        aria-current={activeView === 'pending' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'pending' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pendentes
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'conciliated'} tabIndex={activeView === 'conciliated' ? 0 : -1}
                         onClick={() => setActiveView('conciliated')}
-                        aria-current={activeView === 'conciliated' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'conciliated' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Conciliados
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'categories'} tabIndex={activeView === 'categories' ? 0 : -1}
                         onClick={() => setActiveView('categories')}
-                        aria-current={activeView === 'categories' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'categories' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Categorias
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'close'} tabIndex={activeView === 'close' ? 0 : -1}
                         onClick={() => setActiveView('close')}
-                        aria-current={activeView === 'close' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'close' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Fechamento
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeView === 'prolabore'} tabIndex={activeView === 'prolabore' ? 0 : -1}
                         onClick={() => setActiveView('prolabore')}
-                        aria-current={activeView === 'prolabore' ? 'page' : undefined}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeView === 'prolabore' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         Pró-labore
                     </button>

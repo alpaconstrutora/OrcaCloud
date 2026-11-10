@@ -489,21 +489,21 @@ const PortalHelpSettings: React.FC = () => {
       <div className="flex flex-wrap items-center gap-3">
         <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
           {PORTAIS.map(p => (
-            <button key={p} type="button" onClick={() => setPortal(p)}
-              className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${portal === p ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+            <button aria-pressed={portal === p} key={p} type="button" onClick={() => setPortal(p)}
+              className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${portal === p ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
               {PORTAL_LABELS[p]}
             </button>
           ))}
         </div>
         <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
           {KINDS.map(k => (
-            <button key={k.id} type="button" onClick={() => { setKind(k.id); setAcompanhamento(false); }}
-              className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${!acompanhamento && kind === k.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+            <button aria-pressed={!acompanhamento && kind === k.id} key={k.id} type="button" onClick={() => { setKind(k.id); setAcompanhamento(false); }}
+              className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${!acompanhamento && kind === k.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
               {k.label}
             </button>
           ))}
-          <button type="button" onClick={() => setAcompanhamento(true)}
-            className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${acompanhamento ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
+          <button aria-pressed={acompanhamento} type="button" onClick={() => setAcompanhamento(true)}
+            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${acompanhamento ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}>
             Acompanhamento
           </button>
         </div>

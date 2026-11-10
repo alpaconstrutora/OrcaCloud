@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import { ArrowLeft, Calculator, CheckCircle2, History, Landmark, Loader2, RefreshCw, Scissors, Upload } from 'lucide-react';
 import { formatMoney, formatDateBR } from '../ui/Format';
 import { useConfirm } from '../ui/confirm';
@@ -349,12 +350,12 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
 
             {/* Abas — §19.1 */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {ABAS.map(a => (
-                        <button
+                        <button type="button" role="tab" aria-selected={aba === a.id} tabIndex={aba === a.id ? 0 : -1}
                             key={a.id}
                             onClick={() => setAba(a.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 aba === a.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >
@@ -430,10 +431,10 @@ export default function DebtDetail({ contract, onBack, onEdit, onChanged }: Prop
                             A camada "realizado" chega na Fase 1b, com debt_events. */}
                         <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
                             {(['CONTRATUAL', 'VIGENTE'] as DebtScheduleKind[]).map(k => (
-                                <button
+                                <button type="button" aria-pressed={camada === k}
                                     key={k}
                                     onClick={() => setCamada(k)}
-                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${
+                                    className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${
                                         camada === k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                     }`}
                                 >

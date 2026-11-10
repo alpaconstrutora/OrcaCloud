@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { projectService, ProjectData } from '../services/projectService';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { FolderOpen, Calendar, Trash2, Search, Loader2, Plus, Copy, FileSpreadsheet, LayoutDashboard, Table2, Lock, Unlock, Link2, RefreshCw, Clock, CheckCircle2, MoveHorizontal, AlertCircle } from 'lucide-react';
@@ -921,10 +922,10 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
             {!classificationFilter && (
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                    <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                        <button
+                    <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <button type="button" role="tab" aria-selected={activeTab === 'budgets'} tabIndex={activeTab === 'budgets' ? 0 : -1}
                             onClick={() => setActiveTab('budgets')}
-                            className={`flex items-center px-3 h-7 text-sm font-medium rounded-[6px] whitespace-nowrap transition-all ${activeTab === 'budgets'
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center px-3 h-7 text-sm font-medium rounded-[6px] whitespace-nowrap transition-all ${activeTab === 'budgets'
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-700 hover:text-gray-900'
                                 }`}
@@ -932,9 +933,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             <FolderOpen className="w-4 h-4 mr-2" />
                             Orçamentos
                         </button>
-                        <button
+                        <button type="button" role="tab" aria-selected={activeTab === 'templates'} tabIndex={activeTab === 'templates' ? 0 : -1}
                             onClick={() => setActiveTab('templates')}
-                            className={`flex items-center px-3 h-7 text-sm font-medium rounded-[6px] whitespace-nowrap transition-all ${activeTab === 'templates'
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center px-3 h-7 text-sm font-medium rounded-[6px] whitespace-nowrap transition-all ${activeTab === 'templates'
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-700 hover:text-gray-900'
                                 }`}

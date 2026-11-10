@@ -355,10 +355,10 @@ export function FiscalJobs({ organizationId, onToast, chromeSlot }: Props) {
                 que morava aqui competia com a aba ativa logo acima. */}
             <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
               {FILTERS.map(f => (
-                <button
+                <button type="button" aria-pressed={filter === f.k}
                   key={f.k}
                   onClick={() => setFilter(f.k)}
-                  className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                  className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                     filter === f.k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                   }`}
                 >

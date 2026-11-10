@@ -1,3 +1,4 @@
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React from 'react';
 import ActionIconButton from './ui/ActionIconButton';
@@ -4023,16 +4024,16 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
         <div className={`${isStandalone ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
             {/* `menu` do tour no app logado (sem a casca do link, o menu do
                 portal é esta barra) */}
-            <div data-tour="menu" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+            <div role="tablist" onKeyDown={moverEntreAbas} data-tour="menu" className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                 {desktopNavTabs.map(tab => {
                     const isVisible = enabledTabIds.includes(tab.id);
                     return (
-                        <button
+                        <button type="button" role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
                             key={tab.id}
                             data-tour={`aba-${tab.id}`}
                             onClick={() => setActiveTab(tab.id as typeof activeTab)}
                             title={isAdmin && !isVisible ? 'Oculta para o cliente' : undefined}
-                            className={`
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 
                                 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all
                                 ${activeTab === tab.id
                                     ? 'bg-white text-blue-600 shadow-sm'

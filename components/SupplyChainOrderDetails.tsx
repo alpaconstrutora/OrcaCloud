@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal, ClipboardCheck, Scale, Paperclip } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TabsBar, type TabsBarItem } from './ui/TabsBar';
@@ -1260,7 +1261,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                 bg-white + cor do acento (estado de navegação, não ação). O acento
                 sai do mapa ACCENTS, então o portal externo (§24) mantém o coral. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([
                         { id: 'dados', label: 'Dados Gerais', icon: FileText },
                         { id: 'itens', label: 'Itens do Pedido', icon: Package },
@@ -1268,11 +1269,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         { id: 'recebimento', label: 'Recebimento', icon: Truck },
                         { id: 'comunicacao', label: 'Comunicação', icon: MessageCircle },
                     ] as const).map(aba => (
-                        <button
+                        <button role="tab" aria-selected={abaDetalhe === aba.id} tabIndex={abaDetalhe === aba.id ? 0 : -1}
                             key={aba.id}
                             type="button"
                             onClick={() => setAbaDetalhe(aba.id)}
-                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${abaDetalhe === aba.id
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${abaDetalhe === aba.id
                                 ? `bg-white ${A.text} shadow-sm`
                                 : 'text-gray-700 hover:text-gray-900'
                                 }`}

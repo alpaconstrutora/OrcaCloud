@@ -916,10 +916,10 @@ export default function ContasPagarManager({ organizations }: Props) {
                                 chegaram?". Controle segmentado, mesmo vocabulário do §19.1. */}
                             <div className="flex items-center h-9 bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                 {(['parcelas', 'notas', 'fechamento'] as Visao[]).map(v => (
-                                    <button
+                                    <button type="button" aria-pressed={visao === v}
                                         key={v}
                                         onClick={() => setVisao(v)}
-                                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                             visao === v ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                         }`}
                                     >
@@ -1093,10 +1093,10 @@ export default function ContasPagarManager({ organizations }: Props) {
                                 {(['all', 'pending', 'approved', 'overdue', 'paid'] as StatusFilter[]).map(s => {
                                     const activeColor = s === 'overdue' ? 'text-red-600' : s === 'paid' ? 'text-emerald-600' : s === 'pending' ? 'text-amber-600' : s === 'approved' ? 'text-blue-600' : 'text-gray-900';
                                     return (
-                                        <button
+                                        <button type="button" aria-pressed={statusFilter === s}
                                             key={s}
                                             onClick={() => setStatusFilter(s)}
-                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFilter === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-700 hover:text-gray-900'}`}
+                                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${statusFilter === s ? `bg-white shadow-sm ${activeColor}` : 'text-gray-700 hover:text-gray-900'}`}
                                         >
                                             {s === 'all' ? 'Todos' : s === 'overdue' ? 'Atrasado' : STATUS_PT[s]}
                                         </button>

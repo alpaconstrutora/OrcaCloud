@@ -1,4 +1,5 @@
 import React, { useMemo, useState } from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import {
     AlertTriangle, Award, BookOpen, CheckCircle2, Plus, Search, Users, XCircle, MoveHorizontal } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
@@ -381,12 +382,12 @@ const LaborTrainings: React.FC<LaborTrainingsProps> = ({
 
             {/* Toolbar de abas (§19.1) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {VIEWS.map(v => (
-                        <button
+                        <button type="button" role="tab" aria-selected={view === v.id} tabIndex={view === v.id ? 0 : -1}
                             key={v.id}
                             onClick={() => setView(v.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 view === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

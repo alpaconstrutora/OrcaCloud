@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import {
     Plus, Loader2, AlertTriangle, CheckCircle2, Clock, Archive, Pause,
     Trash2, Save, X, Pencil, TrendingUp, Lock,
@@ -215,12 +216,12 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
 
             {/* Barra de abas (§19.1) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([['plans', 'Planos'], ['rentability', 'Rentabilidade']] as const).map(([id, label]) => (
-                        <button
+                        <button type="button" role="tab" aria-selected={tab === id} tabIndex={tab === id ? 0 : -1}
                             key={id}
                             onClick={() => setTab(id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 tab === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

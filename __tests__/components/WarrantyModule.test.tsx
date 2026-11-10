@@ -287,7 +287,7 @@ describe('Pós-Obra & Garantia · o chamado abre como TELA, não overlay', () =>
         await abrirChamado();
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         // ...e a toolbar de abas da LISTA também sai (é outra tela agora).
-        expect(screen.queryByRole('button', { name: 'Análise', exact: true })).not.toBeInTheDocument();
+        expect(screen.queryByRole('tab', { name: 'Análise', exact: true })).not.toBeInTheDocument();
     });
 
     it('não desenha backdrop nem container de overlay', async () => {
@@ -340,7 +340,7 @@ describe('Pós-Obra & Garantia · abas', () => {
         await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
 
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Pós-Obra & Garantia');
-        await user.click(screen.getByRole('button', { name: 'Análise' }));
+        await user.click(screen.getByRole('tab', { name: 'Análise' }));
         expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent('Análise de Pós-Obra');
     });
 
@@ -349,7 +349,7 @@ describe('Pós-Obra & Garantia · abas', () => {
         render(<WarrantyModule projects={PROJETOS} />);
         await waitFor(() => expect(screen.getByText('Impermeabilização da laje')).toBeInTheDocument());
 
-        await user.click(screen.getByRole('button', { name: 'Análise' }));
+        await user.click(screen.getByRole('tab', { name: 'Análise' }));
         expect(screen.queryByRole('table')).not.toBeInTheDocument();
         expect(screen.getByText('Em aberto')).toBeInTheDocument();
         expect(screen.getByText('SLA vencidos')).toBeInTheDocument();
@@ -371,7 +371,7 @@ describe('Pós-Obra & Garantia · abas', () => {
         expect(screen.getByText('Esquadria da sacada')).toBeInTheDocument();
 
         // …e a Análise continua contando o conjunto inteiro (1 aberto, 1 encerrado).
-        await user.click(screen.getByRole('button', { name: 'Análise' }));
+        await user.click(screen.getByRole('tab', { name: 'Análise' }));
         const emAberto = screen.getByText('Em aberto').closest('div')?.parentElement;
         expect(emAberto).toHaveTextContent('1');
 
@@ -462,7 +462,7 @@ describe('Pós-Obra & Garantia · ações por estado (ciclo de vida, 2026-10-11)
 
     it('encerrado: agendar visita desligado com o motivo', async () => {
         const user = await abrir({ state: 'ENCERRADO', in_warranty: true });
-        await user.click(screen.getByRole('button', { name: 'Visitas' }));
+        await user.click(screen.getByRole('tab', { name: 'Visitas' }));
         const b = screen.getByRole('button', { name: /Agendar visita/ });
         expect(b).toBeDisabled();
         expect(b).toHaveAttribute('title', 'Chamado encerrado.');
@@ -476,7 +476,7 @@ describe('Pós-Obra & Garantia · aba Suprimentos (2026-10-11)', () => {
         render(<WarrantyModule projects={PROJETOS} {...props} />);
         await waitFor(() => expect(screen.getByText('Chamado de compras')).toBeInTheDocument());
         await user.click(screen.getByText('Chamado de compras'));
-        await user.click(await screen.findByRole('button', { name: 'Suprimentos' }));
+        await user.click(await screen.findByRole('tab', { name: 'Suprimentos' }));
         return user;
     }
 
@@ -544,7 +544,7 @@ describe('Pós-Obra & Garantia · pendências (2026-10-11)', () => {
     it('visita pendente oferece registrar, reagendar e cancelar (com motivo)', async () => {
         listVisits.mockResolvedValueOnce([{ id: 'v1', claim_id: 'cp', organization_id: 'org1', scheduled_at: '2026-10-20T12:00:00Z', technician_name: 'Ana', status: 'AGENDADA', created_at: '2026-10-11' }]);
         const user = await abrir({ state: 'VISITA_AGENDADA', in_warranty: null });
-        await user.click(screen.getByRole('button', { name: 'Visitas' }));
+        await user.click(screen.getByRole('tab', { name: 'Visitas' }));
         expect(await screen.findByRole('button', { name: 'Registrar resultado' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Reagendar' })).toBeInTheDocument();
         await user.click(screen.getByRole('button', { name: 'Cancelar visita' }));

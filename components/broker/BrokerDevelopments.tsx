@@ -799,15 +799,15 @@ const BrokerDevelopments: React.FC<BrokerDevelopmentsProps> = ({ buildings, unit
                 <div className="flex items-center gap-3">
                     {/* Toggle Venda/Locação — o mesmo prédio pode ter as duas tabelas. */}
                     <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
-                        <button
+                        <button type="button" aria-pressed={priceMode === 'sale'}
                             onClick={() => setPriceMode('sale')}
-                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'sale' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'sale' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             Venda
                         </button>
-                        <button
+                        <button type="button" aria-pressed={priceMode === 'rental'}
                             onClick={() => setPriceMode('rental')}
-                            className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'rental' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${priceMode === 'rental' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             Locação
                         </button>

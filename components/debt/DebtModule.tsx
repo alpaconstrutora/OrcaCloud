@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import { AlertCircle, Landmark, Percent, Plus, RefreshCw, Search, TrendingDown, Wallet } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState } from '../ui/TableUtils';
 import { KpiCardCompact } from '../ui/KpiCardCompact';
@@ -311,12 +312,12 @@ export default function DebtModule() {
 
             {/* Abas — §19.1, antes dos KPIs: os números refletem a aba ativa. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([['contratos', 'Contratos'], ['propostas', 'Cotações'], ['simulador', 'Simulador'], ['covenants', 'Covenants'], ['posicao', 'Posição consolidada']] as [ModuleView, string][]).map(([id, label]) => (
-                        <button
+                        <button type="button" role="tab" aria-selected={moduleView === id} tabIndex={moduleView === id ? 0 : -1}
                             key={id}
                             onClick={() => setModuleView(id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 moduleView === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

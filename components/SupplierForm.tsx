@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { ArrowLeft, Truck, Tag, User, Mail, Phone, FileText, MapPin, Building2, Briefcase, RefreshCw, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Supplier, Organization } from '../types';
 import { supplierCategoryService } from '../services/supplierCategoryService';
@@ -372,13 +373,13 @@ const SupplierForm: React.FC<SupplierFormProps> = ({ initialData, onSubmit, onCl
 
             {/* Toolbar de abas — anatomia canônica §19.1. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {tabs.map(tab => (
-                        <button
+                        <button role="tab" aria-selected={activeTab === tab} tabIndex={activeTab === tab ? 0 : -1}
                             key={tab}
                             type="button"
                             onClick={() => setActiveTab(tab)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 activeTab === tab ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

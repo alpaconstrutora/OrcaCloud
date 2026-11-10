@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { X, ArrowLeft, Building2, MapPin, Ruler, FileText, Cloud, Search, ChevronDown, TrendingUp, Calendar, Hash, Layers, Settings2, Users, Check } from 'lucide-react';
 import { TipoObra, RegimeObra, TechnicalConfig, ProjectTypeTemplate, OBRA_STATUSES, ObraStatus } from '../types/project';
 import { BASE_CUB_RATES, CUB_STANDARDS_DATA } from '../constants';
@@ -956,13 +957,13 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     `bg-gray-50`). Um <form> só: a aba decide o que APARECE, não o
                     que é gravado — salvar de qualquer aba grava a obra inteira. */}
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm">
-                  <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                  <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {OBRA_TABS.map(tab => (
-                      <button
+                      <button role="tab" aria-selected={obraTab === tab.id} tabIndex={obraTab === tab.id ? 0 : -1}
                         key={tab.id}
                         type="button"
                         onClick={() => setObraTab(tab.id)}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                           obraTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                         }`}
                       >

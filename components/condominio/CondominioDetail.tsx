@@ -4,6 +4,7 @@
 //
 // Um condomínio é o `Empreendimento` no estado EM_OPERACAO — não há entidade
 // nem árvore nova. As torres e unidades são as mesmas que foram vendidas.
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
 import { FileText, Users, Wrench, Save, Scale, Package, Megaphone, Wallet, AlertCircle, FolderOpen, Plus, Link2, Unlink } from 'lucide-react';
 import ClientSelect, { type ClientOption } from '../ClientSelect';
@@ -327,12 +328,12 @@ const CondominioDetail: React.FC<Props> = ({ empreendimento, abaInicial, onBack,
 
             {/* Abas §19.1 */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {abas.map(t => (
-                        <button
+                        <button type="button" role="tab" aria-selected={aba === t.id} tabIndex={aba === t.id ? 0 : -1}
                             key={t.id}
                             onClick={() => setAba(t.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
                                 aba === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

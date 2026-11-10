@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import { X, Clock, Eye, CalendarOff, Plus, Download } from 'lucide-react';
 import ActionIconButton from '../ui/ActionIconButton';
 import { ProjectSchedule, ReplanMode } from '../../types';
@@ -95,15 +96,15 @@ export const ConfigModal: React.FC<ConfigModalProps> = ({ isOpen, onClose, sched
                 </div>
 
                 <div className="p-3 pb-0">
-                    <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
+                    <div role="tablist" onKeyDown={moverEntreAbas} className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
                         {([
                             { id: 'geral' as const, label: 'Geral' },
                             { id: 'exibicao' as const, label: 'Exibição' },
                         ]).map(tab => (
-                            <button
+                            <button type="button" role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
-                                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                             >
                                 {tab.label}
                             </button>

@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import {
     AlertTriangle, Award, BarChart3, BookOpen, Clock, Loader2, ShieldAlert, Users, MoveHorizontal } from 'lucide-react';
 import { KpiCard } from '../ui/KpiCard';
@@ -162,12 +163,12 @@ const AcademyPanels: React.FC<Props> = ({ orgId }) => {
         <div className="space-y-3">
             {/* Sub-toggle do painel (§19.1) */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([['gestor', 'Equipe'], ['rh', 'RH / SESMT']] as Array<[Visao, string]>).map(([id, label]) => (
-                        <button
+                        <button type="button" role="tab" aria-selected={visao === id} tabIndex={visao === id ? 0 : -1}
                             key={id}
                             onClick={() => setVisao(id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 visao === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

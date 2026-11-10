@@ -132,10 +132,10 @@ export default function DebtRenegotiateSheet({ open, onClose, contract, installm
 
                 <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 w-fit">
                     {([['AMORTIZACAO', 'Amortização extraordinária'], ['RENEGOCIACAO', 'Renegociação']] as [Modo, string][]).map(([id, label]) => (
-                        <button
+                        <button type="button" aria-pressed={modo === id}
                             key={id}
                             onClick={() => setModo(id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${
                                 modo === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

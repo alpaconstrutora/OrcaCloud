@@ -173,7 +173,7 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'photo',    label: 'Foto',               sortable: false },
     { key: 'unit',     label: 'Unidade',            sortable: true },
     { key: 'status',   label: 'Status',             sortable: true },
-    // Só no empreendimento do tipo LOTE — e lá Vagas/Banheiros/Pavimento/Posição
+    // Só no empreendimento do tipo LOTE — e lá Dormitórios/Vagas/Banheiros/Pavimento/Posição
     // saem (colunasForaDaTabelaDePrecos). Vêm de empreendimento_units.quadra/lote.
     { key: 'quadra',   label: 'Quadra',             sortable: true },
     { key: 'lote',     label: 'Nº do lote',         sortable: true },
@@ -388,7 +388,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
     const svc = cfg.service;
     // Colunas com labels do modo (o dropdown de configurar colunas mostra estes).
     // Estrutura do tipo do empreendimento do prédio: no LOTE a tabela troca
-    // Vagas/Banheiros/Pavimento/Posição por Quadra/Nº do lote. Só leitura,
+    // Dormitórios/Vagas/Banheiros/Pavimento/Posição por Quadra/Nº do lote. Só leitura,
     // best-effort — sem vínculo ou com erro, fica a tabela de sempre (TORRES).
     const [estrutura, setEstrutura] = React.useState<EstruturaDoTipo>('TORRES');
     const [quadraLote, setQuadraLote] = React.useState<Record<string, { quadra: string | null; lote: string | null }>>({});

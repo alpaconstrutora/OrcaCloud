@@ -205,7 +205,7 @@ SQL:
 - [x] Task 3 — tela Montar plano (Juros a.m., Sistema, Preço sem juros; sugestão do Plano de vendas só em venda sem plano)
 - [x] Task 4 — contrato e Contas a Receber (contrato novo **e** existente passam a valer o total com juros; zerar os juros devolve o valor sem juros)
 - [x] Task 5 — DRE/Balancete: migration `aplicar_20271110300100_dre_juros_destacado.sql` **aplicada em produção em 10/11/2026**. Assinatura md5 linha a linha de `fn_dre`/`fn_balancete`/`fn_dre_summary` idêntica antes/depois (7 orgs × 2 regimes × 12 meses); Σ view = Σ tabela. Reversão: `supabase/manual/reverter_20271110300100_dre_juros_destacado.sql`.
-  - [ ] `scripts/teste-dre-juros-destacado.sql` (cenários com juros, INSERT dentro de BEGIN/ROLLBACK) — **não rodado**: aguarda liberação do usuário para INSERT de teste em produção.
+  - [x] `scripts/teste-dre-juros-destacado.sql` (cenários com juros, INSERT dentro de BEGIN/ROLLBACK) — rodado em produção em 10/11/2026 com liberação do usuário: **40 de 40 verificações ok** (separação 7.884,88 / 1.000,00 nos dois regimes, CANCELLED, `LEAST` com 9.999, sem categoria, fn_dre_summary/balancete/SPE/obras com total inalterado). Rollback conferido: 0 títulos de 2099 depois.
 - [ ] Task 6 — fechamento (PR, CI, merge, conferir produção)
 
 ### Pendências conhecidas (depois do merge)

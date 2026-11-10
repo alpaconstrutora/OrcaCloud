@@ -52,10 +52,12 @@ Trocar a organização do investidor leva o link junto (gatilho atualiza
       do portal. *Pronto quando:* ensaio com ROLLBACK no banco mostra o portal do
       Tiago com 0 obras antes, 1 marcado com destino na SPE, 0 desmarcado — **feito
       em 10/11 (0 → 1 → 0, destino apagado)**.
-- [ ] **Migration aplicada no banco** — *pronto quando:* `investors.is_shared` e
+- [x] **Migration aplicada no banco** — *pronto quando:* `investors.is_shared` e
       `investor_org_shares` existem e o gatilho `trg_investors_compartilhamento`
       aparece em `pg_trigger`. Tem de vir ANTES do front (a lista seleciona
-      `is_shared`).
+      `is_shared`). **Aplicada em 10/11**: coluna, tabela (só `ios_select`),
+      gatilho e `investors_select` com `is_shared` conferidos; funções do portal
+      com anon+authenticated, `fn_orgs_do_investidor` e o gatilho sem grant.
 - [x] **Serviço** — `listInvestors` traz `is_shared` + destinos; na organização do
       topo, mostra os dela e os compartilhados COM ela. *Pronto quando:*
       `__tests__/investidorCompartilhado.test.ts` verde.

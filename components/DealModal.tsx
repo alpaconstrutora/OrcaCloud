@@ -23,8 +23,11 @@ import {
     saldoDoPlano,
     somarDias,
     somarMeses,
+    serieDoPlanoGravado,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
+import SaveStatus from './ui/SaveStatus';
+import { registrarPendencia, CONFIRMAR_SAIDA } from '../lib/guardaDeSaida';
 // Parcelamento COM JUROS (Price/SAC) do "Montar plano" — venda. Testado em
 // __tests__/jurosParcelamento.test.ts.
 import {
@@ -554,6 +557,20 @@ export const InstallmentLoteEditModal: React.FC<InstallmentLoteModalProps> = ({ 
     );
 };
 
+/**
+ * Assinatura do formulário para o dirty-check (§25): JSON com as chaves em
+ * ordem — `setFormData({ ...prev, x })` acrescenta chave nova no FIM, e a mesma
+ * negociação com chaves em outra ordem não pode contar como alterada.
+ */
+const assinaturaDoForm = (d: unknown) => JSON.stringify(d, (_k, v) =>
+    v && typeof v === 'object' && !Array.isArray(v)
+        ? Object.fromEntries(Object.entries(v as Record<string, unknown>).sort(([a], [b]) => a.localeCompare(b)))
+        : v);
+
+/** Montador de plano da aba Financeiro: o que o usuário digitou; `null` = não mexeu. */
+type CamposDoMontador = { entrada: string | null; parcelas: string | null; tipo: string | null; primeiroVencimento: string | null };
+const MONTADOR_INTOCADO: CamposDoMontador = { entrada: null, parcelas: null, tipo: null, primeiroVencimento: null };
+
 interface DealModalProps {
     isOpen: boolean;
     onClose: () => void;
@@ -674,13 +691,33 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         ...initialData
     });
 
+    /**
+     * §25 do guia — alterações não salvas. Sem um `setField` único (cada campo
+     * grava direto via `setFormData`), o dirty é o diff contra o último estado
+     * salvo/carregado, como no ProjectModal. Até 2026-11-10 "Cancelar" e a seta
+     * do cabeçalho fechavam sem perguntar: um plano montado com o cliente na
+     * frente se perdia em silêncio (crítica de design da aba Financeiro).
+     *
+     * O que o PRÓPRIO sistema ajusta depois de abrir (plano reconstruído do
+     * cofre, total semeado pela soma das unidades, código regerado no banco)
+     * passa por `ajustarDoSistema`, que aplica o mesmo ajuste ao snapshot — senão
+     * toda negociação abriria acusando "alterações não salvas".
+     */
+    const formSalvoRef = useRef<Partial<PropertyDeal>>(formData);
+    const [savedAt, setSavedAt] = useState<number | null>(null);
+    const ajustarDoSistema = useCallback((ajuste: (d: Partial<PropertyDeal>) => Partial<PropertyDeal>) => {
+        formSalvoRef.current = ajuste(formSalvoRef.current);
+        setFormData(ajuste);
+    }, []);
+    const dirty = assinaturaDoForm(formData) !== assinaturaDoForm(formSalvoRef.current);
+
     useEffect(() => {
         if (isOpen) {
             // Abre na aba pedida por quem chamou (a fila de Renovações manda
             // 'contrato'); sem isso o modal sempre voltava para 'cliente'.
             setActiveTab((initialTab as TabId) || 'cliente');
             setContratoSubTab(initialTab === 'contrato' ? 'renovacoes' : 'dados');
-            setFormData({
+            const inicial: Partial<PropertyDeal> = {
                 type: defaultType || 'SALE',
                 status: 'IN_NEGOTIATION',
                 value: 0,
@@ -695,7 +732,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 broker_commission_pct: 0,
                 broker_commission_value: 0,
                 ...initialData
-            });
+            };
+            formSalvoRef.current = inicial;
+            setFormData(inicial);
             setSelectedEntryIds(new Set());
             setLastEntryIndex(null);
             setExpandedBuyerId(null);
@@ -893,7 +932,15 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // A parte pura é `montarPlanoRapido` (utils/paymentPlan.ts, testada) e, desde
     // 09/11/2026, `preverPlano`/`montarPlanoNoNegocio` (utils/jurosParcelamento.ts),
     // que somam o parcelamento COM JUROS (Price/SAC) em venda.
-    const [planoRapido, setPlanoRapido] = useState({ entrada: '', parcelas: '12', tipo: 'MENSAL', primeiroVencimento: '' });
+    /**
+     * O que o usuário DIGITOU no montador; `null` = não mexeu, e o campo mostra
+     * o que o app já sabe (`planoRapido`, abaixo): o plano gravado, ou o padrão
+     * 12× mensal. Até 2026-11-10 o montador nascia fixo em "12×, sem entrada" e
+     * não zerava ao reabrir — sobre um plano de sinal + 60 parcelas, "Substituir
+     * plano" trocava tudo por 12× e apagava o sinal; e o digitado numa
+     * negociação aparecia na próxima (crítica de design da aba Financeiro).
+     */
+    const [planoRapidoDigitado, setPlanoRapido] = useState<CamposDoMontador>(MONTADOR_INTOCADO);
     /**
      * Juros do "Montar plano" (só venda). `null` = o usuário não mexeu no campo,
      * e o painel mostra o que o app já sabe: a taxa/sistema/preço gravados na
@@ -906,7 +953,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     );
     const [sugestaoJuros, setSugestaoJuros] = useState<{ taxa: number; plano: string } | null>(null);
     useEffect(() => {
-        if (isOpen) setPlanoJuros({ taxa: null, sistema: null, preco: null });
+        if (isOpen) {
+            setPlanoJuros({ taxa: null, sistema: null, preco: null });
+            setPlanoRapido(MONTADOR_INTOCADO);
+        }
     }, [isOpen, initialData]);
     const ehVenda = formData.type === 'SALE';
     // A sugestão do Plano de vendas só preenche venda SEM plano montado e sem
@@ -934,6 +984,20 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         () => sortPaymentTypes(paymentTypes.filter(t => t.active !== false && t.generates_series)),
         [paymentTypes],
     );
+    /** A série principal do plano gravado — o ponto de partida do montador. */
+    const serieGravada = useMemo(
+        () => serieDoPlanoGravado(linhasDoPlano.filter(l => !l.ehSinal).map(l => l.bloco)),
+        [linhasDoPlano],
+    );
+    /** Os campos do montador como a tela mostra: o digitado, senão o plano gravado. */
+    const planoRapido = {
+        entrada: planoRapidoDigitado.entrada
+            ?? (ehVenda && (Number(formData.down_payment) || 0) > 0 ? Number(formData.down_payment).toFixed(2) : ''),
+        parcelas: planoRapidoDigitado.parcelas ?? String(serieGravada?.parcelas ?? 12),
+        tipo: planoRapidoDigitado.tipo
+            ?? (serieGravada && tiposDeSerie.some(t => t.code === serieGravada.tipo) ? serieGravada.tipo : 'MENSAL'),
+        primeiroVencimento: planoRapidoDigitado.primeiroVencimento ?? (serieGravada?.primeiroVencimento || ''),
+    };
     /** Os campos do painel, já em números. */
     const camposDoPlano = (): CamposDoPlano => ({
         entrada: ehVenda ? (parseFloat(planoRapido.entrada) || 0) : 0,
@@ -950,7 +1014,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         () => preverPlano(formData, camposDoPlano()),
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [formData.type, formData.value, formData.date, formData.contract_total_value, formData.price_before_interest,
-            formData.payment_due_date, planoRapido, planoJuros.preco, mostrarPrecoSemJuros, taxaJuros, sistemaJuros, paymentTypes],
+            formData.payment_due_date, planoRapido.entrada, planoRapido.parcelas, planoRapido.tipo, planoRapido.primeiroVencimento,
+            planoJuros.preco, mostrarPrecoSemJuros, taxaJuros, sistemaJuros, paymentTypes],
     );
     /** Preço sem juros que o campo mostra (o digitado, ou o gravado/total). */
     const precoSemJurosExibido = planoJuros.preco ?? precoSemJurosPadrao(formData);
@@ -1128,11 +1193,22 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             return;
         }
 
+        // Negociação nova fecha ao salvar (§25): o botão fica desligado até o 1º salvar.
+        if (!formData.id) {
+            notifyError('Salve a negociação antes de lançar — a cobrança sai do contrato dela.');
+            return;
+        }
+        // Com alterações pendentes, salva ANTES: o lançamento lê o plano da tela
+        // e grava no contrato — sem isso, Contas a Receber divergia da negociação
+        // gravada, e "Voltar" ainda podia descartar o resto (crítica 10/11/2026).
+        const salvarAntes = dirty;
+
         const total = parcelas.reduce((sum, i) => sum + i.value, 0);
         const jaLancadas = contractEntries.filter(e => e.status === 'PENDING').length;
         const ok = await confirm({
-            title: 'Lançar o plano em Contas a Receber?',
-            message: `${parcelas.length} parcela(s), somando ${fmtMoeda(total)}, serão lançadas como cobrança do contrato desta negociação.`
+            title: salvarAntes ? 'Salvar e lançar o plano em Contas a Receber?' : 'Lançar o plano em Contas a Receber?',
+            message: (salvarAntes ? 'A negociação será salva antes, com as alterações desta tela. ' : '')
+                + `${parcelas.length} parcela(s), somando ${fmtMoeda(total)}, serão lançadas como cobrança do contrato desta negociação.`
                 + (jaLancadas > 0
                     ? ` As ${jaLancadas} parcela(s) ainda PREVISTAS deste contrato serão substituídas; as já pagas ou conciliadas ficam intactas.`
                     : '')
@@ -1140,10 +1216,23 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     ? ` Atenção: o plano ainda não fecha o Valor Total do Contrato (${saldoPlano > 0 ? 'faltam' : 'excedem'} ${fmtMoeda(Math.abs(saldoPlano))}).`
                     : ''),
             variant: 'warning',
-            confirmLabel: 'Lançar no Financeiro',
+            confirmLabel: salvarAntes ? 'Salvar e lançar' : 'Lançar no Financeiro',
             cancelLabel: 'Cancelar',
         });
         if (!ok) return;
+
+        if (salvarAntes) {
+            // Mesma trava de envio duplo do botão Salvar (ver handleSubmit).
+            if (enviandoRef.current) return;
+            enviandoRef.current = true;
+            let gravou = false;
+            try {
+                gravou = await salvarNegociacao();
+            } finally {
+                enviandoRef.current = false;
+            }
+            if (!gravou) return;
+        }
 
         setLancandoNoFinanceiro(true);
         setGenerateResult(null);
@@ -1460,7 +1549,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 clientId: formData.client_id || undefined,
                 costCenterId: formData.cost_center_id || undefined,
             });
-            setFormData(prev => ({ ...prev, code: novo }));
+            // Já gravado no banco pelo serviço — não é pendência do formulário.
+            ajustarDoSistema(prev => ({ ...prev, code: novo }));
         } catch (e: unknown) {
             setContractError(e instanceof Error ? e.message : String(e));
         } finally {
@@ -1484,7 +1574,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 if (active && insts.length > 0) {
                     // Não sobrescreve se já houver algo em edição (ex: efeito refirou
                     // depois que o usuário já gerou/editou parcelas nesta sessão).
-                    setFormData(prev => (prev.custom_installments?.length ? prev : { ...prev, custom_installments: insts }));
+                    ajustarDoSistema(prev => (prev.custom_installments?.length ? prev : { ...prev, custom_installments: insts }));
                 }
             })
             .catch(err => console.error('[DealModal] Erro ao recuperar parcelas do cofre:', err));
@@ -1632,7 +1722,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 if (o && o.length > 0) {
                     setOrg(o[0]);
                     if (!formData.id && !formData.organization_id) {
-                        setFormData(prev => ({ ...prev, organization_id: o[0].id }));
+                        ajustarDoSistema(prev => ({ ...prev, organization_id: o[0].id }));
                     }
                     // Corretores de TODAS as organizações do usuário — não só a da
                     // negociação. Um empreendimento vira uma org-SPE própria (ex:
@@ -1694,7 +1784,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         if (!isOpen || formData.type !== 'SALE') return;
         if ((Number(formData.contract_total_value) || 0) > 0) return;
         if (unitsTotal <= 0) return;
-        setFormData(prev => ((Number(prev.contract_total_value) || 0) > 0
+        ajustarDoSistema(prev => ((Number(prev.contract_total_value) || 0) > 0
             ? prev
             : { ...prev, contract_total_value: Number(unitsTotal.toFixed(2)) }));
     }, [isOpen, formData.type, formData.contract_total_value, unitsTotal]);
@@ -2492,11 +2582,12 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         propertyExportService.generateProposalPDF(formData as PropertyDeal, selectedProperty, selectedClient, org, unitProperties, buyerClients);
     };
 
-    const salvarNegociacao = async () => {
+    /** Grava a negociação. `true` = gravou (o "Salvar e lançar" só segue assim). */
+    const salvarNegociacao = async (): Promise<boolean> => {
         if (dealUnits.length === 0 || !formData.client_id) {
             setActiveTab(dealUnits.length === 0 ? 'unidade' : 'cliente');
             notifyError('Por favor, selecione ao menos um imóvel e o cliente para continuar.');
-            return;
+            return false;
         }
 
         if (formData.value === 0) {
@@ -2506,7 +2597,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 variant: 'warning',
                 confirmLabel: 'Continuar',
             });
-            if (!ok) return;
+            if (!ok) return false;
         }
 
         setLoading(true);
@@ -2522,11 +2613,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 console.error('[DealModal] ERRO: organization_id ausente no payload');
                 notifyError('Erro: Organização não identificada. Por favor, recarregue a página.');
                 setLoading(false);
-                return;
+                return false;
             }
 
             const savedDeal = await commercialService.saveDeal(payload);
             console.log('[DealModal] Negociação salva com sucesso:', savedDeal);
+            // §25 — o que acabou de ser gravado vira a referência do dirty-check.
+            formSalvoRef.current = formData;
+            setSavedAt(Date.now());
 
             // "Gerenciar Negociação" (registro já existente) permanece aberta —
             // o aviso some sozinho, igual ao padrão de notifySuccess/notifyError.
@@ -2544,9 +2638,11 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
 
             if (onSave) onSave();
             if (!isEditModeSave) onClose();
+            return true;
         } catch (err: any) {
             console.error('[DealModal] Erro ao salvar:', err);
             notifyError(`Erro ao salvar negociação: ${err.message || 'Erro de conexão/banco'}`);
+            return false;
         } finally {
             setLoading(false);
         }
@@ -2566,6 +2662,33 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         } finally {
             enviandoRef.current = false;
         }
+    };
+
+    /** Voltar/Cancelar, seta do cabeçalho e fundo: perguntam antes de descartar (§25). */
+    const handleRequestClose = async () => {
+        if (dirty && !(await confirm(CONFIRMAR_SAIDA))) return;
+        onClose();
+    };
+
+    // Trocar de módulo pelo menu, voltar do navegador ou fechar a aba também
+    // perguntam (lib/guardaDeSaida). Só com o modal ABERTO: a instância não
+    // desmonta ao fechar, e um dirty esquecido perguntaria em toda navegação.
+    const idGuardaSaida = React.useId();
+    useEffect(() => {
+        registrarPendencia(idGuardaSaida, isOpen && dirty);
+        return () => registrarPendencia(idGuardaSaida, false);
+    }, [idGuardaSaida, isOpen, dirty]);
+
+    /**
+     * Enter num campo NÃO envia o formulário. Todos os campos moram dentro do
+     * <form onSubmit=salvar>: um Enter no Nº de parcelas gravava a negociação
+     * inteira (só a Data do 1º Pagamento se defendia). Só campos DESTE form —
+     * eventos de portal (o Sheet do bloco) também sobem pela árvore do React.
+     */
+    const bloquearEnterQueEnvia = (e: React.KeyboardEvent<HTMLFormElement>) => {
+        if (e.key !== 'Enter') return;
+        const alvo = e.target;
+        if (alvo instanceof HTMLInputElement && alvo.form === e.currentTarget) e.preventDefault();
     };
 
     if (!isOpen) return null;
@@ -2669,7 +2792,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     return (
         <div className={isEditMode ? 'absolute inset-0 z-[110] bg-gray-50 flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
             {!isEditMode && (
-                <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={onClose} />
+                <div className="absolute inset-0 bg-[#0B1727]/80 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => { void handleRequestClose(); }} />
             )}
 
             <div className={isEditMode
@@ -2693,8 +2816,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                         </div>
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={() => { void handleRequestClose(); }}
                             title={isEditMode ? 'Voltar' : 'Fechar'}
+                            aria-label={isEditMode ? 'Voltar' : 'Fechar'}
                             className="h-9 w-9 shrink-0 flex items-center justify-center bg-white text-gray-400 rounded-[6px] border border-gray-200 shadow-sm hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
                         >
                             {isEditMode ? <ArrowLeft className="w-4 h-4" /> : <X className="w-4 h-4" />}
@@ -2748,6 +2872,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 <form
                     id="deal-modal-form"
                     onSubmit={handleSubmit}
+                    onKeyDown={bloquearEnterQueEnvia}
                     /* pt-3: as abas acima já carregam mb-3 — somados dão os 24px
                        do último bloco de cromo até o conteúdo (§20.1). */
                     className="flex-1 overflow-y-auto px-8 pb-8 pt-3"
@@ -3739,21 +3864,31 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                             parcelas"), e lançar o plano aqui criaria uma segunda
                                             série do mesmo aluguel — a trava está em
                                             contractService.syncContractToFinance. */}
+                                        {/* O lançamento lê o plano DA TELA e grava no contrato: com
+                                            alterações não salvas, Contas a Receber ficaria diferente
+                                            da negociação gravada. Por isso salva antes (rótulo diz),
+                                            e negociação nova — que fecha ao salvar — espera o 1º salvar. */}
                                         {formData.type === 'SALE' && linhasDoPlano.length > 0 && (
                                             <div className="flex items-center justify-end gap-3 pt-1">
-                                                <span className="text-xs text-gray-400">
-                                                    A cobrança é do contrato — sem contrato, ele é criado a partir desta negociação.
+                                                <span className="text-xs text-gray-500">
+                                                    {!formData.id
+                                                        ? 'Salve a negociação para lançar — a cobrança sai do contrato dela.'
+                                                        : dirty
+                                                            ? 'Há alterações não salvas: a negociação é salva antes do lançamento.'
+                                                            : 'A cobrança é do contrato — sem contrato, ele é criado a partir desta negociação.'}
                                                 </span>
                                                 <button
                                                     type="button"
-                                                    disabled={lancandoNoFinanceiro}
+                                                    disabled={lancandoNoFinanceiro || !formData.id}
                                                     onClick={handleLancarNoFinanceiro}
                                                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                                                 >
                                                     {lancandoNoFinanceiro
                                                         ? <Loader2 className="w-[15px] h-[15px] animate-spin" />
                                                         : <DollarSign className="w-[15px] h-[15px]" />}
-                                                    {lancandoNoFinanceiro ? 'Lançando…' : 'Lançar no Financeiro'}
+                                                    {lancandoNoFinanceiro
+                                                        ? 'Lançando…'
+                                                        : dirty && formData.id ? 'Salvar e lançar no Financeiro' : 'Lançar no Financeiro'}
                                                 </button>
                                             </div>
                                         )}
@@ -4802,7 +4937,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     clients={isMultiBuyer ? buyerClients : undefined}
                                     organizationId={formData.organization_id || organizationId || ''}
                                     onStatusChange={(sigStatus: 'PENDING' | 'SIGNED') => {
-                                        setFormData(prev => ({ ...prev, signature_status: sigStatus }));
+                                        // O painel lê o status da assinatura de fora (provedor) — é fato, não edição.
+                                        ajustarDoSistema(prev => ({ ...prev, signature_status: sigStatus }));
                                         if (sigStatus === 'SIGNED' && formData.status === 'ASSINATURA') {
                                             confirm({
                                                 title: 'Contrato assinado!',
@@ -4848,6 +4984,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0">
+                        {isEditMode && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-2" />}
                         {formData.id && (
                             <button
                                 type="button"
@@ -4858,12 +4995,14 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                 Gerar proposta
                             </button>
                         )}
+                        {/* §25 — "Voltar" em edição: o que já foi salvo fica salvo, só
+                            se sai da tela. Criação mantém "Cancelar". */}
                         <button
                             type="button"
-                            onClick={onClose}
+                            onClick={() => { void handleRequestClose(); }}
                             className="h-9 px-3.5 bg-white text-gray-500 rounded-[6px] border border-gray-200 shadow-sm font-medium text-[13px] hover:text-gray-900 transition-all active:scale-95"
                         >
-                            Cancelar
+                            {isEditMode ? 'Voltar' : 'Cancelar'}
                         </button>
                         <button
                             type="submit"

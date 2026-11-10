@@ -9,6 +9,7 @@ import {
     saldoDoPlano,
     blocoParaGerador,
     montarPlanoRapido,
+    serieDoPlanoGravado,
     type BlocoPagamento,
 } from '../utils/paymentPlan';
 import { PaymentInstallment } from '../types/financial';
@@ -274,5 +275,65 @@ describe('montarPlanoRapido', () => {
     it('nº e intervalo inválidos caem em 1', () => {
         const r = montarPlanoRapido({ ...base, entrada: 0, parcelas: 0, intervaloMeses: 0 });
         expect(r.blocos).toEqual([{ tipo: 'MENSAL', quantidade: 1, valorParcela: 120000, primeiroVencimento: '2026-10-10', intervaloMeses: 1 }]);
+    });
+});
+
+describe('serieDoPlanoGravado', () => {
+    // O inverso do montarPlanoRapido: o montador da aba Financeiro abre com a
+    // série que o plano GRAVADO tem, em vez de "12× sem entrada" fixo — que,
+    // num plano de sinal + 60, apagava o sinal ao clicar "Substituir plano".
+    const montado = (over: Partial<Parameters<typeof montarPlanoRapido>[0]> = {}) =>
+        montarPlanoRapido({ total: 80000, entrada: 30000, parcelas: 60, tipo: 'MENSAL', intervaloMeses: 1, primeiroVencimento: '2026-11-10', ...over }).blocos;
+
+    it('série com a sobra num bloco de 1× volta como UMA série (59 + 1 = 60)', () => {
+        const blocos = agruparPlano(montado().flatMap((b, i) => expandirBloco(b, `p${i}`)));
+        expect(blocos.length).toBe(2);
+        expect(serieDoPlanoGravado(blocos)).toEqual({ parcelas: 60, tipo: 'MENSAL', primeiroVencimento: '2026-11-10' });
+    });
+
+    it('série que fecha exata', () => {
+        expect(serieDoPlanoGravado(montado({ total: 150000, parcelas: 12 })))
+            .toEqual({ parcelas: 12, tipo: 'MENSAL', primeiroVencimento: '2026-11-10' });
+    });
+
+    it('respeita o intervalo da série (trimestral com sobra)', () => {
+        const blocos = montarPlanoRapido({ total: 100, entrada: 0, parcelas: 3, tipo: 'TRIMESTRAL', intervaloMeses: 3, primeiroVencimento: '2026-10-10' }).blocos;
+        expect(serieDoPlanoGravado(blocos)).toEqual({ parcelas: 3, tipo: 'TRIMESTRAL', primeiroVencimento: '2026-10-10' });
+    });
+
+    it('SAC: parcelas de valores diferentes, uma por bloco, ainda são uma série', () => {
+        const linhas: PaymentInstallment[] = Array.from({ length: 6 }, (_, k) => ({
+            id: `s${k}`, number: k + 1, value: 1000 - k * 10, dueDate: somarMeses('2027-01-05', k), installmentType: 'MENSAL',
+        } as PaymentInstallment));
+        const blocos = agruparPlano(linhas);
+        expect(blocos.length).toBe(6);
+        expect(serieDoPlanoGravado(blocos)).toEqual({ parcelas: 6, tipo: 'MENSAL', primeiroVencimento: '2027-01-05' });
+    });
+
+    it('plano misto: a série de maior subtotal manda (não os reforços nem as chaves)', () => {
+        const blocos = [
+            bloco({ tipo: 'MENSAL', quantidade: 24, valorParcela: 2000, primeiroVencimento: '2026-12-10', intervaloMeses: 1 }),
+            bloco({ tipo: 'SEMESTRAL', quantidade: 4, valorParcela: 5000, primeiroVencimento: '2027-06-10', intervaloMeses: 6 }),
+            bloco({ tipo: 'CHAVES', quantidade: 1, valorParcela: 40000, primeiroVencimento: '2028-12-10', intervaloMeses: null }),
+        ];
+        expect(serieDoPlanoGravado(blocos)).toEqual({ parcelas: 24, tipo: 'MENSAL', primeiroVencimento: '2026-12-10' });
+    });
+
+    it('reforços intercalados por data não quebram a série mensal (plano gravado expandido)', () => {
+        const linhas = [
+            bloco({ tipo: 'MENSAL', quantidade: 24, valorParcela: 2000, primeiroVencimento: '2026-12-10', intervaloMeses: 1 }),
+            bloco({ tipo: 'SEMESTRAL', quantidade: 4, valorParcela: 5000, primeiroVencimento: '2027-06-10', intervaloMeses: 6 }),
+        ].flatMap((b, i) => expandirBloco(b, `m${i}`));
+        const blocos = agruparPlano(linhas);
+        expect(blocos.length).toBeGreaterThan(2);
+        expect(serieDoPlanoGravado(blocos)).toEqual({ parcelas: 24, tipo: 'MENSAL', primeiroVencimento: '2026-12-10' });
+    });
+
+    it('sem série (só pagamentos avulsos) ou plano vazio = null', () => {
+        expect(serieDoPlanoGravado([])).toBeNull();
+        expect(serieDoPlanoGravado([
+            bloco({ tipo: 'CHAVES', quantidade: 1, intervaloMeses: null, primeiroVencimento: '2027-01-10' }),
+            bloco({ tipo: 'AVULSA', quantidade: 1, intervaloMeses: null, primeiroVencimento: '2027-05-10' }),
+        ])).toBeNull();
     });
 });

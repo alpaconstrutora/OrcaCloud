@@ -109,6 +109,13 @@ describe('montarEspelhoDoEstoque — pelo estoque (prédio sem estrutura no Empr
     expect(r.cena.prismas.find((p) => p.unitId === '11')!.andar).toBe(1);
   });
 
+  // 10/11/2026, Garden Cambuhy em produção: todo imóvel com `number` = 1201 (o número do endereço) e a unidade no
+  // nome — a lista e a ficha do 3D diziam "Unidade 1201" para as 34.
+  it('o rótulo da unidade é o NOME do imóvel, como no 2D; o número só quando não há nome', () => {
+    const r = montarEspelhoDoEstoque({ imoveis: [imovel('a', 1, { name: '101', number: '1201' }), imovel('b', 1, { name: '', number: '102' })], negocios: [] });
+    expect(r.cena.prismas.filter((p) => p.unitId).map((p) => p.rotulo).sort()).toEqual(['101', '102']);
+  });
+
   it('nenhum imóvel com andar (lotes, casas): cena vazia e todos contados', () => {
     const r = montarEspelhoDoEstoque({ imoveis: [imovel('L1', undefined), imovel('L2', undefined)], negocios: [] });
     expect(r.cena.prismas).toEqual([]);
@@ -199,6 +206,45 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     expect(peloEstoque.fonte).toBe('ESTOQUE');
     expect(peloEstoque.dados.get('202')!.plantaUrl).toBe('https://x/2q.png');
     expect(montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [] }).dados.get('202')!.plantaUrl).toBeNull();
+  });
+
+  // F6 (10/11/2026): a vista da janela é da torre do Empreendimento, por faixa de andares.
+  describe('vista da janela', () => {
+    const vistas = [
+      { andar_de: 1, andar_ate: 1, orientacao: null, imagem_url: 'https://x/baixo.jpg', legenda: 'Praça' },
+      { andar_de: 2, andar_ate: 9, orientacao: 'NORTE' as const, imagem_url: 'https://x/norte.jpg', legenda: null },
+    ];
+    const comVistas: TorreDaEstrutura[] = [{ ...ESTRUTURA[0], vistas }];
+
+    it('pela unidade ligada ao imóvel: a faixa do andar dela; fora de toda faixa (ou de outra face), null', () => {
+      const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: comVistas });
+      expect(r.fonte).toBe('EMPREENDIMENTO');
+      expect(r.dados.get('101')!.vista).toEqual({ url: 'https://x/baixo.jpg', legenda: 'Praça', cobre: '1º pavimento · qualquer face' });
+      // 201 está no 2º andar, mas a unidade não tem orientação: a vista da face Norte não serve.
+      expect(r.dados.get('201')!.vista).toBeNull();
+    });
+
+    it('a orientação da unidade do Empreendimento escolhe a vista da face', () => {
+      const norte: TorreDaEstrutura[] = [{ ...comVistas[0], units: comVistas[0].units.map((u) => (u.id === 'u201' ? { ...u, sun_orientation: 'NORTE' as const } : u)) }];
+      const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: norte });
+      expect(r.dados.get('201')!.vista?.url).toBe('https://x/norte.jpg');
+    });
+
+    it('fonte do estoque (Garden): o imóvel sem unidade ligada acha a torre pelo nome do bloco e usa o próprio andar e orientação', () => {
+      const torreA: TorreDaEstrutura[] = [{ ...comVistas[0], name: 'Torre A' }];
+      const imoveis = [...ESTOQUE.slice(0, 3), imovel('901', 9, { sun_orientation: 'NORTH' as never }), imovel('B11', 1, { block: 'B' })];
+      const r = montarEspelhoDoEstoque({ imoveis, negocios: [], estrutura: torreA });
+      expect(r.fonte).toBe('ESTOQUE');
+      expect(r.dados.get('901')!.vista?.url).toBe('https://x/norte.jpg');
+      // Bloco B não tem torre no Empreendimento: sem vista, mas o prédio tem — botão desligado.
+      expect(r.dados.get('B11')!.vista).toBeNull();
+    });
+
+    it('nenhuma vista no prédio: `vista` nem aparece nos dados (a ficha não fala nisso)', () => {
+      const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
+      expect('vista' in r.dados.get('101')!).toBe(false);
+      expect('vista' in montarEspelhoDoEstoque({ imoveis: ESTOQUE, negocios: [] }).dados.get('101')!).toBe(false);
+    });
   });
 
   it('empate de cobertura fica com o Empreendimento (a forma de verdade)', () => {

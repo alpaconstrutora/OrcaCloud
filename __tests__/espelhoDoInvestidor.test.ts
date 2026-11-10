@@ -65,6 +65,17 @@ describe('montarEspelhoDoInvestidor', () => {
     expect(r.dados.get('202')).toEqual({ tipologia: '2 quartos', plantaUrl: null, areaPrivativaM2: 80, dormitorios: 2, banheiros: 2, vagas: 1, preco: 520_000 });
   });
 
+  // F6 (10/11/2026): a vista da janela, que vem em cada torre.
+  it('a ficha leva a vista da faixa do andar da unidade; sem vista na obra, `vista` nem aparece', () => {
+    const comVista = montarEspelhoDoInvestidor({
+      ...OBRA,
+      torres: [{ ...OBRA.torres[0], vistas: [{ andar_de: 2, andar_ate: 3, orientacao: null, imagem_url: 'https://x/alto.jpg', legenda: 'Serra' }] }],
+    });
+    expect(comVista.dados.get('202')!.vista).toEqual({ url: 'https://x/alto.jpg', legenda: 'Serra', cobre: '2º ao 3º pavimento · qualquer face' });
+    expect(comVista.dados.get('101')!.vista).toBeNull();
+    expect('vista' in r.dados.get('202')!).toBe(false);
+  });
+
   // F5 (10/11/2026): a planta baixa da tipologia, que vem com a obra.
   it('a ficha leva a planta da tipologia da unidade quando a obra a traz', () => {
     const comPlantas = montarEspelhoDoInvestidor({ ...OBRA, plantas: [{ tipologia: '2 QUARTOS', tipologia_chave: '2 quartos', imagem_url: 'https://x/2q.png' }] });
@@ -235,6 +246,60 @@ describe('migration das plantas por tipologia — tabela fechada, bucket sem lis
     const doCorretor = funcao(sql, 'fn_broker_portal_get_espelho');
     const trecho = doCorretor.slice(doCorretor.indexOf("'plantas'"), doCorretor.indexOf("'torres'"));
     expect(trecho).toMatch(/e2\.commercial_building_id IN \(\s*SELECT COALESCE\(p\.parent_id, p\.id\)\s+FROM public\.commercial_properties p\s+WHERE p\.id IN \(SELECT id FROM visiveis\)/);
+  });
+
+  it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {
+    const doInvestidor = sql.slice(sql.lastIndexOf("'units', COALESCE"), sql.indexOf('FROM unidades u WHERE u.tower_id = t.id'));
+    expect([...doInvestidor.matchAll(/'([a-z_]+)'\s*,/g)].map((m) => m[1]).filter((k) => k !== 'units').sort()).toEqual([
+      'bathrooms', 'bedrooms', 'floor', 'floor_tipo', 'id', 'is_vendavel', 'name', 'parking_spaces', 'position_type', 'price',
+      'private_area', 'sort_order', 'status', 'sun_orientation', 'typology', 'vaga_na_planta',
+    ]);
+    const listas = [...sql.matchAll(/n\.status IN \(([^)]*)\)/g)].map((m) => m[1].split(',').map((x) => x.trim().replace(/'/g, '')));
+    expect(listas.length).toBe(2);
+    for (const l of listas) expect(l).toEqual(ETAPAS_VENDIDA);
+    expect(sql).not.toMatch(/GRANT[^;]*fn_espelho_de_vendas_das_obras/);
+    expect(sql).toMatch(/GRANT EXECUTE ON FUNCTION public\.fn_broker_portal_get_espelho\(TEXT\) TO anon, authenticated;/);
+  });
+});
+
+/**
+ * F6 (10/11/2026): a migration das vistas da janela reescreve mais uma vez as duas funções do espelho, para cada torre
+ * trazer `vistas`. É a definição que vale no banco — a mesma trava tem de valer para ela.
+ */
+describe('migration das vistas da janela — tabela fechada, funções sem dado de pessoa', () => {
+  const sql = lerMigration('aplicar_20271110600000_empreendimento_tower_vistas.sql');
+  const anterior = lerMigration('aplicar_20271110500000_empreendimento_tipologia_plantas.sql');
+  const chavesDe = (texto: string) => [...texto.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
+  const funcao = (texto: string, nome: string) => {
+    const i = texto.indexOf(`CREATE OR REPLACE FUNCTION public.${nome}`);
+    return texto.slice(i, texto.indexOf('$X$;', i));
+  };
+
+  it('a tabela nasce com RLS, policy só para authenticated pela organização do empreendimento da torre, e fechada para anon', () => {
+    expect(sql).toMatch(/ALTER TABLE public\.empreendimento_tower_vistas ENABLE ROW LEVEL SECURITY;/);
+    expect(sql).toMatch(/CREATE POLICY org_access_empr_tower_vistas ON public\.empreendimento_tower_vistas\s+FOR ALL TO authenticated/);
+    expect(sql.match(/e\.organization_id IN \(SELECT public\.empr_user_org_ids\(\)\)/g)).toHaveLength(2);
+    expect(sql).toMatch(/REVOKE ALL ON TABLE public\.empreendimento_tower_vistas FROM anon;/);
+    expect(sql).not.toMatch(/GRANT[^;]*empreendimento_tower_vistas[^;]*anon/);
+    expect(sql).toMatch(/CHECK \(andar_ate >= andar_de\)/);
+    expect(sql).toMatch(/orientacao IS NULL OR orientacao IN \('NORTE', 'SUL', 'LESTE', 'OESTE'\)/);
+  });
+
+  it('nas duas funções entram só as chaves da vista, e nenhuma de antes sai (as plantas seguem)', () => {
+    for (const nome of ['fn_broker_portal_get_espelho', 'fn_espelho_de_vendas_das_obras']) {
+      const antes = chavesDe(funcao(anterior, nome));
+      const depois = chavesDe(funcao(sql, nome));
+      for (const k of antes) expect(depois).toContain(k);
+      // `imagem_url` já era chave da planta: não conta como nova.
+      expect([...new Set(depois.filter((k) => !antes.includes(k)))].sort()).toEqual(['andar_ate', 'andar_de', 'legenda', 'orientacao', 'vistas']);
+      expect(depois).toContain('plantas');
+    }
+    expect(chavesDe(sql).filter((k) => /client|buyer|comprador|cliente|deal|negoc|broker|corretor|document|cpf|cnpj|email|phone|contract/.test(k))).toEqual([]);
+  });
+
+  it('a vista sai pela torre que a função já entregava (nenhuma torre nova entra por causa dela)', () => {
+    expect(funcao(sql, 'fn_broker_portal_get_espelho')).toMatch(/FROM public\.empreendimento_tower_vistas v\s+WHERE v\.tower_id = tw\.id/);
+    expect(funcao(sql, 'fn_espelho_de_vendas_das_obras')).toMatch(/FROM public\.empreendimento_tower_vistas v\s+WHERE v\.tower_id = t\.id/);
   });
 
   it('a unidade do investidor segue com as mesmas 16 chaves, "vendida" com as etapas do front, e as internas sem GRANT', () => {

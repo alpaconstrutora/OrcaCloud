@@ -1,5 +1,6 @@
 import React from 'react';
-import { Maximize2, X } from 'lucide-react';
+import { Maximize2, Mountain, X } from 'lucide-react';
+import Button from '../ui/Button';
 import { Modal } from '../ui/modal';
 import type { PrismaDoEspelho } from '../../utils/espelhoDeVendas3d';
 import type { DadosDaUnidade, PaletaDoEspelho } from '../../utils/espelhoDeVendas3dMalha';
@@ -35,10 +36,18 @@ export const FichaDaUnidade: React.FC<{
     onFechar: () => void;
 }> = ({ prisma, dados, paleta, mostrarPreco, acoes, onFechar }) => {
     const status = prisma.status ? paleta[prisma.status] : null;
-    // A planta ampliada (F5): um diálogo no centro, nunca tela cheia. Trocar de unidade fecha.
-    const [plantaAberta, setPlantaAberta] = React.useState(false);
-    React.useEffect(() => setPlantaAberta(false), [prisma.chave]);
+    // A planta (F5) e a vista da janela (F6) ampliadas: um diálogo no centro, nunca tela cheia. Trocar de unidade fecha.
+    const [ampliada, setAmpliada] = React.useState<'planta' | 'vista' | null>(null);
+    React.useEffect(() => setAmpliada(null), [prisma.chave]);
     const tituloDaPlanta = dados?.tipologia ? `Planta da tipologia ${dados.tipologia}` : 'Planta da unidade';
+    const vista = dados?.vista;
+    const SEM_VISTA = 'Não há foto de vista cadastrada para o andar desta unidade.';
+    const noDialogo =
+        ampliada === 'planta' && dados?.plantaUrl
+            ? { titulo: tituloDaPlanta, url: dados.plantaUrl, rodape: null as string | null, fechar: 'Fechar a planta' }
+            : ampliada === 'vista' && vista
+                ? { titulo: 'Vista da janela', url: vista.url, rodape: [vista.legenda, vista.cobre].filter(Boolean).join(' · '), fechar: 'Fechar a vista' }
+                : null;
     return (
         <section aria-label={`Ficha da unidade ${prisma.rotulo ?? ''}`} className="rounded-[10px] border border-gray-200 bg-white p-4">
             <div className="flex items-start justify-between gap-3">
@@ -82,7 +91,7 @@ export const FichaDaUnidade: React.FC<{
                     <p className="text-[13px] text-gray-500">{tituloDaPlanta}</p>
                     <button
                         type="button"
-                        onClick={() => setPlantaAberta(true)}
+                        onClick={() => setAmpliada('planta')}
                         aria-label={`Ampliar a ${tituloDaPlanta.toLowerCase()}`}
                         title="Ampliar a planta"
                         data-testid="ficha-planta"
@@ -96,27 +105,41 @@ export const FichaDaUnidade: React.FC<{
                 </div>
             )}
 
+            {/* Só quando o prédio tem alguma vista cadastrada; sem a do andar desta unidade, o botão diz por quê. */}
+            {vista !== undefined && (
+                <div className="mt-3">
+                    <span title={vista ? undefined : SEM_VISTA} className="inline-block">
+                        <Button type="button" variant="secondary" disabled={!vista} onClick={() => setAmpliada('vista')} data-testid="ficha-vista">
+                            <Mountain className="w-[15px] h-[15px]" />
+                            Vista da janela
+                        </Button>
+                    </span>
+                    {!vista && <p className="mt-1.5 text-xs text-gray-500">{SEM_VISTA}</p>}
+                </div>
+            )}
+
             {acoes && <div className="mt-4 flex flex-wrap gap-2">{acoes}</div>}
 
-            {dados?.plantaUrl && (
-                <Modal open={plantaAberta} onClose={() => setPlantaAberta(false)} size="2xl" className="!rounded-[10px]">
+            {noDialogo && (
+                <Modal open onClose={() => setAmpliada(null)} size="2xl" className="!rounded-[10px]">
                     <div className="flex items-center justify-between gap-3 px-4 py-3 border-b border-gray-100">
                         <div className="min-w-0">
-                            <p className="text-sm font-semibold text-gray-900 truncate">{tituloDaPlanta}</p>
+                            <p className="text-sm font-semibold text-gray-900 truncate">{noDialogo.titulo}</p>
                             <p className="text-[13px] text-gray-500 truncate">Unidade {prisma.rotulo} · {prisma.torre}</p>
                         </div>
                         <button
                             type="button"
-                            onClick={() => setPlantaAberta(false)}
-                            aria-label="Fechar a planta"
-                            title="Fechar a planta"
+                            onClick={() => setAmpliada(null)}
+                            aria-label={noDialogo.fechar}
+                            title={noDialogo.fechar}
                             className="shrink-0 w-8 h-8 inline-flex items-center justify-center rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                         >
                             <X className="w-4 h-4" />
                         </button>
                     </div>
                     <div className="p-4 overflow-auto bg-white">
-                        <img src={dados.plantaUrl} alt={tituloDaPlanta} className="mx-auto max-w-full max-h-[70vh] object-contain" />
+                        <img src={noDialogo.url} alt={noDialogo.titulo} className="mx-auto max-w-full max-h-[70vh] object-contain" />
+                        {noDialogo.rodape && <p className="mt-3 text-[13px] text-gray-600 text-center">{noDialogo.rodape}</p>}
                     </div>
                 </Modal>
             )}

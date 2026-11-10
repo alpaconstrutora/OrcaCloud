@@ -27,13 +27,14 @@ import type { EmpreendimentoFloor, EmpreendimentoUnit, FloorTipo, OrdemDasUnidad
 import { lerDistancias } from './empreendimentoDistanciasEntreTorres';
 import { contornoDaLinha, type LinhaComContorno } from './espelhoContornoDaTorre';
 import { plantaDaUnidade, plantasPorChave, type PlantaDaTipologia } from './espelhoPlantaDaTipologia';
+import { orientacaoDoImovel, rotuloDaVista, vistaDaUnidade, type VistaDaTorre } from './espelhoVistaDaJanela';
 import { montarCenaDoEspelho, type CenaDoEspelho, type HipotesesDoEspelho, type TorreDoEspelho } from './espelhoDeVendas3d';
 import type { DadosDaUnidade, PaletaDoEspelho } from './espelhoDeVendas3dMalha';
 import { negocioAtivoDaUnidade, statusEfetivoDaUnidade, type NegocioDaUnidade } from './statusEfetivoDaUnidade';
 
 /** O que o espelho lê de um imóvel do estoque. */
 export type ImovelDoEstoque = Pick<Property, 'id' | 'name' | 'type' | 'status'> &
-  Partial<Pick<Property, 'number' | 'parent_id' | 'block' | 'floor' | 'specs' | 'private_area' | 'area' | 'typology' | 'bedrooms' | 'bathrooms' | 'parking_spaces' | 'position_type' | 'price' | 'current_price' | 'images'>>;
+  Partial<Pick<Property, 'number' | 'parent_id' | 'block' | 'floor' | 'specs' | 'private_area' | 'area' | 'typology' | 'bedrooms' | 'bathrooms' | 'parking_spaces' | 'position_type' | 'sun_orientation' | 'price' | 'current_price' | 'images'>>;
 
 /** Uma torre do Empreendimento como o portal a recebe (RPC `fn_broker_portal_get_espelho`, ou as tabelas no app). */
 export interface TorreDaEstrutura extends LinhaComContorno {
@@ -52,6 +53,8 @@ export interface TorreDaEstrutura extends LinhaComContorno {
   distancias_entre_torres: unknown;
   floors: EmpreendimentoFloor[];
   units: UnidadeDaEstrutura[];
+  /** As vistas da janela da torre, por faixa de andares (F6). Ausente antes da migration. */
+  vistas?: VistaDaTorre[] | null;
 }
 
 export interface UnidadeDaEstrutura {
@@ -101,7 +104,9 @@ const POSICAO: Record<string, EmpreendimentoUnit['position_type']> = { FRONT: 'F
 
 const numero = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v)) ? Number(v) : null);
 const andarDo = (i: ImovelDoEstoque): number | null => numero(i.floor) ?? numero(i.specs?.floor);
-const nomeDo = (i: ImovelDoEstoque) => rotuloCurtoDaUnidade(String(i.number || i.name || ''));
+// O nome antes do número, como o espelho 2D (`PropertyUnitMap`): no Garden Cambuhy o `number` de todo imóvel é 1201,
+// o número do ENDEREÇO do prédio, e a unidade ("101") está no nome.
+const nomeDo = (i: ImovelDoEstoque) => rotuloCurtoDaUnidade(String(i.name || i.number || ''));
 
 function dadosDo(i: ImovelDoEstoque, plantas: ReadonlyMap<string, string>): DadosDaUnidade {
   const tipologia = i.typology || i.specs?.typology || null;
@@ -194,6 +199,21 @@ export function montarEspelhoDoEstoque(entrada: {
   );
   const plantas = plantasPorChave(entrada.plantas);
   const dados = new Map(unidades.map((i) => [i.id, dadosDo(i, plantas)]));
+
+  // A vista da janela (F6) é da TORRE do Empreendimento, por faixa de andares. O imóvel acha a torre pela unidade
+  // ligada a ele; sem ligação, pelo nome do bloco (a mesma regra do contorno). Vale nas duas fontes do desenho.
+  const todas = (entrada.estrutura ?? []).filter((t) => !t.blueprint_quadra_uid);
+  if (todas.some((t) => (t.vistas ?? []).length > 0)) {
+    const daUnidade = new Map<string, { torre: TorreDaEstrutura; unidade: UnidadeDaEstrutura }>();
+    for (const t of todas) for (const u of t.units) if (u.property_id) daUnidade.set(u.property_id, { torre: t, unidade: u });
+    for (const i of unidades) {
+      const ligada = daUnidade.get(i.id);
+      const doBloco = ligada ? null : todas.filter((t) => chaveDaTorre(t.name) === chaveDaTorre(String(i.block ?? '')));
+      const torre = ligada?.torre ?? (doBloco?.length === 1 ? doBloco[0] : null);
+      const v = vistaDaUnidade(torre?.vistas, ligada?.unidade.floor ?? andarDo(i), ligada?.unidade.sun_orientation ?? orientacaoDoImovel(i.sun_orientation));
+      dados.get(i.id)!.vista = v ? { url: v.imagem_url, legenda: v.legenda ?? null, cobre: rotuloDaVista(v) } : null;
+    }
+  }
 
   const estrutura = (entrada.estrutura ?? []).filter((t) => !t.blueprint_quadra_uid);
   const colocados = (cena: CenaDoEspelho) => new Set(cena.prismas.map((p) => p.unitId).filter(Boolean)).size;

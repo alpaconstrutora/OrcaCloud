@@ -33,6 +33,18 @@ export interface DadosDaUnidade {
   fotoUrl?: string | null;
   /** A planta baixa da tipologia da unidade (F5); sem ela a ficha não mostra o trecho. */
   plantaUrl?: string | null;
+  /**
+   * A vista da janela da unidade (F6). `undefined` = o prédio não tem vista cadastrada (a ficha nem fala nisso);
+   * `null` = o prédio tem, mas nenhuma cobre o andar/face desta unidade (botão desligado, com o motivo).
+   */
+  vista?: VistaDaFicha | null;
+}
+
+export interface VistaDaFicha {
+  url: string;
+  legenda: string | null;
+  /** O que a foto cobre: "4º ao 12º pavimento · face Norte". */
+  cobre: string;
 }
 
 /** A ordem da legenda: o que está à venda primeiro. */

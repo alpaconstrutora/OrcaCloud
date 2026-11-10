@@ -26,6 +26,7 @@ import {
 import UnitEditor from './UnitEditor';
 import TerrenoSecao from './TerrenoSecao';
 import PlantasPorTipologiaSecao from './PlantasPorTipologiaSecao';
+import VistasDaTorreSecao from './VistasDaTorreSecao';
 // Os testes e quem mais validava a localização importavam daqui.
 export { problemaDaLocalizacao } from './TerrenoSecao';
 import FloorEditor, { fmtElevacao, lerElevacao, lerPeDireito } from './FloorEditor';
@@ -372,6 +373,12 @@ export const TowerEditor: React.FC<Props> = ({ empreendimentoId, organizationId,
                   <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Unidades" data-testid="secao-unidades">
                     <UnitEditor tower={tower} floors={floorsByTower[tower.id]} onUnitsChange={handleUnitsChange} onTowerChange={handleTowerChange} />
                   </section>
+                  {/* Vista da janela (Espelho de Vendas 3D, F6 — 10/11/2026): só com o empreendimento em mãos. */}
+                  {empreendimento && (
+                    <section className="rounded-[10px] border border-gray-200 bg-white p-4" aria-label="Vista da janela" data-testid="secao-vistas">
+                      <VistasDaTorreSecao towerId={tower.id} towerName={tower.name} empreendimentoId={empreendimentoId} organizationId={organizationId} somenteLeitura={somenteLeitura} />
+                    </section>
+                  )}
                 </fieldset>
               </TorreCard>
             );

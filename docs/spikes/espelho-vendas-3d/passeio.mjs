@@ -90,6 +90,16 @@ try {
   await page.waitForTimeout(300);
   confere((await page.getByRole('dialog').count()) === 0 && !!(await fichaAberta(page)), 'Esc fecha a planta e a ficha continua aberta');
 
+  // 1c. F6: a vista da janela — nos andares altos abre a foto; nos baixos o botão fica desligado e diz por quê.
+  const botaoDaVista = page.getByRole('button', { name: 'Vista da janela' });
+  confere((await botaoDaVista.count()) === 1 && (await botaoDaVista.isEnabled()), 'a ficha de um andar alto tem o botão "Vista da janela" ligado');
+  await botaoDaVista.click();
+  await page.waitForTimeout(400);
+  confere((await page.getByRole('dialog').getByText(/Vista para a serra · 4º ao 19º pavimento/).count()) === 1, 'a vista abre num diálogo com a legenda e a faixa que ela cobre');
+  await page.screenshot({ path: path.join(prints, '12-vista-da-janela.png') });
+  await page.keyboard.press('Escape');
+  await page.waitForTimeout(300);
+
   // 2. Arrastar gira a câmera e NÃO troca nem fecha a ficha.
   await page.mouse.move(caixa.x + caixa.width * 0.5, caixa.y + caixa.height * 0.5);
   await page.mouse.down();

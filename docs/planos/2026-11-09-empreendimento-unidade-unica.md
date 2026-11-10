@@ -31,8 +31,8 @@ O modelo de dados **não muda**: por baixo existe uma torre implícita (com o no
 
 ## Estado
 - [x] 1–10 implementados (frente `empreendimento-unidade-unica`)
-- [ ] migration aplicada no banco
-- [ ] conferido na tela de verdade
+- [x] migration aplicada no banco (09/11, pelo usuário; SELECT conferido: lote → LOTE, chacara/Casa Residencial → IMOVEL_UNICO, resto TORRES)
+- [x] conferido na tela de verdade (dev server da frente, conta desenvolvedor@): "Lote Vale do Sol" com aba "Lote", área 134,00 m², "Cadastrar unidade" gravou 1 torre "Lote" + 1 unidade de 134 m² (DISPONIVEL), que aparece no Espelho de Vendas (unidade MANTIDA, é dado real); Padre Caramurú (Casa) e Tamareiras (Chácara) com aba "Unidade" sem pavimento; Coronel Lambert 316 (Edifício Comercial) com Torres & Unidades como antes
 
 ## Verificação
 - `npx vitest run __tests__/empreendimentoUnidadeUnica.test.ts __tests__/components/UnidadeUnicaEditor.test.tsx __tests__/components/TowerEditorTerreno*.test.tsx`

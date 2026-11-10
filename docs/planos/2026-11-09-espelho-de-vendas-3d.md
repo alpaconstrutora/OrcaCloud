@@ -175,7 +175,7 @@ Mudou em relação ao plano aprovado (09/11/2026):
 - [x] F1a — modelo puro da cena (PR #284, `dd1701ee`)
 - [ ] F1b — contorno materializado na torre
 - [x] F2 — componente `<Espelho3D>` (PR #287)
-- [ ] F3 — Portal do Corretor: código pronto (PR da branch `feat/espelho-3d-f3`); falta aplicar a migration `aplicar_20271109950000_broker_portal_espelho.sql` e conferir em produção
+- [ ] F3 — Portal do Corretor: código pronto (branch `feat/espelho-3d-f3`); migration `aplicar_20271109950000_broker_portal_espelho.sql` APLICADA em 09/11/2026 (conferido: sem EXECUTE para PUBLIC, anon e authenticated executam, token inexistente → `valid=false`, token ativo → `valid=true` com 0 torres, como medido antes); falta o merge e conferir em produção
 - [ ] F4 — Portal do Investidor
 - [ ] F5 — planta baixa por tipologia
 - [ ] F6 — vista da janela

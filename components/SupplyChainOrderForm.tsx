@@ -34,7 +34,7 @@ import { formatCurrency } from '../utils/financialMath';
 import { temCotacao, totalEfetivoDoPedido, totalReferenciaDoPedido, valorEfetivoDoItem } from '../utils/pedidoItemValor';
 import { FORMA_ENTREGA_PADRAO, FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 import { pedidoPreferenciasService } from '../services/pedidoPreferenciasService';
-import { FORMAS_PAGAMENTO_PEDIDO, ROTULO_ORIGEM, camposAPreencher, dataPrevistaDeEntrega, resolverPadroes, type CampoPadrao, type OrigemDoPadrao, type PadroesDoPedido } from '../lib/pedidoPreferencias';
+import { FORMAS_PAGAMENTO_PEDIDO, PADROES_DO_SISTEMA, ROTULO_ORIGEM, camposAPreencher, dataPrevistaDeEntrega, resolverPadroes, vazio, type CampoPadrao, type OrigemDoPadrao, type PadroesDoPedido } from '../lib/pedidoPreferencias';
 
 interface AvulsoItem {
     code: string; description: string; unit: string; quantity: number; unitPrice: number;
@@ -230,6 +230,11 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     const mexidos = React.useRef(new Set<CampoPadrao>());
     const autoPreenchidos = React.useRef(new Set<CampoPadrao>());
     const [origensAplicadas, setOrigensAplicadas] = React.useState<OrigemDoPadrao[]>([]);
+    // A organização do pedido não tem padrão nenhum (nem da empresa, nem o seu) — a tela diz,
+    // em vez de voltar calada para o padrão do sistema (visto em 10/11 numa obra da SPE).
+    const [orgSemPadrao, setOrgSemPadrao] = React.useState(false);
+    // Endereço da obra escolhida: é o local de entrega quando ninguém definiu outro.
+    const enderecoDaObraRef = React.useRef('');
     const mexeu = (campo: CampoPadrao) => {
         mexidos.current.add(campo);
         autoPreenchidos.current.delete(campo);
@@ -309,10 +314,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
             .then(({ empresa, pessoal }) => {
                 if (cancelado) return;
                 const { valores, origem } = resolverPadroes(empresa, pessoal);
-                const aplicar = camposAPreencher(valores, mexidos.current);
+                // Só o que veio de preferência GRAVADA. O padrão do sistema já é o valor inicial
+                // do formulário; reescrevê-lo aqui apagava o endereço que a obra acabou de pôr no
+                // local de entrega (quem chegasse por último ganhava).
+                const aplicar = Object.fromEntries(
+                    Object.entries(camposAPreencher(valores, mexidos.current))
+                        .filter(([campo]) => origem[campo as CampoPadrao] !== 'SISTEMA'),
+                ) as PadroesDoPedido;
 
-                // O que o padrão da organização anterior escreveu e o desta não define sai do
-                // formulário (centro de custo/conta de outra empresa não servem aqui).
+                // O que o padrão da organização anterior escreveu e o desta não define volta ao
+                // valor de quem não tem padrão (centro de custo/conta de outra empresa não servem).
                 for (const campo of [...autoPreenchidos.current]) {
                     if (campo in aplicar) continue;
                     if (campo === 'planoDeContasId') setPlanoDeContasId('');
@@ -320,8 +331,16 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     if (campo === 'paymentAccountId') setBankAccount('');
                     if (campo === 'prazoEntregaDias') setDeliveryDate('');
                     if (campo === 'notes') setNotes('');
+                    if (campo === 'paymentTermType') setPaymentTermType(PADROES_DO_SISTEMA.paymentTermType);
+                    if (campo === 'paymentDays') setPaymentDays(PADROES_DO_SISTEMA.paymentDays);
+                    if (campo === 'paymentInstallments') setPaymentInstallments(PADROES_DO_SISTEMA.paymentInstallments);
+                    if (campo === 'paymentMethod') setPaymentMethod(PADROES_DO_SISTEMA.paymentMethod);
+                    if (campo === 'deliveryMethod') setDeliveryMethod(PADROES_DO_SISTEMA.deliveryMethod);
+                    if (campo === 'deliveryLocation') setDeliveryLocation(enderecoDaObraRef.current || PADROES_DO_SISTEMA.deliveryLocation);
+                    if (campo === 'notesVisibleToSupplier') setNotesVisibleToSupplier(PADROES_DO_SISTEMA.notesVisibleToSupplier);
                     autoPreenchidos.current.delete(campo);
                 }
+                setOrgSemPadrao(vazio(empresa) && vazio(pessoal));
 
                 const escritos = new Set<CampoPadrao>();
                 const v = aplicar as Required<PadroesDoPedido>;
@@ -343,9 +362,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                 if (aplicar.notesVisibleToSupplier !== undefined) { setNotesVisibleToSupplier(v.notesVisibleToSupplier); escritos.add('notesVisibleToSupplier'); }
 
                 escritos.forEach(c => autoPreenchidos.current.add(c));
-                // Aviso só do que veio de preferência gravada (o padrão do sistema é o de sempre).
                 const origens = new Set<OrigemDoPadrao>();
-                escritos.forEach(c => { const o = origem[c]; if (o && o !== 'SISTEMA') origens.add(o); });
+                escritos.forEach(c => { const o = origem[c]; if (o) origens.add(o); });
                 setOrigensAplicadas([...origens]);
             })
             // Sem preferência legível o pedido nasce como sempre nasceu — não trava o formulário.
@@ -584,8 +602,13 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         formattedAddress += ` - ${city || ''}${city && state ? '/' : ''}${state || ''}`;
                     }
 
+                    // O endereço só entra se ninguém definiu o local: nem o usuário à mão,
+                    // nem as Preferências (10/11: o endereço apagava o local do padrão).
                     if (formattedAddress.trim()) {
-                        setDeliveryLocation(formattedAddress);
+                        enderecoDaObraRef.current = formattedAddress;
+                        if (!mexidos.current.has('deliveryLocation') && !autoPreenchidos.current.has('deliveryLocation')) {
+                            setDeliveryLocation(formattedAddress);
+                        }
                     }
                 }
             } catch (err) {
@@ -1357,6 +1380,17 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                     {!isEditing && origensAplicadas.length > 0 && (
                                         <p className="md:col-span-2 text-xs text-gray-500">
                                             Preenchido com {origensAplicadas.map(o => ROTULO_ORIGEM[o]).join(' e ')} (Pedidos de Compra › Preferências). O que você alterar aqui fica como está.
+                                        </p>
+                                    )}
+                                    {/* Topo em "Todas" e sem obra: ainda não se sabe de qual empresa é o pedido. */}
+                                    {!isEditing && !orgDoPedido && (
+                                        <p className="md:col-span-2 text-xs text-gray-500">
+                                            Os padrões de Pedidos de Compra › Preferências entram ao escolher a obra — cada empresa tem o seu.
+                                        </p>
+                                    )}
+                                    {!isEditing && orgDoPedido && orgSemPadrao && (
+                                        <p className="md:col-span-2 text-xs text-amber-600">
+                                            A empresa desta obra não tem padrão em Pedidos de Compra › Preferências — os campos seguem o padrão do sistema.
                                         </p>
                                     )}
                                     {/* Número — só na edição (pedido novo recebe o número ao salvar).

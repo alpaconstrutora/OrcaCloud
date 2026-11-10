@@ -22,6 +22,7 @@ Depois da crítica (nota 20/40, 3 problemas P1), o usuário respondeu às pergun
 | 10/11/2026 | Montador × tabela "Plano de pagamento" | **Editar na própria tabela** — o montador separado deixa de existir |
 | 10/11/2026 | Escopo | Tudo, inclusive os menores |
 | 10/11/2026 | Ritmo | Um comando de cada vez |
+| 10/11/2026 | "Forma de pagamento" com dois sentidos (clarify) | **Topo vira "Condição de pagamento"**; "Forma de pagamento" fica só para o meio (PIX/TED/Dinheiro/Cheque), como em Suprimentos e no Financeiro |
 
 Crítica completa: `.impeccable/critique/2026-11-10T14-26-00Z__components-dealmodal-tsx.md`
 (não versionada; frente `design/negociacao-financeiro`).
@@ -139,7 +140,16 @@ seletores; fonte de 11 px; fecha a crítica.
   campo volta; Chaves pela gaveta → a série encolhe e fecha; conferência com o Plano de vendas
   chamando o servidor de verdade (lista simulada como ativa só na aba: o único plano do banco,
   o do Vale do Sol, está em RASCUNHO — em produção a conferência só aparece com plano ativo).
-- [ ] 3. clarify
+  Publicado: PR #319, `6931d40c`; `conferir-producao.sh` provou o domínio servindo `6931d40`
+  com "Taxa do plano de vendas" e "Forma de pagamento da série".
+- [x] 3. clarify — "Condição de pagamento" (topo) e opção "Parcelado direto"/"Mensalidade";
+  DOC fora das 3 listas (0 registros com DOC no banco, conferido); gaveta do sinal sem o
+  "abaixo" errado; ponto de cada aba com o motivo (title + leitor de tela) e o da aba Parcelas
+  agora = "plano ainda não lançado"; vazio da aba Parcelas diz quantas parcelas faltam lançar e
+  oferece "Lançar no Financeiro" (o texto antigo citava "Parcela avulsa", botão que saiu em
+  02/08); frases da política montadas pela regra (`utils/politicaDeVendasTexto.ts`, testada),
+  com acento, R$/% brasileiros e o que fazer. Conferido no dev local com escritas bloqueadas.
+  Fica para depois: a Simulação do corretor ainda mostra a mensagem crua do servidor.
 - [ ] 4. distill
 - [ ] 5. audit
 - [ ] 6. polish

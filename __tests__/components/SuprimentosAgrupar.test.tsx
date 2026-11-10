@@ -31,6 +31,8 @@ vi.mock('../../hooks/useOrgContext', () => ({
     useOrgContext: () => ({ orgId: 'org1' }),
     useOrgWriteTarget: () => ({ resolveWriteOrg: vi.fn(), orgTargetModal: null }),
     useWritableOrganizations: () => [{ id: 'org1', name: 'Alpa' }],
+    // Pedidos monta o painel de Preferências (fechado) — ele pede a organização padrão.
+    useDefaultWriteOrgId: () => 'org1',
 }));
 vi.mock('../../services/empreendimentoService', () => ({ empreendimentoService: { mapObrasToEmpreendimentos: vi.fn(async () => ({})), list: vi.fn(async () => []) } }));
 

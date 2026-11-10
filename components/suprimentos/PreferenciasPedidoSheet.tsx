@@ -45,7 +45,7 @@ const PreferenciasPedidoSheet: React.FC<Props> = ({ open, onClose, notify }) => 
     const { orgId: orgDoTopo } = useOrgContext();
     const gravaveis = useWritableOrganizations();
     const orgPadrao = useDefaultWriteOrgId();
-    const email = useStore(s => s.currentProfile.email);
+    const email = useStore(s => s.currentProfile?.email);
 
     const [orgId, setOrgId] = useState<string>('');
     const [camada, setCamada] = useState<Camada>('empresa');

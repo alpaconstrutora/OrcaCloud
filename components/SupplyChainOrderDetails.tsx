@@ -268,6 +268,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
     // Ponto do cabeçalho onde o formulário embutido desenha o "Salvar alterações",
     // ao lado de "Negociar" (pedido de 10/11/2026) — ver SupplyChainOrderForm `barraDeAcoes`.
     const [barraSalvar, setBarraSalvar] = React.useState<HTMLDivElement | null>(null);
+    // Idem para o "+ Item avulso", na régua de "Itens do pedido" — a tabela
+    // "Itens avulsos" do formulário repetia estas linhas (pedido de 10/11/2026).
+    const [barraItens, setBarraItens] = React.useState<HTMLDivElement | null>(null);
     const [abaDetalhe, setAbaDetalhe] = React.useState<'dados' | 'itens' | 'financeiro' | 'recebimento' | 'comunicacao'>(
         initialView === 'logistics' ? 'recebimento' : 'dados'
     );
@@ -1374,6 +1377,8 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                     <MoveHorizontal className="w-4 h-4" />
                                 </button>
                             </div>
+                            {/* "+ Item avulso" do formulário embutido entra aqui, por portal. */}
+                            {ehComprador && <div ref={setBarraItens} className="contents" />}
                         </div>
                     </div>
                     {/* §12 — busca sem resultado não pode virar tabela só com
@@ -1554,6 +1559,9 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                             onBack={() => { /* sem "voltar": a tela é o detalhe */ }}
                             onSave={() => { loadOrderData(); }}
                             barraDeAcoes={barraSalvar}
+                            barraItens={barraItens}
+                            itensGravados={order.items}
+                            versaoGravada={order.version}
                         />
                     </div>
                 )}

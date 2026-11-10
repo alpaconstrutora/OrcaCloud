@@ -165,9 +165,22 @@ interface SupplyChainOrderFormProps {
      *  desenhado, ao lado de "Negociar" (pedido de 10/11/2026). Sem ele, o botão
      *  fica acima do formulário, como antes. */
     barraDeAcoes?: HTMLElement | null;
+    /** Embutido: ponto da régua de "Itens do pedido" (tabela do detalhe) onde o
+     *  "+ Item avulso" é desenhado. Embutido, a tabela "Itens avulsos" não
+     *  aparece — repetia as linhas de "Itens do pedido" (pedido de 10/11/2026). */
+    barraItens?: HTMLElement | null;
+    /** Embutido: itens e versão gravados, como o detalhe os tem. Quando o
+     *  detalhe grava um item (editar/excluir/incluir avulso), a versão muda e o
+     *  formulário relê os itens — senão o "Salvar alterações" mandaria a lista
+     *  antiga e cairia em conflito de versão. */
+    itensGravados?: PedidoItemGravado[];
+    versaoGravada?: number;
 }
 
-const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados', barraDeAcoes }) => {
+/** Item como está gravado em `purchase_orders.items`. */
+type PedidoItemGravado = { code: string; description: string; unit: string; quantity: number; unitPrice: number; total?: number; quotedUnitPrice?: number | null; quotedTotal?: number | null; avulso?: boolean };
+
+const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onSave, editingOrderId, embedded = false, painel = 'dados', barraDeAcoes, barraItens, itensGravados, versaoGravada }) => {
     const { orgId: contextOrgId } = useOrgContext();
     const isEditing = !!editingOrderId;
     const [loading, setLoading] = React.useState(true);
@@ -385,9 +398,33 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
      * permite classificar quando os dois lados estiverem prontos, em vez de
      * classificar cedo e errado.
      */
-    const [itensCarregados, setItensCarregados] = React.useState<
-        { code: string; description: string; unit: string; quantity: number; unitPrice: number; total?: number; quotedUnitPrice?: number | null; quotedTotal?: number | null; avulso?: boolean }[] | null
-    >(null);
+    const [itensCarregados, setItensCarregados] = React.useState<PedidoItemGravado[] | null>(null);
+
+    // Itens gravados → estado do formulário. A separação orçamento × avulso
+    // fica para o efeito de classificação (depende do orçamento).
+    const aplicarItensGravados = (items: PedidoItemGravado[]) => {
+        setItensCarregados(items);
+        // Pre-fill quantities and prices from the order
+        const quantities = new Map<string, number>();
+        const prices = new Map<string, number>();
+        const quoted = new Map<string, number | null>();
+        items.forEach((i) => {
+            if (i.quantity !== undefined) quantities.set(i.code, i.quantity);
+            if (i.unitPrice !== undefined) prices.set(i.code, i.unitPrice);
+            if (i.quotedUnitPrice !== undefined) quoted.set(i.code, i.quotedUnitPrice);
+        });
+        setCustomQuantities(prev => new Map([...prev, ...quantities]));
+        setQuotedPrices(prev => new Map([...prev, ...quoted]));
+        setCustomPrices(prev => {
+            const next = new Map(prev);
+            prices.forEach((v, k) => {
+                if (v > 0 || !next.has(k)) {
+                    next.set(k, v);
+                }
+            });
+            return next;
+        });
+    };
 
     // Load existing order data when editing
     React.useEffect(() => {
@@ -417,27 +454,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     // depende do ORÇAMENTO, que é carregado noutro efeito e
                     // chega depois deste. Guardamos os itens crus e a
                     // classificação roda quando os dois estiverem prontos.
-                    setItensCarregados(existingOrder.items);
-                    // Pre-fill quantities and prices from the order
-                    const quantities = new Map<string, number>();
-                    const prices = new Map<string, number>();
-                    const quoted = new Map<string, number | null>();
-                    existingOrder.items.forEach((i) => {
-                        if (i.quantity !== undefined) quantities.set(i.code, i.quantity);
-                        if (i.unitPrice !== undefined) prices.set(i.code, i.unitPrice);
-                        if (i.quotedUnitPrice !== undefined) quoted.set(i.code, i.quotedUnitPrice);
-                    });
-                    setCustomQuantities(prev => new Map([...prev, ...quantities]));
-                    setQuotedPrices(prev => new Map([...prev, ...quoted]));
-                    setCustomPrices(prev => {
-                        const next = new Map(prev);
-                        prices.forEach((v, k) => {
-                            if (v > 0 || !next.has(k)) {
-                                next.set(k, v);
-                            }
-                        });
-                        return next;
-                    });
+                    aplicarItensGravados(existingOrder.items);
                     setDeliveryMethod(existingOrder.deliveryMethod || FORMA_ENTREGA_PADRAO);
                     setDeliveryLocation(existingOrder.deliveryLocation || 'Canteiro de Obras');
                     setEditingVersion(existingOrder.version);
@@ -502,6 +519,45 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
     };
 
     const [editingVersion, setEditingVersion] = React.useState<number | undefined>(undefined);
+
+    // Embutido: o detalhe gravou itens por conta própria (versão nova que não
+    // veio deste formulário) → reler os itens e assumir a versão gravada.
+    React.useEffect(() => {
+        if (!embedded || versaoGravada == null || !itensGravados) return;
+        if (editingVersion === undefined || versaoGravada === editingVersion) return;
+        aplicarItensGravados(itensGravados);
+        setEditingVersion(versaoGravada);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [versaoGravada]);
+
+    // Embutido: "+ Item avulso" grava o item direto no pedido, como editar e
+    // excluir na tabela "Itens do pedido" — a linha aparece lá na hora. Lê o
+    // pedido do servidor para não regravar itens com a lista deste formulário.
+    const incluirAvulsoNoPedido = async (item: AvulsoItem): Promise<string | null> => {
+        if (!editingOrderId) return 'Pedido não encontrado.';
+        try {
+            const atual = await orderService.getOrderById(editingOrderId);
+            if (!atual) return 'Não foi possível ler o pedido. Tente de novo.';
+            const novo = {
+                code: item.code,
+                description: item.description,
+                unit: item.unit,
+                quantity: item.quantity,
+                unitPrice: item.unitPrice,
+                total: round2(item.quantity * item.unitPrice),
+                quotedUnitPrice: item.quotedUnitPrice ?? null,
+                quotedTotal: item.quotedUnitPrice == null ? null : round2(item.quantity * item.quotedUnitPrice),
+                avulso: true,
+            };
+            await orderService.updateOrder(editingOrderId, { items: [...atual.items, novo] }, atual.version);
+            onSave();
+            return null;
+        } catch (err: unknown) {
+            const msg = err instanceof Error ? err.message : String(err);
+            console.error('[SupplyChainOrderForm] Erro ao incluir item avulso:', err);
+            return msg.startsWith('CONFLICT') ? msg.replace(/^CONFLICT:\s*/, '') : 'Erro ao incluir o item avulso.';
+        }
+    };
     const [purchasedQuantities, setPurchasedQuantities] = React.useState<Map<string, number>>(new Map());
 
     // Helper to fetch and update prices for a budget
@@ -1680,7 +1736,22 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 
                             {/* ── Aba "Itens do Pedido" (avulsos + materiais da obra) ── */}
                             {/* §5.2 — cabeçalho e tabela num card só; §16 escala compacta. */}
-                            {mostrarItens && selectedProjectId && (
+                            {/* Embutido: a tabela "Itens do pedido" do detalhe já lista os
+                                avulsos — aqui fica só o "+ Item avulso", desenhado na
+                                régua dela (pedido de 10/11/2026). */}
+                            {embedded && mostrarItens && selectedProjectId && barraItens && createPortal(
+                                <button
+                                    type="button"
+                                    onClick={() => setAvulsoModalConfig({ open: true, editingIndex: null, initial: null })}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-orange-50 hover:bg-orange-100 text-orange-700 border border-orange-200 rounded-[6px] text-[13px] font-medium transition-all active:scale-95 shrink-0"
+                                >
+                                    <Plus className="w-[15px] h-[15px]" />
+                                    Item avulso
+                                </button>,
+                                barraItens,
+                            )}
+
+                            {!embedded && mostrarItens && selectedProjectId && (
                                 <div className="bg-white rounded-[10px] shadow-sm border border-gray-100 overflow-hidden">
                                     {/* §5.2 — toolbar ACOPLADA: régua de controles e tabela no
                                         mesmo card, sem moldura própria. Conteúdo do §5.1: busca,
@@ -2107,8 +2178,14 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                     <AvulsoItemModal
                         projectData={projectData}
                         initial={avulsoModalConfig.initial}
-                        onConfirm={(item) => {
+                        onConfirm={async (item) => {
                             const { editingIndex } = avulsoModalConfig;
+                            if (embedded && isEditing && editingIndex === null) {
+                                const erro = await incluirAvulsoNoPedido(item);
+                                if (erro) return erro;
+                                setAvulsoModalConfig({ open: false, editingIndex: null, initial: null });
+                                return;
+                            }
                             // O modal monta o item com `{...form}`, e `form` nasce do
                             // `initial` — então um total gravado sobreviveria à edição e
                             // ficaria mentindo sobre a nova quantidade. Quem passa por
@@ -2146,7 +2223,8 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
 interface AvulsoItemModalProps {
     projectData: ProjectData | null;
     initial: AvulsoItem | null;
-    onConfirm: (item: AvulsoItem) => void;
+    /** Devolve a mensagem de erro (o modal continua aberto e a mostra) ou nada. */
+    onConfirm: (item: AvulsoItem) => void | Promise<string | null | void>;
     onClose: () => void;
 }
 
@@ -2280,12 +2358,20 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
         setPickerOpen(false);
     };
 
-    const handleConfirm = () => {
+    const [salvando, setSalvando] = React.useState(false);
+
+    const handleConfirm = async () => {
         if (!form.description.trim()) { setFormError('Descrição obrigatória.'); return; }
         if (!form.unit.trim()) { setFormError('Unidade obrigatória.'); return; }
         if (form.quantity <= 0) { setFormError('Quantidade deve ser maior que zero.'); return; }
         setFormError(null);
-        onConfirm({ ...form });
+        setSalvando(true);
+        try {
+            const erro = await onConfirm({ ...form });
+            if (erro) setFormError(erro);
+        } finally {
+            setSalvando(false);
+        }
     };
 
     return (
@@ -2445,10 +2531,12 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ projectData, initial,
                     <button
                         type="button"
                         onClick={handleConfirm}
-                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20"
+                        disabled={salvando}
+                        title={salvando ? 'Gravando o item…' : undefined}
+                        className="flex items-center gap-2 px-6 py-2.5 rounded-xl bg-orange-500 hover:bg-orange-600 text-white text-sm font-black transition-all shadow-lg shadow-orange-500/20 disabled:opacity-60 disabled:cursor-wait"
                     >
-                        {isEditing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
-                        {isEditing ? 'Salvar Alterações' : 'Adicionar Item'}
+                        {salvando ? <Loader2 className="w-4 h-4 animate-spin" /> : isEditing ? <Pencil className="w-4 h-4" /> : <Plus className="w-4 h-4" />}
+                        {salvando ? 'Salvando…' : isEditing ? 'Salvar Alterações' : 'Adicionar Item'}
                     </button>
                 </div>
             </div>

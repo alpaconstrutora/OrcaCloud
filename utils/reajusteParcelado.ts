@@ -13,6 +13,23 @@ export function valorAtualDoContrato(original: number, aditivosAprovados: number
 }
 
 /**
+ * Parcela de venda com juros (Price/SAC) carrega `interest` + `principal` = `value`.
+ * O reajuste escala os dois pelo mesmo fator; o principal sai por diferença para a
+ * soma continuar fechando o valor depois do arredondamento em centavos. Sem isto o
+ * título ficava com o valor reajustado e os juros antigos (plano
+ * 2026-11-09-negociacao-parcelamento-com-juros, Review Focus 2). Linha sem juros
+ * não ganha as chaves.
+ */
+function jurosReajustados(linha: ContractInstallment, valor: number, fator: number): Partial<ContractInstallment> {
+    const temJuros = typeof linha.interest === 'number';
+    const temPrincipal = typeof linha.principal === 'number';
+    if (!temJuros && !temPrincipal) return {};
+    const juros = temJuros ? centavos((linha.interest as number) * fator) : null;
+    if (temJuros && temPrincipal) return { interest: juros, principal: centavos(valor - (juros as number)) };
+    return temJuros ? { interest: juros } : { principal: centavos((linha.principal as number) * fator) };
+}
+
+/**
  * Reajuste de contrato PARCELADO: aplica o fator ao CRONOGRAMA, que é de onde
  * `syncParceladoScheduleToFinance` tira o valor de cada parcela. Até 09/11/2026
  * `applyReajuste` só mudava `current_value` e o sync seguinte regravava as parcelas
@@ -44,7 +61,7 @@ export function reajustarCronograma(
         const valor = centavos(linha.value * fator);
         acrescimo += valor - linha.value;
         reajustadas++;
-        return { ...linha, value: valor };
+        return { ...linha, value: valor, ...jurosReajustados(linha, valor, fator) };
     });
 
     return { cronograma: novo, acrescimo: centavos(acrescimo), reajustadas };

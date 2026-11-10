@@ -48,6 +48,7 @@ import { projectService, ProjectData } from '../services/projectService';
 import { brokerService } from '../services/brokerService';
 import { commercialFinanceService } from '../services/commercialFinanceService';
 import { contractService, generateRecurringInstallmentsForPeriod } from '../services/contractService';
+import { resolverCategoriaReceitaFinanceira } from '../services/financialCategoryResolver';
 import { buildRentalResolveContext } from '../services/rentalDocumentContextService';
 import EmitDocumentModal from './EmitDocumentModal';
 import DocxTemplateManager from './DocxTemplateManager';
@@ -1064,6 +1065,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
      * data. Leva junto o TIPO de cada parcela (Sinal/Mensal/Chaves…) e a forma de
      * pagamento — sem isso a coluna "Tipo" da aba Parcelas nascia vazia e o
      * usuário teria de reclassificar à mão o que o plano já sabia.
+     * Parcela com juros (Price/SAC) leva `interest`/`principal`: o sync do contrato
+     * grava a parte de juros no título (`interest_amount`) para a DRE separá-la.
      */
     const planoComoSchedule = () => [
         ...((Number(formData.down_payment) || 0) > 0 && formData.date
@@ -1079,6 +1082,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             value: Number(i.value) || 0,
             installment_type: i.installmentType ?? null,
             payment_type: i.paymentType ?? null,
+            ...(typeof i.interest === 'number' ? { interest: i.interest, principal: i.principal ?? null } : {}),
         })),
     ]
         .filter(i => i.date && i.value > 0)
@@ -1109,6 +1113,18 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
         const lancadas = await contractService.listFinancialEntries(contrato).catch(() => []);
         await recarregarParcelas();
         return lancadas.length;
+    };
+
+    /**
+     * Plano com juros e org sem a Conta Financeira "Receita Financeira": o sync lança
+     * as parcelas do mesmo jeito (juros sem categoria), mas a DRE não consegue separar
+     * os juros da receita da venda — o usuário precisa saber, senão só descobre na DRE.
+     * O sync resolve a categoria de novo por conta própria; esta consulta é só o aviso.
+     */
+    const avisoJurosSemCategoria = async (parcelas: ReturnType<typeof planoComoSchedule>): Promise<string> => {
+        if (!parcelas.some(p => (Number(p.interest) || 0) > 0)) return '';
+        const categoria = await resolverCategoriaReceitaFinanceira(formData.organization_id || organizationId);
+        return categoria ? '' : ' Atenção: a organização não tem a Conta Financeira "Receita Financeira" — os juros foram lançados sem categoria própria e a DRE não os separa da receita da venda. Cadastre-a e lance de novo.';
     };
 
     const handleLancarNoFinanceiro = async () => {
@@ -1147,6 +1163,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 return;
             }
 
+            const aviso = await avisoJurosSemCategoria(parcelas);
             const lancadas = { length: await aplicarPlanoNoContrato(contrato) };
 
             if (lancadas.length === 0) {
@@ -1160,7 +1177,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
 
             setActiveTab('parcelas');
-            notifySuccess(`${lancadas.length} parcela(s) lançadas em Contas a Receber pelo contrato ${contrato.number || ''}.`);
+            notifySuccess(`${lancadas.length} parcela(s) lançadas em Contas a Receber pelo contrato ${contrato.number || ''}.${aviso}`);
         } catch (err) {
             notifyError(err instanceof Error ? err.message : 'Erro ao lançar o plano no financeiro.');
         } finally {
@@ -1581,6 +1598,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 installment_value: formData.installment_value,
                 cost_center_id: formData.cost_center_id,
                 plano_de_contas_id: formData.plano_de_contas_id,
+                // Venda com juros: o contrato nasce com o Valor Total (com juros).
+                interest_rate_monthly: formData.interest_rate_monthly,
+                contract_total_value: formData.contract_total_value,
             }, isRental ? 'LOCACAO' : 'VENDAS');
             setLinkedContract(contract);
             return contract;
@@ -2215,12 +2235,13 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             }
             setLoading(true);
             try {
+                const aviso = await avisoJurosSemCategoria(parcelas);
                 const quantas = await aplicarPlanoNoContrato(target.contract);
                 setGenerateResult(quantas > 0
                     ? {
                         ok: true,
                         msg: `${quantas} parcela(s) do Plano de Pagamento lançadas em Contas a Receber pelo contrato ${target.contract.number || ''}. `
-                            + 'Elas aparecem nesta mesma tabela.',
+                            + 'Elas aparecem nesta mesma tabela.' + aviso,
                     }
                     : {
                         ok: false,

@@ -9,7 +9,7 @@ ALTER TABLE public.commercial_deals
 
 ALTER TABLE public.internal_transactions
   ADD COLUMN IF NOT EXISTS interest_amount numeric(14,2),
-  ADD COLUMN IF NOT EXISTS interest_category_id uuid REFERENCES public.financial_categories(id);
+  ADD COLUMN IF NOT EXISTS interest_category_id uuid REFERENCES public.financial_categories(id) ON DELETE SET NULL;
 
 COMMENT ON COLUMN public.commercial_deals.interest_rate_monthly IS
   'Taxa de juros mensal (%) do parcelamento da venda. Gravada pelo DealModal ao "Montar plano" (Gerenciar Negociação › Financeiro); lida por ele ao reabrir a negociação. Nula = parcelamento sem juros.';

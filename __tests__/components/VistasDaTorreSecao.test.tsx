@@ -15,7 +15,7 @@ vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => confirmar }));
 const showToast = vi.hoisted(() => vi.fn());
 vi.mock('../../hooks/useToast', () => ({ useToast: () => ({ showToast, localToast: null }) }));
 
-import VistasDaTorreSecao from '../../components/empreendimento/VistasDaTorreSecao';
+import VistasDaTorreSecao, { faixaSugerida } from '../../components/empreendimento/VistasDaTorreSecao';
 
 const BAIXOS: VistaDaTorre = { id: 'v1', tower_id: 't1', andar_de: 0, andar_ate: 3, orientacao: null, imagem_url: 'https://x/baixos.jpg', imagem_path: 'o1/e1/vistas/baixos.jpg', legenda: 'Vista para a praça' };
 const arquivo = () => new File(['x'], 'vista.jpg', { type: 'image/jpeg' });
@@ -50,10 +50,10 @@ describe('VistasDaTorreSecao', () => {
         expect(screen.getByText('1 foto(s)')).toBeTruthy();
     });
 
-    it('"Adicionar vista" fica desligado dizendo o que falta: a foto, depois a faixa', async () => {
+    it('"Salvar vista" fica desligado dizendo o que falta: a foto, depois a faixa', async () => {
         montar();
         await screen.findByTestId('vista-gravada');
-        const botao = screen.getByRole('button', { name: 'Adicionar vista' });
+        const botao = screen.getByRole('button', { name: 'Salvar vista' });
         expect(botao).toBeDisabled();
         expect(screen.getByTestId('nova-vista-motivo').textContent).toBe('Escolha a foto da vista.');
         escolherFoto();
@@ -74,13 +74,47 @@ describe('VistasDaTorreSecao', () => {
         preencher('4', '12');
         fireEvent.change(screen.getByLabelText('Face da torre'), { target: { value: 'NORTE' } });
         fireEvent.change(screen.getByLabelText('Legenda (opcional)'), { target: { value: ' Serra ao fundo ' } });
-        fireEvent.click(screen.getByRole('button', { name: 'Adicionar vista' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
         await waitFor(() => expect(screen.getAllByTestId('vista-gravada')).toHaveLength(2));
         expect(servico.adicionar).toHaveBeenCalledWith({ organizationId: 'o1', empreendimentoId: 'e1', towerId: 't1', andar_de: 4, andar_ate: 12, orientacao: 'NORTE', legenda: 'Serra ao fundo', arquivo: f });
         expect(within(screen.getAllByTestId('vista-gravada')[1]).getByText('4º ao 12º pavimento · face Norte')).toBeTruthy();
         expect(showToast).toHaveBeenCalledWith('Vista da Torre A gravada: 4º ao 12º pavimento · face Norte.');
         expect((screen.getByLabelText('Do andar') as HTMLInputElement).value).toBe('');
-        expect(screen.getByRole('button', { name: 'Adicionar vista' })).toBeDisabled();
+        expect(screen.getByRole('button', { name: 'Salvar vista' })).toBeDisabled();
+    });
+
+    // 10/11/2026, o usuário: "carreguei as imagens mas nao tem botão salvar ou algo do tipo e as imagens nao permanecem".
+    it('com os andares da torre, a faixa já nasce preenchida: escolher a foto liga o "Salvar vista" e avisa que falta salvar', async () => {
+        servico.adicionar.mockResolvedValue({ ...BAIXOS, id: 'v9', andar_de: 0, andar_ate: 3 });
+        montar({ andaresDaTorre: [-2, -1, 0, 0, 1, 2, 3, null] });
+        await screen.findByTestId('vista-gravada');
+        // Do térreo (garagem não tem janela) ao último andar.
+        expect((screen.getByLabelText('Do andar') as HTMLInputElement).value).toBe('0');
+        expect((screen.getByLabelText('Até o andar') as HTMLInputElement).value).toBe('3');
+        expect(screen.getByRole('button', { name: 'Salvar vista' })).toBeDisabled();
+        expect(screen.queryByTestId('nova-vista-por-salvar')).toBeNull();
+        const f = escolherFoto();
+        expect(screen.getByRole('button', { name: 'Salvar vista' })).not.toBeDisabled();
+        expect(screen.getByTestId('nova-vista-por-salvar').textContent).toMatch(/ainda não foi gravada/);
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
+        await waitFor(() => expect(servico.adicionar).toHaveBeenCalledWith(expect.objectContaining({ andar_de: 0, andar_ate: 3, arquivo: f })));
+    });
+
+    it('as unidades chegam depois de o card abrir: a sugestão entra, mas não passa por cima do que foi digitado', async () => {
+        const { rerender } = montar();
+        await screen.findByTestId('vista-gravada');
+        expect((screen.getByLabelText('Do andar') as HTMLInputElement).value).toBe('');
+        rerender(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" andaresDaTorre={[1, 5]} />);
+        expect((screen.getByLabelText('Até o andar') as HTMLInputElement).value).toBe('5');
+        preencher('2', '4');
+        rerender(<VistasDaTorreSecao towerId="t1" towerName="Torre A" empreendimentoId="e1" organizationId="o1" andaresDaTorre={[1, 9]} />);
+        expect((screen.getByLabelText('Até o andar') as HTMLInputElement).value).toBe('4');
+    });
+
+    it('torre só com subsolo usa os andares que tem; sem unidade com andar, a faixa fica vazia', () => {
+        expect(faixaSugerida([-2, -1])).toEqual({ de: '-2', ate: '-1' });
+        expect(faixaSugerida([null, undefined])).toEqual({ de: '', ate: '' });
+        expect(faixaSugerida(undefined)).toEqual({ de: '', ate: '' });
     });
 
     it('subsolo e térreo valem como andar (-1, 0)', async () => {
@@ -89,7 +123,7 @@ describe('VistasDaTorreSecao', () => {
         await screen.findByTestId('vista-gravada');
         escolherFoto();
         preencher('-1', '0');
-        fireEvent.click(screen.getByRole('button', { name: 'Adicionar vista' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
         await waitFor(() => expect(servico.adicionar).toHaveBeenCalledWith(expect.objectContaining({ andar_de: -1, andar_ate: 0, orientacao: null, legenda: null })));
     });
 
@@ -99,7 +133,7 @@ describe('VistasDaTorreSecao', () => {
         await screen.findByTestId('vista-gravada');
         escolherFoto();
         preencher('4', '12');
-        fireEvent.click(screen.getByRole('button', { name: 'Adicionar vista' }));
+        fireEvent.click(screen.getByRole('button', { name: 'Salvar vista' }));
         await waitFor(() => expect(showToast).toHaveBeenCalledWith(expect.stringContaining('não foi gravada'), 'error'));
         expect(screen.getAllByTestId('vista-gravada')).toHaveLength(1);
         expect((screen.getByLabelText('Do andar') as HTMLInputElement).value).toBe('4');

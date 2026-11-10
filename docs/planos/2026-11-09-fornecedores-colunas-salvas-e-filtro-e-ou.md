@@ -24,6 +24,21 @@ Sessão de 09/11/2026 (VS Code):
 - 09/11/2026: código, testes e PR #279 (rascunho). Aplicar a migration no banco remoto
   foi barrado pelo auto mode ([Production Deploy]) — aguarda o usuário aplicar ou autorizar.
   Os três itens só são marcados como feitos após a conferência em produção.
+- 09/11/2026: usuário autorizou ("pode aplicar"); migration aplicada e conferida no
+  information_schema. PR #279 mesclado (561a5fd), CI do main verde, produção servindo.
+  Conferido em produção (orcacloud.vercel.app, usuário desenvolvedor@):
+  - abrir a tela criou a linha em user_table_column_preferences com o que o navegador tinha;
+  - arrastar mudou column_order no banco; apagar `supplierListColumns` do localStorage e
+    recarregar trouxe a ordem de volta, do banco;
+  - para a direita soltando na metade ESQUERDA de Apelido → caiu antes de Apelido; metade
+    direita de Tipo → depois de Tipo; para a esquerda na metade esquerda de Código → antes;
+  - "Fornecedor é Decore Vidros OU Apelido contém Decor" → Decore Vidros + Decorlumen.
+  Ordem de colunas e filtros do usuário restaurados ao fim.
+  (O arrasto do Claude in Chrome não emite dragover no ponto final em arrasto longo — sem
+  drop; o arrasto curto real e os eventos disparados com clientX provaram o código no ar.)
+- 09/11/2026, achado na conferência: com 1 linha na tabela o painel do Filtro avançado
+  ficava CORTADO pelo card da toolbar (overflow-hidden, §5.2) — a 2ª regra, a do E/OU,
+  sumia. Item 4 abaixo.
 
 ## Itens
 
@@ -35,7 +50,7 @@ Sessão de 09/11/2026 (VS Code):
   salva no usuário.
 - **Pronto quando:** em produção, mudar uma coluna, apagar `supplierListColumns` do
   localStorage e recarregar → a escolha volta (veio do banco); linha conferida no banco.
-- [ ] feito
+- [x] feito (conferido em produção, 09/11/2026)
 
 ### 2. Posição das colunas
 - **Muda:** `SortableHeader` sabe de que lado do cabeçalho o mouse está (metade esquerda =
@@ -43,7 +58,7 @@ Sessão de 09/11/2026 (VS Code):
   `moveColumn`, que solta exatamente ali. A ordem entra na gravação do item 1.
 - **Pronto quando:** teste de `moveColumn` com lado 'antes'/'depois' nos dois sentidos;
   em produção, arrastar para a direita solta onde a linha azul mostrou.
-- [ ] feito
+- [x] feito (conferido em produção, 09/11/2026)
 
 ### 3. Filtro avançado E / OU
 - **Muda:** cada regra a partir da 2ª tem conector `e`/`ou` (um só para o conjunto, padrão
@@ -52,4 +67,13 @@ Sessão de 09/11/2026 (VS Code):
   sem mudar as chamadas. Filtro salvo guarda o conector junto (está dentro das regras).
 - **Pronto quando:** testes de `applyFilterRules` (E, OU, regra incompleta) e do painel
   (trocar para OU mostra a união); em produção, dois filtros com OU em Meus Fornecedores.
+- [x] feito (conferido em produção, 09/11/2026)
+
+### 4. Painel do Filtro avançado não pode ser cortado pelo card
+- **Muda:** o painel abre por portal em `document.body` (`position: fixed`, ancorado à
+  direita do botão), como a lista de valores e o FilterPopover (§5.4). Clique dentro dele
+  não conta como "clique fora".
+- **Pronto quando:** teste com o painel dentro de um contêiner `overflow: hidden` de 40 px
+  (painel fora dele, 2ª regra visível); em produção, com 1 linha na tabela, as duas regras
+  aparecem inteiras.
 - [ ] feito

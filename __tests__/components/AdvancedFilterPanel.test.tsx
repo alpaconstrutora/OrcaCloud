@@ -148,3 +148,21 @@ describe('AdvancedFilterPanel — E / OU', () => {
     expect((screen.getAllByRole('combobox', { name: 'Ligar as regras com' }) as HTMLSelectElement[]).map(c => c.value)).toEqual(['e', 'e']);
   });
 });
+
+// 09/11/2026, em produção: com o filtro deixando 1 linha na tabela, o card da toolbar
+// (overflow-hidden, §5.2) ficava baixo e cortava o painel — a 2ª regra, a do E/OU, sumia.
+describe('AdvancedFilterPanel — abre fora do card que o contém', () => {
+  it('o painel sai por portal em document.body, e clicar dentro dele não o fecha', async () => {
+    const user = userEvent.setup();
+    const { container } = render(<div style={{ overflow: 'hidden', height: 40 }}><Tela /></div>);
+    await user.click(screen.getByRole('button', { name: /Filtro avançado/ }));
+    const painel = screen.getByRole('dialog', { name: 'Filtro avançado' });
+    expect(painel.parentElement).toBe(document.body);
+    expect(container.contains(painel)).toBe(false);
+    await user.click(screen.getByRole('button', { name: /Adicionar filtro/ }));
+    await user.click(screen.getByRole('button', { name: /Adicionar filtro/ }));
+    expect(screen.getByRole('combobox', { name: 'Ligar as regras com' })).toBeInTheDocument();
+    await user.click(document.body); // fora → fecha
+    expect(screen.queryByRole('dialog', { name: 'Filtro avançado' })).toBeNull();
+  });
+});

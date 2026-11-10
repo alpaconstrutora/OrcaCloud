@@ -97,13 +97,15 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
         return map
     }, [lines])
 
-    // Totais globais
+    // Totais globais. `n` = TÍTULOS: a parcela com juros aparece em duas categorias
+    // (venda + Receita Financeira) e contaria 2× — desconta a parte de juros. O
+    // subtotal do grupo (abaixo) continua por categoria, como a própria linha.
     const totals = React.useMemo(() => lines.reduce(
         (acc, l) => ({
             creditos: acc.creditos + l.creditos,
             debitos:  acc.debitos  + l.debitos,
             saldo:    acc.saldo    + l.saldo_liquido,
-            n:        acc.n        + l.n_transacoes,
+            n:        acc.n        + l.n_transacoes - (l.n_partes_juros ?? 0),
         }),
         { creditos: 0, debitos: 0, saldo: 0, n: 0 }
     ), [lines])

@@ -100,6 +100,8 @@ interface ReportRow {
     /** Texto em que a busca procura — um grupo inclui os nomes dos filhos. */
     searchText: string;
     qtd: number;
+    /** Para o TOTAL da tela (ver OpuraPivotRow.qtd_titulos); a coluna Qtd mostra `qtd`. */
+    qtdTitulos: number;
     realizado: number; // credit − debit conciliado
     previsto: number;  // credit − debit pendente
     vencido: number;
@@ -118,6 +120,7 @@ function flatRowsToReport(rows: OpuraPivotRow[]): ReportRow[] {
         groupLabel: null,
         searchText: r.dimension_label,
         qtd: r.qtd,
+        qtdTitulos: r.qtd_titulos ?? r.qtd,
         realizado: r.net_realizado,
         previsto: r.credit_previsto - r.debit_previsto,
         vencido: r.vencido,
@@ -304,6 +307,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
             groupLabel: n.synthetic ? flat[i - 1]?.name ?? null : null,
             searchText: subtreeNames(n),
             qtd: n.totals.qtd,
+            qtdTitulos: n.totals.qtd,
             realizado: n.totals.realizado,
             previsto: n.totals.previsto,
             vencido: n.totals.vencido,
@@ -383,7 +387,7 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
 
     // Totais sempre da lista plana — no modo árvore os grupos já somam os filhos.
     const totals = React.useMemo(() => flatRows.reduce((acc, r) => ({
-        qtd:       acc.qtd + r.qtd,
+        qtd:       acc.qtd + r.qtdTitulos,
         realizado: acc.realizado + r.realizado,
         previsto:  acc.previsto + r.previsto,
         vencido:   acc.vencido + r.vencido,

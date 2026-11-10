@@ -10,6 +10,7 @@ import {
     manterJurosDoBlocoEditado,
     planoComoSchedule,
     atualizacaoDoContratoPeloPlano,
+    espelhoDoPlano,
     type PlanoComJuros,
     type CamposDoPlano,
     type NegocioDoPlano,
@@ -140,9 +141,28 @@ describe('montarPlanoNoNegocio — juros na negociação', () => {
         expect(soma(d.custom_installments!.map(l => l.principal!))).toBe(100000);
         expect(d.down_payment).toBe(0);
         expect(d.payment_due_date).toBe('2026-12-10');
-        // Espelho para o gerador do contrato (maior bloco periódico).
+        // Espelho (Nº de Parcelas / Valor Mensal): as 12 parcelas e a parcela fixa.
+        // Até 10/11/2026 dava 11 — o maior bloco; a 12ª (centavos) é bloco próprio.
         expect(d.installment_value).toBe(8884.88);
-        expect(d.installments).toBe(11);
+        expect(d.installments).toBe(12);
+    });
+
+    it('SAC grava o espelho: 12 parcelas, Valor Mensal = a 1ª (a maior)', () => {
+        // Antes: SAC são 12 blocos de 1× e blocoParaGerador devolvia null — o
+        // nº/valor antigo da negociação ficava gravado e ia para o contrato.
+        const d = montar(negocio({ installments: 36, installment_value: 999 }), campos({ sistema: 'SAC' }));
+        expect(d.custom_installments![0]).toMatchObject({ value: 9333.33, interest: 1000 });
+        expect(d.installments).toBe(12);
+        expect(d.installment_value).toBe(9333.33);
+    });
+
+    it('espelhoDoPlano sem juros = blocoParaGerador (maior série periódica)', () => {
+        const blocos = [
+            { tipo: 'MENSAL', quantidade: 10, valorParcela: 1000, primeiroVencimento: '2026-12-10', intervaloMeses: 1 },
+            { tipo: 'ANUAL', quantidade: 2, valorParcela: 20000, primeiroVencimento: '2027-06-10', intervaloMeses: 12 },
+        ];
+        expect(espelhoDoPlano(blocos)).toEqual({ valor: 20000, quantidade: 2 });
+        expect(espelhoDoPlano([])).toBeNull();
     });
 
     it('remontar não aplica juros sobre juros', () => {

@@ -16,8 +16,8 @@ vi.mock('jspdf-autotable', () => ({ default: () => undefined }));
 import { condicoesDaProposta } from '../services/propertyExportService';
 import type { PropertyDeal } from '../types';
 
-// Mesma conversão do service (a data em si não é assunto deste teste).
-const dataPrevista = new Date('2026-11-10').toLocaleDateString('pt-BR');
+// 'YYYY-MM-DD' lido como data de calendário, sem fuso (antes saía o dia anterior em UTC−3).
+const dataPrevista = '10/11/2026';
 const moeda = (n: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(n);
 
 const venda = (over: Partial<PropertyDeal> = {}) => ({
@@ -69,5 +69,12 @@ describe('condicoesDaProposta — venda com juros', () => {
         expect(linhas.map(l => l[0])).toEqual([
             'Tipo de Negociação', 'Valor Mensal', 'Nº de Parcelas', 'Valor Total do Contrato', 'Data Prevista', 'Status Atual',
         ]);
+    });
+});
+
+describe('condicoesDaProposta — Data Prevista sem fuso', () => {
+    it('1º do mês continua 1º (em UTC−3 o new Date de 2026-12-01 dava 30/11)', () => {
+        const linha = condicoesDaProposta(venda({ date: '2026-12-01' })).find(l => l[0] === 'Data Prevista');
+        expect(linha?.[1]).toBe('01/12/2026');
     });
 });

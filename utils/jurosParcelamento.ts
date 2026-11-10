@@ -280,6 +280,30 @@ export function editarValorTotal(
 }
 
 /**
+ * Espelho `installment_value`/`installments` da negociação (Nº de Parcelas e Valor
+ * Mensal — o contrato nasce com `payment_installments` = este nº).
+ *
+ * Sem juros é o `blocoParaGerador` de sempre (maior série com mais de 1 parcela).
+ * Com juros a série é UMA só — Price ou SAC — espalhada em blocos: no Price a
+ * última parcela absorve os centavos e vira bloco próprio (12× virava "11"); no
+ * SAC cada parcela tem um valor, N blocos de 1× — e o espelho nem era gravado
+ * (ficava o nº/valor antigo). Com juros: nº = todas as parcelas com juros, valor
+ * = a 1ª delas (Price: a parcela fixa; SAC: a maior).
+ */
+export function espelhoDoPlano(
+    blocos: (BlocoPagamento & { juros?: number[] })[],
+): { valor: number; quantidade: number } | null {
+    const comJuros = blocos
+        .filter(b => (b.juros?.length ?? 0) > 0)
+        .sort((a, b) => (a.primeiroVencimento || '').localeCompare(b.primeiroVencimento || ''));
+    if (comJuros.length === 0) return blocoParaGerador(blocos);
+    return {
+        valor: comJuros[0].valorParcela,
+        quantidade: comJuros.reduce((soma, b) => soma + b.quantidade, 0),
+    };
+}
+
+/**
  * O patch que "Montar plano" aplica sobre a negociação: sinal, 1º vencimento,
  * cronograma expandido (+ espelho do gerador de contrato) e, em venda com
  * juros, as três colunas de juros e o total com juros. `idBase` prefixa os ids
@@ -290,7 +314,7 @@ export function montarPlanoNoNegocio(deal: NegocioDoPlano, c: CamposDoPlano, idB
     const linhas = blocos.flatMap((b, i) => expandirBloco(b, `${idBase}-${i}`));
     // Espelho para o gerador do contrato, que só sabe UMA série homogênea e lê
     // estes dois campos (ver geracaoContrato no DealModal).
-    const espelho = blocoParaGerador(blocos);
+    const espelho = espelhoDoPlano(blocos);
     const venda = deal.type === 'SALE';
     const tinhaJuros = deal.interest_rate_monthly != null
         || deal.amortization_system != null

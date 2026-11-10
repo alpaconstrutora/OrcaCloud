@@ -68,6 +68,26 @@ const SOURCES_COM_TOTAL = ['CONTRACT_PARCELADO', 'CONTRACT_AVISTA'];
 
 /** Valor bruto da parcela (antes do desconto da linha — o desconto não muda o acordado). */
 const bruto = (p: ParcelaConferida) => Number(p.original_amount ?? p.amount ?? 0);
+
+/** Linha do cronograma com juros da venda parcelada (Price/SAC — `interest` > 0). */
+const temJuros = (l: ContractInstallment | undefined) => (Number(l?.interest) || 0) > 0;
+
+/**
+ * A linha com outro VALOR. Na venda com juros, os juros são os do plano — o que
+ * se corrige aqui (diferença, valor alterado no título) é principal: `interest`
+ * fica e `principal` volta a ser valor − juros. Valor abaixo dos juros: os juros
+ * descem ao valor e o principal fica 0 — nunca `interest > value` (o sync grava
+ * `interest_amount`, e quem lê a coluna fora da view da DRE não tem o LEAST).
+ * Linha sem juros: só o valor muda.
+ */
+export const comNovoValor = (l: ContractInstallment, valor: number): ContractInstallment => {
+    if (!temJuros(l)) return { ...l, value: valor };
+    const juros = dois(Math.min(Number(l.interest), Math.max(0, valor)));
+    return { ...l, value: valor, interest: juros, principal: dois(valor - juros) };
+};
+
+const MOTIVO_JUROS = 'As parcelas em aberto têm juros (Price/SAC) do plano da negociação — gerar parcelas novas aqui apagaria os juros. '
+    + 'Remonte em Gerenciar Negociação › Financeiro › "Montar plano" e lance de novo no contrato; ou use "Distribuir".';
 const ativa = (p: ParcelaConferida) => p.status !== 'CANCELLED' && p.business_status !== 'CANCELADO';
 
 /**
@@ -142,7 +162,7 @@ function cronogramaDosTitulos(cronograma: ContractInstallment[], parcelas: Parce
         if (p.source_system !== 'CONTRACT_PARCELADO' || !ativa(p)) continue;
         const n = posicao(p);
         if (n == null || n > novo.length) continue;
-        novo[n - 1] = { ...novo[n - 1], value: dois(bruto(p)), ...(p.transaction_date ? { date: p.transaction_date.slice(0, 10) } : {}) };
+        novo[n - 1] = { ...comNovoValor(novo[n - 1], dois(bruto(p))), ...(p.transaction_date ? { date: p.transaction_date.slice(0, 10) } : {}) };
     }
     return novo;
 }
@@ -268,7 +288,8 @@ export function planoDeDistribuicao(
     const novo = cronograma.map(l => ({ ...l }));
     s.abertas.forEach((p, i) => {
         const idx = posicao(p)! - 1;
-        novo[idx].value = dois(bruto(p) + parte + (i === n - 1 ? sobra : 0));
+        // A diferença é principal: com juros, `interest` fica e `principal` acompanha.
+        novo[idx] = comNovoValor(novo[idx], dois(bruto(p) + parte + (i === n - 1 ? sobra : 0)));
         // O vencimento é o do TÍTULO (pode ter sido alterado à mão — a marca é limpa ao gravar).
         if (p.transaction_date) novo[idx].date = p.transaction_date.slice(0, 10);
     });
@@ -294,6 +315,13 @@ export function planoDoGerador(
 ): PlanoDeCronograma {
     const s = separar(parcelas, asaasEmCurso);
     if ('motivo' in s) return s;
+    // O gerador faz parcelas iguais SEM juros: com Price/SAC nas abertas, os juros
+    // sumiriam do contrato e de Contas a Receber em silêncio. A taxa e o sistema
+    // moram na negociação — é lá que o plano se refaz.
+    // Olha o CRONOGRAMA, não só os títulos: plano com juros ainda não lançado (sem
+    // títulos) ou mais longo que eles também seria trocado. Só a linha PAGA fica.
+    const posicoesPagas = new Set(s.pagas.map(p => posicao(p)!));
+    if (cronograma.some((l, i) => temJuros(l) && !posicoesPagas.has(i + 1))) return { motivo: MOTIVO_JUROS };
     if (parcelas.some(p => p.source_system === 'CONTRACT_AVISTA' && ativa(p) && !parcelaBaixada(p) && asaasEmCurso.has(p.id))) {
         return { motivo: 'A cobrança à vista tem pagamento Asaas em andamento — aguarde ou cancele o pagamento.' };
     }
@@ -315,8 +343,7 @@ export function planoDoGerador(
 
     // A paga fica no cronograma como o TÍTULO está (valor e data), para o cronograma somar o contrato.
     const mantidas = s.pagas.map(p => ({
-        ...cronograma[posicao(p)! - 1],
-        value: dois(bruto(p)),
+        ...comNovoValor(cronograma[posicao(p)! - 1], dois(bruto(p))),
         ...(p.transaction_date ? { date: p.transaction_date.slice(0, 10) } : {}),
     }));
     const novas = gerarCronogramaContrato({ ...gerador, total: base });

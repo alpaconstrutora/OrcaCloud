@@ -126,6 +126,17 @@ describe('montarEspelhoDoEstoque — pela estrutura do Empreendimento', () => {
     expect(r.cena.prismas.find((p) => p.unitId === '201')).toMatchObject({ baseMm: 2900, topoMm: 5800 });
   });
 
+  it('torre com o contorno enviado pela Planta sai com a forma do desenho; sem ele, esquemática', () => {
+    const anel = [{ x: 50000, y: 20000 }, { x: 61000, y: 20000 }, { x: 61000, y: 36000 }, { x: 50000, y: 36000 }];
+    const comContorno = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: [{ ...ESTRUTURA[0], contorno_na_planta: anel, contorno_frente: { x: 0, y: -1 }, contorno_norte_deg: 0 }] });
+    expect(comContorno.cena.torres[0]).toMatchObject({ origem: 'PLANTA', caixa: { minX: 50000, minY: 20000, maxX: 61000, maxY: 36000 } });
+    const sem = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
+    expect(sem.cena.torres[0].origem).toBe('ESQUEMATICA');
+    // jsonb estragado não derruba: sai esquemática.
+    const estragado = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: [{ ...ESTRUTURA[0], contorno_na_planta: 'x' }] });
+    expect(estragado.cena.torres[0].origem).toBe('ESQUEMATICA');
+  });
+
   it('a unidade que o corretor não vê ocupa o lugar, neutra', () => {
     const r = montarEspelhoDoEstoque({ imoveis: ESTOQUE.slice(0, 3), negocios: [], estrutura: ESTRUTURA });
     const doAndar2 = r.cena.prismas.filter((p) => p.andar === 2);

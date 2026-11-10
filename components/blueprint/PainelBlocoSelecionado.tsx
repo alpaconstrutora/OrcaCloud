@@ -73,6 +73,19 @@ interface Props {
     /** Quantas mudanças o "Ajustar" faria; 0 = já segue. */
     pendentes: number;
     onAjustar: () => Promise<string | void>;
+    /**
+     * O CONTORNO DAS TORRES NO ESPELHO DE VENDAS 3D (F1b, 10/11/2026): os portais desenham a torre com o contorno que
+     * a Planta envia ao Empreendimento. Ausente = a planta não tem bloco casado com torre.
+     */
+    contorno?: {
+      /** Quantas torres têm bloco na planta. */
+      total: number;
+      /** Quantas estão com o contorno diferente do gravado (ou nunca enviado); 0 = o espelho já tem o desenho atual. */
+      pendentes: number;
+      /** Quando foi o último envio (ISO); null = nunca. */
+      enviadoEm: string | null;
+      onEnviar: () => Promise<string | void>;
+    };
   } | null;
   /** M6a: a divisão do pavimento tipo deste bloco (ou o motivo de não haver) e as saídas. */
   pavimentoTipo?: {
@@ -125,6 +138,11 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
   /** De qual ação é o `resultado` — cada seção mostra só o seu. */
   const [deQuem, setDeQuem] = useState<string | null>(null);
   if (!bloco) return null;
+  /** "10/11/2026 14:32" — quando o contorno foi enviado. */
+  const quandoFoi = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? iso : d.toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+  };
   const agir = async (nome: string, fn: () => Promise<string | void>) => {
     setOcupado(nome);
     setDeQuem(nome);
@@ -469,6 +487,33 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
             {ocupado === 'ajustar' ? 'Ajustando…' : 'Ajustar ao Empreendimento'}
           </button>
           {resultado && deQuem === 'ajustar' && <p className="text-slate-700" data-testid="ajuste-resultado">{resultado}</p>}
+          {empreendimento.contorno && empreendimento.contorno.total > 0 && (
+            <div className="space-y-1 border-t border-slate-200 pt-1.5" data-testid="contorno-no-espelho">
+              <p className="text-slate-700">
+                Espelho de Vendas 3D:{' '}
+                {empreendimento.contorno.pendentes === 0
+                  ? `o contorno ${empreendimento.contorno.total === 1 ? 'da torre' : `das ${empreendimento.contorno.total} torres`} é o deste desenho${empreendimento.contorno.enviadoEm ? ` (enviado em ${quandoFoi(empreendimento.contorno.enviadoEm)})` : ''}.`
+                  : empreendimento.contorno.enviadoEm
+                    ? `o desenho mudou desde o último envio (${quandoFoi(empreendimento.contorno.enviadoEm)}) — ${empreendimento.contorno.pendentes} torre(s) com o contorno antigo nos portais.`
+                    : `${empreendimento.contorno.pendentes === 1 ? '1 torre ainda aparece esquemática' : `${empreendimento.contorno.pendentes} torres ainda aparecem esquemáticas`} nos portais — o contorno nunca foi enviado.`}
+              </p>
+              <button
+                type="button"
+                disabled={!!ocupado || empreendimento.contorno.pendentes === 0}
+                onClick={() => void agir('contorno', empreendimento.contorno!.onEnviar)}
+                title={
+                  empreendimento.contorno.pendentes === 0
+                    ? 'O Espelho de Vendas 3D já tem o contorno deste desenho — nada a enviar'
+                    : 'Grava no Empreendimento o contorno de cada torre como está desenhado: é a forma do prédio no Portal do Corretor e no do Investidor'
+                }
+                className="rounded-md border border-slate-300 bg-white px-2 py-1 text-xs font-medium text-slate-800 hover:border-slate-500 disabled:border-slate-200 disabled:text-slate-400"
+                data-testid="enviar-contorno"
+              >
+                {ocupado === 'contorno' ? 'Enviando…' : 'Enviar contorno ao Espelho 3D'}
+              </button>
+              {resultado && deQuem === 'contorno' && <p className="text-slate-700" data-testid="contorno-resultado">{resultado}</p>}
+            </div>
+          )}
         </div>
       )}
       <button type="button" onClick={onAbrirEstudo} className="mt-2 text-xs font-medium text-blue-600 hover:text-blue-800">

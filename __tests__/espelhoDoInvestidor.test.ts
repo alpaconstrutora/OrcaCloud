@@ -193,7 +193,7 @@ describe('migration do contorno da torre — as funções reescritas continuam s
  * `plantas`. É a definição que vale no banco — a mesma trava tem de valer para ela.
  */
 describe('migration das plantas por tipologia — tabela fechada, bucket sem listagem, funções sem dado de pessoa', () => {
-  const sql = lerMigration('aplicar_20271110400000_empreendimento_tipologia_plantas.sql');
+  const sql = lerMigration('aplicar_20271110500000_empreendimento_tipologia_plantas.sql');
   const anterior = lerMigration('aplicar_20271110200000_torre_contorno_na_planta.sql');
   const chavesDe = (texto: string) => [...texto.matchAll(/'([a-z_]+)'\s*,\s*(?=[a-zA-Z(])/g)].map((m) => m[1]);
   const funcao = (texto: string, nome: string) => {

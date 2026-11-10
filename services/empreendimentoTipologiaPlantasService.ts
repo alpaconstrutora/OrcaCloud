@@ -21,7 +21,7 @@ export const TIPOS_DE_IMAGEM_DA_PLANTA = ['image/jpeg', 'image/png', 'image/webp
 export const tabelaDasPlantasAusente = (e: { code?: string; message?: string } | null | undefined) =>
     !!e && (e.code === '42P01' || e.code === 'PGRST205' || /empreendimento_tipologia_plantas/.test(e.message ?? ''));
 
-const FALTA_A_MIGRATION = 'O banco ainda não tem o cadastro de plantas por tipologia — falta aplicar a migration do Espelho de Vendas 3D (aplicar_20271110400000).';
+const FALTA_A_MIGRATION = 'O banco ainda não tem o cadastro de plantas por tipologia — falta aplicar a migration do Espelho de Vendas 3D (aplicar_20271110500000).';
 
 export interface TipologiasNoCadastro {
     /** A tipologia de cada unidade do Empreendimento (uma entrada por unidade). */

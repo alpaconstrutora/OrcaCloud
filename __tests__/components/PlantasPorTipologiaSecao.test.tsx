@@ -98,7 +98,7 @@ describe('PlantasPorTipologiaSecao', () => {
     });
 
     it('banco sem a tabela (migration por aplicar): o motivo aparece na tela', async () => {
-        servico.listar.mockRejectedValue(new Error('O banco ainda não tem o cadastro de plantas por tipologia — falta aplicar a migration do Espelho de Vendas 3D (aplicar_20271110400000).'));
+        servico.listar.mockRejectedValue(new Error('O banco ainda não tem o cadastro de plantas por tipologia — falta aplicar a migration do Espelho de Vendas 3D (aplicar_20271110500000).'));
         montar();
         expect((await screen.findByRole('alert')).textContent).toMatch(/falta aplicar a migration/);
     });

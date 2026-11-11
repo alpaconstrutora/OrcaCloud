@@ -99,7 +99,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
             type="text"
             value={form.nf_cnpj}
             onChange={e => setForm(prev => ({ ...prev, nf_cnpj: e.target.value }))}
-            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
             placeholder="00.000.000/0001-00"
           />
         </div>
@@ -109,7 +109,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
             type="text"
             value={form.nf_number}
             onChange={e => setForm(prev => ({ ...prev, nf_number: e.target.value }))}
-            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
             placeholder="000123"
           />
         </div>
@@ -119,7 +119,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
             type="date"
             value={form.nf_date}
             onChange={e => setForm(prev => ({ ...prev, nf_date: e.target.value }))}
-            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
           />
         </div>
         <div>
@@ -127,7 +127,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
           <MoneyCentsInput
             value={form.nf_value}
             onChange={v => setForm(prev => ({ ...prev, nf_value: v }))}
-            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
             placeholder="0,00"
           />
         </div>

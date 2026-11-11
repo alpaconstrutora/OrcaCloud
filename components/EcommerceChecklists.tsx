@@ -189,7 +189,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
         <select
           value={selectedCompanyId}
           onChange={(e) => handleCompanyChange(e.target.value)}
-          className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
+          className="px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
         >
           {companies.map(c => (
             <option key={c.id} value={c.id}>{c.razao_social}</option>
@@ -272,7 +272,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
                         <select
                           value={operationType}
                           onChange={(e) => setOperationType(e.target.value)}
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                          className="w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                         >
                           <option value="expedicao">Expedição (Comprovante / Canhoto / Rastreio)</option>
                           <option value="recebimento">Recebimento (Foto do palete / NF)</option>
@@ -288,7 +288,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
                           value={documentRef}
                           onChange={(e) => setDocumentRef(e.target.value)}
                           placeholder="Ex: Chave NF-e ou número do pedido"
-                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                          className="w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                         />
                       </div>
 

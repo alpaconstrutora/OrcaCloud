@@ -376,7 +376,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                     type="number"
                     value={bdiComposition[item.key as keyof typeof bdiComposition]}
                     onChange={(e) => setBdiComposition({ ...bdiComposition, [item.key]: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-white/10 border border-white/20 rounded-xl px-3 py-2 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/30"
+                    className="w-full bg-white/10 border border-white/20 rounded-[6px] px-3 h-9 text-sm font-bold focus:outline-none focus:ring-2 focus:ring-white/30"
                   />
                 </div>
               ))}
@@ -1025,7 +1025,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                                   setComparisonData(null);
                                 }
                               }}
-                              className="w-full bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 text-sm font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
+                              className="w-full bg-gray-50 border border-gray-200 rounded-[6px] px-4 h-9 text-sm font-black text-gray-900 focus:outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all"
                             >
                               <option value="">Escolha um padrão...</option>
                               {Object.keys(CUB_STANDARDS_DATA).filter(k => k !== settings.standard).map(key => (

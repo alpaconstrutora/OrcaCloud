@@ -681,7 +681,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 <input
                   type="text" required value={projNome} onChange={e => setProjNome(e.target.value)}
                   placeholder="Ex: Sobrado Residencial Ricardo"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white"
+                  className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                 />
               </label>
 
@@ -690,7 +690,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 <input
                   type="text" required value={projRT} onChange={e => setProjRT(e.target.value)}
                   placeholder="Ex: Eng. Ricardo da Silva"
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white"
+                  className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                 />
               </label>
 
@@ -700,7 +700,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                   <input
                     type="text" value={projART} onChange={e => setProjART(e.target.value)}
                     placeholder="Ex: ART-2026154"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
 
@@ -708,7 +708,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                   Agressividade (CAA)
                   <select
                     value={projCAA} onChange={e => setProjCAA(e.target.value as any)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                   >
                     <option value="I">CAA I (Rural)</option>
                     <option value="II">CAA II (Urbano)</option>
@@ -754,7 +754,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                   <input
                     type="text" required value={elPavimentoInput} onChange={e => setElPavimentoInput(e.target.value)}
                     placeholder="Ex: Baldrame, Térreo"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
 
@@ -763,7 +763,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                   <input
                     type="text" required value={elTag} onChange={e => setElTag(e.target.value)}
                     placeholder="Ex: V1, P4, S15"
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
               </div>
@@ -772,7 +772,7 @@ const StructuralDimension: React.FC<Props> = ({ activeOrganizationId }) => {
                 Tipo do Elemento
                 <select
                   value={elTipo} onChange={e => setElTipo(e.target.value as any)}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2.5 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                  className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                 >
                   <option value="VIGA">VIGA</option>
                   <option value="PILAR">PILAR</option>

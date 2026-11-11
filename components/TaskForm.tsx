@@ -268,7 +268,9 @@ const TaskForm: React.FC<Props> = ({
       prev.includes(empId) ? prev.filter(id => id !== empId) : [...prev, empId]
     )
 
-  const sel = 'w-full px-3 py-2.5 border border-slate-200 rounded-[6px] text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
+  const sel = 'w-full px-3 h-9 border border-slate-200 rounded-[6px] text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
+  // Área de texto não leva h-9: mantém a altura de várias linhas.
+  const selArea = 'w-full px-3 py-2.5 border border-slate-200 rounded-[6px] text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
   const inp = 'mt-1.5 ' + sel
 
   return (
@@ -321,7 +323,7 @@ const TaskForm: React.FC<Props> = ({
 
           <div>
             <label className="text-xs font-semibold text-slate-500">Descrição</label>
-            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={'mt-1.5 ' + sel + ' resize-none'} placeholder="Opcional" />
+            <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={2} className={'mt-1.5 ' + selArea + ' resize-none'} placeholder="Opcional" />
           </div>
 
           <div className="grid grid-cols-2 gap-x-6 gap-y-4">

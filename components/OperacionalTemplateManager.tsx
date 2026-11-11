@@ -51,7 +51,7 @@ const SEVERITY_OPTIONS = [
   { value: 'major',    label: 'Grave' },
 ] as const
 
-const inputCls = 'w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400 transition-colors'
+const inputCls = 'w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400 transition-colors'
 
 // ── Inline editable item row ──────────────────────────────────────────────────
 const ItemRow: React.FC<{

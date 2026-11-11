@@ -126,7 +126,7 @@ const TaskStatusManager: React.FC<Props> = ({ orgId, onClose, onChanged }) => {
     }
   }
 
-  const inp = 'w-full px-3 py-2 border border-slate-200 rounded-lg text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
+  const inp = 'w-full px-3 h-9 border border-slate-200 rounded-[6px] text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
 
   function StatusForm({ s, onChange, onSave, onCancel }: {
     s: EditingStatus

@@ -75,13 +75,13 @@ const BudgetPickerModal: React.FC<{
               onChange={e => setSearch(e.target.value)}
               placeholder="Buscar por descrição ou código..."
               autoFocus
-              className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+              className="w-full pl-9 pr-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
             />
           </div>
           <select
             value={phaseFilter}
             onChange={e => setPhaseFilter(e.target.value)}
-            className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+            className="px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
           >
             <option value="">Todas as fases</option>
             {phases.map(p => <option key={p} value={p}>{p}</option>)}
@@ -228,7 +228,7 @@ const PlanningPickerModal: React.FC<{
             <select
               value={selectedProjectId}
               onChange={e => { setSelectedProjectId(e.target.value); setSearch('') }}
-              className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+              className="flex-1 px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
             >
               <option value="">Selecione o projeto de planejamento...</option>
               {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -246,7 +246,7 @@ const PlanningPickerModal: React.FC<{
                 onChange={e => setSearch(e.target.value)}
                 placeholder="Buscar atividade..."
                 autoFocus
-                className="w-full pl-9 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                className="w-full pl-9 pr-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
               />
             </div>
           </div>
@@ -517,7 +517,9 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
     }
   }
 
-  const inputCls = "w-full px-3 py-2.5 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+  const inputCls = "w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
+  // Área de texto não leva h-9: mantém a altura de várias linhas.
+  const inputClsArea = "w-full px-3 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all"
   const selectCls = inputCls + " appearance-none"
 
   if (loading) {
@@ -735,7 +737,7 @@ const OperacionalForm: React.FC<Props> = ({ workOrderId, projectId, orgId, onSav
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                 rows={3}
                 placeholder="Detalhes adicionais sobre a execução..."
-                className={inputCls + ' resize-none'}
+                className={inputClsArea + ' resize-none'}
               />
             </Field>
           </div>

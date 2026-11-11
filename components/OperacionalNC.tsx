@@ -185,7 +185,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               <select
                 value={form.severity}
                 onChange={e => setForm(f => ({ ...f, severity: e.target.value as typeof form.severity }))}
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400"
               >
                 <option value="minor">Leve</option>
                 <option value="moderate">Moderada</option>
@@ -198,7 +198,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
                 type="date"
                 value={form.dueDate}
                 onChange={e => setForm(f => ({ ...f, dueDate: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-red-400"
               />
             </div>
             <div className="col-span-2">

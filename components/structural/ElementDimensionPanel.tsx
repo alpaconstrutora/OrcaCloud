@@ -483,7 +483,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 <select
                   value={geometria.fckMpa ?? 25}
                   onChange={e => updateGeometria('fckMpa', Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                  className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                 >
                   <option value={20}>C20 (20 MPa)</option>
                   <option value={25}>C25 (25 MPa)</option>
@@ -505,7 +505,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         setIsContinua(val)
                         updateGeometria('isContinua', val ? 1 : 0)
                       }}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                     >
                       <option value="biapoiada">Vão Único (Biapoiada)</option>
                       <option value="continua">Viga Contínua (2 Vãos)</option>
@@ -519,7 +519,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" step="0.1" value={geometria.L1M ?? 4.0}
                           onChange={e => updateGeometria('L1M', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                       <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -527,7 +527,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" step="0.1" value={geometria.L2M ?? 4.0}
                           onChange={e => updateGeometria('L2M', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                     </div>
@@ -537,7 +537,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       <input
                         type="number" step="0.1" value={geometria.comprimentoVaoM ?? 4.0}
                         onChange={e => updateGeometria('comprimentoVaoM', Number(e.target.value))}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                       />
                     </label>
                   )}
@@ -550,7 +550,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <input
                       type="number" step="0.1" value={geometria.comprimentoVaoM ?? 3.0}
                       onChange={e => updateGeometria('comprimentoVaoM', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                     />
                   </label>
                   <label className="flex items-center gap-2 cursor-pointer mt-2 select-none">
@@ -570,7 +570,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" step="0.1" value={geometria.comprimentoLivreM ?? 2.8}
                     onChange={e => updateGeometria('comprimentoLivreM', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
               )}
@@ -584,7 +584,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={geometria.bCm ?? 15}
                     onChange={e => updateGeometria('bCm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
                 <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -592,7 +592,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={geometria.hCm ?? 40}
                     onChange={e => updateGeometria('hCm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
               </div>
@@ -606,7 +606,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <select
                     value={geometria.tipoLaje ?? 'macica'}
                     onChange={e => updateGeometria('tipoLaje', e.target.value)}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                   >
                     <option value="macica">Laje Maciça (Marcus 2D)</option>
                     <option value="trelicada">Laje Treliçada Unidirecional (NBR 14859)</option>
@@ -621,7 +621,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" step="0.1" value={geometria.lxM ?? 3.5}
                           onChange={e => updateGeometria('lxM', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                       <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -629,7 +629,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <select
                           value={geometria.trelicaAdotada ?? 'TR12645'}
                           onChange={e => updateGeometria('trelicaAdotada', e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                         >
                           <option value="TR08644">TR 08644 (h=8cm, Ø4.0mm)</option>
                           <option value="TR12645">TR 12645 (h=12cm, Ø5.0mm)</option>
@@ -644,7 +644,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" value={geometria.htrCm ?? 12}
                           onChange={e => updateGeometria('htrCm', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                       <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -652,7 +652,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" value={geometria.hcCm ?? 5}
                           onChange={e => updateGeometria('hcCm', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                     </div>
@@ -663,7 +663,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" value={geometria.bwCm ?? 12}
                           onChange={e => updateGeometria('bwCm', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                       <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -671,7 +671,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" value={geometria.beCm ?? 30}
                           onChange={e => updateGeometria('beCm', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                     </div>
@@ -681,7 +681,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       <select
                         value={geometria.tipoEnchimento ?? 'EPS'}
                         onChange={e => updateGeometria('tipoEnchimento', e.target.value)}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                        className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                       >
                         <option value="EPS">Blocos de EPS (Isopor - Leve)</option>
                         <option value="CERAMICA">Lajota Cerâmica (Mais pesado)</option>
@@ -696,7 +696,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" step="0.1" value={geometria.lxM ?? 3.5}
                           onChange={e => updateGeometria('lxM', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                       <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -704,7 +704,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                         <input
                           type="number" step="0.1" value={geometria.lyM ?? 4.0}
                           onChange={e => updateGeometria('lyM', Number(e.target.value))}
-                          className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                          className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                         />
                       </label>
                     </div>
@@ -713,7 +713,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       <input
                         type="number" value={geometria.hCm ?? 10}
                         onChange={e => updateGeometria('hCm', Number(e.target.value))}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                       />
                     </label>
                   </>
@@ -729,7 +729,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <select
                     value={geometria.bitolaLongitudinalMm ?? 10}
                     onChange={e => updateGeometria('bitolaLongitudinalMm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                   >
                     <option value={8.0}>Ø 8.0 mm</option>
                     <option value={10.0}>Ø 10.0 mm</option>
@@ -745,7 +745,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <select
                       value={geometria.bitolaEstriboMm ?? 5.0}
                       onChange={e => updateGeometria('bitolaEstriboMm', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
+                      className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white cursor-pointer"
                     >
                       <option value={5.0}>Ø 5.0 mm</option>
                       <option value={6.3}>Ø 6.3 mm</option>
@@ -764,7 +764,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={geometria.aPilarCm ?? 20}
                     onChange={e => updateGeometria('aPilarCm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
                 <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -772,7 +772,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={geometria.bPilarCm ?? 20}
                     onChange={e => updateGeometria('bPilarCm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
               </div>
@@ -790,7 +790,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       <input
                         type="number" value={cargas.q1Knm ?? 15}
                         onChange={e => updateCarga('q1Knm', Number(e.target.value))}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                       />
                     </label>
                     <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -798,7 +798,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                       <input
                         type="number" value={cargas.q2Knm ?? 15}
                         onChange={e => updateCarga('q2Knm', Number(e.target.value))}
-                        className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                        className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                       />
                     </label>
                   </div>
@@ -807,7 +807,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <select
                       value={geometria.deltaRed ?? 0.90}
                       onChange={e => updateGeometria('deltaRed', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                     >
                       <option value={1.00}>1.00 (Sem Redistribuição)</option>
                       <option value={0.95}>0.95 (5% Redução)</option>
@@ -825,7 +825,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <input
                       type="number" value={cargas.mkKnm ?? 10}
                       onChange={e => updateCarga('mkKnm', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                     />
                   </label>
                   <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -833,7 +833,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                     <input
                       type="number" value={cargas.vkKn ?? 15}
                       onChange={e => updateCarga('vkKn', Number(e.target.value))}
-                      className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                      className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                     />
                   </label>
                 </div>
@@ -846,7 +846,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 <input
                   type="number" value={cargas.cargaParedeKnm ?? 10.0}
                   onChange={e => updateCarga('cargaParedeKnm', Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                  className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                 />
               </label>
             )}
@@ -857,7 +857,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                 <input
                   type="number" value={cargas.nkKn ?? 250}
                   onChange={e => updateCarga('nkKn', Number(e.target.value))}
-                  className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                  className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                 />
               </label>
             )}
@@ -869,7 +869,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" step="0.1" value={cargas.cargaRevestimentoKnm2 ?? 1.0}
                     onChange={e => updateCarga('cargaRevestimentoKnm2', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
                 <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -877,7 +877,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" step="0.1" value={cargas.cargaVariavelKnm2 ?? 1.5}
                     onChange={e => updateCarga('cargaVariavelKnm2', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
               </div>
@@ -890,7 +890,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={cargas.nkKn ?? 300}
                     onChange={e => updateCarga('nkKn', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
                 <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -898,7 +898,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" step="0.05" value={cargas.sigmaSoloMpa ?? 0.2}
                     onChange={e => updateCarga('sigmaSoloMpa', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
                 <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -906,7 +906,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={cargas.mkAKnm ?? 0}
                     onChange={e => updateCarga('mkAKnm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
                 <label className="block text-form-label font-black text-slate-500 space-y-1">
@@ -914,7 +914,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
                   <input
                     type="number" value={cargas.mkBKnm ?? 0}
                     onChange={e => updateCarga('mkBKnm', Number(e.target.value))}
-                    className="w-full rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-800 bg-white"
+                    className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-semibold text-slate-800 bg-white"
                   />
                 </label>
               </div>

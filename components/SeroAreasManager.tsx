@@ -81,7 +81,7 @@ export const SeroAreasManager: React.FC<SeroAreasManagerProps> = ({ organization
           <select
             value={form.area_type}
             onChange={e => setForm(prev => ({ ...prev, area_type: e.target.value as 'principal' | 'complementar' }))}
-            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
           >
             <option value="principal">Área Principal</option>
             <option value="complementar">Área Complementar</option>
@@ -94,7 +94,7 @@ export const SeroAreasManager: React.FC<SeroAreasManagerProps> = ({ organization
             <select
               value={form.is_covered ? 'sim' : 'nao'}
               onChange={e => setForm(prev => ({ ...prev, is_covered: e.target.value === 'sim' }))}
-              className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+              className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
             >
               <option value="sim">Coberta (Redução 50%)</option>
               <option value="nao">Descoberta (Redução 75%)</option>
@@ -108,7 +108,7 @@ export const SeroAreasManager: React.FC<SeroAreasManagerProps> = ({ organization
             type="number"
             value={form.total_area}
             onChange={e => setForm(prev => ({ ...prev, total_area: e.target.value }))}
-            className="w-full p-2 border border-gray-200 rounded-lg text-sm bg-gray-50"
+            className="w-full h-9 px-3 border border-gray-200 rounded-[6px] text-sm bg-gray-50"
             placeholder="Ex: 150.50"
           />
         </div>

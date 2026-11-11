@@ -995,7 +995,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                                 activities: (prev.activities || []).map((a, i) => (i === idx ? vincularAtividade(a, vinculo) : a)),
                                                                             }));
                                                                         }}
-                                                                        className="w-full bg-indigo-50/50 border border-indigo-100 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-2.5 rounded-xl text-form-input font-semibold text-indigo-700 transition-all"
+                                                                        className="w-full bg-indigo-50/50 border border-indigo-100 outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 h-9 px-3 rounded-[6px] text-form-input font-semibold text-indigo-700 transition-all"
                                                                     >
                                                                         <option value="">-- Selecione um item --</option>
                                                                         {itensCronogramaVinculaveis.map(({ schedule: is, budget: budgetItem }) => (
@@ -1011,7 +1011,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                                                 placeholder="Descrição da atividade realizada..."
                                                                 value={act.description}
                                                                 onChange={(e) => handleActivityChange(idx, 'description', e.target.value)}
-                                                                className="w-full bg-gray-50 border-none outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 p-3 rounded-xl text-sm font-medium transition-all"
+                                                                className="w-full bg-gray-50 border-none outline-none focus:bg-white focus:ring-1 focus:ring-indigo-100 h-9 px-3 rounded-[6px] text-sm font-medium transition-all"
                                                             />
 
                                                             <div className="flex flex-wrap items-center gap-x-3 gap-y-1 ml-1">

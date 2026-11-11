@@ -230,7 +230,7 @@ const EcommerceDashboard: React.FC<EcommerceDashboardProps> = ({
           <select
             value={selectedCompanyId}
             onChange={(e) => handleCompanyChange(e.target.value)}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
+            className="px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 shadow-sm focus:outline-none focus:ring-1 focus:ring-slate-500"
           >
             {companies.map(c => (
               <option key={c.id} value={c.id}>{c.razao_social} ({c.cnpj ? c.cnpj.substring(0, 5) + '...' : 'Filial'})</option>

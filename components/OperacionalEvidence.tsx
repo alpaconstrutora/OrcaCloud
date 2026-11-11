@@ -162,7 +162,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
             <select
               value={gate}
               onChange={e => setGate(e.target.value as typeof gate)}
-              className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+              className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
             >
               {Object.entries(GATE_LABELS).map(([k, v]) => (
                 <option key={k} value={k}>{v}</option>
@@ -176,7 +176,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
               value={description}
               onChange={e => setDescription(e.target.value)}
               placeholder="Opcional"
-              className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+              className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
             />
           </div>
         </div>

@@ -64,7 +64,7 @@ const ElementForm: React.FC<{
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Tipo
           <select value={f.tipo} onChange={e => onTipoChange(e.target.value as ElementType)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white">
             {ELEMENT_TYPES.map(t => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </label>
@@ -72,17 +72,17 @@ const ElementForm: React.FC<{
           Nome / código *
           <input autoFocus value={f.nome} onChange={e => set('nome', e.target.value)}
             placeholder="Ex.: V1, P3, S-01"
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
         </label>
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Qtd. de peças iguais
           <input type="number" min="1" value={f.quantidade} onChange={e => set('quantidade', e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
         </label>
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Cobrimento (cm)
           <input type="number" step="0.5" value={f.cobrimentoCm} onChange={e => set('cobrimentoCm', e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
         </label>
       </div>
 
@@ -96,7 +96,7 @@ const ElementForm: React.FC<{
                 type="number" step="0.1"
                 value={f.geo[field.key] ?? ''}
                 onChange={e => setF(prev => ({ ...prev, geo: { ...prev.geo, [field.key]: e.target.value } }))}
-                className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
+                className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
               />
             </label>
           ))}

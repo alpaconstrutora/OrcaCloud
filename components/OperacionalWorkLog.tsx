@@ -184,7 +184,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
                 value={form.logDate}
                 onChange={e => setForm(f => ({ ...f, logDate: e.target.value }))}
                 required
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
               />
             </div>
             <div>
@@ -192,7 +192,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               <select
                 value={form.teamId}
                 onChange={e => setForm(f => ({ ...f, teamId: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
               >
                 <option value="">Sem equipe</option>
                 {teams.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
@@ -207,7 +207,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
                 value={form.hoursWorked}
                 onChange={e => setForm(f => ({ ...f, hoursWorked: e.target.value }))}
                 placeholder="0.0"
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
               />
             </div>
             {measurementUnit && (
@@ -220,7 +220,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
                   value={form.quantityExecuted}
                   onChange={e => setForm(f => ({ ...f, quantityExecuted: e.target.value }))}
                   placeholder="0.00"
-                  className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                  className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
                 />
               </div>
             )}

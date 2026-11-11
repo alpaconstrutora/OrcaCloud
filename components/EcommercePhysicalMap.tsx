@@ -267,7 +267,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Ex: Rua C - Box 04"
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 />
               </div>
 
@@ -276,7 +276,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="posicao_logistica">Posição de Estoque (Galpão)</option>
                   <option value="locker">Locker Compartilhado / Lockbox</option>
@@ -290,7 +290,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="">Nenhuma (Livre / Disponível)</option>
                   {companies.map(c => (
@@ -304,7 +304,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}
-                  className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
+                  className="w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-slate-500"
                 >
                   <option value="disponivel">Disponível</option>
                   <option value="ocupado">Reservado / Ocupado</option>

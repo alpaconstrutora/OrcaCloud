@@ -205,7 +205,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
     return name.trim().split(/\s+/).slice(0, 2).map(n => n[0]).join('').toUpperCase()
   }
 
-  const inp  = 'w-full px-3 py-2.5 border border-slate-200 rounded-xl text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
+  const inp  = 'w-full px-3 h-9 border border-slate-200 rounded-[6px] text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white'
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4" onClick={onClose}>

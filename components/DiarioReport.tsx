@@ -80,16 +80,16 @@ export default function DiarioReport({ organizationId }: Props) {
             placeholder="Buscar conta ou descrição…"
             value={search}
             onChange={e => setSearch(e.target.value)}
-            className="w-full pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+            className="w-full pl-9 pr-3 h-9 text-sm border border-slate-200 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
           />
         </div>
         <div className="flex items-center gap-2">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">De</span>
           <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-            className="text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20" />
+            className="text-sm border border-slate-200 rounded-[6px] px-3 h-9 outline-none focus:ring-2 focus:ring-blue-500/20" />
           <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">até</span>
           <input type="date" value={dateTo}   onChange={e => setDateTo(e.target.value)}
-            className="text-sm border border-slate-200 rounded-xl px-3 py-2 outline-none focus:ring-2 focus:ring-blue-500/20" />
+            className="text-sm border border-slate-200 rounded-[6px] px-3 h-9 outline-none focus:ring-2 focus:ring-blue-500/20" />
         </div>
       </div>
 

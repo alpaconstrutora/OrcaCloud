@@ -66,7 +66,7 @@ const RebarForm: React.FC<{
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Bitola *
           <select value={f.bitolaId} onChange={e => set('bitolaId', e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white">
             <option value="">— selecione —</option>
             {catalog.map(c => <option key={c.id} value={c.id}>{bitolaLabel(c)}</option>)}
           </select>
@@ -74,14 +74,14 @@ const RebarForm: React.FC<{
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Função
           <select value={f.funcao} onChange={e => set('funcao', e.target.value as RebarFunction)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white">
             {REBAR_FUNCS.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}
           </select>
         </label>
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           Formato / dobra
           <select value={f.formatoDobra} onChange={e => set('formatoDobra', e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white">
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white">
             {FORMATS.map(fm => <option key={fm} value={fm}>{fm}</option>)}
           </select>
         </label>
@@ -89,26 +89,26 @@ const RebarForm: React.FC<{
           Posição (nº)
           <input type="number" min="1" value={f.posicao} onChange={e => set('posicao', e.target.value)}
             placeholder="Ex.: 1"
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
         </label>
         <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
           {isEstribo ? 'Qtd. de estribos *' : 'Qtd. de barras *'}
           <input type="number" min="1" value={f.quantidade} onChange={e => set('quantidade', e.target.value)}
-            className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+            className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
         </label>
         {isEstribo ? (
           <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
             Espaçamento (cm)
             <input type="number" step="1" value={f.espacamentoCm} onChange={e => set('espacamentoCm', e.target.value)}
               placeholder="Ex.: 20"
-              className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+              className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
           </label>
         ) : (
           <label className="flex flex-col gap-1 text-form-label font-bold text-slate-500">
             Comprimento unit. (cm)
             <input type="number" step="1" value={f.comprimentoUnitCm} onChange={e => set('comprimentoUnitCm', e.target.value)}
               placeholder="Calculado se vazio"
-              className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white" />
+              className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white" />
           </label>
         )}
       </div>

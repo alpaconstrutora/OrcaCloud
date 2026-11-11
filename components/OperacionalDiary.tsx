@@ -254,7 +254,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
               <select
                 value={form.fieldCondition}
                 onChange={e => setForm(f => ({ ...f, fieldCondition: e.target.value as FieldCondition }))}
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
               >
                 <option value="normal">Normal</option>
                 <option value="compromised">Comprometido</option>
@@ -268,7 +268,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
                 min="0"
                 value={form.workersPresent}
                 onChange={e => setForm(f => ({ ...f, workersPresent: e.target.value }))}
-                className="mt-1 w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+                className="mt-1 w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
               />
             </div>
             <div className="col-span-2">
@@ -356,7 +356,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
             value={selectedDate}
             onChange={e => setSelectedDate(e.target.value)}
             max={new Date().toISOString().split('T')[0]}
-            className="px-3 py-2 bg-white border border-slate-200 rounded-xl text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
+            className="px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:border-blue-400"
           />
           <Button
             onClick={handleAutoGenerate}

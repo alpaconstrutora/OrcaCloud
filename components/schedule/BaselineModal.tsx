@@ -51,7 +51,7 @@ export const BaselineModal: React.FC<BaselineModalProps> = ({
                         <input
                             type="text"
                             placeholder="Nome (ex: Planejamento Inicial)"
-                            className="w-full px-3 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-blue-500/20 text-sm"
+                            className="w-full px-3 h-9 border rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500/20 text-sm"
                             value={name}
                             onChange={e => setName(e.target.value)}
                         />

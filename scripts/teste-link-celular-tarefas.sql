@@ -16,8 +16,8 @@
 --
 -- Para ensaiar as migrations ANTES de aplicá-las, gere um arquivo com o
 -- conteúdo das duas, em ordem, no lugar da linha MIGRATION abaixo:
---   aplicar_20271111900000_link_celular_tabela_e_gemeos.sql
---   aplicar_20271111910000_link_celular_rpcs_tarefas.sql
+--   aplicar_20271111950000_link_celular_tabela_e_gemeos.sql
+--   aplicar_20271111960000_link_celular_rpcs_tarefas.sql
 
 BEGIN;
 -- MIGRATION

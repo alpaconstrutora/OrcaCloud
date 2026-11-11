@@ -1,9 +1,9 @@
--- aplicar_20271111910000_link_celular_rpcs_tarefas.sql
+-- aplicar_20271111960000_link_celular_rpcs_tarefas.sql
 --
 -- Link do celular — RPCs de Minhas Tarefas por token, sem login.
 -- Plano: docs/planos/2026-11-11-link-celular-tarefas-diario.md (Parte 1 / Task 2).
 -- Prova: scripts/teste-link-celular-tarefas.sql (seção B).
--- Depende de: aplicar_20271111900000_link_celular_tabela_e_gemeos.sql
+-- Depende de: aplicar_20271111950000_link_celular_tabela_e_gemeos.sql
 -- (_mobile_link_resolver e os gêmeos is_*_de).
 --
 -- Toda celular_* começa pelo resolver: token → (dono do link, org do link). Daí

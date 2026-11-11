@@ -436,7 +436,7 @@ Vitest, Playwright (harness fora do repo).
 
 ## Rollback (Parte 1)
 
-Desfaz as duas migrations (`aplicar_20271111900000…` e `aplicar_20271111910000…`). Os
+Desfaz as duas migrations (`aplicar_20271111950000…` e `aplicar_20271111960000…`). Os
 corpos de `is_task_space_member` e `is_task_collaborator` abaixo são os ORIGINAIS, lidos com
 `pg_get_functiondef` em produção em 2026-11-11, antes de aplicar. Ensaiado em
 `BEGIN … ROLLBACK` (migrations → este SQL → originais idênticos, salvo `\r\n` do corpo

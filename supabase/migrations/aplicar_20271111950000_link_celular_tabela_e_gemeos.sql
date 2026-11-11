@@ -1,4 +1,4 @@
--- aplicar_20271111900000_link_celular_tabela_e_gemeos.sql
+-- aplicar_20271111950000_link_celular_tabela_e_gemeos.sql
 --
 -- Link do celular — Minhas Tarefas (e depois o Diário) por token, sem login.
 -- Plano: docs/planos/2026-11-11-link-celular-tarefas-diario.md (Design §1 e §2,

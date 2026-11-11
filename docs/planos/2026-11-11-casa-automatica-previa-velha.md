@@ -66,5 +66,11 @@ pura que decide restaurar/regravar a partir do modelo atual.
 | 4 | feito — `restaurarPlato` + `passoDoPlatoDaCasa`; lote recusado não grava platô; testes do hook e da função pura. Ctrl+Z no app real: a conferir |
 | 5 | feito — `useConfirm` (`warning`), `unidadeId` preservado; teste da tela |
 
+Conferência no app real (11/11/2026, servidor da frente, conta de teste, planta descartável arquivada no fim):
+`c:/tmp/pwtest/conferencia-casa-previa-velha.cjs` — 13 portões ok: itens 5 (confirmação, cancelar, confirmar), 2
+(Lançar desligado durante a geração), 1 (Lançar e Criar desligados com o motivo; desfazer a mudança religa), 3 (custo
+diz R1-N com o formulário em R1-A), lançar funciona, sem erro de página/console/HTTP. O item 4 não entrou: a planta
+descartável não tem topografia, então a casa sai sem platô.
+
 Observação: o "Construir pelo Empreendimento" aplica a zona e gera no render seguinte; se a zona chegar depois da
 geração, a prévia agora aparece como velha (antes gerava com a zona antiga em silêncio).

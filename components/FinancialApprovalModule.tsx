@@ -255,7 +255,7 @@ const QUEUE_COLUMNS: StandardTableColumn[] = [
     { key: 'project_name', label: 'Obra',       sortable: true, width: 140 },
     { key: 'due_date',     label: 'Vencimento', sortable: true, width: 110 },
     { key: 'amount',       label: 'Valor',      sortable: true, width: 130, align: 'right' },
-    { key: 'status',       label: 'Status',     sortable: true, width: 150 },
+    { key: 'status',       label: 'Status',     sortable: true, width: 190 },
 ];
 
 type EntityFilter = 'all' | ActionQueueItem['entity'];
@@ -464,7 +464,7 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                     return (
                         <span className="flex flex-col min-w-0">
                             <span className="text-sm font-normal text-amber-700">{queueStatusLabel(item)}</span>
-                            {vez && <span className="text-xs font-normal text-gray-500 truncate" title={vez}>{vez}</span>}
+                            {vez && <span className="text-xs font-normal text-gray-500 line-clamp-2 break-words" title={vez}>{vez}</span>}
                         </span>
                     );
                 }

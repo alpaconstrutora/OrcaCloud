@@ -124,10 +124,21 @@ Um item por arquivo. **O que muda** · **como sei que terminou**.
 - [x] 3 serviço: `services/approvalApproversService.ts` (aceita org `null` = "Todas", REGRA #5).
 - [x] 4 erro legível: `utils/alcada.mensagemDaAlcada` em `approvalService` e `darfService`;
   faixa de não-admin explica em vez do `PGRST116`/`42501`.
-- [ ] 5 tela de Aprovações: código pronto (Vez de, botões desligados com motivo, colunas
-  "Aprova o nível 1/2", drawer `QuemAprovaSheet`, seção "Itens sem valor"); `check-ui-standard`
-  limpo. **Falta conferir no navegador** — depende do item 1 aplicado.
-- [ ] 6 Central: botões desligados com motivo; **falta conferir no navegador**.
+- [x] 5 tela de Aprovações: conferida no navegador em 11/11 (dev server da frente, banco real,
+  como desenvolvedor@): colunas "Aprova o nível 1/2" ("Qualquer pessoa"), "Itens sem valor" com os
+  4 tipos, drawer "Quem aprova" com os membros; com "Todas as organizações" no topo, "Nova faixa"
+  e editar/excluir desligados com o motivo. "Vez de" e botões desligados com o motivo conferidos
+  com a resposta da fila trocada SÓ na página (`pode_aprovar=false`, `vez_de=[bruna.pereira]`):
+  o nome saía cortado → coluna Status 150→190 px e o texto quebra em até 2 linhas.
+  **Não feito na tela**: marcar alguém de verdade no drawer (gravaria em produção; a permissão
+  foi negada) e entrar como membro comum. Os dois estão cobertos no teste a seco do item 1
+  (membro → 42501; Bruna marcada → Iago recusado).
+- [x] 6 Central: conferida (fila com aprovar/rejeitar ligados sem aprovadores; com a resposta
+  trocada na página, desligados com o motivo). Os botões perdiam o nome acessível ao desligar
+  (o `title` some) → `aria-label` fixo. O bootstrap falhou 2× na primeira carga após login/HMR
+  ("Não foi possível carregar" nos 6 blocos) e passou em todas as recargas seguintes; a fila
+  leva ~270 ms para 132 itens, o bootstrap ~3,8 s (as outras fontes) — é a rajada já conhecida,
+  não a alçada.
 - [x] 7 testes: `__tests__/alcadaPorUsuario.test.ts` (14) cobre a parte da tela; a regra
   em si é do banco e fica na seção Verificação (não roda no Vitest).
 

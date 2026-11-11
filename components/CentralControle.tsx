@@ -483,6 +483,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                                                     disabled={!!motivoSemAlcada(item)}
                                                     className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                                                     title={motivoSemAlcada(item) ? undefined : `Aprovar ${ENTITY_TAG[item.entity]}`}
+                                                    aria-label={`Aprovar ${ENTITY_TAG[item.entity]}`}
                                                 >
                                                     <Check className="w-4 h-4" />
                                                 </button>
@@ -491,6 +492,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                                                     disabled={!!motivoSemAlcada(item)}
                                                     className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
                                                     title={motivoSemAlcada(item) ? undefined : `Rejeitar ${ENTITY_TAG[item.entity]}`}
+                                                    aria-label={`Rejeitar ${ENTITY_TAG[item.entity]}`}
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>

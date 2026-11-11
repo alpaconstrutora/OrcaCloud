@@ -505,6 +505,25 @@ export interface ImovibStudy {
     revenue_downpayment_percent?: number;
     revenue_construction_percent?: number;
     revenue_handover_percent?: number;
+    // Curva de vendas e recebimento por safra (migration aplicar_20271111800000).
+    // Vazio = padrão de IMOVIB_DEFAULTS.
+    sales_curve_type?: 'linear' | 'lancamento' | 'vso' | 'custom' | null;
+    sales_launch_percent?: number | null;
+    sales_launch_months?: number | null;
+    sales_vso_percent?: number | null;
+    sales_curve_custom?: number[] | null;
+    revenue_intermediate_percent?: number | null;
+    revenue_intermediate_interval_months?: number | null;
+    revenue_post_handover_percent?: number | null;
+    post_handover_months?: number | null;
+    post_handover_rate_monthly?: number | null;
+    handover_delay_months?: number | null;
+    cancellation_lag_months?: number | null;
+    cancellation_refund_percent?: number | null;
+    cancellation_resale?: boolean | null;
+    /** % ao mês. Vazio = inflation_rate. */
+    sales_index_rate_monthly?: number | null;
+    cost_index_rate_monthly?: number | null;
     default_rate_percent?: number;
     cancellation_rate_percent?: number;
     funding_equity_percent?: number;

@@ -50,6 +50,20 @@ export const IMOVIB_DEFAULTS = {
 
     // ── Plano 2026-11-11 (viabilidade de excelência), uma seção por fase ──
     // Fase 1 — Receitas: curva de vendas, recebimento por safra, distrato, índices
+    sales_curve_type: 'linear',
+    sales_launch_percent: 30, // % do VGV vendido no lançamento
+    sales_launch_months: 3,
+    sales_vso_percent: 5, // % do estoque vendido por mês (curva VSO)
+    revenue_intermediate_percent: 0,
+    revenue_intermediate_interval_months: 6,
+    revenue_post_handover_percent: 0,
+    post_handover_months: 0,
+    post_handover_rate_monthly: 0, // % ao mês
+    handover_delay_months: 0,
+    cancellation_lag_months: 12, // meses entre a venda e o distrato
+    cancellation_refund_percent: 75, // % do pago devolvido (Lei 13.786/2018: retenção até 25%, ou 50% com afetação)
+    cancellation_resale: true,
+    // Índices das vendas e da obra: vazio = inflation_rate (não têm padrão próprio).
     // Fase 2 — Indicadores e pontos de equilíbrio
     // Fase 3 — Sensibilidade, cenários e risco
     // Fase 4 — Capital e financiamento

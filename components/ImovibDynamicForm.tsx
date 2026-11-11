@@ -6,6 +6,8 @@ import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import ImovibIndiceDeCorrecao from './ImovibIndiceDeCorrecao';
+import type { ImovibStudyUpdate } from '../types';
 
 interface ImovibDynamicFormProps {
     study: ImovibStudy;
@@ -43,9 +45,21 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
     const usaLegado = study.funding_debt_percent == null;
     const financiadoEfetivo = usaLegado ? (study.financing_percent ?? D.financing_percent) : study.funding_debt_percent!;
     const financiadoOrigem = usaLegado && (study.financing_percent ?? 0) > 0
-        ? 'valor legado deste estudo — passe a defini-lo em Receitas e Capital'
-        : 'definido em Receitas e Capital';
+        ? 'valor legado deste estudo — passe a defini-lo na aba Capital'
+        : 'definido na aba Capital';
     const [financingRateAnnual, setFinancingRateAnnual] = useState(initial(study.financing_rate_annual, D.financing_rate_annual));
+
+    // Índices de correção (item 1.7 do plano 2026-11-11): gravam direto, campo a campo.
+    const salvarCampos = async (campos: ImovibStudyUpdate) => {
+        try {
+            await imovibService.updateStudy(study.id, campos);
+            onDataChanged();
+        } catch (e) {
+            console.error(e);
+            showToast(`Erro ao salvar o índice de correção: ${(e as Error).message}`, 'error');
+        }
+    };
+    const inflacaoGeral = study.inflation_rate ?? D.inflation_rate;
 
     const handleSave = async () => {
         try {
@@ -146,7 +160,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Inflação (Mês)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5" title="Corrige receita e custo quando o índice das vendas ou da obra fica vazio, e deflaciona a visão real.">Inflação geral (% a.m.)</label>
                             <input
                                 type="number"
                                 step="0.01"
@@ -167,10 +181,36 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
-                        <div className="col-span-2 text-xs text-gray-500">
-                            A velocidade de vendas agota é calculada automaticamente diluindo o VGV linearmente pela Duração das Vendas.
-                        </div>
                     </div>
+                </div>
+            </div>
+
+            {/* Índices de correção: obra e vendas separados (item 1.7). */}
+            <div className="mt-8 pt-8 border-t border-gray-100 space-y-4">
+                <h4 className="flex items-center gap-2 text-sm font-semibold text-gray-900 border-b border-gray-100 pb-3">
+                    <Percent className="w-4 h-4" /> Índices de correção
+                </h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <ImovibIndiceDeCorrecao
+                        rotulo="Índice da obra"
+                        campoNome="inflation_index_obra"
+                        campoTaxa="cost_index_rate_monthly"
+                        nome={study.inflation_index_obra}
+                        taxa={study.cost_index_rate_monthly}
+                        inflacaoGeral={inflacaoGeral}
+                        organizationId={study.organization_id}
+                        salvar={salvarCampos}
+                    />
+                    <ImovibIndiceDeCorrecao
+                        rotulo="Índice das vendas"
+                        campoNome="inflation_index_vendas"
+                        campoTaxa="sales_index_rate_monthly"
+                        nome={study.inflation_index_vendas}
+                        taxa={study.sales_index_rate_monthly}
+                        inflacaoGeral={inflacaoGeral}
+                        organizationId={study.organization_id}
+                        salvar={salvarCampos}
+                    />
                 </div>
             </div>
 

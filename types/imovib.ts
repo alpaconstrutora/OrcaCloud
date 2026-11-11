@@ -491,8 +491,8 @@ export interface ImovibStudy {
     land_shape_raw?: string;
     efficiency_percent?: number;
     opportunity_cost_percent?: number;
-    inflation_index_obra?: string;
-    inflation_index_vendas?: string;
+    inflation_index_obra?: string | null;
+    inflation_index_vendas?: string | null;
     location_macro?: string;
     location_micro?: string;
     location_score?: number;

@@ -1,0 +1,60 @@
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../lib/supabase', () => ({ supabase: {} }));
+
+import { montarEstudoDoPortal } from '../services/investorPortalTokenService';
+import { computeImovibMath } from '../utils/imovibMotor';
+import { baseStudy, instancia } from './fixtures/imovibEstudos';
+
+/**
+ * Portal do Investidor por link com a mesma estrutura do app (item 0.6 do plano
+ * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md). `raw` imita o
+ * `study` que fn_investor_portal_get_study devolve.
+ */
+
+// Formato do Bruninho em 11/11/2026: preço/m² 0 no bloco, preço só no espelho.
+const rawSemPrecoNoBloco = (over: Record<string, any> = {}) => {
+    const s = baseStudy();
+    s.blocks[0].sales_price_sqm = 0;
+    return { ...s, ...over };
+};
+
+describe('0.6 — estudo do portal por link', () => {
+    it('resposta nova: o VGV sai do espelho, como no app', () => {
+        const espelho = Array.from({ length: 40 }, (_, i) => instancia(`u${i}`, 'b1', 250_000));
+        const estudo = montarEstudoDoPortal(rawSemPrecoNoBloco({ unit_instances: espelho, estrutura_do_empreendimento: null }))!;
+        const r = computeImovibMath(estudo);
+        expect(r.vgvBase).toBe(40 * 250_000);
+        expect(estudo.estrutura?.origem).toBe('estudo');
+    });
+
+    it('resposta antiga (sem espelho nem estrutura): não quebra e calcula como antes', () => {
+        const estudo = montarEstudoDoPortal(rawSemPrecoNoBloco())!;
+        expect(estudo.unit_instances).toEqual([]);
+        expect(computeImovibMath(estudo).vgvBase).toBe(0);
+    });
+
+    it('estudo vinculado: blocos vêm das torres e unidades do empreendimento', () => {
+        const raw = rawSemPrecoNoBloco({
+            unit_instances: [],
+            estrutura_do_empreendimento: {
+                empreendimento: { id: 'emp', name: 'Garden', organization_id: 'org', imovib_study_id: 'estudo-teste', blueprint_study_id: null, terreno_area: 1000 },
+                torres: [{ id: 't1', empreendimento_id: 'emp', name: 'Torre A', imovib_block_id: 'b1', construction_cost_sqm: null, sales_price_sqm: null, sort_order: 0 }],
+                unidades: [
+                    { id: 'x1', tower_id: 't1', typology: '2Q', private_area: 60, common_area: 15, price: 600_000, is_vendavel: true },
+                    { id: 'x2', tower_id: 't1', typology: '2Q', private_area: 60, common_area: 15, price: 600_000, is_vendavel: true },
+                ],
+            },
+        });
+        const estudo = montarEstudoDoPortal(raw)!;
+        expect(estudo.estrutura).toMatchObject({ origem: 'empreendimento', empreendimento_nome: 'Garden', torres: 1, unidades: 2 });
+        expect(estudo.blocks?.map(b => b.name)).toEqual(['Torre A']);
+        expect(computeImovibMath(estudo).totalPrivateArea).toBe(120);
+        expect('estrutura_do_empreendimento' in estudo).toBe(false);
+    });
+
+    it('sem estudo na resposta devolve null', () => {
+        expect(montarEstudoDoPortal(null)).toBeNull();
+        expect(montarEstudoDoPortal(undefined)).toBeNull();
+    });
+});

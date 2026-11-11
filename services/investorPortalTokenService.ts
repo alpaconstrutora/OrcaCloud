@@ -1,6 +1,26 @@
 import { supabase } from '../lib/supabase';
 import type { InterestRole } from './investorPortalService';
 import type { ObraDoEspelho } from '../utils/espelhoDoInvestidor';
+import type { ImovibStudy } from '../types';
+import { aplicarEstrutura, VinculoDaEstrutura } from './imovibService';
+
+/**
+ * Estudo que fn_investor_portal_get_study devolve, montado do MESMO jeito que
+ * imovibService.getStudyById monta para o app: espelho de vendas e, para estudo
+ * vinculado, blocos derivados das torres do empreendimento. Item 0.6 do plano
+ * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md.
+ *
+ * Aceita também a resposta anterior à migration
+ * aplicar_20271111700000_investor_portal_estudo_mesma_estrutura.sql (sem
+ * `unit_instances` nem `estrutura_do_empreendimento`): calcula como antes.
+ */
+export function montarEstudoDoPortal(raw: any): ImovibStudy | null {
+    if (!raw) return null;
+    const { estrutura_do_empreendimento, blocks, ...resto } = raw;
+    const study = { ...resto, unit_instances: raw.unit_instances ?? [] } as ImovibStudy;
+    aplicarEstrutura(study, blocks ?? [], (estrutura_do_empreendimento ?? undefined) as VinculoDaEstrutura | undefined);
+    return study;
+}
 
 export interface InvestorPortalToken {
     id: string;
@@ -147,13 +167,13 @@ export const investorPortalTokenService = {
         return (data as any)?.milestones ?? [];
     },
 
-    async getStudyByToken(token: string, studyId: string): Promise<any> {
+    async getStudyByToken(token: string, studyId: string): Promise<ImovibStudy | null> {
         const { data, error } = await supabase.rpc('fn_investor_portal_get_study', {
             p_token: token,
             p_study_id: studyId
         });
         if (error) throw error;
-        return (data as any)?.study ?? null;
+        return montarEstudoDoPortal((data as any)?.study);
     },
 
     async submitInterestByToken(token: string, payload: SubmitInvestorPortalInterestPayload): Promise<string> {

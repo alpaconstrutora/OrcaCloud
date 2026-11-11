@@ -34,7 +34,7 @@ interface EmpreendimentoDaEstrutura {
     terreno_area: number | null;
 }
 
-interface VinculoDaEstrutura {
+export interface VinculoDaEstrutura {
     empreendimento: EmpreendimentoDaEstrutura;
     torres: TorreDaEstrutura[];
     unidades: UnidadeDaEstrutura[];
@@ -101,7 +101,7 @@ async function carregarVinculos(studies: { id: string; organization_id?: string 
 }
 
 /** Põe no estudo a estrutura que o motor lê: a do empreendimento vinculado, ou a antiga do estudo. */
-function aplicarEstrutura(study: ImovibStudy, blocosDoEstudo: ImovibBlock[], vinculo: VinculoDaEstrutura | undefined): void {
+export function aplicarEstrutura(study: ImovibStudy, blocosDoEstudo: ImovibBlock[], vinculo: VinculoDaEstrutura | undefined): void {
     if (!vinculo) {
         study.blocks = blocosDoEstudo;
         study.estrutura = { origem: 'estudo', torres: 0, unidades: 0, blocos_fora_do_calculo: [] };

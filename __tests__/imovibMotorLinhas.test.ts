@@ -94,7 +94,7 @@ describe('0.3 — linhas do fluxo', () => {
         const r = computeImovibMath(baseStudy({ swap_financial_percent: 110 }));
         expect(r.netVgvTotal).toBeLessThan(0);
         for (const f of r.monthlyFlows) expect(somaLinhas(f.linhas)).toBeCloseTo(f.net, 4);
-        expect(r.avisos.find(a => a.codigo === 'receita_liquida_negativa')?.aba).toBe('funding');
+        expect(r.avisos.find(a => a.codigo === 'receita_liquida_negativa')?.aba).toBe('capital');
     });
 
     it('percentuais normais não geram o aviso', () => {

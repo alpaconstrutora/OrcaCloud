@@ -21,17 +21,18 @@ vi.mock('../../lib/supabase', () => ({
     supabase: { from: vi.fn(), rpc: vi.fn(), functions: { invoke: vi.fn() } },
 }));
 
-import ImovibFundingForm from '../../components/ImovibFundingForm';
+import ImovibReceitasForm from '../../components/ImovibReceitasForm';
 import { ImovibEdicaoProvider } from '../../hooks/useImovibEdicao';
 
 const estudo = { id: 'estudo-1', name: 'Teste', revenue_downpayment_percent: 10 } as never;
 
-describe('ImovibFundingForm — digitar sem perder o foco', () => {
+// Desde a Fase 1 do plano 2026-11-11 o campo é ImovibInputRow, dentro da aba Receitas.
+describe('ImovibReceitasForm — digitar sem perder o foco', () => {
     beforeEach(() => updateStudy.mockClear());
 
     it('digitar "12.5" mantém o mesmo campo focado e grava só no blur', async () => {
         const user = userEvent.setup();
-        render(<ImovibFundingForm study={estudo} onDataChanged={vi.fn()} />);
+        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} />);
 
         // Por papel (e não pelo rótulo) para o teste valer também contra a versão antiga.
         const sinal = () => screen.getAllByRole('spinbutton')[0] as HTMLInputElement;
@@ -45,7 +46,7 @@ describe('ImovibFundingForm — digitar sem perder o foco', () => {
         expect(campo.value).toBe('12.5');
         expect(updateStudy).not.toHaveBeenCalled();
 
-        // A soma do perfil de recebimento acompanha a digitação: 12,5 + 20 + 70.
+        // A soma do perfil de recebimento acompanha a digitação: 12,5 + 20 + 0 + 70 + 0.
         expect(screen.getByText('102.5%')).toBeInTheDocument();
 
         await user.tab();
@@ -56,9 +57,50 @@ describe('ImovibFundingForm — digitar sem perder o foco', () => {
     it('só leitura: o campo continua desabilitado (fieldset imovib-ro)', () => {
         render(
             <ImovibEdicaoProvider value={{ pode: false, motivo: 'Sem permissão' }}>
-                <ImovibFundingForm study={estudo} onDataChanged={vi.fn()} />
+                <ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} />
             </ImovibEdicaoProvider>,
         );
-        expect(screen.getByLabelText('Sinal / Ato')).toBeDisabled();
+        expect(screen.getByLabelText('Sinal / ato')).toBeDisabled();
+    });
+});
+
+describe('ImovibReceitasForm — curva de vendas e perfil (Fase 1)', () => {
+    beforeEach(() => updateStudy.mockClear());
+
+    it('sair do campo sem mudar o valor não grava', async () => {
+        const user = userEvent.setup();
+        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} />);
+        await user.click(screen.getByLabelText('Sinal / ato'));
+        await user.tab();
+        expect(updateStudy).not.toHaveBeenCalled();
+    });
+
+    it('trocar o tipo da curva grava sales_curve_type', async () => {
+        const user = userEvent.setup();
+        render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} />);
+        await user.selectOptions(screen.getByLabelText('Tipo da curva'), 'vso');
+        expect(updateStudy).toHaveBeenCalledWith('estudo-1', { sales_curve_type: 'vso' });
+    });
+
+    it('curva VSO sem VSO da região: o botão fica desligado e diz por quê; com ela, grava', async () => {
+        const user = userEvent.setup();
+        const { unmount } = render(<ImovibReceitasForm study={{ ...(estudo as object), sales_curve_type: 'vso' } as never} onDataChanged={vi.fn()} />);
+        const desligado = screen.getByRole('button', { name: 'Usar a VSO da região' });
+        expect(desligado).toBeDisabled();
+        expect(desligado).toHaveAttribute('title', 'Preencha a VSO histórica da região em Premissas › Mercado.');
+        unmount();
+
+        render(<ImovibReceitasForm study={{ ...(estudo as object), sales_curve_type: 'vso', vso_regional_percent: 4.5 } as never} onDataChanged={vi.fn()} />);
+        await user.click(screen.getByRole('button', { name: 'Usar a VSO da região (4,5%)' }));
+        expect(updateStudy).toHaveBeenCalledWith('estudo-1', { sales_vso_percent: 4.5 });
+    });
+
+    it('pós-chaves só pede prazo e juro quando tem percentual', () => {
+        const { unmount } = render(<ImovibReceitasForm study={estudo} onDataChanged={vi.fn()} />);
+        expect(screen.queryByLabelText('Prazo do pós-chaves')).toBeNull();
+        unmount();
+        render(<ImovibReceitasForm study={{ ...(estudo as object), revenue_post_handover_percent: 10 } as never} onDataChanged={vi.fn()} />);
+        expect(screen.getByLabelText('Prazo do pós-chaves')).toBeInTheDocument();
+        expect(screen.getByLabelText('Juro do pós-chaves')).toBeInTheDocument();
     });
 });

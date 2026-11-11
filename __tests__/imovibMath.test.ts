@@ -297,7 +297,7 @@ describe('1.6 — avisos de premissa', () => {
         const r = computeImovibMath(baseStudy({ revenue_handover_percent: 20 }));
         const aviso = r.avisos.find(a => a.codigo === 'recebimento_nao_soma_100');
         expect(aviso).toBeDefined();
-        expect(aviso!.aba).toBe('funding');
+        expect(aviso!.aba).toBe('receitas');
     });
 
     it('estudo sem preço de venda gera aviso', () => {

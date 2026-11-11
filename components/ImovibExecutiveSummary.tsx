@@ -61,7 +61,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
     const indicadores: Linha[] = [
         ['Indicador', 'Valor', 'Unidade', 'Observação'],
         ['VGV bruto', m.vgvTotal, 'R$', null],
-        ['VGV líquido', m.netVgvTotal, 'R$', 'Depois de permutas, inadimplência e distratos'],
+        ['VGV líquido', m.netVgvTotal, 'R$', 'Receita dos compradores sem índice: VGV vendido depois das permutas, menos inadimplência e devolução de distratos'],
         ['Custo de obra', m.constCostTotal, 'R$', null],
         ['Terreno', m.landCost, 'R$', null],
         ['Rubricas do CAPEX no cálculo — sobre o terreno', m.capexRubricas.terreno, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],

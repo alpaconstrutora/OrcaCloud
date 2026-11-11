@@ -85,7 +85,7 @@ export interface ImovibMathOptions {
 }
 
 /** Aba do detalhe do estudo onde a premissa de um aviso é corrigida. */
-export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
+export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viability_dynamic';
 
 /**
  * Premissa que o motor não consegue usar como está. O motor calcula assim mesmo
@@ -115,6 +115,8 @@ export interface ImovibMathResult {
     netVgvTotal: number;
     /** Fração do VGV vendável que a curva de vendas não vende no prazo (0 a 1). Fica fora da receita. */
     estoqueNaoVendidoPct: number;
+    /** VGV vendido em cada mês, sem índice (índice 0 = mês 1). Antes do início das vendas, 0. */
+    vendasPorMes: number[];
     constCostTotal: number;
     duration: number;
     landCost: number;
@@ -267,6 +269,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     vgvTotal: 0,
     netVgvTotal: 0,
     estoqueNaoVendidoPct: 0,
+    vendasPorMes: [],
     constCostTotal: 0,
     duration: 0,
     landCost: 0,
@@ -312,6 +315,7 @@ interface Premissas {
     vgvTotal: number;
     netVgvTotal: number;
     estoqueNaoVendidoPct: number;
+    vendasPorMes: number[];
     constCostTotal: number;
     baseVgvTotal: number;
     vgvPorBloco: ImovibMathResult['vgvPorBloco'];
@@ -521,7 +525,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         avisos.push({
             codigo: 'permuta_em_dobro',
             mensagem: `O espelho de vendas já tem unidades permutadas (fora do VGV) e a Permuta Física de ${Number((swapPhysical * 100).toFixed(2)).toLocaleString('pt-BR')}% também está preenchida: a permuta pode estar sendo descontada duas vezes.`,
-            aba: 'funding',
+            aba: 'capital',
         });
     }
     const marketedVgv = vgvTotal * (1 - swapPhysical);
@@ -550,7 +554,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         avisos.push({
             codigo: 'estoque_nao_vendido',
             mensagem: `A curva de vendas não vende tudo no prazo: ${pctBR(estoqueNaoVendidoPct)}% do VGV vendável (${fmtBRL(vgvVendavel * estoqueNaoVendidoPct)}) fica em estoque, fora da receita.`,
-            aba: 'funding',
+            aba: 'receitas',
         });
     }
     const vendasPorMes: number[] = [];
@@ -569,14 +573,14 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         avisos.push({
             codigo: 'recebimento_nao_soma_100',
             mensagem: `O perfil de recebimento soma ${Number(revenueSum.toFixed(2)).toLocaleString('pt-BR')}% (sinal + parcelas de obra + intermediárias + repasse + pós-chaves deveria ser 100%). O cálculo usa os valores como estão.`,
-            aba: 'funding',
+            aba: 'receitas',
         });
     }
     if (posChavesPct > 0 && !(posChavesMeses > 0)) {
         avisos.push({
             codigo: 'pos_chaves_sem_prazo',
             mensagem: `O pós-chaves tem ${pctBR(posChavesPct / 100)}% do valor, mas prazo de 0 meses: o valor foi recebido inteiro nas chaves.`,
-            aba: 'funding',
+            aba: 'receitas',
         });
     }
 
@@ -613,7 +617,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         avisos.push({
             codigo: 'receita_liquida_negativa',
             mensagem: `Permutas ou inadimplência passam de 100%: a receita líquida fica negativa (${fmtBRL(netVgvTotal)}) e sai do caixa.`,
-            aba: 'funding',
+            aba: vgvVendavel < 0 ? 'capital' : 'receitas',
         });
     } else if (deducaoReceitaPct > 1) {
         avisos.push({
@@ -657,6 +661,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         vgvTotal,
         netVgvTotal,
         estoqueNaoVendidoPct,
+        vendasPorMes,
         constCostTotal,
         baseVgvTotal,
         vgvPorBloco,
@@ -842,7 +847,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         P.avisos.push({
             codigo: 'divida_quitada_no_fim',
             mensagem: `As receitas não amortizaram todo o financiamento: ${fmtBRL(debtPayoffAtEnd)} de saldo devedor são quitados com capital próprio no mês ${P.duration}.`,
-            aba: 'funding',
+            aba: 'capital',
         });
     }
     return { monthlyFlows, net, netProjeto: netProjetoDoMes, maxExposure, debtPayoffAtEnd };
@@ -896,6 +901,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         vgvTotal: P.vgvTotal,
         netVgvTotal: P.netVgvTotal,
         estoqueNaoVendidoPct: P.estoqueNaoVendidoPct,
+        vendasPorMes: P.vendasPorMes,
         constCostTotal: P.constCostTotal,
         duration: P.duration,
         landCost: P.landCost,

@@ -104,7 +104,7 @@ export const BudgetActualPage: React.FC<BudgetActualPageProps> = ({ organization
         </div>
         
         <div className="flex items-center gap-2">
-          <label className="text-sm font-bold text-slate-700">Ano Fiscal:</label>
+          <label className="text-xs font-semibold text-slate-500">Ano Fiscal:</label>
           <select 
             value={year}
             onChange={(e) => setYear(Number(e.target.value))}

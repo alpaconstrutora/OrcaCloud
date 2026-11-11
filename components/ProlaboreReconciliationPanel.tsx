@@ -509,7 +509,7 @@ const ProlaboreReconciliationPanel: React.FC<ProlaboreReconciliationPanelProps> 
             {/* Toolbar — competência, empresa, fechamento, lançar total (guia §5.1 desaninhada) */}
             <div className="flex flex-col md:flex-row gap-2.5 items-center flex-wrap">
                 <div className="flex items-center gap-2">
-                    <label className="text-sm font-medium text-gray-500">Competência</label>
+                    <label className="text-xs font-semibold text-slate-500">Competência</label>
                     <input type="month" value={competenceMonth.slice(0, 7)}
                         onChange={e => setCompetenceMonth(`${e.target.value}-01`)}
                         className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none" />

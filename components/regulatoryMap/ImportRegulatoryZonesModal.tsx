@@ -164,7 +164,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
                     )}
 
                     <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Cidade</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Cidade</label>
                         <CitySearchSelect value={city} onChange={setCity} />
                     </div>
 
@@ -179,7 +179,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
                             </p>
                         ) : (
                             <div>
-                                <label className="block text-xs font-semibold text-gray-500 mb-1">Mapa regulatório</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Mapa regulatório</label>
                                 <select
                                     value={selectedMap?.id ?? ''}
                                     onChange={e => setSelectedMap(maps.find(m => m.id === e.target.value) || null)}
@@ -202,7 +202,7 @@ export const ImportRegulatoryZonesModal: React.FC<Props> = ({ organizationId, em
                         ) : (
                             <div className="space-y-2">
                                 <div className="flex items-center justify-between gap-2">
-                                    <label className="block text-xs font-semibold text-gray-500">
+                                    <label className="block text-xs font-semibold text-slate-500">
                                         Zonas a importar ({marcadas} de {zones.length})
                                     </label>
                                     <button

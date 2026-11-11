@@ -137,7 +137,7 @@ function LinhaDoItem({
 
   return (
     <li className="flex items-center justify-between gap-4 py-2.5">
-      <label htmlFor={id} className="min-w-0 text-sm font-medium text-gray-900">
+      <label htmlFor={id} className="text-xs font-semibold text-slate-500 min-w-0">
         {rotulo}
       </label>
       <select id={id} value={atual} onChange={(e) => aoEscolher(e.target.value)} className={CAMPO}>

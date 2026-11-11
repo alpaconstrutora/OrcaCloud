@@ -303,7 +303,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             { label: 'Impostos', key: 'taxes', icon: Calculator },
                         ].map((item) => (
                             <div key={item.key} className="space-y-1.5">
-                                <label className="text-[10px] font-semibold text-slate-500 px-1 whitespace-nowrap">{item.label} (%)</label>
+                                <label className="text-xs font-semibold text-slate-500 px-1 whitespace-nowrap">{item.label} (%)</label>
                                 <div className="relative">
                                     <item.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                                     <input

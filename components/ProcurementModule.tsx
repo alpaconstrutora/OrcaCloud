@@ -98,7 +98,7 @@ function QuotationModal({
                         com status <em>Aberta</em>.
                     </p>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Título da cotação</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Título da cotação</label>
                         <input
                             className="w-full border rounded px-3 py-1.5 text-sm"
                             value={title}
@@ -106,7 +106,7 @@ function QuotationModal({
                         />
                     </div>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Prazo de resposta</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Prazo de resposta</label>
                         <input
                             type="date"
                             className="w-full border rounded px-3 py-1.5 text-sm"
@@ -174,11 +174,11 @@ function OrderModal({
                         Será criado um pedido em <em>Rascunho</em> com <strong>{count} {count === 1 ? 'item' : 'itens'}</strong>.
                     </p>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Fornecedor *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Fornecedor *</label>
                         <SupplierSelect suppliers={suppliers} value={supplierId} onChange={setSupplierId} placeholder="Selecione…" size="sm" />
                     </div>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Data de entrega</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Data de entrega</label>
                         <input
                             type="date"
                             className="w-full border rounded px-3 py-1.5 text-sm"
@@ -187,7 +187,7 @@ function OrderModal({
                         />
                     </div>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <textarea
                             className="w-full border rounded px-3 py-1.5 text-sm"
                             rows={2}
@@ -1315,11 +1315,11 @@ function QuotationModalConsolidation({
                         ({consolidation.items?.length ?? 0} obras) · {fmtBrl(consolidation.totalEstimated)}
                     </p>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Título</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Título</label>
                         <input className="w-full border rounded px-3 py-1.5 text-sm" value={title} onChange={e => setTitle(e.target.value)} />
                     </div>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Prazo de resposta</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Prazo de resposta</label>
                         <input type="date" className="w-full border rounded px-3 py-1.5 text-sm" value={deadline} onChange={e => setDeadline(e.target.value)} />
                     </div>
                     {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -1375,15 +1375,15 @@ function OrderModalConsolidation({
                         Volume: <strong>{fmtQty(consolidation.totalRequiredQty)} {consolidation.inputUnit}</strong> · {fmtBrl(consolidation.totalEstimated)}
                     </p>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Fornecedor *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Fornecedor *</label>
                         <SupplierSelect suppliers={suppliers} value={supplierId} onChange={setSupplierId} placeholder="Selecione…" size="sm" />
                     </div>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Data de entrega</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Data de entrega</label>
                         <input type="date" className="w-full border rounded px-3 py-1.5 text-sm" value={deliveryDate} onChange={e => setDeliveryDate(e.target.value)} />
                     </div>
                     <div>
-                        <label className="block text-form-label font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <textarea className="w-full border rounded px-3 py-1.5 text-sm" rows={2} value={notes} onChange={e => setNotes(e.target.value)} />
                     </div>
                     {error && <p className="text-red-600 text-sm">{error}</p>}
@@ -1572,7 +1572,7 @@ function RiscoPanel({ riskItems, items }: { riskItems: RiskItem[]; items: Procur
                     </p>
                     <div className="flex items-center gap-4">
                         <div className="flex-1">
-                            <label className="block text-form-label font-medium text-gray-700 mb-1">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">
                                 Atraso simulado: <strong>{delayDays} dias</strong>
                             </label>
                             <input

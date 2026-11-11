@@ -289,24 +289,24 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                     {editingReport && (
                         <ModalBody className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Título *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
                                 <input type="text" value={editingReport.title} onChange={e => setEditingReport({ ...editingReport, title: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Finalidade</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Finalidade</label>
                                     <select value={editingReport.finalidade} onChange={e => setEditingReport({ ...editingReport, finalidade: e.target.value as AppraisalFinalidade })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                         {Object.entries(APPRAISAL_FINALIDADE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Objetivo</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Objetivo</label>
                                     <select value={editingReport.objetivo} onChange={e => setEditingReport({ ...editingReport, objetivo: e.target.value as AppraisalObjetivo })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                         {Object.entries(APPRAISAL_OBJETIVO_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Metodologia</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Metodologia</label>
                                     <select value={editingReport.metodologia} onChange={e => setEditingReport({ ...editingReport, metodologia: e.target.value as AppraisalMetodologia })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                         {Object.entries(APPRAISAL_METODOLOGIA_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                     </select>
@@ -314,11 +314,11 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Solicitante</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Solicitante</label>
                                     <input type="text" value={editingReport.client_name ?? ''} onChange={e => setEditingReport({ ...editingReport, client_name: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Status</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Status</label>
                                     <select value={editingReport.status} onChange={e => setEditingReport({ ...editingReport, status: e.target.value as AppraisalStatus })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                         {Object.entries(APPRAISAL_STATUS_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                     </select>
@@ -327,11 +327,11 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest pt-2">Imóvel avaliando</p>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Endereço</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Endereço</label>
                                     <input type="text" value={editingReport.property_address ?? ''} onChange={e => setEditingReport({ ...editingReport, property_address: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Tipo</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tipo</label>
                                     <select value={editingReport.property_type ?? ''} onChange={e => setEditingReport({ ...editingReport, property_type: e.target.value as AppraisalPropertyType })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                         <option value="">Selecione...</option>
                                         {Object.entries(APPRAISAL_PROPERTY_TYPE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -340,52 +340,52 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Cidade</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Cidade</label>
                                     <input type="text" value={editingReport.property_city ?? ''} onChange={e => setEditingReport({ ...editingReport, property_city: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">UF</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">UF</label>
                                     <input type="text" maxLength={2} value={editingReport.property_state ?? ''} onChange={e => setEditingReport({ ...editingReport, property_state: e.target.value.toUpperCase() })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Data-base</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Data-base</label>
                                     <input type="date" value={editingReport.data_base} onChange={e => setEditingReport({ ...editingReport, data_base: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Área privativa (m²)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área privativa (m²)</label>
                                     <input type="number" value={editingReport.property_area_privativa ?? ''} onChange={e => setEditingReport({ ...editingReport, property_area_privativa: parseFloat(e.target.value) || null })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Área total (m²)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área total (m²)</label>
                                     <input type="number" value={editingReport.property_area_total ?? ''} onChange={e => setEditingReport({ ...editingReport, property_area_total: parseFloat(e.target.value) || null })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Descrição do imóvel</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição do imóvel</label>
                                 <textarea rows={2} value={editingReport.property_description ?? ''} onChange={e => setEditingReport({ ...editingReport, property_description: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Diagnóstico do mercado</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Diagnóstico do mercado</label>
                                 <textarea rows={2} value={editingReport.diagnostico_mercado ?? ''} onChange={e => setEditingReport({ ...editingReport, diagnostico_mercado: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Pressupostos e ressalvas</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Pressupostos e ressalvas</label>
                                 <textarea rows={2} value={editingReport.premissas_ressalvas ?? ''} onChange={e => setEditingReport({ ...editingReport, premissas_ressalvas: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest pt-2">Responsabilidade técnica</p>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Responsável técnico</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Responsável técnico</label>
                                     <input type="text" value={editingReport.responsavel_tecnico ?? ''} onChange={e => setEditingReport({ ...editingReport, responsavel_tecnico: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">CREA/CAU</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">CREA/CAU</label>
                                     <input type="text" value={editingReport.crea_cau ?? ''} onChange={e => setEditingReport({ ...editingReport, crea_cau: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">ART/RRT nº</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">ART/RRT nº</label>
                                     <input type="text" value={editingReport.art_numero ?? ''} onChange={e => setEditingReport({ ...editingReport, art_numero: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                             </div>
@@ -405,61 +405,61 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                     {editingComparable && (
                         <ModalBody className="space-y-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Endereço *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Endereço *</label>
                                 <input type="text" value={editingComparable.address} onChange={e => setEditingComparable({ ...editingComparable, address: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div className="grid grid-cols-3 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Fonte</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Fonte</label>
                                     <select value={editingComparable.source} onChange={e => setEditingComparable({ ...editingComparable, source: e.target.value as 'oferta' | 'venda' })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                         <option value="oferta">Oferta</option>
                                         <option value="venda">Venda</option>
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Área (m²) *</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área (m²) *</label>
                                     <input type="number" value={editingComparable.area || ''} onChange={e => setEditingComparable({ ...editingComparable, area: parseFloat(e.target.value) || 0 })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Preço total (R$) *</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Preço total (R$) *</label>
                                     <MoneyCentsInput value={editingComparable.price_total || ''} onChange={v => setEditingComparable({ ...editingComparable, price_total: v === '' ? 0 : Number(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                             </div>
                             <p className="text-xs font-black text-gray-400 uppercase tracking-widest pt-2">Fatores de homogeneização (1,0 = sem ajuste)</p>
                             <div className="grid grid-cols-5 gap-3">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Oferta</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Oferta</label>
                                     <input type="number" step="0.01" value={editingComparable.fator_oferta} onChange={e => setEditingComparable({ ...editingComparable, fator_oferta: parseFloat(e.target.value) || 1 })} className="w-full px-2 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Localização</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Localização</label>
                                     <input type="number" step="0.01" value={editingComparable.fator_localizacao} onChange={e => setEditingComparable({ ...editingComparable, fator_localizacao: parseFloat(e.target.value) || 1 })} className="w-full px-2 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Área</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área</label>
                                     <input type="number" step="0.01" value={editingComparable.fator_area} onChange={e => setEditingComparable({ ...editingComparable, fator_area: parseFloat(e.target.value) || 1 })} className="w-full px-2 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Conservação</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Conservação</label>
                                     <input type="number" step="0.01" value={editingComparable.fator_estado_conservacao} onChange={e => setEditingComparable({ ...editingComparable, fator_estado_conservacao: parseFloat(e.target.value) || 1 })} className="w-full px-2 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Outros</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Outros</label>
                                     <input type="number" step="0.01" value={editingComparable.fator_outros} onChange={e => setEditingComparable({ ...editingComparable, fator_outros: parseFloat(e.target.value) || 1 })} className="w-full px-2 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Distância (km)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Distância (km)</label>
                                     <input type="number" step="0.1" value={editingComparable.distance_km ?? ''} onChange={e => setEditingComparable({ ...editingComparable, distance_km: parseFloat(e.target.value) || null })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-600 mb-1.5">Data de coleta</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Data de coleta</label>
                                     <input type="date" value={editingComparable.data_coleta ?? ''} onChange={e => setEditingComparable({ ...editingComparable, data_coleta: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Observações</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Observações</label>
                                 <textarea rows={2} value={editingComparable.notes ?? ''} onChange={e => setEditingComparable({ ...editingComparable, notes: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                         </ModalBody>
@@ -533,18 +533,18 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                 {editingReport && (
                     <ModalBody className="space-y-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Título *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
                             <input type="text" value={editingReport.title} onChange={e => setEditingReport({ ...editingReport, title: e.target.value })} placeholder="Ex: Laudo de Avaliação — Apto 302, Ed. XYZ" className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Finalidade</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Finalidade</label>
                                 <select value={editingReport.finalidade} onChange={e => setEditingReport({ ...editingReport, finalidade: e.target.value as AppraisalFinalidade })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm">
                                     {Object.entries(APPRAISAL_FINALIDADE_LABELS).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Solicitante</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Solicitante</label>
                                 <input type="text" value={editingReport.client_name ?? ''} onChange={e => setEditingReport({ ...editingReport, client_name: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                         </div>

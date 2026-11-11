@@ -34,53 +34,53 @@ const PremisesFields: React.FC<{ dealType: LandDealType; premises: LandDealPremi
         case 'compra_direta':
             return (
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor total</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor total</label>
                         <MoneyCentsInput value={premises.valor_total} onChange={v => onChange({ ...premises, valor_total: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Entrada</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Entrada</label>
                         <MoneyCentsInput value={premises.entrada} onChange={v => onChange({ ...premises, entrada: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Nº de parcelas</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Nº de parcelas</label>
                         <input type="number" value={premises.num_parcelas ?? ''} onChange={e => onChange({ ...premises, num_parcelas: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Correção mensal (%)</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Correção mensal (%)</label>
                         <input type="number" step="0.01" value={premises.taxa_correcao_mensal_pct ?? ''} onChange={e => onChange({ ...premises, taxa_correcao_mensal_pct: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
                 </div>
             );
         case 'permuta_fisica':
             return (
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Unidades prometidas</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Unidades prometidas</label>
                         <input type="number" value={premises.unidades_prometidas ?? ''} onChange={e => onChange({ ...premises, unidades_prometidas: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor de referência das unidades</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor de referência das unidades</label>
                         <MoneyCentsInput value={premises.valor_referencia_unidades} onChange={v => onChange({ ...premises, valor_referencia_unidades: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo de entrega (meses)</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Prazo de entrega (meses)</label>
                         <input type="number" value={premises.prazo_entrega_meses ?? ''} onChange={e => onChange({ ...premises, prazo_entrega_meses: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
                 </div>
             );
         case 'permuta_financeira':
             return (
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">% sobre o VGV</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">% sobre o VGV</label>
                         <input type="number" step="0.1" value={premises.percentual_sobre_vgv ?? ''} onChange={e => onChange({ ...premises, percentual_sobre_vgv: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor mínimo garantido</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor mínimo garantido</label>
                         <MoneyCentsInput value={premises.valor_minimo_garantido} onChange={v => onChange({ ...premises, valor_minimo_garantido: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
                 </div>
             );
         case 'opcao_compra':
             return (
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Prêmio da opção</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Prêmio da opção</label>
                         <MoneyCentsInput value={premises.premio_opcao} onChange={v => onChange({ ...premises, premio_opcao: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo da opção (meses)</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Prazo da opção (meses)</label>
                         <input type="number" value={premises.prazo_opcao_meses ?? ''} onChange={e => onChange({ ...premises, prazo_opcao_meses: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Valor de exercício</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor de exercício</label>
                         <MoneyCentsInput value={premises.valor_exercicio} onChange={v => onChange({ ...premises, valor_exercicio: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
                 </div>
             );
         case 'sociedade':
             return (
                 <div className="grid grid-cols-2 gap-4">
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Participação do proprietário (%)</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Participação do proprietário (%)</label>
                         <input type="number" step="0.1" value={premises.participacao_pct ?? ''} onChange={e => onChange({ ...premises, participacao_pct: num(e.target.value) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
-                    <div><label className="block text-xs font-bold text-gray-600 mb-1.5">Aporte de terreno equivalente</label>
+                    <div><label className="block text-xs font-semibold text-slate-500 mb-1.5">Aporte de terreno equivalente</label>
                         <MoneyCentsInput value={premises.aporte_terreno_equivalente} onChange={v => onChange({ ...premises, aporte_terreno_equivalente: num(v) })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" /></div>
                 </div>
             );
@@ -214,7 +214,7 @@ const LandDealComparatorPanel: React.FC<Props> = ({ opportunityId, organizationI
                     <ModalBody className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Tipo de negócio</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tipo de negócio</label>
                                 <select
                                     value={editing.deal_type}
                                     onChange={e => setEditing({ ...editing, deal_type: e.target.value as LandDealType, premises_json: {} })}
@@ -224,7 +224,7 @@ const LandDealComparatorPanel: React.FC<Props> = ({ opportunityId, organizationI
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Nome do cenário *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nome do cenário *</label>
                                 <input type="text" value={editing.name} onChange={e => setEditing({ ...editing, name: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                         </div>
@@ -234,7 +234,7 @@ const LandDealComparatorPanel: React.FC<Props> = ({ opportunityId, organizationI
                             onChange={p => setEditing({ ...editing, premises_json: p })}
                         />
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Observações</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Observações</label>
                             <textarea rows={2} value={editing.notes ?? ''} onChange={e => setEditing({ ...editing, notes: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                         </div>
                     </ModalBody>

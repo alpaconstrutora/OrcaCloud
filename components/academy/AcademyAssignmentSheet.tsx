@@ -120,7 +120,7 @@ const AcademyAssignmentSheet: React.FC<Props> = ({
             <SheetPanel className="p-6">
                 <div className="space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Treinamento</label>
+                        <label className="text-xs font-semibold text-slate-500">Treinamento</label>
                         <select
                             value={form.course_id}
                             onChange={e => set('course_id', e.target.value)}
@@ -135,7 +135,7 @@ const AcademyAssignmentSheet: React.FC<Props> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Atribuir a</label>
+                        <label className="text-xs font-semibold text-slate-500">Atribuir a</label>
                         <select
                             value={form.alvo_tipo}
                             onChange={e => { set('alvo_tipo', e.target.value as AcademyAssignmentAlvo); set('alvo_id', ''); }}
@@ -148,7 +148,7 @@ const AcademyAssignmentSheet: React.FC<Props> = ({
 
                     {form.alvo_tipo !== 'TODOS' && (
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">
+                            <label className="text-xs font-semibold text-slate-500">
                                 {ALVOS.find(a => a.id === form.alvo_tipo)?.label}
                             </label>
                             <select
@@ -168,7 +168,7 @@ const AcademyAssignmentSheet: React.FC<Props> = ({
                     )}
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Prazo (dias a partir da matrícula)</label>
+                        <label className="text-xs font-semibold text-slate-500">Prazo (dias a partir da matrícula)</label>
                         <input
                             type="number" min="1"
                             value={form.prazo_dias}
@@ -199,7 +199,7 @@ const AcademyAssignmentSheet: React.FC<Props> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Observações</label>
+                        <label className="text-xs font-semibold text-slate-500">Observações</label>
                         <textarea
                             value={form.observacoes}
                             onChange={e => set('observacoes', e.target.value)}

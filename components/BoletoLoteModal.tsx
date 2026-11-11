@@ -339,7 +339,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                             {/* Fornecedor */}
                             <div className="space-y-1">
-                                <label className="text-form-label font-semibold text-gray-600 flex items-center gap-1">
+                                <label className="flex text-xs font-semibold text-slate-500 items-center gap-1">
                                     <Users className="w-3 h-3" /> Fornecedor
                                 </label>
                                 <SupplierSelect
@@ -352,7 +352,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Centro de custo */}
                             <div className="space-y-1">
-                                <label className="text-form-label font-semibold text-gray-600 flex items-center gap-1">
+                                <label className="flex text-xs font-semibold text-slate-500 items-center gap-1">
                                     <FolderOpen className="w-3 h-3" /> Centro de Custo
                                 </label>
                                 <CostCenterSelect
@@ -366,7 +366,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Projeto */}
                             <div className="space-y-1">
-                                <label className="text-form-label font-semibold text-gray-600">Projeto / Obra</label>
+                                <label className="text-xs font-semibold text-slate-500">Projeto / Obra</label>
                                 <select
                                     value={selectedProjectId}
                                     onChange={e => { setSelectedProjectId(e.target.value); setCommonApplied(false); }}
@@ -381,7 +381,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Descrição */}
                             <div className="space-y-1">
-                                <label className="text-form-label font-semibold text-gray-600">Descrição</label>
+                                <label className="text-xs font-semibold text-slate-500">Descrição</label>
                                 <input
                                     type="text"
                                     value={descricao}
@@ -393,7 +393,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
                             {/* Observações */}
                             <div className="space-y-1">
-                                <label className="text-form-label font-semibold text-gray-600">Observações</label>
+                                <label className="text-xs font-semibold text-slate-500">Observações</label>
                                 <input
                                     type="text"
                                     value={observacoes}

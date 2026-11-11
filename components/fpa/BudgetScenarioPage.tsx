@@ -162,7 +162,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
             
             <div className="p-6 space-y-4">
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">Orçamento Base</label>
+                <label className="text-xs font-semibold text-slate-500">Orçamento Base</label>
                 <select 
                   value={selectedBaseId} 
                   onChange={(e) => setSelectedBaseId(e.target.value)}
@@ -176,7 +176,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">Nome do Cenário</label>
+                <label className="text-xs font-semibold text-slate-500">Nome do Cenário</label>
                 <input 
                   type="text" 
                   value={newScenarioName}
@@ -188,7 +188,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Tipo de Cenário</label>
+                  <label className="text-xs font-semibold text-slate-500">Tipo de Cenário</label>
                   <select 
                     value={scenarioType} 
                     onChange={(e) => setScenarioType(e.target.value as any)}
@@ -200,7 +200,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
                   </select>
                 </div>
                 <div className="space-y-2">
-                  <label className="text-sm font-bold text-slate-700">Ajuste Despesas (%)</label>
+                  <label className="text-xs font-semibold text-slate-500">Ajuste Despesas (%)</label>
                   <div className="relative">
                     <input 
                       type="number" 

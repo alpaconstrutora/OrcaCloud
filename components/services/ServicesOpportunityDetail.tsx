@@ -666,7 +666,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
           <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl w-full max-w-sm p-6 space-y-4">
             <h3 className="font-semibold text-gray-900 dark:text-white">Marcar como Perdido</h3>
             <div>
-              <label className="block text-form-label font-medium text-gray-600 mb-1">Motivo da perda *</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">Motivo da perda *</label>
               <textarea
                 className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
                 rows={3}
@@ -728,7 +728,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               Um projeto vazio será criado em <strong>Engenharia → Orçamentos</strong> e uma notificação será enviada ao destinatário abaixo.
             </p>
             <div>
-              <label className="block text-form-label font-medium text-gray-600 mb-1">E-mail do orçamentista *</label>
+              <label className="block text-xs font-semibold text-slate-500 mb-1">E-mail do orçamentista *</label>
               <input
                 type="email"
                 autoFocus

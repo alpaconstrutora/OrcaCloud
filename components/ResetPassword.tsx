@@ -102,7 +102,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, emailD
                     <form onSubmit={handleReset} className="space-y-4">
                         {emailMostrado && (
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">E-mail</label>
                                 <div className="relative">
                                     <Mail className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                                     <input
@@ -117,7 +117,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, emailD
                             </div>
                         )}
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">{ehConvite ? 'Senha' : 'Nova Senha'}</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">{ehConvite ? 'Senha' : 'Nova Senha'}</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                                 <input
@@ -132,7 +132,7 @@ const ResetPassword: React.FC<ResetPasswordProps> = ({ onComplete, email, emailD
                             </div>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmar Senha</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Confirmar Senha</label>
                             <div className="relative">
                                 <Lock className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                                 <input

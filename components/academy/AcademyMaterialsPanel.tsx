@@ -139,7 +139,7 @@ const AcademyMaterialsPanel: React.FC<Props> = ({
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 space-y-4">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Título</label>
+                            <label className="text-xs font-semibold text-slate-500">Título</label>
                             <input
                                 value={form.titulo}
                                 onChange={e => setForm(p => ({ ...p, titulo: e.target.value }))}
@@ -148,7 +148,7 @@ const AcademyMaterialsPanel: React.FC<Props> = ({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Tipo</label>
+                            <label className="text-xs font-semibold text-slate-500">Tipo</label>
                             <select
                                 value={form.tipo}
                                 onChange={e => setForm(p => ({ ...p, tipo: e.target.value as 'ARQUIVO' | 'LINK' }))}
@@ -161,7 +161,7 @@ const AcademyMaterialsPanel: React.FC<Props> = ({
 
                         {form.tipo === 'LINK' ? (
                             <div className="space-y-1.5 md:col-span-2">
-                                <label className="text-xs font-semibold text-gray-500">URL</label>
+                                <label className="text-xs font-semibold text-slate-500">URL</label>
                                 <input
                                     value={form.url}
                                     onChange={e => setForm(p => ({ ...p, url: e.target.value }))}
@@ -171,7 +171,7 @@ const AcademyMaterialsPanel: React.FC<Props> = ({
                             </div>
                         ) : (
                             <div className="space-y-1.5 md:col-span-2">
-                                <label className="text-xs font-semibold text-gray-500">Arquivo</label>
+                                <label className="text-xs font-semibold text-slate-500">Arquivo</label>
                                 <div
                                     onClick={() => fileRef.current?.click()}
                                     className="border-2 border-dashed border-gray-200 rounded-[10px] p-3 text-center cursor-pointer hover:border-blue-300 hover:bg-blue-50/30 transition-all"
@@ -204,7 +204,7 @@ const AcademyMaterialsPanel: React.FC<Props> = ({
                         )}
 
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Vincular a uma aula (opcional)</label>
+                            <label className="text-xs font-semibold text-slate-500">Vincular a uma aula (opcional)</label>
                             <select
                                 value={form.lesson_id}
                                 onChange={e => setForm(p => ({ ...p, lesson_id: e.target.value }))}

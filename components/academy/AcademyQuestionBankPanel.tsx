@@ -238,7 +238,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                 {prova && (
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4 border-t border-gray-100 pt-4">
                         <div className="space-y-1.5 md:col-span-2">
-                            <label className="text-xs font-semibold text-gray-500">Título</label>
+                            <label className="text-xs font-semibold text-slate-500">Título</label>
                             <input
                                 value={prova.titulo}
                                 onChange={e => salvarProva('titulo', e.target.value)}
@@ -247,7 +247,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Nota mínima</label>
+                            <label className="text-xs font-semibold text-slate-500">Nota mínima</label>
                             <input
                                 type="number" min="0" max="10" step="0.1"
                                 value={prova.nota_minima}
@@ -257,7 +257,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Tentativas</label>
+                            <label className="text-xs font-semibold text-slate-500">Tentativas</label>
                             <input
                                 type="number" min="1"
                                 value={prova.tentativas_max}
@@ -267,7 +267,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Questões sorteadas</label>
+                            <label className="text-xs font-semibold text-slate-500">Questões sorteadas</label>
                             <input
                                 type="number" min="1"
                                 value={prova.qtd_questoes ?? ''}
@@ -278,7 +278,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Tempo limite (min)</label>
+                            <label className="text-xs font-semibold text-slate-500">Tempo limite (min)</label>
                             <input
                                 type="number" min="1"
                                 value={prova.tempo_limite_minutos ?? ''}
@@ -329,7 +329,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
             {aberto && !somenteLeitura && (
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4 space-y-4">
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Enunciado</label>
+                        <label className="text-xs font-semibold text-slate-500">Enunciado</label>
                         <textarea
                             value={nova.enunciado}
                             onChange={e => setNova(p => ({ ...p, enunciado: e.target.value }))}
@@ -338,7 +338,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Tipo</label>
+                        <label className="text-xs font-semibold text-slate-500">Tipo</label>
                         <select
                             value={nova.tipo}
                             onChange={e => trocarTipo(e.target.value as AcademyQuestionTipo)}
@@ -349,7 +349,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                     </div>
 
                     <div className="space-y-2">
-                        <label className="text-xs font-semibold text-gray-500">
+                        <label className="text-xs font-semibold text-slate-500">
                             Alternativas — clique no círculo para marcar a correta
                         </label>
                         {nova.opcoes.map((o, i) => (
@@ -395,7 +395,7 @@ const AcademyQuestionBankPanel: React.FC<Props> = ({
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">Explicação (opcional)</label>
+                        <label className="text-xs font-semibold text-slate-500">Explicação (opcional)</label>
                         <input
                             value={nova.explicacao}
                             onChange={e => setNova(p => ({ ...p, explicacao: e.target.value }))}

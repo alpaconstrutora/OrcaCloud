@@ -14,7 +14,7 @@ interface Props {
 const INPUT = 'w-full rounded-[6px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 h-9 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
 // Área de texto não leva h-9: mantém a altura de várias linhas.
 const INPUT_AREA = 'w-full rounded-[6px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
-const LABEL = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
+const LABEL = 'block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1';
 
 const ServicesOpportunityModal: React.FC<Props> = ({ organizationId, initial, onClose, onSaved }) => {
   const [form, setForm] = useState({

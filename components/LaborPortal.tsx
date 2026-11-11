@@ -918,7 +918,7 @@ const SeletorDaPrevia: React.FC<{
     return (
         <div className="flex flex-col items-center py-12">
             <div className="p-4 bg-white rounded-[10px] border border-gray-100 shadow-sm w-full max-w-sm space-y-1.5">
-                <label htmlFor="previa-colaborador" className="text-xs font-semibold text-gray-500">Ver o portal como</label>
+                <label htmlFor="previa-colaborador" className="text-xs font-semibold text-slate-500">Ver o portal como</label>
                 <select
                     id="previa-colaborador"
                     value=""

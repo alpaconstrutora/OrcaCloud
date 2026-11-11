@@ -207,11 +207,11 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
                 <ModalBody className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Título *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
                             <input type="text" value={callForm.title} onChange={e => setCallForm({ ...callForm, title: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" placeholder="Ex: Chamada 1 — Aquisição do terreno" />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Valor total (R$) *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor total (R$) *</label>
                             <MoneyCentsInput value={callForm.total_amount || ''}
                                 onChange={v => {
                                     const total = v === '' ? 0 : Number(v);
@@ -223,16 +223,16 @@ const CapitalCallPanel: React.FC<Props> = ({ organizationId, speEntityId, partne
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Data de emissão</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Data de emissão</label>
                             <input type="date" value={callForm.issue_date} onChange={e => setCallForm({ ...callForm, issue_date: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Vencimento *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Vencimento *</label>
                             <input type="date" value={callForm.due_date} onChange={e => setCallForm({ ...callForm, due_date: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                         </div>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">Descrição</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição</label>
                         <textarea rows={2} value={callForm.description} onChange={e => setCallForm({ ...callForm, description: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                     </div>
                     <div>

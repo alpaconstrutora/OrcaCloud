@@ -19,7 +19,7 @@ export default function MarketHipotesesIndicadores({ ind }: { ind: MarketIndicad
         <div className="grid grid-cols-2 md:grid-cols-5 gap-x-3 gap-y-3">
           {DESCRICAO_HIPOTESES_INDICADORES.map((d) => (
             <div key={d.chave} className="space-y-1.5" title={d.explicacao}>
-              <label className="block text-[11px] font-semibold text-slate-500 leading-tight">
+              <label className="block text-xs font-semibold text-slate-500 leading-tight">
                 {d.rotulo} <span className="font-normal text-slate-400">({d.unidade})</span>
               </label>
               <input

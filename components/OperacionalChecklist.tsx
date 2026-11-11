@@ -694,7 +694,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                           </p>
                           <div className="space-y-2">
                             <div>
-                              <label className="text-form-label font-bold text-slate-500">Descrição</label>
+                              <label className="text-xs font-semibold text-slate-500">Descrição</label>
                               <textarea
                                 value={ncForm.description}
                                 onChange={e => setNcForms(f => ({ ...f, [item.id]: { ...f[item.id], description: e.target.value } }))}
@@ -704,7 +704,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                             </div>
                             <div className="grid grid-cols-2 gap-2">
                               <div>
-                                <label className="text-form-label font-bold text-slate-500">Severidade</label>
+                                <label className="text-xs font-semibold text-slate-500">Severidade</label>
                                 <select
                                   value={ncForm.severity}
                                   onChange={e => setNcForms(f => ({ ...f, [item.id]: { ...f[item.id], severity: e.target.value as NCFormState['severity'] } }))}
@@ -716,7 +716,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                                 </select>
                               </div>
                               <div>
-                                <label className="text-form-label font-bold text-slate-500">Prazo</label>
+                                <label className="text-xs font-semibold text-slate-500">Prazo</label>
                                 <input
                                   type="date"
                                   value={ncForm.dueDate}
@@ -726,7 +726,7 @@ const OperacionalChecklist: React.FC<Props> = ({ workOrderId, orgId }) => {
                               </div>
                             </div>
                             <div>
-                              <label className="text-form-label font-bold text-slate-500">Ação corretiva</label>
+                              <label className="text-xs font-semibold text-slate-500">Ação corretiva</label>
                               <textarea
                                 value={ncForm.correctiveAction}
                                 onChange={e => setNcForms(f => ({ ...f, [item.id]: { ...f[item.id], correctiveAction: e.target.value } }))}

@@ -233,9 +233,9 @@ export default function OficiosList({ documentos, modelos, nomeDepartamento, loa
                 filtersPanel={painelAberto && (
                     <div className="flex items-center gap-2 flex-wrap bg-gray-50 border border-gray-200 rounded-[10px] p-4">
                         <div className="flex items-center gap-1.5">
-                            <label htmlFor="oficios-filtro-de" className="text-sm font-medium text-gray-500">Data do ofício de</label>
+                            <label htmlFor="oficios-filtro-de" className="text-xs font-semibold text-slate-500">Data do ofício de</label>
                             <input id="oficios-filtro-de" type="date" value={filtros.de} onChange={e => setFiltro('de', e.target.value)} className={DATA} />
-                            <label htmlFor="oficios-filtro-ate" className="text-sm font-medium text-gray-500">até</label>
+                            <label htmlFor="oficios-filtro-ate" className="text-xs font-semibold text-slate-500">até</label>
                             <input id="oficios-filtro-ate" type="date" value={filtros.ate} onChange={e => setFiltro('ate', e.target.value)} className={DATA} />
                         </div>
                         <SelectDeFiltro id="oficios-filtro-emitente" todos="Todos os emitentes" vazio="Nenhum ofício na lista" opcoes={opcoes.emitente} value={filtros.emitente} onChange={v => setFiltro('emitente', v)} />

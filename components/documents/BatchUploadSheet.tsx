@@ -677,7 +677,7 @@ export function BatchUploadSheet({
                       {norma && (
                         <div className="mt-2 grid grid-cols-2 gap-2">
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-500">Código</label>
+                            <label className="text-xs font-semibold text-slate-500">Código</label>
                             <input
                               type="text"
                               placeholder="Ex: NBR 15575-1"
@@ -690,7 +690,7 @@ export function BatchUploadSheet({
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-500">Edição / ano</label>
+                            <label className="text-xs font-semibold text-slate-500">Edição / ano</label>
                             <select
                               value={norma.edicao}
                               disabled={!editavel}
@@ -739,7 +739,7 @@ export function BatchUploadSheet({
                   {item.expanded && (item.status === 'pronto' || item.status === 'invalido') && (
                     <div className="border-t border-slate-100 bg-slate-50/60 p-3 grid grid-cols-1 md:grid-cols-4 gap-3">
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500">Tipo de documento</label>
+                        <label className="text-xs font-semibold text-slate-500">Tipo de documento</label>
                         <select
                           value={item.overrides.tipo_documento ?? ''}
                           onChange={(e) => updateOverride(item.key, { tipo_documento: e.target.value || undefined })}
@@ -752,7 +752,7 @@ export function BatchUploadSheet({
                         </select>
                       </div>
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500">Disciplina</label>
+                        <label className="text-xs font-semibold text-slate-500">Disciplina</label>
                         <select
                           value={item.overrides.discipline_code ?? ''}
                           onChange={(e) => updateOverride(item.key, { discipline_code: e.target.value || undefined })}
@@ -767,7 +767,7 @@ export function BatchUploadSheet({
                       {norma ? (
                         <>
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-500">Órgão</label>
+                            <label className="text-xs font-semibold text-slate-500">Órgão</label>
                             <input
                               type="text"
                               list="ged-normas-orgaos-lote"
@@ -777,7 +777,7 @@ export function BatchUploadSheet({
                             />
                           </div>
                           <div className="space-y-1">
-                            <label className="text-[11px] font-semibold text-slate-500">Situação</label>
+                            <label className="text-xs font-semibold text-slate-500">Situação</label>
                             <select
                               value={norma.situacao}
                               onChange={(e) => updateOverride(item.key, { norma_situacao: e.target.value as OpuraNormaSituacao })}
@@ -790,7 +790,7 @@ export function BatchUploadSheet({
                           </div>
                           {norma.situacao === 'substituida' && (
                             <div className="space-y-1 md:col-span-2">
-                              <label className="text-[11px] font-semibold text-slate-500">Substituída por</label>
+                              <label className="text-xs font-semibold text-slate-500">Substituída por</label>
                               <input
                                 type="text"
                                 placeholder="Ex: ABNT NBR 15575-1:2024"
@@ -803,7 +803,7 @@ export function BatchUploadSheet({
                         </>
                       ) : (
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500">Data de vencimento</label>
+                        <label className="text-xs font-semibold text-slate-500">Data de vencimento</label>
                         <input
                           type="date"
                           value={item.overrides.data_validade ?? ''}
@@ -813,7 +813,7 @@ export function BatchUploadSheet({
                       </div>
                       )}
                       <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-slate-500">Tags</label>
+                        <label className="text-xs font-semibold text-slate-500">Tags</label>
                         <input
                           type="text"
                           placeholder="(padrão do lote)"

@@ -563,33 +563,33 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         </div>
 
                                         <div className="flex items-center justify-between">
-                                            <label className="text-form-label text-gray-500">Oficiais</label>
+                                            <label className="text-xs font-semibold text-slate-500">Oficiais</label>
                                             <input type="number" min="0" step="1" className="w-16 border border-gray-200 rounded text-center text-form-input p-0.5" value={itemSchedule?.crewMainWorkers ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'crewMainWorkers', parseInt(e.target.value, 10) || 0)} placeholder="0" />
                                         </div>
                                         <div className="flex items-center justify-between">
-                                            <label className="text-form-label text-gray-500">Serventes</label>
+                                            <label className="text-xs font-semibold text-slate-500">Serventes</label>
                                             <input type="number" min="0" step="1" className="w-16 border border-gray-200 rounded text-center text-form-input p-0.5" value={itemSchedule?.crewHelpers ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'crewHelpers', parseInt(e.target.value, 10) || 0)} placeholder="0" />
                                         </div>
 
                                         {(itemSchedule?.mainWorkerProd || 0) > 0 ? (
                                             <>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-form-label text-blue-600 font-medium">Prod. Oficial</label>
+                                                    <label className="text-xs font-semibold text-blue-600">Prod. Oficial</label>
                                                     <input type="number" min="0.1" step="0.1" className="w-16 border border-blue-200 bg-blue-50/30 rounded text-center text-form-input p-0.5" value={itemSchedule?.mainWorkerProd ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'mainWorkerProd', parseFloat(e.target.value) || 0)} placeholder="un/dia" />
                                                 </div>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-form-label text-blue-600 font-medium">Prod. Servente</label>
+                                                    <label className="text-xs font-semibold text-blue-600">Prod. Servente</label>
                                                     <input type="number" min="0" step="0.1" className="w-16 border border-blue-200 bg-blue-50/30 rounded text-center text-form-input p-0.5" value={itemSchedule?.helperProd ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'helperProd', parseFloat(e.target.value) || 0)} placeholder="un/dia" />
                                                 </div>
                                             </>
                                         ) : (
                                             <>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-form-label text-gray-500">HH/unid</label>
+                                                    <label className="text-xs font-semibold text-slate-500">HH/unid</label>
                                                     <input type="number" min="0" step="0.1" className="w-16 border border-gray-200 rounded text-center text-form-input p-0.5" value={itemSchedule?.effortCoefficient ?? ''} onChange={(e) => handleUpdateCrewField(item.id, 'effortCoefficient', parseFloat(e.target.value) || 0)} placeholder="0" />
                                                 </div>
                                                 <div className="flex items-center justify-between">
-                                                    <label className="text-form-label text-gray-500">Fator Ajudante</label>
+                                                    <label className="text-xs font-semibold text-slate-500">Fator Ajudante</label>
                                                     <input type="number" min="0" max="1" step="0.1" className="w-16 border border-gray-200 rounded text-center text-form-input p-0.5" value={itemSchedule?.helperFactor ?? 0.5} onChange={(e) => handleUpdateCrewField(item.id, 'helperFactor', parseFloat(e.target.value) || 0.5)} />
                                                 </div>
                                             </>
@@ -613,7 +613,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         <hr className="border-gray-100" />
 
                                         <div className="flex items-center justify-between">
-                                            <label className="text-form-label text-amber-600 font-medium">Eficiência</label>
+                                            <label className="text-xs font-semibold text-amber-600">Eficiência</label>
                                             <div className="flex items-center gap-2">
                                                 <input
                                                     type="range" min="0.5" max="1.5" step="0.1"
@@ -626,7 +626,7 @@ export const ScheduleGantt: React.FC<ScheduleGanttProps> = ({
                                         </div>
 
                                         <div className="flex items-center justify-between">
-                                            <label className="text-form-label text-gray-500">Horas/dia</label>
+                                            <label className="text-xs font-semibold text-slate-500">Horas/dia</label>
                                             <input type="number" min="1" max="24" step="1" className="w-16 border border-gray-200 rounded text-center text-form-input p-0.5" value={itemSchedule?.hoursPerDay ?? 8} onChange={(e) => handleUpdateCrewField(item.id, 'hoursPerDay', parseFloat(e.target.value) || 8)} />
                                         </div>
 

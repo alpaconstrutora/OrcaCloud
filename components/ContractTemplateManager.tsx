@@ -216,13 +216,13 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClos
                     <div className="col-span-2 space-y-4">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-form-label font-medium text-gray-500 mb-1">Nome *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Nome *</label>
                                 <input value={name} onChange={e => setName(e.target.value)}
                                     placeholder="ex: Contrato de Empreitada Padrão"
                                     className="w-full rounded-[6px] border border-gray-200 bg-white px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
-                                <label className="block text-form-label font-medium text-gray-500 mb-1">Tipo de contrato</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo de contrato</label>
                                 <select value={contractType} onChange={e => setContractType(e.target.value)}
                                     className="w-full rounded-[6px] border border-gray-200 bg-white px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="">Todos</option>
@@ -233,7 +233,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClos
                             </div>
                         </div>
                         <div>
-                            <label className="block text-form-label font-medium text-gray-500 mb-1">Descrição</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
                             <input value={description} onChange={e => setDescription(e.target.value)}
                                 placeholder="Uso interno para identificar o template"
                                 className="w-full rounded-[6px] border border-gray-200 bg-white px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500" />
@@ -242,7 +242,7 @@ const ContractTemplateManager: React.FC<Props> = ({ organizationId, open, onClos
                         {/* Editor / Preview */}
                         <div>
                             <div className="flex items-center justify-between mb-1">
-                                <label className="text-form-label font-medium text-gray-500">
+                                <label className="text-xs font-semibold text-slate-500">
                                     {previewMode ? 'Preview (variáveis substituídas por exemplo)' : 'Conteúdo HTML — use {{VARIAVEL}} para substituição dinâmica'}
                                 </label>
                             </div>

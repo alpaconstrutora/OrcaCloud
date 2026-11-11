@@ -66,7 +66,7 @@ const TypeForm: React.FC<{
     <form onSubmit={handleSubmit} className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="col-span-2">
-          <label className="block text-form-label font-semibold text-slate-600 mb-1">Nome *</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Nome *</label>
           <input
             className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={form.name}
@@ -76,7 +76,7 @@ const TypeForm: React.FC<{
           />
         </div>
         <div>
-          <label className="block text-form-label font-semibold text-slate-600 mb-1">
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
             Slug (identificador) *
           </label>
           <input
@@ -91,7 +91,7 @@ const TypeForm: React.FC<{
           </p>
         </div>
         <div>
-          <label className="block text-form-label font-semibold text-slate-600 mb-1">Cor</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Cor</label>
           <div className="flex flex-wrap gap-1.5 pt-1">
             {COLOR_OPTIONS.map(c => (
               <button
@@ -105,7 +105,7 @@ const TypeForm: React.FC<{
           </div>
         </div>
         <div className="col-span-2">
-          <label className="block text-form-label font-semibold text-slate-600 mb-1">Descrição</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
           <input
             className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={form.description}

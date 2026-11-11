@@ -2678,9 +2678,13 @@ mesmo vocabulário do `<thead>` sentence case (§6.2):
 > impressão (`ReportViewer`, `DiaryReportViewer`), cabeçalhos de seção dos painéis
 > laterais da Planta e os trechos de `InvestorDashboard`/`SupplierDashboard`
 > compartilhados com o portal.
-> ⚠️ **Ainda fora do §21 (sem caixa alta, mas em outro estilo):** ~700 rótulos em
-> `text-sm font-medium text-gray-700`, `text-xs font-bold text-gray-600` etc. Não são
-> "gritados"; padronizar é um passo separado.
+> ✅ **Um estilo só (11/11/2026, pedido do usuário):** sem a caixa alta, a Nova cotação
+> ficou com dois estilos de rótulo no mesmo formulário. Os 548 rótulos de campo em outro
+> estilo (`text-sm font-medium text-gray-700`, `text-xs font-bold text-gray-600`,
+> `text-form-label …`) viraram o §21. **Não muda:** `<label>` que envolve
+> checkbox/radio/input (texto de OPÇÃO, fica `text-sm`), `<label>` sem classe de
+> tipografia (herda do bloco), `cursor-pointer`/`sr-only` e cor de destaque.
+> 🔒 Trava: `__tests__/rotuloPadraoGuard.test.ts` (catraca).
 
 ---
 

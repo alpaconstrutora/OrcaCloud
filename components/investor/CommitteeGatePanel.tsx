@@ -171,7 +171,7 @@ const CommitteeGatePanel: React.FC<Props> = ({ opportunity, opportunityId, organ
                         </div>
                     )}
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">Decisão</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Decisão</label>
                         <select
                             value={form.decision ?? 'pendente'}
                             onChange={e => setForm({ ...form, decision: e.target.value as CommitteeDecision })}
@@ -183,11 +183,11 @@ const CommitteeGatePanel: React.FC<Props> = ({ opportunity, opportunityId, organ
                         </select>
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">Condicionantes</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Condicionantes</label>
                         <textarea rows={2} value={form.condicionantes ?? ''} onChange={e => setForm({ ...form, condicionantes: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                     </div>
                     <div>
-                        <label className="block text-xs font-bold text-gray-600 mb-1.5">Parecer</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Parecer</label>
                         <textarea rows={3} value={form.parecer ?? ''} onChange={e => setForm({ ...form, parecer: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                     </div>
                 </ModalBody>

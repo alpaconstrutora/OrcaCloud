@@ -1002,7 +1002,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                         <p className="text-sm text-gray-500 mb-6">{op.title}</p>
                         <form onSubmit={handleInterestSubmit} className="space-y-4">
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Nome completo *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nome completo *</label>
                                 <input
                                     type="text" required
                                     value={interest.contact_name}
@@ -1013,7 +1013,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">E-mail</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">E-mail</label>
                                     <input
                                         type="email"
                                         value={interest.contact_email}
@@ -1023,7 +1023,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">Telefone / WhatsApp</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Telefone / WhatsApp</label>
                                     <input
                                         type="tel"
                                         value={interest.contact_phone}
@@ -1034,7 +1034,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Perfil</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Perfil</label>
                                 <div className="flex flex-wrap gap-2">
                                     {ROLES.map(r => (
                                         <button key={r} type="button"
@@ -1047,7 +1047,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-button font-bold text-gray-600 mb-1.5">Mensagem (opcional)</label>
+                                <label className="block text-xs font-semibold text-slate-500 text-button mb-1.5">Mensagem (opcional)</label>
                                 <textarea rows={3}
                                     value={interest.message}
                                     onChange={e => setInterest(p => ({ ...p, message: e.target.value }))}

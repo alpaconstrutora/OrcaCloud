@@ -3018,7 +3018,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               </div>
               <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Nome {wbsModal.type === 'PHASE' ? 'da Etapa' : 'da Subetapa'}</label>
+                  <label className="block text-xs font-semibold text-slate-500 mb-1">Nome {wbsModal.type === 'PHASE' ? 'da Etapa' : 'da Subetapa'}</label>
                   <input type="text" autoFocus placeholder={wbsModal.type === 'PHASE' ? "Ex: Instalações Elétricas" : "Ex: Tubulações"} className="w-full rounded-[6px] border border-gray-300 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={wbsModal.value} onChange={(e) => setWbsModal({ ...wbsModal, value: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleConfirmWBSAction()} />
                 </div>
                 <div className="flex gap-2 pt-2">
@@ -3491,7 +3491,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </span>
                   </div>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Descrição da Versão</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição da Versão</label>
                     <textarea
                       autoFocus
                       rows={3}

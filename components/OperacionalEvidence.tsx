@@ -158,7 +158,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
         <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Nova Evidência</p>
         <div className="grid grid-cols-2 gap-3">
           <div>
-            <label className="text-form-label font-bold text-slate-500">Etapa</label>
+            <label className="text-xs font-semibold text-slate-500">Etapa</label>
             <select
               value={gate}
               onChange={e => setGate(e.target.value as typeof gate)}
@@ -170,7 +170,7 @@ const OperacionalEvidence: React.FC<Props> = ({ workOrderId, orgId }) => {
             </select>
           </div>
           <div>
-            <label className="text-form-label font-bold text-slate-500">Descrição</label>
+            <label className="text-xs font-semibold text-slate-500">Descrição</label>
             <input
               type="text"
               value={description}

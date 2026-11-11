@@ -2908,7 +2908,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-gray-500">Mudar preço sugerido para</label>
+                                    <label className="text-xs font-semibold text-slate-500">Mudar preço sugerido para</label>
                                     <div className="flex gap-2">
                                         <MoneyCentsInput
                                             value={bulkPriceValue}

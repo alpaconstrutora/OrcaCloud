@@ -929,7 +929,7 @@ export const VinculacoesTab: React.FC<Props> = ({
               )}
 
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Nome</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Nome</label>
                 <input
                   value={ccForm.name}
                   onChange={e => setCcForm(f => ({ ...f, name: e.target.value }))}
@@ -939,7 +939,7 @@ export const VinculacoesTab: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Grupo</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Grupo</label>
                 <select
                   value={ccForm.parentId}
                   onChange={e => setCcForm(f => ({ ...f, parentId: e.target.value }))}
@@ -958,7 +958,7 @@ export const VinculacoesTab: React.FC<Props> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-500 mb-1.5">Descrição</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição</label>
                 <input
                   value={ccForm.description}
                   onChange={e => setCcForm(f => ({ ...f, description: e.target.value }))}

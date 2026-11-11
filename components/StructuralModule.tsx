@@ -128,7 +128,7 @@ const SteelForm: React.FC<{
           className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
         />
       </label>
-      <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
+      <label className="flex text-xs font-semibold text-slate-500 flex-col gap-1">
         Custo/kg (R$)
         <MoneyCentsInput
           value={f.custoKg}

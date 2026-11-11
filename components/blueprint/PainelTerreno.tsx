@@ -812,7 +812,7 @@ export default function PainelTerreno({
                   ))}
                 </select>
               </label>
-              <label className="flex items-center gap-1.5 text-xs text-slate-600">
+              <label className="flex text-xs font-semibold text-slate-500 items-center gap-1.5">
                 Faixa
                 <CampoEmMetros
                   valorMm={divisaSelecionada.restricao.faixaMm}
@@ -826,7 +826,7 @@ export default function PainelTerreno({
           )}
 
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <label className="flex items-center gap-1.5 text-xs text-slate-600">
+            <label className="flex text-xs font-semibold text-slate-500 items-center gap-1.5">
               Comprimento
               <CampoEmMetros
                 valorMm={comprimentoMm}

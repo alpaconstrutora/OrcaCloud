@@ -1496,17 +1496,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                         </div>
                         <form onSubmit={handleSaveEditMember} className="p-6 space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Nome</label>
                                 <input type="text" required value={editMemberName} onChange={(e) => setEditMemberName(e.target.value)}
                                     className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">E-mail</label>
                                 <input type="email" required value={editMemberEmail} onChange={(e) => setEditMemberEmail(e.target.value)}
                                     className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Função</label>
                                 <select value={editMemberRole} onChange={(e) => setEditMemberRole(e.target.value as OrganizationRole)}
                                     className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="admin">Administrador</option>
@@ -1515,7 +1515,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Produto Òpura</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Produto Òpura</label>
                                 <div className="grid grid-cols-3 gap-2">
                                     {PRODUCTS.map(p => (
                                         <button key={p.id} type="button"
@@ -1603,7 +1603,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             <form onSubmit={handleInvite} className="space-y-6">
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Nome</label>
                                         <input
                                             type="text"
                                             required
@@ -1614,7 +1614,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">E-mail</label>
                                         <input
                                             type="email"
                                             required
@@ -1628,7 +1628,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Função Base</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Função Base</label>
                                         <select value={newMemberRole} onChange={(e) => handleRoleChangeWithDefaults(e.target.value as OrganizationRole)}
                                             className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="member">Membro</option>
@@ -1637,7 +1637,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Template (Opcional)</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Cargo Template (Opcional)</label>
                                         <select value={newMemberCustomRoleId} onChange={(e) => handleCustomRoleSelect(e.target.value)}
                                             className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="">Nenhum (Usar Permissões Customizadas)</option>
@@ -1650,7 +1650,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
                                 {/* Produto Òpura */}
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-2">Produto Òpura</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-2">Produto Òpura</label>
                                     <div className="grid grid-cols-3 gap-2">
                                         {PRODUCTS.map(p => (
                                             <button key={p.id} type="button"
@@ -1669,7 +1669,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 </div>
 
                                 <div className="space-y-4">
-                                    <label className="block text-sm font-medium text-gray-700">Revisão de Permissões</label>
+                                    <label className="block text-xs font-semibold text-slate-500">Revisão de Permissões</label>
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                                         <div className="p-6 space-y-8 max-h-[400px] overflow-y-auto">
                                             {PERMISSION_GROUPS.map((section) => (
@@ -1738,7 +1738,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
                             <form onSubmit={handleSaveRole} className="space-y-6">
                                 <div>
-                                    <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Cargo</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Nome do Cargo</label>
                                     <input
                                         type="text"
                                         required
@@ -1750,7 +1750,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 </div>
 
                                 <div className="space-y-3">
-                                    <label className="block text-sm font-medium text-gray-700">Permissões do Template</label>
+                                    <label className="block text-xs font-semibold text-slate-500">Permissões do Template</label>
                                     <div className="bg-gray-50 rounded-xl border border-gray-200 overflow-hidden">
                                         <div className="p-6 space-y-8 max-h-[400px] overflow-y-auto">
                                             {PERMISSION_GROUPS.map((section) => (

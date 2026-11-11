@@ -575,7 +575,7 @@ const LaborAllocations: React.FC<LaborAllocationsProps> = ({ orgId, employees, o
                 As duas não podem dividir a mesma barra. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 <div className="flex flex-wrap items-center gap-2">
-                    <label htmlFor="alloc-competencia" className="text-sm font-medium text-gray-500">Competência</label>
+                    <label htmlFor="alloc-competencia" className="text-xs font-semibold text-slate-500">Competência</label>
                     <input
                         id="alloc-competencia"
                         type="month"

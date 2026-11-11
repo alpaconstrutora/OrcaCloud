@@ -174,7 +174,7 @@ nenhuma com dado longo, então redimensionamento não agrega" basta).
 - [ ] §1 Imports obrigatórios
 - [ ] §2 Columns — definição das colunas
 - [ ] §3 State — filtros persistidos e colunas (+ §3.1 busca de seletor em drawer é transitória)
-- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência, §4.5 `destaque` em painel analítico, §4.5.1 painel com faixas "Hoje" × "Período")
+- [ ] §4 KPI Cards (+ §4.1 `sub` opcional, §4.2 quebra de simetria, §4.3 uppercase por `size`, §4.4 variante divisor/tendência, §4.5 `destaque` em painel analítico, §4.5.1 painel com faixas "Hoje" × "Período", §4.5.2 tendência/série/sólido só com dado medido)
 - [ ] §5 Toolbar (+ §5.1 desaninhada, §5.2 acoplada à tabela, §5.3 toolbar de botões — qual das três e por quê; §5.4 filtro rápido de escolha única em popover, não pílulas soltas acima da tabela; §5.5 filtro avançado: campo com valores conhecidos traz `options` e `getValue` = o que a célula mostra)
 - [ ] §6 Tabela — container e `<thead>`
 - [ ] §6.1 Redimensionamento de colunas — decisão explícita
@@ -404,7 +404,11 @@ isso sozinho por `size`. Além disso, o espaçamento vertical usa `leading-none`
 + `mb-1.5` fixo em vez do `line-height` padrão do navegador — é essa folga de
 `line-height` que normalmente infla a altura "vazia" abaixo do número.
 
-### 4.4 Variante — divisor pontilhado + indicador de tendência (proposta, não implementada)
+### 4.4 Variante — divisor pontilhado + indicador de tendência (histórico; a tendência foi implementada na §4.5.2)
+
+> ℹ️ **11/11/2026:** o indicador de tendência saiu do papel no `destaque` — ver
+> **§4.5.2** (`tendencia`, `serie`, `solido`). O divisor pontilhado continua não
+> implementado. O texto abaixo fica como registro de onde a ideia veio.
 
 Inspirado num dashboard externo (FlowAI): separa o valor grande da legenda com
 uma linha pontilhada fina, e troca o `sub` neutro por um indicador de tendência
@@ -477,6 +481,63 @@ destaca. Aqui a cor passa a significar **estado**, e só aparece por limiar.
 > ❌ Não pintar `tom` por gosto: sem limiar escrito, é `neutro`.
 > ℹ️ Em uso: `components/rentals/RentalAnalysisOverview.tsx` (leituras Operação e
 > Investimento).
+
+### 4.5.2 Destaque com tendência, linha do mês a mês e card sólido
+
+**Criado em 11/11/2026 (Financeiro › Dashboard financeiro, faixa "Hoje"), por decisão
+do usuário** — escolheu a variante A de um protótipo inspirado num dashboard externo
+("Glassy Dashboard"). Plano: `docs/planos/2026-11-10-kpi-card-tendencia-e-historico.md`.
+
+Três props opcionais do `destaque`. Sem elas o card é o da §4.5, igual.
+
+```tsx
+const serie = serieComHoje(historico, 'vencido_receber', hoje.vencido_receber); // meses fechados + hoje
+const tendencia = tendenciaDaSerie(serie, 'desce', mesAnterior, eixoBRL);       // hoje × mês anterior
+const tom = tomPorLimiar(hoje.vencido_receber, LIMIAR.vencidoReceberAlerta, 'alerta');
+
+<KpiCard destaque label="Vencido a receber" icon={<ArrowDownLeft />}
+  value={moneyBRL(hoje.vencido_receber)}
+  contagem={primeiraCarga ? { alvo: hoje.vencido_receber, formatar: moneyBRL } : undefined}
+  sub="95 títulos · desde jun/2015"
+  tom={tom}
+  serie={serie}
+  tendencia={tendencia}
+  solido={cardSolido(tom, tendencia)}
+  acao={{ label: 'Cobrar em Contas a receber', onClick: irCobrar }} />
+```
+
+- **`tendencia`** — seta + texto + base no canto do rótulo: "↑ +0,4% vs. out/26".
+  A cor diz se **melhorou**, não a direção: "a pagar" caindo é verde
+  (`text-emerald-700`), vencido subindo é vermelho (`text-red-700`), igual é cinza.
+  Texto `sr-only` "(melhorou)"/"(piorou)": a cor nunca é o único sinal. Percentual só
+  sobre base positiva; base zero ou negativa (saldo no vermelho) mostra a diferença em
+  reais. Sem os dois pontos medidos, **não há selo** (nunca "0%").
+- **Sem pílula, sem fundo.** O selo é texto colorido, como o status do §8. Num card de
+  número, um chip com fundo compete com o próprio número.
+- **`serie`** — linha de 32px sob o número, área a 12%, na cor da série principal do
+  §28.4 (`#3b82f6`), ponto no último valor. Só forma: sem eixo, sem rótulo, `aria-hidden`
+  (o valor exato é o número do card). **Mínimo de 6 meses** (§4.5.1); `null` = mês não
+  medido, e a linha **quebra** ali (nunca vira zero). O último ponto é sempre o número
+  escrito no card. Não substitui o gráfico do §28: é contexto do número, não análise.
+- **`solido`** — fundo `bg-red-700`, tudo em branco. **Só existe em `tom="alerta"`**
+  (fora dele a prop é ignorada) e a tela decide quando: no Dashboard financeiro é
+  `cardSolido` = alerta **E** piorou pelo menos `LIMIAR.pioraRelevante` (2%) desde o fim
+  do mês anterior. Regra de uso: no máximo um ou dois por faixa, e por limiar escrito,
+  nunca por gosto. Sem tendência medida, não fica sólido.
+- **`contagem`** — o número conta de 0 até o valor (750 ms) **só na primeira carga** da
+  tela; trocar de organização ou de período depois troca direto (§28.2). Respeita
+  `prefers-reduced-motion`.
+- **Sem hover, sem sombra** — o §4 continua valendo. O protótipo tinha elevação no
+  hover para card clicável, mas nenhum card de destaque é clicável (a ação mora no
+  link `acao`), então ela não entrou.
+- **Histórico vem de outra consulta, que falha sozinha:** sem ela o card mostra o
+  número de hoje sem linha nem selo — o presente nunca espera pelo passado.
+
+> ❌ Não inventar série: se o passado não pode ser reconstruído com a regra de hoje,
+> o card fica sem linha. "Aguardando aprovação" não tem série porque a fila mudou de
+> definição em 26/10 e 09/11/2026 — 12 meses desenhariam uma fila que nunca existiu.
+> ℹ️ Em uso: `components/FinancialDashboard.tsx` (faixa "Hoje": saldo, vencido a
+> receber e a pagar). Histórico: `fn_financial_dashboard_history`.
 
 ### 4.5.1 Painel com duas leituras empilhadas — "Hoje" × "Período"
 

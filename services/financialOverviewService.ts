@@ -41,6 +41,16 @@ export interface DashboardHoje {
     contas: DashboardConta[];
 }
 
+/** A faixa "Hoje" no fim de um mês fechado (fn_financial_dashboard_history). */
+export interface DashboardHistoricoMes {
+    /** Primeiro dia do mês, 'AAAA-MM-DD'. */
+    mes: string;
+    vencido_receber: number;
+    vencido_pagar: number;
+    /** Soma do saldo que o banco informou DENTRO do mês; null = nenhuma conta informou. */
+    saldo_banco: number | null;
+}
+
 export interface DashboardMes {
     /** Primeiro dia do mês, 'AAAA-MM-DD'. */
     mes: string;
@@ -145,5 +155,21 @@ export const financialOverviewService = {
             sem_fornecedor_valor: num(d.sem_fornecedor_valor),
             sem_fornecedor_qtd: num(d.sem_fornecedor_qtd),
         };
+    },
+
+    /** Os números da faixa "Hoje" no fim de cada mês FECHADO, do mais antigo ao mais
+     *  recente. O mês corrente não vem: é o `getToday`. */
+    async getHistory(organizationId: string | null, meses = 12): Promise<DashboardHistoricoMes[]> {
+        const { data, error } = await supabase.rpc('fn_financial_dashboard_history', {
+            p_organization_id: organizationId,
+            p_meses: meses,
+        });
+        if (error) throw error;
+        return ((data ?? []) as Record<string, unknown>[]).map(m => ({
+            mes: String(m.mes),
+            vencido_receber: num(m.vencido_receber),
+            vencido_pagar: num(m.vencido_pagar),
+            saldo_banco: numOuNulo(m.saldo_banco),
+        }));
     },
 };

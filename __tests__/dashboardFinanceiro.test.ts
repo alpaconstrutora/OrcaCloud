@@ -2,8 +2,9 @@ import { describe, it, expect } from 'vitest';
 import {
     limitesDoPeriodo, resumoDosBancos, tomDoSaldo, legendaDoSaldo, tomPorLimiar,
     dataBR, mesCurto, mesAno, diasEntre, isoLocal,
+    serieComHoje, tendenciaDaSerie, cardSolido, saldoDoMesCorrente,
 } from '../lib/dashboardFinanceiro';
-import type { DashboardConta } from '../services/financialOverviewService';
+import type { DashboardConta, DashboardHistoricoMes } from '../services/financialOverviewService';
 
 const conta = (nome: string, saldo: number | null, data: string | null): DashboardConta => ({
     conta_id: nome, conta: nome, banco: null,
@@ -107,5 +108,63 @@ describe('tomPorLimiar', () => {
         expect(tomPorLimiar(0, 0, 'alerta')).toBe('neutro');
         expect(tomPorLimiar(0.01, 0, 'alerta')).toBe('alerta');
         expect(tomPorLimiar(3, 0, 'atencao')).toBe('atencao');
+    });
+});
+
+describe('histórico e tendência', () => {
+    const reais = (v: number) => `R$ ${Math.round(v)}`;
+    const hist: DashboardHistoricoMes[] = [
+        { mes: '2026-09-01', vencido_receber: 3_120_825, vencido_pagar: 1_826_833, saldo_banco: -5_762.69 },
+        { mes: '2026-10-01', vencido_receber: 3_132_268, vencido_pagar: 1_830_862, saldo_banco: null },
+    ];
+
+    it('a série termina no valor de hoje (o número do card)', () => {
+        expect(serieComHoje(hist, 'vencido_receber', 3_143_711)).toEqual([3_120_825, 3_132_268, 3_143_711]);
+        expect(serieComHoje([], 'saldo_banco', 10)).toEqual([10]);
+    });
+
+    it('sem dois pontos medidos não há tendência — nunca "0%"', () => {
+        expect(tendenciaDaSerie([10], 'sobe', undefined, reais)).toBeNull();
+        expect(tendenciaDaSerie([], 'sobe', undefined, reais)).toBeNull();
+        // saldo de outubro não foi informado: hoje × out = sem medida
+        expect(tendenciaDaSerie(serieComHoje(hist, 'saldo_banco', -4_000), 'sobe', '2026-10-01', reais)).toBeNull();
+    });
+
+    it('vencido subindo é ruim; o percentual usa o mês anterior como base', () => {
+        const t = tendenciaDaSerie(serieComHoje(hist, 'vencido_receber', 3_143_711), 'desce', '2026-10-01', reais)!;
+        expect(t).toMatchObject({ direcao: 'sobe', bom: false, texto: '+0,4%', base: 'vs. out/26' });
+    });
+
+    it('a pagar caindo é bom (verde), mesmo descendo', () => {
+        const t = tendenciaDaSerie([100, 80], 'desce', '2026-10-01', reais)!;
+        expect(t).toMatchObject({ direcao: 'desce', bom: true, texto: '−20,0%' });
+    });
+
+    it('base zero ou negativa: diferença em reais, não percentual', () => {
+        expect(tendenciaDaSerie([0, 5_000], 'desce', '2026-10-01', reais)).toMatchObject({ pct: null, texto: '+R$ 5000', bom: false });
+        expect(tendenciaDaSerie([-13_830.8, -5_762.69], 'sobe', '2026-08-01', reais)).toMatchObject({ pct: null, texto: '+R$ 8068', bom: true });
+    });
+
+    it('igual ao mês anterior é estável e não pinta de vermelho', () => {
+        expect(tendenciaDaSerie([50, 50], 'desce', undefined, reais)).toMatchObject({ direcao: 'estavel', bom: true, texto: '0,0%', base: 'vs. mês anterior' });
+    });
+
+    it('saldo de hoje na linha: só com TODAS as contas informadas no mês corrente', () => {
+        const hojeISO = '2026-11-11';
+        expect(saldoDoMesCorrente([conta('Asaas', 100, '2026-11-02'), conta('Sicredi', -50, '2026-11-10')], hojeISO)).toBe(50);
+        // Sicredi parada em setembro: o card mostra a soma, a linha não
+        expect(saldoDoMesCorrente([conta('Asaas', 100, '2026-11-02'), conta('Sicredi', -5_762.69, '2026-09-30')], hojeISO)).toBeNull();
+        expect(saldoDoMesCorrente([conta('Asaas', 100, '2026-11-02'), conta('Itaú', null, null)], hojeISO)).toBeNull();
+        expect(saldoDoMesCorrente([], hojeISO)).toBeNull();
+    });
+
+    it('sólido só com alerta E piora de pelo menos 2%', () => {
+        const piora = (pct: number | null) => ({ texto: '', direcao: 'sobe' as const, bom: false, pct, base: '' });
+        expect(cardSolido('alerta', piora(0.004))).toBe(false);   // +0,4%: a Alpa em 11/11
+        expect(cardSolido('alerta', piora(0.02))).toBe(true);
+        expect(cardSolido('alerta', piora(null))).toBe(true);    // vencido que nasceu do zero
+        expect(cardSolido('atencao', piora(0.5))).toBe(false);
+        expect(cardSolido('alerta', { ...piora(-0.3), bom: true })).toBe(false);
+        expect(cardSolido('alerta', null)).toBe(false);          // sem histórico: o card de hoje
     });
 });

@@ -11,11 +11,12 @@ import { usePersistedState } from './ui/TableUtils';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { approvalService } from '../services/approvalService';
 import {
-    financialOverviewService, type DashboardHoje, type DashboardPeriodo,
+    financialOverviewService, type DashboardHoje, type DashboardPeriodo, type DashboardHistoricoMes,
 } from '../services/financialOverviewService';
 import {
     LIMIAR, ROTULO_PERIODO, type Periodo, limitesDoPeriodo, resumoDosBancos, tomDoSaldo,
     legendaDoSaldo, tomPorLimiar, dataBR, mesCurto, mesAno,
+    serieComHoje, tendenciaDaSerie, cardSolido, saldoDoMesCorrente,
 } from '../lib/dashboardFinanceiro';
 import {
     moneyBRL, compactAxis, niceTicks, plural, GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE,
@@ -281,6 +282,31 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
 
     useEffect(() => { void carregarHoje(); }, [carregarHoje]);
 
+    // ── Histórico: linha e tendência dos cards de "Hoje" (guia §4.5.2) ──
+    // Carrega e falha SOZINHO: sem ele os cards ficam como eram (sem linha, sem selo) —
+    // o número de hoje nunca espera nem some por causa do passado.
+    const [historico, setHistorico] = useState<DashboardHistoricoMes[] | null>(null);
+    const pedidoHistorico = useRef(0);
+
+    const carregarHistorico = useCallback(async () => {
+        const pedido = ++pedidoHistorico.current;
+        setHistorico(null);
+        try {
+            const h = await financialOverviewService.getHistory(orgId);
+            if (pedido === pedidoHistorico.current) setHistorico(h);
+        } catch (e) {
+            if (pedido === pedidoHistorico.current) console.error('[FinancialDashboard] histórico:', e);
+        }
+    }, [orgId]);
+
+    useEffect(() => { void carregarHistorico(); }, [carregarHistorico]);
+
+    // O número conta de 0 até o valor só na PRIMEIRA posição carregada: trocar de
+    // organização depois não anima (§28.2 — número que cresce a cada troca lê como dado mudando).
+    const primeiroHoje = useRef<DashboardHoje | null>(null);
+    if (hoje && primeiroHoje.current === null) primeiroHoje.current = hoje;
+    const contar = hoje != null && hoje === primeiroHoje.current;
+
     // ── Período ──
     const [periodo, setPeriodo] = usePersistedState<Periodo>('financialDashboard:periodo', 'month');
     const [offset, setOffset] = useState(0);
@@ -311,6 +337,22 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
     const tomSaldo = bancos ? tomDoSaldo(bancos) : 'neutro';
     const resultado = dados ? dados.recebido - dados.pago : 0;
 
+    // Série = meses fechados + hoje (o último ponto é o número do card). Aguardando
+    // aprovação não tem: a fila mudou de definição em 26/10 e 09/11/2026 (ver o plano).
+    const mesAnterior = historico?.[historico.length - 1]?.mes;
+    const linha = (campo: 'vencido_receber' | 'vencido_pagar' | 'saldo_banco', valorHoje: number | null, bomQuando: 'sobe' | 'desce') => {
+        if (!historico || historico.length === 0) return { serie: undefined, tendencia: null };
+        const serie = serieComHoje(historico, campo, valorHoje);
+        return { serie, tendencia: tendenciaDaSerie(serie, bomQuando, mesAnterior, eixoBRL) };
+    };
+    // Saldo: o ponto de hoje só entra com TODAS as contas informadas neste mês (mesma régua
+    // do histórico) — por isso aqui o fim da linha pode não ser o número do card.
+    const linhaSaldo = linha('saldo_banco', hoje ? saldoDoMesCorrente(hoje.contas, hoje.hoje) : null, 'sobe');
+    const linhaReceber = linha('vencido_receber', hoje?.vencido_receber ?? null, 'desce');
+    const linhaPagar = linha('vencido_pagar', hoje?.vencido_pagar ?? null, 'desce');
+    const tomReceber = hoje ? tomPorLimiar(hoje.vencido_receber, LIMIAR.vencidoReceberAlerta, 'alerta') : 'neutro';
+    const tomPagar = hoje ? tomPorLimiar(hoje.vencido_pagar, LIMIAR.vencidoPagarAlerta, 'alerta') : 'neutro';
+
     return (
         <div className="space-y-6 pb-20">
             <div>
@@ -330,7 +372,8 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
                 ) : !hoje || !bancos ? (
                     // As duas fileiras: sem a segunda, a faixa do período pulava ~90px ao chegar o dado.
                     <div className="space-y-3">
-                        <CartoesCarregando quantos={4} altura="h-[132px]" grade="grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" rotulo="Carregando a posição de hoje" />
+                        {/* 132px do card + 42px da linha do mês a mês (§4.5.2) */}
+                        <CartoesCarregando quantos={4} altura="h-[174px]" grade="grid-cols-1 sm:grid-cols-2 xl:grid-cols-4" rotulo="Carregando a posição de hoje" />
                         <CartoesCarregando quantos={4} altura="h-[78px]" grade="grid-cols-2 xl:grid-cols-4" rotulo="Carregando os vencimentos dos próximos dias" />
                     </div>
                 ) : (
@@ -341,8 +384,11 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
                                 label="Saldo nos bancos"
                                 icon={<Landmark />}
                                 value={bancos.saldo == null ? '—' : moneyBRL(bancos.saldo)}
+                                contagem={contar && bancos.saldo != null ? { alvo: bancos.saldo, formatar: moneyBRL } : undefined}
                                 sub={legendaDoSaldo(bancos)}
                                 tom={tomSaldo}
+                                serie={linhaSaldo.serie}
+                                tendencia={linhaSaldo.tendencia}
                                 title={hoje.contas.map(c => c.saldo_banco == null
                                     ? `${c.conta}: sem saldo do banco`
                                     : `${c.conta}: ${moneyBRL(c.saldo_banco)} em ${dataBR(c.saldo_banco_data ?? '')}`).join('\n') || undefined}
@@ -356,10 +402,14 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
                                 label="Vencido a receber"
                                 icon={<ArrowDownLeft />}
                                 value={moneyBRL(hoje.vencido_receber)}
+                                contagem={contar ? { alvo: hoje.vencido_receber, formatar: moneyBRL } : undefined}
                                 sub={hoje.vencido_receber_qtd > 0
                                     ? `${plural(hoje.vencido_receber_qtd, 'título', 'títulos')}${hoje.vencido_receber_desde ? ` · desde ${mesAno(hoje.vencido_receber_desde)}` : ''}`
                                     : 'Nenhum título vencido'}
-                                tom={tomPorLimiar(hoje.vencido_receber, LIMIAR.vencidoReceberAlerta, 'alerta')}
+                                tom={tomReceber}
+                                serie={linhaReceber.serie}
+                                tendencia={linhaReceber.tendencia}
+                                solido={cardSolido(tomReceber, linhaReceber.tendencia)}
                                 acao={hoje.vencido_receber > 0 ? { label: 'Cobrar em Contas a receber', onClick: () => ir('contas-a-receber') } : undefined}
                             />
                             <KpiCard
@@ -367,10 +417,14 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
                                 label="Vencido a pagar"
                                 icon={<ArrowUpRight />}
                                 value={moneyBRL(hoje.vencido_pagar)}
+                                contagem={contar ? { alvo: hoje.vencido_pagar, formatar: moneyBRL } : undefined}
                                 sub={hoje.vencido_pagar_qtd > 0
                                     ? `${plural(hoje.vencido_pagar_qtd, 'título', 'títulos')}${hoje.vencido_pagar_desde ? ` · desde ${mesAno(hoje.vencido_pagar_desde)}` : ''}`
                                     : 'Nenhum título vencido'}
-                                tom={tomPorLimiar(hoje.vencido_pagar, LIMIAR.vencidoPagarAlerta, 'alerta')}
+                                tom={tomPagar}
+                                serie={linhaPagar.serie}
+                                tendencia={linhaPagar.tendencia}
+                                solido={cardSolido(tomPagar, linhaPagar.tendencia)}
                                 acao={hoje.vencido_pagar > 0 ? { label: 'Pagar em Contas a pagar', onClick: () => ir('contas-a-pagar') } : undefined}
                             />
                             <KpiCard

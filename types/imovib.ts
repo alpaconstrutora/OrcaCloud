@@ -488,7 +488,7 @@ export interface ImovibRisk {
 }
 
 /**
- * Outra fonte de capital do estudo (migration aplicar_20271111960000): entra no
+ * Outra fonte de capital do estudo (migration aplicar_20271111980000): entra no
  * mês `entry_month` e sai a juros (cronograma de utils/debtAmortization.ts) ou
  * por participação nas distribuições. Cálculo: utils/imovibFontes.ts.
  */
@@ -610,7 +610,7 @@ export interface ImovibStudy {
     financing_percent?: number;
     financing_rate_annual?: number;
     // Regras do financiamento, caixa mínimo e origem da TMA (migration
-    // aplicar_20271111950000). Vazio = padrão de IMOVIB_DEFAULTS.
+    // aplicar_20271111970000). Vazio = padrão de IMOVIB_DEFAULTS.
     financing_release_lag_months?: number | null;
     /** % do VGV vendável vendido antes da primeira liberação. */
     financing_min_sales_percent?: number | null;

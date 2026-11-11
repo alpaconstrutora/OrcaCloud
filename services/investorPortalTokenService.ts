@@ -14,7 +14,7 @@ import { aplicarEstrutura, VinculoDaEstrutura } from './imovibService';
  * aplicar_20271111700000_investor_portal_estudo_mesma_estrutura.sql (sem
  * `unit_instances` nem `estrutura_do_empreendimento`): calcula como antes.
  * As outras fontes de capital (`funding_sources`, item 4.4) vêm desde
- * aplicar_20271111960000; resposta sem elas = estudo sem fontes.
+ * aplicar_20271111980000; resposta sem elas = estudo sem fontes.
  */
 export function montarEstudoDoPortal(raw: any): ImovibStudy | null {
     if (!raw) return null;

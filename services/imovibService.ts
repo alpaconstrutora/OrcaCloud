@@ -23,7 +23,7 @@ export const COLUNAS_DA_LISTAGEM = [METADADOS_DA_LISTAGEM, ...CAMPOS_DO_MOTOR].j
 // Só o que o motor lê do espelho para o VGV (computeImovibMath).
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
 
-// Outras fontes de capital (aplicar_20271111960000) — o motor lê todas as colunas.
+// Outras fontes de capital (aplicar_20271111980000) — o motor lê todas as colunas.
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
 
 // ── Estrutura lida do Empreendimento (plano 2026-10-19-imovib-premissas-planta-inteligente.md)

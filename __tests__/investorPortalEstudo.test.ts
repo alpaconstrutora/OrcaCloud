@@ -75,7 +75,7 @@ describe('0.6 — estudo do portal por link', () => {
         expect(portal.vpl).toBe(app.vpl);
         expect(montarEstudoDoPortal(rawSemPrecoNoBloco())!.funding_sources).toEqual([]);
         // A função devolve as colunas que o motor lê das fontes.
-        const sql = readFileSync(resolve(__dirname, '../supabase/migrations/aplicar_20271111960000_imovib_funding_sources.sql'), 'utf-8');
+        const sql = readFileSync(resolve(__dirname, '../supabase/migrations/aplicar_20271111980000_imovib_funding_sources.sql'), 'utf-8');
         for (const col of ['amount', 'entry_month', 'remuneration', 'rate_annual', 'profit_share_percent', 'amortization', 'term_months', 'grace_months'])
             expect(sql).toContain(`'${col}', f.${col}`);
         expect(sql).toContain("'funding_sources', v_fontes");

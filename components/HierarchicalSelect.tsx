@@ -460,7 +460,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                             value={search}
                             onChange={e => setSearch(e.target.value)}
                             placeholder="Buscar..."
-                            className="w-full text-form-input px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
+                            className="w-full text-form-input px-3 h-9 rounded-[6px] bg-slate-50 border border-slate-200 outline-none focus:border-slate-300 placeholder-slate-400 font-medium text-slate-700"
                         />
                     </div>
                     {listBody}

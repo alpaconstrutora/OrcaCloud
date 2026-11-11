@@ -3500,11 +3500,25 @@ moldura.
 > `triggerClassName` — o padrão `md` deles ainda é o gatilho antigo `py-4
 > rounded-2xl`. ⚠️ Rótulo em `space-y-1.5` precisa de `block`: `<label>` é
 > inline e ignora a margem que o `space-y` põe nele.
-> ℹ️ Varredura de 10/11/2026 (`<input>`/`<select>` com `p-2.5`/`py-3`/`p-3`/`p-4`
-> e sem `h-*`): **~535 campos em 80 arquivos** ainda no campo alto; os maiores
-> são `ProjectModal` (65), `OpuraDocsModule` (57), `AppraisalModule` (24),
-> `investor/OpportunityForm` (23), `OpuraCnoModule` (22), `OpuraAssetsModule`
-> (21) e `documents/DocumentBatchEditModal` (18).
+> ✅ **2026-11-10/11 — o app inteiro em h-9.** A varredura (resolvendo as
+> constantes de classe do arquivo, `className={inputCls}`, e contando também o
+> `<MoneyCentsInput>`) achou **1.344 campos** `<input>`/`<select>` sem altura fixa em
+> 194 arquivos: 882 altos (`p-2.5`/`py-3`, ~42–54px) e 462 médios (`py-2`, ~38–40px).
+> Migrados por módulo em #338 (RH), #340 (Financeiro), #342 (Suprimentos), #343
+> (Obras), #344 (Comercial) e #345 (Geral). O gatilho `md` de `SupplierSelect`/
+> `HierarchicalSelect` também virou h-9 (#337). Regras usadas:
+> - padding vertical → `h-9`; `rounded-xl/lg/2xl` → `rounded-[6px]`; `text-sm` se
+>   faltar tamanho de fonte;
+> - **`<textarea>` não leva h-9.** Quando a constante de classe é compartilhada,
+>   ela vira h-9 e a área de texto passa a usar a irmã `inputClsArea` com o valor
+>   antigo;
+> - ícone `absolute … top-3` dentro do campo → `top-1/2 -translate-y-1/2` (o `top-3`
+>   foi calculado para o campo de ~46px e fica até 4px abaixo do centro no de 36px);
+> - fica fora: campo dentro de `<td>` (§7.1) e número de destaque `text-lg`+.
+> 🔒 **Trava:** `__tests__/campoAlturaGuard.test.ts` — catraca sobre `<input>`,
+> `<select>` e `<MoneyCentsInput>` com padding vertical ≥ 2 e sem `h-*`. O
+> `BASELINE` guarda só os 3 números de destaque e as 3 telas fora do app (login,
+> senha, página pública) e só pode diminuir.
 > ✅ **Componente do título de seção: `components/ui/SecaoTitulo.tsx`** (ícone +
 > `h3` + `resumo` opcional + `acoes` à direita, já com `border-b pb-3`). Criado
 > em 2026-10-14 para Comercial › Empreendimentos › Torres & Unidades, onde cada

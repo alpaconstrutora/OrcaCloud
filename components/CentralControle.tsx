@@ -228,10 +228,17 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         return () => { cancelado = true; };
     }, [organizationId, periodoCaixa]);
 
+    // O caixa espera o bootstrap terminar (abrir a tela, Atualizar, trocar de org):
+    // as duas consultas juntas disputavam o banco e o bootstrap ficava ~1 s mais lento
+    // (A/B em produção, 11/11/2026: 3,2–3,6 s junto × ~2,4 s sozinho). Trocar o
+    // período não passa pelo bootstrap — busca na hora.
     React.useEffect(() => {
         if (!podeCarregar || !verFinanceiro) return;
+        // Org nova: o gráfico na tela é de outra empresa — esqueleto já, mesmo esperando a vez.
+        if (caixaDaOrg.current !== undefined && caixaDaOrg.current !== organizationId) setCaixa(CARREGANDO);
+        if (carregando) return;
         return carregarCaixa();
-    }, [carregarCaixa, podeCarregar, verFinanceiro]);
+    }, [carregarCaixa, podeCarregar, verFinanceiro, carregando, organizationId]);
 
     // ── Derivados ──────────────────────────────────────────────────────────
     const dadosMeuDia = meuDia.estado === 'ok' ? meuDia.data : null;
@@ -316,7 +323,8 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                 nome={nome}
                 contagem={contagem}
                 carregando={carregando}
-                onAtualizar={() => { load({ realcar: true }); if (verFinanceiro) carregarCaixa(); }}
+                // O caixa vem sozinho quando o bootstrap termina (efeito acima).
+                onAtualizar={() => { load({ realcar: true }); }}
             />
 
             <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar a Minha fila">

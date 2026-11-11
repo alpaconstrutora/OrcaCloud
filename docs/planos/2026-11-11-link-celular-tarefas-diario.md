@@ -25,6 +25,7 @@ Sessão: `dac20e1e-e944-41c5-bafb-71f69696d5e3` · 2026-11-11
 | 2026-11-11 | Seção 4 (telas): mesmas telas com "fonte de dados" trocável; efetivo e cronograma entram no link | aprovada |
 | 2026-11-11 | Seção 5 (fases, provas, ordem de deploy) | aprovada ("continue") |
 | 2026-11-11 | Design escrito neste arquivo | aprovado ("design certo"), commit `eb6661b5` |
+| 2026-11-11 | Gestor gera link de outro owner/admin? | **Não** — gestor só gera para `member`; admin/owner geram o próprio (revisão final). Revogar e consultar continuam para qualquer membro |
 
 ### Ajustes ao ler o código para o plano (2026-11-11)
 
@@ -41,6 +42,24 @@ Sessão: `dac20e1e-e944-41c5-bafb-71f69696d5e3` · 2026-11-11
 - Nome da pessoa: `profiles.name`; gestor: `is_org_manager(org_id)` (existe no banco).
 - O plano detalha a **Parte 1 (F1 + F2)** — Tarefas pelo link, publicável sozinha. A
   Parte 2 (F3–F5, Diário) é detalhada neste arquivo depois de F2 no ar, relendo o código.
+
+### Ajustes da revisão final da Parte 1 (2026-11-11)
+
+- **Link revogado/vencido com a tela aberta:** `fonteDoLink(token, { aoRecusar })` — no
+  ponto único de chamada, 42501 com a mensagem exata `link inválido ou vencido` chama
+  `aoRecusar` (e ainda lança). Outro 42501 (recusa de uma ação) não dispara.
+  `CelularTokenGate` vai a `invalido` (desmonta Minhas Tarefas) e reconfere
+  `celular_sessao` no `visibilitychange`. A fonte segue estável (`useMemo` só com o token).
+- **Sair da org revoga o link:** gatilho `AFTER DELETE ON organization_members`
+  (`_mobile_link_revoga_ao_sair_da_org`) preenche `revoked_at` do link da pessoa naquela
+  org; reinserir a pessoa não ressuscita o link antigo. Conferido antes: nenhum fluxo
+  normal apaga e reinsere membros existentes (`updateOrganization` apaga só quem saiu da
+  lista e faz upsert em `organization_id,email`; `invite-member` só faz upsert).
+- **`celular_tarefa_criar` = `tasks_insert`:** espaço só se o dono do link for MEMBRO
+  (`is_task_space_member_de`); ser `owner_user_id` do espaço não basta (R5).
+- **Gestor × admin/owner:** `mobile_link_generate` recusa (42501) o gestor gerando para
+  quem não é `member`; no Editar membro, "Gerar link" fica desligado com o motivo.
+- **Barra de aba única:** a barra de seções do `/celular` só aparece com 2+ abas.
 
 ## Design
 
@@ -407,9 +426,94 @@ Vitest, Playwright (harness fora do repo).
 
 - [x] Design aprovado em 5 seções (2026-11-11) — `eb6661b5`
 - [x] Plano de implementação Parte 1 (F1 + F2)
-- [ ] Task 1 · [ ] Task 2 · [ ] Task 3 · [ ] Task 4 · [ ] Task 5 · [ ] Task 6 · [ ] Task 7
+- [x] Task 1 `f4a8922d` · [x] Task 2 `57e99095` · [x] Task 3 `1f8cc825` · [x] Task 4 `1c38a778` · [x] Task 5 `c4cc0bf1` · [x] Task 6 `fdfbdc7f` · [ ] Task 7
+- [x] Correções da revisão final (gestor só gera para `member`, revogação com a tela aberta,
+  gatilho de saída da org, criar = `tasks_insert`, sem barra de aba única) — `fa2a00e6`
+  (banco), `3f1c251e` (front). Ensaio BEGIN/ROLLBACK com as duas migrations → `TUDO OK`;
+  migrations ainda NÃO aplicadas.
 - [ ] Plano de implementação Parte 2 (F3–F5) — depois de F2 no ar
 - [ ] F1 · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
+
+## Rollback (Parte 1)
+
+Desfaz as duas migrations (`aplicar_20271111900000…` e `aplicar_20271111910000…`). Os
+corpos de `is_task_space_member` e `is_task_collaborator` abaixo são os ORIGINAIS, lidos com
+`pg_get_functiondef` em produção em 2026-11-11, antes de aplicar. Ensaiado em
+`BEGIN … ROLLBACK` (migrations → este SQL → originais idênticos, salvo `\r\n` do corpo
+antigo e a ordem do ACL; nenhuma função/tabela/gatilho novo restante) → `ROLLBACK OK`.
+Apaga os links gerados (a tabela inteira) — quem tinha link perde o acesso pelo celular.
+
+```sql
+BEGIN;
+
+DROP TRIGGER IF EXISTS trg_org_members_revoga_link_celular ON public.organization_members;
+
+DROP FUNCTION IF EXISTS public.celular_sessao(TEXT);
+DROP FUNCTION IF EXISTS public.celular_tarefas_listar(TEXT, UUID, UUID, BOOLEAN);
+DROP FUNCTION IF EXISTS public.celular_espacos_listar(TEXT);
+DROP FUNCTION IF EXISTS public.celular_status_listar(TEXT);
+DROP FUNCTION IF EXISTS public.celular_responsaveis_listar(TEXT);
+DROP FUNCTION IF EXISTS public.celular_tarefa_criar(TEXT, JSONB);
+DROP FUNCTION IF EXISTS public.celular_tarefa_atualizar(TEXT, UUID, JSONB);
+DROP FUNCTION IF EXISTS public._celular_tarefa_json(public.tasks);
+DROP FUNCTION IF EXISTS public._celular_tarefa_visivel(UUID, UUID, public.tasks);
+DROP FUNCTION IF EXISTS public._celular_responsaveis(UUID);
+DROP FUNCTION IF EXISTS public._celular_data(JSONB, TEXT);
+DROP FUNCTION IF EXISTS public._celular_uuid(JSONB, TEXT);
+DROP FUNCTION IF EXISTS public._celular_prioridade(JSONB);
+
+DROP FUNCTION IF EXISTS public.mobile_link_generate(UUID, UUID);
+DROP FUNCTION IF EXISTS public.mobile_link_revoke(UUID, UUID);
+DROP FUNCTION IF EXISTS public.mobile_link_status(UUID, UUID);
+DROP FUNCTION IF EXISTS public._mobile_link_resolver(TEXT);
+DROP FUNCTION IF EXISTS public._mobile_link_revoga_ao_sair_da_org();
+
+-- Originais de volta ANTES de apagar os gêmeos (hoje eles chamam os *_de).
+CREATE OR REPLACE FUNCTION public.is_task_space_member(p_space_id uuid)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public', 'pg_temp'
+AS $function$
+BEGIN
+    RETURN EXISTS (
+        SELECT 1 FROM public.task_space_members
+        WHERE space_id = p_space_id
+          AND user_id  = auth.uid()
+    );
+END;
+$function$;
+
+CREATE OR REPLACE FUNCTION public.is_task_collaborator(p_task_id uuid)
+ RETURNS boolean
+ LANGUAGE sql
+ STABLE SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.task_collaborators tc
+    JOIN public.employees emp ON emp.id = tc.employee_id
+    WHERE tc.task_id = p_task_id
+      AND emp.email = (SELECT email FROM auth.users WHERE id = auth.uid())
+  )
+$function$;
+
+-- Privilégios como eram antes (inclusive o EXECUTE de PUBLIC que a migration tirou).
+GRANT EXECUTE ON FUNCTION public.is_task_space_member(uuid) TO PUBLIC, anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.is_task_collaborator(uuid) TO PUBLIC, anon, authenticated, service_role;
+
+DROP FUNCTION IF EXISTS public.is_task_space_member_de(UUID, UUID);
+DROP FUNCTION IF EXISTS public.is_task_collaborator_de(UUID, UUID);
+DROP FUNCTION IF EXISTS public.is_org_member_de(UUID, UUID);
+DROP FUNCTION IF EXISTS public._mobile_link_hash(TEXT);
+
+DROP TABLE IF EXISTS public.user_mobile_links;
+
+COMMIT;
+```
+
+Front: reverter os commits da Parte 1 (a rota `/celular` sem as RPCs mostra a recusa).
 
 ## Verificação
 

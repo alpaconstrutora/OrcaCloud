@@ -29,6 +29,8 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 |---|---|---|
 | 2026-11-11 | Planejar só as duas lacunas principais (curva de vendas e indicadores) ou todas? | **Todas**: *"escreva um plano completo para todos"*. Os 13 blocos entram no escopo. |
 | 2026-11-11 | Por onde começar? (a mensagem anterior dizia "se as recomendações servirem, começo pela Fase 0") | *"comece pela Fase 0"*. A recomendação de D6 (corrigir a função do portal já na Fase 0) foi tratada como aceita; a migration foi escrita e **não aplicada** — aplicar pede OK explícito. As outras decisões (D1–D5, D7) só travam fases seguintes e seguem em aberto. |
+| 2026-11-11 | D1: o recebimento por safra muda VPL, TIR e exposição dos 3 estudos existentes. Um modelo só ou manter o antigo nos existentes? (pedido: *"iniciar f1"*) | **Um modelo só.** Todos os estudos passam a ser calculados por safra; a tabela antes → depois dos 3 estudos fica no item 1.4. |
+| 2026-11-11 | D7: dividir "Receitas e Capital" em duas abas? | **Dividir:** Receitas (espelho, curva de vendas, recebimento, distrato) e Capital (financiamento e permutas). |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 

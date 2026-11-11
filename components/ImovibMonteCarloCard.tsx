@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Dices, Loader2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { ImovibStudy, ImovibScenario } from '../types';
@@ -30,6 +30,8 @@ const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cena
     const [simulando, setSimulando] = useState(false);
     const [resultado, setResultado] = useState<ResultadoMonteCarlo | null>(null);
     const faixas = useMemo(() => faixasDoMonteCarlo(cenarios, choques), [cenarios, choques]);
+    // Resultado de premissas antigas não fica na tela ao lado das faixas novas.
+    useEffect(() => { setResultado(null); }, [faixas, study]);
     const usaCenarios = cenarios.some(c => c.kind === 'pessimista') && cenarios.some(c => c.kind === 'otimista');
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
     const n = parseInt(iteracoes, 10);

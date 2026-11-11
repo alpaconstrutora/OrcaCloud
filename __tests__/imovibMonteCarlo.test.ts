@@ -82,8 +82,21 @@ describe('3.4 — Monte Carlo', () => {
         const r = simularMonteCarlo(s, FAIXAS, 30, 3);
         expect(r.semTir).toBe(30);
         expect(r.tir).toBeNull();
-        expect(r.probTirAbaixoDaTma).toBeNull();
+        // Sem TIR e com VPL negativo: conta como abaixo da TMA (regra da revisão da Fase 3).
+        expect(r.probTirAbaixoDaTma).toBe(1);
         expect(r.probVplNegativo).toBe(1);
+    });
+
+    it('triangular não é uniforme: em u = 0,1 sorteia −4,52 (a uniforme daria −7)', () => {
+        expect(sortearTriangular({ min: -10, moda: 0, max: 20 }, 0.1)).toBeCloseTo(-10 + Math.sqrt(0.1 * 30 * 10), 9);
+    });
+
+    it('sorteio sem TIR e com VPL negativo conta como TIR abaixo da TMA (a base são todos os sorteios)', () => {
+        const s = baseStudy();
+        // Faixa de preço entre −99,9% e −90%: perto de −99% a TIR some.
+        const r = simularMonteCarlo(s, { preco: { min: -99.9, moda: -99.9, max: -90 } }, 200, 5);
+        expect(r.semTir).toBeGreaterThan(0);
+        expect(r.probTirAbaixoDaTma!).toBeGreaterThanOrEqual(r.semTir / 200);
     });
 
     it('2.000 sorteios no estudo-base cabem em 2 s', () => {

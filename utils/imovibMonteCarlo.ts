@@ -22,7 +22,10 @@ export interface ResultadoMonteCarlo {
     tir: Percentis | null;
     vpl: Percentis;
     probVplNegativo: number;
-    /** Entre os sorteios com TIR. */
+    /**
+     * Sobre todos os sorteios. Sorteio sem TIR e com VPL negativo (fluxo que
+     * nunca se paga) conta como abaixo da TMA; sem TIR e com VPL ≥ 0, não.
+     */
     probTirAbaixoDaTma: number | null;
     histogramaVpl: { de: number; ate: number; n: number }[];
 }
@@ -65,6 +68,7 @@ export function simularMonteCarlo(
     const ordem = (Object.keys(variaveis) as VariavelDoEstudo[]).sort();
     const vpls: number[] = [];
     const tirs: number[] = [];
+    let abaixoDaTma = 0;
 
     for (let k = 0; k < n; k++) {
         const choques: Choques = {};
@@ -72,7 +76,10 @@ export function simularMonteCarlo(
         const x = aplicarChoques(study, choques);
         const r = computeImovibMath(x.study, x.options);
         vpls.push(r.vpl);
-        if (Number.isFinite(r.annualIrr)) tirs.push(r.annualIrr);
+        if (Number.isFinite(r.annualIrr)) {
+            tirs.push(r.annualIrr);
+            if (r.annualIrr < tma) abaixoDaTma++;
+        } else if (r.vpl < 0) abaixoDaTma++;
     }
 
     const menor = Math.min(...vpls);
@@ -92,7 +99,7 @@ export function simularMonteCarlo(
         tir: tirs.length ? percentis(tirs) : null,
         vpl: percentis(vpls),
         probVplNegativo: vpls.filter(v => v < 0).length / n,
-        probTirAbaixoDaTma: tirs.length ? tirs.filter(t => t < tma).length / tirs.length : null,
+        probTirAbaixoDaTma: tirs.length || abaixoDaTma ? abaixoDaTma / n : null,
         histogramaVpl,
     };
 }

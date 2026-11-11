@@ -55,6 +55,25 @@ describe('3.1 — tornado', () => {
     });
 });
 
+describe('3.1 (revisão) — tornado com choque não monótono e TIR que some', () => {
+    it('cada barra guarda o valor do choque para cima e para baixo, não só o pior e o melhor', () => {
+        const s = baseStudy();
+        const b = tornado(s, 'vpl').find(x => x.variavel === 'preco')!;
+        expect(b.acima).toBeCloseTo(valor(s, 'preco', 10, 'vpl'), 6);
+        expect(b.abaixo).toBeCloseTo(valor(s, 'preco', -10, 'vpl'), 6);
+    });
+
+    it('variável que tira a TIR de um lado vai para o topo, marcada', () => {
+        // Preço −99%: a TIR some (até −95% ela ainda existe, perto de −100% a.a.).
+        const s = baseStudy();
+        const barras = tornado(s, 'tir', { preco: 99 });
+        expect(barras[0].variavel).toBe('preco');
+        expect(barras[0].perdeAMetrica).toBe(true);
+        expect(Number.isNaN(barras[0].abaixo)).toBe(true);
+        expect(barras.filter(b => b.perdeAMetrica)).toHaveLength(1);
+    });
+});
+
 describe('3.2 — grade cruzada', () => {
     const deltas = [-20, -10, 0, 10, 20];
     it('5 × 5; a célula central é o valor base', () => {

@@ -33,9 +33,14 @@ export interface BarraDoTornado {
     variavel: VariavelDoEstudo;
     rotulo: string;
     base: number;
-    /** O pior e o melhor dos dois choques (+ e −); NaN quando a métrica não existe (TIR sem raiz). */
+    /** Valor com o choque para cima (+d) e para baixo (−d). NaN = a métrica deixa de existir (TIR sem raiz). */
+    acima: number;
+    abaixo: number;
+    /** O pior e o melhor dos dois choques; NaN quando algum lado não tem a métrica. */
     pior: number;
     melhor: number;
+    /** Um dos choques faz a métrica sumir (a TIR deixa de existir): vai para o topo do tornado. */
+    perdeAMetrica: boolean;
 }
 
 /** Uma barra por variável, ordenadas pela amplitude (as sem métrica vão para o fim). */
@@ -43,11 +48,13 @@ export function tornado(study: ImovibStudy, metrica: MetricaDoEstudo, choques: C
     const base = medir(study, {}, metrica);
     const barras = VARIAVEIS_DO_ESTUDO.map(v => {
         const d = choques[v] ?? CHOQUES_PADRAO[v];
-        const a = medir(study, { [v]: d }, metrica);
-        const b = medir(study, { [v]: -d }, metrica);
-        return { variavel: v, rotulo: ROTULO_DA_VARIAVEL[v], base, pior: Math.min(a, b), melhor: Math.max(a, b) };
+        const acima = medir(study, { [v]: d }, metrica);
+        const abaixo = medir(study, { [v]: -d }, metrica);
+        const perdeAMetrica = Number.isFinite(base) && (!Number.isFinite(acima) || !Number.isFinite(abaixo)) && (Number.isFinite(acima) || Number.isFinite(abaixo));
+        return { variavel: v, rotulo: ROTULO_DA_VARIAVEL[v], base, acima, abaixo, pior: Math.min(acima, abaixo), melhor: Math.max(acima, abaixo), perdeAMetrica };
     });
-    const amplitude = (x: BarraDoTornado) => (Number.isFinite(x.melhor - x.pior) ? x.melhor - x.pior : -1);
+    // Perder a métrica (a TIR some) é o maior efeito possível: essas barras vêm primeiro.
+    const amplitude = (x: BarraDoTornado) => (x.perdeAMetrica ? Infinity : Number.isFinite(x.melhor - x.pior) ? x.melhor - x.pior : -1);
     return barras.sort((x, y) => amplitude(y) - amplitude(x));
 }
 

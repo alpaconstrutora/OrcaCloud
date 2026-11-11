@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
-import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
+import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, Tooltip, ReferenceLine } from 'recharts';
 import { ImovibStudy } from '../types';
 import { tornado, MetricaDoEstudo } from '../utils/imovibSensibilidade';
 import { VARIAVEIS_DO_ESTUDO, ROTULO_DA_VARIAVEL, UNIDADE_DA_VARIAVEL, VariavelDoEstudo } from '../utils/imovibVariacoes';
@@ -37,18 +37,29 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
     const [editandoChoques, setEditandoChoques] = useState(false);
     const barras = useMemo(() => tornado(study, metrica, choques), [study, metrica, choques]);
     const base = barras[0]?.base ?? NaN;
-    const dados = barras.map(b => ({
-        nome: `${b.rotulo} ±${choques[b.variavel].toLocaleString('pt-BR')} ${UNIDADE_DA_VARIAVEL[b.variavel]}`,
-        pior: Number.isFinite(b.pior - base) ? b.pior - base : 0,
-        melhor: Number.isFinite(b.melhor - base) ? b.melhor - base : 0,
-        piorAbs: b.pior,
-        melhorAbs: b.melhor,
-    }));
+    // Uma barra por choque (+d e −d), cada uma colorida pelo próprio efeito. Empilhar
+    // "pior" e "melhor" somava os dois quando caíam do mesmo lado da base.
+    const rel = (v: number) => (Number.isFinite(v - base) ? v - base : 0);
+    const dados = barras.map(b => {
+        const d = choques[b.variavel].toLocaleString('pt-BR');
+        const u = UNIDADE_DA_VARIAVEL[b.variavel];
+        const sem = !Number.isFinite(b.acima) ? ` · sem ${ROTULO_DA_METRICA[metrica]} com +${d}` : !Number.isFinite(b.abaixo) ? ` · sem ${ROTULO_DA_METRICA[metrica]} com −${d}` : '';
+        return {
+            nome: `${b.rotulo} ±${d} ${u}${sem}`,
+            cima: rel(b.acima),
+            baixo: rel(b.abaixo),
+            cimaAbs: b.acima,
+            baixoAbs: b.abaixo,
+            rotuloCima: `+${d} ${u}`,
+            rotuloBaixo: `−${d} ${u}`,
+        };
+    });
+    const cor = (delta: number) => (delta >= 0 ? COR_MELHOR : COR_PIOR);
 
     return (
         <ChartCard title="Gráfico tornado" subtitle={`Quanto cada premissa move ${ROTULO_DA_METRICA[metrica].toLowerCase()} do estudo, para cima e para baixo. Base: ${formatarMetrica(metrica, base)}.`}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                <Legend items={[{ label: 'Choque desfavorável', color: COR_PIOR }, { label: 'Choque favorável', color: COR_MELHOR }]} />
+                <Legend items={[{ label: 'Piora', color: COR_PIOR }, { label: 'Melhora', color: COR_MELHOR }]} />
                 <div className="flex items-center gap-2">
                     <label htmlFor="imovib-tornado-metrica" className="text-xs font-semibold text-slate-500">Métrica</label>
                     <select
@@ -99,21 +110,25 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
             ) : (
                 <div className="h-[360px]">
                     <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                        <BarChart layout="vertical" data={dados} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barSize={18} stackOffset="sign">
+                        <BarChart layout="vertical" data={dados} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barSize={9} barGap={2}>
                             <CartesianGrid horizontal={false} stroke={GRID} />
                             <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatarMetrica(metrica, v + base)} />
                             <YAxis type="category" dataKey="nome" width={230} tick={CATEGORY_TICK} axisLine={false} tickLine={false} />
                             <Tooltip
                                 contentStyle={TOOLTIP_STYLE}
                                 cursor={TOOLTIP_CURSOR}
-                                formatter={(_v: unknown, nome: unknown, item: { payload?: { piorAbs: number; melhorAbs: number } }) => [
-                                    formatarMetrica(metrica, nome === 'pior' ? item.payload!.piorAbs : item.payload!.melhorAbs),
-                                    nome === 'pior' ? 'Desfavorável' : 'Favorável',
+                                formatter={(_v: unknown, nome: unknown, item: { payload?: { cimaAbs: number; baixoAbs: number; rotuloCima: string; rotuloBaixo: string } }) => [
+                                    formatarMetrica(metrica, nome === 'cima' ? item.payload!.cimaAbs : item.payload!.baixoAbs),
+                                    `Choque ${nome === 'cima' ? item.payload!.rotuloCima : item.payload!.rotuloBaixo}`,
                                 ]}
                             />
                             <ReferenceLine x={0} stroke="#94a3b8" />
-                            <Bar dataKey="pior" stackId="t" fill={COR_PIOR} />
-                            <Bar dataKey="melhor" stackId="t" fill={COR_MELHOR} />
+                            <Bar dataKey="cima">
+                                {dados.map((d, i) => <Cell key={i} fill={cor(d.cima)} />)}
+                            </Bar>
+                            <Bar dataKey="baixo">
+                                {dados.map((d, i) => <Cell key={i} fill={cor(d.baixo)} />)}
+                            </Bar>
                         </BarChart>
                     </ResponsiveContainer>
                 </div>

@@ -202,8 +202,6 @@ function getAdvancedFilterValue(
         default: return null;
     }
 }
-import { HugeiconsIcon } from '@hugeicons/react';
-import { Copy01Icon } from '@hugeicons/core-free-icons';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { orderService } from '../services/orderService';
 import { kpiService } from '../services/kpiService';
@@ -937,17 +935,13 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                             Ver Detalhes <ArrowRight className="w-3.5 h-3.5" />
                                         </button>
                                         <ActionIconButton kind="edit" className="ml-2" title="Editar Pedido" onClick={() => onEdit?.(order.id)} />
+                                        <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={() => handleDuplicate(order.id)} />
                                         <InlineDisclosureMenu
                                             menuItems={[
                                                 {
                                                     icon: <Truck className="w-[18px] h-[18px]" />,
                                                     label: 'Logística',
                                                     onClick: () => onViewLogistics(order.id),
-                                                },
-                                                {
-                                                    icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
-                                                    label: 'Duplicar Pedido',
-                                                    onClick: () => handleDuplicate(order.id),
                                                 },
                                             ]}
                                             showDelete

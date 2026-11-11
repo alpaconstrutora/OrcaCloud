@@ -996,10 +996,12 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
     const [membros, setMembros] = useState<MembroAprovador[]>([]);
     const [quemAprova, setQuemAprova] = useState<{ titulo: string; descricao: string; alvo: AlvoDaAlcada; niveis: { level: 1 | 2; rotulo: string }[] } | null>(null);
 
+    // Sem organização no topo ("Todas"), o serviço não filtra e a RLS recorta (REGRA #5).
     useEffect(() => {
-        if (tab !== 'config' || !organizationId) { setAprovadores([]); setMembros([]); return; }
+        if (tab !== 'config') return;
         let vivo = true;
-        Promise.all([approvalApproversService.listar(organizationId), approvalApproversService.membros(organizationId)])
+        const org = organizationId || null;
+        Promise.all([approvalApproversService.listar(org), approvalApproversService.membros(org)])
             .then(([a, m]) => { if (vivo) { setAprovadores(a); setMembros(m); } })
             .catch(e => { if (vivo) setConfigError(e instanceof Error ? e.message : 'Erro ao carregar aprovadores'); });
         return () => { vivo = false; };
@@ -1008,11 +1010,12 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
     // Dono/admin da organização (ou acesso total) define faixas e aprovadores — a RLS
     // recusa os demais; aqui só se explica antes de a pessoa tentar.
     const motivoSomenteLeitura = useMemo(() => {
-        if (!organizationId) return 'Selecione uma organização específica no topo para alterar faixas e aprovadores.';
-        if (temAcessoTotal(userEmail)) return null;
         const eu = membros.find(m => m.email.toLowerCase() === userEmail.toLowerCase());
-        if (eu && (eu.role === 'owner' || eu.role === 'admin')) return null;
-        return 'Só o dono ou um administrador da organização altera faixas e define quem aprova. Você pode consultar.';
+        const ehGestor = temAcessoTotal(userEmail) || eu?.role === 'owner' || eu?.role === 'admin';
+        if (organizationId && ehGestor) return null;
+        return organizationId
+            ? 'Só o dono ou um administrador da organização altera faixas e define quem aprova. Você pode consultar.'
+            : 'Selecione uma organização específica no topo para alterar faixas e aprovadores.';
     }, [organizationId, userEmail, membros]);
 
     function abrirQuemAprovaFaixa(item: FinancialApprovalConfig) {
@@ -1143,7 +1146,10 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
                     <div className="mt-6 space-y-3">
                         <div>
                             <h2 className="text-base font-semibold text-gray-900">Itens sem valor</h2>
-                            <p className="text-sm text-gray-500 mt-1">Revisão de planta, ofício, solicitação de compra e etapa de processo não têm faixa: quem aprova é definido por tipo.</p>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Revisão de planta, ofício, solicitação de compra e etapa de processo não têm faixa: quem aprova é definido por tipo.
+                                {!organizationId && ' Com "Todas as organizações" no topo, a lista junta as pessoas de todas elas.'}
+                            </p>
                         </div>
                         <ItensSemValorTable aprovadores={aprovadores} onQuemAprova={abrirQuemAprovaTipo} />
                     </div>

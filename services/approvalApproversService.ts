@@ -9,14 +9,13 @@ import type { ApprovalApprover, MembroAprovador } from '../types/financial';
  * remover e incluir. Plano: docs/planos/2026-11-10-alcada-aprovacao-por-usuario.md
  */
 export const approvalApproversService = {
-    async listar(organizationId: string): Promise<ApprovalApprover[]> {
-        const [{ data, error }, membros] = await Promise.all([
-            supabase
-                .from('approval_approvers')
-                .select('id, organization_id, faixa_id, entity_type, level, user_id')
-                .eq('organization_id', organizationId),
-            this.membros(organizationId),
-        ]);
+    /** `null` ("Todas as organizações" no topo): sem filtro — a RLS recorta (REGRA #5). */
+    async listar(organizationId: string | null): Promise<ApprovalApprover[]> {
+        let q = supabase
+            .from('approval_approvers')
+            .select('id, organization_id, faixa_id, entity_type, level, user_id');
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const [{ data, error }, membros] = await Promise.all([q, this.membros(organizationId)]);
         if (error) throw new Error(`Erro ao carregar aprovadores: ${error.message}`);
         const porId = new Map(membros.map(m => [m.user_id, m]));
         return ((data ?? []) as ApprovalApprover[]).map(a => ({
@@ -27,14 +26,18 @@ export const approvalApproversService = {
     },
 
     /** Membros com conta (user_id preenchido) — só eles podem ser aprovadores. */
-    async membros(organizationId: string): Promise<MembroAprovador[]> {
-        const { data, error } = await supabase
+    async membros(organizationId: string | null): Promise<MembroAprovador[]> {
+        let q = supabase
             .from('organization_members')
             .select('user_id, name, email, role')
-            .eq('organization_id', organizationId)
             .not('user_id', 'is', null);
+        if (organizationId) q = q.eq('organization_id', organizationId);
+        const { data, error } = await q;
         if (error) throw new Error(`Erro ao carregar membros: ${error.message}`);
+        // Com várias organizações a mesma pessoa vem uma vez por org: fica a primeira.
+        const vistos = new Set<string>();
         return (data ?? [])
+            .filter(m => !vistos.has(m.user_id as string) && !!vistos.add(m.user_id as string))
             .map(m => ({
                 user_id: m.user_id as string,
                 nome: (m.name as string | null)?.trim() || (m.email as string),

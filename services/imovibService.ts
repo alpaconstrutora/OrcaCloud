@@ -3,7 +3,7 @@ import {
     ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate,
     ImovibBlock, ImovibBlockInsert, ImovibBlockUpdate,
     ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
-    ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance,
+    ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance, ImovibScenario, ImovibRisk,
 } from '../types';
 import { fetchAllPages } from '../lib/supabasePaginate';
 import {
@@ -646,6 +646,76 @@ export const imovibService = {
             .delete()
             .eq('unit_id', unitId);
         if (error) throw new Error(`Failed to delete unit instances by unit: ${error.message}`);
+    },
+
+    // ── Cenários e riscos (Fase 3 do plano 2026-11-11) ───────────────────────
+
+    async listarCenarios(studyId: string): Promise<ImovibScenario[]> {
+        const { data, error } = await supabase
+            .from('imovib_scenarios')
+            .select('id, study_id, name, kind, choques, sort_order, created_at')
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao ler os cenários: ${error.message}`);
+        return (data || []) as ImovibScenario[];
+    },
+
+    /**
+     * Cria os cenários padrão (Pessimista, Otimista) que ainda não existem. A trava
+     * UNIQUE (study_id, name) faz o segundo clique não duplicar nada.
+     */
+    async criarCenariosPadrao(studyId: string, padroes: readonly Pick<ImovibScenario, 'name' | 'kind' | 'choques'>[]): Promise<void> {
+        const linhas = padroes.map((p, i) => ({ study_id: studyId, name: p.name, kind: p.kind, choques: p.choques, sort_order: i }));
+        const { error } = await supabase
+            .from('imovib_scenarios')
+            .upsert(linhas, { onConflict: 'study_id,name', ignoreDuplicates: true });
+        if (error) throw new Error(`Falha ao criar os cenários padrão: ${error.message}`);
+    },
+
+    /** Grava o cenário (cria sem `id`, atualiza com). `.select()` confere que a escrita passou na RLS. */
+    async salvarCenario(c: Omit<ImovibScenario, 'id' | 'created_at'> & { id?: string }): Promise<ImovibScenario> {
+        const { id, ...campos } = c;
+        const q = id
+            ? supabase.from('imovib_scenarios').update(campos).eq('id', id).select('id, study_id, name, kind, choques, sort_order, created_at')
+            : supabase.from('imovib_scenarios').insert(campos).select('id, study_id, name, kind, choques, sort_order, created_at');
+        const { data, error } = await q;
+        if (error) throw new Error(error.code === '23505' ? `Já existe um cenário com o nome "${c.name}".` : `Falha ao salvar o cenário: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para salvar cenários deste estudo.');
+        return data[0] as ImovibScenario;
+    },
+
+    async excluirCenario(id: string): Promise<void> {
+        const { error } = await supabase.from('imovib_scenarios').delete().eq('id', id);
+        if (error) throw new Error(`Falha ao excluir o cenário: ${error.message}`);
+    },
+
+    async listarRiscos(studyId: string): Promise<ImovibRisk[]> {
+        const { data, error } = await supabase
+            .from('imovib_risks')
+            .select('id, study_id, category, description, probability, impact, mitigation, owner, status, sort_order, created_at')
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao ler os riscos: ${error.message}`);
+        return (data || []) as ImovibRisk[];
+    },
+
+    async salvarRisco(r: Omit<ImovibRisk, 'id' | 'created_at'> & { id?: string }): Promise<ImovibRisk> {
+        const { id, ...campos } = r;
+        const cols = 'id, study_id, category, description, probability, impact, mitigation, owner, status, sort_order, created_at';
+        const q = id
+            ? supabase.from('imovib_risks').update(campos).eq('id', id).select(cols)
+            : supabase.from('imovib_risks').insert(campos).select(cols);
+        const { data, error } = await q;
+        if (error) throw new Error(`Falha ao salvar o risco: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para salvar riscos deste estudo.');
+        return data[0] as ImovibRisk;
+    },
+
+    async excluirRisco(id: string): Promise<void> {
+        const { error } = await supabase.from('imovib_risks').delete().eq('id', id);
+        if (error) throw new Error(`Falha ao excluir o risco: ${error.message}`);
     },
 
 };

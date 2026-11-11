@@ -21,6 +21,7 @@ import {
 import type { ReconciliationDivergences } from '../types/financial';
 import type { ProcessStepBottleneck } from '../types/process';
 import { useStore } from '../store/useStore';
+import { motivoSemAlcada } from '../utils/alcada';
 
 interface Props {
     organizationId: string | null;
@@ -474,18 +475,22 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                                         {isDraft ? (
                                             <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
                                         ) : (
-                                            <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()}>
+                                            // Fora da alçada (10/11/2026): desligados, com o motivo no
+                                            // <div> — botão desligado não recebe o hover.
+                                            <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()} title={motivoSemAlcada(item) ?? undefined}>
                                                 <button
                                                     onClick={() => setApprovalModal({ item, mode: 'approve' })}
-                                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors"
-                                                    title={`Aprovar ${ENTITY_TAG[item.entity]}`}
+                                                    disabled={!!motivoSemAlcada(item)}
+                                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                                    title={motivoSemAlcada(item) ? undefined : `Aprovar ${ENTITY_TAG[item.entity]}`}
                                                 >
                                                     <Check className="w-4 h-4" />
                                                 </button>
                                                 <button
                                                     onClick={() => setApprovalModal({ item, mode: 'reject' })}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                                                    title={`Rejeitar ${ENTITY_TAG[item.entity]}`}
+                                                    disabled={!!motivoSemAlcada(item)}
+                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
+                                                    title={motivoSemAlcada(item) ? undefined : `Rejeitar ${ENTITY_TAG[item.entity]}`}
                                                 >
                                                     <X className="w-4 h-4" />
                                                 </button>

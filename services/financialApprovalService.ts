@@ -7,6 +7,8 @@ import type {
 import { approvalService } from './approvalService';
 import { processService } from './processService';
 
+const SO_ADMIN_FAIXA = 'Só o dono ou um administrador da organização altera as faixas de aprovação.';
+
 export const financialApprovalService = {
 
     // ── Configuração de faixas ────────────────────────────────
@@ -36,13 +38,19 @@ export const financialApprovalService = {
         const { data, error } = item.id
             ? await supabase.from('financial_approval_config').update(payload).eq('id', item.id).select().single()
             : await supabase.from('financial_approval_config').insert(payload).select().single();
-        if (error) throw error;
+        // Desde 10/11/2026 só dono/admin grava faixa (RLS fac_v5_*): o UPDATE de
+        // outro membro volta com 0 linhas (PGRST116 no .single()), o INSERT com 42501.
+        if (error) {
+            if (error.code === 'PGRST116' || error.code === '42501') throw new Error(SO_ADMIN_FAIXA);
+            throw error;
+        }
         return data as FinancialApprovalConfig;
     },
 
     async deleteConfig(id: string): Promise<void> {
-        const { error } = await supabase.from('financial_approval_config').delete().eq('id', id);
+        const { error, count } = await supabase.from('financial_approval_config').delete({ count: 'exact' }).eq('id', id);
         if (error) throw error;
+        if (count === 0) throw new Error(SO_ADMIN_FAIXA);
     },
 
     async resolveRequiredLevels(organizationId: string, amount: number): Promise<{ required_levels: number; level1_label: string; level2_label: string } | null> {

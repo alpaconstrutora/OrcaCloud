@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { marcarLoginNestaAba } from '../lib/loginNestaAba';
-import { Building2, Lock, Mail, Loader2, AlertCircle, User, TrendingUp, Code, ArrowLeft, Truck, Briefcase, Landmark, GraduationCap } from 'lucide-react';
+import { Building2, Lock, Mail, Loader2, AlertCircle, User, Code, ArrowLeft, Truck, Briefcase, Landmark, GraduationCap } from 'lucide-react';
 import { ProfileGroup } from '../types';
 
 interface AuthProps {
@@ -28,15 +28,8 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                     title: 'Portal do Cliente',
                     subtitle: 'Acompanhe seu contrato e obra'
                 };
-            case ProfileGroup.INVESTOR:
-                return {
-                    primary: 'bg-purple-600',
-                    ring: 'focus:ring-purple-500',
-                    text: 'text-purple-600',
-                    icon: TrendingUp,
-                    title: 'Portal do Investidor',
-                    subtitle: 'Gestão de participações e cotas'
-                };
+            // INVESTOR não passa mais por aqui: tem tela própria desde 11/11/2026
+            // (`components/portal/InvestorLogin.tsx`, escolhida no App.tsx).
             case ProfileGroup.DEVELOPER:
                 return {
                     primary: 'bg-slate-800',

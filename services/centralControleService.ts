@@ -100,7 +100,11 @@ export const centralControleService = {
             p_divergence_as_of: opcoes.asOf ?? new Date().toISOString().split('T')[0],
             p_divergence_aging_days: opcoes.agingDays ?? 5,
             p_divergence_value_tolerance: opcoes.valueTolerance ?? 50,
-            p_divergence_limit: opcoes.limit ?? 100,
+            // 0 = só as contagens. A Central usa `counts` e `as_of`; as três listas
+            // (até 100 linhas cada) eram 115 KB dos 168 KB da resposta (medido
+            // 11/11/2026). As listas continuam na tela de Conciliação, que chama
+            // `divergenceService` com o próprio limite.
+            p_divergence_limit: opcoes.limit ?? 0,
         });
         if (error) throw error;
 

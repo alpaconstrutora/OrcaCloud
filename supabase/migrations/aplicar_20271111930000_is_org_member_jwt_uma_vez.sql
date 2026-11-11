@@ -26,11 +26,16 @@
 --
 -- REGRA #7
 --   Pergunta 1 (perna do OR): nenhuma policy muda.
---   Pergunta 2 (quem executa): ACL MANTIDA DE PROPÓSITO — `CREATE OR REPLACE`
---   preserva {PUBLIC, anon, authenticated, service_role}. É o predicado avaliado
---   DENTRO das policies, inclusive nas leituras anônimas dos portais; revogar
---   quebraria essas policies. Devolve só um booleano sobre o PRÓPRIO usuário do
---   JWT — não expõe dado de ninguém.
+--   Pergunta 2 (quem executa): sai o PUBLIC implícito, entram grants EXPLÍCITOS
+--   para quem avalia policies — anon, authenticated, service_role. O anon PRECISA
+--   continuar: é o predicado DENTRO das policies, 120 das 614 têm papel {public}
+--   (contado em 11/11/2026), e o anon que lê essas tabelas (e o storage, 29
+--   policies) precisa de EXECUTE — sem ele a leitura falha com "permission denied
+--   for function". Nenhum outro papel sujeito a RLS lê tabela do schema public
+--   (só anon e authenticated têm SELECT; 0 tabelas concedidas a PUBLIC). Devolve só
+--   um booleano sobre o PRÓPRIO usuário do JWT — não expõe dado de ninguém.
+--   Teste a seco: anon e authenticated lendo todas as tabelas de policy {public}
+--   com is_org_member, antes × depois do REVOKE (ver o PR).
 --
 -- Aplicar: npx supabase db query --linked -f <caminho deste arquivo>
 -- NUNCA `supabase db push` (CLAUDE.md da raiz).
@@ -74,7 +79,12 @@ BEGIN
 END;
 $$;
 
+-- REGRA #7: PUBLIC sai; quem avalia policy entra por nome (ver Pergunta 2 acima).
+REVOKE EXECUTE ON FUNCTION public.is_org_member(uuid) FROM PUBLIC;
+GRANT  EXECUTE ON FUNCTION public.is_org_member(uuid) TO anon, authenticated, service_role;
+
 -- Conferência depois de aplicar:
 --   SELECT p.proconfig, p.proacl::text, position('v_uid' in p.prosrc) > 0 AS nova
 --     FROM pg_proc p WHERE p.proname = 'is_org_member';
---   (proconfig = {search_path=public, pg_temp}; proacl com =X, anon=X, authenticated=X)
+--   (proconfig = {search_path=public, pg_temp}; proacl SEM o "=X" inicial, com
+--    anon=X, authenticated=X, service_role=X)

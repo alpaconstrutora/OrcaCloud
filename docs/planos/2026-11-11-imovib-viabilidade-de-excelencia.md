@@ -725,13 +725,15 @@ Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/
 
 Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) aplicada em 11/11 com OK do usuário; coluna conferida no banco.
 
-**Fase 2 — Indicadores e fluxo:** 0 de 6
-- [ ] 2.1 Indicadores
-- [ ] 2.2 Variações e pontos de equilíbrio
-- [ ] 2.3 Resumo Executivo
-- [ ] 2.4 Fluxo aberto na Dinâmica
-- [ ] 2.5 Excel e listagem
-- [ ] 2.6 Pendências da revisão da Fase 1
+**Fase 2 — Indicadores e fluxo:** 6 de 6 no código (branch `feat/imovib-fase2`); publicação espera revisão e CI
+- [x] 2.1 Indicadores — `utils/imovibIndicadores.ts`. Razões sem base (sem VGV, sem saída) ficam vazias, não 0. Payback = último mês em que o acumulado volta a ficar ≥ 0 e assim fica.
+- [x] 2.2 Variações e pontos de equilíbrio — `utils/imovibVariacoes.ts`, `utils/imovibEquilibrio.ts`. Vendas mínimas = 100% + a variação de preço que zera o VPL (a receita do motor é linear no VGV). Cada busca < 50 ms.
+- [x] 2.3 Resumo Executivo — VPL e lucro separados; payback, múltiplo, retorno sobre o capital, mês da exposição; cartão de pontos de equilíbrio com margem-alvo editável (padrão 15%, não gravada). Sai o bloco "Simulação Completa".
+- [x] 2.4 Fluxo aberto na Dinâmica — `utils/imovibVisaoDoFluxo.ts`; grupos "Receitas e deduções", "Custos", "Financiamento".
+- [x] 2.5 Excel e listagem — colunas Payback e Múltiplo ocultas por padrão.
+- [x] 2.6 Pendências da revisão da Fase 1 — capital próprio e dívida não voltam ao padrão (vazio na dívida faria o motor usar o "% Financiado" legado).
+
+Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase2.js`): 0 escritas, 0 erros de console. No Bruninho, terreno máximo R$ 2.791.232 − terreno atual R$ 2.150.000 = R$ 641.232, o VPL do estudo (o terreno sai no mês 1, sem desconto). Achados e corrigidos: grupo "Receitas" somava impostos e corretagem (virou "Receitas e deduções"); erro de digitação no subtítulo da TIR.
 
 **Fase 3 — Risco:** 0 de 6
 - [ ] 3.1 Tornado

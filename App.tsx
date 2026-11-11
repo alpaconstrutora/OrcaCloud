@@ -6,6 +6,7 @@ import LoginGateway from './components/LoginGateway';
 // Estático como o Auth (não lazy): é a primeira tela de uma rota de entrada, e um
 // Suspense ali viraria um piscar de loader antes do formulário.
 import PortalLogin from './components/portal/PortalLogin';
+import InvestorLogin from './components/portal/InvestorLogin';
 import { entradaDoPortal, entradaDaUrlAtual, rotaDeEntradaDoPortal } from './lib/entradasDoPortal';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
@@ -855,6 +856,10 @@ const App: React.FC = () => {
     // Portais": a saída para o seletor é só a recusa (efeito acima).
     const entrada = entradaDoPortal(selectedLoginGroup);
     if (entrada) return <PortalLogin entrada={entrada} />;
+    // Investidor: tela própria com a troca animada entrar ↔ criar conta (11/11/2026,
+    // docs/planos/2026-11-11-login-investidor-animado.md). Continua chegando pelo
+    // seletor, com "Voltar para Portais" — não é uma entrada própria com rota.
+    if (selectedLoginGroup === ProfileGroup.INVESTOR) return <InvestorLogin onBack={() => setSelectedLoginGroup(null)} />;
     return <Auth group={selectedLoginGroup || undefined} onBack={() => setSelectedLoginGroup(null)} />;
   }
   if (authError) return (

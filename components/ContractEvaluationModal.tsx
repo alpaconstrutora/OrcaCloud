@@ -89,7 +89,7 @@ const ContractEvaluationModal: React.FC<ContractEvaluationModalProps> = ({ isOpe
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Período de Referência</label>
                         <input type="month" value={period} onChange={e => setPeriod(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="p-3 bg-gray-50 rounded-xl flex items-center justify-between">
                         <span className="text-xs font-medium text-gray-500">Nota Ponderada</span>

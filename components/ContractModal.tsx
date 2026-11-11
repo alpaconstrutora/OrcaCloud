@@ -1022,14 +1022,14 @@ export const ContractModal: React.FC<ContractModalProps> = ({
                                                     placeholder="Nome / Razão Social *"
                                                     value={newClientName}
                                                     onChange={e => setNewClientName(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                    className="w-full px-4 h-9 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                                 />
                                                 <input
                                                     type="text"
                                                     placeholder={newClientType === 'PJ' ? 'CNPJ (opcional)' : 'CPF (opcional)'}
                                                     value={newClientDoc}
                                                     onChange={e => setNewClientDoc(e.target.value)}
-                                                    className="w-full px-4 py-3 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
+                                                    className="w-full px-4 h-9 bg-white border border-blue-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
                                                 />
                                                 <div className="flex gap-2">
                                                     <Button type="button" variant="primary" onClick={handleCreateClient} disabled={!newClientName.trim() || savingClient}

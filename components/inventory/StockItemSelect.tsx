@@ -60,7 +60,7 @@ const StockItemSelect: React.FC<Props> = ({ items, value, onChange, onCreateNew,
                     onFocus={() => setOpen(true)}
                     onBlur={() => setTimeout(() => setOpen(false), 150)}
                     placeholder={placeholder ?? 'Buscar item do catálogo...'}
-                    className="w-full pl-9 pr-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                    className="w-full pl-9 pr-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                 />
             </div>
 

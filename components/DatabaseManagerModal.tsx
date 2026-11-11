@@ -148,14 +148,14 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
                                 autoFocus
                                 type="text"
                                 placeholder="Nome da Base (ex: Tabela 2024)"
-                                className="w-full px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-3 h-9 text-sm rounded-[6px] border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={editName}
                                 onChange={e => setEditName(e.target.value)}
                             />
                             <input
                                 type="text"
                                 placeholder="Descrição (opcional)"
-                                className="w-full px-3 py-2 rounded-lg border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full px-3 h-9 text-sm rounded-[6px] border border-blue-200 focus:ring-2 focus:ring-blue-500 outline-none"
                                 value={editDesc}
                                 onChange={e => setEditDesc(e.target.value)}
                             />

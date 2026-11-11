@@ -97,13 +97,13 @@ const ContractTechnicalResponsibilityModal: React.FC<ContractTechnicalResponsibi
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Profissional</label>
                     <input type="text" value={professionalName} onChange={e => setProfessionalName(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Conselho</label>
                         <select value={council} onChange={e => setCouncil(e.target.value as TechnicalCouncil | '')}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
                             <option value="">—</option>
                             <option value="CREA">CREA</option>
                             <option value="CAU">CAU</option>
@@ -113,12 +113,12 @@ const ContractTechnicalResponsibilityModal: React.FC<ContractTechnicalResponsibi
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Nº do Registro</label>
                         <input type="text" value={councilNumber} onChange={e => setCouncilNumber(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Tipo</label>
                         <select value={artType} onChange={e => setArtType(e.target.value as ArtType)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
                             <option value="ART">ART</option>
                             <option value="RRT">RRT</option>
                             <option value="TRT">TRT</option>
@@ -127,23 +127,23 @@ const ContractTechnicalResponsibilityModal: React.FC<ContractTechnicalResponsibi
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Nº do Documento</label>
                         <input type="text" value={artNumber} onChange={e => setArtNumber(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Vigência — Início</label>
                         <input type="date" value={validFrom} onChange={e => setValidFrom(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Vigência — Fim</label>
                         <input type="date" value={validUntil} onChange={e => setValidUntil(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                 </div>
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Status</label>
                     <select value={status} onChange={e => setStatus(e.target.value as TechnicalResponsibilityStatus)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
                         <option value="VALIDA">Válida</option>
                         <option value="SUSPENSA">Suspensa</option>
                         <option value="CANCELADA">Cancelada</option>

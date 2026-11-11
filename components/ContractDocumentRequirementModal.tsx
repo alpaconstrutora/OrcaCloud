@@ -97,12 +97,12 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Documento</label>
                     <input type="text" placeholder="Ex: CND, FGTS, ART/RRT, Apólice…" value={document} onChange={e => setDocument(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Fase Exigida</label>
                     <select value={phase} onChange={e => setPhase(e.target.value as DocumentRequirementPhase)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
                         {(Object.keys(PHASE_LABELS) as DocumentRequirementPhase[]).map(p => (
                             <option key={p} value={p}>{PHASE_LABELS[p]}</option>
                         ))}
@@ -111,7 +111,7 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Validade do Último Envio</label>
                     <input type="date" value={lastValidUntil} onChange={e => setLastValidUntil(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <label className="flex items-center gap-3 p-3 bg-gray-50 rounded-2xl cursor-pointer">
                     <input type="checkbox" checked={blocksPayment} onChange={e => setBlocksPayment(e.target.checked)} className="w-4 h-4" />
@@ -125,7 +125,7 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prazo de Comunicação (horas)</label>
                         <input type="number" min="0" placeholder="Ex: 24" value={communicationDeadlineHours} onChange={e => setCommunicationDeadlineHours(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                 )}
             </SheetPanel>

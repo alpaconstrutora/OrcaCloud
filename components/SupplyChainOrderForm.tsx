@@ -1998,7 +1998,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                             onChange={e => { setNewUnit(e.target.value); setError(''); }}
                             onKeyDown={e => e.key === 'Enter' && handleAdd()}
                             placeholder="Nova unidade..."
-                            className="flex-1 rounded-xl border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                            className="flex-1 rounded-[6px] border border-gray-200 px-3 h-9 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                         />
                         <Button onClick={handleAdd} size="sm" className="gap-1.5 whitespace-nowrap">
                             <Plus className="w-3.5 h-3.5" /> Adicionar

@@ -87,12 +87,12 @@ const ContractAcceptanceModal: React.FC<ContractAcceptanceModalProps> = ({ isOpe
                                     </button>
                                     <input type="text" placeholder="Descrição da pendência" value={item.description}
                                         onChange={e => updatePendingItem(idx, { description: e.target.value })}
-                                        className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm" />
+                                        className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm" />
                                     <div className="grid grid-cols-2 gap-2">
                                         <input type="date" value={item.deadline || ''} onChange={e => updatePendingItem(idx, { deadline: e.target.value })}
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm" />
+                                            className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm" />
                                         <input type="text" placeholder="Responsável" value={item.responsible || ''} onChange={e => updatePendingItem(idx, { responsible: e.target.value })}
-                                            className="w-full px-3 py-2 bg-white border border-gray-200 rounded-lg text-sm" />
+                                            className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm" />
                                     </div>
                                 </div>
                             ))}

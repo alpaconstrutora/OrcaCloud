@@ -2268,7 +2268,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                     placeholder="Observação da resolução (opcional)"
                                                     value={resolutionInputs[d.id] || ''}
                                                     onChange={e => setResolutionInputs(prev => ({ ...prev, [d.id]: e.target.value }))}
-                                                    className="w-full text-form-input rounded-xl border border-gray-200 px-3 py-2 outline-none focus:ring-2 focus:ring-amber-300 bg-white"
+                                                    className="w-full text-form-input rounded-[6px] border border-gray-200 px-3 h-9 outline-none focus:ring-2 focus:ring-amber-300 bg-white"
                                                 />
                                                 <div className="flex gap-2">
                                                     {(['Resolvida', 'Aceita', 'Devolvida'] as DiscrepancyStatus[]).map(s => (

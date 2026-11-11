@@ -144,7 +144,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
                         <div>
                             <label className="block text-form-label text-gray-400 mb-1">Almoxarifado de origem *</label>
                             <select
-                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 py-2 text-sm text-white"
+                                className="w-full bg-gray-800 border border-gray-600 rounded px-3 h-9 text-sm text-white"
                                 value={warehouseId}
                                 onChange={e => setWarehouseId(e.target.value)}
                             >

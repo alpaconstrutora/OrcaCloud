@@ -79,7 +79,7 @@ const ContractPenaltyModal: React.FC<ContractPenaltyModalProps> = ({ isOpen, onC
                     <select
                         value={kind}
                         onChange={e => setKind(e.target.value as PenaltyKind)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500"
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500"
                     >
                         {(Object.keys(KIND_LABELS) as PenaltyKind[]).map(k => (
                             <option key={k} value={k}>{KIND_LABELS[k]}</option>
@@ -96,17 +96,17 @@ const ContractPenaltyModal: React.FC<ContractPenaltyModalProps> = ({ isOpen, onC
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Base de Cálculo (R$)</label>
                         <input type="text" placeholder="0,00" value={baseValue} onChange={e => setBaseValue(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Valor da Multa (R$)</label>
                         <input type="text" required placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2 col-span-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prazo de Cura (padrão: 3 dias úteis)</label>
                         <input type="date" value={cureDeadline} onChange={e => setCureDeadline(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                 </div>
             </SheetPanel>

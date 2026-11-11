@@ -135,15 +135,15 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Frente</label>
-                                        <input type="number" step="0.01" value={config.position_weights.FRONT} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, FRONT: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
+                                        <input type="number" step="0.01" value={config.position_weights.FRONT} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, FRONT: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Lateral</label>
-                                        <input type="number" step="0.01" value={config.position_weights.LATERAL} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, LATERAL: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
+                                        <input type="number" step="0.01" value={config.position_weights.LATERAL} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, LATERAL: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                     </div>
                                     <div className="space-y-1">
                                         <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Fundos</label>
-                                        <input type="number" step="0.01" value={config.position_weights.BACK} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, BACK: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
+                                        <input type="number" step="0.01" value={config.position_weights.BACK} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, BACK: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                     </div>
                                 </div>
                             </div>
@@ -154,7 +154,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                                     {Object.entries(config.orientation_weights).map(([key, val]) => (
                                         <div key={key} className="space-y-1">
                                             <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{key}</label>
-                                            <input type="number" step="0.01" value={val} onChange={(e) => setConfig({...config, orientation_weights: {...config.orientation_weights, [key]: parseFloat(e.target.value)}})} className="w-full px-4 py-2 bg-white border border-gray-200 rounded-xl font-bold text-sm" />
+                                            <input type="number" step="0.01" value={val} onChange={(e) => setConfig({...config, orientation_weights: {...config.orientation_weights, [key]: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                         </div>
                                     ))}
                                 </div>

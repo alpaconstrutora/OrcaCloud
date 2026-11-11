@@ -142,7 +142,7 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                             <div className="p-4 bg-blue-50/50 rounded-2xl border border-blue-200 flex gap-3 animate-in fade-in slide-in-from-top-4">
                                 <input
                                     autoFocus
-                                    className="flex-1 rounded-xl border border-blue-200 p-3 outline-none focus:ring-4 focus:ring-blue-500/10 font-medium text-sm"
+                                    className="flex-1 rounded-[6px] border border-blue-200 h-9 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 font-medium text-sm"
                                     placeholder="Nome da categoria..."
                                     value={formData.name}
                                     onChange={e => setFormData({ name: e.target.value })}
@@ -162,7 +162,7 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
                                     <div className="flex-1 flex gap-3">
                                         <input
                                             autoFocus
-                                            className="flex-1 rounded-xl border border-blue-200 p-2 outline-none focus:ring-4 focus:ring-blue-500/10 font-medium text-sm"
+                                            className="flex-1 rounded-[6px] border border-blue-200 h-9 px-3 outline-none focus:ring-4 focus:ring-blue-500/10 font-medium text-sm"
                                             value={formData.name}
                                             onChange={e => setFormData({ name: e.target.value })}
                                         />

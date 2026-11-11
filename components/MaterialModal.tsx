@@ -139,7 +139,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                 value={formData.title}
                                 onChange={(e) => setFormData({ ...formData, title: e.target.value })}
                                 placeholder="Ex: Book Completo - Fase 1"
-                                className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
+                                className="w-full px-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
                             />
                         </div>
 
@@ -154,7 +154,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                     required
                                     value={formData.type}
                                     onChange={(e) => setFormData({ ...formData, type: e.target.value as BrokerMaterial['type'] })}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
+                                    className="w-full px-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
                                 >
                                     {MATERIAL_TYPES.map(type => (
                                         <option key={type.value} value={type.value}>{type.label}</option>
@@ -171,7 +171,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                 <select
                                     value={formData.project_id || ''}
                                     onChange={(e) => setFormData({ ...formData, project_id: e.target.value })}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
+                                    className="w-full px-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
                                 >
                                     <option value="">Nenhum (Material Geral)</option>
                                     {projects.map(proj => (
@@ -225,7 +225,7 @@ const MaterialModal: React.FC<MaterialModalProps> = ({
                                     min="1"
                                     value={formData.version}
                                     onChange={(e) => setFormData({ ...formData, version: parseInt(e.target.value) || 1 })}
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
+                                    className="w-full px-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all font-medium text-gray-900"
                                 />
                             </div>
 

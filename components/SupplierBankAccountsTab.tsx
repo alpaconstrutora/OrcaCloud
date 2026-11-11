@@ -16,7 +16,9 @@ import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 
 // ─── Estilos reutilizáveis (consistentes com SupplierModal) ───────────────────
-const inputCls = 'w-full rounded-xl border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
+const inputCls = 'w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full rounded-[6px] border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
 const labelCls = 'block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1';
 
 // ─── Estado inicial do formulário ─────────────────────────────────────────────
@@ -541,7 +543,7 @@ const SupplierBankAccountsTab: React.FC<SupplierBankAccountsTabProps> = ({
                 <textarea
                     rows={2}
                     placeholder="Notas internas sobre esta conta..."
-                    className={inputCls + ' resize-none'}
+                    className={inputClsArea + ' resize-none'}
                     value={form.notes}
                     onChange={e => set({ notes: e.target.value })}
                 />

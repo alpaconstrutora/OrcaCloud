@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import {
     limitesDoPeriodo, resumoDosBancos, tomDoSaldo, legendaDoSaldo, tomPorLimiar,
     dataBR, mesCurto, mesAno, diasEntre, isoLocal,
-    serieComHoje, tendenciaDaSerie, cardSolido,
+    serieComHoje, tendenciaDaSerie, cardSolido, saldoDoMesCorrente,
 } from '../lib/dashboardFinanceiro';
 import type { DashboardConta, DashboardHistoricoMes } from '../services/financialOverviewService';
 
@@ -147,6 +147,15 @@ describe('histórico e tendência', () => {
 
     it('igual ao mês anterior é estável e não pinta de vermelho', () => {
         expect(tendenciaDaSerie([50, 50], 'desce', undefined, reais)).toMatchObject({ direcao: 'estavel', bom: true, texto: '0,0%', base: 'vs. mês anterior' });
+    });
+
+    it('saldo de hoje na linha: só com TODAS as contas informadas no mês corrente', () => {
+        const hojeISO = '2026-11-11';
+        expect(saldoDoMesCorrente([conta('Asaas', 100, '2026-11-02'), conta('Sicredi', -50, '2026-11-10')], hojeISO)).toBe(50);
+        // Sicredi parada em setembro: o card mostra a soma, a linha não
+        expect(saldoDoMesCorrente([conta('Asaas', 100, '2026-11-02'), conta('Sicredi', -5_762.69, '2026-09-30')], hojeISO)).toBeNull();
+        expect(saldoDoMesCorrente([conta('Asaas', 100, '2026-11-02'), conta('Itaú', null, null)], hojeISO)).toBeNull();
+        expect(saldoDoMesCorrente([], hojeISO)).toBeNull();
     });
 
     it('sólido só com alerta E piora de pelo menos 2%', () => {

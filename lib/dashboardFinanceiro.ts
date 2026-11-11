@@ -183,6 +183,23 @@ export function serieComHoje(
     return [...historico.map(h => h[campo]), hoje];
 }
 
+/**
+ * O ponto de HOJE na linha do saldo, pela mesma régua do histórico: soma só quando
+ * toda conta ativa informou saldo DENTRO do mês corrente. O número do card soma o último
+ * saldo de cada conta, de qualquer idade — bom para o card (que avisa a defasagem), errado
+ * para a linha: comparar 4 contas hoje com 2 contas em julho desenha uma queda que não houve.
+ */
+export function saldoDoMesCorrente(contas: DashboardConta[], hoje: string): number | null {
+    if (contas.length === 0) return null;
+    const mes = hoje.slice(0, 7);
+    let soma = 0;
+    for (const c of contas) {
+        if (c.saldo_banco == null || !c.saldo_banco_data || c.saldo_banco_data.slice(0, 7) !== mes) return null;
+        soma += c.saldo_banco;
+    }
+    return soma;
+}
+
 const pctComSinal = (p: number) =>
     `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 

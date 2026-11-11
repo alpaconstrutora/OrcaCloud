@@ -16,7 +16,7 @@ import {
 import {
     LIMIAR, ROTULO_PERIODO, type Periodo, limitesDoPeriodo, resumoDosBancos, tomDoSaldo,
     legendaDoSaldo, tomPorLimiar, dataBR, mesCurto, mesAno,
-    serieComHoje, tendenciaDaSerie, cardSolido,
+    serieComHoje, tendenciaDaSerie, cardSolido, saldoDoMesCorrente,
 } from '../lib/dashboardFinanceiro';
 import {
     moneyBRL, compactAxis, niceTicks, plural, GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE,
@@ -345,7 +345,9 @@ const FinancialDashboard: React.FC<FinancialDashboardProps> = ({ onNavigate }) =
         const serie = serieComHoje(historico, campo, valorHoje);
         return { serie, tendencia: tendenciaDaSerie(serie, bomQuando, mesAnterior, eixoBRL) };
     };
-    const linhaSaldo = linha('saldo_banco', bancos?.saldo ?? null, 'sobe');
+    // Saldo: o ponto de hoje só entra com TODAS as contas informadas neste mês (mesma régua
+    // do histórico) — por isso aqui o fim da linha pode não ser o número do card.
+    const linhaSaldo = linha('saldo_banco', hoje ? saldoDoMesCorrente(hoje.contas, hoje.hoje) : null, 'sobe');
     const linhaReceber = linha('vencido_receber', hoje?.vencido_receber ?? null, 'desce');
     const linhaPagar = linha('vencido_pagar', hoje?.vencido_pagar ?? null, 'desce');
     const tomReceber = hoje ? tomPorLimiar(hoje.vencido_receber, LIMIAR.vencidoReceberAlerta, 'alerta') : 'neutro';

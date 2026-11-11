@@ -20,8 +20,8 @@
 --   • Sem corte por created_at: é "o que estava devido naquela data segundo os registros
 --     de hoje". Cortar por created_at desenharia a implantação do sistema, não a dívida.
 --   • Saldo = o saldo que o BANCO informou dentro do mês (digitado, OFX ou Asaas — a
---     mesma fonte do card), o mais recente de cada conta, somado. Mês sem nenhum = null
---     (não medido, não zero). NÃO o saldo calculado pelo extrato: na Alpa a Sicredi não
+--     mesma fonte do card), o mais recente de cada conta, somado — e só quando TODA conta
+--     que já existia no corte informou. Mês incompleto = null (não medido, não zero). NÃO o saldo calculado pelo extrato: na Alpa a Sicredi não
 --     tem saldo inicial e o calculado fica ~R$ 28 mil abaixo do OFX em todo mês (jul–set/26,
 --     medido em 11/11) — a forma da linha estaria certa, o percentual da tendência não.
 --   • Aguardando aprovação NÃO tem série: a fila mudou de definição em 26/10 e 09/11.
@@ -75,7 +75,7 @@ BEGIN
   ),
   contas AS (
     -- Mesmo recorte de contas do card (fn_financial_dashboard_today: só ATIVAS).
-    SELECT pa.id
+    SELECT pa.id, (pa.created_at AT TIME ZONE 'America/Sao_Paulo')::date AS criada_em
     FROM public.payment_accounts pa
     WHERE pa.organization_id = ANY(v_targets)
       AND pa.is_active
@@ -101,12 +101,22 @@ BEGIN
     JOIN informado inf ON inf.data >= me.mes AND inf.data < me.corte
     ORDER BY me.mes, inf.conta, inf.data DESC, inf.prioridade
   ),
-  saldo AS (
-    -- NULL = nenhuma conta informou saldo no mês: não medido, não zero.
-    SELECT me.mes, SUM(u.saldo) AS informado
+  exigidas AS (
+    -- Toda conta que já existia no corte precisa ter informado saldo no mês.
+    SELECT me.mes, c.id AS conta
     FROM meses me
-    LEFT JOIN ultimo_do_mes u ON u.mes = me.mes
-    GROUP BY me.mes
+    JOIN contas c ON c.criada_em < me.corte
+  ),
+  saldo AS (
+    -- Soma SÓ quando o mês está completo. Somar as contas que informaram e pular as que
+    -- não informaram compara totais de contas diferentes: medido em 11/11 em "Todas",
+    -- jul/26 somava 2 contas e hoje 4 — a linha mostrava uma queda que não houve.
+    -- NULL = mês incompleto ou sem conta: não medido, não zero.
+    SELECT e.mes,
+           CASE WHEN COUNT(*) = COUNT(u.conta) THEN SUM(u.saldo) END AS informado
+    FROM exigidas e
+    LEFT JOIN ultimo_do_mes u ON u.mes = e.mes AND u.conta = e.conta
+    GROUP BY e.mes
   )
   SELECT COALESCE(jsonb_agg(jsonb_build_object(
            'mes',             v.mes,
@@ -116,7 +126,7 @@ BEGIN
          ) ORDER BY v.mes), '[]'::jsonb)
   INTO v_result
   FROM vencido v
-  JOIN saldo s ON s.mes = v.mes;
+  LEFT JOIN saldo s ON s.mes = v.mes;
 
   RETURN v_result;
 END;

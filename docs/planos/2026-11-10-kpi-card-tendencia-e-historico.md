@@ -53,6 +53,12 @@ Pedidos seguintes, na mesma sessão:
    (falta saldo inicial na conta). A forma da linha batia, o percentual não. Mês sem saldo
    informado = sem ponto. Na Alpa hoje: jul, ago e set/26 têm; out/26 não — então o card de
    saldo ganha linha mas não ganha selo de tendência até um saldo de outubro/novembro existir.
+7a. **Saldo só com o mês COMPLETO** (11/11, visto na tela com dados reais): em "Todas" o
+   card de hoje somava 4 contas e jul/26 somava 2 — a linha mostrava uma queda que não
+   houve. Agora o mês só tem ponto quando toda conta que já existia no corte informou
+   saldo nele, e o ponto de hoje segue a mesma régua (`saldoDoMesCorrente`). Medido: em
+   "Todas" só set/26 fecha (um ponto, sem linha); na Alpa, jul–set/26. A migration foi
+   reaplicada com essa regra.
 8. **Sem hover.** O protótipo tinha elevação no hover para card clicável; nenhum card de
    destaque é clicável (a ação é o link `acao`), então não entrou — o §4 segue valendo.
 

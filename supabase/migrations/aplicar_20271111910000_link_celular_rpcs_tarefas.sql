@@ -14,6 +14,7 @@
 --   tasks_select_collaborator colaborador da tarefa
 --   tasks_update              user_id = u OR (space_id NOT NULL AND membro do espaço)
 --                             (colaborador só LÊ)
+--   tasks_insert              user_id = u AND (space_id NULL OR membro do espaço)
 --   task_spaces_select        dono OR membro
 --   task_folders_select       membro do espaço
 --   task_statuses_select      membro da org (o resolver já conferiu)
@@ -325,7 +326,9 @@ $$;
 -- Aceita só: title (obrigatório), description, start_date, due_date, priority
 -- (1–4; ausente = 3, o padrão do celular), space_id, folder_id. Força dono e org
 -- do link, status 'open' e source_module 'manual'. Espaço: da org do link e o
--- dono do link é membro ou dono. Pasta: do espaço informado.
+-- dono do link é MEMBRO dele — a regra de tasks_insert
+-- (space_id IS NULL OR is_task_space_member(space_id)); ser só o owner_user_id
+-- do espaço não basta. Pasta: do espaço informado.
 CREATE OR REPLACE FUNCTION public.celular_tarefa_criar(p_token TEXT, p_dados JSONB)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -366,7 +369,7 @@ BEGIN
         SELECT 1 FROM public.task_spaces s
          WHERE s.id = v_space
            AND s.org_id = v_org
-           AND (s.owner_user_id = v_user OR public.is_task_space_member_de(v_user, s.id))
+           AND public.is_task_space_member_de(v_user, s.id)
     ) THEN
         RAISE EXCEPTION 'sem acesso a este espaço' USING ERRCODE = '42501';
     END IF;

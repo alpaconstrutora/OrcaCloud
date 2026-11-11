@@ -20,7 +20,11 @@
 --      passam a chamar o gêmeo com auth.uid(). is_org_member NÃO muda (caminho
 --      quente de toda a RLS e lê auth.jwt()); a equivalência é provada no teste.
 --   4. mobile_link_generate / _revoke / _status — gestão pelo app logado:
---      owner/admin da org para qualquer membro; cada um para si.
+--      cada um para si; owner/admin da org GERA só para quem tem papel
+--      `member` (admin/owner geram o próprio) e revoga/consulta o de qualquer
+--      membro.
+--   5. Gatilho em organization_members: apagar a linha do membro revoga o link
+--      dele naquela org (reinserir a pessoa não ressuscita o link antigo).
 --
 -- REGRA #7: toda função leva REVOKE de PUBLIC e anon; internos e gêmeos também
 -- de authenticated. As SECURITY DEFINER conferem a autorização por dentro.
@@ -195,8 +199,11 @@ END;
 $$;
 
 -- ── 5. Gestão do link (app logado) ──────────────────────────────────────────
--- Pode: owner/admin da org (is_org_manager) para qualquer membro; o próprio
--- usuário para si. Em qualquer caso a pessoa do link tem de ser membro da org.
+-- Pode: o próprio usuário para si; owner/admin da org (is_org_manager) para
+-- qualquer membro em revogar/consultar. GERAR para outra pessoa só se ela tiver
+-- papel `member` nessa org: o link de um admin/owner (inclusive superadmin) só
+-- ele mesmo gera (decisão do usuário, revisão final de 2026-11-11). Em qualquer
+-- caso a pessoa do link tem de ser membro da org. Recusa: a mesma, 42501.
 
 CREATE OR REPLACE FUNCTION public.mobile_link_generate(p_user_id UUID, p_org_id UUID)
 RETURNS TEXT
@@ -210,6 +217,11 @@ DECLARE
 BEGIN
     IF v_ator IS NULL OR p_user_id IS NULL OR p_org_id IS NULL
        OR (public.is_org_manager(p_org_id)
+               AND (p_user_id = v_ator
+                    OR EXISTS (SELECT 1 FROM public.organization_members om
+                                WHERE om.organization_id = p_org_id
+                                  AND om.user_id = p_user_id
+                                  AND om.role = 'member'))
            OR (p_user_id = v_ator AND public.is_org_member(p_org_id))) IS NOT TRUE
        OR public.is_org_member_de(p_user_id, p_org_id) IS NOT TRUE THEN
         RAISE EXCEPTION 'sem permissão para gerenciar o link do celular desta pessoa' USING ERRCODE = '42501';
@@ -289,6 +301,38 @@ BEGIN
 END;
 $$;
 
+-- ── 6. Sair da org revoga o link ────────────────────────────────────────────
+-- O resolver já recusa ex-membro, mas a linha continuava "viva": se a pessoa
+-- voltasse à org (novo convite), o link antigo — que pode ter ficado num
+-- celular de terceiro — voltaria a valer. Apagar a linha do membro revoga o
+-- link dele naquela org; para voltar a usar, gera-se um novo.
+-- Conferido antes de criar: nenhum fluxo normal apaga e reinsere membros
+-- existentes (updateOrganization apaga só quem saiu da lista e faz upsert em
+-- organization_id,email; invite-member só faz upsert).
+-- Linha legada sem user_id: não há link (o link é por conta), nada a fazer.
+CREATE OR REPLACE FUNCTION public._mobile_link_revoga_ao_sair_da_org()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+VOLATILE SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF OLD.user_id IS NOT NULL THEN
+        UPDATE public.user_mobile_links l
+           SET revoked_at = now()
+         WHERE l.org_id = OLD.organization_id
+           AND l.user_id = OLD.user_id
+           AND l.revoked_at IS NULL;
+    END IF;
+    RETURN OLD;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_org_members_revoga_link_celular ON public.organization_members;
+CREATE TRIGGER trg_org_members_revoga_link_celular
+    AFTER DELETE ON public.organization_members
+    FOR EACH ROW EXECUTE FUNCTION public._mobile_link_revoga_ao_sair_da_org();
+
 -- ── Privilégios (REGRA #7) ──────────────────────────────────────────────────
 -- Internos e gêmeos: ninguém da API executa; só as funções do link (e, depois,
 -- os núcleos e as celular_*), que rodam como dono.
@@ -297,6 +341,8 @@ REVOKE EXECUTE ON FUNCTION public._mobile_link_resolver(TEXT)             FROM P
 REVOKE EXECUTE ON FUNCTION public.is_org_member_de(UUID, UUID)            FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.is_task_space_member_de(UUID, UUID)     FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public.is_task_collaborator_de(UUID, UUID)     FROM PUBLIC, anon, authenticated;
+-- Função de gatilho: dispara sozinha; ninguém da API chama.
+REVOKE EXECUTE ON FUNCTION public._mobile_link_revoga_ao_sair_da_org()   FROM PUBLIC, anon, authenticated;
 
 -- Originais: as policies de tarefas são TO public e são avaliadas como o papel
 -- de quem consulta, então anon, authenticated e service_role continuam com

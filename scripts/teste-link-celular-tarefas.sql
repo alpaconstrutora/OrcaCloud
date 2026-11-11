@@ -3,7 +3,8 @@
 -- (docs/planos/2026-11-11-link-celular-tarefas-diario.md, Parte 1).
 --
 --   Seção A — tabela user_mobile_links, _mobile_link_resolver, gêmeos de
---             autorização (*_de) e gestão do link (mobile_link_*).
+--             autorização (*_de), gestão do link (mobile_link_*: gestor só
+--             gera para `member`) e o gatilho que revoga o link ao sair da org.
 --   Seção B — RPCs de Tarefas do link (celular_*), chamadas como anon só com
 --             o token da seção A: mesma visibilidade da RLS, presa à org do link;
 --             lista branca de escrita; recusas 42501/22023.
@@ -64,7 +65,11 @@ DO $$
 DECLARE
     u UUID; u_email TEXT; o UUID; m UUID; x UUID; o2 UUID;
     t1 TEXT; t2 TEXT; t3 TEXT; v TEXT; ex_membro TEXT; volta TEXT; apagadas INT; fora BOOLEAN;
+    linhas_de_u public.organization_members[]; revogado_ao_sair BOOLEAN; dentro BOOLEAN; reinserido TEXT;
+    f1_admin TEXT; f1_owner TEXT; f1_status TEXT; f1_revoga TEXT; f1_revogado BOOLEAN;
+    o_tmp UUID; link_tmp TEXT; sobrou_tmp INT;
     recusa CONSTANT TEXT := '42501:link inválido ou vencido';
+    recusa_gestao CONSTANT TEXT := '42501:sem permissão para gerenciar o link do celular desta pessoa';
     l RECORD;
 BEGIN
     -- ── fixtures ─────────────────────────────────────────────────────────────
@@ -173,6 +178,13 @@ BEGIN
     v := pg_temp.como(u, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', m, o));
     PERFORM pg_temp.confere(v LIKE '42501:%', 'membro comum gerando link do gestor → 42501 (veio ' || v || ')');
 
+    -- ── F1: admin/owner geram o PRÓPRIO link ────────────────────────────────
+    v := pg_temp.como(m, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', m, o));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'owner/admin gera o próprio link (veio ' || v || ')');
+    PERFORM pg_temp.confere(public._mobile_link_hash(substr(v, 4))
+                            = (SELECT token_hash FROM public.user_mobile_links WHERE org_id = o AND user_id = m),
+        'link próprio do gestor gravado na linha dele');
+
     -- ── privilégios: anon e authenticated não leem a tabela nem chamam internos
     v := pg_temp.como(NULL, 'anon', 'SELECT count(*)::text FROM public.user_mobile_links');
     PERFORM pg_temp.confere(v = 'ok:0' OR v LIKE '42501:%', 'anon: SELECT em user_mobile_links → 0 linhas ou 42501 (veio ' || v || ')');
@@ -247,23 +259,91 @@ BEGIN
     v := pg_temp.como(NULL, 'postgres', format('SELECT r.user_id::text FROM public._mobile_link_resolver(%L) r', t2));
     PERFORM pg_temp.confere(v = recusa, 'vencido → ' || recusa || ' (veio ' || v || ')');
 
-    -- ── ex-membro → recusa (Review Focus 1) ─────────────────────────────────
+    -- ── ex-membro → recusa (Review Focus 1) e o link fica revogado (F4) ─────
     v := pg_temp.como(u, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', u, o));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'u gera de novo depois de vencido (veio ' || v || ')');
     t3 := substr(v, 4);
     BEGIN
+        SELECT array_agg(om) INTO linhas_de_u FROM public.organization_members om
+         WHERE om.organization_id = o AND (om.user_id = u OR lower(om.email) = lower(u_email));
         DELETE FROM public.organization_members
          WHERE organization_id = o AND (user_id = u OR lower(email) = lower(u_email));
         GET DIAGNOSTICS apagadas = ROW_COUNT;
         fora := public.is_org_member_de(u, o);
+        revogado_ao_sair := (SELECT revoked_at IS NOT NULL FROM public.user_mobile_links WHERE org_id = o AND user_id = u);
         ex_membro := pg_temp.como(NULL, 'postgres', format('SELECT r.user_id::text FROM public._mobile_link_resolver(%L) r', t3));
+        -- A pessoa volta à org (as mesmas linhas): o link antigo NÃO ressuscita.
+        INSERT INTO public.organization_members SELECT (lin).* FROM unnest(linhas_de_u) lin;
+        dentro := public.is_org_member_de(u, o);
+        reinserido := pg_temp.como(NULL, 'postgres', format('SELECT r.user_id::text FROM public._mobile_link_resolver(%L) r', t3));
         RAISE EXCEPTION 'desfaz o DELETE' USING ERRCODE = 'LC001';
     EXCEPTION WHEN SQLSTATE 'LC001' THEN NULL;
     END;
     PERFORM pg_temp.confere(apagadas > 0 AND fora IS FALSE, 'DELETE tirou u de o (linhas: ' || apagadas || ')');
+    PERFORM pg_temp.confere(revogado_ao_sair IS TRUE, 'F4: DELETE do membro preenche revoked_at do link dele na org');
     PERFORM pg_temp.confere(ex_membro = recusa, 'saiu da org → ' || recusa || ' (veio ' || coalesce(ex_membro, '<null>') || ')');
+    PERFORM pg_temp.confere(dentro IS TRUE, 'F4: reinserir as linhas devolve u à org');
+    PERFORM pg_temp.confere(reinserido = recusa,
+        'F4: de volta à org, o link antigo continua recusado (veio ' || coalesce(reinserido, '<null>') || ')');
+    -- Desfeito o subbloco (DELETE, gatilho e reinserção), o token é o de antes: a
+    -- recusa acima veio da saída da org, não de outra coisa.
     volta := pg_temp.como(NULL, 'postgres', format('SELECT r.user_id::text FROM public._mobile_link_resolver(%L) r', t3));
-    PERFORM pg_temp.confere(volta = 'ok:' || u, 'de volta à org, o mesmo token vale (veio ' || volta || ')');
+    PERFORM pg_temp.confere(volta = 'ok:' || u, 'desfeita a saída, o mesmo token vale (veio ' || volta || ')');
+
+    -- ── F1: gestor NÃO gera link de outro admin/owner; revoga e consulta, sim ─
+    -- u promovido (e desfeito) no subbloco: o mesmo par gestor × alvo de antes.
+    BEGIN
+        UPDATE public.organization_members SET role = 'admin' WHERE organization_id = o AND user_id = u;
+        f1_admin := pg_temp.como(m, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', u, o));
+        UPDATE public.organization_members SET role = 'owner' WHERE organization_id = o AND user_id = u;
+        f1_owner := pg_temp.como(m, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', u, o));
+        f1_status := pg_temp.como(m, 'authenticated', format('SELECT public.mobile_link_status(%L, %L)::text', u, o));
+        f1_revoga := pg_temp.como(m, 'authenticated', format('SELECT public.mobile_link_revoke(%L, %L)::text', u, o));
+        f1_revogado := (SELECT revoked_at IS NOT NULL FROM public.user_mobile_links WHERE org_id = o AND user_id = u);
+        RAISE EXCEPTION 'desfaz a promoção' USING ERRCODE = 'LC001';
+    EXCEPTION WHEN SQLSTATE 'LC001' THEN NULL;
+    END;
+    PERFORM pg_temp.confere(f1_admin = recusa_gestao, 'gestor gerando link de um ADMIN → ' || recusa_gestao || ' (veio ' || coalesce(f1_admin, '<null>') || ')');
+    PERFORM pg_temp.confere(f1_owner = recusa_gestao, 'gestor gerando link de um OWNER → ' || recusa_gestao || ' (veio ' || coalesce(f1_owner, '<null>') || ')');
+    PERFORM pg_temp.confere(f1_status LIKE 'ok:%', 'gestor consulta o link de um owner (veio ' || coalesce(f1_status, '<null>') || ')');
+    PERFORM pg_temp.confere(f1_revoga LIKE 'ok:%' AND f1_revogado IS TRUE,
+        'gestor revoga o link de um owner (veio ' || coalesce(f1_revoga, '<null>') || ')');
+    volta := pg_temp.como(NULL, 'postgres', format('SELECT r.user_id::text FROM public._mobile_link_resolver(%L) r', t3));
+    PERFORM pg_temp.confere(volta = 'ok:' || u, 'desfeita a promoção, o token de u segue valendo (veio ' || volta || ')');
+
+    -- ── F4: apagar a ORGANIZAÇÃO (cascata em organization_members e em
+    --    user_mobile_links) não esbarra no gatilho ──────────────────────────
+    BEGIN
+        INSERT INTO public.organizations (name) VALUES ('LC org temporária') RETURNING id INTO o_tmp;
+        INSERT INTO public.organization_members (organization_id, user_id, email, role)
+        VALUES (o_tmp, u, u_email, 'member');
+        link_tmp := pg_temp.como(u, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', u, o_tmp));
+        DELETE FROM public.organizations WHERE id = o_tmp;
+        SELECT count(*) INTO sobrou_tmp FROM public.user_mobile_links WHERE org_id = o_tmp;
+        RAISE EXCEPTION 'desfaz a org temporária' USING ERRCODE = 'LC001';
+    EXCEPTION WHEN SQLSTATE 'LC001' THEN NULL;
+    END;
+    PERFORM pg_temp.confere(link_tmp LIKE 'ok:%', 'org temporária: u gera o link (veio ' || coalesce(link_tmp, '<null>') || ')');
+    PERFORM pg_temp.confere(sobrou_tmp = 0, 'org apagada: cascata leva o link junto, sem erro do gatilho');
+
+    PERFORM pg_temp.confere(EXISTS (
+        SELECT 1 FROM pg_trigger t
+         WHERE t.tgrelid = 'public.organization_members'::regclass
+           AND t.tgname = 'trg_org_members_revoga_link_celular'
+           AND t.tgfoid = 'public._mobile_link_revoga_ao_sair_da_org()'::regprocedure
+           AND (t.tgtype & 1) = 1      -- FOR EACH ROW
+           AND (t.tgtype & 2) = 0      -- AFTER
+           AND (t.tgtype & 8) = 8      -- DELETE
+           AND (t.tgtype & (4 | 16 | 32)) = 0),
+        'F4: gatilho AFTER DELETE FOR EACH ROW em organization_members');
+    PERFORM pg_temp.confere(
+        NOT has_function_privilege('anon', 'public._mobile_link_revoga_ao_sair_da_org()', 'EXECUTE')
+        AND NOT has_function_privilege('authenticated', 'public._mobile_link_revoga_ao_sair_da_org()', 'EXECUTE')
+        AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a
+                         WHERE p.oid = 'public._mobile_link_revoga_ao_sair_da_org()'::regprocedure AND a.grantee = 0)
+        AND (SELECT p.prosecdef AND 'search_path=public, pg_temp' = ANY (p.proconfig)
+               FROM pg_proc p WHERE p.oid = 'public._mobile_link_revoga_ao_sair_da_org()'::regprocedure),
+        'F4: função do gatilho SECURITY DEFINER, search_path fixo, sem EXECUTE para PUBLIC/anon/authenticated');
 
     INSERT INTO lc_ctx VALUES (u, o, m, x, o2, t3);
 END $$;
@@ -362,7 +442,7 @@ DO $$
 DECLARE
     ctx RECORD;
     u UUID; o UUID; m UUID; o2 UUID; tk TEXT; u_email TEXT;
-    s_u UUID; s_u2 UUID; s_m UUID; s_o2 UUID; f_u UUID; f_u2 UUID;
+    s_u UUID; s_u2 UUID; s_m UUID; s_o2 UUID; s_dono UUID; f_u UUID; f_u2 UUID;
     t_own UUID; t_outro UUID; t_sm UUID; t_espaco UUID; t_sempasta UUID; t_colab UUID;
     t_o2 UUID; t_sub UUID; t_done UUID; t_nova UUID;
     e_colab UUID; e_ok UUID; e_fora UUID; e_comp UUID; st_done UUID; st_o2 UUID;
@@ -502,6 +582,18 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE '42501:%', 'criar em espaço de outra org (u é membro dele) → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'space_id', s_m)));
     PERFORM pg_temp.confere(v LIKE '42501:%', 'criar em espaço da org sem ser membro → 42501 (veio ' || v || ')');
+
+    -- F5: dono do espaço (owner_user_id) que NÃO é membro dele — tasks_insert
+    -- recusa, a RPC também. O gatilho seed_space_owner_member põe o dono como
+    -- membro; a linha é tirada aqui (como postgres, sem auth.uid()).
+    INSERT INTO public.task_spaces (org_id, owner_user_id, name) VALUES (o, u, 'LC espaço de u sem u membro') RETURNING id INTO s_dono;
+    DELETE FROM public.task_space_members WHERE space_id = s_dono AND user_id = u;
+    PERFORM pg_temp.confere(NOT public.is_task_space_member_de(u, s_dono), 'fixture F5: u é dono de s_dono mas não membro');
+    v := pg_temp.como(u, 'authenticated', format(
+        'INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id) VALUES (%L, %L, ''LC x'', ''open'', 3, %L) RETURNING id::text', o, u, s_dono));
+    PERFORM pg_temp.confere(v LIKE '42501:%', 'referência: tasks_insert recusa o dono não membro (veio ' || v || ')');
+    v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'space_id', s_dono)));
+    PERFORM pg_temp.confere(v LIKE '42501:%', 'F5: criar em espaço de que u é dono mas não membro → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'space_id', s_u, 'folder_id', f_u2)));
     PERFORM pg_temp.confere(v LIKE '22023:%', 'criar com pasta de outro espaço → 22023 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'folder_id', f_u)));

@@ -109,8 +109,26 @@ Um item por arquivo. **O que muda** · **como sei que terminou**.
 
 ## Estado
 
-- [ ] 1 migration · [ ] 2 tipos · [ ] 3 serviço · [ ] 4 erro legível · [ ] 5 tela de
-  Aprovações · [ ] 6 Central · [ ] 7 testes
+10/11/2026, commits 26a50411 + 50c42c0e (branch `feat/alcada-aprovacao-por-usuario`, sem push):
+
+- [ ] 1 migration: **escrita** (`aplicar_20271111150000_alcada_por_usuario.sql`, prefixo
+  conferido, `migrationsPrefixo.test` verde), **NÃO aplicada**. O teste a seco no banco
+  remoto (transação desfeita no fim) foi barrado pelo classificador de permissões:
+  aguarda autorização do usuário para (a) o teste a seco e (b) a aplicação.
+- [x] 2 tipos: `ApprovalApprover`, `MembroAprovador`; `pode_aprovar`/`vez_de` em `ActionQueueItem`.
+- [x] 3 serviço: `services/approvalApproversService.ts` (aceita org `null` = "Todas", REGRA #5).
+- [x] 4 erro legível: `utils/alcada.mensagemDaAlcada` em `approvalService` e `darfService`;
+  faixa de não-admin explica em vez do `PGRST116`/`42501`.
+- [ ] 5 tela de Aprovações: código pronto (Vez de, botões desligados com motivo, colunas
+  "Aprova o nível 1/2", drawer `QuemAprovaSheet`, seção "Itens sem valor"); `check-ui-standard`
+  limpo. **Falta conferir no navegador** — depende do item 1 aplicado.
+- [ ] 6 Central: botões desligados com motivo; **falta conferir no navegador**.
+- [x] 7 testes: `__tests__/alcadaPorUsuario.test.ts` (14) cobre a parte da tela; a regra
+  em si é do banco e fica na seção Verificação (não roda no Vitest).
+
+Desvio registrado: `fn_alcada_pode_aprovar` não recebe e-mail (o desenho dizia
+`(org, entity, valor, nível, email)`): usa a identidade de quem chama (`auth.uid()` /
+e-mail do JWT), que é o que o gatilho precisa e não deixa perguntar "fulano pode?".
 
 ## Verificação
 

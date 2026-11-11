@@ -69,6 +69,16 @@ const ImovibDistratoCard: React.FC<ImovibDistratoCardProps> = ({ study, salvar }
                         className="w-4 h-4 accent-indigo-600"
                     />
                 </label>
+                {revende && (
+                    <ImovibInputRow
+                        label="Deságio da revenda"
+                        desc="Desconto sobre o preço original da unidade"
+                        title="Sem deságio, a retenção do que o comprador pagou faz o distrato dar lucro. O padrão de 10% é hipótese: ajuste ao mercado."
+                        value={study.cancellation_resale_discount_percent ?? D.cancellation_resale_discount_percent}
+                        onCommit={(v) => salvar({ cancellation_resale_discount_percent: v })}
+                    />
+                )}
+                <p className="text-xs text-slate-500">O distrato acontece no máximo nas chaves; venda feita nas chaves ou depois não distrata.</p>
 
                 <div className="h-px bg-slate-100 my-3" />
                 <ImovibInputRow

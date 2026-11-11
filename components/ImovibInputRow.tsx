@@ -32,10 +32,14 @@ const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onC
     // com `value` não serve — o pai o atualiza a cada tecla (onChange).
     const valorAoFocar = useRef(value);
 
-    // Valor mudou por fora (recarga do estudo) e o usuário não está digitando.
+    // Só quando o VALOR muda por fora (recarga do estudo) e ninguém está digitando.
+    // Reagir também à saída do campo (`editando` → false) punha de volta o valor
+    // antigo do pai até a recarga chegar: o usuário via 0 e achava que não gravou.
+    const editandoRef = useRef(false);
+    editandoRef.current = editando;
     useEffect(() => {
-        if (!editando) setTexto(String(value));
-    }, [value, editando]);
+        if (!editandoRef.current) setTexto(String(value));
+    }, [value]);
 
     return (
         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-[10px] border border-slate-100 hover:border-slate-300 transition-colors group">

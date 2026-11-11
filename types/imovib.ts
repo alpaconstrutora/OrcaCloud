@@ -521,6 +521,8 @@ export interface ImovibStudy {
     cancellation_lag_months?: number | null;
     cancellation_refund_percent?: number | null;
     cancellation_resale?: boolean | null;
+    /** Deságio da revenda da unidade distratada, % (migration aplicar_20271111850000). */
+    cancellation_resale_discount_percent?: number | null;
     /** % ao mês. Vazio = inflation_rate. */
     sales_index_rate_monthly?: number | null;
     cost_index_rate_monthly?: number | null;

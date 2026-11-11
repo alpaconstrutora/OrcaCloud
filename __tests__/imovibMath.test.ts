@@ -368,3 +368,23 @@ describe('1.4 — curva de vendas e recebimento por safra no motor', () => {
         expect(r.avisos.map(a => a.codigo)).toContain('pos_chaves_sem_prazo');
     });
 });
+
+describe('1.4 (revisão) — distrato custa dinheiro com os padrões', () => {
+    it('subir a taxa de distrato derruba o VPL (padrões: devolução 75%, revenda com deságio de 10%)', () => {
+        const vpl = (taxa: number) => computeImovibMath(baseStudy({ cancellation_rate_percent: taxa })).vpl;
+        expect(vpl(10)).toBeLessThan(vpl(0));
+        expect(vpl(30)).toBeLessThan(vpl(10));
+    });
+
+    it('vendas depois das chaves não distratam, e o motor avisa', () => {
+        const r = computeImovibMath(baseStudy({ cancellation_rate_percent: 10, construction_start_month: 1, sales_duration_months: 36 }));
+        const aviso = r.avisos.find(a => a.codigo === 'distrato_parcial');
+        expect(aviso?.aba).toBe('receitas');
+        expect(aviso?.mensagem).toMatch(/36,11%/); // 13 de 36 meses de venda (24 a 36) caem nas chaves (mês 24) ou depois
+    });
+
+    it('sem distrato, ou com todas as vendas antes das chaves, não avisa', () => {
+        expect(computeImovibMath(baseStudy({ cancellation_rate_percent: 0, sales_duration_months: 36, construction_start_month: 1 })).avisos.map(a => a.codigo)).not.toContain('distrato_parcial');
+        expect(computeImovibMath(baseStudy({ cancellation_rate_percent: 10 })).avisos.map(a => a.codigo)).not.toContain('distrato_parcial');
+    });
+});

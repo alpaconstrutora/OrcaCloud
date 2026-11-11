@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { TrendingUp } from 'lucide-react';
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { ImovibStudy, ImovibStudyUpdate } from '../types';
@@ -46,7 +46,12 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
         [study.sales_curve_custom, duracao],
     );
     const [pesos, setPesos] = useState<string[]>(pesosGravados.map(String));
-    useEffect(() => { setPesos(pesosGravados.map(String)); }, [pesosGravados]);
+    // Recarga que chega enquanto um mês é digitado atualiza os outros e preserva
+    // esse (antes, o rascunho voltava ao gravado e o valor sumia sem gravar).
+    const mesEmEdicao = useRef<number | null>(null);
+    useEffect(() => {
+        setPesos(prev => pesosGravados.map((g, i) => (i === mesEmEdicao.current && prev[i] !== undefined ? prev[i] : String(g))));
+    }, [pesosGravados]);
 
     const dados = useMemo(() => {
         const vendido = math.vendasPorMes.reduce((a, b) => a + b, 0);
@@ -124,8 +129,10 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
                                             step="1"
                                             value={p}
                                             aria-label={`Peso do mês ${inicio + i}`}
+                                            onFocus={() => { mesEmEdicao.current = i; }}
                                             onChange={(e) => setPesos(prev => prev.map((x, j) => (j === i ? e.target.value : x)))}
                                             onBlur={() => {
+                                                mesEmEdicao.current = null;
                                                 const novos = pesos.map(x => Math.max(0, parseFloat(x) || 0));
                                                 if (novos.some((n, j) => n !== pesosGravados[j])) salvar({ sales_curve_custom: novos });
                                             }}

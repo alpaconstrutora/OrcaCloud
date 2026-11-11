@@ -104,3 +104,21 @@ describe('ImovibReceitasForm — curva de vendas e perfil (Fase 1)', () => {
         expect(screen.getByLabelText('Juro do pós-chaves')).toBeInTheDocument();
     });
 });
+
+describe('ImovibReceitasForm — pesos da curva personalizada', () => {
+    beforeEach(() => updateStudy.mockClear());
+
+    it('recarga do estudo durante a digitação não apaga o peso que está sendo digitado', async () => {
+        const user = userEvent.setup();
+        const base = { ...(estudo as object), sales_curve_type: 'custom', sales_duration_months: 3, sales_start_month: 1, sales_curve_custom: [0, 0, 0] };
+        const { rerender } = render(<ImovibReceitasForm study={base as never} onDataChanged={vi.fn()} />);
+        const mes2 = screen.getByLabelText('Peso do mês 2') as HTMLInputElement;
+        await user.clear(mes2);
+        await user.type(mes2, '3');
+        // Chega a recarga de uma gravação anterior (mês 1 = 5) enquanto o mês 2 está sendo digitado.
+        rerender(<ImovibReceitasForm study={{ ...base, sales_curve_custom: [5, 0, 0] } as never} onDataChanged={vi.fn()} />);
+        expect(mes2.value).toBe('3');
+        await user.tab();
+        expect(updateStudy).toHaveBeenCalledWith('estudo-1', { sales_curve_custom: [5, 3, 0] });
+    });
+});

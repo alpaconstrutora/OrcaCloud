@@ -35,6 +35,8 @@ export interface PremissasDeDistrato {
     devolucaoPct: number;
     /** A unidade distratada é revendida no mês seguinte (sem novo distrato). */
     revende: boolean;
+    /** Desconto da revenda sobre o preço original (10 = 10%). */
+    desagioRevendaPct: number;
 }
 
 /** Um valor por mês (índice 0 = mês 1). Todas as séries têm o mesmo tamanho. */
@@ -55,9 +57,13 @@ type Linha = keyof SerieDeRecebimento;
  *
  * @param vendasPorMes `vendasPorMes[i]` = VGV vendido no mês i+1 (sem correção).
  * @param mesDasChaves último mês da obra.
- * @param horizonte último mês do estudo. Distrato que cairia depois dele não
- *   acontece. As séries têm pelo menos esse tamanho e crescem quando repasse
- *   atrasado, pós-chaves ou revenda recebem depois dele.
+ * @param horizonte último mês do estudo: tamanho mínimo das séries, que crescem
+ *   quando repasse atrasado, pós-chaves ou revenda recebem depois dele.
+ *
+ * Distrato (decisão do usuário em 11/11/2026, revisão da Fase 1): acontece no
+ * máximo nas chaves — venda feita nas chaves ou depois não distrata, o comprador
+ * já recebeu o imóvel e o repasse é do banco. A revenda sai com deságio; sem
+ * ele, a retenção do pago fazia mais distrato dar mais lucro.
  */
 export function recebimentoPorSafra(
     vendasPorMes: number[],
@@ -72,6 +78,7 @@ export function recebimentoPorSafra(
     const por = (x: number) => (Number(x) || 0) / 100;
     const taxaDistrato = Math.min(1, Math.max(0, por(distrato.taxaPct)));
     const defasagem = Math.max(0, Math.round(distrato.defasagemMeses || 0));
+    const desagio = Math.min(1, Math.max(0, por(distrato.desagioRevendaPct)));
     const chaves = Math.round(mesDasChaves);
 
     /** Põe `valor` da safra no mês `m`, se o mês vem antes do corte (distrato). */
@@ -123,16 +130,15 @@ export function recebimentoPorSafra(
     vendasPorMes.forEach((V, i) => {
         if (!V) return; // venda negativa (permuta acima de 100%) também entra: o motor avisa
         const s = i + 1;
-        const mesDoDistrato = s + defasagem;
-        const distrata = taxaDistrato > 0 && mesDoDistrato <= horizonte;
-        if (!distrata) {
+        if (!(taxaDistrato > 0) || s >= chaves) {
             agendar(V, s, null);
             return;
         }
+        const mesDoDistrato = Math.min(s + defasagem, chaves);
         agendar(V * (1 - taxaDistrato), s, null);
         const pagoAntes = agendar(V * taxaDistrato, s, mesDoDistrato);
         lancar('devolucaoDistrato', mesDoDistrato, -pagoAntes * por(distrato.devolucaoPct), null, sem);
-        if (distrato.revende) agendar(V * taxaDistrato, mesDoDistrato + 1, null);
+        if (distrato.revende) agendar(V * taxaDistrato * (1 - desagio), mesDoDistrato + 1, null);
     });
 
     const tamanho = Math.max(Math.round(horizonte) || 0, ...Object.values(out).map(s => s.length));

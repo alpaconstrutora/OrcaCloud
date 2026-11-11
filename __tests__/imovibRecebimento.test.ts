@@ -14,7 +14,7 @@ const PERFIL: PerfilDeRecebimento = {
     sinalPct: 10, parcelasObraPct: 20, intermediariasPct: 10, intermediariasIntervalo: 6,
     repassePct: 50, atrasoDoRepasse: 0, posChavesPct: 10, posChavesMeses: 12, posChavesJurosMensal: 0,
 };
-const SEM_DISTRATO: PremissasDeDistrato = { taxaPct: 0, defasagemMeses: 12, devolucaoPct: 75, revende: true };
+const SEM_DISTRATO: PremissasDeDistrato = { taxaPct: 0, defasagemMeses: 12, devolucaoPct: 75, revende: true, desagioRevendaPct: 0 };
 
 describe('1.2 — recebimentoPorSafra', () => {
     it('uma venda de 1.000.000 no mês 3, chaves no mês 12, perfil 10/20/10/50/10', () => {
@@ -74,7 +74,7 @@ describe('1.2 — recebimentoPorSafra', () => {
     });
 
     it('distrato de 10% em 6 meses, devolução de 50%, sem revenda', () => {
-        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: false };
+        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: false, desagioRevendaPct: 0 };
         const sem = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, SEM_DISTRATO, 24);
         const com = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, distrato, 24);
         // A fração cancelada pagou, antes do mês 9, sinal (mês 3) + parcelas dos meses 4 a 8.
@@ -87,7 +87,7 @@ describe('1.2 — recebimentoPorSafra', () => {
     });
 
     it('com revenda, a fração distratada vira venda nova no mês seguinte, sem novo distrato', () => {
-        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: true };
+        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: true, desagioRevendaPct: 0 };
         const com = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, distrato, 24);
         const sem = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, { ...distrato, revende: false }, 24);
         expect(mes(com.sinal, 10) - mes(sem.sinal, 10)).toBeCloseTo(0.1 * 1_000_000 * 0.1, 6);
@@ -95,11 +95,31 @@ describe('1.2 — recebimentoPorSafra', () => {
         expect(com.devolucaoDistrato.filter(x => x !== 0)).toHaveLength(1);
     });
 
-    it('distrato que cairia depois do horizonte não acontece', () => {
-        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 30, devolucaoPct: 50, revende: true };
+    it('distrato acontece no máximo nas chaves: com defasagem que passaria delas, cai no mês das chaves', () => {
+        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 30, devolucaoPct: 50, revende: false, desagioRevendaPct: 0 };
         const s = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, distrato, 24);
-        expect(sum(s.devolucaoDistrato)).toBe(0);
-        expect(total(s)).toBeCloseTo(1_000_000, 6);
+        // A fração cancelada pagou sinal (mês 3), as 8 parcelas dos meses 4–11 e a intermediária do mês 9;
+        // o repasse do mês 12 ela já não paga.
+        const pago = 0.1 * (100_000 + 8 * 200_000 / 9 + 100_000);
+        expect(mes(s.devolucaoDistrato, 12)).toBeCloseTo(-0.5 * pago, 4);
+        expect(mes(s.repasse, 12)).toBeCloseTo(0.9 * 500_000, 4);
+    });
+
+    it('venda nas chaves ou depois não distrata (o comprador já recebeu o imóvel)', () => {
+        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 75, revende: true, desagioRevendaPct: 10 };
+        for (const mesDaVenda of [12, 15]) {
+            const s = recebimentoPorSafra(venda(mesDaVenda, 1_000_000), PERFIL, 12, distrato, 30);
+            expect(sum(s.devolucaoDistrato)).toBe(0);
+            expect(total(s)).toBeCloseTo(1_000_000, 6);
+        }
+    });
+
+    it('a revenda sai com deságio: recebe menos que a venda original', () => {
+        const base = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 75, revende: true };
+        const semDesagio = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, { ...base, desagioRevendaPct: 0 }, 24);
+        const comDesagio = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, { ...base, desagioRevendaPct: 10 }, 24);
+        expect(total(semDesagio) - total(comDesagio)).toBeCloseTo(0.1 * 1_000_000 * 0.1, 4);
+        expect(mes(comDesagio.sinal, 10)).toBeCloseTo(0.1 * 1_000_000 * 0.9 * 0.1, 4); // sinal da revenda (10% de 90%)
     });
 
     it('sem vendas: tudo zero, no tamanho do horizonte', () => {

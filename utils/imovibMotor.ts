@@ -92,7 +92,7 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -248,7 +248,7 @@ export const CAMPOS_DO_MOTOR = [
     'sales_curve_type', 'sales_launch_percent', 'sales_launch_months', 'sales_vso_percent', 'sales_curve_custom',
     'revenue_intermediate_percent', 'revenue_intermediate_interval_months',
     'revenue_post_handover_percent', 'post_handover_months', 'post_handover_rate_monthly', 'handover_delay_months',
-    'cancellation_lag_months', 'cancellation_refund_percent', 'cancellation_resale',
+    'cancellation_lag_months', 'cancellation_refund_percent', 'cancellation_resale', 'cancellation_resale_discount_percent',
     'sales_index_rate_monthly', 'cost_index_rate_monthly',
 ] as const satisfies readonly (keyof ImovibStudy)[];
 
@@ -600,7 +600,20 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         defasagemMeses: val(study.cancellation_lag_months, D.cancellation_lag_months),
         devolucaoPct: val(study.cancellation_refund_percent, D.cancellation_refund_percent),
         revende: study.cancellation_resale ?? D.cancellation_resale,
+        desagioRevendaPct: val(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent),
     }, duracaoBase);
+
+    // Distrato só vale para venda feita antes das chaves (utils/imovibRecebimento.ts).
+    const taxaDistrato = val(study.cancellation_rate_percent, D.cancellation_rate_percent);
+    const vendidoTotal = vendasPorMes.reduce((a, b) => a + b, 0);
+    const vendidoNasChavesOuDepois = vendasPorMes.slice(handoverMonth - 1).reduce((a, b) => a + b, 0);
+    if (taxaDistrato > 0 && vendidoTotal > 0 && vendidoNasChavesOuDepois > 0) {
+        avisos.push({
+            codigo: 'distrato_parcial',
+            mensagem: `${pctBR(vendidoNasChavesOuDepois / vendidoTotal)}% do VGV é vendido nas chaves (mês ${handoverMonth}) ou depois e não distrata: o distrato de ${pctBR(taxaDistrato / 100)}% vale só para as vendas anteriores.`,
+            aba: 'receitas',
+        });
+    }
 
     // Inadimplência: só sobre o que o comprador paga direto à incorporadora.
     // Sinal é pago na assinatura e o repasse vem do banco.

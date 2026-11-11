@@ -37,7 +37,7 @@ const COLUMNS: ColumnConfig[] = [
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    number: 123, organization: 200, empreendimento: 184, obra: 160, orcamento: 144, costCenter: 160, chartOfAccounts: 160, supplier: 200, status: 140, nfe: 160, date: 171, value: 141, items: 102, actions: 220,
+    number: 123, organization: 200, empreendimento: 184, obra: 160, orcamento: 144, costCenter: 160, chartOfAccounts: 160, supplier: 200, status: 140, nfe: 160, date: 171, value: 141, items: 102, actions: 270,
 };
 
 // Todos os status da união `PurchaseOrder['status']` — o `satisfies Record<...>`
@@ -830,17 +830,13 @@ const SupplyChainOrderList: React.FC<SupplyChainOrderListProps> = ({ onCreateNew
                                                         Ver Detalhes
                                                     </button>
                                                     <ActionIconButton kind="edit" className="ml-1" title="Editar Pedido" onClick={(e) => { e.stopPropagation(); onEdit?.(order.id); }} />
+                                                    <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={(e) => { e.stopPropagation(); handleDuplicate(order.id); }} />
                                                     <InlineDisclosureMenu
                                                         menuItems={[
                                                             {
                                                                 icon: <Truck className="w-[18px] h-[18px]" />,
                                                                 label: 'Logística',
                                                                 onClick: () => onViewLogistics(order.id),
-                                                            },
-                                                            {
-                                                                icon: <HugeiconsIcon icon={Copy01Icon} size={18} />,
-                                                                label: 'Duplicar Pedido',
-                                                                onClick: () => handleDuplicate(order.id),
                                                             },
                                                         ]}
                                                         showDelete

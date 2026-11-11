@@ -628,7 +628,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     type="date"
                                                     value={counterFormData.deliveryDate}
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
-                                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
+                                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                 />
                                             </div>
                                             <div>
@@ -636,7 +636,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 <select
                                                     value={counterFormData.deliveryMethod}
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
-                                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
+                                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                 >
                                                     {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                                 </select>
@@ -648,7 +648,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     value={counterFormData.deliveryLocation}
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, deliveryLocation: e.target.value }))}
                                                     placeholder="Ex: Canteiro de Obras"
-                                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
+                                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                 />
                                             </div>
                                         </div>
@@ -659,7 +659,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 <select
                                                     value={counterFormData.paymentMethod}
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                                                    className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
+                                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                 >
                                                     <option value="Boleto">Boleto Bancário</option>
                                                     <option value="Pix">Pix</option>
@@ -675,7 +675,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     <select
                                                         value={counterFormData.paymentTermType}
                                                         onChange={(e) => setCounterFormData(prev => ({ ...prev, paymentTermType: e.target.value as 'Vista' | 'Parcelado' }))}
-                                                        className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
+                                                        className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                     >
                                                         <option value="Vista">À Vista</option>
                                                         <option value="Parcelado">Parcelado</option>
@@ -697,7 +697,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                                 setCounterFormData(prev => ({ ...prev, paymentInstallments: val }));
                                                             }
                                                         }}
-                                                        className="w-full px-5 py-3.5 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
+                                                        className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:ring-4 focus:ring-indigo-50 focus:border-indigo-200 outline-none transition-all"
                                                     />
                                                 </div>
                                             </div>

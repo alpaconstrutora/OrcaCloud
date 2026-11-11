@@ -91,34 +91,34 @@ const ContractSupplyMatrixModal: React.FC<ContractSupplyMatrixModalProps> = ({ i
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Item</label>
                     <input type="text" placeholder="Ex: Materiais incorporados, Consumíveis, EPIs…" value={item} onChange={e => setItem(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Fornece</label>
                         <input type="text" placeholder="ALPA / CONTRATADO" value={supplies} onChange={e => setSupplies(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Transporta/Descarga</label>
                         <input type="text" value={transports} onChange={e => setTransports(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Guarda</label>
                         <input type="text" value={stores} onChange={e => setStores(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
                         <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Instala/Usa</label>
                         <input type="text" value={installs} onChange={e => setInstalls(e.target.value)}
-                            className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                 </div>
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Perda Admissível / Observação</label>
                     <input type="text" value={admissibleLoss} onChange={e => setAdmissibleLoss(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
             </SheetPanel>
             <SheetFooter>

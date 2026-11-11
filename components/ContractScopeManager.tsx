@@ -405,7 +405,7 @@ const ContractScopeManager: React.FC<Props> = ({ organizationId, onClose, onSele
                                         placeholder="Nome do modelo para salvar *"
                                         value={catalogTemplateName}
                                         onChange={e => setCatalogTemplateName(e.target.value)}
-                                        className="flex-1 px-3 py-2 text-sm border border-gray-200 rounded-[6px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
+                                        className="flex-1 px-3 h-9 text-sm border border-gray-200 rounded-[6px] bg-white focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 font-medium"
                                     />
                                     <button
                                         onClick={handleSaveCatalog}

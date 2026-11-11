@@ -142,7 +142,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Almoxarifado</label>
                         <select
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.warehouseId}
                             onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value }))}
                         >
@@ -166,7 +166,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                             <label className="block text-form-label text-gray-700 mb-1">Quantidade *</label>
                             <input
                                 type="number" min="0.0001" step="0.01"
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.quantity || ''}
                                 onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
                             />
@@ -175,7 +175,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                             <div>
                                 <label className="block text-form-label text-gray-700 mb-1">Custo unitário</label>
                                 <MoneyCentsInput
-                                    className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                    className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     value={form.unitCost ?? ''}
                                     onChange={v => setForm(f => ({ ...f, unitCost: v === '' ? undefined : Number(v) || undefined }))}
                                     placeholder="R$"
@@ -186,7 +186,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                             <label className="block text-form-label text-gray-700 mb-1">Data</label>
                             <input
                                 type="date"
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.movedAt ?? ''}
                                 onChange={e => setForm(f => ({ ...f, movedAt: e.target.value }))}
                             />
@@ -196,7 +196,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                     <div>
                         <label className="block text-form-label text-gray-700 mb-1">Observações</label>
                         <input
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value || undefined }))}
                         />
@@ -283,7 +283,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
                         <input
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.name}
                             onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                         />
@@ -291,7 +291,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
                         <select
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.type}
                             onChange={e => setForm(f => ({ ...f, type: e.target.value as CreateWarehouseInput['type'] }))}
                         >
@@ -303,7 +303,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Obra (opcional)</label>
                         <select
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.projectId ?? ''}
                             onChange={e => setForm(f => ({ ...f, projectId: e.target.value || null }))}
                         >
@@ -314,7 +314,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
                         <input
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                         />
@@ -720,7 +720,7 @@ export const InventoryModule: React.FC<Props> = ({ activeOrganizationId }) => {
                             placeholder="Buscar insumo..."
                             value={searchTerm}
                             onChange={e => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border-none rounded-xl text-sm focus:ring-2 focus:ring-blue-500 transition-all"
+                            className="w-full pl-9 pr-4 h-9 bg-gray-50 border-none rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 transition-all"
                         />
                     </div>
                     <div className="h-8 w-[1px] bg-gray-200 hidden sm:block"></div>
@@ -1440,7 +1440,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Origem *</label>
                             <select
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.fromWarehouseId}
                                 onChange={e => setForm(f => ({ ...f, fromWarehouseId: e.target.value }))}
                             >
@@ -1450,7 +1450,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Destino *</label>
                             <select
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.toWarehouseId}
                                 onChange={e => setForm(f => ({ ...f, toWarehouseId: e.target.value }))}
                             >
@@ -1460,7 +1460,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                     </div>
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-                        <input className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
+                        <input className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                     </div>
 
                     <div className="space-y-3">
@@ -1873,7 +1873,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Solicitante *</label>
                             <input
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.requestedBy}
                                 onChange={e => setForm(f => ({ ...f, requestedBy: e.target.value }))}
                                 placeholder="Nome do solicitante"
@@ -1882,7 +1882,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Almoxarifado</label>
                             <select
-                                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                                className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.warehouseId ?? ''}
                                 onChange={e => setForm(f => ({ ...f, warehouseId: e.target.value || undefined }))}
                             >
@@ -1894,7 +1894,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
                         <input
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
                             onChange={e => setForm(f => ({ ...f, notes: e.target.value || undefined }))}
                         />
@@ -2021,7 +2021,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
                     <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Aprovado / Rejeitado por *</label>
                         <input
-                            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+                            className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={approvedBy}
                             onChange={e => setApprovedBy(e.target.value)}
                             placeholder="Seu nome"

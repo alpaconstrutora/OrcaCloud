@@ -853,21 +853,21 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
                                     <input
                                         type="number" step="0.01" placeholder="Ex: 5 ou -3"
                                         value={percent} onChange={e => setPercent(e.target.value)}
-                                        className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400 w-40"
+                                        className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm font-bold outline-none focus:border-blue-400 w-40"
                                     />
                                     <span className="text-xs text-gray-400 font-medium">% sobre o preço de cada unidade nesta versão</span>
                                 </div>
                             ) : (
                                 <div className="flex flex-wrap items-center gap-2">
                                     <select value={indexName} onChange={e => setIndexName(e.target.value as IndexName)}
-                                        className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400">
+                                        className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm font-bold outline-none focus:border-blue-400">
                                         {INDEX_NAMES.map(n => <option key={n} value={n}>{n}</option>)}
                                     </select>
                                     <input type="month" value={baseMonth} onChange={e => setBaseMonth(e.target.value)}
-                                        className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400" />
+                                        className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm font-bold outline-none focus:border-blue-400" />
                                     <span className="text-xs text-gray-400 font-medium">até</span>
                                     <input type="month" value={targetMonth} onChange={e => setTargetMonth(e.target.value)}
-                                        className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-bold outline-none focus:border-blue-400" />
+                                        className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm font-bold outline-none focus:border-blue-400" />
                                 </div>
                             )}
 

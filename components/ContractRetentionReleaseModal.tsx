@@ -73,7 +73,7 @@ const ContractRetentionReleaseModal: React.FC<ContractRetentionReleaseModalProps
                     <select
                         value={kind}
                         onChange={e => setKind(e.target.value as RetentionReleaseKind)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500"
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500"
                     >
                         <option value="PROVISORIO">Recebimento Provisório ({contract.retention_release_provisional ?? 50}%)</option>
                         <option value="DEFINITIVO">Recebimento Definitivo ({contract.retention_release_definitive ?? 50}%)</option>
@@ -83,7 +83,7 @@ const ContractRetentionReleaseModal: React.FC<ContractRetentionReleaseModalProps
                 <div className="space-y-2">
                     <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Valor a Liberar (R$)</label>
                     <input type="text" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)}
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     <div className="flex gap-2 pt-1">
                         <button type="button" onClick={() => handleSuggestPercent(50)} className="text-xs font-medium text-blue-600 hover:text-blue-800">50% do saldo</button>
                         <span className="text-gray-200">|</span>

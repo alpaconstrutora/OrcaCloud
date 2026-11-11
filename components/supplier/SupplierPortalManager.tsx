@@ -566,7 +566,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                     const supplier = suppliers.find((s) => s.id === e.target.value);
                     setEnableEmail(supplier?.email || '');
                   }}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione um prestador...</option>
                   {suppliers.map((s) => (
@@ -586,7 +586,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                   value={enableEmail}
                   onChange={(e) => setEnableEmail(e.target.value)}
                   placeholder="email@fornecedor.com"
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3.5 h-9 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
                 />
                 <p className="text-xs text-gray-400 pt-1">
                   É este e-mail que o fornecedor usa para entrar no Portal do Fornecedor.
@@ -637,7 +637,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                 <select
                   value={tokenOrgOverride}
                   onChange={(e) => setTokenOrgOverride(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione a organização...</option>
                   {organizations.map((org) => (

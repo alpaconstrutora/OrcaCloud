@@ -912,7 +912,7 @@ const SupplierBulkCategoryModal: React.FC<SupplierBulkCategoryModalProps> = ({ c
                         onChange={(e) => setCategory(e.target.value)}
                         disabled={saving}
                         placeholder="Digite ou selecione uma categoria"
-                        className="w-full px-4 py-3 bg-gray-50 border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:bg-white focus:border-blue-400 disabled:opacity-50"
+                        className="w-full px-4 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm text-gray-700 outline-none focus:bg-white focus:border-blue-400 disabled:opacity-50"
                     />
                     <datalist id="supplier-bulk-categories">
                         {categories.map(c => <option key={c} value={c} />)}

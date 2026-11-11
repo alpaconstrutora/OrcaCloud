@@ -581,7 +581,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                     readOnly
                                                     value={quotationNumber ?? ''}
                                                     placeholder="Gerado ao salvar"
-                                                    className="w-full rounded-lg border border-gray-300 p-2.5 bg-gray-50 text-gray-500 font-mono outline-none"
+                                                    className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 bg-gray-50 text-gray-500 font-mono outline-none"
                                                 />
                                                 <div className="absolute right-2 top-1/2 -translate-y-1/2">
                                                     <ActionIconButton
@@ -607,7 +607,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                             value={formData.title}
                                             onChange={e => setFormData(prev => ({ ...prev, title: e.target.value }))}
                                             placeholder="Ex: Materiais Hidráulicos - Fase 1"
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
                                     </div>
 
@@ -617,7 +617,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                             required
                                             value={formData.projectId}
                                             onChange={e => setFormData(prev => ({ ...prev, projectId: e.target.value }))}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                                         >
                                             <option value="">Selecione um projeto...</option>
                                             {projects.map(p => (
@@ -633,7 +633,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                             type="date"
                                             value={formData.deadline}
                                             onChange={e => setFormData(prev => ({ ...prev, deadline: e.target.value }))}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
                                     </div>
 
@@ -654,7 +654,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                             type="date"
                                             value={formData.deliveryDate}
                                             onChange={e => setFormData(prev => ({ ...prev, deliveryDate: e.target.value }))}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
                                     </div>
 
@@ -663,7 +663,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                         <select
                                             value={formData.deliveryMethod}
                                             onChange={e => setFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold"
                                         >
                                             {FORMAS_DE_ENTREGA.map(forma => <option key={forma} value={forma}>{forma}</option>)}
                                         </select>
@@ -676,7 +676,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                             value={formData.deliveryLocation}
                                             onChange={e => setFormData(prev => ({ ...prev, deliveryLocation: e.target.value }))}
                                             placeholder="Ex: Canteiro de Obras / Almoxarifado"
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none"
                                         />
                                     </div>
 
@@ -685,7 +685,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                         <select
                                             value={formData.paymentMethod}
                                             onChange={e => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
-                                            className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold"
+                                            className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-blue-500 outline-none bg-white font-bold"
                                         >
                                             <option value="Boleto">Boleto Bancário</option>
                                             <option value="Pix">Pix</option>
@@ -726,7 +726,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         min={0}
                                                         value={formData.paymentDays}
                                                         onChange={e => setFormData(prev => ({ ...prev, paymentDays: parseInt(e.target.value) || 0 }))}
-                                                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
+                                                        className="w-full rounded-[6px] border border-gray-300 h-9 px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
                                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
                                                 </div>
@@ -740,7 +740,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         min={1}
                                                         value={formData.paymentInstallments}
                                                         onChange={e => setFormData(prev => ({ ...prev, paymentInstallments: parseInt(e.target.value) || 1 }))}
-                                                        className="w-full rounded-lg border border-gray-300 p-2.5 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
+                                                        className="w-full rounded-[6px] border border-gray-300 h-9 px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
                                                     <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
                                                 </div>

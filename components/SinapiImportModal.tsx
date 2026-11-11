@@ -282,7 +282,7 @@ const SinapiImportModal: React.FC<SinapiImportModalProps> = ({ isOpen, onClose, 
                                     type="month"
                                     value={referenceMonth}
                                     onChange={(e) => { setReferenceMonth(e.target.value); setStage('pick'); setParsed(null); }}
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
+                                    className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:ring-2 focus:ring-emerald-500 outline-none"
                                 />
                                 {referenceMonth && (
                                     <p className="text-xs text-gray-400 mt-1">

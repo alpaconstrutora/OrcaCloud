@@ -1526,7 +1526,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                                 placeholder="Nome do novo grupo..."
                                 value={newGroupName}
                                 onChange={(e) => setNewGroupName(e.target.value)}
-                                className="w-full pl-9 pr-4 py-2 bg-blue-50/30 border border-blue-100 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                                className="w-full pl-9 pr-4 h-9 bg-blue-50/30 border border-blue-100 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                             />
                         </div>
                         <button
@@ -1545,7 +1545,7 @@ const GroupManagerModal: React.FC<GroupManagerModalProps> = ({
                             placeholder="Buscar grupo existente..."
                             value={searchTerm}
                             onChange={(e) => setSearchTerm(e.target.value)}
-                            className="w-full pl-9 pr-4 py-2 bg-gray-50 border border-gray-200 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                            className="w-full pl-9 pr-4 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                         />
                     </div>
                 </div>

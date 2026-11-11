@@ -4204,7 +4204,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         value={reajusteBase}
                                         onChange={e => setReajusteBase(e.target.value)}
                                         placeholder="ex: 2850.00"
-                                        className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-[6px] border border-gray-200 px-4 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 <div>
@@ -4216,7 +4216,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         value={reajusteAtual}
                                         onChange={e => setReajusteAtual(e.target.value)}
                                         placeholder="ex: 3010.00"
-                                        className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-[6px] border border-gray-200 px-4 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                                 {reajusteBase && reajusteAtual && parseFloat(reajusteBase) > 0 && parseFloat(reajusteAtual) > 0 && (
@@ -4236,7 +4236,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                         value={reajusteNotes}
                                         onChange={e => setReajusteNotes(e.target.value)}
                                         placeholder="ex: INCC-M Janeiro/2027"
-                                        className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full rounded-[6px] border border-gray-200 px-4 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     />
                                 </div>
                             </div>
@@ -4342,7 +4342,7 @@ const UnitManagerModal: React.FC<UnitManagerModalProps> = ({ units: init, onClos
                             onChange={e => { setNewUnit(e.target.value); setError(''); }}
                             onKeyDown={e => e.key === 'Enter' && handleAdd()}
                             placeholder="Nova unidade..."
-                            className="flex-1 rounded-[6px] border border-gray-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
+                            className="flex-1 rounded-[6px] border border-gray-200 px-3 h-9 text-sm focus:ring-2 focus:ring-blue-400 outline-none"
                         />
                         <Button size="sm" onClick={handleAdd} className="whitespace-nowrap">
                             <Plus className="w-3.5 h-3.5" /> Adicionar
@@ -4478,7 +4478,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                 value={form.code}
                                 onChange={e => setForm(f => ({ ...f, code: e.target.value }))}
                                 placeholder="Ex: 00001"
-                                className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none font-mono"
+                                className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-orange-400 outline-none font-mono"
                             />
                         </div>
                         <div>
@@ -4487,7 +4487,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                 <select
                                     value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
                                     onChange={e => { if (e.target.value !== '__custom__') setForm(f => ({ ...f, unit: e.target.value })); }}
-                                    className="flex-1 rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                    className="flex-1 rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                                 >
                                     <option value="">Selecione...</option>
                                     {units.map(u => <option key={u} value={u}>{u}</option>)}
@@ -4510,7 +4510,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                 value={form.description}
                                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
                                 placeholder="Descrição do material ou serviço"
-                                className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                                className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                             />
                         </div>
                         <div>
@@ -4522,7 +4522,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                 value={form.quantity}
                                 onChange={e => setForm(f => ({ ...f, quantity: parseFloat(e.target.value) || 0 }))}
                                 onFocus={e => e.target.select()}
-                                className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
+                                className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-orange-400 outline-none"
                             />
                         </div>
                         <div>
@@ -4538,7 +4538,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                         setPriceDigits(digits);
                                         setForm(f => ({ ...f, unitPrice: fromCurrencyDigits(digits) }));
                                     }}
-                                    className="w-full pl-9 rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
+                                    className="w-full pl-9 rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-orange-400 outline-none text-right font-bold"
                                 />
                             </div>
                         </div>
@@ -4564,7 +4564,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                                     <select
                                         value={selectedDatabaseId}
                                         onChange={e => setSelectedDatabaseId(e.target.value)}
-                                        className="w-full rounded-[6px] border border-gray-200 p-2.5 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
+                                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-orange-400 outline-none bg-white"
                                     >
                                         <option value="">Selecione uma base...</option>
                                         {databases.map(db => (
@@ -4740,12 +4740,12 @@ const SignaturePanel: React.FC<SignaturePanelProps> = ({ contract, onSend, onRef
                     {signers.map((s, i) => (
                         <div key={i} className="grid grid-cols-3 gap-2 items-end">
                             <input value={s.name} onChange={e => updateSigner(i, 'name', e.target.value)}
-                                placeholder="Nome *" className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                placeholder="Nome *" className="rounded-[6px] border border-gray-200 px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             <input value={s.email} onChange={e => updateSigner(i, 'email', e.target.value)}
-                                placeholder="E-mail *" type="email" className="rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                placeholder="E-mail *" type="email" className="rounded-[6px] border border-gray-200 px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                             <div className="flex gap-1">
                                 <input value={s.phone} onChange={e => updateSigner(i, 'phone', e.target.value)}
-                                    placeholder="WhatsApp" className="flex-1 rounded-lg border border-gray-200 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
+                                    placeholder="WhatsApp" className="flex-1 rounded-[6px] border border-gray-200 px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500" />
                                 {signers.length > 1 && (
                                     <button onClick={() => removeSigner(i)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg">
                                         <X size={14} />

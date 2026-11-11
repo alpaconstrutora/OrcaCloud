@@ -309,7 +309,7 @@ const AddCityModal: React.FC<{
           <select
             value={stateId}
             onChange={e => setStateId(e.target.value)}
-            className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+            className="w-full px-3 h-9 border border-slate-300 rounded text-sm"
             required
           >
             <option value="">— selecione —</option>
@@ -325,7 +325,7 @@ const AddCityModal: React.FC<{
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="ex: Distrito de Cocais"
-            className="w-full px-3 py-2 border border-slate-300 rounded text-sm"
+            className="w-full px-3 h-9 border border-slate-300 rounded text-sm"
             required
             minLength={2}
           />
@@ -339,7 +339,7 @@ const AddCityModal: React.FC<{
             value={ibgeCode}
             onChange={e => setIbgeCode(e.target.value.replace(/\D/g, ''))}
             placeholder="ex: 3550308"
-            className="w-full px-3 py-2 border border-slate-300 rounded text-sm font-mono"
+            className="w-full px-3 h-9 border border-slate-300 rounded text-sm font-mono"
             maxLength={7}
           />
         </div>

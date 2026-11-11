@@ -104,7 +104,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                                 value={formData.description}
                                 onChange={e => setFormData({ ...formData, description: e.target.value })}
                                 placeholder="Ex: Acréscimo de escopo na fachada / Reajuste IGPM"
-                                className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                className="w-full pl-14 pr-6 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                             />
                         </div>
                     </div>
@@ -119,7 +119,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                                     value={formData.value_impact}
                                     onChange={e => setFormData({ ...formData, value_impact: parseFloat(e.target.value) || 0 })}
                                     placeholder="0,00"
-                                    className="w-full pl-14 pr-6 py-4 bg-blue-50/30 border border-blue-100/50 rounded-2xl text-sm font-medium text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    className="w-full pl-14 pr-6 h-9 bg-blue-50/30 border border-blue-100/50 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                 />
                             </div>
                             <p className="text-xs text-gray-400 font-medium ml-1 uppercase">Use valores negativos para descontos.</p>
@@ -132,7 +132,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                                     type="date"
                                     value={formData.new_end_date}
                                     onChange={e => setFormData({ ...formData, new_end_date: e.target.value })}
-                                    className="w-full pl-14 pr-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                    className="w-full pl-14 pr-6 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                                 />
                             </div>
                         </div>

@@ -100,6 +100,23 @@ describe('4.4 — motor com outras fontes', () => {
         expect(paraAFonte).toBeLessThan(1_000_000);
     });
 
+    it('4B.2 — fonte que entra depois do pico de exposição avisa; a que entra antes não', () => {
+        const base = computeImovibMath(baseStudy());
+        const pico = base.monthlyFlows.reduce((m, f) => (f.acc < base.monthlyFlows[m - 1].acc ? f.month : m), 1);
+        expect(pico).toBeLessThan(base.duration);
+        const depois = computeImovibMath(baseStudy({ funding_sources: [fonte({ name: 'SCP tardia', remuneration: 'participacao', profit_share_percent: 30, entry_month: base.duration })] }));
+        const aviso = depois.avisos.find(a => a.codigo === 'fontes_de_capital' && a.mensagem.includes('SCP tardia'));
+        expect(aviso?.aba).toBe('capital');
+        expect(aviso!.mensagem).toContain(`mês ${base.duration}`);
+        expect(aviso!.mensagem).toContain(`mês ${pico}`);
+        expect(aviso!.mensagem).toMatch(/lucro/);
+        const juros = computeImovibMath(baseStudy({ funding_sources: [fonte({ name: 'Mútuo tardio', entry_month: base.duration, term_months: 1 })] }));
+        // Entrando no último mês, o mútuo também vence depois do fim (outro aviso).
+        expect(juros.avisos.find(a => a.mensagem.includes('Mútuo tardio') && a.mensagem.includes('pico'))!.mensagem).toMatch(/juros/);
+        const antes = computeImovibMath(baseStudy({ funding_sources: [fonte({ remuneration: 'participacao', profit_share_percent: 30, entry_month: 3 })] }));
+        expect(antes.avisos.filter(a => a.codigo === 'fontes_de_capital')).toEqual([]);
+    });
+
     it('o fluxo do projeto não muda com nenhuma fonte', () => {
         const a = computeImovibMath(baseStudy());
         const b = computeImovibMath(baseStudy({ funding_sources: [fonte(), fonte({ id: 'f2', remuneration: 'participacao', profit_share_percent: 20 })] }));

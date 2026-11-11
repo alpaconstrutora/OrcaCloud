@@ -95,6 +95,7 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         expect(linha(indicadores, 'Financiamento liberado')[1]).toBe(m.capital.divida);
         expect(linha(indicadores, 'Permuta')[1]).toBe(m.capital.permuta);
         expect(linha(indicadores, 'Outras fontes de capital')[1]).toBe(m.capital.terceiros);
+        expect(linha(indicadores, 'Vendas durante a obra')[1]).toBe(m.capital.vendasNaObra);
     });
 
     it('4.3 — aba Aportes: uma linha por mês, e distribuições menos aportes é o lucro', () => {

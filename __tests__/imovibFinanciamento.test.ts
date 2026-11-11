@@ -120,11 +120,33 @@ describe('4.1 — motor com as regras do financiamento', () => {
     it('4.2 — as fatias do capital somam 100%, e sem dinheiro nenhum ficam vazias', () => {
         const r = computeImovibMath(comDivida({ swap_financial_percent: 10 }));
         const c = composicaoDoCapital(r.capital);
-        expect(c.map(x => x.chave)).toEqual(['proprio', 'divida', 'permuta', 'terceiros']);
+        expect(c.map(x => x.chave)).toEqual(['proprio', 'divida', 'vendasNaObra', 'permuta', 'terceiros']);
         expect(c.reduce((a, x) => a + x.pct, 0)).toBeCloseTo(100, 9);
         expect(c.find(x => x.chave === 'divida')!.valor).toBe(r.capital.divida);
         expect(c.find(x => x.chave === 'proprio')!.valor).toBe(-r.maxExposure);
-        expect(composicaoDoCapital({ proprio: 0, divida: 0, permuta: 0, terceiros: 0 }).every(x => x.pct === 0)).toBe(true);
+        expect(composicaoDoCapital({ proprio: 0, divida: 0, vendasNaObra: 0, permuta: 0, terceiros: 0 }).every(x => x.pct === 0)).toBe(true);
+    });
+
+    describe('4B.1 — vendas durante a obra', () => {
+        // baseStudy: obra do mês 6 ao 29; chaves no mês 29.
+        const ateAsChaves = (r: ReturnType<typeof computeImovibMath>) => r.monthlyFlows.slice(0, 29)
+            .reduce((a, f) => a + f.linhas.receitaSinal + f.linhas.receitaParcelasObra + f.linhas.receitaIntermediarias + f.linhas.devolucaoDistrato, 0);
+
+        it('sem deduções: é o que os compradores pagam até as chaves, sem o repasse', () => {
+            const r = computeImovibMath(baseStudy({ tax_rate: 0, brokerage_fee: 0, revenue_intermediate_percent: 5, revenue_handover_percent: 65 }));
+            expect(r.capital.vendasNaObra).toBeGreaterThan(0);
+            expect(r.capital.vendasNaObra).toBeCloseTo(ateAsChaves(r), 2);
+        });
+
+        it('com 4% de imposto e 5% de comissão, é 91% disso', () => {
+            const r = computeImovibMath(baseStudy());
+            expect(r.capital.vendasNaObra).toBeCloseTo(ateAsChaves(r) * 0.91, 2);
+        });
+
+        it('tudo no repasse: a fatia fica zerada', () => {
+            const r = computeImovibMath(baseStudy({ revenue_downpayment_percent: 0, revenue_construction_percent: 0, revenue_handover_percent: 100 }));
+            expect(r.capital.vendasNaObra).toBe(0);
+        });
     });
 
     it('4.2 — unidade PERMUTADO do espelho entra na fatia da permuta', () => {

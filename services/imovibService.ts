@@ -3,7 +3,7 @@ import {
     ImovibStudy, ImovibStudyInsert, ImovibStudyUpdate,
     ImovibBlock, ImovibBlockInsert, ImovibBlockUpdate,
     ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
-    ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance, ImovibScenario, ImovibRisk,
+    ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance, ImovibScenario, ImovibRisk, ImovibFundingSource,
 } from '../types';
 import { fetchAllPages } from '../lib/supabasePaginate';
 import {
@@ -22,6 +22,9 @@ export const COLUNAS_DA_LISTAGEM = [METADADOS_DA_LISTAGEM, ...CAMPOS_DO_MOTOR].j
 
 // Só o que o motor lê do espelho para o VGV (computeImovibMath).
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
+
+// Outras fontes de capital (aplicar_20271111960000) — o motor lê todas as colunas.
+const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
 
 // ── Estrutura lida do Empreendimento (plano 2026-10-19-imovib-premissas-planta-inteligente.md)
 
@@ -176,7 +179,7 @@ export const imovibService = {
 
         const studyIds = studies.map(s => s.id);
 
-        const [{ data: blocks, error: blocksError }, { data: capex, error: capexError }, { data: instancias, error: instError }] = await Promise.all([
+        const [{ data: blocks, error: blocksError }, { data: capex, error: capexError }, { data: instancias, error: instError }, { data: fontes, error: fontesError }] = await Promise.all([
             supabase
                 .from('imovib_blocks')
                 .select('id, study_id, name, construction_cost_sqm, sales_price_sqm, created_at, updated_at')
@@ -192,7 +195,16 @@ export const imovibService = {
                 .from('imovib_unit_instances')
                 .select(INSTANCIA_VGV_COLS)
                 .in('study_id', studyIds),
+            // Outras fontes de capital: sem elas a listagem mostraria outro VPL.
+            supabase
+                .from('imovib_funding_sources')
+                .select(FONTE_COLS)
+                .in('study_id', studyIds)
+                .order('sort_order', { ascending: true })
+                .order('created_at', { ascending: true }),
         ]);
+
+        if (fontesError) throw new Error(`Falha ao ler as outras fontes de capital: ${fontesError.message}`);
 
         if (instError) {
             console.error('Error fetching IMOVIB unit instances in batch:', instError);
@@ -247,6 +259,13 @@ export const imovibService = {
             instByStudy.set(i.study_id, arr);
         });
 
+        const fontesByStudy = new Map<string, ImovibFundingSource[]>();
+        ((fontes || []) as ImovibFundingSource[]).forEach(f => {
+            const arr = fontesByStudy.get(f.study_id) || [];
+            arr.push(f);
+            fontesByStudy.set(f.study_id, arr);
+        });
+
         const vinculos = await carregarVinculos(studies);
 
         return studies.map(s => {
@@ -254,6 +273,7 @@ export const imovibService = {
                 ...s,
                 capex_items: capexByStudy.get(s.id) || [],
                 unit_instances: instByStudy.get(s.id) || [],
+                funding_sources: fontesByStudy.get(s.id) || [],
             } as ImovibStudy;
             aplicarEstrutura(study, blocksByStudy.get(s.id) || [], vinculos.get(s.id));
             return study;
@@ -336,6 +356,8 @@ export const imovibService = {
                 .eq('study_id', id);
             if (instError) throw new Error(`Failed to fetch unit instances: ${instError.message}`);
             study.unit_instances = (instancias || []) as ImovibUnitInstance[];
+
+            study.funding_sources = await this.listarFontes(id);
         }
 
         return study;
@@ -716,6 +738,38 @@ export const imovibService = {
     async excluirRisco(id: string): Promise<void> {
         const { error } = await supabase.from('imovib_risks').delete().eq('id', id);
         if (error) throw new Error(`Falha ao excluir o risco: ${error.message}`);
+    },
+
+    // ── Outras fontes de capital (item 4.4 do plano 2026-11-11) ──────────────
+
+    /** Falha PROPAGA: sem as fontes o motor calcularia outro VPL sem aviso. */
+    async listarFontes(studyId: string): Promise<ImovibFundingSource[]> {
+        const { data, error } = await supabase
+            .from('imovib_funding_sources')
+            .select(FONTE_COLS)
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao ler as outras fontes de capital: ${error.message}`);
+        return (data || []) as ImovibFundingSource[];
+    },
+
+    /** Grava a fonte (cria sem `id`, atualiza com). `.select()` confere que a escrita passou na RLS. */
+    async salvarFonte(f: Omit<ImovibFundingSource, 'id' | 'created_at'> & { id?: string }): Promise<ImovibFundingSource> {
+        const { id, ...campos } = f;
+        const q = id
+            ? supabase.from('imovib_funding_sources').update(campos).eq('id', id).select(FONTE_COLS)
+            : supabase.from('imovib_funding_sources').insert(campos).select(FONTE_COLS);
+        const { data, error } = await q;
+        if (error) throw new Error(`Falha ao salvar a fonte de capital: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para salvar fontes de capital deste estudo.');
+        return data[0] as ImovibFundingSource;
+    },
+
+    async excluirFonte(id: string): Promise<void> {
+        const { data, error } = await supabase.from('imovib_funding_sources').delete().eq('id', id).select('id');
+        if (error) throw new Error(`Falha ao excluir a fonte de capital: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para excluir fontes de capital deste estudo.');
     },
 
 };

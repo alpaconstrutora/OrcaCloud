@@ -23,6 +23,7 @@ import CommitteeGatePanel from './CommitteeGatePanel';
 import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
 import { useImovibMath } from '../../hooks/useImovibMath';
+import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
 import { TITULO_VGV_LIQUIDO } from '../../constants/imovibClassificacao';
 import { ImovibStudy } from '../../types';
 import { InvestmentSimulator } from './InvestmentSimulator';
@@ -772,11 +773,11 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                         {study ? (
                                                             <ResponsiveContainer width="100%" height="90%">
                                                                 <PieChart>
+                                                                    {/* Fase 4 (D2): fatias calculadas pelo motor, não o "% equity" digitado. */}
                                                                     <Pie
-                                                                        data={[
-                                                                            { name: 'Capital Próprio (Equity)', value: study.funding_equity_percent || 0 },
-                                                                            { name: 'Financiamento Bancário (Dívida)', value: study.funding_debt_percent || 0 }
-                                                                        ]}
+                                                                        data={composicaoDoCapital(studyMath.capital)
+                                                                            .filter(c => c.pct > 0)
+                                                                            .map(c => ({ name: ROTULO_DO_CAPITAL[c.chave], value: c.pct, chave: c.chave }))}
                                                                         cx="50%"
                                                                         cy="50%"
                                                                         innerRadius={60}
@@ -784,10 +785,11 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                                         paddingAngle={5}
                                                                         dataKey="value"
                                                                     >
-                                                                        <Cell fill="#4f46e5" />
-                                                                        <Cell fill="#06b6d4" />
+                                                                        {composicaoDoCapital(studyMath.capital).filter(c => c.pct > 0).map(c => (
+                                                                            <Cell key={c.chave} fill={COR_DO_CAPITAL[c.chave]} />
+                                                                        ))}
                                                                     </Pie>
-                                                                    <Tooltip formatter={(v: any) => `${v}%`} />
+                                                                    <Tooltip formatter={(v: any) => `${Number(v).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`} />
                                                                     <Legend verticalAlign="bottom" height={36} iconType="circle" wrapperStyle={{ fontSize: 11 }} />
                                                                 </PieChart>
                                                             </ResponsiveContainer>

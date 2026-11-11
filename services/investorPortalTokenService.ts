@@ -13,11 +13,13 @@ import { aplicarEstrutura, VinculoDaEstrutura } from './imovibService';
  * Aceita também a resposta anterior à migration
  * aplicar_20271111700000_investor_portal_estudo_mesma_estrutura.sql (sem
  * `unit_instances` nem `estrutura_do_empreendimento`): calcula como antes.
+ * As outras fontes de capital (`funding_sources`, item 4.4) vêm desde
+ * aplicar_20271111960000; resposta sem elas = estudo sem fontes.
  */
 export function montarEstudoDoPortal(raw: any): ImovibStudy | null {
     if (!raw) return null;
     const { estrutura_do_empreendimento, blocks, ...resto } = raw;
-    const study = { ...resto, unit_instances: raw.unit_instances ?? [] } as ImovibStudy;
+    const study = { ...resto, unit_instances: raw.unit_instances ?? [], funding_sources: raw.funding_sources ?? [] } as ImovibStudy;
     aplicarEstrutura(study, blocks ?? [], (estrutura_do_empreendimento ?? undefined) as VinculoDaEstrutura | undefined);
     return study;
 }

@@ -2,6 +2,9 @@ import { ImovibStudy, ImovibCapexItem, ImovibCapexBase } from '../types';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { curvaDeVendas, TipoCurvaDeVendas } from './imovibCurvas';
 import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
+import { fluxoDaDivida, PremissasDoFinanciamento } from './imovibFinanciamento';
+import { aportesEDistribuicoes, LinhaDeAporte } from './imovibAportes';
+import { fluxoDasFontes, partilhaDasDistribuicoes } from './imovibFontes';
 
 /**
  * Motor dos Estudos de Viabilidade (Imovib) — cálculo puro, sem React.
@@ -12,7 +15,7 @@ import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
  *
  *   montarPremissas     → lê o estudo, aplica padrões, soma áreas/VGV/custos, avisa;
  *   montarSeries        → uma série por linha do fluxo (receita, deduções, custos);
- *   aplicarFinanciamento→ dívida à produção sobre as séries;
+ *   aplicarFinanciamento→ dívida à produção, outras fontes, aportes e distribuições;
  *   calcularResultado   → VPL, TIR, valor de cada rubrica.
  *
  * O hook (hooks/useImovibMath.ts) é só o useMemo desta função e reexporta tudo.
@@ -92,7 +95,7 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -138,6 +141,15 @@ export interface ImovibMathResult {
     vgvPorBloco: Record<string, { vgv: number; fonte: 'espelho' | 'preco_m2' }>;
     /** Saldo devedor que as receitas não amortizaram e o investidor quita no último mês. */
     debtPayoffAtEnd: number;
+    /**
+     * De onde vem o dinheiro do empreendimento (item 4.2, decisão D2), em R$:
+     * capital próprio necessário (módulo da exposição máxima), dívida liberada,
+     * permuta (VGV entregue ao terrenista) e outras fontes. Fatias:
+     * composicaoDoCapital em utils/imovibFinanciamento.ts.
+     */
+    capital: { proprio: number; divida: number; permuta: number; terceiros: number };
+    /** Aportes e distribuições mês a mês (item 4.3), sobre o caixa antes da participação das fontes. */
+    aportes: LinhaDeAporte[];
     /**
      * Rubricas do CAPEX detalhado entraram no cálculo? Só no modo Completo e com
      * rubricas cadastradas. Quando sim, imposto e corretagem da Dinâmica NÃO
@@ -267,6 +279,9 @@ export const CAMPOS_DO_MOTOR = [
     'revenue_post_handover_percent', 'post_handover_months', 'post_handover_rate_monthly', 'handover_delay_months',
     'cancellation_lag_months', 'cancellation_refund_percent', 'cancellation_resale', 'cancellation_resale_discount_percent',
     'sales_index_rate_monthly', 'cost_index_rate_monthly',
+    // Fase 4 (migration aplicar_20271111950000)
+    'financing_release_lag_months', 'financing_min_sales_percent', 'financing_interest_mode', 'financing_amortization',
+    'min_cash_balance',
 ] as const satisfies readonly (keyof ImovibStudy)[];
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
@@ -296,6 +311,8 @@ const EMPTY_RESULT: ImovibMathResult = {
     vgvBase: 0,
     vgvPorBloco: {},
     debtPayoffAtEnd: 0,
+    capital: { proprio: 0, divida: 0, permuta: 0, terceiros: 0 },
+    aportes: [],
     capexRubricasAtivas: false,
     capexRubricas: { terreno: 0, obra: 0, vgv: 0, total: 0 },
     capexValorPorRubrica: {},
@@ -317,8 +334,8 @@ interface Premissas {
     indiceVendas: number;
     indiceObra: number;
     monthlyDiscount: number;
-    monthlyFinancingRate: number;
-    actualFinPct: number;
+    financiamento: PremissasDoFinanciamento;
+    caixaMinimo: number;
     landCost: number;
     rubricas: ImovibCapexItem[];
     capexRubricasAtivas: boolean;
@@ -330,6 +347,10 @@ interface Premissas {
     deducaoPct: { impostos: number; comercial: number; outras: number };
     costDeltaMultiplier: number;
     vgvTotal: number;
+    /** VGV depois das permutas: a base das vendas e da exigência de vendas do financiamento. */
+    vgvVendavel: number;
+    /** Preço das unidades PERMUTADO do espelho (já fora do VGV). */
+    permutaDoEspelho: number;
     netVgvTotal: number;
     estoqueNaoVendidoPct: number;
     vendasPorMes: number[];
@@ -400,6 +421,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     const vgvPorBloco: ImovibMathResult['vgvPorBloco'] = {};
     const instancias = study.unit_instances || [];
     let espelhoTemPermutada = false;
+    let permutaDoEspelho = 0;
     const blocosSemPreco: string[] = [];
 
     study.blocks?.forEach(block => {
@@ -423,9 +445,12 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         let blockVgv: number;
         if (doBloco.length > 0) {
             if (doBloco.some(i => i.status === 'PERMUTADO')) espelhoTemPermutada = true;
+            const precoDa = (i: typeof doBloco[number]) => ((i.price || 0) > 0 ? i.price : (i.private_area || 0) * precoM2);
             blockVgv = doBloco
                 .filter(i => i.status !== 'PERMUTADO')
-                .reduce((acc, i) => acc + ((i.price || 0) > 0 ? i.price : (i.private_area || 0) * precoM2), 0);
+                .reduce((acc, i) => acc + precoDa(i), 0);
+            // Fora do VGV, mas é capital do terrenista: entra na fatia da permuta (item 4.2).
+            permutaDoEspelho += doBloco.filter(i => i.status === 'PERMUTADO').reduce((acc, i) => acc + precoDa(i), 0);
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
         } else {
             blockVgv = blockVendavelArea * precoM2;
@@ -665,6 +690,15 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     const actualFinPct = study.funding_debt_percent != null && !Number.isNaN(study.funding_debt_percent)
         ? study.funding_debt_percent / 100
         : financingPercent;
+    // Regras de liberação e pagamento (item 4.1). Os padrões reproduzem o cálculo de antes.
+    const financiamento: PremissasDoFinanciamento = {
+        fracaoDaObra: actualFinPct,
+        jurosMensal: monthlyFinancingRate,
+        defasagemDaLiberacao: val(study.financing_release_lag_months, D.financing_release_lag_months),
+        vendasMinimasPct: val(study.financing_min_sales_percent, D.financing_min_sales_percent),
+        jurosNaObra: study.financing_interest_mode ?? D.financing_interest_mode,
+        amortizaCom: study.financing_amortization ?? D.financing_amortization,
+    };
 
     return {
         study,
@@ -677,8 +711,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         indiceVendas,
         indiceObra,
         monthlyDiscount,
-        monthlyFinancingRate,
-        actualFinPct,
+        financiamento,
+        caixaMinimo: val(study.min_cash_balance, D.min_cash_balance),
         landCost,
         rubricas,
         capexRubricasAtivas,
@@ -689,6 +723,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         deducaoPct,
         costDeltaMultiplier,
         vgvTotal,
+        vgvVendavel,
+        permutaDoEspelho,
         netVgvTotal,
         estoqueNaoVendidoPct,
         vendasPorMes,
@@ -803,84 +839,129 @@ interface FluxoDoAcionista {
     netProjeto: number[];
     maxExposure: number;
     debtPayoffAtEnd: number;
+    aportes: LinhaDeAporte[];
+    dividaLiberada: number;
+    aporteDeTerceiros: number;
 }
 
+/**
+ * Ordem: dívida à produção (utils/imovibFinanciamento.ts) → fontes a juros
+ * (utils/imovibFontes.ts) → aportes e distribuições sobre esse caixa
+ * (utils/imovibAportes.ts) → a parte das fontes por participação em cada
+ * distribuição: capital de volta e a fatia delas no LUCRO
+ * (partilhaDasDistribuicoes). `net` é o caixa do incorporador depois de tudo isso;
+ * `netProjeto`, o caixa sem dívida nem terceiros.
+ */
 function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
-    let accumulatedFlow = 0;
-    let accProjeto = 0;
-    let maxExposure = 0;
-    let debtBalance = 0;
-    let debtPayoffAtEnd = 0;
-    const monthlyFlows: MonthlyFlow[] = [];
-    const net: number[] = [];
-    const netProjetoDoMes: number[] = [];
+    const n = P.duration;
+    const netRevDoMes: number[] = [];
+    const vendasAcumuladasPct: number[] = [];
+    let vendido = 0;
+    for (let i = 0; i < n; i++) {
+        netRevDoMes.push(S.receitaBruta[i] - S.deducaoReceita[i] + S.devolucao[i]);
+        vendido += P.vendasPorMes[i] ?? 0;
+        vendasAcumuladasPct.push(P.vgvVendavel > 0 ? (vendido / P.vgvVendavel) * 100 : 0);
+    }
+    const D = fluxoDaDivida(S.custoObra, netRevDoMes, S.linhas.map(l => l.receitaRepasse), vendasAcumuladasPct, P.financiamento);
+    const fontes = P.study.funding_sources ?? [];
+    const T = fontes.length ? fluxoDasFontes(fontes, n) : null;
 
-    for (let m = 1; m <= P.duration; m++) {
-        const i = m - 1;
-        const grossRev = S.receitaBruta[i];
-        const netRev = grossRev - S.deducaoReceita[i] + S.devolucao[i];
+    // 1ª passada: o caixa antes da participação das fontes.
+    const antes: { netFlow: number; debtPayment: number }[] = [];
+    for (let i = 0; i < n; i++) {
+        const netRev = netRevDoMes[i];
         const custoObra = S.custoObra[i];
-
-        const totalCost = S.custoProprio[i] + custoObra;
-        const financedCost = custoObra * P.actualFinPct;
+        const financedCost = D.liberacao[i];
         const equityCost = S.custoProprio[i] + (custoObra - financedCost);
-
-        const jurosDoMes = debtBalance * P.monthlyFinancingRate;
-        debtBalance = debtBalance * (1 + P.monthlyFinancingRate);
-        debtBalance += financedCost;
-
-        let debtPayment = 0;
-        let investorRev = 0;
-        if (netRev > 0) {
-            if (debtBalance > 0) {
-                debtPayment = Math.min(debtBalance, netRev);
-                debtBalance -= debtPayment;
-                investorRev = netRev - debtPayment;
-            } else {
-                investorRev = netRev;
-            }
-        } else {
-            // Deduções acima da receita do mês (só com percentuais somando mais de
-            // 100%): a diferença sai do caixa. Antes era descartada em silêncio.
-            investorRev = netRev;
-        }
-
+        // Receita do mês menos o que foi ao banco (amortização e, se pagos, juros).
+        // Receita líquida negativa (deduções acima de 100%) sai do caixa.
+        const investorRev = netRev - D.pagamento[i];
+        let debtPayment = D.pagamento[i];
         let netFlow = investorRev - equityCost;
 
         // Último mês: o saldo que as receitas não amortizaram é quitado pelo
         // investidor. O motor antigo terminava o fluxo com a dívida em
         // aberto e a descartava — com 100% de dívida, subir o custo de obra
         // não mudava o VPL.
-        if (m === P.duration && debtBalance > 0.005) {
-            debtPayoffAtEnd = debtBalance;
-            debtPayment += debtBalance;
-            netFlow -= debtBalance;
-            debtBalance = 0;
+        if (i === n - 1 && D.quitacaoNoFim > 0) {
+            debtPayment += D.quitacaoNoFim;
+            netFlow -= D.quitacaoNoFim;
+        }
+        if (T) netFlow += T.aporte[i] + T.remuneracao[i];
+        antes.push({ netFlow, debtPayment });
+    }
+
+    const aportes = aportesEDistribuicoes(antes.map(a => a.netFlow), P.caixaMinimo);
+    if (T && T.participacao > 0) {
+        partilhaDasDistribuicoes(aportes, T.aporteParticipacao, T.participacao)
+            .forEach((v, i) => { aportes[i].paraTerceiros = v; });
+    }
+
+    // 2ª passada: participação das fontes em cada distribuição e o fluxo final.
+    let accumulatedFlow = 0;
+    let accProjeto = 0;
+    let maxExposure = 0;
+    const monthlyFlows: MonthlyFlow[] = [];
+    const net: number[] = [];
+    const netProjetoDoMes: number[] = [];
+    for (let m = 1; m <= n; m++) {
+        const i = m - 1;
+        const { debtPayment } = antes[i];
+        let netFlow = antes[i].netFlow;
+        let remuneracaoDeTerceiros = T ? T.remuneracao[i] : 0;
+        if (aportes[i].paraTerceiros > 0) {
+            netFlow -= aportes[i].paraTerceiros;
+            remuneracaoDeTerceiros -= aportes[i].paraTerceiros;
         }
 
         accumulatedFlow += netFlow;
         if (accumulatedFlow < maxExposure) maxExposure = accumulatedFlow;
 
-        const linhas: LinhasDoMes = { ...S.linhas[i], liberacaoDivida: financedCost, pagamentoDaDivida: -debtPayment };
-        const netProjeto = netFlow - linhas.liberacaoDivida - linhas.pagamentoDaDivida;
+        const linhas: LinhasDoMes = {
+            ...S.linhas[i],
+            liberacaoDivida: D.liberacao[i],
+            pagamentoDaDivida: -debtPayment,
+            aporteDeTerceiros: T ? T.aporte[i] : 0,
+            remuneracaoDeTerceiros,
+        };
+        const netProjeto = netFlow - linhas.liberacaoDivida - linhas.pagamentoDaDivida
+            - linhas.aporteDeTerceiros - linhas.remuneracaoDeTerceiros;
         accProjeto += netProjeto;
 
         monthlyFlows.push({
-            month: m, name: `Mês ${m}`, rev: grossRev, cost: totalCost, net: netFlow, acc: accumulatedFlow,
-            netProjeto, accProjeto, jurosDoMes, linhas,
+            month: m, name: `Mês ${m}`, rev: S.receitaBruta[i], cost: S.custoProprio[i] + S.custoObra[i],
+            net: netFlow, acc: accumulatedFlow, netProjeto, accProjeto, jurosDoMes: D.juros[i], linhas,
         });
         net.push(netFlow);
         netProjetoDoMes.push(netProjeto);
     }
 
-    if (debtPayoffAtEnd > 0) {
+    if (D.quitacaoNoFim > 0) {
         P.avisos.push({
             codigo: 'divida_quitada_no_fim',
-            mensagem: `As receitas não amortizaram todo o financiamento: ${fmtBRL(debtPayoffAtEnd)} de saldo devedor são quitados com capital próprio no mês ${P.duration}.`,
+            mensagem: `As receitas não amortizaram todo o financiamento: ${fmtBRL(D.quitacaoNoFim)} de saldo devedor são quitados com capital próprio no mês ${n}.`,
             aba: 'capital',
         });
     }
-    return { monthlyFlows, net, netProjeto: netProjetoDoMes, maxExposure, debtPayoffAtEnd };
+    if (D.naoLiberado > 0.005) {
+        const { vendasMinimasPct, defasagemDaLiberacao } = P.financiamento;
+        const porVendas = D.naoLiberado - D.naoLiberadoPelaDefasagem;
+        const motivos: string[] = [];
+        if (porVendas > 0.005) motivos.push(`${fmtBRL(porVendas)} porque a venda acumulada não chega a ${Number(vendasMinimasPct.toFixed(2)).toLocaleString('pt-BR')}% do VGV vendável até o fim da obra${defasagemDaLiberacao > 0 ? ' e da defasagem' : ''}`);
+        if (D.naoLiberadoPelaDefasagem > 0.005) motivos.push(`${fmtBRL(D.naoLiberadoPelaDefasagem)} porque a defasagem de ${defasagemDaLiberacao} meses joga a liberação para depois do fim do estudo`);
+        P.avisos.push({
+            codigo: 'financiamento_nao_liberado',
+            mensagem: `${fmtBRL(D.naoLiberado)} do financiamento à produção não são liberados: ${motivos.join('; ')}. Esse custo sai do capital próprio.`,
+            aba: 'capital',
+        });
+    }
+    T?.avisos.forEach(mensagem => P.avisos.push({ codigo: 'fontes_de_capital', mensagem, aba: 'capital' }));
+
+    return {
+        monthlyFlows, net, netProjeto: netProjetoDoMes, maxExposure, debtPayoffAtEnd: D.quitacaoNoFim, aportes,
+        dividaLiberada: D.liberacao.reduce((a, b) => a + b, 0),
+        aporteDeTerceiros: T ? T.aporte.reduce((a, b) => a + b, 0) : 0,
+    };
 }
 
 // ── 4. Resultado ────────────────────────────────────────────────────────────
@@ -941,6 +1022,13 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         vgvBase: P.baseVgvTotal,
         vgvPorBloco: P.vgvPorBloco,
         debtPayoffAtEnd: F.debtPayoffAtEnd,
+        capital: {
+            proprio: Math.max(0, -F.maxExposure),
+            divida: F.dividaLiberada,
+            permuta: Math.max(0, P.vgvTotal - P.vgvVendavel) + P.permutaDoEspelho,
+            terceiros: F.aporteDeTerceiros,
+        },
+        aportes: F.aportes,
         capexRubricasAtivas: P.capexRubricasAtivas,
         capexRubricas: {
             terreno: P.rubricaTerreno,

@@ -54,3 +54,6 @@ export function imovibIdentificacaoParaGravar(c: { cnpj: string; developer: stri
         ...(manager ? {} : { project_manager: '' }),
     };
 }
+
+/** O que é o "VGV líquido" desde a Fase 1 do plano 2026-11-11 (item 2.6): `title` na listagem e no portal. */
+export const TITULO_VGV_LIQUIDO = 'Receita dos compradores sem índice: VGV vendido depois das permutas, menos inadimplência e devolução de distratos. Pode passar do VGV com os juros do pós-chaves.';

@@ -8,10 +8,12 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import { formatMoney, formatDateBR, formatPercent, Money } from './ui/Format';
 import { computeImovibMath, ImovibMathResult } from '../hooks/useImovibMath';
+import { calcularIndicadores, IndicadoresDoEstudo } from '../utils/imovibIndicadores';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useImovibPermissaoPorOrg } from '../hooks/useImovibEdicao';
-import { imovibIncorporadora } from '../constants/imovibClassificacao';
+import { imovibIncorporadora, TITULO_VGV_LIQUIDO } from '../constants/imovibClassificacao';
 
 interface ImovibDashboardProps {
     /** Ignorado: a organização vem do topo (useOrgContext, REGRA #5). */
@@ -20,7 +22,7 @@ interface ImovibDashboardProps {
     onViewStudy: (id: string) => void;
 }
 
-// Todas as colunas disponíveis (16) — passadas ao ColumnConfigButton e ao loop de render.
+// Todas as colunas disponíveis (18) — passadas ao ColumnConfigButton e ao loop de render.
 const IMOVIB_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Estudo', sortable: true },
     { key: 'developer', label: 'Incorporadora', sortable: true },
@@ -36,6 +38,9 @@ const IMOVIB_COLUMNS: ColumnConfig[] = [
     { key: 'irr', label: 'TIR (a.a.)', sortable: true },
     { key: 'margin', label: 'Margem', sortable: true },
     { key: 'exposure', label: 'Exposição máx.', sortable: true },
+    // Item 2.5 do plano 2026-11-11: ocultas por padrão.
+    { key: 'payback', label: 'Payback', sortable: true },
+    { key: 'multiple', label: 'Múltiplo', sortable: true },
     { key: 'created_at', label: 'Criado em', sortable: true },
     { key: 'updated_at', label: 'Atualizado em', sortable: true },
 ];
@@ -50,7 +55,7 @@ const DEFAULT_COLUMNS = IMOVIB_COLUMNS.filter(c => DEFAULT_VISIBLE_KEYS.includes
 const IMOVIB_COL_WIDTHS: Record<string, number> = {
     name: 220, developer: 180, segment: 140, phase: 130, development_modality: 150,
     zoning: 140, version: 90, vgv: 140, netVgv: 140, cost: 140, vpl: 130, irr: 110,
-    margin: 110, exposure: 140, created_at: 130, updated_at: 130, actions: 60,
+    margin: 110, exposure: 140, payback: 110, multiple: 110, created_at: 130, updated_at: 130, actions: 60,
 };
 
 // Cores das fases que o formulário grava (IMOVIB_FASES em
@@ -76,6 +81,7 @@ interface StudyRow {
     m: ImovibMathResult;
     cost: number;
     margin: number; // pontos percentuais; NaN quando VGV = 0
+    ind: IndicadoresDoEstudo;
 }
 
 const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStudy }) => {
@@ -142,7 +148,10 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
         const m = computeImovibMath(study);
         const totalNetProfit = m.monthlyFlows.reduce((acc, f) => acc + f.net, 0);
         const margin = m.vgvTotal > 0 ? (totalNetProfit / m.vgvTotal) * 100 : NaN;
-        return { study, m, cost: m.constCostTotal + m.landCost, margin };
+        // Só indicadores do próprio fluxo — ponto de equilíbrio (que roda o motor
+        // dezenas de vezes) não entra na listagem.
+        const ind = calcularIndicadores(m, study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate);
+        return { study, m, cost: m.constCostTotal + m.landCost, margin, ind };
     }), [studies]);
 
     const filteredRows = useMemo(() => {
@@ -181,6 +190,8 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                 case 'irr': return num(ra.m.annualIrr, rb.m.annualIrr);
                 case 'margin': return num(ra.margin, rb.margin);
                 case 'exposure': return num(ra.m.maxExposure, rb.m.maxExposure);
+                case 'payback': return num(ra.ind.paybackSimplesMes ?? NaN, rb.ind.paybackSimplesMes ?? NaN);
+                case 'multiple': return num(ra.ind.multiploDoCapital ?? NaN, rb.ind.multiploDoCapital ?? NaN);
                 case 'created_at': return txt(a.created_at).localeCompare(txt(b.created_at)) * dir;
                 case 'updated_at': return txt(a.updated_at).localeCompare(txt(b.updated_at)) * dir;
                 default: return 0;
@@ -358,7 +369,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredRows.map(({ study, m, cost, margin }) => (
+                                {filteredRows.map(({ study, m, cost, margin, ind }) => (
                                     <tr
                                         key={study.id}
                                         onClick={() => onViewStudy(study.id)}
@@ -405,7 +416,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                             </td>
                                         )}
                                         {visible.includes('netVgv') && (
-                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800" title={TITULO_VGV_LIQUIDO}>
                                                 {formatMoney(m.netVgvTotal)}
                                             </td>
                                         )}
@@ -432,6 +443,16 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                         {visible.includes('exposure') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800">
                                                 {formatMoney(m.maxExposure)}
+                                            </td>
+                                        )}
+                                        {visible.includes('payback') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800" title="Mês em que o caixa acumulado do acionista volta ao positivo">
+                                                {ind.paybackSimplesMes == null ? '—' : `Mês ${ind.paybackSimplesMes}`}
+                                            </td>
+                                        )}
+                                        {visible.includes('multiple') && (
+                                            <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800" title="Entradas ÷ saídas de caixa do acionista">
+                                                {ind.multiploDoCapital == null ? '—' : `${ind.multiploDoCapital.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}×`}
                                             </td>
                                         )}
                                         {visible.includes('created_at') && (

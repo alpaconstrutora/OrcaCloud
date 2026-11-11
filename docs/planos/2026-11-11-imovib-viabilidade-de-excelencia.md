@@ -725,7 +725,7 @@ Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/
 
 Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) aplicada em 11/11 com OK do usuário; coluna conferida no banco.
 
-**Fase 2 — Indicadores e fluxo:** 6 de 6 no código (branch `feat/imovib-fase2`); publicação espera revisão e CI
+**Fase 2 — Indicadores e fluxo:** 6 de 6 — no ar (PR #358, 1623a5ae), revisada; correções da revisão: vendas mínimas em % do VGV vendável (acima de 100% = "nem vendendo tudo"), corrida da taxa do índice, alternadores no padrão §19.1
 - [x] 2.1 Indicadores — `utils/imovibIndicadores.ts`. Razões sem base (sem VGV, sem saída) ficam vazias, não 0. Payback = último mês em que o acumulado volta a ficar ≥ 0 e assim fica.
 - [x] 2.2 Variações e pontos de equilíbrio — `utils/imovibVariacoes.ts`, `utils/imovibEquilibrio.ts`. Vendas mínimas = 100% + a variação de preço que zera o VPL (a receita do motor é linear no VGV). Cada busca < 50 ms.
 - [x] 2.3 Resumo Executivo — VPL e lucro separados; payback, múltiplo, retorno sobre o capital, mês da exposição; cartão de pontos de equilíbrio com margem-alvo editável (padrão 15%, não gravada). Sai o bloco "Simulação Completa".

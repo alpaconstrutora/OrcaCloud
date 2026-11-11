@@ -9,6 +9,7 @@ import Button from './ui/Button'
 import { useOrgWriteTarget } from '../hooks/useOrgContext'
 import { taskSpaceService, TaskSpaceWithMeta } from '../services/taskSpaceService'
 import { taskStatusService, TaskStatus } from '../services/taskService'
+import { type Task, TASK_COLS } from '../services/celular/tarefasFonte'
 import { statusesOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
 import {
   startOfDay, addDays, isoDate, dayOf, isOverdue, isNewTask, groupBySection, onDay,
@@ -35,26 +36,6 @@ import {
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-interface Task {
-  id: string
-  org_id: string
-  title: string
-  description: string | null
-  start_date: string | null
-  due_date: string | null
-  priority: number
-  status: 'open' | 'done' | 'snoozed'
-  status_id: string | null
-  source_module: string
-  space_id: string | null
-  folder_id: string | null
-  project_id: string | null
-  assignee_employee_id: string | null
-  alert_at: string | null
-  parent_task_id: string | null
-  created_at: string
-}
-
 interface EmployeeOption { id: string; name: string }
 interface FolderSel      { id: string; space_id: string; name: string; color: string | null }
 interface Props {
@@ -69,7 +50,6 @@ interface ToastState {
   action?: { label: string; run: () => void }
 }
 
-const TASK_COLS = 'id, org_id, title, description, start_date, due_date, priority, status, status_id, source_module, space_id, folder_id, project_id, assignee_employee_id, alert_at, parent_task_id, created_at'
 const TASK_LIMIT = 300
 /** Pasta virtual: tarefas do espaço que não estão em pasta nenhuma. */
 const NO_FOLDER = '__sem_pasta__'

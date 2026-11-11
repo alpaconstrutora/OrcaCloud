@@ -346,7 +346,7 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
                     </p>
 
                     <Field label="Descrição (opcional)">
-                        <textarea value={editing.description ?? ''} onChange={e => setField('description', e.target.value)} rows={2} className={inputCls} />
+                        <textarea value={editing.description ?? ''} onChange={e => setField('description', e.target.value)} rows={2} className={inputClsArea} />
                     </Field>
 
                     <div className="flex justify-end gap-3">
@@ -445,7 +445,9 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
     );
 };
 
-const inputCls = 'w-full p-2.5 rounded-xl border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm font-medium';
+const inputCls = 'w-full h-9 px-3 rounded-[6px] border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm font-medium';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full p-2.5 rounded-[6px] border border-gray-200 focus:border-blue-400 focus:ring-2 focus:ring-blue-100 transition-all text-sm font-medium';
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div>

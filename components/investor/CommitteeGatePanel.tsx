@@ -175,7 +175,7 @@ const CommitteeGatePanel: React.FC<Props> = ({ opportunity, opportunityId, organ
                         <select
                             value={form.decision ?? 'pendente'}
                             onChange={e => setForm({ ...form, decision: e.target.value as CommitteeDecision })}
-                            className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                            className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                         >
                             {(['pendente', 'aprovado', 'aprovado_condicionantes', 'reprovado', 'devolvido', 'suspenso', 'arquivado'] as CommitteeDecision[]).map(d => (
                                 <option key={d} value={d}>{COMMITTEE_DECISION_LABELS[d]}</option>

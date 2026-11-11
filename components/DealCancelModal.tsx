@@ -113,7 +113,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                                 value={customReason}
                                 onChange={(e) => setCustomReason(e.target.value)}
                                 placeholder="Descreva o motivo..."
-                                className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
+                                className="w-full px-4 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-form-input font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
                             />
                         )}
                     </div>
@@ -126,7 +126,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                         <MoneyCentsInput
                             value={refundAmount}
                             onChange={(v) => setRefundAmount(v === '' ? 0 : Number(v))}
-                            className="w-full px-4 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-sm font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
+                            className="w-full px-4 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-bold text-gray-700 outline-none focus:border-red-400 transition-all"
                         />
                         <p className="text-xs text-gray-400 font-bold uppercase tracking-wide">
                             Será registrado como observação do distrato para controle financeiro.

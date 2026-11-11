@@ -1008,7 +1008,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     value={interest.contact_name}
                                     onChange={e => setInterest(p => ({ ...p, contact_name: e.target.value }))}
                                     placeholder="Seu nome"
-                                    className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -1019,7 +1019,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         value={interest.contact_email}
                                         onChange={e => setInterest(p => ({ ...p, contact_email: e.target.value }))}
                                         placeholder="seu@email.com"
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                        className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
                                 </div>
                                 <div>
@@ -1029,7 +1029,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                         value={interest.contact_phone}
                                         onChange={e => setInterest(p => ({ ...p, contact_phone: e.target.value }))}
                                         placeholder="(00) 00000-0000"
-                                        className="w-full px-4 py-3 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                        className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
                                 </div>
                             </div>

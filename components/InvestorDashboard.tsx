@@ -1117,7 +1117,7 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                                 if (e.key === 'Escape') setInputModal(null);
                             }}
                             autoFocus
-                            className="w-full px-4 py-2 border border-gray-200 rounded-xl text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm mb-6 focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <div className="flex gap-3 justify-end">
                             <Button variant="ghost" onClick={() => setInputModal(null)}>Cancelar</Button>

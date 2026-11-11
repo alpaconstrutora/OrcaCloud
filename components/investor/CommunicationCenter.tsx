@@ -144,7 +144,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                                 type="text"
                                 value={form.title || ''}
                                 onChange={e => setForm(f => ({ ...f, title: e.target.value }))}
-                                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Ex: Reunião de Prestação de Contas — Mar/26"
                             />
                         </label>
@@ -153,7 +153,7 @@ const CommunicationCenter: React.FC<Props> = ({ organizationId, investorId, isAd
                             <select
                                 value={form.type}
                                 onChange={e => setForm(f => ({ ...f, type: e.target.value as AnnouncementType }))}
-                                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 {Object.entries(ANNOUNCEMENT_TYPE_LABELS).map(([v, l]) => (
                                     <option key={v} value={v}>{l}</option>

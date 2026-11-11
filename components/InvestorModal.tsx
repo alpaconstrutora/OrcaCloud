@@ -218,7 +218,7 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Código</label>
                                 <input
                                     type="text"
-                                    className="w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                                    className="w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-purple-500 outline-none"
                                     value={formData.code ?? ''}
                                     onChange={(e) => update({ code: e.target.value })}
                                     placeholder="001"
@@ -228,10 +228,10 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">Nome Completo</label>
                             <div className="relative">
-                                <User className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                <User className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input
                                     type="text"
-                                    className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                                    className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-purple-500 outline-none"
                                     value={formData.name}
                                     onChange={(e) => update({ name: e.target.value })}
                                     placeholder="Ex: João da Silva"
@@ -243,10 +243,10 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-1">E-mail (Acesso ao Portal)</label>
                             <div className="relative">
-                                <Mail className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <input
                                     type="email"
-                                    className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                                    className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-purple-500 outline-none"
                                     value={formData.email}
                                     onChange={(e) => update({ email: e.target.value })}
                                     placeholder="investidor@exemplo.com"
@@ -259,10 +259,10 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">CPF / CNPJ</label>
                                 <div className="relative">
-                                    <FileText className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                    <FileText className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                     <input
                                         type="text"
-                                        className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                                        className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-purple-500 outline-none"
                                         value={formData.document}
                                         onChange={(e) => update({ document: e.target.value })}
                                         placeholder="000.000.000-00"
@@ -272,10 +272,10 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Telefone</label>
                                 <div className="relative">
-                                    <Phone className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                     <input
                                         type="text"
-                                        className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 focus:ring-2 focus:ring-purple-500 outline-none"
+                                        className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 focus:ring-2 focus:ring-purple-500 outline-none"
                                         value={formData.phone}
                                         onChange={(e) => update({ phone: e.target.value })}
                                         placeholder="(00) 00000-0000"
@@ -292,9 +292,9 @@ const InvestorModal: React.FC<InvestorModalProps> = ({ isOpen, onClose, onSubmit
                                 aplicar_20271110950000_investidor_compartilhado.sql. */}
                             <label className="block text-sm font-medium text-gray-700 mb-1">Organização</label>
                             <div className="relative">
-                                <Building2 className="absolute left-3 top-3 w-5 h-5 text-gray-400" />
+                                <Building2 className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
                                 <select
-                                    className="pl-10 w-full rounded-lg border border-gray-300 p-2.5 bg-white focus:ring-2 focus:ring-purple-500 outline-none"
+                                    className="pl-10 w-full rounded-[6px] border border-gray-300 h-9 text-sm px-3 bg-white focus:ring-2 focus:ring-purple-500 outline-none"
                                     value={formData.organization_id || ''}
                                     onChange={(e) => update({ organization_id: e.target.value || undefined })}
                                 >

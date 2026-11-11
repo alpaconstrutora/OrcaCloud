@@ -313,7 +313,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     type="date"
                                     value={proposedDate}
                                     onChange={(e) => setProposedDate(e.target.value)}
-                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-[6px] px-4 h-9 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 />
                             </div>
                             <div>
@@ -321,7 +321,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 <select
                                     value={proposedPaymentMethod}
                                     onChange={(e) => setProposedPaymentMethod(e.target.value)}
-                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-[6px] px-4 h-9 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 >
                                     <option value="Boleto">Boleto</option>
                                     <option value="PIX">PIX</option>
@@ -337,7 +337,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 <select
                                     value={proposedTermType}
                                     onChange={(e) => setProposedTermType(e.target.value as any)}
-                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-[6px] px-4 h-9 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 >
                                     <option value="Vista">À Vista</option>
                                     <option value="Parcelado">Parcelado</option>
@@ -349,7 +349,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     type="number"
                                     value={proposedDays}
                                     onChange={(e) => setProposedDays(parseInt(e.target.value) || 0)}
-                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-[6px] px-4 h-9 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 />
                             </div>
                         </div>
@@ -361,7 +361,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                     type="number"
                                     value={proposedInstallments}
                                     onChange={(e) => setProposedInstallments(parseInt(e.target.value) || 1)}
-                                    className={`w-full bg-gray-50 border border-gray-100 rounded-xl px-4 py-3 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
+                                    className={`w-full bg-gray-50 border border-gray-100 rounded-[6px] px-4 h-9 text-sm font-bold outline-none focus:ring-2 ${A.ring}`}
                                 />
                             </div>
                         )}
@@ -378,7 +378,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                                 type="number"
                                                 value={unitarioEfetivoDoItem(item)}
                                                 onChange={(e) => handlePriceChange(idx, parseFloat(e.target.value) || 0)}
-                                                className={`w-full bg-white border border-gray-100 rounded-lg pl-8 pr-3 py-2 text-form-input font-black outline-none focus:ring-2 ${A.ring}`}
+                                                className={`w-full bg-white border border-gray-100 rounded-[6px] pl-8 pr-3 h-9 text-form-input font-black outline-none focus:ring-2 ${A.ring}`}
                                             />
                                         </div>
                                         {temCotacao(item) && (

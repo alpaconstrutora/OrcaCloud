@@ -145,7 +145,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                                 <select
                                     value={editing.category}
                                     onChange={e => setEditing({ ...editing, category: e.target.value as RiskCategory })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 >
                                     {CATEGORIES.map(c => <option key={c} value={c}>{RISK_CATEGORY_LABELS[c]}</option>)}
                                 </select>
@@ -155,7 +155,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                                 <select
                                     value={editing.status}
                                     onChange={e => setEditing({ ...editing, status: e.target.value as RiskStatus })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 >
                                     {(['aberto', 'em_mitigacao', 'mitigado', 'materializado', 'encerrado'] as RiskStatus[]).map(s => <option key={s} value={s}>{RISK_STATUS_LABELS[s]}</option>)}
                                 </select>
@@ -168,7 +168,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                                 value={editing.title}
                                 onChange={e => setEditing({ ...editing, title: e.target.value })}
                                 placeholder="Ex: Atraso na aprovação de EIV"
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         <div className="grid grid-cols-2 gap-4">
@@ -186,20 +186,20 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Probabilidade (1-5)</label>
                                 <input type="number" min={1} max={5} value={editing.probabilidade}
                                     onChange={e => setEditing({ ...editing, probabilidade: Math.min(5, Math.max(1, Number(e.target.value))) })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Impacto (1-5)</label>
                                 <input type="number" min={1} max={5} value={editing.impacto}
                                     onChange={e => setEditing({ ...editing, impacto: Math.min(5, Math.max(1, Number(e.target.value))) })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Tendência</label>
                                 <select
                                     value={editing.tendencia ?? 'estavel'}
                                     onChange={e => setEditing({ ...editing, tendencia: e.target.value as RiskTendencia })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 >
                                     <option value="subindo">Subindo</option>
                                     <option value="estavel">Estável</option>
@@ -220,11 +220,11 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                         <div className="grid grid-cols-2 gap-4">
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Responsável (e-mail)</label>
-                                <input type="email" value={editing.responsavel_email ?? ''} onChange={e => setEditing({ ...editing, responsavel_email: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                                <input type="email" value={editing.responsavel_email ?? ''} onChange={e => setEditing({ ...editing, responsavel_email: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div>
                                 <label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo</label>
-                                <input type="date" value={editing.prazo ?? ''} onChange={e => setEditing({ ...editing, prazo: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm" />
+                                <input type="date" value={editing.prazo ?? ''} onChange={e => setEditing({ ...editing, prazo: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                         </div>
                     </ModalBody>

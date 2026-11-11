@@ -1375,7 +1375,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                         onChange={(e) => setNewMessage(e.target.value)}
                         disabled={isPreview}
                         placeholder={isPreview ? 'Envio de mensagens indisponível no modo de pré-visualização' : `Enviar mensagem em #${selectedConversation.name}...`}
-                        className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-form-input text-gray-900 focus:outline-none focus:border-orange-500 disabled:opacity-40"
+                        className="flex-1 bg-white border border-gray-200 rounded-[6px] px-4 h-9 text-form-input text-gray-900 focus:outline-none focus:border-orange-500 disabled:opacity-40"
                       />
                       <Button type="submit" size="icon" disabled={isPreview} className="bg-orange-500 hover:bg-orange-600 text-white disabled:opacity-40 disabled:cursor-not-allowed">
                         <Send className="w-4 h-4" />
@@ -2189,7 +2189,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   value={newRequest.title}
                   onChange={(e) => setNewRequest({ ...newRequest, title: e.target.value })}
                   placeholder="Ex: Reenvio de projeto executivo de fundação"
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3.5 h-9 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -2211,7 +2211,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <select
                     value={newRequest.type}
                     onChange={(e) => setNewRequest({ ...newRequest, type: e.target.value as any })}
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-900 focus:outline-none"
+                    className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-900 focus:outline-none"
                   >
                     <option value="TECNICA">Técnica</option>
                     <option value="CONTRATO">Dúvida Contratual</option>
@@ -2226,7 +2226,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <select
                     value={newRequest.priority}
                     onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value as any })}
-                    className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-900 focus:outline-none"
+                    className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-900 focus:outline-none"
                   >
                     <option value="BAIXA">Baixa</option>
                     <option value="MEDIA">Média</option>

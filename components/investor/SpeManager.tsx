@@ -191,21 +191,21 @@ const SpeManager: React.FC<Props> = ({ organizationId, isAdmin, userEmail }) => 
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nome da SPE</span>
                             <input type="text" value={entityForm.name}
                                 onChange={e => setEntityForm(f => ({ ...f, name: e.target.value }))}
-                                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="Ex: SPE Empreendimento Cambuí I" />
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">CNPJ</span>
                             <input type="text" value={entityForm.cnpj || ''}
                                 onChange={e => setEntityForm(f => ({ ...f, cnpj: e.target.value }))}
-                                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="00.000.000/0001-00" />
                         </label>
                         <label className="flex flex-col gap-1">
                             <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Capital Social (R$)</span>
                             <MoneyCentsInput value={entityForm.capital_social || ''}
                                 onChange={v => setEntityForm(f => ({ ...f, capital_social: v === '' ? 0 : Number(v) }))}
-                                className="px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                                 placeholder="0,00" />
                         </label>
                     </div>

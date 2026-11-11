@@ -276,18 +276,18 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                             {showNewReq ? (
                                 <div className="bg-blue-50 border border-blue-100 rounded-2xl p-5 space-y-3">
                                     <p className="text-xs font-black text-blue-600 uppercase tracking-widest">Novo Chamado</p>
-                                    <input className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-400" placeholder="Título *" value={newReq.title} onChange={e => setNewReq(p => ({ ...p, title: e.target.value }))} />
+                                    <input className="w-full rounded-[6px] border border-blue-200 px-4 h-9 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-400" placeholder="Título *" value={newReq.title} onChange={e => setNewReq(p => ({ ...p, title: e.target.value }))} />
                                     <textarea className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-400 resize-none" rows={2} placeholder="Descrição" value={newReq.description} onChange={e => setNewReq(p => ({ ...p, description: e.target.value }))} />
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Categoria</label>
-                                            <select className="w-full rounded-xl border border-blue-200 px-3 py-2 text-sm bg-white outline-none" value={newReq.category} onChange={e => setNewReq(p => ({ ...p, category: e.target.value }))}>
+                                            <select className="w-full rounded-[6px] border border-blue-200 px-3 h-9 text-sm bg-white outline-none" value={newReq.category} onChange={e => setNewReq(p => ({ ...p, category: e.target.value }))}>
                                                 {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
                                             </select>
                                         </div>
                                         <div>
                                             <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Prioridade</label>
-                                            <select className="w-full rounded-xl border border-blue-200 px-3 py-2 text-sm bg-white outline-none" value={newReq.priority} onChange={e => setNewReq(p => ({ ...p, priority: e.target.value as any }))}>
+                                            <select className="w-full rounded-[6px] border border-blue-200 px-3 h-9 text-sm bg-white outline-none" value={newReq.priority} onChange={e => setNewReq(p => ({ ...p, priority: e.target.value as any }))}>
                                                 {['Baixa','Média','Alta','Urgente'].map(c => <option key={c}>{c}</option>)}
                                             </select>
                                         </div>
@@ -335,13 +335,13 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label>
-                                                    <select className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white outline-none" value={editingReqData.status} onChange={e => setEditingReqData(p => ({ ...p, status: e.target.value as any }))}>
+                                                    <select className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm bg-white outline-none" value={editingReqData.status} onChange={e => setEditingReqData(p => ({ ...p, status: e.target.value as any }))}>
                                                         {['Aberto','Em Andamento','Aguardando','Resolvido','Cancelado'].map(s => <option key={s}>{s}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
                                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Responsável</label>
-                                                    <input className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="Nome" value={editingReqData.assigned_to ?? ''} onChange={e => setEditingReqData(p => ({ ...p, assigned_to: e.target.value }))} />
+                                                    <input className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="Nome" value={editingReqData.assigned_to ?? ''} onChange={e => setEditingReqData(p => ({ ...p, assigned_to: e.target.value }))} />
                                                 </div>
                                             </div>
                                             <div>
@@ -379,25 +379,25 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Número *</label>
-                                            <input className="w-full rounded-xl border border-indigo-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400" placeholder="OS-2026-001" value={newOs.number} onChange={e => setNewOs(p => ({ ...p, number: e.target.value }))} />
+                                            <input className="w-full rounded-[6px] border border-indigo-200 px-4 h-9 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400" placeholder="OS-2026-001" value={newOs.number} onChange={e => setNewOs(p => ({ ...p, number: e.target.value }))} />
                                         </div>
                                         <div>
                                             <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Prioridade</label>
-                                            <select className="w-full rounded-xl border border-indigo-200 px-3 py-2.5 text-sm bg-white outline-none" value={newOs.priority} onChange={e => setNewOs(p => ({ ...p, priority: e.target.value as any }))}>
+                                            <select className="w-full rounded-[6px] border border-indigo-200 px-3 h-9 text-sm bg-white outline-none" value={newOs.priority} onChange={e => setNewOs(p => ({ ...p, priority: e.target.value as any }))}>
                                                 {['Baixa','Média','Alta','Urgente'].map(c => <option key={c}>{c}</option>)}
                                             </select>
                                         </div>
                                     </div>
-                                    <input className="w-full rounded-xl border border-indigo-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Título *" value={newOs.title} onChange={e => setNewOs(p => ({ ...p, title: e.target.value }))} />
+                                    <input className="w-full rounded-[6px] border border-indigo-200 px-4 h-9 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400" placeholder="Título *" value={newOs.title} onChange={e => setNewOs(p => ({ ...p, title: e.target.value }))} />
                                     <textarea className="w-full rounded-xl border border-indigo-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400 resize-none" rows={2} placeholder="Descrição" value={newOs.description} onChange={e => setNewOs(p => ({ ...p, description: e.target.value }))} />
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
                                             <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Data Agendada</label>
-                                            <input type="date" className="w-full rounded-xl border border-indigo-200 px-3 py-2.5 text-sm bg-white outline-none" value={newOs.scheduled_date} onChange={e => setNewOs(p => ({ ...p, scheduled_date: e.target.value }))} />
+                                            <input type="date" className="w-full rounded-[6px] border border-indigo-200 px-3 h-9 text-sm bg-white outline-none" value={newOs.scheduled_date} onChange={e => setNewOs(p => ({ ...p, scheduled_date: e.target.value }))} />
                                         </div>
                                         <div>
                                             <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Valor (R$)</label>
-                                            <MoneyCentsInput className="w-full rounded-xl border border-indigo-200 px-3 py-2.5 text-sm bg-white outline-none" placeholder="0,00" value={newOs.value} onChange={v => setNewOs(p => ({ ...p, value: v }))} />
+                                            <MoneyCentsInput className="w-full rounded-[6px] border border-indigo-200 px-3 h-9 text-sm bg-white outline-none" placeholder="0,00" value={newOs.value} onChange={v => setNewOs(p => ({ ...p, value: v }))} />
                                         </div>
                                     </div>
                                     <div className="flex gap-2 pt-1">
@@ -445,18 +445,18 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label>
-                                                    <select className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white outline-none" value={editingOsData.status} onChange={e => setEditingOsData(p => ({ ...p, status: e.target.value as any }))}>
+                                                    <select className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm bg-white outline-none" value={editingOsData.status} onChange={e => setEditingOsData(p => ({ ...p, status: e.target.value as any }))}>
                                                         {['Aberta','Em Execução','Concluída','Cancelada'].map(s => <option key={s}>{s}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
                                                     <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Responsável</label>
-                                                    <input className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300" placeholder="Nome" value={editingOsData.assigned_to ?? ''} onChange={e => setEditingOsData(p => ({ ...p, assigned_to: e.target.value }))} />
+                                                    <input className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-indigo-300" placeholder="Nome" value={editingOsData.assigned_to ?? ''} onChange={e => setEditingOsData(p => ({ ...p, assigned_to: e.target.value }))} />
                                                 </div>
                                             </div>
                                             <div>
                                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Data Agendada</label>
-                                                <input type="date" className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm bg-white outline-none" value={editingOsData.scheduled_date ?? ''} onChange={e => setEditingOsData(p => ({ ...p, scheduled_date: e.target.value }))} />
+                                                <input type="date" className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm bg-white outline-none" value={editingOsData.scheduled_date ?? ''} onChange={e => setEditingOsData(p => ({ ...p, scheduled_date: e.target.value }))} />
                                             </div>
                                             <div>
                                                 <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Notas Internas</label>

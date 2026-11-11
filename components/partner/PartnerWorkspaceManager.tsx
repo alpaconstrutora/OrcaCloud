@@ -1631,7 +1631,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                           value={newMessage}
                           onChange={(e) => setNewMessage(e.target.value)}
                           placeholder={`Responder em #${selectedConversation.name}...`}
-                          className="flex-1 bg-white border border-gray-200 rounded-xl px-4 py-2 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
+                          className="flex-1 bg-white border border-gray-200 rounded-[6px] px-4 h-9 text-form-input text-gray-900 focus:outline-none focus:border-orange-500"
                         />
                         <Button type="submit" size="icon" className="bg-orange-500 hover:bg-orange-600 text-white">
                           <Send className="w-4 h-4" />
@@ -2520,7 +2520,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   required
                   value={newWorkspaceSupplierId}
                   onChange={(e) => setNewWorkspaceSupplierId(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione um prestador...</option>
                   {suppliers.map(s => (
@@ -2690,7 +2690,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   required
                   value={docToShareId}
                   onChange={(e) => setDocToShareId(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione um documento...</option>
                   {recommendedDocs.length > 0 && (
@@ -2746,7 +2746,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                   required
                   value={promoteDocName}
                   onChange={(e) => setPromoteDocName(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3.5 py-2.5 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3.5 h-9 text-form-input text-gray-800 focus:outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -2755,7 +2755,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <select
                   value={promoteDocCategoria}
                   onChange={(e) => setPromoteDocCategoria(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-800 focus:outline-none"
                 >
                   {CATEGORIA_ORDER.map((cat) => (
                     <option key={cat} value={cat}>{CATEGORIA_LABELS[cat]}</option>
@@ -2805,7 +2805,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 <select
                   value={tokenOrgOverride}
                   onChange={(e) => setTokenOrgOverride(e.target.value)}
-                  className="bg-gray-50 border border-gray-200 rounded-xl px-3 py-2.5 text-form-input text-gray-800 focus:outline-none"
+                  className="bg-gray-50 border border-gray-200 rounded-[6px] px-3 h-9 text-form-input text-gray-800 focus:outline-none"
                 >
                   <option value="">Selecione a organização...</option>
                   {Object.entries(orgNames).map(([id, name]) => (

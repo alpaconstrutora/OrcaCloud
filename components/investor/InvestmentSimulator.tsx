@@ -118,7 +118,7 @@ export const InvestmentSimulator: React.FC<InvestmentSimulatorProps> = ({
                             <select
                                 value={modality}
                                 onChange={(e) => setModality(e.target.value as 'spe' | 'mutuo')}
-                                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none"
+                                className="w-full px-3 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-xs font-bold text-gray-700 focus:outline-none"
                             >
                                 <option value="spe">Cota de SPE</option>
                                 <option value="mutuo">Mútuo Conversível</option>
@@ -131,7 +131,7 @@ export const InvestmentSimulator: React.FC<InvestmentSimulatorProps> = ({
                             <select
                                 value={simulatedDuration}
                                 onChange={(e) => setSimulatedDuration(Number(e.target.value))}
-                                className="w-full px-3 py-2.5 bg-gray-50 border border-gray-200 rounded-xl text-xs font-bold text-gray-700 focus:outline-none"
+                                className="w-full px-3 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-xs font-bold text-gray-700 focus:outline-none"
                             >
                                 <option value={12}>12 meses</option>
                                 <option value={24}>24 meses</option>

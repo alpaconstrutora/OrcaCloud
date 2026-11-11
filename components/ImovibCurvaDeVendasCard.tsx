@@ -145,7 +145,7 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
                     )}
                 </div>
 
-                <ChartCard title="Vendas por mês" subtitle="VGV vendido no mês e estoque que resta, sem correção.">
+                <ChartCard title="Vendas por mês" subtitle="VGV vendido no mês (eixo da esquerda) e estoque que resta (eixo da direita), sem correção.">
                     {dados.length === 0 || dados.every(d => d.vendas === 0) ? (
                         <ChartEmpty>Sem VGV para distribuir: informe o preço de venda em Orçamento › Por torre.</ChartEmpty>
                     ) : (
@@ -153,13 +153,15 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
                             <Legend items={[{ label: 'Vendas do mês', color: SERIE_PRINCIPAL }, { label: 'Estoque', color: SERIE_CONTEXTO }]} />
                             <div className="h-56">
                                 <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                    <ComposedChart data={dados} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                                    {/* Eixos separados: a venda do mês é ~1/36 do estoque inicial e sumiria no mesmo eixo. */}
+                                    <ComposedChart data={dados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                                         <CartesianGrid vertical={false} stroke={GRID} />
                                         <XAxis dataKey="mes" tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />
-                                        <YAxis tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
+                                        <YAxis yAxisId="vendas" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
+                                        <YAxis yAxisId="estoque" orientation="right" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
                                         <Tooltip contentStyle={TOOLTIP_STYLE} cursor={TOOLTIP_CURSOR} formatter={(v: unknown) => moneyBRL(Number(v))} />
-                                        <Bar dataKey="vendas" name="Vendas do mês" fill={SERIE_PRINCIPAL} radius={[3, 3, 0, 0]} />
-                                        <Line dataKey="estoque" name="Estoque" stroke={SERIE_CONTEXTO} strokeWidth={2} dot={false} type="monotone" />
+                                        <Bar yAxisId="vendas" dataKey="vendas" name="Vendas do mês" fill={SERIE_PRINCIPAL} radius={[3, 3, 0, 0]} />
+                                        <Line yAxisId="estoque" dataKey="estoque" name="Estoque" stroke={SERIE_CONTEXTO} strokeWidth={2} dot={false} type="monotone" />
                                     </ComposedChart>
                                 </ResponsiveContainer>
                             </div>

@@ -69,7 +69,12 @@ export const IMOVIB_DEFAULTS = {
     margem_alvo_terreno_percent: 15, // margem líquida sobre o VGV usada no 'terreno máximo' do Resumo (editável na tela)
     // Fase 3 — Sensibilidade, cenários e risco
     monte_carlo_iteracoes: 2000, // sorteios por simulação (botão Simular)
-    // Fase 4 — Capital e financiamento
+    // Fase 4 — Capital e financiamento (os quatro primeiros reproduzem o cálculo de antes)
+    financing_release_lag_months: 0, // meses entre a medição e a liberação
+    financing_min_sales_percent: 0, // % do VGV vendável vendido antes da 1ª liberação
+    financing_interest_mode: 'capitaliza', // ou 'paga_mensal'
+    financing_amortization: 'receitas', // toda a receita líquida amortiza; ou 'repasse'
+    min_cash_balance: 0, // caixa mínimo da SPE, R$
     // Fase 5 — Marcos, terreno, desembolso, rubricas
     // Fase 6 — Tributos
     // Fase 10 — Critérios do parecer

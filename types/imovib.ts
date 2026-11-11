@@ -487,6 +487,33 @@ export interface ImovibRisk {
     created_at?: string;
 }
 
+/**
+ * Outra fonte de capital do estudo (migration aplicar_20271111960000): entra no
+ * mês `entry_month` e sai a juros (cronograma de utils/debtAmortization.ts) ou
+ * por participação nas distribuições. Cálculo: utils/imovibFontes.ts.
+ */
+export interface ImovibFundingSource {
+    id: string;
+    study_id: string;
+    name: string;
+    kind: 'mutuo' | 'cri' | 'scp' | 'investidor' | 'outro';
+    amount: number;
+    /** Mês do estudo em que o dinheiro entra (1 = primeiro). */
+    entry_month: number;
+    remuneration: 'juros' | 'participacao';
+    /** % ao ano (remuneração a juros). */
+    rate_annual?: number | null;
+    /** % de cada distribuição (remuneração por participação). */
+    profit_share_percent?: number | null;
+    amortization: 'BULLET' | 'PRICE' | 'SAC';
+    /** Parcelas mensais, contando a carência. */
+    term_months?: number | null;
+    /** Meses sem amortizar o principal (os juros são pagos). */
+    grace_months?: number | null;
+    sort_order: number;
+    created_at?: string;
+}
+
 export type ImovibCapexItemInsert = Omit<ImovibCapexItem, 'id' | 'created_at' | 'updated_at'>;
 
 // ImovibRegulatoryZone removido: o Mapa Regulatório mora no empreendimento
@@ -582,9 +609,22 @@ export interface ImovibStudy {
     brokerage_fee?: number;
     financing_percent?: number;
     financing_rate_annual?: number;
+    // Regras do financiamento, caixa mínimo e origem da TMA (migration
+    // aplicar_20271111950000). Vazio = padrão de IMOVIB_DEFAULTS.
+    financing_release_lag_months?: number | null;
+    /** % do VGV vendável vendido antes da primeira liberação. */
+    financing_min_sales_percent?: number | null;
+    financing_interest_mode?: 'capitaliza' | 'paga_mensal' | null;
+    financing_amortization?: 'receitas' | 'repasse' | null;
+    /** Caixa mínimo da SPE, R$ (aportes e distribuições). */
+    min_cash_balance?: number | null;
+    /** De onde vem a TMA (texto livre). */
+    discount_rate_basis?: string | null;
     created_at: string;
     updated_at: string;
     blocks?: ImovibBlock[];
+    /** Outras fontes de capital (imovib_funding_sources), montadas pelo imovibService. */
+    funding_sources?: ImovibFundingSource[];
     capex_items?: ImovibCapexItem[];
     /**
      * Espelho de vendas (imovib_unit_instances). Quando o bloco tem espelho, o VGV
@@ -596,7 +636,7 @@ export interface ImovibStudy {
     estrutura?: ImovibEstrutura;
 }
 
-export type ImovibStudyInsert = Omit<ImovibStudy, 'id' | 'created_at' | 'updated_at' | 'blocks' | 'estrutura'>;
+export type ImovibStudyInsert = Omit<ImovibStudy, 'id' | 'created_at' | 'updated_at' | 'blocks' | 'estrutura' | 'funding_sources'>;
 export type ImovibStudyUpdate = Partial<ImovibStudyInsert>;
 
 export interface ImovibBlock {

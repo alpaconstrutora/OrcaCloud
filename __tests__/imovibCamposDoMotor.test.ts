@@ -12,8 +12,9 @@ import { ESTUDOS_DE_REGRESSAO } from './fixtures/imovibEstudos';
  * calcula outro número na listagem, sem erro nenhum.
  */
 
-// Montados em memória pelo imovibService, não são colunas de imovib_studies.
-const ESTRUTURA = ['blocks', 'capex_items', 'unit_instances', 'estrutura'];
+// Montados em memória pelo imovibService (getStudyById e getStudiesWithMetrics),
+// não são colunas de imovib_studies.
+const ESTRUTURA = ['blocks', 'capex_items', 'unit_instances', 'estrutura', 'funding_sources'];
 
 const soOQueOMotorLe = (s: any) => {
     const copia: any = {};

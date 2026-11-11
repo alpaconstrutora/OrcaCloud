@@ -64,6 +64,23 @@ describe('0.6 — estudo do portal por link', () => {
         for (const chave of ["'torres'", "'unidades'", "'unit_instances'", "'estrutura_do_empreendimento'"]) expect(sql).toContain(chave);
     });
 
+    it('4.4 — as outras fontes de capital chegam ao motor do portal: mesmo VPL do app', () => {
+        const fontes = [{
+            id: 'f1', study_id: 'estudo-teste', name: 'Mútuo', kind: 'mutuo', amount: 1_000_000, entry_month: 3,
+            remuneration: 'juros', rate_annual: 12, profit_share_percent: null, amortization: 'BULLET',
+            term_months: 24, grace_months: 0, sort_order: 0,
+        }];
+        const app = computeImovibMath(baseStudy({ funding_sources: fontes }));
+        const portal = computeImovibMath(montarEstudoDoPortal({ ...baseStudy(), funding_sources: fontes, unit_instances: [], estrutura_do_empreendimento: null })!);
+        expect(portal.vpl).toBe(app.vpl);
+        expect(montarEstudoDoPortal(rawSemPrecoNoBloco())!.funding_sources).toEqual([]);
+        // A função devolve as colunas que o motor lê das fontes.
+        const sql = readFileSync(resolve(__dirname, '../supabase/migrations/aplicar_20271111960000_imovib_funding_sources.sql'), 'utf-8');
+        for (const col of ['amount', 'entry_month', 'remuneration', 'rate_annual', 'profit_share_percent', 'amortization', 'term_months', 'grace_months'])
+            expect(sql).toContain(`'${col}', f.${col}`);
+        expect(sql).toContain("'funding_sources', v_fontes");
+    });
+
     it('sem estudo na resposta devolve null', () => {
         expect(montarEstudoDoPortal(null)).toBeNull();
         expect(montarEstudoDoPortal(undefined)).toBeNull();

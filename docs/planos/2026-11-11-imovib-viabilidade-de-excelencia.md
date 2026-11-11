@@ -32,10 +32,12 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 | 2026-11-11 | D1: o recebimento por safra muda VPL, TIR e exposição dos 3 estudos existentes. Um modelo só ou manter o antigo nos existentes? (pedido: *"iniciar f1"*) | **Um modelo só.** Todos os estudos passam a ser calculados por safra; a tabela antes → depois dos 3 estudos fica no item 1.4. |
 | 2026-11-11 | D7: dividir "Receitas e Capital" em duas abas? | **Dividir:** Receitas (espelho, curva de vendas, recebimento, distrato) e Capital (financiamento e permutas). |
 | 2026-11-11 | A revisão da Fase 1 achou que, com os padrões, mais distrato dava mais lucro (retenção de 25% do pago + revenda pelo preço cheio) e que venda distratada depois das chaves devolvia até o dinheiro do banco. Como corrigir? | **Revenda com deságio + distrato só até as chaves.** Deságio editável, padrão 10% (coluna nova, migration `aplicar_20271111850000`); venda feita nas chaves ou depois não distrata, com aviso `distrato_parcial`. |
+| 2026-11-11 | D3: outras fontes de capital e resultado por sócio entram nesta rodada? (pedido: *"iniciar a Fase 4"*) | **Sim** (itens 4.4 e 9.2, na forma simples). |
+| 2026-11-11 | D2: o campo "Capital Próprio (Equity)" vira número calculado ou continua editável? | **Calculado.** O campo editável sai da aba Capital; a coluna `funding_equity_percent` fica no banco, sem uso. |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
-Cada uma traz a recomendação de quem escreveu o plano. Nenhuma foi respondida.
+Cada uma traz a recomendação de quem escreveu o plano. D1, D2, D3, D6 e D7 já foram respondidas (tabela acima); D4 e D5 seguem em aberto.
 
 - **D1 (item 1.4).** O recebimento por safra muda VPL, TIR e exposição dos estudos que já existem. Hoje são 3 no banco (Davi Bueno, Garden Cambuhy, Bruninho), nenhum editado desde 19/10/2026. Um modelo só para todos, com a tabela antes → depois dos 3 estudos, ou manter o modelo antigo nos estudos existentes? **Recomendação: um modelo só.** Dois modelos divergem para sempre e a listagem passa a comparar estudos calculados de jeitos diferentes.
 - **D2 (item 4.2).** O campo "Capital Próprio (Equity)" é gravado e exportado, mas o motor não o lê. Virar número calculado (capital necessário em R$ e em %), ou continuar editável e passar a travar a soma com a dívida? **Recomendação: calculado.**
@@ -735,7 +737,7 @@ Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escrit
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase2.js`): 0 escritas, 0 erros de console. No Bruninho, terreno máximo R$ 2.791.232 − terreno atual R$ 2.150.000 = R$ 641.232, o VPL do estudo (o terreno sai no mês 1, sem desconto). Achados e corrigidos: grupo "Receitas" somava impostos e corretagem (virou "Receitas e deduções"); erro de digitação no subtítulo da TIR.
 
-**Fase 3 — Risco:** 6 de 6 — revisada; migrations `aplicar_20271111900000` (cenários) e `aplicar_20271111910000` (riscos) aplicadas em 11/11 com OK do usuário (RLS pela organização do estudo, sem anon, conferido em `pg_policies`); publicação pelo PR #360
+**Fase 3 — Risco:** 6 de 6 — no ar (PR #360, 19aabd95); migrations `aplicar_20271111900000` (cenários) e `aplicar_20271111910000` (riscos) aplicadas em 11/11 com OK do usuário (RLS pela organização do estudo, sem anon, conferido em `pg_policies`)
 - [x] 3.1 Tornado — 8 variáveis × 4 métricas, choques ajustáveis (hipóteses da tela, não gravadas). Revisão: uma barra por choque, colorida pelo próprio efeito (empilhar somava os dois quando caíam do mesmo lado); variável que faz a TIR sumir vai para o topo, marcada.
 - [x] 3.2 Grade cruzada — eixos de −2 a +2 vezes o choque da variável.
 - [x] 3.3 Cenários salvos — tabela comparativa, cenários padrão (UNIQUE impede duplicar), drawer (criar fecha, editar fica).
@@ -745,7 +747,7 @@ Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura,
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase3.js`): aba abre sem erro com as tabelas novas, 0 escritas, 0 erros de console.
 
-**Fase 4 — Capital:** 0 de 5
+**Fase 4 — Capital:** 0 de 5 — migrations `aplicar_20271111950000` (colunas do financiamento, caixa mínimo, origem da TMA) e `aplicar_20271111960000` (tabela `imovib_funding_sources` e função do portal com as fontes) aplicadas em 11/11 com OK do usuário (*"Pode aplicar"*): 6 colunas, 4 policies só `authenticated`, anon sem SELECT, função com `funding_sources` e EXECUTE de anon/authenticated
 - [ ] 4.1 Financiamento à produção
 - [ ] 4.2 Capital próprio calculado (D2)
 - [ ] 4.3 Aportes e distribuições

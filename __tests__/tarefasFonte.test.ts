@@ -13,7 +13,8 @@ vi.mock('../lib/supabase', () => ({
 import React from 'react'
 import { renderToString } from 'react-dom/server'
 import {
-  fonteDoLink, fonteLogada, TarefasFonteContext, TASK_COLS, useTarefasFonte, type TarefasFonte,
+  ehRecusaDoLink, fonteDoLink, fonteLogada, MENSAGEM_LINK_RECUSADO, TarefasFonteContext, TASK_COLS,
+  useTarefasFonte, type TarefasFonte,
 } from '../services/celular/tarefasFonte'
 
 const ok = (data: unknown) => ({ data, error: null })
@@ -107,6 +108,52 @@ describe('fonteDoLink', () => {
       orgId: 'o', title: 't', description: null, start_date: null, due_date: null,
       priority: 3, space_id: null, folder_id: null,
     })).rejects.toEqual(erro)
+  })
+
+  it('aoRecusar: chamado só com 42501 + "link inválido ou vencido", e o erro ainda é lançado', async () => {
+    const aoRecusar = vi.fn()
+    const f = fonteDoLink('tk', { aoRecusar })
+    const recusa = { code: '42501', message: 'link inválido ou vencido' }
+
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: recusa })
+    await expect(f.listarTarefas(undefined, null, 300)).rejects.toEqual(recusa)
+    expect(aoRecusar).toHaveBeenCalledTimes(1)
+
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: recusa })
+    await expect(f.atualizarTarefa('t1', { title: 'x' })).rejects.toEqual(recusa)
+    expect(aoRecusar).toHaveBeenCalledTimes(2)
+
+    // Outro 42501 é recusa de UMA ação (o link segue valendo): não dispara.
+    const semPermissao = { code: '42501', message: 'tarefa não encontrada ou sem permissão para editar' }
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: semPermissao })
+    await expect(f.atualizarTarefa('t1', { title: 'x' })).rejects.toEqual(semPermissao)
+    // A mesma mensagem com outro código também não.
+    const outroCodigo = { code: '22023', message: 'link inválido ou vencido' }
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: outroCodigo })
+    await expect(f.listarStatus(undefined)).rejects.toEqual(outroCodigo)
+    // Rede/5xx: não dispara.
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: { message: 'Failed to fetch' } })
+    await expect(f.listarEspacos(undefined)).rejects.toBeTruthy()
+    // Sucesso: não dispara.
+    mocks.rpc.mockResolvedValueOnce(ok([]))
+    await f.listarResponsaveis('x')
+
+    expect(aoRecusar).toHaveBeenCalledTimes(2)
+  })
+
+  it('sem opções, a recusa do token só é lançada (aoRecusar é opcional)', async () => {
+    const recusa = { code: '42501', message: 'link inválido ou vencido' }
+    mocks.rpc.mockResolvedValueOnce({ data: null, error: recusa })
+    await expect(fonteDoLink('tk').listarStatus(undefined)).rejects.toEqual(recusa)
+  })
+
+  it('ehRecusaDoLink: só 42501 com a mensagem exata do resolver', () => {
+    expect(ehRecusaDoLink({ code: '42501', message: MENSAGEM_LINK_RECUSADO })).toBe(true)
+    expect(ehRecusaDoLink({ code: '42501', message: 'Link inválido ou vencido' })).toBe(false)
+    expect(ehRecusaDoLink({ code: '42501', message: 'sem acesso a este espaço' })).toBe(false)
+    expect(ehRecusaDoLink({ code: 'PGRST301', message: MENSAGEM_LINK_RECUSADO })).toBe(false)
+    expect(ehRecusaDoLink(null)).toBe(false)
+    expect(ehRecusaDoLink('42501')).toBe(false)
   })
 
   it('NUNCA chama supabase.from nem auth.getUser (a sessão logada de outra pessoa não vale)', async () => {

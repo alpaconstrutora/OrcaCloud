@@ -11,7 +11,7 @@ import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 import { temAcessoTotal } from '../lib/acessoTotal';
-import LinkDoCelularBloco from './celular/LinkDoCelularBloco';
+import LinkDoCelularBloco, { MOTIVO_GERAR_SO_O_PROPRIO } from './celular/LinkDoCelularBloco';
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
@@ -1593,7 +1593,19 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     <span className="text-xs text-gray-400">abre Minhas Tarefas no celular, sem senha</span>
                                 </div>
                                 {editingMember.userId && organizationId ? (
-                                    <LinkDoCelularBloco userId={editingMember.userId} orgId={organizationId} nomePessoa={editMemberName.trim() || editingMember.name} />
+                                    <LinkDoCelularBloco
+                                        userId={editingMember.userId}
+                                        orgId={organizationId}
+                                        nomePessoa={editMemberName.trim() || editingMember.name}
+                                        // O banco só deixa o gestor gerar o link de quem é `member`;
+                                        // admin/owner gera o próprio (revogar continua liberado).
+                                        motivoGerarBloqueado={
+                                            (editingMember.role === 'owner' || editingMember.role === 'admin')
+                                                && editingMember.userId !== session?.user?.id
+                                                ? MOTIVO_GERAR_SO_O_PROPRIO
+                                                : undefined
+                                        }
+                                    />
                                 ) : (
                                     <div className="space-y-2">
                                         <Button type="button" disabled title={MOTIVO_SEM_CONTA}>Gerar link</Button>

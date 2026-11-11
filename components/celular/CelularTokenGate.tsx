@@ -1,5 +1,5 @@
 import React from 'react'
-import { AlertCircle, CheckSquare, Loader2, LinkIcon } from 'lucide-react'
+import { AlertCircle, CheckSquare, Loader2, LinkIcon, type LucideIcon } from 'lucide-react'
 import Button from '../ui/Button'
 import TasksMobileApp from '../TasksMobileApp'
 import { celularSessao, type SessaoCelular } from '../../services/celular/celularLinkService'
@@ -15,7 +15,9 @@ import { fonteDoLink, TarefasFonteContext } from '../../services/celular/tarefas
  * Estados: `carregando` → `ok` | `invalido` (o banco recusou, ou o endereço não traz um
  * token com cara de token — aí nem chama RPC) | `erro` (rede: dá para tentar de novo).
  *
- * Por ora a barra de baixo só tem "Tarefas"; o Diário entra na Fase 5.
+ * Link revogado ou vencido COM A TELA ABERTA também vai a `invalido` (desmonta a tela de
+ * tarefas — nenhum dado fica à vista): quando qualquer RPC da fonte volta com a recusa do
+ * token, e quando a aba volta a ficar visível e `celular_sessao` recusa.
  */
 
 type Estado =
@@ -25,6 +27,12 @@ type Estado =
   | { tipo: 'ok'; sessao: SessaoCelular }
 
 export const TEXTO_LINK_INVALIDO = 'Link inválido ou vencido — peça um novo ao administrador'
+
+/** Seções da barra de baixo. A barra só aparece com 2 ou mais — a Fase 5 acrescenta o Diário aqui. */
+const ABAS: { id: string; rotulo: string; Icone: LucideIcon }[] = [
+  { id: 'tarefas', rotulo: 'Tarefas', Icone: CheckSquare },
+]
+const ABA_ATUAL = 'tarefas'
 
 // ── Telas de estado (mesmo desenho do EmptyState/ErrorState de Minhas Tarefas) ──
 const TelaDeEstado: React.FC<{
@@ -50,8 +58,12 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
 
   // ⚠️ A fonte PRECISA ser estável: `TasksMobileApp` a tem nas dependências do efeito que
   // carrega as listas. `fonteDoLink(token)` solto no JSX criaria um objeto novo a cada
-  // render do gate e a tela recarregaria em laço.
-  const fonte = React.useMemo(() => fonteDoLink(token), [token])
+  // render do gate e a tela recarregaria em laço. Por isso só `token` nas dependências:
+  // `aoRecusar` usa o `setEstado` do React, que é estável por contrato.
+  const fonte = React.useMemo(
+    () => fonteDoLink(token, { aoRecusar: () => setEstado({ tipo: 'invalido' }) }),
+    [token],
+  )
 
   React.useEffect(() => {
     // Sem token utilizável: recusa direto, sem tocar no banco.
@@ -66,6 +78,26 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
       .catch(() => { if (!cancelado) setEstado({ tipo: 'erro' }) })
     return () => { cancelado = true }
   }, [token, tentativa])
+
+  // Aba de volta à frente (celular desbloqueado, troca de app): o link pode ter sido revogado
+  // ou ter vencido enquanto a tela estava parada — reconfere antes de qualquer toque.
+  // Só a recusa do banco tira da tela; falha de rede aqui não derruba quem está usando.
+  const aberta = estado.tipo === 'ok'
+  React.useEffect(() => {
+    if (!aberta || !token) return
+    let ativo = true
+    const aoMudarVisibilidade = () => {
+      if (document.visibilityState !== 'visible') return
+      celularSessao(token)
+        .then(sessao => { if (ativo && !sessao) setEstado({ tipo: 'invalido' }) })
+        .catch(() => { /* rede: segue na tela; a próxima RPC dirá se o link caiu */ })
+    }
+    document.addEventListener('visibilitychange', aoMudarVisibilidade)
+    return () => {
+      ativo = false
+      document.removeEventListener('visibilitychange', aoMudarVisibilidade)
+    }
+  }, [aberta, token])
 
   if (estado.tipo === 'carregando') {
     return (
@@ -114,16 +146,22 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
         </TarefasFonteContext.Provider>
       </div>
 
-      <nav aria-label="Seções" className="bg-white border-t border-slate-200 flex-shrink-0 pb-[env(safe-area-inset-bottom)]">
-        <button
-          type="button"
-          aria-current="page"
-          className="w-full h-12 flex flex-col items-center justify-center gap-0.5 text-blue-600"
-        >
-          <CheckSquare className="w-5 h-5" aria-hidden="true" />
-          <span className="text-[11px] font-medium">Tarefas</span>
-        </button>
-      </nav>
+      {/* Barra de uma aba só não leva a lugar nenhum: some até haver uma segunda seção. */}
+      {ABAS.length >= 2 && (
+        <nav aria-label="Seções" className="bg-white border-t border-slate-200 flex-shrink-0 pb-[env(safe-area-inset-bottom)] flex">
+          {ABAS.map(({ id, rotulo, Icone }) => (
+            <button
+              key={id}
+              type="button"
+              aria-current={id === ABA_ATUAL ? 'page' : undefined}
+              className={`flex-1 h-12 flex flex-col items-center justify-center gap-0.5 ${id === ABA_ATUAL ? 'text-blue-600' : 'text-slate-500'}`}
+            >
+              <Icone className="w-5 h-5" aria-hidden="true" />
+              <span className="text-[11px] font-medium">{rotulo}</span>
+            </button>
+          ))}
+        </nav>
+      )}
     </div>
   )
 }

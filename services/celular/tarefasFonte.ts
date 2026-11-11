@@ -158,11 +158,33 @@ export const fonteLogada: TarefasFonte = {
 }
 
 // ── Fonte do link (só RPCs celular_*, autorizadas pelo token) ─────────────────
-export function fonteDoLink(token: string): TarefasFonte {
-  /** Chama a RPC e lança o erro do banco (a recusa do token vem como 42501). */
+/** Mensagem EXATA do `_mobile_link_resolver` para token inexistente, vencido, revogado ou de ex-membro. */
+export const MENSAGEM_LINK_RECUSADO = 'link inválido ou vencido'
+
+/**
+ * O banco recusou o TOKEN (não uma operação): 42501 + a mensagem do resolver. Outro 42501
+ * — ex.: "tarefa não encontrada ou sem permissão para editar" — é recusa de uma ação só,
+ * e o link continua valendo.
+ */
+export function ehRecusaDoLink(erro: unknown): boolean {
+  if (!erro || typeof erro !== 'object') return false
+  const { code, message } = erro as { code?: unknown; message?: unknown }
+  return code === '42501' && message === MENSAGEM_LINK_RECUSADO
+}
+
+export interface OpcoesFonteDoLink {
+  /** Chamado quando o banco recusa o token com a tela aberta (link revogado ou vencido no meio do uso). */
+  aoRecusar?: () => void
+}
+
+export function fonteDoLink(token: string, opcoes?: OpcoesFonteDoLink): TarefasFonte {
+  /** Chama a RPC e lança o erro do banco; se for a recusa do token, avisa `aoRecusar` antes. */
   async function chamar<T>(rpc: string, args: Record<string, unknown> = {}): Promise<T> {
     const { data, error } = await supabase.rpc(rpc, { p_token: token, ...args })
-    if (error) throw error
+    if (error) {
+      if (ehRecusaDoLink(error)) opcoes?.aoRecusar?.()
+      throw error
+    }
     return data as T
   }
 

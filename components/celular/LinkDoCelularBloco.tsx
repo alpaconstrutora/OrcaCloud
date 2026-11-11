@@ -13,8 +13,10 @@ import {
  * Gestão do link do celular de UMA pessoa em UMA organização (`/celular?token=`):
  * validade e último uso, **Gerar** / **Gerar novo**, **Copiar**, **WhatsApp** e **Revogar**.
  *
- * Quem pode o quê é decidido no BANCO (`mobile_link_*`): gestor da organização para qualquer
- * membro, ou a própria pessoa para si. Recusa chega como 42501 e vira o texto de permissão.
+ * Quem pode o quê é decidido no BANCO (`mobile_link_*`): a própria pessoa para si; o gestor da
+ * organização revoga/consulta o de qualquer membro, mas GERA só para quem tem papel `member`
+ * (admin/owner geram o próprio — a tela avisa por `motivoGerarBloqueado`). Recusa chega como
+ * 42501 e vira o texto de permissão.
  *
  * O token só existe em claro na URL devolvida por `gerarLinkCelular`. Ela fica só neste estado
  * (some ao trocar de pessoa/organização, ao revogar e ao desmontar) — nunca vai para log,
@@ -57,13 +59,21 @@ function mensagemDoErro(e: unknown, acao: string): string {
 /** Texto enviado por WhatsApp — o endereço vai junto, para a pessoa tocar e abrir. */
 export const textoDoWhatsapp = (url: string) => `Seu link do OrçaCloud no celular: ${url}`
 
+/** Por que o gestor não gera o link de um admin/owner (o banco recusa do mesmo jeito). */
+export const MOTIVO_GERAR_SO_O_PROPRIO = 'Admin e owner geram o próprio link, pelo menu da conta › Meu link do celular'
+
 interface Props {
   userId: string
   orgId: string
   nomePessoa: string
+  /**
+   * Gerar desligado por regra (não por estado), com o motivo — ex.: gestor editando um
+   * admin/owner, que só gera o próprio link. Revogar e consultar continuam.
+   */
+  motivoGerarBloqueado?: string
 }
 
-const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa }) => {
+const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivoGerarBloqueado }) => {
   const confirm = useConfirm()
   const [status, setStatus] = React.useState<StatusLinkCelular | null>(null)
   const [carregando, setCarregando] = React.useState(true)
@@ -113,7 +123,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa }) => {
   }
 
   const gerar = async () => {
-    if (ocupado) return
+    if (ocupado || motivoGerarBloqueado) return
     // Gerar de novo derruba o link que já está no celular da pessoa — avisa antes.
     if (temLinkAtivo) {
       const ok = await confirm({
@@ -193,7 +203,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa }) => {
     ? 'Aguarde a consulta do link.'
     : ocupado
       ? 'Aguarde a operação em andamento.'
-      : undefined
+      : motivoGerarBloqueado
   const motivoRevogarDesligado = carregando
     ? 'Aguarde a consulta do link.'
     : ocupado
@@ -250,7 +260,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa }) => {
         <Button
           type="button"
           onClick={gerar}
-          disabled={carregando || !!ocupado}
+          disabled={carregando || !!ocupado || !!motivoGerarBloqueado}
           title={motivoGerarDesligado}
           data-testid="link-do-celular-gerar"
         >
@@ -270,6 +280,9 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa }) => {
           Revogar link
         </Button>
       </div>
+      {motivoGerarBloqueado && !carregando && !ocupado && (
+        <p className="text-xs text-slate-500" data-testid="link-do-celular-motivo-gerar">{motivoGerarBloqueado}</p>
+      )}
       {motivoRevogarDesligado && !carregando && !ocupado && (
         <p className="text-xs text-slate-500">{motivoRevogarDesligado}</p>
       )}

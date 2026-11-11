@@ -24,6 +24,23 @@ Sessão: `dac20e1e-e944-41c5-bafb-71f69696d5e3` · 2026-11-11
 | 2026-11-11 | Seção 3 (mídia): Edge `celular-diario-midia` com upload assinado direto ao storage | aprovada |
 | 2026-11-11 | Seção 4 (telas): mesmas telas com "fonte de dados" trocável; efetivo e cronograma entram no link | aprovada |
 | 2026-11-11 | Seção 5 (fases, provas, ordem de deploy) | aprovada ("continue") |
+| 2026-11-11 | Design escrito neste arquivo | aprovado ("design certo"), commit `eb6661b5` |
+
+### Ajustes ao ler o código para o plano (2026-11-11)
+
+- `celular_tarefa_concluir` / `_reabrir` / `_editar` viram **uma** RPC,
+  `celular_tarefa_atualizar(p_token, p_task_id, p_patch)`: a tela já calcula o patch
+  (`doneStatusOfOrg`, `status_id` anterior no Desfazer, edição) e a lógica não deve ser
+  duplicada em SQL. A RPC aceita só as colunas da lista branca e valida cada valor.
+- A tela também lê espaços (`taskSpaceService.listSpaces`), status da org
+  (`taskStatusService.list`) e responsáveis (`listAssignable`: `employees` +
+  `employee_org_shares`) → RPCs `celular_espacos_listar`, `celular_status_listar`,
+  `celular_responsaveis_listar`.
+- Nome da obra das tarefas vem junto da lista (`celular_tarefas_listar` devolve
+  `nomes_obras`), como a tela já faz em duas consultas.
+- Nome da pessoa: `profiles.name`; gestor: `is_org_manager(org_id)` (existe no banco).
+- O plano detalha a **Parte 1 (F1 + F2)** — Tarefas pelo link, publicável sozinha. A
+  Parte 2 (F3–F5, Diário) é detalhada neste arquivo depois de F2 no ar, relendo o código.
 
 ## Design
 
@@ -161,10 +178,237 @@ com critério) são escritas na etapa de plano de implementação, neste mesmo a
 | F4 Mídia | Edge `celular-diario-midia` | sonda de fora: 401 sem token, 403 outra org, 200 válido |
 | F5 Tela: Diário pelo link | `DiarioFonte`, aba Diário | registro com foto pelo link aparece no desktop e no cronograma |
 
+## Plano de implementação — Parte 1 (F1 + F2: Tarefas pelo link)
+
+> **Para quem executa:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development
+> (recomendado) ou superpowers:executing-plans. Passos com `- [ ]`.
+
+**Goal:** abrir `/celular?token=…` no celular, sem login, e usar Minhas Tarefas
+(listar, criar, editar, concluir, desfazer) da pessoa dona do link, na org do link.
+
+**Architecture:** tabela `user_mobile_links` (hash, sem policy) + RPCs `SECURITY DEFINER`
+que resolvem o token e autorizam com gêmeos `*_de(p_user, …)` dos helpers da RLS. No
+front, `TasksMobileApp` lê e grava por uma `TarefasFonte` (contexto React): `fonteLogada`
+(o código atual) ou `fonteDoLink(token)` (RPCs). `CelularTokenGate` antes do `<Layout>`.
+
+**Tech Stack:** Postgres/Supabase (plpgsql, pgcrypto em `extensions`), React 19 + Vite,
+Vitest, Playwright (harness fora do repo).
+
+**Spec:** a seção **Design** acima, neste mesmo arquivo.
+
+### Global Constraints
+
+- Trabalhar só em `C:\D\frentes\link-celular` (branch `feat/link-celular`). Nunca no checkout de integração.
+- Migration: arquivo `supabase/migrations/aplicar_<14 dígitos>_<nome>.sql`; prefixo **maior que o maior do dia** — conferir com `ls supabase/migrations | grep 20271111` na hora (último visto: `20271111850000`). Aplicar com `npx supabase db query --linked -f`, **nunca** `db push`.
+- ⚠️ Aplicar migration em produção e publicar (push em `main`) **só com aval explícito do usuário na hora**.
+- Toda função nova: `REVOKE EXECUTE … FROM PUBLIC, anon` (e `authenticated` nos internos). `GRANT … TO anon, authenticated` **só** nas `celular_*`; `TO authenticated` só nas `mobile_link_*`.
+- Funções `SECURITY DEFINER` com `SET search_path = public, pg_temp`; pgcrypto qualificado: `extensions.digest`, `extensions.gen_random_bytes`.
+- Token: 32 bytes de `extensions.gen_random_bytes`, base64url sem `=`; guardado só `encode(extensions.digest(token,'sha256'),'hex')`.
+- Recusa de token (inválido, vencido, revogado, ex-membro): sempre `RAISE EXCEPTION 'link inválido ou vencido' USING ERRCODE = '42501'` — mesma mensagem.
+- Endereço: `/celular?token=`. Texto da recusa: "Link inválido ou vencido — peça um novo ao administrador".
+- REGRA #1 (`scripts/check-ui-standard.sh`) em todo `.tsx` tocado; REGRA #5 (`__tests__/orgContextGuard.test.ts`) verde.
+- Português em código, comentários, mensagens e commits.
+
+### Review Focus
+
+1. Pessoa removida da org com link vivo → o link para de funcionar na próxima chamada (resolver reconfere membro). Teste no SQL (Task 1).
+2. Navegador com sessão logada de **outra** pessoa abrindo `/celular?token=` → mostra as tarefas do dono do link, nunca as da sessão: `fonteDoLink` não pode chamar `supabase.from`. Teste em `tarefasFonte.test.ts` (Task 3).
+3. `p_patch` forjado (`status_id` de outra org, `user_id`, `org_id`, `space_id` fora da lista branca, responsável de outra org) → recusa 42501/22023. Teste no SQL (Task 2).
+4. Criar em espaço/pasta de outra org, ou pasta que não é do espaço → recusa. Teste no SQL (Task 2).
+5. `/celular` sem token, token vazio ou com espaço/encoding quebrado → tela de recusa sem chamar RPC de dados. Teste em `celularRota.test.ts` (Task 5).
+
+### Arquivos
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `supabase/migrations/aplicar_<p1>_link_celular_tabela_e_gemeos.sql` | tabela, hash, resolver, gêmeos, gestão (`mobile_link_*`) |
+| `supabase/migrations/aplicar_<p2>_link_celular_rpcs_tarefas.sql` | `celular_sessao` + RPCs de Tarefas |
+| `scripts/teste-link-celular-tarefas.sql` | prova `BEGIN … ROLLBACK` das duas migrations |
+| `services/celular/tarefasFonte.ts` | interface `TarefasFonte`, `fonteLogada`, `fonteDoLink`, contexto |
+| `services/celular/celularLinkService.ts` | gerar / revogar / status, `celularSessao`, `urlDoLinkCelular`, `tokenDoCelularDaUrl` |
+| `components/TasksMobileApp.tsx` | passa a usar `useTarefasFonte()` — sem mudar comportamento logado |
+| `components/celular/CelularTokenGate.tsx` | valida a sessão do link e monta a casca |
+| `components/celular/LinkDoCelularBloco.tsx` | bloco Gerar / Copiar / WhatsApp / Revogar |
+| `App.tsx` | rota `/celular` antes do `<Layout>` |
+| `components/OrganizationUsers.tsx` (Edit Member Modal, ~l.1487) | usa `LinkDoCelularBloco` |
+| `components/Layout.tsx` (menu da conta, ~l.1467) | item "Meu link do celular" |
+| `__tests__/tarefasFonte.test.ts`, `__tests__/celularRota.test.ts` | unitários |
+
+---
+
+### Task 1: Banco — tabela, resolver, gêmeos e gestão do link
+
+**Files:**
+- Create: `supabase/migrations/aplicar_<p1>_link_celular_tabela_e_gemeos.sql`
+- Create: `scripts/teste-link-celular-tarefas.sql` (seção A)
+
+**Interfaces:**
+- Produces (SQL):
+  - `user_mobile_links` (colunas da Design §1; `UNIQUE (org_id, user_id)`; RLS on, zero policies)
+  - `_mobile_link_hash(p_token TEXT) RETURNS TEXT` IMMUTABLE
+  - `_mobile_link_resolver(p_token TEXT, OUT user_id UUID, OUT org_id UUID)` — grava `last_used_at`
+  - `is_org_member_de(p_user UUID, p_org UUID) RETURNS BOOLEAN` — mesmo corpo de `is_org_member`, com `auth.uid()` → `p_user` e o e-mail de `auth.jwt()` → `auth.users.email` de `p_user`
+  - `is_task_space_member_de(p_user UUID, p_space_id UUID)`, `is_task_collaborator_de(p_user UUID, p_task_id UUID)`; os originais (mesmos nomes de parâmetro: `p_space_id`, `p_task_id`) passam a `RETURN …_de(auth.uid(), …)`
+  - `mobile_link_generate(p_user_id UUID, p_org_id UUID) RETURNS TEXT` (token em claro; upsert por `(org_id,user_id)`, zera `revoked_at`, `expires_at = now()+90 days`, `created_by = auth.uid()`)
+  - `mobile_link_revoke(p_user_id UUID, p_org_id UUID) RETURNS VOID`
+  - `mobile_link_status(p_user_id UUID, p_org_id UUID) RETURNS JSONB` → `{existe, expires_at, last_used_at, revogado}`
+  - Autorização das três `mobile_link_*`: `auth.uid()` não nulo **e** (`is_org_manager(p_org_id)` **ou** `p_user_id = auth.uid() AND is_org_member(p_org_id)`) **e** `is_org_member_de(p_user_id, p_org_id)`; senão 42501.
+
+- [ ] **Step 1: Escrever a seção A de `scripts/teste-link-celular-tarefas.sql`** no molde de `scripts/teste-codigo-patrimonial.sql` (`BEGIN; -- MIGRATION … pg_temp.confere … ROLLBACK;`, linha final `SELECT 'TUDO OK'`). Escolhe um membro real `u` de uma org `o` (`organization_members` com `user_id`) e um não membro `x`. Asserções, simulando o chamador com `set_config('request.jwt.claims', json_build_object('sub',…,'role','authenticated')::text, true)` + `SET LOCAL ROLE authenticated`/`anon` (e `RESET ROLE` entre blocos):
+  - `u` gera o próprio link → token com 43 caracteres `[A-Za-z0-9_-]`; a linha guarda `token_hash = _mobile_link_hash(token)` e **não** contém o token.
+  - `_mobile_link_resolver(token)` → `(u, o)` e `last_used_at` preenchido.
+  - `x` (não gestor, não dono) gerando link de `u` → 42501.
+  - Como `anon`: `SELECT` em `user_mobile_links` → 0 linhas ou 42501; `_mobile_link_resolver` → 42501 de privilégio (sem GRANT).
+  - Revogado → resolver 42501 `'link inválido ou vencido'`; vencido (`UPDATE expires_at = now() - interval '1 s'`) → idem; `DELETE` de `u` em `organization_members` → idem (mesma mensagem nos três).
+  - Equivalência: para toda linha de `organization_members` com `user_id` (limite 500), `is_org_member_de(user_id, organization_id)` = `is_org_member(organization_id)` avaliado com `request.jwt.claims` daquele usuário (sub + email de `auth.users`).
+  - `is_task_space_member(s)` com claims de um membro real de `task_space_members` = TRUE e = `is_task_space_member_de(…)`.
+- [ ] **Step 2: Rodar e ver falhar** — `npx supabase db query --linked -f scripts/teste-link-celular-tarefas.sql` → FAIL com `function public.mobile_link_generate(...) does not exist`.
+- [ ] **Step 3: Escrever a migration** com as interfaces acima e os REVOKE/GRANT das Global Constraints (`_mobile_link_*` e gêmeos: `REVOKE … FROM PUBLIC, anon, authenticated`).
+- [ ] **Step 4: Ensaio sem aplicar** — gerar `C:\tmp\ensaio-link-celular-a.sql` = teste com o conteúdo da migration no lugar de `-- MIGRATION`; rodar com `db query -f` → última linha `TUDO OK`.
+- [ ] **Step 5: Travas** — `npx vitest run __tests__/segurancaMigrations.test.ts` → PASS.
+- [ ] **Step 6: Commit** — `git add` dos dois arquivos; `feat(banco): link do celular — tabela, resolver e gêmeos de autorização`.
+
+### Task 2: Banco — RPCs de Tarefas do link
+
+**Files:**
+- Create: `supabase/migrations/aplicar_<p2>_link_celular_rpcs_tarefas.sql` (`<p2>` > `<p1>`)
+- Modify: `scripts/teste-link-celular-tarefas.sql` (seção B; o ensaio passa a inlinear as duas migrations)
+
+**Interfaces:**
+- Consumes: Task 1 (`_mobile_link_resolver`, gêmeos).
+- Produces (todas `(p_token TEXT, …)`, `GRANT TO anon, authenticated`):
+  - `celular_sessao(p_token) RETURNS JSONB` → `{user_id, nome (profiles.name), org_id, org_nome}`
+  - `celular_tarefas_listar(p_token, p_space_id UUID DEFAULT NULL, p_folder_id UUID DEFAULT NULL, p_sem_pasta BOOLEAN DEFAULT FALSE) RETURNS JSONB` → `{tarefas: [colunas de TASK_COLS], nomes_obras: {id: nome}}`. Filtro = o de `loadTasks` (`status='open'`, `parent_task_id IS NULL`, ordem `due_date ASC NULLS LAST, priority ASC`, limite 300) **e** `org_id = org do link` **e** visibilidade de `tasks_select` ∪ `tasks_select_collaborator` via gêmeos.
+  - `celular_espacos_listar(p_token) RETURNS JSONB` → array no formato `TaskSpaceWithMeta` (`folders`, `member_count`, `open_task_count`), só espaços da org do link visíveis por `task_spaces_select` (dono ou membro).
+  - `celular_status_listar(p_token) RETURNS JSONB` → `task_statuses` da org do link (mesmas colunas de `taskStatusService.list`).
+  - `celular_responsaveis_listar(p_token) RETURNS JSONB` → `[{id, name}]`, mesma regra de `listAssignable` (ATIVO; da org ou compartilhado por `employee_org_shares.target_org_id`).
+  - `celular_tarefa_criar(p_token, p_dados JSONB) RETURNS JSONB` (linha com `TASK_COLS`). Aceita: `title` (obrigatório, trim não vazio → senão 22023), `description`, `start_date`, `due_date`, `priority` (1–4), `space_id`, `folder_id`. Força `user_id` = dono do link, `org_id` = org do link, `status='open'`, `source_module='manual'`. `space_id` precisa ser da org do link e `is_task_space_member_de` ou dono; `folder_id` precisa ser do `space_id`.
+  - `celular_tarefa_atualizar(p_token, p_task_id UUID, p_patch JSONB) RETURNS JSONB` (linha com `TASK_COLS`). Lista branca: `title, description, start_date, due_date, priority, status ('open'|'done'), status_id, assignee_employee_id`; chave fora dela → 22023. Tarefa da org do link e editável por `tasks_update` (dono ou membro do espaço — colaborador só lê) → senão 42501. `status_id` precisa ser de `task_statuses` da org do link; responsável precisa estar em `celular_responsaveis_listar`.
+
+- [ ] **Step 1: Seção B do teste**, com token de `u` gerado na seção A:
+  - `celular_tarefas_listar` como `anon` devolve exatamente as tarefas abertas que `SELECT … FROM tasks` devolve com claims de `u` na mesma org (comparar conjuntos de `id`).
+  - Tarefa de outro usuário, fora de espaço de `u`, não aparece; tarefa onde `u` é só colaborador aparece, mas `celular_tarefa_atualizar` nela → 42501.
+  - `criar` com `space_id` de outra org → 42501; com `folder_id` de outro espaço → 22023; com título `'  '` → 22023; criada sai com `user_id = u`, `org_id = o`.
+  - `atualizar` com `{"org_id": …}` ou `{"user_id": …}` → 22023; com `status_id` de outra org → 42501; com `{"status":"done","status_id":<concluído da org>}` → `status='done'` e `completed_at` preenchido (gatilho existente).
+  - Token de outra org não lista nada de `o`.
+- [ ] **Step 2: Rodar** → FAIL `function public.celular_tarefas_listar(...) does not exist`.
+- [ ] **Step 3: Escrever a migration** com as interfaces acima.
+- [ ] **Step 4: Ensaio** com as duas migrations inlineadas → `TUDO OK`.
+- [ ] **Step 5:** `npx vitest run __tests__/segurancaMigrations.test.ts` → PASS.
+- [ ] **Step 6: Commit** — `feat(banco): RPCs de Tarefas do link do celular`.
+
+### Task 3: `TarefasFonte` — fonte logada e fonte do link
+
+**Files:**
+- Create: `services/celular/tarefasFonte.ts`
+- Test: `__tests__/tarefasFonte.test.ts`
+
+**Interfaces:**
+- Consumes: RPCs da Task 2; tipos `Task`, `TaskStatus` (de onde `TasksMobileApp` importa hoje), `TaskSpaceWithMeta`.
+- Produces:
+  ```ts
+  export interface EscopoTarefas { spaceId?: string; folderId?: string; semPasta?: boolean }
+  export interface NovaTarefa { orgId: string; title: string; description: string | null; start_date: string | null; due_date: string | null; priority: number; space_id: string | null; folder_id: string | null }
+  export type PatchTarefa = Partial<Pick<Task, 'title'|'description'|'start_date'|'due_date'|'priority'|'status'|'status_id'|'assignee_employee_id'>>
+  export interface TarefasFonte {
+    modo: 'logado' | 'link'
+    listarTarefas(orgId: string | undefined, escopo: EscopoTarefas | null, limite: number): Promise<{ tarefas: Task[]; nomesObras: Map<string, string> }>
+    listarEspacos(orgId: string | undefined): Promise<TaskSpaceWithMeta[]>
+    listarStatus(orgId: string | undefined): Promise<TaskStatus[]>
+    listarResponsaveis(orgId: string): Promise<{ id: string; name: string }[]>
+    criarTarefa(dados: NovaTarefa): Promise<Task>
+    atualizarTarefa(id: string, patch: PatchTarefa): Promise<Task>
+  }
+  export const fonteLogada: TarefasFonte
+  export function fonteDoLink(token: string): TarefasFonte
+  export const TarefasFonteContext: React.Context<TarefasFonte>   // padrão: fonteLogada
+  export function useTarefasFonte(): TarefasFonte
+  ```
+  `fonteLogada` = o código que hoje está em `TasksMobileApp` (`loadTasks`, `listAssignable`, insert, update), movido sem mudar consultas; `criarTarefa` lê o usuário de `supabase.auth.getUser()` e lança `'Sua sessão expirou. Entre de novo para criar a tarefa.'` sem usuário. Em `fonteDoLink`, `orgId` recebido é ignorado (a org é a do token).
+
+- [ ] **Step 1: Testes** (`vi.mock('../lib/supabase')` no molde de `__tests__/alcadaDaBaixa.test.ts`, com `rpc` e `from` espiões):
+  - `fonteDoLink('tk').listarTarefas(undefined, {spaceId:'s', folderId:'f'}, 300)` chama `rpc('celular_tarefas_listar', {p_token:'tk', p_space_id:'s', p_folder_id:'f', p_sem_pasta:false})` e devolve `nomesObras` como `Map`.
+  - `semPasta: true` → `p_folder_id: null, p_sem_pasta: true`.
+  - `atualizarTarefa('t1', {status:'done', status_id:'d'})` → `rpc('celular_tarefa_atualizar', {p_token:'tk', p_task_id:'t1', p_patch:{status:'done', status_id:'d'}})`.
+  - Em **toda** chamada de `fonteDoLink`, `supabase.from` **não** é chamado (Review Focus 2).
+  - Erro do `rpc` vira `throw` (a tela já trata com `falha(...)`).
+- [ ] **Step 2:** `npx vitest run __tests__/tarefasFonte.test.ts` → FAIL (módulo não existe).
+- [ ] **Step 3: Implementar** `services/celular/tarefasFonte.ts`.
+- [ ] **Step 4:** mesmo comando → PASS.
+- [ ] **Step 5: Commit** — `feat(tarefas): fonte de dados trocável (logado × link do celular)`.
+
+### Task 4: `TasksMobileApp` passa a usar a fonte
+
+**Files:**
+- Modify: `components/TasksMobileApp.tsx` (`listAssignable` l.117, `TaskEditSheet` l.562, `AddTaskSheet` l.699, `loadTasks` l.793, `loadSpaces` l.831, status l.846, `reopen` l.852, `complete` l.866, `resolveCreateOrg` l.940)
+
+**Interfaces:**
+- Consumes: `useTarefasFonte()` (Task 3).
+- Produces: `TasksMobileApp` com o mesmo `Props`; com `fonte.modo === 'link'`, `resolveCreateOrg` devolve `selectedSpace?.org_id ?? orgId` sem `resolveWriteOrg`.
+
+- [ ] **Step 1:** trocar cada acesso a dados pela chamada da fonte; o arquivo não importa mais `supabase` nem `taskSpaceService`/`taskStatusService`.
+- [ ] **Step 2: Verificar** — `grep -nE "supabase\.|taskSpaceService|taskStatusService" components/TasksMobileApp.tsx` → nada; `npx tsc --noEmit -p .` sem erro novo (ver `index_publicacao_build.md` para o Node 24); `npx vitest run __tests__/tasksMobileAgenda.test.ts __tests__/tarefasFonte.test.ts __tests__/orgContextGuard.test.ts` → PASS; `bash scripts/check-ui-standard.sh components/TasksMobileApp.tsx` → exit 0.
+- [ ] **Step 3: Prova de não regressão (logado)** — harness Playwright com stub do PostgREST (molde em `C:\tmp\pwtest`, ver `index_harness_navegador.md`), viewport 390×844: lista, concluir + Desfazer, criar e editar disparam as mesmas requisições de antes (mesmas URLs/corpos de `tasks`).
+- [ ] **Step 4: Commit** — `refactor(tarefas): TasksMobileApp lê e grava pela TarefasFonte`.
+
+### Task 5: Rota `/celular` e `CelularTokenGate`
+
+**Files:**
+- Create: `services/celular/celularLinkService.ts`, `components/celular/CelularTokenGate.tsx`
+- Modify: `App.tsx` (memo junto de `supplierPortalToken` ~l.657; render junto dos gates ~l.790)
+- Test: `__tests__/celularRota.test.ts`
+
+**Interfaces:**
+- Produces:
+  ```ts
+  export function tokenDoCelularDaUrl(pathname: string, search: string): string | null  // '/celular' ou '/celular/'; token trim, só [A-Za-z0-9_-]{20,}; senão null
+  export function urlDoLinkCelular(token: string, origin?: string): string               // `${origin ?? window.location.origin}/celular?token=${token}`
+  export interface SessaoCelular { user_id: string; nome: string; org_id: string; org_nome: string }
+  export async function celularSessao(token: string): Promise<SessaoCelular | null>      // 42501 → null; outro erro → throw
+  export async function gerarLinkCelular(userId: string, orgId: string): Promise<string>  // devolve a URL
+  export async function revogarLinkCelular(userId: string, orgId: string): Promise<void>
+  export async function statusLinkCelular(userId: string, orgId: string): Promise<{ existe: boolean; expires_at: string | null; last_used_at: string | null; revogado: boolean }>
+  ```
+  `CelularTokenGate: React.FC<{ token: string | '' }>` — estados `carregando | invalido | erro | ok`. `ok`: cabeçalho (nome · org), `TarefasFonteContext.Provider value={fonteDoLink(token)}` envolvendo `<TasksMobileApp orgId={sessao.org_id} />`. `invalido`: texto das Global Constraints. `erro` (rede): "Não foi possível abrir. Verifique a conexão." + Tentar de novo. Barra de abas só com "Tarefas" (Diário entra na F5).
+  `App.tsx`: `pathname` `/celular` ou `/celular/` **sempre** renderiza o gate (token `null` → `''` → estado `invalido` sem chamar RPC), antes de `<Layout>` e da checagem de login.
+
+- [ ] **Step 1: Testes** — `tokenDoCelularDaUrl('/celular', '?token=abcDEF_123-xyzxyzxyzxyz')` → o token; `'/celular/'` idem; `'?token='`, `'?token=%20%20'`, `'?token=a b'`, `'?token=<script>'`, token com 10 caracteres → `null`; `'/m/loja'` → `null`; `urlDoLinkCelular('t','https://x')` → `'https://x/celular?token=t'`.
+- [ ] **Step 2:** `npx vitest run __tests__/celularRota.test.ts` → FAIL.
+- [ ] **Step 3: Implementar** serviço, gate e rota.
+- [ ] **Step 4:** testes → PASS; `bash scripts/check-ui-standard.sh components/celular/CelularTokenGate.tsx` → exit 0; `orgContextGuard` → PASS.
+- [ ] **Step 5: Harness** (stub de `rpc/celular_*`): sem token → tela de recusa e **nenhuma** chamada `rpc/`; token recusado (stub 42501) → recusa; token válido → cabeçalho com nome e org e a lista; com cookie de sessão de outra pessoa no navegador, as chamadas continuam sendo só `rpc/celular_*`.
+- [ ] **Step 6: Commit** — `feat(celular): rota /celular com token abre Minhas Tarefas sem login`.
+
+### Task 6: Gestão do link no app logado
+
+**Files:**
+- Create: `components/celular/LinkDoCelularBloco.tsx`
+- Modify: `components/OrganizationUsers.tsx` (Edit Member Modal ~l.1487), `components/Layout.tsx` (menu da conta, junto de "Minha conta" ~l.1467)
+
+**Interfaces:**
+- Consumes: `gerarLinkCelular`, `revogarLinkCelular`, `statusLinkCelular`, `urlDoLinkCelular` (Task 5).
+- Produces: `LinkDoCelularBloco: React.FC<{ userId: string; orgId: string; nomePessoa: string }>` — mostra validade e último uso; **Gerar** (ou **Gerar novo**, que avisa que o anterior para de funcionar, via `useConfirm`); depois de gerar, mostra a URL uma vez com **Copiar** e **WhatsApp** (`https://wa.me/?text=` + texto "Seu link do OrçaCloud no celular: <url>"); **Revogar** com `useConfirm`. Botão desabilitado diz o motivo (`title`).
+  No Layout: item "Meu link do celular" abre `Sheet` com o bloco para o usuário logado; org = `useOrgContext().orgId`; em "Todas", `resolveWriteOrg('single')` (REGRA #5).
+
+- [ ] **Step 1: Implementar** bloco e as duas entradas.
+- [ ] **Step 2: Verificar** — `bash scripts/check-ui-standard.sh components/celular/LinkDoCelularBloco.tsx components/OrganizationUsers.tsx components/Layout.tsx` → sem item novo; `npx vitest run __tests__/orgContextGuard.test.ts` → PASS; `npx tsc --noEmit -p .` sem erro novo.
+- [ ] **Step 3: Harness** (stub das `mobile_link_*`): gerar mostra a URL `…/celular?token=…`, Copiar põe no clipboard, Revogar pede confirmação; usuário em "Todas" vê o seletor de org antes de gerar.
+- [ ] **Step 4: Commit** — `feat(usuarios): gerar, copiar e revogar o link do celular`.
+
+### Task 7: Publicar a Parte 1
+
+- [ ] **Step 1:** suíte — `npx vitest run` (ver `index_publicacao_build.md`) e `npm run build` → verdes; ler a saída antes de seguir.
+- [ ] **Step 2: ⚠️ com aval do usuário** — aplicar `aplicar_<p1>` e `aplicar_<p2>` com `npx supabase db query --linked -f`; rodar `scripts/teste-link-celular-tarefas.sql` (sem `-- MIGRATION` preenchido) → `TUDO OK`; `bash scripts/check-rls-postura.sh` → verde.
+- [ ] **Step 3: Sonda de fora** — `curl` em `rest/v1/user_mobile_links` com a chave anon → `[]` ou 401/42501; `rest/v1/rpc/celular_sessao` com token falso → 42501.
+- [ ] **Step 4: ⚠️ com aval do usuário** — `git push origin HEAD:main`; `bash scripts/conferir-producao.sh "Meu link do celular"` → SHA e texto no bundle.
+- [ ] **Step 5: Prova real** — o usuário gera o próprio link, abre no celular, conclui e desfaz uma tarefa; registrar o resultado em **Estado**.
+
 ## Estado
 
-- [x] Design aprovado em 5 seções (2026-11-11)
-- [ ] Plano de implementação detalhado
+- [x] Design aprovado em 5 seções (2026-11-11) — `eb6661b5`
+- [x] Plano de implementação Parte 1 (F1 + F2)
+- [ ] Task 1 · [ ] Task 2 · [ ] Task 3 · [ ] Task 4 · [ ] Task 5 · [ ] Task 6 · [ ] Task 7
+- [ ] Plano de implementação Parte 2 (F3–F5) — depois de F2 no ar
 - [ ] F1 · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
 
 ## Verificação

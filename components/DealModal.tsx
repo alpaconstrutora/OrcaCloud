@@ -1,6 +1,6 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, ArrowLeft, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2 } from 'lucide-react';
+import { X, DollarSign, Calendar, FileText, User, Info, Building, Check, AlertCircle, Maximize2, Layers, UserCheck, Percent, PenLine, Mail, Phone, MapPin, Pencil, Trash2, Plus, RefreshCw, BedDouble, Bath, DoorClosed, Car, Compass, ShieldCheck, FileDown, Settings, MoveHorizontal, Loader2 } from 'lucide-react';
 import { Property, PropertyDeal, Client, Organization, PaymentInstallment, BrokerProfile, PaymentType, DealUnit, DealBuyer, CostCenter } from '../types';
 import { commercialService, dealUnitsOf, dealUnitsTotal, dealBuyersOf } from '../services/commercialService';
 import ActionIconButton from './ui/ActionIconButton';
@@ -3076,6 +3076,46 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Em tela cheia o fundo é o mesmo `bg-gray-50` do shell do app (Layout.tsx),
     // para os cards brancos terem o contraste de Gestão de Unidades. Em modal, o
     // card continua branco sobre o backdrop escuro.
+    // Em edição os botões moram no cabeçalho da tela (à direita do título); em
+    // criação (modal), no rodapé. O JSX é o mesmo nos dois lugares — só o
+    // contêiner muda, então "Gerar proposta / Voltar / Salvar" não divergem.
+    const botoesDeAcao = (
+        <>
+            {formData.id && (
+                <button
+                    type="button"
+                    onClick={handleExportPDF}
+                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-600 rounded-[6px] border border-gray-200 shadow-sm font-medium text-[13px] hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
+                >
+                    <FileText className="w-[15px] h-[15px]" />
+                    Gerar proposta
+                </button>
+            )}
+            {/* §25 — "Voltar" em edição: o que já foi salvo fica salvo, só
+                se sai da tela. Criação mantém "Cancelar". */}
+            <button
+                type="button"
+                onClick={() => { void handleRequestClose(); }}
+                className="h-9 px-3.5 bg-white text-gray-500 rounded-[6px] border border-gray-200 shadow-sm font-medium text-[13px] hover:text-gray-900 transition-all active:scale-95"
+            >
+                {isEditMode ? 'Voltar' : 'Cancelar'}
+            </button>
+            <button
+                type="submit"
+                form="deal-modal-form"
+                disabled={loading}
+                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+            >
+                {loading ? (
+                    <div className="w-[15px] h-[15px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                ) : (
+                    <Check className="w-[15px] h-[15px]" />
+                )}
+                Salvar alterações
+            </button>
+        </>
+    );
+
     return (
         <div className={isEditMode ? 'absolute inset-0 z-[110] bg-gray-50 flex flex-col' : 'absolute inset-0 z-[110] flex items-center justify-center p-8'}>
             {!isEditMode && (
@@ -3090,7 +3130,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 {/* Cabeçalho — §20: h1 solto + subtítulo mt-1.5, sem card/banda colorida.
                     Sem blocos de métrica: tela de edição não exibe KPI (ver abaixo). */}
                 <div className="px-8 pt-6 pb-3 shrink-0">
-                    <div className="flex items-start justify-between gap-4">
+                    <div className="flex flex-wrap items-start justify-between gap-x-4 gap-y-3">
                         <div className="min-w-0">
                             <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                                 {formData.id ? 'Gerenciar Negociação' : 'Nova Negociação Comercial'}
@@ -3101,15 +3141,24 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                     : 'Registro de ativo imobiliário'}
                             </p>
                         </div>
-                        <button
-                            type="button"
-                            onClick={() => { void handleRequestClose(); }}
-                            title={isEditMode ? 'Voltar' : 'Fechar'}
-                            aria-label={isEditMode ? 'Voltar' : 'Fechar'}
-                            className="h-9 w-9 shrink-0 flex items-center justify-center bg-white text-gray-400 rounded-[6px] border border-gray-200 shadow-sm hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
-                        >
-                            {isEditMode ? <ArrowLeft className="w-4 h-4" /> : <X className="w-4 h-4" />}
-                        </button>
+                        {isEditMode ? (
+                            // Gerar proposta / Voltar / Salvar alterações na linha do título,
+                            // à direita (§25). O "Voltar" de texto substitui a seta solta.
+                            <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+                                <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-2" />
+                                {botoesDeAcao}
+                            </div>
+                        ) : (
+                            <button
+                                type="button"
+                                onClick={() => { void handleRequestClose(); }}
+                                title="Fechar"
+                                aria-label="Fechar"
+                                className="h-9 w-9 shrink-0 flex items-center justify-center bg-white text-gray-400 rounded-[6px] border border-gray-200 shadow-sm hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
+                            >
+                                <X className="w-4 h-4" />
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -5389,51 +5438,17 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                     )}
                 </form>
 
-                {/* Rodapé — §17: ação primária compacta (h-9, sentence case, sem
-                    shadow-xl/ring/uppercase); secundárias no mesmo h-9. */}
-                <div className="px-8 py-4 border-t border-gray-100 bg-white flex flex-wrap items-center justify-between gap-x-4 gap-y-2 shrink-0">
-                    {/* O aviso fixo "Aprovação sistêmica obrigatória…" saiu em 10/11/2026:
-                        não estava ligado a regra nenhuma. A conferência real com o Plano de
-                        vendas fica embaixo da tabela do plano (aba Financeiro). */}
-                    <div className="min-w-0">
-                        {isEditMode && <SaveStatus dirty={dirty} savedAt={savedAt} />}
+                {/* Rodapé — só na criação (modal). Em edição os botões moram no
+                    cabeçalho da tela. §17: ação primária compacta (h-9, sentence
+                    case, sem shadow-xl/ring/uppercase); secundárias no mesmo h-9. */}
+                {!isEditMode && (
+                    <div className="px-8 py-4 border-t border-gray-100 bg-white flex flex-wrap items-center justify-end gap-2 shrink-0">
+                        {/* O aviso fixo "Aprovação sistêmica obrigatória…" saiu em 10/11/2026:
+                            não estava ligado a regra nenhuma. A conferência real com o Plano de
+                            vendas fica embaixo da tabela do plano (aba Financeiro). */}
+                        {botoesDeAcao}
                     </div>
-
-                    <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
-                        {formData.id && (
-                            <button
-                                type="button"
-                                onClick={handleExportPDF}
-                                className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-600 rounded-[6px] border border-gray-200 shadow-sm font-medium text-[13px] hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
-                            >
-                                <FileText className="w-[15px] h-[15px]" />
-                                Gerar proposta
-                            </button>
-                        )}
-                        {/* §25 — "Voltar" em edição: o que já foi salvo fica salvo, só
-                            se sai da tela. Criação mantém "Cancelar". */}
-                        <button
-                            type="button"
-                            onClick={() => { void handleRequestClose(); }}
-                            className="h-9 px-3.5 bg-white text-gray-500 rounded-[6px] border border-gray-200 shadow-sm font-medium text-[13px] hover:text-gray-900 transition-all active:scale-95"
-                        >
-                            {isEditMode ? 'Voltar' : 'Cancelar'}
-                        </button>
-                        <button
-                            type="submit"
-                            form="deal-modal-form"
-                            disabled={loading}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
-                        >
-                            {loading ? (
-                                <div className="w-[15px] h-[15px] border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                            ) : (
-                                <Check className="w-[15px] h-[15px]" />
-                            )}
-                            Salvar alterações
-                        </button>
-                    </div>
-                </div>
+                )}
 
                 {/* Aviso padrão de salvamento (toast) — mesmo padrão visual do
                     toast de sucesso dos módulos (fixo, canto inferior direito). */}

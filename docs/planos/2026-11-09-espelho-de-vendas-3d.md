@@ -150,6 +150,11 @@ Mudou em relação ao plano aprovado (09/11/2026):
   `@react-three/fiber` estão fora do programa TS do projeto. O que dá para tipar ficou em
   `utils/espelhoDeVendas3dMalha.ts`; a cena se confere pelo passeio do harness.
 - O subsolo não entra no desenho 3D (aparece na lista por andar).
+- **Revertido em 10/11/2026** (pedido do usuário: *"trazer as garagens e subsolos para o espelho"*): o subsolo entra
+  no desenho. No Garden Cambuhy a Torre B tem 8 apartamentos nos pavimentos -1 e -2 (desnível) e as duas torres têm
+  estacionamentos de -1 a -4 — nada disso aparecia. A unidade do subsolo tem a cor do status; o estacionamento sem
+  unidade é piso neutro. Com subsolo, o chão fica translúcido (35 %, sem gravar profundidade) e o que está abaixo do
+  térreo aparece através; a câmera enquadra do subsolo mais fundo ao topo; tocar numa unidade do subsolo abre a ficha.
 
 ### F3 — Portal do Corretor: seletor "2D | 3D" no Estoque
 

@@ -103,11 +103,15 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
   const cy = (cena.caixa.minY + cena.caixa.maxY) / 2;
   const largura = (cena.caixa.maxX - cena.caixa.minX) * M;
   const profundidade = (cena.caixa.maxY - cena.caixa.minY) * M;
-  const altura = Math.max(cena.caixa.topoMm, 0) * M;
+  // Do subsolo mais fundo (base < 0) ao topo: desde 10/11/2026 o subsolo é desenhado e entra no enquadramento.
+  const fundo = Math.min(cena.caixa.baseMm, 0) * M;
+  const topo = Math.max(cena.caixa.topoMm, 0) * M;
+  const altura = topo - fundo;
+  const temSubsolo = fundo < 0;
   const raio = Math.max(largura, profundidade, altura, 10);
-  /** A esfera que envolve as torres acima do chão — é ela que a câmera enquadra. */
+  /** A esfera que envolve as torres inteiras, com o subsolo — é ela que a câmera enquadra. */
   const raioDaCena = Math.max(Math.hypot(largura, profundidade, altura) / 2, 5);
-  const alvo = useMemo<[number, number, number]>(() => [0, altura / 2, 0], [altura]);
+  const alvo = useMemo<[number, number, number]>(() => [0, (fundo + topo) / 2, 0], [fundo, topo]);
 
   const { malhas, arestas } = useMemo(() => {
     const ms: MalhaDoGrupo[] = [];
@@ -138,7 +142,7 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
   );
 
   const daSelecionada = useMemo(() => {
-    const p = selecionada ? cena.prismas.find((x) => x.unitId === selecionada && !x.abaixoDoSolo) : null;
+    const p = selecionada ? cena.prismas.find((x) => x.unitId === selecionada) : null;
     if (!p) return null;
     const geometria = geometriaDoPrisma(p, cx, cy);
     return { p, geometria, contorno: new THREE.EdgesGeometry(geometria) };
@@ -171,10 +175,11 @@ const Espelho3DCena: React.FC<Espelho3DCenaProps> = ({ cena, paleta, destaque, s
       <directionalLight color={luz.sol.cor} position={[raio * luz.sol.direcao[0], raio * luz.sol.direcao[1], raio * luz.sol.direcao[2]]} intensity={luz.sol.intensidade} />
       <directionalLight color={luz.contraluz.cor} position={[-raio * luz.sol.direcao[0], raio, -raio * luz.sol.direcao[2]]} intensity={luz.contraluz.intensidade} />
 
-      {/* O chão: só dá a referência de onde a torre pousa. */}
-      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]}>
+      {/* O chão: a referência de onde a torre pousa. Com subsolo ele fica translúcido (e não grava profundidade), para o
+          que está abaixo do térreo aparecer através — como um corte do terreno. Desenhado depois dos prédios. */}
+      <mesh rotation={[-Math.PI / 2, 0, 0]} position={[0, -0.02, 0]} renderOrder={temSubsolo ? 2 : 0}>
         <circleGeometry args={[raio * 1.6, 64]} />
-        <meshBasicMaterial color={luz.chao} />
+        <meshBasicMaterial color={luz.chao} transparent={temSubsolo} opacity={temSubsolo ? 0.35 : 1} depthWrite={!temSubsolo} />
       </mesh>
 
       {malhas.map((m) => (

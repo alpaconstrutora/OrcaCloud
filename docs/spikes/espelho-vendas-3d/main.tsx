@@ -66,8 +66,16 @@ function torre(id: string, nome: string, andares: number, porAndar: number, area
 const EM_L = [{ x: 0, y: 0 }, { x: 26000, y: 0 }, { x: 26000, y: 12000 }, { x: 14000, y: 12000 }, { x: 14000, y: 22000 }, { x: 0, y: 22000 }];
 const A = torre('A', 'Torre A', 18, 4, [127.4, 127.4, 81.2, 81.2], { contorno: { anel: EM_L, frenteParaFora: { x: 0, y: -1 }, rotacaoNorteDeg: 0 } });
 const B = torre('B', 'Torre B', 12, 6, [64, 64, 72, 72, 58, 58], { sort_order: 1 });
-// Uma garagem em cada torre: o andar 0 fica sem unidade (o térreo de lazer, volume neutro) e o -1 só na lista.
-const comTerreo = (t: TorreDoEspelho): TorreDoEspelho => ({ ...t, units: [...(t.units ?? []), { id: `${t.id}-g`, name: 'Garagem', floor: -1, floor_tipo: 'GARAGEM' as never, status: 'DISPONIVEL' as never }] });
+// Uma garagem em cada torre: o andar 0 fica sem unidade (o térreo de lazer, volume neutro) e o -1 aparece abaixo do
+// chão translúcido (desde 10/11/2026). A Torre B tem ainda um apartamento no -2, como os do Garden Cambuhy em desnível.
+const comTerreo = (t: TorreDoEspelho): TorreDoEspelho => ({
+  ...t,
+  units: [
+    ...(t.units ?? []),
+    { id: `${t.id}-g`, name: 'Garagem', floor: -1, floor_tipo: 'GARAGEM' as never, status: 'DISPONIVEL' as never },
+    ...(t.id === 'B' ? [{ id: 'B-ss', name: 'SS201', floor: -2, floor_tipo: 'TIPO' as never, private_area: 64, status: 'RESERVADO' as never }] : []),
+  ],
+});
 
 const torres = q.get('torres') === '1' ? [comTerreo(B)] : [comTerreo(A), comTerreo(B)];
 const cena = montarCenaDoEspelho({ torres, distancias: [{ torre_a: 'A', torre_b: 'B', distancia_m: 18 }] });

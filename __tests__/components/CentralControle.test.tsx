@@ -104,9 +104,11 @@ describe('CentralControle · tela "Bom dia"', () => {
     it('dia zerado: nada esperando e a barra "Seu dia" cheia', async () => {
         bootstrap.mockResolvedValue(painel());
         montar();
-        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live]' })).toBeInTheDocument();
+        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live] > span' })).toBeInTheDocument();
         expect(screen.getByText('Nada pendente')).toBeInTheDocument();
         expect(screen.getByText('100%')).toBeInTheDocument();
+        // Abrir a tela com o dia já zerado não "fecha o dia" (a onda é da transição).
+        expect(document.querySelector('.central-dia-fechado')).toBeNull();
     });
 
     it('fonte com erro derruba só o cartão dela', async () => {
@@ -172,8 +174,61 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(botao).toHaveTextContent('Concluída');
         await userEvent.click(botao);
         expect(atualizarTarefa).toHaveBeenCalledTimes(1);
-        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live]' })).toBeInTheDocument();
+        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live] > span' })).toBeInTheDocument();
         expect(screen.getByText('1 de 1 concluídos')).toBeInTheDocument();
         expect(bootstrap).toHaveBeenCalledTimes(1);
+        // O último pendente saiu: "Seu dia" fecha (onda nos quadradinhos).
+        expect(document.querySelector('.central-dia-fechado')).not.toBeNull();
+    });
+
+    it('o foco vai para o novo "Mais urgente" quando o anterior sai', async () => {
+        const tarefa = (id: string, title: string, due_date: string) =>
+            ({ id, org_id: 'o1', title, due_date, priority: 2, source_module: 'manual', source_ref: null });
+        bootstrap.mockResolvedValue(painel({
+            meu_dia: { ok: true, data: meuDia({
+                tarefas: {
+                    pendentes: [
+                        tarefa('t1', 'Ligar para o fornecedor', '2026-11-09T15:00:00Z'),
+                        tarefa('t2', 'Conferir medição', '2026-11-11T15:00:00Z'),
+                    ],
+                    qtd_pendentes: 2, concluidas_hoje: 0,
+                },
+            }) },
+        }));
+        montar();
+        const fila = cartao('Minha fila');
+        await waitFor(() => expect(within(fila).getByText('Ligar para o fornecedor')).toBeInTheDocument());
+        await userEvent.click(within(fila).getByRole('button', { name: 'Concluir tarefa' }));
+        await waitFor(() => expect(within(fila).getByText('Conferir medição')).toBeInTheDocument());
+        await waitFor(() => expect(within(fila).queryByText('Ligar para o fornecedor')).not.toBeInTheDocument());
+        // Sem isto o foco caía no <body> e quem usa teclado recomeçava do topo.
+        await waitFor(() => expect(within(fila).getByRole('button', { name: 'Concluir tarefa' })).toHaveFocus());
+    });
+
+    it('Atualizar marca só o número que mudou; a primeira carga não marca nada', async () => {
+        const contas = (atrasadas: number) => painel({ meu_dia: { ok: true, data: meuDia({
+            contas_7_dias: { atrasadas: { qtd: atrasadas, valor: 100 }, vencem_em_2_dias: { qtd: 4, valor: 50 }, vencem_em_7_dias: { qtd: 0, valor: 0 } },
+        }) } });
+        bootstrap.mockResolvedValueOnce(contas(3)).mockResolvedValueOnce(contas(5));
+        montar();
+        const c = await waitFor(() => { const el = cartao('Contas a pagar'); expect(within(el).getByText('Atrasadas')).toBeInTheDocument(); return el; });
+        expect(c.querySelector('.central-mudou')).toBeNull();
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        // Atrasadas 3 → 5 e o total 7 → 9 mudaram; "vencem em 2 dias" (4) não.
+        await waitFor(() => expect(c.querySelectorAll('.central-mudou')).toHaveLength(2));
+        // O total é o NumeroQueSobe: o valor final está no aria-label.
+        const marcados = Array.from(c.querySelectorAll('.central-mudou')).map(e => e.querySelector('[aria-label]')?.getAttribute('aria-label') ?? e.textContent);
+        expect(marcados).toEqual(expect.arrayContaining(['9', '5']));
+    });
+
+    it('trocar o período do caixa mantém o gráfico anterior esmaecido até o novo chegar', async () => {
+        bootstrap.mockResolvedValue(painel());
+        montar();
+        const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByText('R$ 1.000')).toBeInTheDocument(); return el; });
+        cashflow.mockReturnValue(new Promise(() => { /* período novo ainda carregando */ }));
+        await userEvent.click(within(c).getByRole('button', { name: '60 dias' }));
+        expect(c).toHaveAttribute('aria-busy', 'false');
+        expect(within(c).getByText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
     });
 });

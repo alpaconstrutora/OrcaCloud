@@ -9,6 +9,11 @@ import type { CashflowProjectionPoint } from '../../services/financialIntelligen
  * 60 ou 90 dias, e o saldo do último dia em número grande. Cromo do §28.2:
  * grade sólida `#f1f5f9`, eixos sem linha, eixo de valor compacto, linha 2px e
  * sem animação de entrada (o gráfico redesenha ao trocar o período).
+ *
+ * `trocando`: o período novo está carregando. Número e gráfico do período
+ * anterior ficam esmaecidos e voltam ao normal em 150ms quando o novo chega —
+ * a troca é um esmaecido, nunca a linha "crescendo" (§28.2), e o cartão não
+ * pisca para o esqueleto nem muda de altura.
  */
 export type PeriodoCaixa = 30 | 60 | 90;
 
@@ -19,6 +24,7 @@ interface Props {
     periodo: PeriodoCaixa;
     onPeriodo: (p: PeriodoCaixa) => void;
     animar: boolean;
+    trocando?: boolean;
     onNavigate: (view: string) => void;
 }
 
@@ -39,7 +45,8 @@ function diaMes(iso: string): string {
     return `${d}/${m}`;
 }
 
-export function CartaoCaixa({ estado, onTentarDeNovo, pontos, periodo, onPeriodo, animar, onNavigate }: Props) {
+export function CartaoCaixa({ estado, onTentarDeNovo, pontos, periodo, onPeriodo, animar, trocando = false, onNavigate }: Props) {
+    const esmaece = `transition-opacity duration-150 ${trocando ? 'opacity-40' : ''}`;
     const final = pontos.length ? pontos[pontos.length - 1].saldo_acum : null;
     const negativo = final != null && final < 0;
     const dados = pontos.map(p => ({ dia: diaMes(p.data_ref), saldo: p.saldo_acum }));
@@ -53,7 +60,7 @@ export function CartaoCaixa({ estado, onTentarDeNovo, pontos, periodo, onPeriodo
             acao={{ rotulo: 'Inteligência Financeira', onClick: () => onNavigate('financial-intelligence') }}
         >
             <div className="flex flex-wrap items-end justify-between gap-3">
-                <div className="min-w-0">
+                <div className={`min-w-0 ${esmaece}`} aria-busy={trocando}>
                     {final == null ? (
                         <p className="text-sm text-gray-500">Sem projeção para o período.</p>
                     ) : (
@@ -83,7 +90,7 @@ export function CartaoCaixa({ estado, onTentarDeNovo, pontos, periodo, onPeriodo
                 </div>
             </div>
             {dados.length > 1 && (
-                <div className="mt-3 h-[140px]">
+                <div className={`mt-3 h-[140px] ${esmaece}`} aria-busy={trocando}>
                     <ResponsiveContainer width="100%" height="100%">
                         <LineChart data={dados} margin={{ top: 8, right: 8, bottom: 0, left: 0 }}>
                             <CartesianGrid vertical={false} stroke="#f1f5f9" />

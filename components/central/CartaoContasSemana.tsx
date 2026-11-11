@@ -1,6 +1,7 @@
 import React from 'react';
 import { CartaoCentral, type EstadoDoCartao } from './CartaoCentral';
 import { NumeroQueSobe } from './NumeroQueSobe';
+import { Realce } from './Realce';
 import type { MeuDia } from '../../services/centralControleService';
 
 /**
@@ -14,6 +15,8 @@ interface Props {
     onTentarDeNovo: () => void;
     dados: MeuDia['contas_7_dias'] | null;
     animar: boolean;
+    /** Rodada de "Atualizar" (Realce marca o número que mudou). */
+    rodada: number;
     onNavigate: (view: string) => void;
 }
 
@@ -41,7 +44,7 @@ function fBRL(v: number): string {
     return v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 });
 }
 
-export function CartaoContasSemana({ estado, onTentarDeNovo, dados, animar, onNavigate }: Props) {
+export function CartaoContasSemana({ estado, onTentarDeNovo, dados, animar, rodada, onNavigate }: Props) {
     const total = dados ? FAIXAS.reduce((s, f) => s + dados[f.chave].qtd, 0) : 0;
     const atrasadas = dados?.atrasadas.qtd ?? 0;
     const idMascara = `central-varre-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
@@ -86,7 +89,9 @@ export function CartaoContasSemana({ estado, onTentarDeNovo, dados, animar, onNa
                             </g>
                         </svg>
                         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
-                            <NumeroQueSobe valor={total} animar={animar} className="text-[28px] leading-none font-semibold text-gray-900" />
+                            <Realce valor={total} rodada={rodada}>
+                                <NumeroQueSobe valor={total} animar={animar} className="text-[28px] leading-none font-semibold text-gray-900" />
+                            </Realce>
                             <span className="text-xs text-gray-500 mt-1">{total === 1 ? 'título' : 'títulos'}</span>
                         </div>
                     </div>
@@ -95,7 +100,9 @@ export function CartaoContasSemana({ estado, onTentarDeNovo, dados, animar, onNa
                             <li key={f.chave} className="flex items-center gap-2 text-sm">
                                 <span className={`w-2 h-2 rounded-full shrink-0 ${f.ponto}`} aria-hidden="true" />
                                 <span className="flex-1 min-w-0 text-gray-700 truncate">{f.rotulo}</span>
-                                <span className="tabular-nums text-gray-900 font-medium">{dados[f.chave].qtd.toLocaleString('pt-BR')}</span>
+                                <Realce valor={dados[f.chave].qtd} rodada={rodada}>
+                                    <span className="tabular-nums text-gray-900 font-medium">{dados[f.chave].qtd.toLocaleString('pt-BR')}</span>
+                                </Realce>
                                 <span className="tabular-nums text-gray-500 w-[92px] text-right">{fBRL(dados[f.chave].valor)}</span>
                             </li>
                         ))}

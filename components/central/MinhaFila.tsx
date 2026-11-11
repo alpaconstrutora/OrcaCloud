@@ -1,6 +1,7 @@
 import React from 'react';
 import { Check, ChevronRight, X, CircleCheck } from 'lucide-react';
 import { CartaoCentral, type EstadoDoCartao } from './CartaoCentral';
+import { NumeroQueTroca } from './NumeroQueTroca';
 import { ENTITY_TAG } from '../FinancialApprovalModule';
 import type { ActionQueueItem } from '../../services/approvalService';
 import { diasDeAtraso, type FilaDoDia, type ItemDaFila } from '../../utils/meuDia';
@@ -98,6 +99,37 @@ export function MinhaFila(props: Props) {
     const { estado, onTentarDeNovo, fila, destaque, saindo, filtro, className } = props;
     const [abertos, setAbertos] = React.useState<Record<string, boolean>>({ aprovacoes: true, tarefas: true, contas: true, alertas: false });
 
+    // ── Foco depois que o item resolvido sai ──────────────────────────────
+    // Quem resolve pelo teclado perdia o foco (a linha some e ele cai no
+    // <body>). Guardamos a POSIÇÃO do último foco dentro da fila; quando a lista
+    // muda, o foco está perdido e aquele item não existe mais, o foco vai para
+    // quem ocupou o lugar (mesmo grupo, mesmo índice; senão o cabeçalho do
+    // grupo). Foco que está em outro lugar não é tocado.
+    const raiz = React.useRef<HTMLDivElement>(null);
+    const ultimaPosicao = React.useRef<{ grupo: string; indice: number; chave: string } | null>(null);
+    const registrarFoco = (e: React.FocusEvent) => {
+        const el = (e.target as HTMLElement).closest<HTMLElement>('[data-fila-chave]');
+        ultimaPosicao.current = el
+            ? { grupo: el.dataset.filaGrupo ?? '', indice: Number(el.dataset.filaIndice ?? 0), chave: el.dataset.filaChave ?? '' }
+            : null;
+    };
+    const assinatura = [destaque?.chave ?? '', ...[...fila.aprovacoes, ...fila.tarefas, ...fila.contas, ...fila.alertas].map(i => i.chave)].join('|');
+    React.useEffect(() => {
+        const pos = ultimaPosicao.current;
+        const r = raiz.current;
+        if (!pos || !r) return;
+        const ativo = document.activeElement;
+        if (ativo && ativo !== document.body) return;
+        if (r.querySelector(`[data-fila-chave="${CSS.escape(pos.chave)}"]`)) return;
+        ultimaPosicao.current = null;
+        const doGrupo = Array.from(r.querySelectorAll<HTMLElement>(`[data-fila-grupo="${pos.grupo}"]`));
+        const lugar = doGrupo[Math.min(pos.indice, doGrupo.length - 1)];
+        const alvo = lugar?.querySelector<HTMLElement>('[data-fila-alvo]') ?? lugar?.querySelector<HTMLElement>('button:not(:disabled)')
+            ?? r.querySelector<HTMLElement>(`[data-fila-cabecalho="${pos.grupo}"]`)
+            ?? r.querySelector<HTMLElement>('button:not(:disabled)');
+        alvo?.focus();
+    }, [assinatura]);
+
     const grupos = GRUPOS.filter(g => filtro === 'tudo' || g.chave === filtro);
     const vazio = fila.aprovacoes.length + fila.tarefas.length + fila.contas.length + fila.alertas.length === 0;
     const qtdDoGrupo = (g: typeof GRUPOS[number]) =>
@@ -118,9 +150,10 @@ export function MinhaFila(props: Props) {
                     <p className="text-xs text-gray-500">Quando algo chegar à sua alçada ou vencer, aparece aqui.</p>
                 </div>
             ) : (
-                <div key={filtro} className="flex flex-col gap-4 central-aparece">
+                <div key={filtro} ref={raiz} onFocus={registrarFoco} className="flex flex-col gap-4 central-aparece">
                     {destaque && filtro === 'tudo' && (
-                        <div key={destaque.chave} className="central-recolhe" data-saindo={saindo.has(destaque.chave)}>
+                        <div key={destaque.chave} className="central-recolhe" data-saindo={saindo.has(destaque.chave)}
+                            data-fila-chave={destaque.chave} data-fila-grupo="destaque" data-fila-indice={0}>
                             <div className="central-troca"><Destaque item={destaque} {...props} /></div>
                         </div>
                     )}
@@ -136,6 +169,7 @@ export function MinhaFila(props: Props) {
                                 <button
                                     type="button"
                                     aria-expanded={aberto}
+                                    data-fila-cabecalho={g.chave}
                                     aria-controls={idLista}
                                     onClick={() => setAbertos(a => ({ ...a, [g.chave]: !aberto }))}
                                     disabled={filtro !== 'tudo'}
@@ -145,7 +179,7 @@ export function MinhaFila(props: Props) {
                                         <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform duration-200 motion-reduce:transition-none ${aberto ? 'rotate-90' : ''}`} aria-hidden="true" />
                                     )}
                                     <span className="text-sm font-medium text-gray-800">{g.titulo}</span>
-                                    <span className="text-xs text-gray-500 tabular-nums">{qtd.toLocaleString('pt-BR')}</span>
+                                    <NumeroQueTroca valor={qtd} className="text-xs text-gray-500" />
                                 </button>
                                 {/* Sempre no DOM para abrir e fechar deslizando; fechado = `inert`
                                     (fora do Tab e do leitor de tela). */}
@@ -155,7 +189,7 @@ export function MinhaFila(props: Props) {
                                             <p className="text-sm text-gray-500 py-2">Nada aqui hoje.</p>
                                         ) : (
                                             <ul className="divide-y divide-gray-100">
-                                                {itens.slice(0, POR_GRUPO).map(i => <Linha key={i.chave} item={i} {...props} />)}
+                                                {itens.slice(0, POR_GRUPO).map((i, indice) => <Linha key={i.chave} item={i} grupo={g.chave} indice={indice} {...props} />)}
                                             </ul>
                                         )}
                                         <button
@@ -224,13 +258,13 @@ function Destaque({ item, hoje, saindo, onAprovar, onRejeitar, onConcluirTarefa,
     );
 }
 
-function Linha({ item, hoje, saindo, onAprovar, onRejeitar, onConcluirTarefa, onNavigate }: { item: ItemDaFila } & Props) {
+function Linha({ item, grupo, indice, hoje, saindo, onAprovar, onRejeitar, onConcluirTarefa, onNavigate }: { item: ItemDaFila; grupo: string; indice: number } & Props) {
     const prazo = prazoTexto(item.prazo, hoje);
     const resolvido = saindo.has(item.chave);
     const partes = [item.tipo === 'aprovacao' ? ENTITY_TAG[item.aprovacao.entity] : null, detalheDo(item)].filter(Boolean);
     const icone ='h-8 w-8 inline-flex items-center justify-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40';
     return (
-        <li className="central-recolhe" data-saindo={resolvido}>
+        <li className="central-recolhe" data-saindo={resolvido} data-fila-chave={item.chave} data-fila-grupo={grupo} data-fila-indice={indice}>
             {/* O padding mora DENTRO do recorte: no próprio filho da grade ele
                 impediria a linha de recolher até zero. */}
             <div><div className="flex items-center gap-3 py-2.5">
@@ -248,7 +282,7 @@ function Linha({ item, hoje, saindo, onAprovar, onRejeitar, onConcluirTarefa, on
                         <CircleCheck className={`w-4 h-4 transition-colors duration-150 ${resolvido ? 'fill-emerald-500' : 'fill-transparent'}`} aria-hidden="true" />
                     </button>
                 )}
-                <button type="button" onClick={() => onNavigate(destinoDo(item))}
+                <button type="button" data-fila-alvo onClick={() => onNavigate(destinoDo(item))}
                     className="flex-1 min-w-0 text-left rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40">
                     <span className="block text-sm text-gray-900 truncate">{tituloDo(item)}</span>
                     {/* O detalhe encolhe; o prazo nunca é cortado (é o que diz a urgência). */}

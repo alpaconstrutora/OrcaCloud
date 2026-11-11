@@ -24,6 +24,7 @@ import { CartaoContasSemana } from './central/CartaoContasSemana';
 import { CartaoCaixa, type PeriodoCaixa } from './central/CartaoCaixa';
 import { CartaoObras } from './central/CartaoObras';
 import { CartaoConciliado } from './central/CartaoConciliado';
+import { NumeroQueTroca } from './central/NumeroQueTroca';
 import type { EstadoDoCartao } from './central/CartaoCentral';
 
 /**
@@ -71,6 +72,14 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
 
     const [periodoCaixa, setPeriodoCaixa] = React.useState<PeriodoCaixa>(90);
     const [caixa, setCaixa] = React.useState<Fonte<CashflowProjectionPoint[]>>(CARREGANDO);
+    // Trocar 30/60/90 (ou atualizar) mantém o gráfico anterior esmaecido até o novo
+    // chegar — sem voltar ao esqueleto. Organização nova volta ao esqueleto: o dado
+    // velho é de outra empresa.
+    const [caixaTrocando, setCaixaTrocando] = React.useState(false);
+    const caixaDaOrg = React.useRef<string | null | undefined>(undefined);
+    // Cada "Atualizar" concluído é uma rodada; o <Realce> dos cartões marca o número
+    // que mudou de uma rodada para a outra.
+    const [rodada, setRodada] = React.useState(0);
 
     const profile = useStore(s => s.currentProfile);
     const organizations = useStore(s => s.organizations);
@@ -78,7 +87,9 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const verFinanceiro = !!mod.financeiro;
     const verObras = !!mod.obras;
 
-    const load = React.useCallback(async () => {
+    // `opcoes` pode chegar como o evento do clique (onTentarDeNovo={load}): só
+    // `realcar === true` conta como rodada de "Atualizar".
+    const load = React.useCallback(async (opcoes?: { realcar?: boolean }) => {
         setCarregando(true);
 
         // ── Uma chamada para as consultas pesadas ─────────────────────────
@@ -165,6 +176,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
         else console.error('[CentralControle] approval config:', approvalConfigR.reason);
 
         setCarregando(false);
+        if (opcoes?.realcar === true) setRodada(r => r + 1);
     }, [organizationId]);
 
     // ── C3: não competir com a casca do app ───────────────────────────────
@@ -199,10 +211,20 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     // bootstrap. Espera o mesmo portão no primeiro carregamento.
     const carregarCaixa = React.useCallback(() => {
         let cancelado = false;
-        setCaixa(CARREGANDO);
+        const mesmaOrg = caixaDaOrg.current === organizationId;
+        setCaixa(c => (mesmaOrg && c.estado === 'ok' ? c : CARREGANDO));
+        setCaixaTrocando(mesmaOrg);
         financialIntelligenceService.getCashflowProjection(organizationId, periodoCaixa)
-            .then(pontos => { if (!cancelado) setCaixa({ estado: 'ok', data: pontos }); })
-            .catch(err => { console.error('[CentralControle] cashflow:', err); if (!cancelado) setCaixa({ estado: 'erro' }); });
+            .then(pontos => {
+                if (cancelado) return;
+                caixaDaOrg.current = organizationId;
+                setCaixa({ estado: 'ok', data: pontos });
+                setCaixaTrocando(false);
+            })
+            .catch(err => {
+                console.error('[CentralControle] cashflow:', err);
+                if (!cancelado) { setCaixa({ estado: 'erro' }); setCaixaTrocando(false); }
+            });
         return () => { cancelado = true; };
     }, [organizationId, periodoCaixa]);
 
@@ -294,7 +316,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                 nome={nome}
                 contagem={contagem}
                 carregando={carregando}
-                onAtualizar={() => { load(); if (verFinanceiro) carregarCaixa(); }}
+                onAtualizar={() => { load({ realcar: true }); if (verFinanceiro) carregarCaixa(); }}
             />
 
             <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar a Minha fila">
@@ -307,7 +329,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                         className={`h-8 px-3.5 inline-flex items-center gap-1.5 rounded-full border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${filtro === p.chave ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                     >
                         {p.rotulo}
-                        {p.qtd != null && <span className={`tabular-nums text-xs ${filtro === p.chave ? 'text-blue-100' : 'text-gray-500'}`}>{p.qtd.toLocaleString('pt-BR')}</span>}
+                        {p.qtd != null && <NumeroQueTroca valor={p.qtd} className={`text-xs ${filtro === p.chave ? 'text-blue-100' : 'text-gray-500'}`} />}
                     </button>
                 ))}
             </div>
@@ -319,7 +341,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                     {estadoDaFila === 'ok' && partesSemCarga.length > 0 && (
                         <p role="status" className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-[6px] px-3 py-2">
                             Parte da fila não carregou ({partesSemCarga.join(', ')}).{' '}
-                            <button type="button" onClick={load} className="font-medium underline underline-offset-2 hover:text-amber-900">Tentar de novo</button>
+                            <button type="button" onClick={() => load()} className="font-medium underline underline-offset-2 hover:text-amber-900">Tentar de novo</button>
                         </p>
                     )}
                     <MinhaFila
@@ -342,7 +364,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                 </div>
 
                 {verFinanceiro && (
-                    <CartaoContasSemana estado={estadoDe(meuDia)} onTentarDeNovo={load} dados={dadosMeuDia?.contas_7_dias ?? null} animar={animar} onNavigate={onNavigate} />
+                    <CartaoContasSemana estado={estadoDe(meuDia)} onTentarDeNovo={load} dados={dadosMeuDia?.contas_7_dias ?? null} animar={animar} rodada={rodada} onNavigate={onNavigate} />
                 )}
                 {verFinanceiro && (
                     <CartaoCaixa
@@ -352,14 +374,15 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                         periodo={periodoCaixa}
                         onPeriodo={setPeriodoCaixa}
                         animar={animar}
+                        trocando={caixaTrocando}
                         onNavigate={onNavigate}
                     />
                 )}
                 {verObras && (
-                    <CartaoObras estado={estadoDe(scorecards)} onTentarDeNovo={load} scorecards={scorecards.estado === 'ok' ? scorecards.data : []} animar={animar} onNavigate={onNavigate} />
+                    <CartaoObras estado={estadoDe(scorecards)} onTentarDeNovo={load} scorecards={scorecards.estado === 'ok' ? scorecards.data : []} animar={animar} rodada={rodada} onNavigate={onNavigate} />
                 )}
                 {verFinanceiro && (
-                    <CartaoConciliado estado={estadoDe(meuDia)} onTentarDeNovo={load} dados={dadosMeuDia?.conciliado ?? null} animar={animar} onNavigate={onNavigate} />
+                    <CartaoConciliado estado={estadoDe(meuDia)} onTentarDeNovo={load} dados={dadosMeuDia?.conciliado ?? null} animar={animar} rodada={rodada} onNavigate={onNavigate} />
                 )}
             </div>
 

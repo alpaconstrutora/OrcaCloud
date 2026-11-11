@@ -669,5 +669,52 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
     .central-troca { animation: central-aparece 200ms ease-out both; }
 }
 @keyframes central-varre { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* Contador que troca (NumeroQueTroca): o número novo desce de cima — a fila
+   baixou. E o "dia fechado": quando o último pendente sai, os 12 quadradinhos
+   de "Seu dia" (SegmentedProgress) sobem e voltam em onda, da esquerda para a
+   direita, uma vez. Na própria cor dos segmentos: vale nos dois temas. */
+.central-troca-numero { animation: central-aparece 200ms ease-out both; }
+@media (prefers-reduced-motion: no-preference) {
+    .central-troca-numero { animation: central-troca-numero 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .central-dia-fechado [aria-hidden="true"] > span { animation: central-onda 420ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: bottom center; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(2)  { animation-delay: 30ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(3)  { animation-delay: 60ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(4)  { animation-delay: 90ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(5)  { animation-delay: 120ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(6)  { animation-delay: 150ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(7)  { animation-delay: 180ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(8)  { animation-delay: 210ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(9)  { animation-delay: 240ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(10) { animation-delay: 270ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(11) { animation-delay: 300ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(12) { animation-delay: 330ms; }
+}
+@keyframes central-troca-numero {
+    from { opacity: 0; transform: translateY(-60%); }
+    to   { opacity: 1; transform: none; }
+}
+/* Realce: o número que mudou desde o último "Atualizar". Fundo + um contorno da
+   mesma cor (box-shadow) dão respiro sem deslocar o texto. É cor, não movimento:
+   fica também com `prefers-reduced-motion`. */
+.central-mudou { --central-mudou: rgb(251 191 36 / 0.32); border-radius: 4px; animation: central-mudou 1400ms ease-out both; }
+.central-mudou-claro { --central-mudou: rgb(255 255 255 / 0.28); }
+/* Duas cópias com nomes diferentes: rodadas seguidas alternam e a animação
+   recomeça sem remontar o número (ver Realce.tsx). */
+.central-mudou-par { animation-name: central-mudou-b; }
+@keyframes central-mudou {
+    0%, 35% { background-color: var(--central-mudou); box-shadow: 0 0 0 3px var(--central-mudou); }
+    100%    { background-color: transparent; box-shadow: 0 0 0 3px transparent; }
+}
+@keyframes central-mudou-b {
+    0%, 35% { background-color: var(--central-mudou); box-shadow: 0 0 0 3px var(--central-mudou); }
+    100%    { background-color: transparent; box-shadow: 0 0 0 3px transparent; }
+}
+
+@keyframes central-onda {
+    0%   { transform: none; }
+    40%  { transform: scaleY(1.5); }
+    100% { transform: none; }
+}
 @keyframes central-cresce { from { transform: scaleX(0); } to { transform: none; } }
 .theme-midnight .central-trilho { stroke: var(--opura-mid-raised); }

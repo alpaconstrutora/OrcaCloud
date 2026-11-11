@@ -696,7 +696,7 @@ Condições que o pedido não descreve e que mais provavelmente derrubam quem us
 
 Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/segurancaMigrations.test.ts` só reconhece funções delimitadas por `$$` ou `$function$`; com `$X$` ou outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde. Pelo menos dez migrations posteriores ao corte usam outro delimitador. Não corrigido aqui.
 
-**Fase 1 — Receitas:** 7 de 7 no código (branch `feat/imovib-fase1`); a publicação espera revisão e CI
+**Fase 1 — Receitas:** 7 de 7 — revisada, as duas migrations aplicadas; publicação pelo PR #356
 - [x] 1.1 Curvas de venda — `utils/imovibCurvas.ts`.
 - [x] 1.2 Recebimento por safra, com distrato — `utils/imovibRecebimento.ts`. O `horizonte` corta o distrato e é o tamanho mínimo das séries; repasse atrasado, pós-chaves e revenda podem passar dele. Pós-chaves com 0 meses sai inteiro nas chaves, com aviso.
 - [x] 1.3 Colunas das premissas de receita — migration `aplicar_20271111800000_imovib_receitas_por_safra.sql` **aplicada em 11/11** com OK do usuário; 16 colunas conferidas no banco.
@@ -713,7 +713,7 @@ Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/
 - [x] 1.6 Aba Receitas: perfil de recebimento e distrato — `ImovibInputRow` só grava quando o valor muda.
 - [x] 1.7 Índices separados — `utils/indiceVariacao.ts`, `components/ImovibIndiceDeCorrecao.tsx`.
 
-Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) escrita, falta aplicar.
+Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) aplicada em 11/11 com OK do usuário; coluna conferida no banco.
 
 **Fase 2 — Indicadores e fluxo:** 0 de 5
 - [ ] 2.1 Indicadores

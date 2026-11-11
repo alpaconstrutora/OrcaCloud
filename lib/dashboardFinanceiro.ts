@@ -6,8 +6,8 @@
  * Nada aqui fala com o banco: datas do período, meses do gráfico, o resumo do saldo
  * dos bancos e o estado (`tom`) de cada número de destaque.
  */
-import type { DashboardConta } from '../services/financialOverviewService';
-import type { KpiTom } from '../components/ui/KpiCard';
+import type { DashboardConta, DashboardHistoricoMes } from '../services/financialOverviewService';
+import type { KpiTom, KpiTendencia } from '../components/ui/KpiCard';
 
 /**
  * Hipóteses de gestão — quando um número de "Hoje" ganha cor (guia §4.5). Num lugar só,
@@ -16,13 +16,17 @@ import type { KpiTom } from '../components/ui/KpiCard';
  * - qualquer item esperando aprovação acima da alçada é atenção;
  * - saldo do banco mais velho que 7 dias, ou conta ativa sem saldo informado, é atenção:
  *   o número deixa de dizer quanto há no banco hoje;
- * - saldo somado negativo é alerta.
+ * - saldo somado negativo é alerta;
+ * - um card em alerta só fica SÓLIDO quando piorou pelo menos 2% desde o fim do mês
+ *   anterior: na Alpa o vencido a receber sobe ~0,4% ao mês só de juros e títulos novos
+ *   (R$ 3,13 mi → R$ 3,14 mi entre 31/10 e 11/11/2026), e isso não é notícia.
  */
 export const LIMIAR = {
     vencidoReceberAlerta: 0,
     vencidoPagarAlerta: 0,
     aprovacaoAtencao: 0,
     saldoDiasAtencao: 7,
+    pioraRelevante: 0.02,
 } as const;
 
 export type Periodo = 'month' | 'quarter' | 'year';
@@ -164,3 +168,57 @@ export function legendaDoSaldo(r: ResumoDosBancos): string {
 
 export const tomPorLimiar = (valor: number, limiar: number, tom: Exclude<KpiTom, 'neutro'>): KpiTom =>
     valor > limiar ? tom : 'neutro';
+
+// ─── Histórico e tendência (plano 2026-11-10-kpi-card-tendencia-e-historico) ──
+
+type CampoDoHistorico = 'vencido_receber' | 'vencido_pagar' | 'saldo_banco';
+
+/** A série do card: os meses fechados do histórico + o valor de hoje no fim. O último
+ *  ponto é sempre o número escrito no card. */
+export function serieComHoje(
+    historico: DashboardHistoricoMes[],
+    campo: CampoDoHistorico,
+    hoje: number | null,
+): (number | null)[] {
+    return [...historico.map(h => h[campo]), hoje];
+}
+
+const pctComSinal = (p: number) =>
+    `${p > 0 ? '+' : p < 0 ? '−' : ''}${Math.abs(p * 100).toLocaleString('pt-BR', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+
+/**
+ * Compara o último ponto da série com o anterior (hoje × fim do mês passado).
+ * - `null` quando falta um dos dois: sem medida não há tendência (nunca "0%").
+ * - Percentual só sobre base positiva; base zero ou negativa (saldo no vermelho, vencido
+ *   que nasceu do nada) mostra a diferença em reais — "+58%" sobre um saldo negativo
+ *   não diz nada a ninguém.
+ * - `bom` depende do que se mede: vencido caindo é bom, saldo subindo é bom.
+ */
+export function tendenciaDaSerie(
+    serie: (number | null)[],
+    bomQuando: 'sobe' | 'desce',
+    mesAnterior: string | undefined,
+    formatarValor: (v: number) => string,
+): KpiTendencia | null {
+    if (serie.length < 2) return null;
+    const atual = serie[serie.length - 1];
+    const antes = serie[serie.length - 2];
+    if (atual == null || antes == null) return null;
+    const diff = atual - antes;
+    const direcao = diff > 0 ? 'sobe' : diff < 0 ? 'desce' : 'estavel';
+    const bom = direcao === 'estavel' || (bomQuando === 'sobe' ? diff > 0 : diff < 0);
+    const pct = antes > 0 && atual >= 0 ? diff / antes : null;
+    const texto = pct != null || diff === 0
+        ? pctComSinal(pct ?? 0)
+        : `${diff > 0 ? '+' : diff < 0 ? '−' : ''}${formatarValor(Math.abs(diff))}`;
+    return { texto, direcao, bom, pct, base: mesAnterior ? `vs. ${mesCurto(mesAnterior)}` : 'vs. mês anterior' };
+}
+
+/**
+ * Card sólido = em alerta E piorando de verdade (decisão do usuário, 11/11/2026). Sem
+ * tendência medida, não fica sólido: na dúvida, o card de hoje.
+ */
+export function cardSolido(tom: KpiTom, tendencia: KpiTendencia | null): boolean {
+    if (tom !== 'alerta' || !tendencia || tendencia.bom) return false;
+    return tendencia.pct == null || Math.abs(tendencia.pct) >= LIMIAR.pioraRelevante;
+}

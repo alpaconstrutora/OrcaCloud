@@ -694,6 +694,23 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
     from { opacity: 0; transform: translateY(-60%); }
     to   { opacity: 1; transform: none; }
 }
+/* Realce: o número que mudou desde o último "Atualizar". Fundo + um contorno da
+   mesma cor (box-shadow) dão respiro sem deslocar o texto. É cor, não movimento:
+   fica também com `prefers-reduced-motion`. */
+.central-mudou { --central-mudou: rgb(251 191 36 / 0.32); border-radius: 4px; animation: central-mudou 1400ms ease-out both; }
+.central-mudou-claro { --central-mudou: rgb(255 255 255 / 0.28); }
+/* Duas cópias com nomes diferentes: rodadas seguidas alternam e a animação
+   recomeça sem remontar o número (ver Realce.tsx). */
+.central-mudou-par { animation-name: central-mudou-b; }
+@keyframes central-mudou {
+    0%, 35% { background-color: var(--central-mudou); box-shadow: 0 0 0 3px var(--central-mudou); }
+    100%    { background-color: transparent; box-shadow: 0 0 0 3px transparent; }
+}
+@keyframes central-mudou-b {
+    0%, 35% { background-color: var(--central-mudou); box-shadow: 0 0 0 3px var(--central-mudou); }
+    100%    { background-color: transparent; box-shadow: 0 0 0 3px transparent; }
+}
+
 @keyframes central-onda {
     0%   { transform: none; }
     40%  { transform: scaleY(1.5); }

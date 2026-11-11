@@ -2,6 +2,7 @@ import React from 'react';
 import { ArrowDown, ArrowUp } from 'lucide-react';
 import { CartaoCentral, type EstadoDoCartao } from './CartaoCentral';
 import { NumeroQueSobe } from './NumeroQueSobe';
+import { Realce } from './Realce';
 import type { MeuDia } from '../../services/centralControleService';
 import { percentualConciliado } from '../../utils/meuDia';
 
@@ -16,10 +17,12 @@ interface Props {
     onTentarDeNovo: () => void;
     dados: MeuDia['conciliado'] | null;
     animar: boolean;
+    /** Rodada de "Atualizar" (Realce marca o número que mudou). */
+    rodada: number;
     onNavigate: (view: string) => void;
 }
 
-export function CartaoConciliado({ estado, onTentarDeNovo, dados, animar, onNavigate }: Props) {
+export function CartaoConciliado({ estado, onTentarDeNovo, dados, animar, rodada, onNavigate }: Props) {
     const r = dados ? percentualConciliado(dados) : null;
     return (
         <CartaoCentral
@@ -34,12 +37,16 @@ export function CartaoConciliado({ estado, onTentarDeNovo, dados, animar, onNavi
                 <p className="text-sm text-blue-50">Nenhum extrato importado nos últimos 30 dias.</p>
             ) : (
                 <div className="flex flex-col gap-2">
-                    <NumeroQueSobe
-                        valor={r.pct}
-                        animar={animar}
-                        formatar={n => `${Math.round(n).toLocaleString('pt-BR')}%`}
-                        className="text-[44px] leading-none font-semibold text-white tracking-[-0.02em]"
-                    />
+                    <span className="self-start">
+                        <Realce valor={Math.round(r.pct)} rodada={rodada} claro>
+                            <NumeroQueSobe
+                                valor={r.pct}
+                                animar={animar}
+                                formatar={n => `${Math.round(n).toLocaleString('pt-BR')}%`}
+                                className="text-[44px] leading-none font-semibold text-white tracking-[-0.02em]"
+                            />
+                        </Realce>
+                    </span>
                     <p className="text-sm text-blue-50">
                         {dados.conciliadas.toLocaleString('pt-BR')} de {r.base.toLocaleString('pt-BR')} {r.base === 1 ? 'linha conciliada' : 'linhas conciliadas'}
                     </p>

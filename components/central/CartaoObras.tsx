@@ -1,6 +1,7 @@
 import React from 'react';
 import { CartaoCentral, type EstadoDoCartao } from './CartaoCentral';
 import { NumeroQueSobe } from './NumeroQueSobe';
+import { Realce } from './Realce';
 import type { ProjectScorecard } from '../../services/financialIntelligenceService';
 
 /**
@@ -13,6 +14,8 @@ interface Props {
     onTentarDeNovo: () => void;
     scorecards: ProjectScorecard[];
     animar: boolean;
+    /** Rodada de "Atualizar" (Realce marca o número que mudou). */
+    rodada: number;
     onNavigate: (view: string) => void;
 }
 
@@ -22,7 +25,7 @@ const SITUACOES = [
     { risco: 'HIGH', rotulo: 'Em risco', barra: 'bg-red-500' },
 ] as const;
 
-export function CartaoObras({ estado, onTentarDeNovo, scorecards, animar, onNavigate }: Props) {
+export function CartaoObras({ estado, onTentarDeNovo, scorecards, animar, rodada, onNavigate }: Props) {
     const total = scorecards.length;
     const porRisco = (r: ProjectScorecard['risco']) => scorecards.filter(s => s.risco === r).length;
     const maior = Math.max(1, ...SITUACOES.map(s => porRisco(s.risco)));
@@ -40,7 +43,9 @@ export function CartaoObras({ estado, onTentarDeNovo, scorecards, animar, onNavi
             ) : (
                 <>
                     <p className="flex items-baseline gap-2">
-                        <NumeroQueSobe valor={total} animar={animar} className="text-[28px] leading-none font-semibold text-gray-900" />
+                        <Realce valor={total} rodada={rodada}>
+                            <NumeroQueSobe valor={total} animar={animar} className="text-[28px] leading-none font-semibold text-gray-900" />
+                        </Realce>
                         <span className="text-sm text-gray-500">{total === 1 ? 'obra' : 'obras'}</span>
                     </p>
                     <ul className="mt-4 space-y-3">
@@ -52,7 +57,9 @@ export function CartaoObras({ estado, onTentarDeNovo, scorecards, animar, onNavi
                                     <span className="h-2 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
                                         <span className={`block h-full rounded-full ${s.barra} ${animar ? 'central-cresce' : ''}`} style={{ width: `${(n / maior) * 100}%` }} />
                                     </span>
-                                    <span className="tabular-nums font-medium text-gray-900 w-8 text-right">{n.toLocaleString('pt-BR')}</span>
+                                    <span className="tabular-nums font-medium text-gray-900 w-8 text-right">
+                                        <Realce valor={n} rodada={rodada}>{n.toLocaleString('pt-BR')}</Realce>
+                                    </span>
                                 </li>
                             );
                         })}

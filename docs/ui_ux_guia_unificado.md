@@ -2723,6 +2723,13 @@ abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
   - **Foco:** se o item resolvido sai e o foco ficou perdido (`<body>`), ele vai para
     quem ocupou o lugar — mesmo grupo e índice, ou o novo "Mais urgente"; senão o
     cabeçalho do grupo. Foco que está em outro lugar não é tocado.
+  - **O que mudou ao Atualizar** (`Realce`): o número de cartão que mudou desde o
+    último "Atualizar" ganha fundo âmbar que esmaece em ~1,4s (no cartão azul,
+    branco translúcido). A primeira carga e o "Tentar de novo" não marcam; se nada
+    mudou, nada pisca. É cor, não movimento: fica com menos movimento também.
+  - **Caixa 30/60/90:** o período anterior fica esmaecido (`opacity-40`) até o novo
+    chegar e volta em 150ms — sem esqueleto, sem a linha crescer, sem mudar a altura.
+    Organização nova volta ao esqueleto (o dado velho é de outra empresa).
   - `prefers-reduced-motion`: nada desloca nem cresce; o item resolvido só esmaece
     no lugar e sai; contadores só esmaecem; sem onda.
 

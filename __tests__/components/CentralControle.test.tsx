@@ -204,4 +204,31 @@ describe('CentralControle · tela "Bom dia"', () => {
         // Sem isto o foco caía no <body> e quem usa teclado recomeçava do topo.
         await waitFor(() => expect(within(fila).getByRole('button', { name: 'Concluir tarefa' })).toHaveFocus());
     });
+
+    it('Atualizar marca só o número que mudou; a primeira carga não marca nada', async () => {
+        const contas = (atrasadas: number) => painel({ meu_dia: { ok: true, data: meuDia({
+            contas_7_dias: { atrasadas: { qtd: atrasadas, valor: 100 }, vencem_em_2_dias: { qtd: 4, valor: 50 }, vencem_em_7_dias: { qtd: 0, valor: 0 } },
+        }) } });
+        bootstrap.mockResolvedValueOnce(contas(3)).mockResolvedValueOnce(contas(5));
+        montar();
+        const c = await waitFor(() => { const el = cartao('Contas a pagar'); expect(within(el).getByText('Atrasadas')).toBeInTheDocument(); return el; });
+        expect(c.querySelector('.central-mudou')).toBeNull();
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        // Atrasadas 3 → 5 e o total 7 → 9 mudaram; "vencem em 2 dias" (4) não.
+        await waitFor(() => expect(c.querySelectorAll('.central-mudou')).toHaveLength(2));
+        // O total é o NumeroQueSobe: o valor final está no aria-label.
+        const marcados = Array.from(c.querySelectorAll('.central-mudou')).map(e => e.querySelector('[aria-label]')?.getAttribute('aria-label') ?? e.textContent);
+        expect(marcados).toEqual(expect.arrayContaining(['9', '5']));
+    });
+
+    it('trocar o período do caixa mantém o gráfico anterior esmaecido até o novo chegar', async () => {
+        bootstrap.mockResolvedValue(painel());
+        montar();
+        const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByText('R$ 1.000')).toBeInTheDocument(); return el; });
+        cashflow.mockReturnValue(new Promise(() => { /* período novo ainda carregando */ }));
+        await userEvent.click(within(c).getByRole('button', { name: '60 dias' }));
+        expect(c).toHaveAttribute('aria-busy', 'false');
+        expect(within(c).getByText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+    });
 });

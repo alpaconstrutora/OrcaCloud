@@ -8,11 +8,23 @@ tabela, então só com o ok dele e em horário combinado).
 ## Estado
 
 - [x] Medição sem DDL (abaixo).
-- [ ] Ok do usuário para este plano e para o horário de aplicar.
-- [ ] Teste a seco da função `minhas_orgs_membro()`: equivalência com `is_org_member`
-      para todo usuário × organização (sem trava de tabela: só cria função, desfeito).
-- [ ] Migration aplicada (ALTER POLICY: trava a tabela por milissegundos).
-- [ ] Medida de fora: Central e tela de Conciliação antes × depois.
+- [x] Ok do usuário para este plano (11/11/2026, "ok"); aplicação quando ele rodar a migration.
+- [x] Teste a seco da função `minhas_orgs_membro()` (só a função, sem ALTER POLICY, desfeito):
+      12 usuários (todo e-mail de organization_members/broker_profiles + JWT vazio) × 7
+      organizações lidas como dono = **84 pares, 0 diferenças** com `is_org_member`; e as
+      linhas do extrato que cada um vê pela policy atual = as do conjunto, **12 de 12**
+      (de 0 a 13.962). Migration: `aplicar_20271111940000_rls_extrato_titulos_por_conjunto.sql`.
+- [x] Migration aplicada pelo usuário (11/11/2026). Conferido: as duas policies com
+      `organization_id IN (SELECT minhas_orgs_membro())`, mesmo nome/papel/comando,
+      WITH CHECK só em internal_transactions; `minhas_orgs_membro` sem PUBLIC e sem anon.
+- [x] Medida de fora (11/11/2026, desenvolvedor@, "Todas"):
+      varredura do extrato 625–774 ms → 4–8 ms; títulos 111–116 ms → 5–16 ms;
+      bootstrap com JWT real 2,1–2,7 s → 0,54–0,58 s; **Central na produção: primeira
+      carga 0,83 s, Atualizar 0,72–0,83 s** (de manhã: 5,6–5,9 s); caixa 2,0–2,4 s → 0,28 s.
+      Dados conferidos na tela (títulos, obras, % conciliado, caixa, aprovações, alertas,
+      divergências) e nenhuma requisição com erro. Conciliação não medida.
+- [ ] Próxima etapa (não começada): as outras ~610 policies com `is_org_member`, tabela
+      a tabela, com a mesma prova de equivalência.
 
 ## Por quê
 

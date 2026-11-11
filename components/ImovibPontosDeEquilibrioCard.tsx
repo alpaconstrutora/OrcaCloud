@@ -14,6 +14,7 @@ const pct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits:
 const MOTIVO: Record<NonNullable<PontoDeEquilibrio['motivo']>, string> = {
     sem_vgv: 'Sem VGV no estudo',
     sem_raiz: 'Não existe: o alvo não é atingido em nenhum valor',
+    acima_do_vgv: 'Nem vendendo tudo: o VPL fica negativo',
 };
 
 const Linha: React.FC<{ rotulo: string; ajuda: string; ponto: PontoDeEquilibrio; formata: (v: number) => string }> = ({ rotulo, ajuda, ponto, formata }) => (
@@ -100,7 +101,7 @@ const ImovibPontosDeEquilibrioCard: React.FC<ImovibPontosDeEquilibrioCardProps> 
             />
             <Linha
                 rotulo="Vendas mínimas"
-                ajuda="Percentual do VGV que precisa ser vendido"
+                ajuda="Percentual do VGV vendável, no ritmo da curva de vendas"
                 ponto={fixos.vendas}
                 formata={(v) => pct(v)}
             />

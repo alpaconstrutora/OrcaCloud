@@ -12,7 +12,8 @@ import { computeImovibMath, ImovibMathOptions } from './imovibMotor';
  */
 export interface PontoDeEquilibrio {
     valor: number | null;
-    motivo?: 'sem_raiz' | 'sem_vgv';
+    /** `acima_do_vgv`: só para vendas mínimas — mesmo vendendo tudo o VPL fica negativo. */
+    motivo?: 'sem_raiz' | 'sem_vgv' | 'acima_do_vgv';
 }
 
 export type AlvoDoTerreno =
@@ -92,11 +93,16 @@ export function custoMaximoDeObra(study: ImovibStudy): PontoDeEquilibrio {
 }
 
 /**
- * Percentual do VGV que precisa ser vendido para o VPL chegar a zero. A receita
- * do motor é linear no VGV (curva, recebimento, deduções), então vender x% é o
- * mesmo que vender tudo com o preço em x%: é 100% + a variação de `precoMinimo`.
+ * Percentual do VGV VENDÁVEL (depois das permutas) que precisa ser vendido, no
+ * mesmo ritmo da curva, para o VPL chegar a zero. A receita do motor é linear no
+ * VGV, então vender uma fração a mais ou a menos equivale a mudar o preço: é a
+ * fração que a curva vende × (100% + a variação de `precoMinimo`). Acima de 100%
+ * do VGV vendável não existe — mesmo vendendo tudo o VPL fica negativo.
  */
 export function vendasMinimas(study: ImovibStudy): PontoDeEquilibrio {
     const p = precoMinimo(study);
-    return p.valor == null ? p : { valor: 100 + p.valor };
+    if (p.valor == null) return p;
+    const fracaoVendida = 1 - computeImovibMath(study).estoqueNaoVendidoPct;
+    const valor = (100 + p.valor) * fracaoVendida;
+    return valor > 100 + 1e-9 ? { valor: null, motivo: 'acima_do_vgv' } : { valor };
 }

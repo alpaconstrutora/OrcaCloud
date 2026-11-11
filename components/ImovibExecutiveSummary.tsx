@@ -65,7 +65,9 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
     const ind = calcularIndicadores(m, tma);
     const margemAlvo = D.margem_alvo_terreno_percent;
     const ponto = (p: PontoDeEquilibrio): [number | null, string | null] =>
-        p.valor == null ? [null, p.motivo === 'sem_vgv' ? 'Sem VGV no estudo' : 'Não existe: o alvo não é atingido'] : [p.valor, null];
+        p.valor == null
+            ? [null, p.motivo === 'sem_vgv' ? 'Sem VGV no estudo' : p.motivo === 'acima_do_vgv' ? 'Nem vendendo tudo: o VPL fica negativo' : 'Não existe: o alvo não é atingido']
+            : [p.valor, null];
     const [terrenoVpl, obsTerrenoVpl] = ponto(terrenoMaximo(study, { tipo: 'vpl_zero' }));
     const [terrenoMargem, obsTerrenoMargem] = ponto(terrenoMaximo(study, { tipo: 'margem', pct: margemAlvo }));
     const [preco, obsPreco] = ponto(precoMinimo(study));
@@ -102,7 +104,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         [`Terreno para margem de ${margemAlvo.toLocaleString('pt-BR')}%`, terrenoMargem, 'R$', obsTerrenoMargem ?? 'Margem líquida sobre o VGV'],
         ['Variação de preço que zera o VPL', preco, '%', obsPreco],
         ['Variação do custo de obra que zera o VPL', custo, '%', obsCusto],
-        ['Vendas mínimas', vendas, '% do VGV', obsVendas],
+        ['Vendas mínimas', vendas, '% do VGV vendável', obsVendas ?? 'No ritmo da curva de vendas'],
         ['TMA', tma, '% a.a.', null],
         ['Duração', m.duration, 'meses', null],
     ];

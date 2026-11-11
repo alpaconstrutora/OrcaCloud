@@ -40,6 +40,25 @@ describe('ImovibIndiceDeCorrecao', () => {
         await waitFor(() => expect(p.salvar).toHaveBeenCalledWith({ cost_index_rate_monthly: 0.5 }));
     });
 
+    it('troca rápida de índice: a série do índice anterior chegando atrasada não grava a taxa', async () => {
+        let resolverIncc!: (v: unknown) => void;
+        list.mockImplementation((nome: string) => (nome === 'INCC'
+            ? new Promise(r => { resolverIncc = r; })
+            : Promise.resolve(serie(0.3))));
+        const user = userEvent.setup();
+        const p = props();
+        const { rerender } = render(<ImovibIndiceDeCorrecao {...p} />);
+        await user.selectOptions(screen.getByLabelText('Índice da obra'), 'INCC');
+        rerender(<ImovibIndiceDeCorrecao {...p} nome="INCC" />);
+        // Antes da série do INCC voltar, troca para IPCA.
+        await user.selectOptions(screen.getByLabelText('Índice da obra'), 'IPCA');
+        resolverIncc(serie(0.5));
+        await new Promise(r => setTimeout(r, 20));
+        expect(p.salvar).not.toHaveBeenCalledWith({ cost_index_rate_monthly: 0.5 });
+        rerender(<ImovibIndiceDeCorrecao {...p} nome="IPCA" />);
+        await waitFor(() => expect(p.salvar).toHaveBeenCalledWith({ cost_index_rate_monthly: 0.3 }));
+    });
+
     it('com taxa já preenchida, escolher o índice não troca a taxa', async () => {
         list.mockResolvedValue(serie(0.5));
         const user = userEvent.setup();

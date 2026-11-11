@@ -45,7 +45,9 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
 
     // Escolheu o índice com a taxa vazia: quando a série chegar, a taxa vira a média
     // (item 2.6 do plano 2026-11-11 — antes, escolher o índice não mudava o cálculo).
-    const preencherAoCarregar = useRef(false);
+    // Guarda PARA QUAL índice o preenchimento foi pedido: a série de um índice
+    // trocado logo em seguida pode chegar depois e não pode gravar a taxa.
+    const preencherPara = useRef<string | null>(null);
     const taxaRef = useRef(taxa);
     taxaRef.current = taxa;
 
@@ -61,11 +63,12 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                 if (!vivo) return;
                 const m = taxaMensalMedia(porMes(valores), 12);
                 setMedia(m);
-                if (preencherAoCarregar.current && m != null && taxaRef.current == null) {
+                setMotivo(m == null ? `Não há série do ${nome} com dois meses ou mais. Cadastre em Contratos › Índices.` : '');
+                if (preencherPara.current !== nome) return;
+                preencherPara.current = null;
+                if (m != null && taxaRef.current == null) {
                     salvar({ [campoTaxa]: Math.round(m * 10000) / 10000 } as ImovibStudyUpdate);
                 }
-                preencherAoCarregar.current = false;
-                setMotivo(m == null ? `Não há série do ${nome} com dois meses ou mais. Cadastre em Contratos › Índices.` : '');
             })
             .catch(e => {
                 if (!vivo) return;
@@ -85,7 +88,7 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                     id={idNome}
                     value={nome ?? ''}
                     onChange={(e) => {
-                        preencherAoCarregar.current = !!e.target.value && taxa == null;
+                        preencherPara.current = e.target.value && taxa == null ? e.target.value : null;
                         salvar({ [campoNome]: e.target.value || null } as ImovibStudyUpdate);
                     }}
                     className="h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"

@@ -28,14 +28,15 @@ type Grupo = GrupoDoFluxo;
 
 function Alternador<T extends string>({ rotulo, opcoes, valor, onChange }: { rotulo: string; opcoes: { id: T; rotulo: string }[]; valor: T; onChange: (v: T) => void }) {
     return (
-        <div role="group" aria-label={rotulo} className="inline-flex rounded-[6px] border border-gray-200 bg-white p-0.5">
+        // §19.1 do guia: trilho bg-gray-50 p-1; ativo bg-white text-blue-600 shadow-sm (não o azul sólido).
+        <div role="group" aria-label={rotulo} className="inline-flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
             {opcoes.map(o => (
                 <button
                     key={o.id}
                     type="button"
                     aria-pressed={valor === o.id}
                     onClick={() => onChange(o.id)}
-                    className={`h-8 px-3 text-[13px] font-medium rounded-[4px] transition-colors ${valor === o.id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50'}`}
+                    className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${valor === o.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                 >
                     {o.rotulo}
                 </button>

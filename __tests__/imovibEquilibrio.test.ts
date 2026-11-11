@@ -95,9 +95,29 @@ describe('2.2 — pontos de equilíbrio', () => {
         expect(Math.abs(computeImovibMath(s, { costDelta: c.valor! }).vpl)).toBeLessThan(1);
     });
 
-    it('vendas mínimas = 100% + a variação de preço que zera o VPL (receita é linear no VGV)', () => {
+    it('vendas mínimas: % do VGV vendável; vender essa fração com o mesmo ritmo zera o VPL', () => {
         const s = baseStudy();
-        expect(vendasMinimas(s).valor!).toBeCloseTo(100 + precoMinimo(s).valor!, 6);
-        expect(vendasMinimas(s).valor!).toBeLessThan(100);
+        const v = vendasMinimas(s).valor!;
+        expect(v).toBeLessThan(100);
+        // Receita linear no VGV: vender v% (a curva linear vende 100%) = preço em v% do original.
+        expect(Math.abs(computeImovibMath(s, { vgvDelta: v - 100 }).vpl)).toBeLessThan(1);
+    });
+
+    it('vendas mínimas com estoque: a base é o VGV vendável, não o que a curva vende', () => {
+        const s = baseStudy({ sales_curve_type: 'vso', sales_vso_percent: 8 });
+        const r = computeImovibMath(s);
+        expect(r.estoqueNaoVendidoPct).toBeGreaterThan(0);
+        const v = vendasMinimas(s).valor!;
+        const fracaoVendida = 1 - r.estoqueNaoVendidoPct;
+        expect(v).toBeCloseTo((100 + precoMinimo(s).valor!) * fracaoVendida, 6);
+        // Aqui é preciso vender mais do que a curva vende (há estoque para isso), mas não mais que 100%.
+        expect(v).toBeGreaterThan(fracaoVendida * 100);
+        expect(v).toBeLessThan(100);
+    });
+
+    it('vendas mínimas acima do VGV vendável: não existe (mesmo vendendo tudo o VPL fica negativo)', () => {
+        const s = baseStudy();
+        s.blocks[0].construction_cost_sqm = 9_000;
+        expect(vendasMinimas(s)).toEqual({ valor: null, motivo: 'acima_do_vgv' });
     });
 });

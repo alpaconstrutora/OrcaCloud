@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { OrganizationMember, OrganizationRole, UserPermissions, OrganizationCustomRole, ProductContext, ModuleVisibilityConfig, ProductModuleMap } from '../types';
 import { User, Plus, Trash2, Shield, MoreVertical, Mail, Check, X, Settings as SettingsIcon, ChevronDown, ChevronUp, Briefcase, Users, Edit2, Send, Save, Building2, Palette, AlertCircle, Search, ArrowLeft, MoveHorizontal } from 'lucide-react';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -1125,25 +1126,25 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
 
             {/* §19.1 — toolbar de abas: card branco próprio + trilho bg-gray-50 */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                    <button
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                    <button type="button" role="tab" aria-selected={activeSubTab === 'members'} tabIndex={activeSubTab === 'members' ? 0 : -1}
                         onClick={() => setActiveSubTab('members')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'members' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         <Users className="w-4 h-4 inline mr-2" />
                         Membros
                     </button>
-                    <button
+                    <button type="button" role="tab" aria-selected={activeSubTab === 'roles'} tabIndex={activeSubTab === 'roles' ? 0 : -1}
                         onClick={() => setActiveSubTab('roles')}
-                        className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'roles' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'roles' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                     >
                         <Briefcase className="w-4 h-4 inline mr-2" />
                         Cargos Customizados
                     </button>
                     {isAdmin && (
-                        <button
+                        <button type="button" role="tab" aria-selected={activeSubTab === 'visibility'} tabIndex={activeSubTab === 'visibility' ? 0 : -1}
                             onClick={() => setActiveSubTab('visibility')}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeSubTab === 'visibility' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             <Shield className="w-4 h-4 inline mr-2" />
                             Visibilidade de Módulos

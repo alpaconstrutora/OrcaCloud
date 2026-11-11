@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import {
     Package,
     Truck,
@@ -1556,15 +1557,15 @@ const SupplierDashboard: React.FC<SupplierDashboardProps> = ({
                 (não é o azul sólido de botão/toggle — aquilo é ação, isto é navegação).
                 No portal a navegação é a sidebar (desktop) e a barra inferior (mobile). */}
             <div className={`${isPublicExperience ? 'hidden' : 'flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {navTabs.map(tab => {
                         const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
                         return (
-                            <button
+                            <button type="button" role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id)}
                                 title={hidden ? 'Oculta para o fornecedor' : undefined}
-                                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id
+                                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === tab.id
                                     ? 'bg-white text-blue-600 shadow-sm'
                                     : hidden
                                         ? 'text-gray-300 border border-dashed border-gray-200'

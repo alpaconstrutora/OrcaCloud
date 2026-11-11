@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react'
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import {
   ArrowLeft, Edit2, Loader2, AlertCircle, Clock, CheckCircle2, XCircle,
   Lock, PlayCircle, Eye, TrendingUp, DollarSign, Calendar, Users,
@@ -78,8 +79,12 @@ const TabBtn: React.FC<{ active: boolean; label: string; badge?: number; onClick
   active, label, badge, onClick
 }) => (
   <button
+    type="button"
+    role="tab"
+    aria-selected={active}
+    tabIndex={active ? 0 : -1}
     onClick={onClick}
-    className={`flex items-center gap-1.5 px-4 py-2.5 text-button font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap
+    className={`outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500 flex items-center gap-1.5 px-4 py-2.5 text-button font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap
       ${active ? 'border-blue-600 text-blue-600' : 'border-transparent text-slate-400 hover:text-slate-700'}`}
   >
     {label}
@@ -386,7 +391,7 @@ const OperacionalDetail: React.FC<Props> = ({ workOrderId, orgId, onBack, onEdit
 
       {/* Tabs */}
       <div className="bg-white rounded-2xl border border-slate-100 shadow-sm overflow-hidden">
-        <div className="flex border-b border-slate-100 overflow-x-auto scrollbar-hide">
+        <div role="tablist" onKeyDown={moverEntreAbas} className="flex border-b border-slate-100 overflow-x-auto scrollbar-hide">
           <TabBtn active={activeTab === 'geral'}        label="Geral"        onClick={() => setActiveTab('geral')} />
           <TabBtn active={activeTab === 'apontamentos'} label="Apontamentos" badge={logCount}     onClick={() => setActiveTab('apontamentos')} />
           <TabBtn active={activeTab === 'checklist'}    label="Checklist"    badge={checklistTotal - checklistDone} onClick={() => setActiveTab('checklist')} />

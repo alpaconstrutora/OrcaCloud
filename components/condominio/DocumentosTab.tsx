@@ -453,11 +453,11 @@ const DocumentosTab: React.FC<Props> = ({ empreendimento }) => {
                             fora), então a escolha vem antes dos campos. */}
                         <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
                             {([['arquivo', 'Enviar arquivo', Upload], ['link', 'Link externo', Link2]] as [Modo, string, any][]).map(([id, label, Icone]) => (
-                                <button
+                                <button aria-pressed={modo === id}
                                     key={id}
                                     type="button"
                                     onClick={() => setModo(id)}
-                                    className={`flex-1 flex items-center justify-center gap-1.5 h-9 rounded-[6px] text-sm font-medium transition-all ${
+                                    className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex-1 flex items-center justify-center gap-1.5 h-9 rounded-[6px] text-sm font-medium transition-all ${
                                         modo === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                     }`}
                                 >

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import CostCenterSelect from './CostCenterSelect';
 import PlanoContasSelect from './PlanoContasSelect';
 import { AlertCircle, Loader2 } from 'lucide-react';
@@ -467,12 +468,12 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                     {/* 2. Toolbar de abas (§19.1). Some no drill-down do ciclo:
                         lá a navegação é o "Voltar à lista". */}
                     <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                             {TABS.map(t => (
-                                <button
+                                <button type="button" role="tab" aria-selected={activeTab === t.id} tabIndex={activeTab === t.id ? 0 : -1}
                                     key={t.id}
                                     onClick={() => setActiveTab(t.id)}
-                                    className={`h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                    className={`outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 h-7 px-3 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                         activeTab === t.id ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                                     }`}
                                 >

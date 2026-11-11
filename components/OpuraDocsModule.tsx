@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import ActionIconButton from './ui/ActionIconButton';
 import ClientSelect, { type ClientOption } from './ClientSelect';
 import { InlineActionTray } from './ui/InlineActionTray';
@@ -2585,17 +2586,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
 
       {/* ─── TOOLBAR DE ABAS (§3) — card branco + trilho bg-gray-50, flex-wrap (nunca overflow-x-auto) ─── */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+        <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
           {CATEGORIES.map((cat) => {
             const isAllowed = canAccessTab(cat.id);
             if (!isAllowed) return null; // Esconde abas proibidas pelo controle de acesso (Feature 3)
 
             const isActive = activeTab === cat.id && !showMetrics;
             return (
-              <button
+              <button type="button" role="tab" aria-selected={isActive} tabIndex={isActive ? 0 : -1}
                 key={cat.id}
                 onClick={() => { setActiveTab(cat.id); setShowMetrics(false); }}
-                className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                   isActive ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
               >
@@ -2604,25 +2605,29 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             );
           })}
 
-          <button
+          <button type="button" role="tab" aria-selected={showMetrics} tabIndex={showMetrics ? 0 : -1}
             onClick={() => { setShowMetrics(true); setShowPendingOnly(false); }}
-            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
               showMetrics ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
             }`}
           >
             📊 Saúde Documental
           </button>
 
-          {isOrgAdmin && (
-            <button
-              onClick={() => setShowSettings(true)}
-              className="px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all text-gray-700 hover:text-gray-900 flex items-center gap-1.5"
-            >
-              ⚙️ Ajustes do GED
-            </button>
-          )}
         </div>
 
+        {/* Ações ao lado das abas (§19.1, slot à direita). "Ajustes do GED" morava DENTRO do
+            trilho de abas, mas abre uma janela — não é aba (10/11/2026). */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
+        {isOrgAdmin && (
+          <button
+            type="button"
+            onClick={() => setShowSettings(true)}
+            className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-gray-700 rounded-[6px] border border-gray-200 shadow-sm font-medium text-[13px] hover:text-blue-600 hover:border-blue-200 transition-all active:scale-95"
+          >
+            ⚙️ Ajustes do GED
+          </button>
+        )}
         {pendingApprovals.length > 0 && (
           <button
             onClick={() => setShowPendingOnly(!showPendingOnly)}
@@ -2636,6 +2641,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             Pendências ({pendingApprovals.length})
           </button>
         )}
+        </div>
       </div>
 
       {/* ─── FILTROS DE BUSCA E LISTAGEM ─── */}

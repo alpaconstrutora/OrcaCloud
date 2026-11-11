@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { Shield, Plus, AlertTriangle, CheckCircle, Clock, XCircle, Wrench, Star, Search, MoveHorizontal, Upload, X, Building2, Landmark, ArrowLeft } from 'lucide-react';
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Cell } from 'recharts';
 import { warrantyService, mensagemDoErro } from '../services/warrantyService';
@@ -1015,12 +1016,12 @@ const WarrantyModule: React.FC<WarrantyModuleProps> = ({
 
             {/* Toolbar de abas — §19.1. `mb-3` pelo ritmo do §20.1. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {VIEWS.map(v => (
-                        <button
+                        <button type="button" role="tab" aria-selected={view === v.id} tabIndex={view === v.id ? 0 : -1}
                             key={v.id}
                             onClick={() => setView(v.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 view === v.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >
@@ -2510,17 +2511,17 @@ export const WarrantyClaimDetail: React.FC<WarrantyClaimDetailProps> = ({
 
             {/* Abas — §19.1: card branco com trilho cinza dentro, h-7, flex-wrap */}
             <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([
                         { id: 'info', label: 'Informações' },
                         { id: 'visitas', label: 'Visitas' },
                         { id: 'suprimentos', label: 'Suprimentos' },
                         { id: 'historico', label: 'Histórico' },
                     ] as const).map(t => (
-                        <button
+                        <button type="button" role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1}
                             key={t.id}
                             onClick={() => setTab(t.id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

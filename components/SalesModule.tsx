@@ -1,4 +1,5 @@
 // @ts-nocheck
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import TabsBar from './ui/TabsBar';
 import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders, BarChart3, Link2, Check, Download } from 'lucide-react';
@@ -1747,17 +1748,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                 dele as abas são as do edifício, logo abaixo. */}
             {!selectedBuildingId && (
                 <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                    <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-                        <button
+                    <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                        <button type="button" role="tab" aria-selected={activeTab === 'inventory'} tabIndex={activeTab === 'inventory' ? 0 : -1}
                             onClick={() => setActiveTab('inventory')}
-                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'inventory' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             <HomeIcon className="w-3.5 h-3.5" />
                             Imóveis
                         </button>
-                        <button
+                        <button type="button" role="tab" aria-selected={activeTab === 'analysis'} tabIndex={activeTab === 'analysis' ? 0 : -1}
                             onClick={() => setActiveTab('analysis')}
-                            className={`flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 h-7 px-3 rounded-[6px] text-sm font-medium transition-all whitespace-nowrap ${activeTab === 'analysis' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                         >
                             <BarChart3 className="w-3.5 h-3.5" />
                             Análise

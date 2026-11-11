@@ -6,6 +6,7 @@
 // agora. Por isso o plano abre ordenado por vencimento (não por cadastro) e o
 // KPI de vencidos é o primeiro. Listar manutenção em ordem alfabética é a
 // forma mais eficiente de um plano de manutenção morrer sem ninguém notar.
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
 import {
     AlertTriangle, CalendarClock, ClipboardList, Wrench, Search, RefreshCw, Plus, CheckCircle2, AlertCircle, MessageSquare, MoveHorizontal } from 'lucide-react';
@@ -549,12 +550,12 @@ const ManutencaoTab: React.FC<Props> = ({ empreendimento }) => {
                 dizem respeito à aba ativa — mostrar o dado antes do controle que o
                 define inverte a leitura (§20.1, ordem corrigida em 02/08/2026). */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {([['plano', 'Plano de manutenção'], ['ordens', 'Ordens de serviço'], ['chamados', 'Chamados dos condôminos']] as [Aba, string][]).map(([id, label]) => (
-                        <button
+                        <button type="button" role="tab" aria-selected={aba === id} tabIndex={aba === id ? 0 : -1}
                             key={id}
                             onClick={() => setAba(id)}
-                            className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 aba === id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

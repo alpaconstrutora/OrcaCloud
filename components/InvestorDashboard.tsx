@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { TrendingUp, PieChart as PieChartIcon, Building2, Boxes, Wallet, Calculator, FileText, Bell, LayoutGrid, RefreshCw, Smartphone, Settings2, Eye, EyeOff, X, CheckCircle2, XCircle, ChevronDown, HelpCircle, MoreHorizontal } from 'lucide-react';
 import { ProjectSettings, UserProfile, BudgetEntry, DiaryEntry } from '../types';
 import { Investor, investorService } from '../services/investorService';
@@ -810,15 +811,15 @@ const InvestorDashboard: React.FC<InvestorDashboardProps> = ({
                 h-7, sentence case e flex-wrap (nunca overflow-x-auto, que corta
                 aba sem avisar). No portal a navegação é a sidebar/barra inferior. */}
             <div className={`${isStandalone || isPublicExperience ? 'hidden' : 'hidden md:flex'} flex-col lg:flex-row gap-3 items-center justify-between bg-white p-3 rounded-[10px] border border-gray-100 shadow-sm mb-3`}>
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {navTabs.map(tab => {
                         const hidden = isAdmin && !enabledTabIds.includes(tab.id);
                         return (
-                            <button
+                            <button type="button" role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
                                 key={tab.id}
                                 onClick={() => setActiveTab(tab.id as TabId)}
                                 title={hidden ? 'Oculta para o investidor' : undefined}
-                                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                     activeTab === tab.id
                                         ? 'bg-white text-blue-600 shadow-sm'
                                         : hidden

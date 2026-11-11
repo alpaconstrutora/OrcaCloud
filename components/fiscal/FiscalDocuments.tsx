@@ -1,3 +1,4 @@
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import { useState, useEffect } from 'react';
 import {
   FileText, Search, RefreshCw, CheckCircle2, ArrowLeft, Plus, ShoppingCart, MoveHorizontal, UploadCloud, AlertCircle,
@@ -737,12 +738,12 @@ function DocumentDetail({
 
       {/* Tabs — anatomia canônica §19.1: card externo + trilho cinza + aba ativa branca */}
       <div className="bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="inline-flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
+        <div role="tablist" onKeyDown={moverEntreAbas} className="inline-flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1">
           {TABS.map(t => (
-            <button
+            <button type="button" role="tab" aria-selected={tab === t.key} tabIndex={tab === t.key ? 0 : -1}
               key={t.key}
               onClick={() => setTab(t.key)}
-              className={`h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${
+              className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 h-7 px-3 rounded-[6px] text-sm font-medium transition-all ${
                 tab === t.key ? 'bg-white text-blue-600 shadow-sm' : t.hasCritical ? 'text-red-600 hover:text-red-700' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
@@ -1063,10 +1064,10 @@ export function FiscalDocuments({ organizationId, onToast, onViewOrder, onViewPa
                 busca e não na toolbar de abas (§19.1), que é navegação. */}
             <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
               {FILTERS.map(f => (
-                <button
+                <button type="button" aria-pressed={filter === f.k}
                   key={f.k}
                   onClick={() => setFilter(f.k)}
-                  className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                  className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                     filter === f.k ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                   }`}
                 >

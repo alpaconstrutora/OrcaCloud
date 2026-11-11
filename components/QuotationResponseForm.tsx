@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { avisarAcaoDoPortal } from '../utils/portalEventos';
 import { FORMA_ENTREGA_PADRAO, FORMAS_DE_ENTREGA } from '../utils/formaEntrega';
 import {
@@ -399,13 +400,13 @@ const QuotationResponseForm: React.FC<QuotationResponseFormProps> = ({
             {/* Abas §19.1 — trilho cinza dentro de card branco, h-7, ativa = bg-white
                 + cor do acento. O coral do portal sai do mapa ACCENTS (§24). */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {abasVisiveis.map(t => (
-                        <button
+                        <button role="tab" aria-selected={aba === t.id} tabIndex={aba === t.id ? 0 : -1}
                             key={t.id}
                             type="button"
                             onClick={() => setAba(t.id)}
-                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                 aba === t.id ? `bg-white ${A.text} shadow-sm` : 'text-gray-700 hover:text-gray-900'
                             }`}
                         >

@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react'
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { isObra } from '../utils/projectClassification'
 import {
   ClipboardList, LayoutDashboard, BookOpen,
@@ -52,8 +53,12 @@ const TabBtn: React.FC<{
   onClick: () => void
 }> = ({ active, icon: Icon, label, onClick }) => (
   <button
+    type="button"
+    role="tab"
+    aria-selected={active}
+    tabIndex={active ? 0 : -1}
     onClick={onClick}
-    className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all
+    className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all outline-none focus-visible:ring-2 focus-visible:ring-blue-500
       ${active
         ? 'bg-white text-blue-600 shadow-sm'
         : 'text-gray-700 hover:text-gray-900'}`}
@@ -411,19 +416,19 @@ const OperacionalModule: React.FC<Props> = ({
         {/* Toolbar de abas — anatomia canônica ui_ux_guia_unificado.md §19.1 */}
         {canManageProjects && (
           <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-            <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
-              <button
+            <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+              <button type="button" role="tab" aria-selected={preView === 'select'} tabIndex={preView === 'select' ? 0 : -1}
                 onClick={() => setPreView('select')}
-                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                   preView === 'select' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
               >
                 <Building2 className="w-3.5 h-3.5" />
                 Selecionar Obra
               </button>
-              <button
+              <button type="button" role="tab" aria-selected={preView === 'manage'} tabIndex={preView === 'manage' ? 0 : -1}
                 onClick={() => setPreView('manage')}
-                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                   preView === 'manage' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
                 }`}
               >
@@ -482,7 +487,7 @@ const OperacionalModule: React.FC<Props> = ({
 
       {/* Toolbar de abas — anatomia canônica §19.1; mb-3 pelo ritmo do §20.1 */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+        <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
         <TabBtn
           active={view === 'list' || view === 'detail' || view === 'form'}
           icon={ClipboardList}

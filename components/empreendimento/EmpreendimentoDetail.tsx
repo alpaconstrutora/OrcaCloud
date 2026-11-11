@@ -1,4 +1,5 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
+import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
 import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
@@ -343,12 +344,12 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
 
       {/* Tabs — anatomia canônica §19.1: card branco externo + trilho bg-gray-50, aba ativa bg-white text-blue-600 shadow-sm, flex-wrap */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+        <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
           {tabs.map(t => (
-            <button
+            <button type="button" role="tab" aria-selected={tab === t.id} tabIndex={tab === t.id ? 0 : -1}
               key={t.id}
               onClick={() => setTab(t.id)}
-              className={`px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
+              className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all flex items-center gap-1.5 ${
                 tab === t.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-700 hover:text-gray-900'
               }`}
             >

@@ -1,4 +1,5 @@
 import React from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import ActionIconButton from './ui/ActionIconButton';
 import {
     ArrowLeft, FileText, Calendar, Shield, DollarSign,
@@ -1455,7 +1456,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                 overflow-x-auto), abas h-7. Aba ativa é ESTADO DE NAVEGAÇÃO
                 (bg-white text-blue-600 shadow-sm), não o azul sólido de ação. */}
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full">
                     {/* Recorrente e não-recorrente têm as MESMAS abas (pedido de
                         2026-09-28); o recorrente só acrescenta "Faturas de
                         Consumo". Antes o recorrente tinha só Resumo/Execução/Riscos,
@@ -1476,10 +1477,10 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                         { id: 'evaluation', label: 'Avaliação de Desempenho', icon: BarChart3 },
                         { id: 'emissao', label: 'Emissão', icon: FileDown },
                     ].map((tab) => (
-                        <button
+                        <button type="button" role="tab" aria-selected={activeTab === tab.id} tabIndex={activeTab === tab.id ? 0 : -1}
                             key={tab.id}
                             onClick={() => setActiveTab(tab.id as ContractDetailTab)}
-                            className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
+                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${activeTab === tab.id
                                 ? 'bg-white text-blue-600 shadow-sm'
                                 : 'text-gray-700 hover:text-gray-900'
                                 }`}

@@ -41,7 +41,7 @@ import { EmpreendimentoDetail } from '../../components/empreendimento/Empreendim
 
 const GARDEN = { id: 'e1', organization_id: 'o1', name: '011 - Garden Cambuhy', status: 'PLANEJAMENTO', tipo: 'VERTICAL' };
 const montar = () => render(<EmpreendimentoDetail empreendimento={GARDEN as never} organizationId="o1" onBack={vi.fn()} onEdit={vi.fn()} />);
-const abaSincronizacao = () => screen.getByRole('button', { name: /Sincronização/ });
+const abaSincronizacao = () => screen.getByRole('tab', { name: /Sincronização/ });
 
 describe('Empreendimento › Curadoria dentro da Sincronização', () => {
   beforeEach(() => {
@@ -52,7 +52,7 @@ describe('Empreendimento › Curadoria dentro da Sincronização', () => {
   it('não há mais aba Curadoria no menu', async () => {
     montar();
     await waitFor(() => expect(abaSincronizacao()).toBeInTheDocument());
-    expect(screen.queryByRole('button', { name: /^Curadoria/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('tab', { name: /^Curadoria/ })).not.toBeInTheDocument();
   });
 
   it('sem proposta nenhuma: a Sincronização não mostra o bloco Curadoria', async () => {

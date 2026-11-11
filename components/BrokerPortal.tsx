@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { Building2, FileText, Send, CheckCircle2, DollarSign, User, Briefcase, Info, Smartphone, Settings2, Eye, EyeOff, X, ChevronDown, ArrowLeft, Bell, HelpCircle, LogOut } from 'lucide-react';
 import { PortalHelp } from './portal/PortalHelp';
 import BrokerMyData from './broker/BrokerMyData';
@@ -531,15 +532,15 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
             {/* Tab Navigation — só no app autenticado; no portal público a navegação fica na sidebar da casca */}
             {!isStandalone && (
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-                <div className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full" data-tour="menu">
+                <div role="tablist" onKeyDown={moverEntreAbas} className="flex flex-wrap items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 max-w-full" data-tour="menu">
                     {navTabs.map(tab => {
                         const hidden = isAdmin && !visibleTabs.some(v => v.id === tab.id);
                         return (
-                            <button
+                            <button type="button" role="tab" aria-selected={currentTab === tab.id} tabIndex={currentTab === tab.id ? 0 : -1}
                                 key={tab.id}
                                 data-tour={`aba-${tab.id}`}
                                 onClick={() => irParaAba(tab.id as PortalTab)}
-                                className={`flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
+                                className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 flex items-center gap-1.5 px-3 h-7 rounded-[6px] text-sm font-medium whitespace-nowrap transition-all ${
                                     currentTab === tab.id
                                         ? 'bg-white text-blue-600 shadow-sm'
                                         : hidden
@@ -569,10 +570,10 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                                 { id: 'RENTAL', label: 'Locação' },
                                 { id: 'BOTH', label: 'Todos' }
                             ].map((p) => (
-                                <button
+                                <button type="button" aria-pressed={selectedPurpose === p.id}
                                     key={p.id}
                                     onClick={() => setSelectedPurpose(p.id as 'SALE' | 'RENTAL' | 'BOTH')}
-                                    className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedPurpose === p.id
+                                    className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedPurpose === p.id
                                         ? 'bg-white text-gray-900 shadow-sm'
                                         : 'text-gray-700 hover:text-gray-900'
                                         }`}
@@ -588,9 +589,9 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                             <div className="flex items-center gap-2 overflow-x-auto pb-2 xl:pb-0 scrollbar-hide">
                                 <span className="text-xs font-semibold text-gray-500 px-2 shrink-0">Empreendimento:</span>
                                 <div className="flex items-center bg-gray-50 p-1 rounded-[10px] border border-gray-100 gap-1 min-w-max">
-                                    <button
+                                    <button type="button" aria-pressed={selectedBuildingId === 'all'}
                                         onClick={() => setSelectedBuildingId('all')}
-                                        className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedBuildingId === 'all'
+                                        className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all ${selectedBuildingId === 'all'
                                             ? 'bg-white text-blue-600 shadow-sm'
                                             : 'text-gray-700 hover:text-gray-900'
                                             }`}
@@ -598,10 +599,10 @@ const BrokerPortalDesktop: React.FC<BrokerPortalProps> = ({ profile, activeTab =
                                         Geral
                                     </button>
                                     {buildings.map((b) => (
-                                        <button
+                                        <button type="button" aria-pressed={selectedBuildingId === b.id}
                                             key={b.id}
                                             onClick={() => setSelectedBuildingId(b.id)}
-                                            className={`px-3 h-7 rounded-[6px] text-sm font-medium transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
+                                            className={`outline-none focus-visible:ring-2 focus-visible:ring-blue-500 px-3 h-7 rounded-[6px] text-sm font-medium transition-all max-w-[150px] truncate ${selectedBuildingId === b.id
                                                 ? 'bg-white text-blue-600 shadow-sm'
                                                 : 'text-gray-700 hover:text-gray-900'
                                                 }`}

@@ -2626,6 +2626,28 @@ header e `<main>` inclusos), não filhos do `<main>` do Layout.
 > rótulo §21, botão desabilitado com o motivo) vive no componente — tela de
 > entrada nova de portal usa `PortalLogin` com uma entrada nova, não copia.
 
+### 20.3 Exceção — saudação da Central ("Bom dia", 11/11/2026)
+
+**Decidido com o usuário em 10/11/2026** (`docs/planos/2026-11-10-central-bom-dia.md`,
+referência: reel do CarePath AI). A tela de entrada (`components/CentralControle.tsx`)
+abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
+
+```tsx
+<h1 className="text-[32px] md:text-[40px] leading-tight font-medium text-gray-900 tracking-[-0.02em] [text-wrap:balance]">
+  Bom dia, Ana
+</h1>
+<p className="text-gray-500 text-base mt-1.5 max-w-[60ch]">12 itens precisam de você hoje: …</p>
+```
+
+- **Maior e mais leve** que o §20 (40px, peso médio): é uma saudação, não o rótulo de
+  uma lista. Continua **solto** — nada de card, banda colorida ou hero.
+- O subtítulo é a **frase-resumo do dia** (só as partes ≠ 0), não uma descrição da tela.
+- Aparece **sem esperar o banco** (nome + hora); a frase mostra esqueleto até a contagem.
+- Entrada curta uma vez (`.central-entra`, `index.css`), nenhuma com `prefers-reduced-motion`.
+
+> ❌ Não copiar para outras telas: a exceção é da tela de entrada. Lista, cadastro e
+> painel analítico seguem o §20.
+
 ---
 
 ## 21. RÓTULO DE CAMPO E TÍTULO DE MODAL (formulários)
@@ -3389,6 +3411,25 @@ recorta a aba.
 > cadastro/venda, com outro vocabulário; o espelho é leitura analítica.
 > ❌ Andar não quebra linha (`flex-wrap` mentiria sobre o prédio): torre larga rola na
 > horizontal dentro do card.
+
+### 28.7 Medidor semicircular — distribuição de UM total em 2–3 faixas
+
+**Criado em 11/11/2026** (Central › cartão Contas a pagar,
+`components/central/CartaoContasSemana.tsx`). Use quando o número que importa é o
+**total** e a pergunta é "quanto disso é urgente": títulos atrasados / vencem em até 2
+dias / vencem de 3 a 7 dias.
+
+- SVG próprio (não Recharts): arco de raio 80 e espessura 16 sobre um trilho
+  `#f1f5f9` (`.central-trilho`, que o Escuro Total escurece). Fatias na ordem da
+  urgência, da esquerda para a direita, com respiro de 1,5% entre elas; faixa vazia
+  não ocupa espaço.
+- **Total no centro** (número grande, `tabular-nums`) e **legenda em texto** com
+  quantidade e valor de cada faixa — a cor nunca carrega a informação sozinha (§28.3).
+- O `<svg>` tem `role="img"` e um `aria-label` com as três quantidades.
+- Cores semânticas fixas: vermelho = atrasado, âmbar = perto, verde = em dia.
+
+> ❌ Não usar para série no tempo nem para mais de 3 faixas (vira donut ilegível): aí é
+> barra (§28.1).
 
 ---
 

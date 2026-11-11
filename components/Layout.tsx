@@ -11,7 +11,7 @@ import { taskService } from '../services/taskService';
 import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
-import { podeVerTreinamentos } from '../utils/permissaoTreinamentos';
+import { modulosPermitidos } from '../utils/modulosPermitidos';
 import { temAcessoTotal } from '../lib/acessoTotal';
 
 const ThemeModeIcon = ({ mode, className }: { mode: ThemeMode; className?: string }) => {
@@ -218,106 +218,12 @@ const Layout: React.FC<LayoutProps> = ({
     || currentMember?.permissions?.canViewSettings;
 
   // Módulos habilitados e visibilidade calculada por cargo/usuário
-  const allowedMods = React.useMemo(() => {
-    const baseMods = activeEmpresa?.modulos_habilitados || {
-      obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: false, offices: false, reformas: false
-    };
-
-    if (profile.group === 'DESENVOLVEDOR' || isDevEmail) {
-      return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true
-      };
-    }
-
-    if (!currentMember) return { ...baseMods, ecommerce: false, treinamentos: baseMods.rh !== false };
-
-    if (currentMember.role === 'admin') {
-      return {
-        obras: true, compras: true, financeiro: true, fiscal: true, rh: true, incorporacao: true, crm: true, estoque: true, broker_portal: true, pro: true, offices: true, reformas: true, quality: true, ecommerce: true, treinamentos: true
-      };
-    }
-
-    const roleId = currentMember.customRoleId || currentMember.role;
-    const matrix = activeOrg?.settings?.module_visibility || {};
-
-    // Suporte à nova estrutura por produto (platform | pro | offices)
-    // Retrocompatível: se não houver dimensão de produto, trata como 'platform'
-    const productCtx = (currentMember as any).productContext || 'platform';
-    let productMatrix: Record<string, Record<string, boolean>>;
-    if ((matrix as any).platform !== undefined || (matrix as any).pro !== undefined || (matrix as any).offices !== undefined) {
-      productMatrix = ((matrix as any)[productCtx] as Record<string, Record<string, boolean>>) || {};
-    } else {
-      productMatrix = matrix as Record<string, Record<string, boolean>>;
-    }
-    const roleConfig = productMatrix[roleId] || {};
-
-    const checkModule = (layoutKey: string, userPermKey: string, matrixKey: string): boolean => {
-      // O tipo UserPermissions é estendido com canView*
-      const userPerm = currentMember.permissions ? (currentMember.permissions as any)[userPermKey] : undefined;
-      if (userPerm !== undefined) {
-        return !!userPerm;
-      }
-      if (roleConfig[matrixKey] !== undefined) {
-        return !!roleConfig[matrixKey];
-      }
-      return !!baseMods[layoutKey as keyof typeof baseMods];
-    };
-
-    // Para usuários Pro: somente módulo pro habilitado por padrão
-    if (productCtx === 'pro') {
-      return {
-        obras: false, compras: false, rh: false, financeiro: false, fiscal: false,
-        incorporacao: false, crm: false, estoque: false, broker_portal: false,
-        reformas: false, quality: false,
-        offices: false,
-        pro: checkModule('pro', 'canViewPro', 'pro'),
-        rentals: false,
-        ecommerce: false,
-        treinamentos: false,
-      };
-    }
-
-    // Para usuários Offices: somente módulos offices e crm de serviços
-    if (productCtx === 'offices') {
-      return {
-        obras: false, compras: false, rh: false, financeiro: false, fiscal: false,
-        incorporacao: false, estoque: false, broker_portal: false, reformas: false,
-        quality: false, pro: false,
-        offices: checkModule('offices', 'canViewOffices', 'offices'),
-        crm: checkModule('crm', 'canViewSales', 'crm'),
-        rentals: checkModule('crm', 'canViewRentals', 'rentals'),
-        ecommerce: false,
-        treinamentos: false,
-      };
-    }
-
-    const rh = checkModule('rh', 'canViewLabor', 'rh');
-    return {
-      obras: checkModule('obras', 'canViewBudget', 'obras'),
-      compras: checkModule('compras', 'canViewOrders', 'compras'),
-      rh,
-      // Gestão de treinamentos fora do RH (16/10/2026): chave própria; sem nada
-      // gravado, herda o que o RH decide para o usuário (utils/permissaoTreinamentos.ts).
-      treinamentos: podeVerTreinamentos({
-        permissoes: currentMember.permissions as unknown as Record<string, unknown> | undefined,
-        matrizDoCargo: roleConfig,
-        podeVerRh: rh,
-      }),
-      offices: checkModule('offices', 'canViewOffices', 'offices'),
-      pro: checkModule('pro', 'canViewPro', 'pro'),
-      crm: checkModule('crm', 'canViewSales', 'crm'),
-      rentals: checkModule('crm', 'canViewRentals', 'rentals'),
-      incorporacao: checkModule('incorporacao', 'canViewImovib', 'incorporacao'),
-      fiscal: checkModule('fiscal', 'canViewFiscal', 'fiscal'),
-      quality: checkModule('quality', 'canViewQuality', 'quality'),
-      ecommerce: checkModule('ecommerce', 'canViewEcommerce', 'ecommerce'),
-      
-      financeiro: baseMods.financeiro !== false,
-      reformas: baseMods.reformas !== false,
-      estoque: baseMods.estoque !== false,
-      broker_portal: baseMods.broker_portal !== false
-    };
-  }, [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId, isDevEmail]);
+  // Regra do menu em utils/modulosPermitidos (11/11/2026): a Central usa a mesma.
+  const allowedMods = React.useMemo(
+    () => modulosPermitidos({ activeEmpresa, profile, currentMember, activeOrg, isDevEmail }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [activeEmpresa, profile.group, currentMember, activeOrg, activeOrganizationId, isDevEmail],
+  );
 
   const mod = allowedMods;
   const isDev = profile.group === 'DESENVOLVEDOR' || isDevEmail;

@@ -621,3 +621,16 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
     cursor: not-allowed;
     opacity: 0.6;
 }
+
+/* Central de Controle › "Bom dia" (11/11/2026, docs/planos/2026-11-10-central-bom-dia.md).
+   A saudação entra curta, uma vez; sem movimento para quem pediu menos movimento.
+   O trilho cinza do medidor de Contas a pagar é SVG (stroke), que as sobrescritas
+   globais do Escuro Total não alcançam. */
+@media (prefers-reduced-motion: no-preference) {
+    .central-entra { animation: central-entra 480ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+@keyframes central-entra {
+    from { opacity: 0; transform: translateY(6px); }
+    to   { opacity: 1; transform: none; }
+}
+.theme-midnight .central-trilho { stroke: var(--opura-mid-raised); }

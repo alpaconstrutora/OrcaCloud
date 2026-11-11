@@ -1,577 +1,348 @@
 import React from 'react';
-import {
-    AlertTriangle, CheckSquare, ChevronRight, RefreshCw, Loader2, ShieldCheck, BarChart3, ArrowRight, Check, X,
-} from 'lucide-react';
 import { financialIntelligenceService } from '../services/financialIntelligenceService';
 import type { FinancialAlert, ProjectScorecard, CashflowProjectionPoint } from '../services/financialIntelligenceService';
-import { divergenceService } from '../services/divergenceService';
-import { approvalService } from '../services/approvalService';
-import type { ActionQueueItem, ApprovalPendingSummary, QueueEntity } from '../services/approvalService';
+import type { ActionQueueItem } from '../services/approvalService';
 import { financialApprovalService } from '../services/financialApprovalService';
-import type { FinancialApprovalConfig } from '../types/financial';
-import { processService } from '../services/processService';
+import type { FinancialApprovalConfig, ReconciliationDivergences } from '../types/financial';
+import type { ProcessStepBottleneck } from '../types/process';
 import { contractIndexService } from '../services/contractIndexService';
-import { KpiCard } from './ui/KpiCard';
-import MyTasksWidget from './MyTasksWidget';
-import { ApproveRejectModal, ENTITY_TAG } from './FinancialApprovalModule';
+import { taskService } from '../services/taskService';
+import { ApproveRejectModal } from './FinancialApprovalModule';
 import {
     centralControleService, comoSettled,
-    type CentralControleBootstrap,
+    type CentralControleBootstrap, type MeuDia,
 } from '../services/centralControleService';
-import type { ReconciliationDivergences } from '../types/financial';
-import type { ProcessStepBottleneck } from '../types/process';
 import { useStore } from '../store/useStore';
-import { motivoSemAlcada } from '../utils/alcada';
+import { useModulosPermitidos } from '../utils/modulosPermitidos';
+import {
+    saudacaoPorHora, comoChamar, diaEmSaoPaulo, montarFila, itemEmDestaque, contagemDoDia,
+    type AlertaDoDia,
+} from '../utils/meuDia';
+import { Saudacao } from './central/Saudacao';
+import { MinhaFila, type FiltroDaFila } from './central/MinhaFila';
+import { CartaoContasSemana } from './central/CartaoContasSemana';
+import { CartaoCaixa, type PeriodoCaixa } from './central/CartaoCaixa';
+import { CartaoObras } from './central/CartaoObras';
+import { CartaoConciliado } from './central/CartaoConciliado';
+import type { EstadoDoCartao } from './central/CartaoCentral';
 
+/**
+ * Central de Controle → tela "Bom dia" (11/11/2026).
+ * Plano: docs/planos/2026-11-10-central-bom-dia.md · referência: reel do
+ * CarePath AI ("Your morning, sorted.").
+ *
+ * Saudação + frase-resumo do que precisa de MIM hoje + barra "Seu dia"; pílulas
+ * que filtram a Minha fila; grade com Contas a pagar (7 dias), Caixa projetado,
+ * Obras e Extrato conciliado. Cada cartão carrega e falha sozinho. Um cartão só
+ * aparece se o módulo para onde ele leva aparece no menu lateral
+ * (`utils/modulosPermitidos`, a mesma regra do `Layout`).
+ */
 interface Props {
     organizationId: string | null;
     userEmail?: string;
     onNavigate: (view: string) => void;
 }
 
-type Severity = FinancialAlert['severity'];
-type CashflowDays = 30 | 60 | 90;
+/** Fonte do painel: ainda carregando, com erro, ou o dado. */
+type Fonte<T> = { estado: 'carregando' } | { estado: 'erro' } | { estado: 'ok'; data: T };
+const CARREGANDO = { estado: 'carregando' } as const;
 
-/** Item unificado da Faixa 1 — origem apagada, só resta o que importa: prioridade e para onde ir. */
-interface AlertItem {
-    id: string;
-    severity: Severity;
-    title: string;
-    description: string;
-    amount?: number | null;
-    view: string;
-    /** Só presente quando a fonte associa o item a uma obra — usado no filtro de Obra. */
-    projectName?: string | null;
+function estadoDe(f: Fonte<unknown>): EstadoDoCartao {
+    return f.estado;
 }
 
-const SEVERITY_ORDER: Record<Severity, number> = { HIGH: 0, MEDIUM: 1, LOW: 2 };
-
-const SEVERITY_DOT: Record<Severity, string> = {
-    HIGH:   'bg-red-500',
-    MEDIUM: 'bg-amber-500',
-    LOW:    'bg-gray-400',
-};
-
-// QueueEntity: o resumo de pendências (fn_approval_pending_summary) lê a fila, que tem DARF.
-const ENTITY_LABEL_PLURAL: Record<QueueEntity, string> = {
-    transaction:     'transações financeiras',
-    darf:            'DARFs',
-    contract:        'contratos',
-    purchase_order:  'pedidos de compra',
-    process_step:    'etapas de processo',
-    blueprint_snapshot: 'revisões de planta',
-    purchase_request: 'solicitações de compra',
-    doc_gen_documento: 'ofícios',
-};
-
-const ENTITY_LABEL_SINGULAR: Record<QueueEntity, string> = {
-    transaction:     'Transação financeira',
-    darf:            'DARF',
-    contract:        'Contrato',
-    purchase_order:  'Pedido de compra',
-    process_step:    'Etapa de processo',
-    blueprint_snapshot: 'Revisão de planta',
-    purchase_request: 'Solicitação de compra',
-    doc_gen_documento: 'Ofício',
-};
-
 function fBRL(v: number | null | undefined): string {
-    if (v === null || v === undefined) return '—';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+    return v == null ? '—' : v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
 }
 
 const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNavigate }) => {
-    const [alerts, setAlerts]           = React.useState<AlertItem[]>([]);
-    const [actionQueue, setActionQueue] = React.useState<ActionQueueItem[]>([]);
-    const [scorecards, setScorecards]   = React.useState<ProjectScorecard[]>([]);
+    const [fila, setFila] = React.useState<Fonte<ActionQueueItem[]>>(CARREGANDO);
+    const [meuDia, setMeuDia] = React.useState<Fonte<MeuDia>>(CARREGANDO);
+    const [alertas, setAlertas] = React.useState<Fonte<AlertaDoDia[]>>(CARREGANDO);
+    const [scorecards, setScorecards] = React.useState<Fonte<ProjectScorecard[]>>(CARREGANDO);
     const [approvalConfig, setApprovalConfig] = React.useState<FinancialApprovalConfig[]>([]);
     const [approvalModal, setApprovalModal] = React.useState<{ item: ActionQueueItem; mode: 'approve' | 'reject' } | null>(null);
-    const [loading, setLoading]         = React.useState(true);
-    const [sourceErrors, setSourceErrors] = React.useState<string[]>([]);
-    const [selectedObra, setSelectedObra] = React.useState<string>('all');
+    const [carregando, setCarregando] = React.useState(true);
+    const [filtro, setFiltro] = React.useState<FiltroDaFila>('tudo');
+    // Números sobem até o valor só na PRIMEIRA carga da tela; atualizar não anima.
+    const [animar, setAnimar] = React.useState(true);
 
-    // Faixa 3 — caixa projetado. Único filtro de período honesto: é o único
-    // dos serviços que de fato aceita um parâmetro de dias (os demais RPCs
-    // só recebem p_organization_id, então um "período" global seria enganoso).
-    const [cashflowDays, setCashflowDays] = React.useState<CashflowDays>(90);
-    const [cashflow, setCashflow] = React.useState<CashflowProjectionPoint[]>([]);
-    const [cashflowLoading, setCashflowLoading] = React.useState(false);
+    const [periodoCaixa, setPeriodoCaixa] = React.useState<PeriodoCaixa>(90);
+    const [caixa, setCaixa] = React.useState<Fonte<CashflowProjectionPoint[]>>(CARREGANDO);
+
+    const profile = useStore(s => s.currentProfile);
+    const organizations = useStore(s => s.organizations);
+    const mod = useModulosPermitidos({ group: profile.group, email: userEmail || profile.email });
+    const verFinanceiro = !!mod.financeiro;
+    const verObras = !!mod.obras;
 
     const load = React.useCallback(async () => {
-        setLoading(true);
+        setCarregando(true);
 
-        // ── Uma chamada para as seis consultas pesadas ────────────────────
+        // ── Uma chamada para as consultas pesadas ─────────────────────────
         // Até 24/09/2026 as OITO saíam juntas num `Promise.allSettled`, por
         // cima das ~17 requisições da casca do app — pico medido de 17 em voo.
-        // Nenhuma das seis é lenta sozinha (3 ms a 1,5 s com a RLS ativa); em
-        // produção, correndo juntas, a média ia a 687–3.744 ms e o pior caso a
-        // 7,8 s (`pg_stat_statements`, ~350 chamadas). Não era o SQL: era a
-        // disputa por uma instância pequena.
-        //
-        // `fn_central_controle_bootstrap` roda as seis numa sessão só. As duas
-        // leituras de tabela (reajuste e config de alçada) continuam soltas —
-        // são baratas e não entram na função.
+        // `fn_central_controle_bootstrap` roda todas numa sessão só (e, desde
+        // 11/11/2026, também o bloco `meu_dia`). As duas leituras de tabela
+        // (reajuste e config de alçada) continuam soltas — são baratas.
         //
         // O isolamento por fonte NÃO se perdeu: a função SQL embrulha cada
-        // consulta no próprio `BEGIN … EXCEPTION`, e `comoSettled` devolve o
-        // mesmo `PromiseSettledResult` que o código abaixo já lia.
+        // consulta no próprio `BEGIN … EXCEPTION`, e cada cartão mostra o
+        // próprio "Não carregou".
         const [bootstrapR, reajusteR, approvalConfigR] = await Promise.allSettled([
             centralControleService.bootstrap(organizationId),
             contractIndexService.listDueForReajuste(organizationId),
             financialApprovalService.listConfig(organizationId),
         ]);
 
-        // Uma falha da chamada consolidada (rede, timeout) derruba as seis
-        // juntas — é o preço de trocar seis round-trips por um. `comoSettled`
-        // transforma isso no mesmo `rejected` que cada fonte teria sozinha,
-        // então os seis blocos de tratamento abaixo seguem valendo.
+        // Uma falha da chamada consolidada (rede, timeout) derruba todas as
+        // fontes juntas — é o preço de trocar N round-trips por um.
         const painel = bootstrapR.status === 'fulfilled' ? bootstrapR.value : undefined;
         const falhaGeral = bootstrapR.status === 'rejected' ? bootstrapR.reason : undefined;
         const fonte = <T,>(chave: keyof CentralControleBootstrap): PromiseSettledResult<T> =>
             painel
                 ? comoSettled(painel[chave] as never, String(chave)) as PromiseSettledResult<T>
                 : { status: 'rejected', reason: falhaGeral ?? new Error('Painel indisponível.') };
+        const paraFonte = <T,>(r: PromiseSettledResult<T>, nome: string): Fonte<T> => {
+            if (r.status === 'fulfilled') return { estado: 'ok', data: r.value };
+            console.error(`[CentralControle] ${nome}:`, r.reason);
+            return { estado: 'erro' };
+        };
 
-        const financialR       = fonte<FinancialAlert[]>('financial_alerts');
-        const divergenceR      = fonte<ReconciliationDivergences>('divergences');
-        const approvalSummaryR = fonte<ApprovalPendingSummary[]>('approval_summary');
-        const bottlenecksR     = fonte<ProcessStepBottleneck[]>('bottlenecks');
-        const actionQueueR     = fonte<ActionQueueItem[]>('action_queue');
-        const scorecardR       = fonte<ProjectScorecard[]>('scorecards');
-
-        const errs: string[] = [];
-        const built: AlertItem[] = [];
-
+        // Alertas: os mesmos da Central antiga (alertas financeiros, divergências
+        // de conciliação, gargalos de processo e reajustes vencidos). As
+        // "N transações aguardando aprovação" saíram: a Minha fila já as lista.
+        const financialR = fonte<FinancialAlert[]>('financial_alerts');
+        const divergenceR = fonte<ReconciliationDivergences>('divergences');
+        const bottlenecksR = fonte<ProcessStepBottleneck[]>('bottlenecks');
+        const lista: AlertaDoDia[] = [];
+        let algumAlertaCarregou = false;
         if (financialR.status === 'fulfilled') {
-            financialR.value.forEach((a, i) => built.push({
+            algumAlertaCarregou = true;
+            financialR.value.forEach((a, i) => lista.push({
                 id: `fin-${i}-${a.ref_id ?? a.title}`,
                 severity: a.severity,
                 title: a.title,
                 description: a.project_name ? `${a.description} · ${a.project_name}` : a.description,
                 amount: a.amount,
                 view: 'financial-dashboard',
-                projectName: a.project_name,
             }));
-        } else {
-            errs.push('Alertas financeiros');
-            console.error('[CentralControle] financial alerts:', financialR.reason);
-        }
-
+        } else console.error('[CentralControle] financial alerts:', financialR.reason);
         if (divergenceR.status === 'fulfilled') {
+            algumAlertaCarregou = true;
             const d = divergenceR.value;
-            if (d.counts.value_mismatch > 0) built.push({
-                id: 'div-mismatch',
-                severity: 'HIGH',
-                title: `${d.counts.value_mismatch} lançamento(s) com valor divergente`,
-                description: `Banco × sistema não batem — apurado em ${d.as_of}`,
-                view: 'bank-reconciliation',
-            });
-            if (d.counts.bank_without_internal > 0) built.push({
-                id: 'div-bank',
-                severity: 'MEDIUM',
-                title: `${d.counts.bank_without_internal} lançamento(s) do banco sem correspondência`,
-                description: `Sem contrapartida no sistema — apurado em ${d.as_of}`,
-                view: 'bank-reconciliation',
-            });
-            if (d.counts.internal_without_bank > 0) built.push({
-                id: 'div-internal',
-                severity: 'MEDIUM',
-                title: `${d.counts.internal_without_bank} lançamento(s) do sistema sem correspondência`,
-                description: `Sem contrapartida no banco — apurado em ${d.as_of}`,
-                view: 'bank-reconciliation',
-            });
-        } else {
-            errs.push('Divergências de conciliação');
-            console.error('[CentralControle] divergences:', divergenceR.reason);
-        }
-
-        if (approvalSummaryR.status === 'fulfilled') {
-            (approvalSummaryR.value as ApprovalPendingSummary[])
-                .filter(s => s.qtd > 0)
-                .forEach(s => built.push({
-                    id: `appr-${s.entity}`,
-                    severity: 'MEDIUM',
-                    title: `${s.qtd} ${ENTITY_LABEL_PLURAL[s.entity] ?? s.entity} aguardando aprovação`,
-                    description: `Total em aberto: ${fBRL(s.soma)}`,
-                    amount: s.soma,
-                    view: 'financial-approval',
-                }));
-        } else {
-            errs.push('Pendências de aprovação');
-            console.error('[CentralControle] approval summary:', approvalSummaryR.reason);
-        }
-
+            if (d.counts.value_mismatch > 0) lista.push({ id: 'div-mismatch', severity: 'HIGH', view: 'bank-reconciliation', title: `${d.counts.value_mismatch} lançamento(s) com valor divergente`, description: `Banco × sistema não batem — apurado em ${d.as_of}` });
+            if (d.counts.bank_without_internal > 0) lista.push({ id: 'div-bank', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.bank_without_internal} lançamento(s) do banco sem correspondência`, description: `Sem contrapartida no sistema — apurado em ${d.as_of}` });
+            if (d.counts.internal_without_bank > 0) lista.push({ id: 'div-internal', severity: 'MEDIUM', view: 'bank-reconciliation', title: `${d.counts.internal_without_bank} lançamento(s) do sistema sem correspondência`, description: `Sem contrapartida no banco — apurado em ${d.as_of}` });
+        } else console.error('[CentralControle] divergences:', divergenceR.reason);
         if (bottlenecksR.status === 'fulfilled') {
-            bottlenecksR.value
-                .filter(b => b.overdue_count > 0)
-                .forEach(b => built.push({
-                    id: `proc-${b.step_name}`,
-                    severity: 'HIGH',
-                    title: `${b.overdue_count} etapa(s) atrasada(s) em "${b.step_name}"`,
-                    description: `${b.active_count} ativa(s) no total nessa etapa`,
-                    view: 'opura-processos',
-                }));
-        } else {
-            errs.push('Gargalos de processo');
-            console.error('[CentralControle] bottlenecks:', bottlenecksR.reason);
-        }
-
+            algumAlertaCarregou = true;
+            bottlenecksR.value.filter(b => b.overdue_count > 0).forEach(b => lista.push({
+                id: `proc-${b.step_name}`, severity: 'HIGH', view: 'opura-processos',
+                title: `${b.overdue_count} etapa(s) atrasada(s) em "${b.step_name}"`,
+                description: `${b.active_count} ativa(s) no total nessa etapa`,
+            }));
+        } else console.error('[CentralControle] bottlenecks:', bottlenecksR.reason);
         if (reajusteR.status === 'fulfilled') {
-            reajusteR.value.forEach(c => built.push({
-                id: `reajuste-${c.id}`,
-                severity: 'MEDIUM',
+            algumAlertaCarregou = true;
+            reajusteR.value.forEach(c => lista.push({
+                id: `reajuste-${c.id}`, severity: 'MEDIUM', view: 'contracts-reajuste',
                 title: `Contrato ${c.number} com reajuste vencido`,
                 description: `${c.reajuste_index} · venceu ${new Date(c.reajuste_proximo).toLocaleDateString('pt-BR')} · valor atual ${fBRL(c.current_value)}`,
                 amount: c.current_value,
-                view: 'contracts-reajuste',
             }));
-        } else {
-            errs.push('Reajustes de contrato');
-            console.error('[CentralControle] reajustes:', reajusteR.reason);
-        }
+        } else console.error('[CentralControle] reajustes:', reajusteR.reason);
+        setAlertas(algumAlertaCarregou ? { estado: 'ok', data: lista } : { estado: 'erro' });
 
-        built.sort((a, b) => SEVERITY_ORDER[a.severity] - SEVERITY_ORDER[b.severity]);
-        setAlerts(built);
+        setFila(paraFonte(fonte<ActionQueueItem[]>('action_queue'), 'action queue'));
+        setMeuDia(paraFonte(fonte<MeuDia>('meu_dia'), 'meu dia'));
+        setScorecards(paraFonte(fonte<ProjectScorecard[]>('scorecards'), 'scorecards'));
 
-        if (actionQueueR.status === 'fulfilled') {
-            setActionQueue(actionQueueR.value);
-        } else {
-            errs.push('Fila de aprovação');
-            console.error('[CentralControle] action queue:', actionQueueR.reason);
-        }
+        // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão.
+        if (approvalConfigR.status === 'fulfilled') setApprovalConfig(approvalConfigR.value);
+        else console.error('[CentralControle] approval config:', approvalConfigR.reason);
 
-        if (scorecardR.status === 'fulfilled') {
-            setScorecards(scorecardR.value);
-        } else {
-            errs.push('Resultado por obra');
-            console.error('[CentralControle] scorecards:', scorecardR.reason);
-        }
-
-        // Config de alçadas — não crítica: sem ela o modal só usa rótulos padrão
-        // (Gestor / Financeiro-Diretoria), então uma falha aqui não vira banner de erro.
-        if (approvalConfigR.status === 'fulfilled') {
-            setApprovalConfig(approvalConfigR.value);
-        } else {
-            console.error('[CentralControle] approval config:', approvalConfigR.reason);
-        }
-
-        setSourceErrors(errs);
-        setLoading(false);
+        setCarregando(false);
     }, [organizationId]);
 
     // ── C3: não competir com a casca do app ───────────────────────────────
     // As consultas deste painel são as mais pesadas da sessão e, até
     // 24/09/2026, saíam no MESMO instante em que a casca carregava projetos,
-    // organizações, clientes, colaboradores e tarefas — pico medido de 17
-    // requisições em voo, num banco de 224 MB de shared_buffers. Sobrepor as
-    // duas rajadas fazia as duas demorarem mais.
-    //
-    // `projectsLoading` nasce `true` e só cai quando o carregamento mais
-    // pesado da casca termina — é o sinal mais honesto de "assentou" que o
-    // store oferece. Não é bloqueio de leitura por organização (REGRA #5): o
-    // painel carrega em "Todas" igual, só espera a vez.
+    // organizações, clientes, colaboradores e tarefas. `projectsLoading` nasce
+    // `true` e só cai quando o carregamento mais pesado da casca termina. Não é
+    // bloqueio de leitura por organização (REGRA #5): o painel carrega em
+    // "Todas" igual, só espera a vez.
     const cascaCarregando = useStore(s => s.projectsLoading);
     const [podeCarregar, setPodeCarregar] = React.useState(false);
 
     React.useEffect(() => {
         if (podeCarregar) return;
         if (!cascaCarregando) { setPodeCarregar(true); return; }
-        // Teto de 4 s: se a casca travar ou falhar, o painel não fica refém
-        // dela — atrasar é aceitável, nunca carregar não é.
+        // Teto de 4 s: se a casca travar ou falhar, o painel não fica refém dela.
         const teto = setTimeout(() => setPodeCarregar(true), 4000);
         return () => clearTimeout(teto);
     }, [cascaCarregando, podeCarregar]);
 
     React.useEffect(() => { if (podeCarregar) load(); }, [load, podeCarregar]);
 
-    // Faixa 3 — recarrega só o caixa projetado ao trocar o período (30/60/90 dias),
-    // sem re-buscar as demais 5 fontes.
-    //
-    // Espera o mesmo portão do `load()`: esta RPC não entrou na consolidada
-    // porque é a única que aceita parâmetro de período e recarrega sozinha ao
-    // trocar 30/60/90 — mas no primeiro carregamento ela disputava com a casca
-    // igual às outras. Trocar o período depois não espera nada: aí a casca já
-    // assentou e `podeCarregar` é verdadeiro.
+    // Depois da primeira carga, nada mais anima (atualizar, trocar de org ou de período).
     React.useEffect(() => {
-        if (!podeCarregar) return;
-        let cancelled = false;
-        setCashflowLoading(true);
-        financialIntelligenceService.getCashflowProjection(organizationId, cashflowDays)
-            .then(points => { if (!cancelled) setCashflow(points); })
-            .catch(err => { console.error('[CentralControle] cashflow:', err); if (!cancelled) setCashflow([]); })
-            .finally(() => { if (!cancelled) setCashflowLoading(false); });
-        return () => { cancelled = true; };
-    }, [organizationId, cashflowDays, podeCarregar]);
+        if (!carregando && animar) {
+            const t = setTimeout(() => setAnimar(false), 900);
+            return () => clearTimeout(t);
+        }
+    }, [carregando, animar]);
 
-    // Opções do filtro de Obra — só entram obras que de fato têm algo pendente
-    // visível agora (alerta financeiro ou item na fila de aprovação).
-    const obraOptions = React.useMemo(() => {
-        const names = new Set<string>();
-        alerts.forEach(a => { if (a.projectName) names.add(a.projectName); });
-        actionQueue.forEach(i => { if (i.project_name) names.add(i.project_name); });
-        return Array.from(names).sort();
-    }, [alerts, actionQueue]);
+    // Caixa projetado: única fonte com parâmetro de período, por isso fora do
+    // bootstrap. Espera o mesmo portão no primeiro carregamento.
+    const carregarCaixa = React.useCallback(() => {
+        let cancelado = false;
+        setCaixa(CARREGANDO);
+        financialIntelligenceService.getCashflowProjection(organizationId, periodoCaixa)
+            .then(pontos => { if (!cancelado) setCaixa({ estado: 'ok', data: pontos }); })
+            .catch(err => { console.error('[CentralControle] cashflow:', err); if (!cancelado) setCaixa({ estado: 'erro' }); });
+        return () => { cancelado = true; };
+    }, [organizationId, periodoCaixa]);
 
-    // Itens sem obra associada (divergência agregada, aprovação agregada, gargalo de
-    // processo) permanecem sempre visíveis — filtrar por obra não pode escondê-los
-    // silenciosamente, já que não têm essa dimensão.
-    const filteredAlerts = React.useMemo(() => {
-        if (selectedObra === 'all') return alerts;
-        return alerts.filter(a => !a.projectName || a.projectName === selectedObra);
-    }, [alerts, selectedObra]);
+    React.useEffect(() => {
+        if (!podeCarregar || !verFinanceiro) return;
+        return carregarCaixa();
+    }, [carregarCaixa, podeCarregar, verFinanceiro]);
 
-    const filteredActionQueue = React.useMemo(() => {
-        if (selectedObra === 'all') return actionQueue;
-        return actionQueue.filter(i => !i.project_name || i.project_name === selectedObra);
-    }, [actionQueue, selectedObra]);
-
-    const obrasEmRisco = React.useMemo(
-        () => scorecards.filter(s => s.risco === 'HIGH').length,
-        [scorecards],
+    // ── Derivados ──────────────────────────────────────────────────────────
+    const dadosMeuDia = meuDia.estado === 'ok' ? meuDia.data : null;
+    const hoje = dadosMeuDia?.hoje ?? diaEmSaoPaulo(new Date().toISOString())!;
+    const filaDoDia = React.useMemo(
+        () => montarFila(fila.estado === 'ok' ? fila.data : [], dadosMeuDia, alertas.estado === 'ok' ? alertas.data : []),
+        [fila, dadosMeuDia, alertas],
     );
-    const obrasEmAtencao = React.useMemo(
-        () => scorecards.filter(s => s.risco === 'MEDIUM').length,
-        [scorecards],
-    );
-    const caixaProjetado = cashflow.length > 0 ? cashflow[cashflow.length - 1].saldo_acum : null;
+    const destaque = React.useMemo(() => itemEmDestaque(filaDoDia, hoje), [filaDoDia, hoje]);
+    const tudoCarregado = fila.estado !== 'carregando' && meuDia.estado !== 'carregando' && alertas.estado !== 'carregando';
+    const contagem = tudoCarregado ? contagemDoDia(filaDoDia, dadosMeuDia) : null;
+    const totalAprovacoesDaOrg = fila.estado === 'ok' ? fila.data.filter(i => i.approval_status === 'PENDENTE').length : 0;
+
+    const estadoDaFila: EstadoDoCartao =
+        !tudoCarregado ? 'carregando'
+        : fila.estado === 'erro' && meuDia.estado === 'erro' && alertas.estado === 'erro' ? 'erro'
+        : 'ok';
+    const partesSemCarga = [
+        fila.estado === 'erro' ? 'aprovações' : null,
+        meuDia.estado === 'erro' ? 'tarefas e contas' : null,
+        alertas.estado === 'erro' ? 'alertas' : null,
+    ].filter((p): p is string => !!p);
+
+    const hora = new Date().getHours();
+    const nome = comoChamar(organizations, userEmail || profile.email);
+
+    // ── Ações (estado local, §22: nada de recarregar o painel inteiro) ─────
+    const concluirTarefa = React.useCallback(async (id: string) => {
+        setMeuDia(m => m.estado !== 'ok' ? m : {
+            estado: 'ok',
+            data: {
+                ...m.data,
+                tarefas: {
+                    pendentes: m.data.tarefas.pendentes.filter(t => t.id !== id),
+                    qtd_pendentes: Math.max(0, m.data.tarefas.qtd_pendentes - 1),
+                    concluidas_hoje: m.data.tarefas.concluidas_hoje + 1,
+                },
+            },
+        });
+        try {
+            await taskService.update(id, { status: 'done' });
+        } catch (err) {
+            console.error('[CentralControle] concluir tarefa:', err);
+            load();
+        }
+    }, [load]);
+
+    const aprovacaoFeita = React.useCallback((item: ActionQueueItem) => {
+        setApprovalModal(null);
+        setFila(f => f.estado !== 'ok' ? f : { estado: 'ok', data: f.data.filter(i => !(i.entity === item.entity && i.id === item.id)) });
+        setMeuDia(m => m.estado !== 'ok' ? m : { estado: 'ok', data: { ...m.data, aprovacoes_hoje: m.data.aprovacoes_hoje + 1 } });
+    }, []);
+
+    const pilulas: { chave: FiltroDaFila; rotulo: string; qtd: number | null }[] = [
+        { chave: 'tudo', rotulo: 'Tudo', qtd: contagem?.pendentes ?? null },
+        { chave: 'aprovacoes', rotulo: 'Aprovações', qtd: contagem?.aprovacoes ?? null },
+        { chave: 'tarefas', rotulo: 'Tarefas', qtd: contagem?.tarefas ?? null },
+        { chave: 'contas', rotulo: 'Contas de hoje', qtd: contagem?.contas ?? null },
+        { chave: 'alertas', rotulo: 'Alertas', qtd: alertas.estado === 'ok' ? alertas.data.length : null },
+    ];
 
     return (
-        <div className="space-y-6">
-            {/* Header */}
-            <div className="flex items-center justify-between">
-                <div>
-                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">Central de Controle</h1>
-                    <p className="text-gray-400 text-sm mt-1.5 font-medium">O que precisa da sua atenção agora</p>
-                </div>
-                <div className="flex items-center gap-2">
-                    {obraOptions.length > 0 && (
-                        <select
-                            value={selectedObra}
-                            onChange={e => setSelectedObra(e.target.value)}
-                            className="text-sm font-normal px-3 h-9 rounded-[6px] border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-blue-400"
-                            title="Filtrar por obra"
-                        >
-                            <option value="all">Todas as obras</option>
-                            {obraOptions.map(name => <option key={name} value={name}>{name}</option>)}
-                        </select>
-                    )}
+        <div className="space-y-6 pb-20">
+            <Saudacao
+                saudacao={saudacaoPorHora(hora)}
+                nome={nome}
+                contagem={contagem}
+                carregando={carregando}
+                onAtualizar={() => { load(); if (verFinanceiro) carregarCaixa(); }}
+            />
+
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrar a Minha fila">
+                {pilulas.map(p => (
                     <button
-                        onClick={load}
-                        disabled={loading}
-                        className="p-3 bg-blue-50 text-blue-600 rounded-xl hover:bg-blue-600 hover:text-white transition-all active:scale-95"
-                        title="Atualizar"
+                        key={p.chave}
+                        type="button"
+                        aria-pressed={filtro === p.chave}
+                        onClick={() => setFiltro(p.chave)}
+                        className={`h-8 px-3.5 inline-flex items-center gap-1.5 rounded-full border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${filtro === p.chave ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                     >
-                        <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
+                        {p.rotulo}
+                        {p.qtd != null && <span className={`tabular-nums text-xs ${filtro === p.chave ? 'text-blue-100' : 'text-gray-500'}`}>{p.qtd.toLocaleString('pt-BR')}</span>}
                     </button>
-                </div>
+                ))}
             </div>
 
-            {sourceErrors.length > 0 && (
-                <div className="bg-amber-50 border border-amber-100 rounded-2xl px-5 py-3 text-xs font-semibold text-amber-700">
-                    Não foi possível carregar: {sourceErrors.join(', ')}. Os demais blocos seguem atualizados.
+            {/* 3 colunas no desktop com a fila ocupando 2 linhas; abaixo de lg, uma
+                coluna na ordem fila → contas → caixa → obras → conciliado. */}
+            <div className="grid grid-cols-1 lg:grid-cols-[minmax(0,1.35fr)_minmax(0,1fr)_minmax(0,1fr)] gap-6 items-stretch">
+                <div className="lg:row-span-2 flex flex-col gap-3 min-w-0">
+                    {estadoDaFila === 'ok' && partesSemCarga.length > 0 && (
+                        <p role="status" className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded-[6px] px-3 py-2">
+                            Parte da fila não carregou ({partesSemCarga.join(', ')}).{' '}
+                            <button type="button" onClick={load} className="font-medium underline underline-offset-2 hover:text-amber-900">Tentar de novo</button>
+                        </p>
+                    )}
+                    <MinhaFila
+                        className="flex-1"
+                        estado={estadoDaFila}
+                        onTentarDeNovo={load}
+                        fila={filaDoDia}
+                        destaque={destaque}
+                        hoje={hoje}
+                        filtro={filtro}
+                        totalAprovacoesDaOrg={totalAprovacoesDaOrg}
+                        qtdTarefas={dadosMeuDia?.tarefas.qtd_pendentes ?? filaDoDia.tarefas.length}
+                        qtdContas={dadosMeuDia?.contas_hoje.qtd_pendentes ?? filaDoDia.contas.length}
+                        onAprovar={item => setApprovalModal({ item, mode: 'approve' })}
+                        onRejeitar={item => setApprovalModal({ item, mode: 'reject' })}
+                        onConcluirTarefa={concluirTarefa}
+                        onNavigate={onNavigate}
+                    />
                 </div>
-            )}
 
-            {/* Faixa 1 — Alertas & Exceções */}
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-red-500 rounded-xl flex items-center justify-center">
-                            <AlertTriangle className="w-4 h-4 text-white" />
-                        </div>
-                        <div>
-                            <h3 className="text-sm font-black text-gray-900">Alertas &amp; Exceções</h3>
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
-                                {loading ? 'Carregando...' : filteredAlerts.length > 0 ? `${filteredAlerts.length} pendência(s)` : 'Tudo em dia'}
-                            </p>
-                        </div>
-                    </div>
-                </div>
-
-                {loading ? (
-                    <div className="flex justify-center items-center py-8">
-                        <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                    </div>
-                ) : filteredAlerts.length === 0 ? (
-                    <div className="py-8 px-5 text-center">
-                        <ShieldCheck className="w-8 h-8 text-emerald-300 mx-auto mb-2" />
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nenhuma exceção encontrada</p>
-                    </div>
-                ) : (
-                    <ul className="divide-y divide-gray-50">
-                        {filteredAlerts.map(a => (
-                            <li key={a.id}>
-                                <button
-                                    onClick={() => onNavigate(a.view)}
-                                    className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors text-left group"
-                                >
-                                    <span className={`w-2 h-2 rounded-full flex-shrink-0 ${SEVERITY_DOT[a.severity]}`} />
-                                    <div className="flex-1 min-w-0">
-                                        <p className="text-sm font-bold text-gray-800 truncate leading-tight">{a.title}</p>
-                                        <p className="text-xs text-gray-400 mt-0.5 truncate">{a.description}</p>
-                                    </div>
-                                    {a.amount != null && (
-                                        <span className="text-sm font-medium text-gray-700 tabular-nums flex-shrink-0">{fBRL(a.amount)}</span>
-                                    )}
-                                    <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
-                                </button>
-                            </li>
-                        ))}
-                    </ul>
+                {verFinanceiro && (
+                    <CartaoContasSemana estado={estadoDe(meuDia)} onTentarDeNovo={load} dados={dadosMeuDia?.contas_7_dias ?? null} animar={animar} onNavigate={onNavigate} />
                 )}
-            </section>
-
-            {/* Faixa 2 — Minha Mesa */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                {/* Fila de aprovação */}
-                <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden">
-                    <div className="flex items-center justify-between px-5 py-4 border-b border-gray-50">
-                        <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 bg-purple-600 rounded-xl flex items-center justify-center">
-                                <ShieldCheck className="w-4 h-4 text-white" />
-                            </div>
-                            <div>
-                                <h3 className="text-sm font-black text-gray-900">Fila de Aprovação</h3>
-                                <p className="text-xs font-bold text-gray-400 uppercase tracking-wider leading-none mt-0.5">
-                                    {loading ? 'Carregando...' : filteredActionQueue.length > 0 ? `${filteredActionQueue.length} aguardando você` : 'Nada pendente'}
-                                </p>
-                            </div>
-                        </div>
-                        <button
-                            onClick={() => onNavigate('financial-approval')}
-                            className="flex items-center gap-1 text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
-                        >
-                            Ver todas <ChevronRight className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-
-                    {loading ? (
-                        <div className="flex justify-center items-center py-8">
-                            <Loader2 className="w-5 h-5 animate-spin text-gray-300" />
-                        </div>
-                    ) : filteredActionQueue.length === 0 ? (
-                        <div className="py-8 px-5 text-center">
-                            <CheckSquare className="w-8 h-8 text-gray-200 mx-auto mb-2" />
-                            <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Nenhuma aprovação pendente</p>
-                        </div>
-                    ) : (
-                        <ul className="divide-y divide-gray-50">
-                            {filteredActionQueue.slice(0, 5).map(item => {
-                                const isDraft = item.approval_status === 'RASCUNHO';
-                                return (
-                                    <li
-                                        key={`${item.entity}-${item.id}`}
-                                        onClick={() => onNavigate('financial-approval')}
-                                        className="w-full flex items-center gap-3 px-5 py-3 hover:bg-gray-50/60 transition-colors cursor-pointer group"
-                                    >
-                                        <div className="flex-1 min-w-0">
-                                            <p className="text-sm font-bold text-gray-800 truncate leading-tight">{item.title}</p>
-                                            <p className="text-xs text-gray-400 mt-0.5 truncate">
-                                                {item.party_name ?? item.project_name ?? ENTITY_LABEL_SINGULAR[item.entity]}
-                                                {isDraft ? ' · Rascunho' : ''}
-                                            </p>
-                                        </div>
-                                        <span className="text-sm font-medium text-gray-700 tabular-nums flex-shrink-0">{fBRL(item.amount)}</span>
-                                        {isDraft ? (
-                                            <ChevronRight className="w-4 h-4 text-gray-300 group-hover:text-gray-500 flex-shrink-0" />
-                                        ) : (
-                                            // Fora da alçada (10/11/2026): desligados, com o motivo no
-                                            // <div> — botão desligado não recebe o hover.
-                                            <div className="flex items-center gap-1 flex-shrink-0" onClick={e => e.stopPropagation()} title={motivoSemAlcada(item) ?? undefined}>
-                                                <button
-                                                    onClick={() => setApprovalModal({ item, mode: 'approve' })}
-                                                    disabled={!!motivoSemAlcada(item)}
-                                                    className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                                                    title={motivoSemAlcada(item) ? undefined : `Aprovar ${ENTITY_TAG[item.entity]}`}
-                                                    aria-label={`Aprovar ${ENTITY_TAG[item.entity]}`}
-                                                >
-                                                    <Check className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => setApprovalModal({ item, mode: 'reject' })}
-                                                    disabled={!!motivoSemAlcada(item)}
-                                                    className="p-1.5 text-red-500 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-40 disabled:hover:bg-transparent disabled:cursor-not-allowed"
-                                                    title={motivoSemAlcada(item) ? undefined : `Rejeitar ${ENTITY_TAG[item.entity]}`}
-                                                    aria-label={`Rejeitar ${ENTITY_TAG[item.entity]}`}
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
-                                            </div>
-                                        )}
-                                    </li>
-                                );
-                            })}
-                        </ul>
-                    )}
-
-                    {filteredActionQueue.length > 5 && (
-                        <div className="px-5 py-2.5 border-t border-gray-50 text-center">
-                            <button
-                                onClick={() => onNavigate('financial-approval')}
-                                className="text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors"
-                            >
-                                Ver todos os {filteredActionQueue.length} itens →
-                            </button>
-                        </div>
-                    )}
-                </div>
-
-                {/* Minhas Tarefas — movido de dentro do BIDashboard */}
-                <MyTasksWidget orgId={organizationId ?? undefined} onNavigate={onNavigate} />
+                {verFinanceiro && (
+                    <CartaoCaixa
+                        estado={estadoDe(caixa)}
+                        onTentarDeNovo={carregarCaixa}
+                        pontos={caixa.estado === 'ok' ? caixa.data : []}
+                        periodo={periodoCaixa}
+                        onPeriodo={setPeriodoCaixa}
+                        animar={animar}
+                        onNavigate={onNavigate}
+                    />
+                )}
+                {verObras && (
+                    <CartaoObras estado={estadoDe(scorecards)} onTentarDeNovo={load} scorecards={scorecards.estado === 'ok' ? scorecards.data : []} animar={animar} onNavigate={onNavigate} />
+                )}
+                {verFinanceiro && (
+                    <CartaoConciliado estado={estadoDe(meuDia)} onTentarDeNovo={load} dados={dadosMeuDia?.conciliado ?? null} animar={animar} onNavigate={onNavigate} />
+                )}
             </div>
-
-            {/* Faixa 3 — Resumo macro. Só 2 âncoras + link; o BI Executivo (BIDashboard)
-                continua sendo o destino de análise, não é duplicado aqui. */}
-            <section className="bg-white rounded-2xl border border-gray-100 shadow-sm p-5">
-                <div className="flex items-center justify-between mb-4">
-                    <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 bg-blue-600 rounded-xl flex items-center justify-center">
-                            <BarChart3 className="w-4 h-4 text-white" />
-                        </div>
-                        <h3 className="text-sm font-black text-gray-900">Resumo Macro</h3>
-                    </div>
-                    <div className="flex items-center gap-2">
-                        <div className="flex bg-gray-50 p-1 rounded-xl border border-gray-100">
-                            {([30, 60, 90] as CashflowDays[]).map(d => (
-                                <button
-                                    key={d}
-                                    onClick={() => setCashflowDays(d)}
-                                    className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-colors ${
-                                        cashflowDays === d ? 'bg-blue-600 text-white' : 'text-gray-500 hover:text-gray-800'
-                                    }`}
-                                >
-                                    {d}d
-                                </button>
-                            ))}
-                        </div>
-                        <button
-                            onClick={() => onNavigate('bi-executivo')}
-                            className="flex items-center gap-1.5 text-xs font-black text-blue-600 uppercase tracking-wider hover:text-blue-800 transition-colors px-3 py-2"
-                        >
-                            BI Executivo <ArrowRight className="w-3.5 h-3.5" />
-                        </button>
-                    </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <KpiCard
-                        label="Caixa Projetado"
-                        value={cashflowLoading ? '...' : fBRL(caixaProjetado)}
-                        sub={`Saldo acumulado em ${cashflowDays} dias`}
-                        icon={<BarChart3 className="w-5 h-5" />}
-                        color={caixaProjetado != null && caixaProjetado < 0 ? 'red' : 'emerald'}
-                        onClick={() => onNavigate('bi-executivo')}
-                    />
-                    <KpiCard
-                        label="Obras em Risco"
-                        value={loading ? '...' : obrasEmRisco}
-                        sub={obrasEmAtencao > 0 ? `+ ${obrasEmAtencao} em atenção` : 'Nenhuma em atenção'}
-                        icon={<AlertTriangle className="w-5 h-5" />}
-                        color={obrasEmRisco > 0 ? 'red' : 'emerald'}
-                        onClick={() => onNavigate('bi-executivo')}
-                    />
-                </div>
-            </section>
 
             {/* Aprovar/rejeitar direto da fila — reaproveita o modal do FinancialApprovalModule,
                 não duplica a lógica de dispatch por entidade nem os rótulos de alçada. */}
@@ -581,7 +352,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                     mode={approvalModal.mode}
                     userEmail={userEmail}
                     config={approvalConfig}
-                    onDone={() => { setApprovalModal(null); load(); }}
+                    onDone={() => aprovacaoFeita(approvalModal.item)}
                     onClose={() => setApprovalModal(null)}
                 />
             )}

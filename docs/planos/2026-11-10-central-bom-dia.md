@@ -102,7 +102,31 @@ Começa depois do PR da alçada (plano irmão). Um item por arquivo.
 
 ## Estado
 
-- [ ] 1 · [ ] 2 · [ ] 3 · [ ] 4 · [ ] 5 · [ ] 6 · [ ] 7
+11/11/2026, branch `feat/central-bom-dia` (a alçada do plano irmão entrou no #351):
+
+- [ ] 1 migration `aplicar_20271111400000_central_meu_dia.sql`: escrita (bootstrap do banco
+  conferido idêntico ao arquivo antes de reescrever; colunas conferidas). **Falta** o teste a
+  seco e a aplicação (o usuário roda: o classificador barra `db query` que cria função).
+- [x] 2 serviço: tipo `MeuDia` e fonte `meu_dia` em `centralControleService`.
+- [x] 3 `utils/meuDia.ts` + `__tests__/meuDia.test.ts` (23).
+- [x] 4 `components/central/*`: `CartaoCentral`, `NumeroQueSobe`, `Saudacao`, `MinhaFila`,
+  `CartaoContasSemana`, `CartaoCaixa`, `CartaoObras`, `CartaoConciliado`; `check-ui-standard` limpo.
+- [ ] 5 `CentralControle.tsx` reescrita; regra do menu extraída do `Layout` para
+  `utils/modulosPermitidos.ts` (mesma decisão para menu e cartões). Conferida no navegador SEM
+  o bloco no banco (estado de erro por cartão ok); **falta** com o bloco, celular e Escuro Total.
+- [x] 6 guia: §20.3 (saudação) e §28.7 (medidor semicircular).
+- [x] 7 `__tests__/components/CentralControle.test.tsx` (6): carregando, dia zerado, erro só
+  no cartão, sem permissão, fila só da alçada com destaque, concluir tarefa sem recarregar.
+
+Desvios do brief, decididos na implementação:
+- **Pílulas** filtram a Minha fila (Tudo · Aprovações · Tarefas · Contas de hoje · Alertas);
+  o filtro "Todas as obras" da Central antiga saiu (o cartão Obras cobre a leitura por obra).
+- "N transações aguardando aprovação" deixou de ser alerta: a fila já lista as aprovações.
+- **% conciliado** não existia em lugar nenhum do app: definido como linhas do extrato dos
+  últimos 30 dias (contas ativas) conciliadas por `fn_bank_tx_conciliado` ÷ (conciliadas +
+  pendentes); variação em pontos sobre os 30 dias anteriores. Em 11/11: 3 de 7.
+- "Tarefas" = as MINHAS (`user_id`), não as de espaços compartilhados que a RLS também mostra.
+- "Contas pagas hoje" = `payment_date` = hoje (não registra QUEM baixou).
 
 ## Verificação
 

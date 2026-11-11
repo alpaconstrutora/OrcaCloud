@@ -30,7 +30,8 @@ interface Props {
     placeholder?: string;
     disabled?: boolean;
     /** 'md' (padrão) é o campo de formulário; 'sm' é o gatilho compacto h-9
-     *  para barras/linhas, no recorte dos outros controles. */
+     *  para barras/linhas, no recorte dos outros controles. Os dois têm 36px
+     *  (§16/§30) — até 10/11/2026 o 'md' era `py-4 rounded-2xl` (~54px). */
     size?: 'md' | 'sm';
     /** Classe do gatilho quando a tela tem a própria régua (substitui a de `size`). */
     triggerClassName?: string;
@@ -150,12 +151,12 @@ const SupplierSelect: React.FC<Props> = ({
                 className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                     triggerClassName ?? (size === 'sm'
                         ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
-                        : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4')
+                        : 'h-9 bg-white border border-gray-200 rounded-[6px] pl-3 pr-2')
                 }`}
             >
                 {selected ? (
                     <span className="flex items-center gap-2 flex-1 min-w-0">
-                        <span className={`text-sm text-gray-900 truncate ${compact ? 'font-normal' : size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
+                        <span className={`text-sm text-gray-900 truncate ${compact ? 'font-normal' : 'font-medium'}`}>{selected.name}</span>
                         {selected.document && !compact && (
                             <span className="text-xs font-normal text-gray-400 truncate shrink-0">{selected.document}</span>
                         )}

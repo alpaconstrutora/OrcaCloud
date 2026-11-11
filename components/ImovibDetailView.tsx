@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
 import ImovibCashFlow from './ImovibCashFlow';
 import ImovibExecutiveSummary from './ImovibExecutiveSummary';
 import ImovibCapexForm from './ImovibCapexForm';
-import ImovibFundingForm from './ImovibFundingForm';
+import ImovibReceitasForm from './ImovibReceitasForm';
+import ImovibCapitalForm from './ImovibCapitalForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibForm from './ImovibForm';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -22,13 +23,15 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'funding' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
     { id: 'premises', label: 'Premissas', icon: <Building2 className="w-4 h-4" /> },
     { id: 'capex', label: 'Orçamento (CAPEX)', icon: <Calculator className="w-4 h-4" /> },
-    { id: 'funding', label: 'Receitas e Capital', icon: <Landmark className="w-4 h-4" /> },
+    // "Receitas e Capital" virou duas abas (decisão D7 do plano 2026-11-11).
+    { id: 'receitas', label: 'Receitas', icon: <TrendingUp className="w-4 h-4" /> },
+    { id: 'capital', label: 'Capital', icon: <Landmark className="w-4 h-4" /> },
     { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
     { id: 'viability_static', label: 'Estática', icon: <Calculator className="w-4 h-4" /> },
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
@@ -182,9 +185,14 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             <ImovibCapexForm study={study} onDataChanged={() => loadStudyDetails(false)} />
                         </ErrorBoundary>
                     )}
-                    {activeTab === 'funding' && (
+                    {activeTab === 'receitas' && (
                         <ErrorBoundary>
-                            <ImovibFundingForm study={study} onDataChanged={loadStudyDetails} />
+                            <ImovibReceitasForm study={study} onDataChanged={() => loadStudyDetails(false)} />
+                        </ErrorBoundary>
+                    )}
+                    {activeTab === 'capital' && (
+                        <ErrorBoundary>
+                            <ImovibCapitalForm study={study} onDataChanged={() => loadStudyDetails(false)} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'risk_scenarios' && (

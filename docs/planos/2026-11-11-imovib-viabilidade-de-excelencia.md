@@ -29,6 +29,9 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 |---|---|---|
 | 2026-11-11 | Planejar só as duas lacunas principais (curva de vendas e indicadores) ou todas? | **Todas**: *"escreva um plano completo para todos"*. Os 13 blocos entram no escopo. |
 | 2026-11-11 | Por onde começar? (a mensagem anterior dizia "se as recomendações servirem, começo pela Fase 0") | *"comece pela Fase 0"*. A recomendação de D6 (corrigir a função do portal já na Fase 0) foi tratada como aceita; a migration foi escrita e **não aplicada** — aplicar pede OK explícito. As outras decisões (D1–D5, D7) só travam fases seguintes e seguem em aberto. |
+| 2026-11-11 | D1: o recebimento por safra muda VPL, TIR e exposição dos 3 estudos existentes. Um modelo só ou manter o antigo nos existentes? (pedido: *"iniciar f1"*) | **Um modelo só.** Todos os estudos passam a ser calculados por safra; a tabela antes → depois dos 3 estudos fica no item 1.4. |
+| 2026-11-11 | D7: dividir "Receitas e Capital" em duas abas? | **Dividir:** Receitas (espelho, curva de vendas, recebimento, distrato) e Capital (financiamento e permutas). |
+| 2026-11-11 | A revisão da Fase 1 achou que, com os padrões, mais distrato dava mais lucro (retenção de 25% do pago + revenda pelo preço cheio) e que venda distratada depois das chaves devolvia até o dinheiro do banco. Como corrigir? | **Revenda com deságio + distrato só até as chaves.** Deságio editável, padrão 10% (coluna nova, migration `aplicar_20271111850000`); venda feita nas chaves ou depois não distrata, com aviso `distrato_parcial`. |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
@@ -693,14 +696,24 @@ Condições que o pedido não descreve e que mais provavelmente derrubam quem us
 
 Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/segurancaMigrations.test.ts` só reconhece funções delimitadas por `$$` ou `$function$`; com `$X$` ou outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde. Pelo menos dez migrations posteriores ao corte usam outro delimitador. Não corrigido aqui.
 
-**Fase 1 — Receitas:** 0 de 7
-- [ ] 1.1 Curvas de venda
-- [ ] 1.2 Recebimento por safra, com distrato
-- [ ] 1.3 Colunas das premissas de receita
-- [ ] 1.4 Motor usa curva e safra (D1) — colar aqui a tabela antes → depois dos 3 estudos
-- [ ] 1.5 Aba Receitas: curva de vendas (D7)
-- [ ] 1.6 Aba Receitas: perfil de recebimento e distrato
-- [ ] 1.7 Índices separados
+**Fase 1 — Receitas:** 7 de 7 — revisada, as duas migrations aplicadas; publicação pelo PR #356
+- [x] 1.1 Curvas de venda — `utils/imovibCurvas.ts`.
+- [x] 1.2 Recebimento por safra, com distrato — `utils/imovibRecebimento.ts`. O `horizonte` corta o distrato e é o tamanho mínimo das séries; repasse atrasado, pós-chaves e revenda podem passar dele. Pós-chaves com 0 meses sai inteiro nas chaves, com aviso.
+- [x] 1.3 Colunas das premissas de receita — migration `aplicar_20271111800000_imovib_receitas_por_safra.sql` **aplicada em 11/11** com OK do usuário; 16 colunas conferidas no banco.
+- [x] 1.4 Motor usa curva e safra (D1). `netVgvTotal` passou a ser a receita dos compradores sem índice. Antes → depois, estudos do banco com as colunas novas vazias, já com a correção do distrato:
+
+  | Estudo | VGV líquido | VPL | TIR a.a. | Exposição máxima |
+  |---|---|---|---|---|
+  | Garden Cambuhy | R$ 10.716.160 → R$ 11.557.195 | R$ 3.482.437 → R$ 3.998.485 | 186,2% → 141,28% | −R$ 2.347.203 → −R$ 2.760.018 |
+  | Bruninho | R$ 9.199.998 → R$ 9.922.040 | R$ 164.093 → R$ 641.232 | 14,37% → 19,9% | −R$ 5.285.761 → −R$ 5.661.649 |
+  | Davi Bueno | sem VGV — sem mudança | | | |
+
+  De onde vem o salto: o modelo antigo descontava 8% do VGV inteiro (3% de inadimplência + 5% de distrato) como perda definitiva. Agora a inadimplência incide só sobre parcelas, intermediárias e pós-chaves, e o distrato custa a devolução, o atraso e o deságio da revenda. No Bruninho: sem distrato e sem inadimplência, VPL R$ 709.543; com 3% de inadimplência, R$ 662.008; com mais 5% de distrato, R$ 641.232; com 10% de distrato, R$ 620.456.
+- [x] 1.5 Aba Receitas: curva de vendas (D7) — abas Receitas e Capital; `ImovibFundingForm` apagado. O gráfico lê `vendasPorMes` do motor.
+- [x] 1.6 Aba Receitas: perfil de recebimento e distrato — `ImovibInputRow` só grava quando o valor muda.
+- [x] 1.7 Índices separados — `utils/indiceVariacao.ts`, `components/ImovibIndiceDeCorrecao.tsx`.
+
+Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) aplicada em 11/11 com OK do usuário; coluna conferida no banco.
 
 **Fase 2 — Indicadores e fluxo:** 0 de 5
 - [ ] 2.1 Indicadores

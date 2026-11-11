@@ -297,7 +297,7 @@ describe('1.6 — avisos de premissa', () => {
         const r = computeImovibMath(baseStudy({ revenue_handover_percent: 20 }));
         const aviso = r.avisos.find(a => a.codigo === 'recebimento_nao_soma_100');
         expect(aviso).toBeDefined();
-        expect(aviso!.aba).toBe('funding');
+        expect(aviso!.aba).toBe('receitas');
     });
 
     it('estudo sem preço de venda gera aviso', () => {
@@ -308,5 +308,83 @@ describe('1.6 — avisos de premissa', () => {
 
     it('estudo sem área gera aviso', () => {
         expect(computeImovibMath(baseStudy({ blocks: [] })).avisos.some(a => a.codigo === 'sem_area')).toBe(true);
+    });
+});
+
+describe('1.4 — curva de vendas e recebimento por safra no motor', () => {
+    const totalRev = (r: ReturnType<typeof computeImovibMath>) => sum(r.monthlyFlows.map(f => f.rev));
+
+    it('curva VSO de 3% em 24 meses deixa estoque, avisa e recebe menos que a linear', () => {
+        const linear = computeImovibMath(baseStudy());
+        const vso = computeImovibMath(baseStudy({ sales_curve_type: 'vso', sales_vso_percent: 3 }));
+        expect(vso.estoqueNaoVendidoPct).toBeCloseTo(Math.pow(0.97, 24), 9);
+        expect(vso.avisos.map(a => a.codigo)).toContain('estoque_nao_vendido');
+        expect(totalRev(vso)).toBeLessThan(totalRev(linear));
+        expect(linear.estoqueNaoVendidoPct).toBe(0);
+    });
+
+    it('pós-chaves de 20% em 60 meses estende o fluxo além da obra e das vendas', () => {
+        const r = computeImovibMath(baseStudy({ revenue_handover_percent: 50, revenue_post_handover_percent: 20, post_handover_months: 60 }));
+        expect(r.duration).toBeGreaterThan(29);
+        expect(r.duration).toBe(29 + 60);
+        expect(r.monthlyFlows[r.duration - 1].linhas.receitaPosChaves).toBeGreaterThan(0);
+    });
+
+    it('distrato: devolver mais derruba o VPL; revender o distratado melhora', () => {
+        const comDistrato = { cancellation_rate_percent: 10, cancellation_lag_months: 6 };
+        const devolve25 = computeImovibMath(baseStudy({ ...comDistrato, cancellation_refund_percent: 25, cancellation_resale: false }));
+        const devolve75 = computeImovibMath(baseStudy({ ...comDistrato, cancellation_refund_percent: 75, cancellation_resale: false }));
+        const revende = computeImovibMath(baseStudy({ ...comDistrato, cancellation_refund_percent: 75, cancellation_resale: true }));
+        expect(devolve75.vpl).toBeLessThan(devolve25.vpl);
+        expect(revende.vpl).toBeGreaterThan(devolve75.vpl);
+        expect(sum(devolve75.monthlyFlows.map(f => f.linhas.devolucaoDistrato))).toBeLessThan(0);
+    });
+
+    it('inadimplência reduz parcelas, intermediárias e pós-chaves; sinal e repasse não', () => {
+        const total = (r: ReturnType<typeof computeImovibMath>, k: 'receitaSinal' | 'receitaParcelasObra' | 'receitaRepasse') =>
+            sum(r.monthlyFlows.map(f => f.linhas[k]));
+        const sem = computeImovibMath(baseStudy());
+        const com = computeImovibMath(baseStudy({ default_rate_percent: 10 }));
+        expect(total(com, 'receitaSinal')).toBeCloseTo(total(sem, 'receitaSinal'), 4);
+        expect(total(com, 'receitaRepasse')).toBeCloseTo(total(sem, 'receitaRepasse'), 4);
+        expect(total(com, 'receitaParcelasObra')).toBeCloseTo(0.9 * total(sem, 'receitaParcelasObra'), 4);
+    });
+
+    it('índice da obra acima do das vendas derruba o VPL; vazios seguem a inflação geral', () => {
+        const igual = computeImovibMath(baseStudy({ inflation_rate: 0.4 }));
+        const obraMaior = computeImovibMath(baseStudy({ inflation_rate: 0.4, cost_index_rate_monthly: 0.8 }));
+        const explicito = computeImovibMath(baseStudy({ inflation_rate: 0.4, cost_index_rate_monthly: 0.4, sales_index_rate_monthly: 0.4 }));
+        expect(obraMaior.vpl).toBeLessThan(igual.vpl);
+        expect(explicito.vpl).toBeCloseTo(igual.vpl, 6);
+    });
+
+    it('VGV líquido é a receita sem índice: com tudo vendido e perfil de 100%, é o VGV vendável', () => {
+        const r = computeImovibMath(baseStudy({ inflation_rate: 0.4 }));
+        expect(r.netVgvTotal).toBeCloseTo(40 * 70 * 10_000, 4);
+    });
+
+    it('pós-chaves com percentual e sem prazo avisa', () => {
+        const r = computeImovibMath(baseStudy({ revenue_handover_percent: 60, revenue_post_handover_percent: 10, post_handover_months: 0 }));
+        expect(r.avisos.map(a => a.codigo)).toContain('pos_chaves_sem_prazo');
+    });
+});
+
+describe('1.4 (revisão) — distrato custa dinheiro com os padrões', () => {
+    it('subir a taxa de distrato derruba o VPL (padrões: devolução 75%, revenda com deságio de 10%)', () => {
+        const vpl = (taxa: number) => computeImovibMath(baseStudy({ cancellation_rate_percent: taxa })).vpl;
+        expect(vpl(10)).toBeLessThan(vpl(0));
+        expect(vpl(30)).toBeLessThan(vpl(10));
+    });
+
+    it('vendas depois das chaves não distratam, e o motor avisa', () => {
+        const r = computeImovibMath(baseStudy({ cancellation_rate_percent: 10, construction_start_month: 1, sales_duration_months: 36 }));
+        const aviso = r.avisos.find(a => a.codigo === 'distrato_parcial');
+        expect(aviso?.aba).toBe('receitas');
+        expect(aviso?.mensagem).toMatch(/36,11%/); // 13 de 36 meses de venda (24 a 36) caem nas chaves (mês 24) ou depois
+    });
+
+    it('sem distrato, ou com todas as vendas antes das chaves, não avisa', () => {
+        expect(computeImovibMath(baseStudy({ cancellation_rate_percent: 0, sales_duration_months: 36, construction_start_month: 1 })).avisos.map(a => a.codigo)).not.toContain('distrato_parcial');
+        expect(computeImovibMath(baseStudy({ cancellation_rate_percent: 10 })).avisos.map(a => a.codigo)).not.toContain('distrato_parcial');
     });
 });

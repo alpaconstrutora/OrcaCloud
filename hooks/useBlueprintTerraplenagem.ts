@@ -30,6 +30,42 @@ export interface PlatoDaCasaParaGravar {
 }
 
 /**
+ * 11/11/2026: o platô que ESTAVA na premissa antes de a casa gravar o dela — `aplicarPlatoDaCasa` devolve, e
+ * `restaurarPlato` grava de volta quando o Ctrl+Z desfaz a casa (o lote do editor não alcança esta premissa).
+ */
+export interface PlatoAnterior {
+  base: BaseDoPlato;
+  cotaPlatoM: number | null;
+  inclinacao: InclinacaoDoPlato | null;
+  anelPlato: Point[] | null;
+  taludePorAresta: ParametrosDeTerraplenagem['taludePorAresta'];
+}
+
+/** O lançamento da casa que gravou um platô: o modelo de antes e o de depois do lote, e os dois platôs. */
+export interface PlatoDaCasaLancado<M> {
+  antes: M;
+  /** `null` até o editor mostrar o modelo do lote (o primeiro modelo diferente do `antes`). */
+  depois: M | null;
+  gravado: PlatoDaCasaParaGravar;
+  anterior: PlatoAnterior;
+  /** O platô da casa está gravado agora? */
+  ativo: boolean;
+}
+
+/**
+ * 11/11/2026: o Ctrl+Z da casa desfaz também o platô. O histórico do editor devolve as MESMAS referências de modelo
+ * (`ModelHistory` guarda os estados), então voltar ao modelo de ANTES do lote = a casa foi desfeita → restaurar o platô
+ * anterior; voltar ao de DEPOIS (Ctrl+Y) → regravar o da casa. Qualquer outro modelo (edições depois do lançamento) não
+ * mexe no platô. Pura: devolve o registro novo e a ação.
+ */
+export function passoDoPlatoDaCasa<M>(r: PlatoDaCasaLancado<M>, atual: M): { registro: PlatoDaCasaLancado<M>; acao: 'RESTAURAR' | 'REGRAVAR' | null } {
+  if (r.depois === null) return { registro: atual === r.antes ? r : { ...r, depois: atual }, acao: null };
+  if (r.ativo && atual === r.antes) return { registro: { ...r, ativo: false }, acao: 'RESTAURAR' };
+  if (!r.ativo && atual === r.depois) return { registro: { ...r, ativo: true }, acao: 'REGRAVAR' };
+  return { registro: r, acao: null };
+}
+
+/**
  * A premissa de terraplenagem do estudo: base e cota do platô; talude,
  * empolamento e contração (fase 3); banqueta, via de serviço, talude por
  * aresta e as linhas desenhadas do perfil (fases 4 e 5); muro por aresta e
@@ -77,8 +113,13 @@ export interface Terraplenagem {
    * explícita da premissa (nunca por abrir a tela).
    */
   definirAnelEmUso: (anel: Point[] | null) => void;
-  /** F25: o "Lançar" da casa automática grava o platô dela (base CASA, cota, anel, muros) de uma vez. */
-  aplicarPlatoDaCasa: (p: PlatoDaCasaParaGravar) => void;
+  /**
+   * F25: o "Lançar" da casa automática grava o platô dela (base CASA, cota, anel, muros) de uma vez. Devolve o platô
+   * que estava antes (11/11/2026), para o Ctrl+Z da casa voltar a ele com `restaurarPlato`.
+   */
+  aplicarPlatoDaCasa: (p: PlatoDaCasaParaGravar) => PlatoAnterior;
+  /** 11/11/2026: grava de volta o platô de antes da casa (o Ctrl+Z que desfez a casa). */
+  restaurarPlato: (a: PlatoAnterior) => void;
 }
 
 /** O JSON parcial gravado, completado com o padrão (e sem chaves estranhas). */
@@ -443,7 +484,8 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
   }, []);
 
   const aplicarPlatoDaCasa = useCallback(
-    (p: PlatoDaCasaParaGravar) => {
+    (p: PlatoDaCasaParaGravar): PlatoAnterior => {
+      const anterior: PlatoAnterior = { base, cotaPlatoM, inclinacao: inclinacaoRef.current, anelPlato: anelCasaRef.current, taludePorAresta: parametros.taludePorAresta };
       const anel = p.anel.map((q) => ({ x: Math.round(q.x), y: Math.round(q.y) }));
       const parametrosNovos = { ...parametros, taludePorAresta: p.taludePorAresta ?? [] };
       anelCasaRef.current = anel;
@@ -454,6 +496,22 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
       inclinacaoRef.current = null;
       setParametrosLocal(parametrosNovos);
       persistir(premissa('CASA', p.cotaPlatoM, parametrosNovos, linhasDoPerfil, drenagem));
+      return anterior;
+    },
+    [persistir, premissa, base, cotaPlatoM, parametros, linhasDoPerfil, drenagem],
+  );
+
+  const restaurarPlato = useCallback(
+    (a: PlatoAnterior) => {
+      const parametrosNovos = { ...parametros, taludePorAresta: a.taludePorAresta };
+      anelCasaRef.current = a.anelPlato;
+      setAnelPlato(a.anelPlato);
+      setBaseLocal(a.base);
+      setCotaLocal(a.cotaPlatoM);
+      setInclinacaoLocal(a.inclinacao);
+      inclinacaoRef.current = a.inclinacao;
+      setParametrosLocal(parametrosNovos);
+      persistir(premissa(a.base, a.cotaPlatoM, parametrosNovos, linhasDoPerfil, drenagem));
     },
     [persistir, premissa, parametros, linhasDoPerfil, drenagem],
   );
@@ -462,6 +520,7 @@ export function useBlueprintTerraplenagem(studyId: string, organizationId: strin
     anelPlato,
     definirAnelEmUso,
     aplicarPlatoDaCasa,
+    restaurarPlato,
     base,
     setBase,
     cotaPlatoM,

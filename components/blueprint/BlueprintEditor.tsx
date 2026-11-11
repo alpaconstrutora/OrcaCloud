@@ -622,7 +622,7 @@ import { lotesParaCasas, modeloDoLote, programaDoLote } from '../../utils/bluepr
 import { criarPlantaDaCasaDoLote, plantasDosLotes } from '../../services/blueprintCasasDoLoteamentoService';
 import type { PedidoDaCasa } from '../../utils/blueprintCasaAutomatica';
 import type { ProgramaCurtoDaCasa } from '../../utils/blueprintPrograma';
-import { SUBIDA_DO_ALIMENTADOR_DA_CASA, conferirPlanoDaCasa, esgotoDaCasaNoModelo, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
+import { SUBIDA_DO_ALIMENTADOR_DA_CASA, assinaturaDoPedidoDaCasa, conferirPlanoDaCasa, esgotoDaCasaNoModelo, faixaDaAguaQuenteDaCasaNoModelo, forroDaAguaDaCasa, forroEletricoDaCasa, motivoParaNaoGerar as motivoParaNaoGerarACasa } from '../../utils/blueprintCasaAutomatica';
 import { hipotesesDasPremissas } from '../../utils/blueprintPremissasDaCasa';
 import { PROGRAMA_CURTO_PADRAO, programaCurtoDaUnidade } from '../../utils/blueprintPrograma';
 import { produtoDoEmpreendimento } from '../../utils/blueprintProdutoDoEmpreendimento';
@@ -695,7 +695,7 @@ import {
   nomeDoArquivoDeTopografia,
   svgDoPerfil,
 } from '../../utils/blueprintTopografiaExport';
-import { novoIdDeDrenagem, useBlueprintTerraplenagem } from '../../hooks/useBlueprintTerraplenagem';
+import { novoIdDeDrenagem, passoDoPlatoDaCasa, useBlueprintTerraplenagem, type PlatoDaCasaLancado } from '../../hooks/useBlueprintTerraplenagem';
 import { useBlueprintProjetoExecutivo } from '../../hooks/useBlueprintProjetoExecutivo';
 import {
   EXECUTIVO_PADRAO,
@@ -9162,20 +9162,43 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
   }, [levelId, casa, montarPedidoDaCasa, editor.model, terreno, limitesDoNivel, casaDoEstudo.premissas.curto]);
   /** A trava, só com a tela aberta: o lote recria os mesmos ids no desenho de agora? */
   const provaDaCasa = useMemo(() => (telaAberta === 'casa' && casa.plano ? conferirPlanoDaCasa(editor.model, casa.plano) : null), [telaAberta, casa.plano, editor.model]);
-  // O CUB do padrão escolhido, na UF do produto (ou da cidade da zona) — o custo da prévia.
+  /**
+   * 11/11/2026: a prévia é VELHA quando o pedido de agora tem outra assinatura (programa, hipóteses, zona, premissas das
+   * disciplinas, chuva, topografia) — lançar gravaria a casa das premissas antigas. O desenho fica com a trava acima.
+   */
+  const previaDaCasaVelha = useMemo(() => {
+    if (telaAberta !== 'casa' || !casa.plano || !casa.assinatura || !levelId) return false;
+    return assinaturaDoPedidoDaCasa(montarPedidoDaCasa(editor.model, levelId, terreno, limitesDoNivel, casaDoEstudo.premissas.curto)) !== casa.assinatura;
+  }, [telaAberta, casa.plano, casa.assinatura, levelId, montarPedidoDaCasa, editor.model, terreno, limitesDoNivel, casaDoEstudo.premissas.curto]);
+  /**
+   * 11/11/2026: o platô que o último "Lançar" da casa gravou na terraplenagem — o lote do editor não o alcança, então o
+   * Ctrl+Z que volta ao modelo de antes da casa restaura o platô anterior, e o Ctrl+Y que refaz a casa o regrava.
+   */
+  const platoDaCasaLancado = useRef<PlatoDaCasaLancado<BlueprintModel> | null>(null);
+  useEffect(() => {
+    const r = platoDaCasaLancado.current;
+    if (!r) return;
+    const { registro, acao } = passoDoPlatoDaCasa(r, editor.model);
+    platoDaCasaLancado.current = registro;
+    if (acao === 'RESTAURAR') terraplenagem.restaurarPlato(r.anterior);
+    else if (acao === 'REGRAVAR') terraplenagem.aplicarPlatoDaCasa(r.gravado);
+  }, [editor.model]); // eslint-disable-line react-hooks/exhaustive-deps
+  // O CUB do padrão DA PRÉVIA (11/11/2026: a área é dela; sem prévia, o do formulário), na UF do produto (ou da cidade
+  // da zona) — o custo da prévia.
   const [cubDaCasa, setCubDaCasa] = useState<CubDoPadrao | null>(null);
+  const padraoDoCubDaCasa = casa.curtoDoPlano?.padrao ?? casaDoEstudo.premissas.curto.padrao;
   // UF do CUB: a do produto, a da cidade da zona, a da ficha do empreendimento — e só então o padrão.
   const ufDaCasa = ufDoProduto || zona.cidade?.state_code || dadosDaFicha.uf || 'MG';
   useEffect(() => {
     if (telaAberta !== 'casa') return;
     let vivo = true;
-    cubDoPadrao(ufDaCasa, casaDoEstudo.premissas.curto.padrao)
+    cubDoPadrao(ufDaCasa, padraoDoCubDaCasa)
       .then((c) => vivo && setCubDaCasa(c))
       .catch(() => vivo && setCubDaCasa(null));
     return () => {
       vivo = false;
     };
-  }, [telaAberta, ufDaCasa, casaDoEstudo.premissas.curto.padrao]);
+  }, [telaAberta, ufDaCasa, padraoDoCubDaCasa]);
   // As Torres & Unidades do Empreendimento ligado ao estudo — a Casa preenche o programa pela unidade e o Produto
   // da massa monta o mix por elas (25/10/2026: um hook para as duas telas; era um efeito só da Casa).
   const empreendimentoDaCasa = empreendimentoVinculado?.id || zona.empreendimentoId || empreendimentoSugerido || null;
@@ -12630,22 +12653,33 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             motivoParaNaoGerar={motivoParaNaoGerarCasa}
             onGerar={gerarCasa}
             prova={provaDaCasa}
+            desatualizada={previaDaCasaVelha}
             lancado={lancadoCasa}
             onLancar={async () => {
               const plano = casa.plano;
               if (!plano) return;
               const prova = conferirPlanoDaCasa(editor.model, plano);
               if (!prova.ok) throw new Error(prova.motivo);
+              const antes = editor.model;
               const criados = editor.runBatch(plano.comandos);
-              // F25: o platô da casa vai para a aba de terraplenagem (base "sob a casa", a cota, os muros por borda).
+              // 11/11/2026: lote recusado pelo editor (trava de outra pessoa, somente leitura) não cria nada — sem isto o
+              // platô era gravado mesmo assim e a mensagem dizia "0 elemento(s) lançados".
+              if (criados.length === 0 && plano.criados.length > 0) throw new Error('O editor recusou o lote — nada foi lançado (veja o aviso no editor).');
+              // F25: o platô da casa vai para a aba de terraplenagem (base "sob a casa", a cota, os muros por borda); o
+              // registro faz o Ctrl+Z da casa desfazê-lo junto (11/11/2026).
               const plato = plano.resumo.terraplenagem;
-              if (plato) terraplenagem.aplicarPlatoDaCasa({ anel: plato.platoNoMundo, cotaPlatoM: plato.cotaDoPlatoM, taludePorAresta: plato.parametros.taludePorAresta });
+              if (plato) {
+                const gravado = { anel: plato.platoNoMundo, cotaPlatoM: plato.cotaDoPlatoM, taludePorAresta: plato.parametros.taludePorAresta };
+                const anterior = terraplenagem.aplicarPlatoDaCasa(gravado);
+                platoDaCasaLancado.current = { antes, depois: null, gravado, anterior, ativo: true };
+              } else platoDaCasaLancado.current = null;
               setLancadoCasa(`${criados.length} elemento(s) lançados num lote só${plano.sobrado ? ', no térreo e no pavimento superior (criado agora)' : ''} — Ctrl+Z desfaz tudo. Volte ao editor para ver a casa.`);
             }}
             onCriarAlternativa={async () => {
               const plano = casa.plano;
               if (!plano) return;
-              const c = casaDoEstudo.premissas.curto;
+              // 11/11/2026: o nome é o da PRÉVIA (o formulário pode ter mudado depois de gerar).
+              const c = casa.curtoDoPlano ?? casaDoEstudo.premissas.curto;
               await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome: `Casa automática — ${c.dormitorios} dorm., ${c.padrao}`, descricao: plano.escolha ?? undefined, model: plano.resultado });
               await recarregarRamos();
               setTelaAberta('alternativas');

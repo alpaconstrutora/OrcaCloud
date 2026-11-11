@@ -31,7 +31,7 @@
  */
 import { HIPOTESES_DA_TERRAPLENAGEM_DA_CASA_PADRAO, platoDaCasa, type HipotesesDaTerraplenagemDaCasa, type ResumoDaTerraplenagem } from './blueprintPlatoDaCasa';
 import { HIPOTESES_DO_MURO_DA_CASA_PADRAO, planejarMuroDaCasa, type HipotesesDoMuroDaCasa, type PlanoDoMuroDaCasa } from './blueprintMuroDaCasa';
-import { DIMENSAO_DA_VAGA, TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
+import { DIMENSAO_DA_VAGA, TIPO_NBR5410_DO_USO, applyBatch, conflitosDoModelo, distanciaEntreEixos3D, envelopeDoTrecho, medirEscada, pavimentosDoNucleo, point, pointInPolygon, polygonArea, snapshotHash, stableStringify, uidDeterministico, type BlueprintModel, type Boundary, type Command, type ObjectId, type CamadaParede, type Point, type SpaceLabel, type Trecho } from './blueprintKernel';
 import { envelopeLegal, type ContextoDaMassa } from './blueprintMassa';
 import { envelopeConstrutivo } from './blueprintTerreno';
 import { recuosEfetivos } from './blueprintZonaUrbanistica';
@@ -3802,5 +3802,18 @@ export interface PedidoDaCasa {
 export function planejarCasaDoPedido(pedido: PedidoDaCasa, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const leitorDoTerreno = pedido.terreno ? { cotaEmM: amostradorDaGrade(pedido.terreno.grade), cotaZeroM: pedido.terreno.cotaZeroM } : null;
   return planejarCasa(pedido.original, { ...pedido.entrada, leitorDoTerreno, gradeDoTerreno: pedido.terreno?.grade ?? null }, pedido.hip, opcoes);
+}
+
+/**
+ * A ASSINATURA do pedido (11/11/2026): tudo o que a casa lê FORA do desenho — programa, hipóteses, zona, premissas das
+ * disciplinas, chuva, catálogo de evaporadoras, materiais, topografia. A prévia gerada com uma assinatura e a tela com
+ * outra = prévia VELHA: as premissas mudaram depois de gerar, e lançar gravaria a casa das premissas antigas. O desenho
+ * (o modelo, o lote, o pavimento) fica de fora: quem o confere é `conferirPlanoDaCasa`, pelo hash do resultado. Chaves
+ * em ordem (`stableStringify`): a mesma premissa relida do banco em outra ordem não vira "mudou".
+ */
+export function assinaturaDoPedidoDaCasa(pedido: PedidoDaCasa): string {
+  const { levelId: _nivel, ctx, ...entrada } = pedido.entrada;
+  const { terreno: _terreno, limites: _limites, ...zona } = ctx;
+  return stableStringify({ entrada, zona, hip: pedido.hip, terreno: pedido.terreno });
 }
 

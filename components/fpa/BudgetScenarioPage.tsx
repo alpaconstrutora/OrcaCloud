@@ -166,7 +166,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
                 <select 
                   value={selectedBaseId} 
                   onChange={(e) => setSelectedBaseId(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm font-bold focus:border-indigo-500 outline-none"
+                  className="w-full border-2 border-slate-200 rounded-[6px] h-9 px-3 text-sm font-bold focus:border-indigo-500 outline-none"
                 >
                   <option value="">Selecione a base...</option>
                   {originalBudgets.map(ob => (
@@ -182,7 +182,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
                   value={newScenarioName}
                   onChange={(e) => setNewScenarioName(e.target.value)}
                   placeholder="Ex: Cenário Otimista 2027"
-                  className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm font-bold focus:border-indigo-500 outline-none"
+                  className="w-full border-2 border-slate-200 rounded-[6px] h-9 px-3 text-sm font-bold focus:border-indigo-500 outline-none"
                 />
               </div>
 
@@ -192,7 +192,7 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
                   <select 
                     value={scenarioType} 
                     onChange={(e) => setScenarioType(e.target.value as any)}
-                    className="w-full border-2 border-slate-200 rounded-lg p-2.5 text-sm font-bold focus:border-indigo-500 outline-none"
+                    className="w-full border-2 border-slate-200 rounded-[6px] h-9 px-3 text-sm font-bold focus:border-indigo-500 outline-none"
                   >
                     <option value="OPTIMISTIC">Otimista</option>
                     <option value="PESSIMISTIC">Pessimista</option>
@@ -206,9 +206,9 @@ export const BudgetScenarioPage: React.FC<BudgetScenarioPageProps> = ({ organiza
                       type="number" 
                       value={adjustmentPercent}
                       onChange={(e) => setAdjustmentPercent(Number(e.target.value))}
-                      className="w-full border-2 border-slate-200 rounded-lg p-2.5 pl-8 text-sm font-bold focus:border-indigo-500 outline-none"
+                      className="w-full border-2 border-slate-200 rounded-[6px] h-9 px-3 pl-8 text-sm font-bold focus:border-indigo-500 outline-none"
                     />
-                    <span className="absolute left-3 top-2.5 text-slate-400 font-bold">%</span>
+                    <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-slate-400 font-bold pointer-events-none">%</span>
                   </div>
                 </div>
               </div>

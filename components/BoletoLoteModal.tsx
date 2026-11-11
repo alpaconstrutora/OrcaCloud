@@ -370,7 +370,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                 <select
                                     value={selectedProjectId}
                                     onChange={e => { setSelectedProjectId(e.target.value); setCommonApplied(false); }}
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
+                                    className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-blue-200 bg-white"
                                 >
                                     <option value="">— Sem projeto —</option>
                                     {projects.map(p => (
@@ -387,7 +387,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                     value={descricao}
                                     onChange={e => { setDescricao(e.target.value); setCommonApplied(false); }}
                                     placeholder="O que está sendo pago"
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                                    className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                                 />
                             </div>
 
@@ -399,7 +399,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                     value={observacoes}
                                     onChange={e => { setObservacoes(e.target.value); setCommonApplied(false); }}
                                     placeholder="Opcional"
-                                    className="w-full border border-gray-200 rounded-xl px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-200"
+                                    className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-blue-200"
                                 />
                             </div>
                         </div>

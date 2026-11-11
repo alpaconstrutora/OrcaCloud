@@ -740,7 +740,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                             value={form.category}
                             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
                             placeholder="Geral"
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 h-9 rounded-[6px] border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <datalist id="divergence-categories">
                             {categories.map(c => <option key={c} value={c} />)}
@@ -751,7 +751,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <select
                             value={form.projectId}
                             onChange={e => setForm(f => ({ ...f, projectId: e.target.value }))}
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 h-9 rounded-[6px] border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
                             <option value="">— Sem obra —</option>
                             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
@@ -773,7 +773,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                             <select
                                 value={form.partyKey}
                                 onChange={e => setForm(f => ({ ...f, partyKey: e.target.value }))}
-                                className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full px-3 h-9 rounded-[6px] border border-gray-200 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             >
                                 <option value="">— Sem contraparte —</option>
                                 {partyPrimary.length > 0 && (
@@ -794,7 +794,7 @@ const DivergencesPanel: React.FC<DivergencesPanelProps> = ({ organizationId, onC
                         <input
                             value={form.description}
                             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                            className="w-full px-3 py-2 rounded-lg border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full px-3 h-9 rounded-[6px] border border-gray-200 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
                 </ModalBody>

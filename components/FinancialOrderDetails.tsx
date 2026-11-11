@@ -295,7 +295,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                                 <select
                                     value={bankAccount}
                                     onChange={(e) => setBankAccount(e.target.value)}
-                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-2xl pl-12 pr-4 py-4 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
+                                    className="w-full bg-gray-50/50 border border-gray-100 rounded-[6px] pl-12 pr-4 h-9 text-sm font-bold text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all appearance-none"
                                 >
                                     <option value="">Selecione uma conta...</option>
                                     {accounts.map(acc => (

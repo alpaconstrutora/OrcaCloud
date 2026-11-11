@@ -310,14 +310,14 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                 </div>
                 <div className="flex items-center gap-3 flex-wrap">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
                     <span className="text-gray-400 text-sm">até</span>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
                     <div className="relative">
                         <Building2 className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
                         <select value={projectId} onChange={e => setProjectId(e.target.value)}
-                            className="border border-gray-200 rounded-xl pl-9 pr-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white max-w-[200px]">
+                            className="border border-gray-200 rounded-[6px] pl-9 pr-3 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white max-w-[200px]">
                             <option value="">Todas as obras</option>
                             {obras.map(o => (
                                 <option key={o.project_id} value={o.project_id}>
@@ -327,7 +327,7 @@ const DREReport: React.FC<DREReportProps> = ({ organizationId }) => {
                         </select>
                     </div>
                     <select value={regime} onChange={e => setRegime(e.target.value as RegimeContabil)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400 bg-white">
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400 bg-white">
                         <option value="CAIXA">Caixa</option>
                         <option value="COMPETENCIA">Competência</option>
                     </select>

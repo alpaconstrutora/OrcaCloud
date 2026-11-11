@@ -341,7 +341,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                             placeholder={taxes.length ? 'Selecione ou digite o tributo' : 'Ex: IRRF, PIS, COFINS...'}
                             value={form.party_name}
                             onChange={e => setForm(f => ({ ...f, party_name: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <datalist id="tributos-pagar-nomes">
                             {taxes.map(n => <option key={n} value={n} />)}
@@ -354,7 +354,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                             placeholder="Descrição do tributo"
                             value={form.description}
                             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -364,7 +364,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                                 placeholder="0,00"
                                 value={form.amount}
                                 onChange={v => setForm(f => ({ ...f, amount: v }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <div>
@@ -373,7 +373,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                                 type="date"
                                 value={form.due_date}
                                 onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
@@ -383,7 +383,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                             type="month"
                             value={form.competencia}
                             onChange={e => setForm(f => ({ ...f, competencia: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <p className="text-[11px] text-slate-400 mt-1">Mês de auferimento (usado no fechamento por competência). Padrão: mês do vencimento.</p>
                     </div>
@@ -394,7 +394,7 @@ function NovoLancamentoModal({ organizationId, tributo, onSave, onClose }: NovoM
                             placeholder="Ex: Venda de Ativo, Locação, Manual..."
                             value={form.category}
                             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
                 </div>

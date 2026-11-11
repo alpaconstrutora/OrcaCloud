@@ -49,3 +49,42 @@ export function aplicarVariacao(study: ImovibStudy, variavel: VariavelDoEstudo, 
     }
     return { study: s, options: {} };
 }
+
+/** Várias premissas variadas juntas (cenário, célula da grade, sorteio do Monte Carlo). */
+export type Choques = Partial<Record<VariavelDoEstudo, number>>;
+
+export const VARIAVEIS_DO_ESTUDO: VariavelDoEstudo[] = [
+    'preco', 'custo_obra', 'terreno', 'velocidade_vendas', 'prazo_obra', 'juros_financiamento', 'indice_obra', 'distrato',
+];
+
+export const ROTULO_DA_VARIAVEL: Record<VariavelDoEstudo, string> = {
+    preco: 'Preço de venda',
+    custo_obra: 'Custo de obra',
+    terreno: 'Custo do terreno',
+    velocidade_vendas: 'Prazo das vendas',
+    prazo_obra: 'Prazo da obra',
+    juros_financiamento: 'Juros do financiamento',
+    indice_obra: 'Índice da obra',
+    distrato: 'Distrato',
+};
+
+export const UNIDADE_DA_VARIAVEL: Record<VariavelDoEstudo, string> = {
+    preco: '%', custo_obra: '%', terreno: '%',
+    velocidade_vendas: 'meses', prazo_obra: 'meses',
+    juros_financiamento: 'p.p. a.a.', indice_obra: 'p.p. a.m.', distrato: 'p.p.',
+};
+
+/** Aplica cada choque sobre o resultado do anterior; preço e custo somam nas opções do motor. */
+export function aplicarChoques(study: ImovibStudy, choques: Choques): { study: ImovibStudy; options: ImovibMathOptions } {
+    let atual = study;
+    const options: ImovibMathOptions = {};
+    for (const v of VARIAVEIS_DO_ESTUDO) {
+        const d = choques[v];
+        if (d == null || d === 0 || !Number.isFinite(d)) continue;
+        const x = aplicarVariacao(atual, v, d);
+        atual = x.study;
+        if (x.options.vgvDelta != null) options.vgvDelta = (options.vgvDelta ?? 0) + x.options.vgvDelta;
+        if (x.options.costDelta != null) options.costDelta = (options.costDelta ?? 0) + x.options.costDelta;
+    }
+    return { study: atual === study ? { ...study } : atual, options };
+}

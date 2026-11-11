@@ -38,6 +38,7 @@
  * `frenteDePareto` separa as alternativas não dominadas em área construída
  * (menor), metros de parede (o proxy de custo — o orçamento é da E7) e nota.
  */
+import { prng } from './prng';
 import {
   applyBatch,
   emptyModel,
@@ -219,17 +220,9 @@ export interface ResultadoDoGerador {
 
 // ─── PRNG semeado ────────────────────────────────────────────────────────────
 
-/** mulberry32: 32 bits, rápido, determinístico. */
-export function prng(semente: number): () => number {
-  let a = (semente >>> 0) || 1;
-  return () => {
-    a = (a + 0x6d2b79f5) >>> 0;
-    let t = a;
-    t = Math.imul(t ^ (t >>> 15), t | 1);
-    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
+// Mora em utils/prng.ts desde a Fase 3 do plano 2026-11-11 do Imovib (o Monte
+// Carlo da viabilidade usa o mesmo gerador). Reexportado aqui para os imports antigos.
+export { prng };
 
 // ─── Geometria de apoio ──────────────────────────────────────────────────────
 

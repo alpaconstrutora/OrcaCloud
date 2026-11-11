@@ -725,7 +725,7 @@ Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/
 
 Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) aplicada em 11/11 com OK do usuário; coluna conferida no banco.
 
-**Fase 2 — Indicadores e fluxo:** 6 de 6 no código (branch `feat/imovib-fase2`); publicação espera revisão e CI
+**Fase 2 — Indicadores e fluxo:** 6 de 6 — no ar (PR #358, 1623a5ae), revisada; correções da revisão: vendas mínimas em % do VGV vendável (acima de 100% = "nem vendendo tudo"), corrida da taxa do índice, alternadores no padrão §19.1
 - [x] 2.1 Indicadores — `utils/imovibIndicadores.ts`. Razões sem base (sem VGV, sem saída) ficam vazias, não 0. Payback = último mês em que o acumulado volta a ficar ≥ 0 e assim fica.
 - [x] 2.2 Variações e pontos de equilíbrio — `utils/imovibVariacoes.ts`, `utils/imovibEquilibrio.ts`. Vendas mínimas = 100% + a variação de preço que zera o VPL (a receita do motor é linear no VGV). Cada busca < 50 ms.
 - [x] 2.3 Resumo Executivo — VPL e lucro separados; payback, múltiplo, retorno sobre o capital, mês da exposição; cartão de pontos de equilíbrio com margem-alvo editável (padrão 15%, não gravada). Sai o bloco "Simulação Completa".
@@ -735,13 +735,15 @@ Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escrit
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase2.js`): 0 escritas, 0 erros de console. No Bruninho, terreno máximo R$ 2.791.232 − terreno atual R$ 2.150.000 = R$ 641.232, o VPL do estudo (o terreno sai no mês 1, sem desconto). Achados e corrigidos: grupo "Receitas" somava impostos e corretagem (virou "Receitas e deduções"); erro de digitação no subtítulo da TIR.
 
-**Fase 3 — Risco:** 0 de 6
-- [ ] 3.1 Tornado
-- [ ] 3.2 Grade cruzada
-- [ ] 3.3 Cenários salvos
-- [ ] 3.4 Monte Carlo
-- [ ] 3.5 Matriz de riscos
-- [ ] 3.6 Testes de estresse prontos
+**Fase 3 — Risco:** 6 de 6 — revisada; migrations `aplicar_20271111900000` (cenários) e `aplicar_20271111910000` (riscos) aplicadas em 11/11 com OK do usuário (RLS pela organização do estudo, sem anon, conferido em `pg_policies`); publicação pelo PR #360
+- [x] 3.1 Tornado — 8 variáveis × 4 métricas, choques ajustáveis (hipóteses da tela, não gravadas). Revisão: uma barra por choque, colorida pelo próprio efeito (empilhar somava os dois quando caíam do mesmo lado); variável que faz a TIR sumir vai para o topo, marcada.
+- [x] 3.2 Grade cruzada — eixos de −2 a +2 vezes o choque da variável.
+- [x] 3.3 Cenários salvos — tabela comparativa, cenários padrão (UNIQUE impede duplicar), drawer (criar fecha, editar fica).
+- [x] 3.4 Monte Carlo — `prng` movido para `utils/prng.ts`. Chance de TIR abaixo da TMA sobre todos os sorteios (sem TIR e com VPL negativo conta como abaixo). Medido no navegador, Garden Cambuhy: 2.000 sorteios levavam ~7 s; com a busca da TIR acelerada (fator de desconto acumulado), 1,8 s. Padrão mantido em 2.000.
+- [x] 3.5 Matriz de riscos — StandardTable, drawer, mapa probabilidade × impacto; o texto livre continua como "Notas gerais de risco".
+- [x] 3.6 Testes de estresse prontos — uma barra por premissa e quatro atalhos; nada é gravado.
+
+Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase3.js`): aba abre sem erro com as tabelas novas, 0 escritas, 0 erros de console.
 
 **Fase 4 — Capital:** 0 de 5
 - [ ] 4.1 Financiamento à produção

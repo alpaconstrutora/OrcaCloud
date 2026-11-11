@@ -459,6 +459,34 @@ export interface ImovibCapexItem {
 
 export type ImovibCapexBase = 'vgv' | 'obra' | 'terreno';
 
+/** Cenário salvo do estudo (migration aplicar_20271111900000). `choques`: {variavel: delta}, ver utils/imovibVariacoes.ts. */
+export interface ImovibScenario {
+    id: string;
+    study_id: string;
+    name: string;
+    kind: 'pessimista' | 'otimista' | 'personalizado';
+    choques: Partial<Record<'preco' | 'custo_obra' | 'terreno' | 'velocidade_vendas' | 'prazo_obra' | 'juros_financiamento' | 'indice_obra' | 'distrato', number>>;
+    sort_order: number;
+    created_at?: string;
+}
+
+/** Risco da matriz do estudo (migration aplicar_20271111910000). */
+export interface ImovibRisk {
+    id: string;
+    study_id: string;
+    category: 'legal' | 'mercado' | 'construcao' | 'financeiro' | 'ambiental' | 'outro';
+    description: string;
+    /** 1 a 5. */
+    probability: number;
+    /** 1 a 5. */
+    impact: number;
+    mitigation?: string | null;
+    owner?: string | null;
+    status: 'aberto' | 'mitigado' | 'aceito' | 'encerrado';
+    sort_order: number;
+    created_at?: string;
+}
+
 export type ImovibCapexItemInsert = Omit<ImovibCapexItem, 'id' | 'created_at' | 'updated_at'>;
 
 // ImovibRegulatoryZone removido: o Mapa Regulatório mora no empreendimento

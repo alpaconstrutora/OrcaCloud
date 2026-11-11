@@ -7,7 +7,11 @@
 import React from 'react';
 import { cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { describe, expect, it, vi } from 'vitest';
-import TelaCasaAutomatica from '../../components/blueprint/TelaCasaAutomatica';
+// 11/11/2026: o "Voltar ao padrão" pergunta pelo `useConfirm` do app (§14) — a resposta é controlada por teste.
+const confirmar = vi.fn(async () => true);
+vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => confirmar }));
+
+import TelaCasaAutomatica, { MOTIVO_GERANDO, MOTIVO_PREVIA_VELHA } from '../../components/blueprint/TelaCasaAutomatica';
 import { emptyModel } from '../../utils/blueprintKernel';
 import { PREMISSAS_DA_CASA_PADRAO } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
@@ -44,7 +48,7 @@ const plano = {
   },
 } as unknown as PlanoDaCasa;
 
-const casa = (extra: Partial<EstadoDaCasaAutomatica> = {}): EstadoDaCasaAutomatica => ({ rodando: false, plano: null, erro: null, progresso: null, gerar: vi.fn(), cancelar: vi.fn(), limpar: vi.fn(), ...extra });
+const casa = (extra: Partial<EstadoDaCasaAutomatica> = {}): EstadoDaCasaAutomatica => ({ rodando: false, plano: null, assinatura: null, curtoDoPlano: null, erro: null, progresso: null, gerar: vi.fn(), cancelar: vi.fn(), limpar: vi.fn(), ...extra });
 
 function tela(extra: Partial<React.ComponentProps<typeof TelaCasaAutomatica>> = {}) {
   const props: React.ComponentProps<typeof TelaCasaAutomatica> = {
@@ -209,6 +213,49 @@ describe('TelaCasaAutomatica (F10)', () => {
     await waitFor(() => expect(p.onLancar).toHaveBeenCalled());
     fireEvent.click(screen.getByTestId('criar-alternativa-casa'));
     await waitFor(() => expect(p.onCriarAlternativa).toHaveBeenCalled());
+  });
+
+  it('11/11/2026: prévia velha (as premissas mudaram depois de gerar) — Lançar e Criar alternativa desligam e dizem por quê', () => {
+    tela({ casa: casa({ plano }), desatualizada: true });
+    for (const id of ['lancar-casa', 'criar-alternativa-casa']) {
+      const b = screen.getByTestId(id) as HTMLButtonElement;
+      expect(b.disabled).toBe(true);
+      expect(b.title).toBe(MOTIVO_PREVIA_VELHA);
+    }
+    expect(screen.getByText(MOTIVO_PREVIA_VELHA)).toBeTruthy();
+    cleanup();
+  });
+
+  it('11/11/2026: gerando de novo com a prévia antiga à vista — Lançar e Criar alternativa desligam até terminar', () => {
+    tela({ casa: casa({ plano, rodando: true }) });
+    for (const id of ['lancar-casa', 'criar-alternativa-casa']) {
+      const b = screen.getByTestId(id) as HTMLButtonElement;
+      expect(b.disabled).toBe(true);
+      expect(b.title).toBe(MOTIVO_GERANDO);
+    }
+    cleanup();
+  });
+
+  it('11/11/2026: o custo diz o padrão DA PRÉVIA, não o que o formulário passou a ter', () => {
+    tela({ casa: casa({ plano, curtoDoPlano: { ...PREMISSAS_DA_CASA_PADRAO.curto, padrao: 'R1-N' } }), premissas: { ...PREMISSAS_DA_CASA_PADRAO, curto: { ...PREMISSAS_DA_CASA_PADRAO.curto, padrao: 'R1-A' } } });
+    const custo = screen.getByTestId('custo-da-casa').parentElement!.textContent!;
+    expect(custo).toContain('R1-N');
+    expect(custo).not.toContain('R1-A');
+    cleanup();
+  });
+
+  it('11/11/2026: "Voltar ao padrão" pergunta antes; cancelar não muda nada; confirmar volta ao padrão e mantém a unidade ligada', async () => {
+    const premissas = { ...PREMISSAS_DA_CASA_PADRAO, unidadeId: 'u1', sementes: 3, curto: { ...PREMISSAS_DA_CASA_PADRAO.curto, dormitorios: 5 } };
+    confirmar.mockResolvedValueOnce(false);
+    const t = tela({ premissas, unidades: [{ id: 'u1', rotulo: 'Casa 1' }] });
+    fireEvent.click(screen.getByTestId('voltar-ao-padrao-casa'));
+    await waitFor(() => expect(confirmar).toHaveBeenCalledTimes(1));
+    expect(confirmar.mock.calls[0][0]).toMatchObject({ variant: 'warning' });
+    expect(t.onPremissas).not.toHaveBeenCalled();
+    confirmar.mockResolvedValueOnce(true);
+    fireEvent.click(screen.getByTestId('voltar-ao-padrao-casa'));
+    await waitFor(() => expect(t.onPremissas).toHaveBeenCalledWith({ ...PREMISSAS_DA_CASA_PADRAO, unidadeId: 'u1' }));
+    cleanup();
   });
 
   it('o número é livre enquanto se digita: o "5" de "5500" não vira 2000; sai do campo, volta para a faixa', () => {

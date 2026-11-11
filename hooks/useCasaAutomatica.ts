@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { planejarCasaDoPedido, type PedidoDaCasa, type PlanoDaCasa } from '../utils/blueprintCasaAutomatica';
+import { assinaturaDoPedidoDaCasa, planejarCasaDoPedido, type PedidoDaCasa, type PlanoDaCasa } from '../utils/blueprintCasaAutomatica';
+import type { ProgramaCurtoDaCasa } from '../utils/blueprintPrograma';
 import type { RespostaDaCasa } from '../utils/blueprintCasaAutomatica.worker';
 
 /**
@@ -11,6 +12,13 @@ import type { RespostaDaCasa } from '../utils/blueprintCasaAutomatica.worker';
 export interface EstadoDaCasaAutomatica {
   rodando: boolean;
   plano: PlanoDaCasa | null;
+  /**
+   * 11/11/2026: a assinatura do pedido que gerou o `plano` (`assinaturaDoPedidoDaCasa`) — a tela compara com a de agora
+   * e, diferente, a prévia é VELHA (as premissas mudaram). `null` sem plano.
+   */
+  assinatura: string | null;
+  /** 11/11/2026: o programa curto com que a prévia foi gerada — o custo (padrão do CUB) e o nome da alternativa são DELA. */
+  curtoDoPlano: ProgramaCurtoDaCasa | null;
   erro: string | null;
   /** A última etapa concluída (`null` antes da primeira). */
   progresso: { indice: number; total: number; rotulo: string } | null;
@@ -22,6 +30,7 @@ export interface EstadoDaCasaAutomatica {
 export function useCasaAutomatica(): EstadoDaCasaAutomatica {
   const [rodando, setRodando] = useState(false);
   const [plano, setPlano] = useState<PlanoDaCasa | null>(null);
+  const [doPlano, setDoPlano] = useState<{ assinatura: string; curto: ProgramaCurtoDaCasa } | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [progresso, setProgresso] = useState<EstadoDaCasaAutomatica['progresso']>(null);
   const worker = useRef<Worker | null>(null);
@@ -45,14 +54,17 @@ export function useCasaAutomatica(): EstadoDaCasaAutomatica {
       const minha = vez.current;
       setErro(null);
       setRodando(true);
+      const deste = { assinatura: assinaturaDoPedidoDaCasa(pedido), curto: pedido.entrada.curto };
       const receber = (r: RespostaDaCasa) => {
         if (minha !== vez.current) return;
         if (r.tipo === 'etapa') {
           setProgresso({ indice: r.indice, total: r.total, rotulo: r.etapa.rotulo });
           return;
         }
-        if (r.tipo === 'resultado') setPlano(r.plano);
-        else setErro(r.mensagem);
+        if (r.tipo === 'resultado') {
+          setPlano(r.plano);
+          setDoPlano(deste);
+        } else setErro(r.mensagem);
         setRodando(false);
         setProgresso(null);
         if (worker.current) {
@@ -90,10 +102,11 @@ export function useCasaAutomatica(): EstadoDaCasaAutomatica {
   const limpar = useCallback(() => {
     cancelar();
     setPlano(null);
+    setDoPlano(null);
     setErro(null);
   }, [cancelar]);
 
-  return { rodando, plano, erro, progresso, gerar, cancelar, limpar };
+  return { rodando, plano, assinatura: plano ? (doPlano?.assinatura ?? null) : null, curtoDoPlano: plano ? (doPlano?.curto ?? null) : null, erro, progresso, gerar, cancelar, limpar };
 }
 
 /**

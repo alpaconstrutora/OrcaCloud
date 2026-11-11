@@ -14,6 +14,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, Building2, Check, CircleDot, ClipboardList, Droplets, HelpCircle, Home, Info, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
+import { useConfirm } from '../ui/confirm';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
@@ -62,6 +63,12 @@ interface Props {
   /** Por que não dá para gerar (sem lote, sem FRENTE, pavimento com paredes…); `null` = pode. */
   motivoParaNaoGerar: string | null;
   onGerar: () => void;
+  /**
+   * 11/11/2026: a prévia é VELHA — as premissas (programa, hipóteses, zona, premissas das disciplinas, chuva) mudaram
+   * depois de gerar (`assinaturaDoPedidoDaCasa` da prévia ≠ a de agora). Lançar e Criar alternativa desligam até gerar de
+   * novo: gravariam a casa das premissas antigas.
+   */
+  desatualizada?: boolean;
   /** A trava antes de gravar: o lote recria os mesmos ids no desenho atual? */
   prova: { ok: true } | { ok: false; motivo: string } | null;
   onLancar: () => Promise<void>;
@@ -109,6 +116,9 @@ const DO_ESTADO: Record<EstadoDoPasso, { rotulo: string; cor: string; Icone: typ
   AVISO: { rotulo: 'aviso', cor: 'text-slate-600', Icone: Info },
 };
 const ONDE_RESPONDER: Partial<Record<PassoDaCasa, string>> = { LOTE: 'Abrir o lote digitado', ZONA: 'Abrir Dados do lote', UNIDADE: 'Escolher a unidade' };
+
+export const MOTIVO_PREVIA_VELHA = 'As premissas mudaram desde a prévia — gere de novo.';
+export const MOTIVO_GERANDO = 'Aguarde: a casa está sendo gerada.';
 
 const PERIODO_DA_CHUVA: Record<PeriodoDeRetorno, string> = { 1: '1 ano', 5: '5 anos (coberturas e terraços)', 25: '25 anos' };
 
@@ -191,6 +201,7 @@ const marcaCls = 'flex items-center gap-2 self-end pb-2 text-sm text-gray-700';
 
 export default function TelaCasaAutomatica(props: Props) {
   const { casa, premissas: p, onPremissas, prova, cub } = props;
+  const confirmar = useConfirm();
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<GrupoDaPendencia | null>('VERIFICACAO');
@@ -206,16 +217,22 @@ export default function TelaCasaAutomatica(props: Props) {
     rodava.current = casa.rodando;
   }, [casa.rodando, casa.plano]);
 
-  const motivoDeLancar = !plano
+  // 11/11/2026: a prévia antiga continua à vista enquanto a nova é gerada, e depois que as premissas mudam — nos dois
+  // casos lançar (ou criar a alternativa) gravaria uma casa que não é a das premissas da tela.
+  const motivoDeCriar = !plano
     ? 'Gere a prévia primeiro'
     : plano.comandos.length === 0
       ? 'A prévia não tem nada a lançar'
-      : prova && !prova.ok
-        ? prova.motivo
-        : ocupado
-          ? 'Aguarde a ação em curso'
-          : undefined;
-  const motivoDeCriar = !plano ? 'Gere a prévia primeiro' : plano.comandos.length === 0 ? 'A prévia não tem nada a lançar' : ocupado ? 'Aguarde a ação em curso' : undefined;
+      : casa.rodando
+        ? MOTIVO_GERANDO
+        : props.desatualizada
+          ? MOTIVO_PREVIA_VELHA
+          : ocupado
+            ? 'Aguarde a ação em curso'
+            : undefined;
+  const motivoDeLancar = motivoDeCriar ?? (prova && !prova.ok ? prova.motivo : undefined);
+  // O padrão do CUB é o DA PRÉVIA (a área é dela); trocar o padrão no formulário só vale depois de gerar de novo.
+  const padraoDaPrevia = casa.curtoDoPlano?.padrao ?? p.curto.padrao;
 
   const agir = async (nome: string, fn: () => Promise<void>) => {
     setOcupado(nome);
@@ -257,7 +274,7 @@ export default function TelaCasaAutomatica(props: Props) {
   // A aba escolhida que deixou de existir (gerou de novo sem furos, desligou o platô) cai no resultado.
   const abaEfetiva: Aba = abas.some((a) => a.id === aba) ? aba : plano ? 'resultado' : 'programa';
 
-  const avisoDeLancar = plano && plano.comandos.length > 0 ? (motivoDeLancar ?? motivoDeCriar) : undefined;
+  const avisoDeLancar = plano && plano.comandos.length > 0 && !casa.rodando ? motivoDeLancar : undefined;
 
   return (
     <div className="space-y-6" data-testid="tela-casa">
@@ -381,7 +398,21 @@ export default function TelaCasaAutomatica(props: Props) {
               titulo="Programa da casa"
               resumo={props.persistenciaIndisponivel ? 'as premissas valem só nesta sessão (o estudo não as guarda)' : 'guardado no estudo'}
               acoes={
-                <Button variant="secondary" onClick={() => onPremissas({ ...PREMISSAS_DA_CASA_PADRAO })}>
+                <Button
+                  variant="secondary"
+                  data-testid="voltar-ao-padrao-casa"
+                  onClick={async () => {
+                    // §14: confirmação do app. Volta TUDO o que a casa guarda — inclusive a aba Hipóteses, que não está à
+                    // vista —, menos a unidade do Empreendimento escolhida (desfazer o vínculo é a opção "Nenhuma").
+                    const ok = await confirmar({
+                      title: 'Voltar ao padrão?',
+                      message: `O programa, o que a casa leva e as hipóteses da aba Hipóteses voltam ao padrão.${p.unidadeId ? ' A unidade do Empreendimento escolhida continua ligada.' : ''}`,
+                      variant: 'warning',
+                      confirmLabel: 'Voltar ao padrão',
+                    });
+                    if (ok) onPremissas({ ...PREMISSAS_DA_CASA_PADRAO, unidadeId: p.unidadeId });
+                  }}
+                >
                   Voltar ao padrão
                 </Button>
               }
@@ -630,7 +661,7 @@ export default function TelaCasaAutomatica(props: Props) {
                 {area != null && cub ? reais(area * cub.valorM2) : '—'}
               </dd>
               <dd className="text-xs text-slate-500">
-                {cub ? `${reais(cub.valorM2)}/m² · ${p.curto.padrao}${cub.estimado ? ' · CUB estimado — confira' : cub.referencia ? ` · ${cub.referencia}` : ''}` : 'CUB indisponível'}
+                {cub ? `${reais(cub.valorM2)}/m² · ${padraoDaPrevia}${cub.estimado ? ' · CUB estimado — confira' : cub.referencia ? ` · ${cub.referencia}` : ''}` : 'CUB indisponível'}
               </dd>
             </div>
             <div className="space-y-1">

@@ -327,7 +327,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                             : cashFlowData.annualIrr > 999
                                 ? '> 999'
                                 : cashFlowData.annualIrr.toFixed(2)}% a.a.`}
-                        sub="Rentabilidade % Anualzada do projeto"
+                        sub="Do acionista, ao ano"
                         icon={<Activity className="w-4 h-4" />}
                         color="blue"
                     />

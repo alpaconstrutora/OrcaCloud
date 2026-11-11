@@ -44,7 +44,7 @@ export type GrupoDoFluxo = 'receitas' | 'custos' | 'financiamento';
 /** Linhas do fluxo agrupadas, com o rótulo usado na tela e no Excel. A ordem é a da tabela. */
 export const GRUPOS_DO_FLUXO: { id: GrupoDoFluxo; rotulo: string; linhas: { chave: keyof LinhasDoMes; rotulo: string }[] }[] = [
     {
-        id: 'receitas', rotulo: 'Receitas', linhas: [
+        id: 'receitas', rotulo: 'Receitas e deduções', linhas: [
             { chave: 'receitaSinal', rotulo: 'Sinal' },
             { chave: 'receitaParcelasObra', rotulo: 'Parcelas de obra' },
             { chave: 'receitaIntermediarias', rotulo: 'Intermediárias' },

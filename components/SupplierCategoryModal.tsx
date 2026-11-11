@@ -125,7 +125,7 @@ export const SupplierCategoryModal: React.FC<SupplierCategoryModalProps> = ({ is
 
                 <div className="flex-1 overflow-y-auto p-10 space-y-6">
                     <div className="flex items-center justify-between mb-2">
-                        <h3 className="text-xs font-bold text-gray-400 uppercase tracking-widest">Lista de Categorias</h3>
+                        <h3 className="text-xs font-bold text-gray-400">Lista de Categorias</h3>
                         {!isAdding && (
                             <button
                                 onClick={() => { setIsAdding(true); setEditingId(null); setFormData({ name: '' }); }}

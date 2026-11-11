@@ -1694,7 +1694,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   {showDetailTab('overview') && (
                     <div className="flex flex-col gap-4">
                       <div className="bg-gray-50 border border-gray-200 rounded-2xl p-4">
-                        <h4 className="text-xs font-bold text-gray-500 uppercase mb-3">Resumo de Execução</h4>
+                        <h4 className="text-xs font-bold text-gray-500 mb-3">Resumo de Execução</h4>
                         <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mb-4">
                           <div>
                             <span className="text-gray-400 block">Data Início</span>
@@ -2183,7 +2183,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
             <form onSubmit={handleCreateRequest} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Título</label>
+                <label className="text-xs font-semibold text-slate-500">Título</label>
                 <input
                   required
                   value={newRequest.title}
@@ -2194,7 +2194,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Descrição Detalhada</label>
+                <label className="text-xs font-semibold text-slate-500">Descrição Detalhada</label>
                 <textarea
                   required
                   rows={3}
@@ -2207,7 +2207,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
               <div className="grid grid-cols-2 gap-3">
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-400 uppercase font-bold">Tipo</label>
+                  <label className="text-xs font-semibold text-slate-500">Tipo</label>
                   <select
                     value={newRequest.type}
                     onChange={(e) => setNewRequest({ ...newRequest, type: e.target.value as any })}
@@ -2222,7 +2222,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                 </div>
 
                 <div className="flex flex-col gap-1.5">
-                  <label className="text-xs text-gray-400 uppercase font-bold">Prioridade</label>
+                  <label className="text-xs font-semibold text-slate-500">Prioridade</label>
                   <select
                     value={newRequest.priority}
                     onChange={(e) => setNewRequest({ ...newRequest, priority: e.target.value as any })}
@@ -2236,7 +2236,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Anexos (opcional)</label>
+                <label className="text-xs font-semibold text-slate-500">Anexos (opcional)</label>
                 <input
                   type="file"
                   multiple
@@ -2289,7 +2289,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
 
             <form onSubmit={handleSendDocument} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Arquivo</label>
+                <label className="text-xs font-semibold text-slate-500">Arquivo</label>
                 <input
                   required
                   type="file"
@@ -2299,7 +2299,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Observação (opcional)</label>
+                <label className="text-xs font-semibold text-slate-500">Observação (opcional)</label>
                 <textarea
                   rows={3}
                   value={sendDocNote}
@@ -2381,7 +2381,7 @@ export const PartnerPortal: React.FC<PartnerPortalProps> = ({ userEmail, preview
                   <User className="w-5 h-5 text-orange-600" />
                 </div>
                 <div>
-                  <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">Minha Conta</h2>
+                  <h2 className="text-lg font-black text-gray-900">Minha Conta</h2>
                   <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Dados cadastrais</p>
                 </div>
               </div>

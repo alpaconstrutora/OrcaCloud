@@ -184,7 +184,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                 <div className="p-2 border-b border-gray-100 bg-white">
                     <div className="grid grid-cols-12 gap-3 mb-4">
                         <div className="col-span-1">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Código</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Código</label>
                             <input
                                 type="text"
                                 placeholder="Ex: 98546"
@@ -194,7 +194,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             />
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Tipo</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                             <select
                                 className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchType}
@@ -206,7 +206,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Natureza</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Natureza</label>
                             <select
                                 className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchNature}
@@ -219,7 +219,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Grupo</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Grupo</label>
                             <select
                                 className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                                 value={searchGroup}
@@ -232,7 +232,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                             </select>
                         </div>
                         <div className="col-span-5">
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-1">Descrição</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
                             <div className="flex gap-2">
                                 <div className="relative flex-1">
                                     <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -268,7 +268,7 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
 
                     <div className="flex flex-wrap items-center gap-4 p-2 bg-gray-50 rounded-lg border border-gray-100 text-xs">
                         <div className="flex items-center gap-2">
-                            <label className="font-bold text-gray-400 uppercase">Base:</label>
+                            <label className="text-xs font-semibold text-slate-500">Base:</label>
                             <select
                                 className="bg-transparent font-medium text-blue-600 outline-none border-b border-dashed border-blue-200"
                                 value={searchDatabase}
@@ -284,12 +284,12 @@ const DatabasePickerModal: React.FC<DatabasePickerModalProps> = ({ isOpen, onClo
                         </div>
                         <div className="h-3 w-[1px] bg-gray-200" />
                         <div className="flex items-center gap-2">
-                            <label className="font-bold text-gray-400 uppercase">Ref:</label>
+                            <label className="text-xs font-semibold text-slate-500">Ref:</label>
                             <span className="font-medium text-blue-600">12/2025</span>
                         </div>
                         <div className="h-3 w-[1px] bg-gray-200" />
                         <div className="flex items-center gap-2">
-                            <label className="font-bold text-gray-400 uppercase">UF:</label>
+                            <label className="text-xs font-semibold text-slate-500">UF:</label>
                             <select
                                 className="bg-transparent font-medium text-blue-600 outline-none border-b border-dashed border-blue-200"
                                 value={searchLocation}

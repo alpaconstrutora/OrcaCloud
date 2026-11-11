@@ -2515,7 +2515,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             
             <form onSubmit={handleCreateWorkspace} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Fornecedor / Prestador de Serviço</label>
+                <label className="text-xs font-semibold text-slate-500">Fornecedor / Prestador de Serviço</label>
                 <select
                   required
                   value={newWorkspaceSupplierId}
@@ -2685,7 +2685,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
             
             <form onSubmit={handleShareDoc} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Documento / Projeto</label>
+                <label className="text-xs font-semibold text-slate-500">Documento / Projeto</label>
                 <select
                   required
                   value={docToShareId}
@@ -2741,7 +2741,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
 
             <form onSubmit={handleConfirmPromote} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Nome do Documento</label>
+                <label className="text-xs font-semibold text-slate-500">Nome do Documento</label>
                 <input
                   required
                   value={promoteDocName}
@@ -2751,7 +2751,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Categoria</label>
+                <label className="text-xs font-semibold text-slate-500">Categoria</label>
                 <select
                   value={promoteDocCategoria}
                   onChange={(e) => setPromoteDocCategoria(e.target.value)}
@@ -2801,7 +2801,7 @@ export const PartnerWorkspaceManager: React.FC<PartnerWorkspaceManagerProps> = (
                 do link é derivável — escolha manual aqui em vez de bloquear a ação. */}
             {!derivedTokenOrgId && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Organização responsável pelo link</label>
+                <label className="text-xs font-semibold text-slate-500">Organização responsável pelo link</label>
                 <select
                   value={tokenOrgOverride}
                   onChange={(e) => setTokenOrgOverride(e.target.value)}

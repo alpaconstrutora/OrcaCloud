@@ -778,7 +778,7 @@ const SavePlanningVersionModal: React.FC<{ onCancel: () => void; onSave: (descri
                     </Button>
                 </div>
                 <div className="px-6 py-4">
-                    <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Descrição</label>
+                    <label className="text-xs font-semibold text-slate-500">Descrição</label>
                     <input
                         autoFocus
                         value={description}
@@ -4047,7 +4047,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                         <div>
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                                                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                                <h3 className="text-xs font-bold text-gray-700">
                                                     {syncDiff.newItems.length} item(s) novo(s) no orçamento
                                                 </h3>
                                                 <span className="text-xs text-gray-400">serão adicionados sem data/duração</span>
@@ -4068,7 +4068,7 @@ export const FinancialSchedule: React.FC<FinancialScheduleProps> = ({
                                         <div>
                                             <div className="flex items-center gap-2 mb-2">
                                                 <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                                                <h3 className="text-xs font-bold text-gray-700 uppercase tracking-wide">
+                                                <h3 className="text-xs font-bold text-gray-700">
                                                     {syncDiff.changedItems.length} item(s) com duração a recalcular
                                                 </h3>
                                                 <span className="text-xs text-gray-400">quantidade alterada</span>

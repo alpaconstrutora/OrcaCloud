@@ -153,7 +153,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
 
                         {organizacoes && (
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Organização</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Organização</label>
                                 <select
                                     value={organizationId}
                                     onChange={e => setOrganizationId(e.target.value)}
@@ -173,7 +173,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                         )}
 
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Categoria</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Categoria</label>
                             <select
                                 value={category}
                                 onChange={e => setCategory(e.target.value)}
@@ -187,7 +187,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
 
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Cliente</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Cliente</label>
                                 {/* Drawers padrão do app (mesmos das células do Extrato). O estado continua
                                     sendo o NOME — é o que bank_transactions.counterparty_name guarda. */}
                                 <ClientSelect
@@ -201,7 +201,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                                 />
                             </div>
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Credor</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Credor</label>
                                 <SupplierSelect
                                     suppliers={credorRegistros}
                                     value={credorRegistros.find(s => s.name === supplierName)?.id ?? ''}
@@ -216,7 +216,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Obra / Projeto</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Obra / Projeto</label>
                             <select
                                 value={projectId}
                                 onChange={e => setProjectId(e.target.value)}
@@ -229,7 +229,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Centro de Custo</label>
                             <CostCenterSelect
                                 costCenters={costCenters}
                                 value={costCenterId}
@@ -241,7 +241,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                         </div>
 
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Plano de Contas</label>
                             {/* Mesmo drawer e mesma lista do Centro de Custo acima (accordion por nível). */}
                             <PlanoContasSelect
                                 planoContas={planoContas}

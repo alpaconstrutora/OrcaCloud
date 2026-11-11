@@ -141,7 +141,7 @@ const DatabaseManagerModal: React.FC<DatabaseManagerModalProps> = ({ isOpen, onC
 
                     {(isCreating || isEditing) && (
                         <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 space-y-3">
-                            <h4 className="text-sm font-bold text-blue-800 uppercase">
+                            <h4 className="text-sm font-bold text-blue-800">
                                 {isCreating ? 'Nova Base' : 'Editar Base'}
                             </h4>
                             <input

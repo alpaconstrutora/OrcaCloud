@@ -1653,7 +1653,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             {property.type === 'BUILDING' ? (property.address.split('-')[1]?.trim() || property.address) : (properties.find(p => p.id === property.parent_id)?.name || 'Unidade Independente')}
                         </span>
                     </div>
-                    <h3 className="text-xl font-black leading-tight mb-2 group-hover:text-blue-400 transition-colors uppercase">{property.name}</h3>
+                    <h3 className="text-xl font-black leading-tight mb-2 group-hover:text-blue-400 transition-colors">{property.name}</h3>
                     <div className="flex items-center gap-4 text-gray-300 font-bold text-xs uppercase tracking-widest">
                         <span>{property.type === 'BUILDING' ? 'Edifício' : property.type}</span>
                         <span>• {property.area} m²</span>
@@ -2505,7 +2505,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <label className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Mudar preço sugerido para</label>
+                                    <label className="text-xs font-semibold text-slate-500">Mudar preço sugerido para</label>
                                     <div className="flex gap-2">
                                         <MoneyCentsInput
                                             value={bulkPriceValue}
@@ -2557,7 +2557,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             <div className="lg:col-span-1 space-y-6 p-5 bg-gray-50 rounded-[10px] border border-gray-100">
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Velocidade de Vendas</label>
+                                        <label className="text-xs font-semibold text-slate-500">Velocidade de Vendas</label>
                                         <span className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-[6px]">{simMonthlySales} und/mês</span>
                                     </div>
                                     <input
@@ -2574,7 +2574,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                                 <div className="space-y-4">
                                     <div className="flex justify-between items-center">
-                                        <label className="text-xs font-black text-gray-400 uppercase tracking-widest">Ajuste de Preço (VGV)</label>
+                                        <label className="text-xs font-semibold text-slate-500">Ajuste de Preço (VGV)</label>
                                         <span className={`text-sm font-black px-2 py-1 rounded-[6px] ${simPriceAdjust >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
                                             {simPriceAdjust > 0 ? '+' : ''}{simPriceAdjust}%
                                         </span>

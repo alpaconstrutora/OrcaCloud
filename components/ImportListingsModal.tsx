@@ -308,7 +308,7 @@ export const ImportListingsModal: React.FC<ImportListingsModalProps> = ({
               </div>
 
               <div className="space-y-3">
-                <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
+                <h4 className="text-xs font-black text-slate-400 border-b border-slate-100 pb-1.5">
                   Mapear Colunas da Planilha
                 </h4>
                 

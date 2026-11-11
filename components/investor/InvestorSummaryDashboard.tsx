@@ -90,7 +90,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Gráfico histórico */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-1 flex items-center gap-2">
+                    <h3 className="text-sm font-black text-gray-800 mb-1 flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-blue-600" />
                         Capital Investido — Evolução Mensal
                     </h3>
@@ -135,7 +135,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
 
                 {/* Participações */}
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm flex flex-col">
-                    <h3 className="text-form-label font-bold text-gray-400 uppercase tracking-widest mb-4">Minhas Participações</h3>
+                    <h3 className="text-form-label font-bold text-gray-400 mb-4">Minhas Participações</h3>
                     {holdings.length === 0 ? (
                         <div className="flex-1 flex items-center justify-center">
                             <p className="text-xs text-gray-300 font-bold text-center">Nenhuma participação registrada</p>
@@ -168,7 +168,7 @@ const InvestorSummaryDashboard: React.FC<Props> = ({
             {/* Gráfico por projeto (só mostra se há dados) */}
             {perProjectData.length > 0 && (
                 <div className="bg-white p-6 rounded-2xl border border-gray-100 shadow-sm">
-                    <h3 className="text-sm font-black text-gray-800 uppercase tracking-widest mb-1">Capital por Empreendimento</h3>
+                    <h3 className="text-sm font-black text-gray-800 mb-1">Capital por Empreendimento</h3>
                     <p className="text-xs text-gray-400 mb-4">Aportado vs. Patrimônio estimado por obra</p>
                     <div className="h-48">
                         <ResponsiveContainer width="100%" height="100%">

@@ -174,12 +174,12 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
             {/* New Entry Form */}
             {showForm && (
                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 space-y-4">
-                    <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest flex items-center gap-2">
+                    <h3 className="text-sm font-black text-indigo-900 flex items-center gap-2">
                         <Clock className="w-4 h-4" /> Novo Registro de Ponto
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
                         <div className="col-span-2">
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Colaborador *</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Colaborador *</label>
                             <div className="relative">
                                 <select value={newEntry.employee_id} onChange={e => setNewEntry(p => ({ ...p, employee_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Selecione...</option>
@@ -189,7 +189,7 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                             </div>
                         </div>
                         <div className="col-span-2">
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Obra</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Obra</label>
                             <div className="relative">
                                 <select value={newEntry.project_id} onChange={e => setNewEntry(p => ({ ...p, project_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Sem obra</option>
@@ -201,19 +201,19 @@ const LaborTimeTracking: React.FC<LaborTimeTrackingProps> = ({ employees, projec
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Data</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Data</label>
                             <input type="date" value={newEntry.date} onChange={e => setNewEntry(p => ({ ...p, date: e.target.value }))} className={inputCls} />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Horas Normais</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Horas Normais</label>
                             <input type="number" min="0" max="24" step="0.5" value={newEntry.hours_worked} onChange={e => setNewEntry(p => ({ ...p, hours_worked: parseFloat(e.target.value) || 0 }))} className={inputCls} />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Horas Extras</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Horas Extras</label>
                             <input type="number" min="0" max="12" step="0.5" value={newEntry.overtime_hours} onChange={e => setNewEntry(p => ({ ...p, overtime_hours: parseFloat(e.target.value) || 0 }))} className={inputCls} />
                         </div>
                         <div className="col-span-2 md:col-span-3">
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Observações</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Observações</label>
                             <input value={newEntry.notes} onChange={e => setNewEntry(p => ({ ...p, notes: e.target.value }))} className={inputCls} placeholder="Nota opcional..." />
                         </div>
                     </div>

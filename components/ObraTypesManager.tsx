@@ -328,7 +328,7 @@ const ObraTypesManager: React.FC<Props> = ({ organizationId }) => {
             {/* Tipos personalizados + overrides */}
             <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="px-5 py-3 border-b border-slate-100 flex items-center justify-between">
-                <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Tipos Personalizados</h2>
+                <h2 className="text-xs font-black text-slate-500">Tipos Personalizados</h2>
                 <span className="text-xs text-slate-400">{customTypes.length} tipo{customTypes.length !== 1 ? 's' : ''}</span>
               </div>
 
@@ -355,7 +355,7 @@ const ObraTypesManager: React.FC<Props> = ({ organizationId }) => {
             {/* Tipos do sistema (não overrideados) */}
             <section className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
               <div className="px-5 py-3 border-b border-slate-100 flex items-center gap-2">
-                <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Tipos do Sistema</h2>
+                <h2 className="text-xs font-black text-slate-500">Tipos do Sistema</h2>
                 <span className="text-xs text-slate-400 ml-auto">clique no lápis para personalizar</span>
               </div>
               <ul className="divide-y divide-slate-100">

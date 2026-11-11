@@ -236,7 +236,7 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h3 className="font-black text-gray-900 text-sm uppercase tracking-wider">Planos de Vendas — {buildingName}</h3>
+                        <h3 className="font-black text-gray-900 text-sm">Planos de Vendas — {buildingName}</h3>
                         <p className="text-xs text-gray-400 font-medium mt-0.5">
                             A política comercial: desconto máximo, entrada mínima, prazo, índice e comissão. O simulador do corretor aplica estes limites.
                         </p>
@@ -299,7 +299,7 @@ export const SalesPlanManager: React.FC<Props> = ({ organizationId, buildingId, 
             {editing && (
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm space-y-5">
                     <div className="flex items-center justify-between">
-                        <h4 className="font-black text-gray-900 text-sm uppercase tracking-wider">
+                        <h4 className="font-black text-gray-900 text-sm">
                             {editing.id ? 'Editar plano' : 'Novo plano'}
                         </h4>
                         <button onClick={() => setEditing(null)} className="p-1.5 rounded-lg text-gray-400 hover:bg-gray-100"><X className="w-4 h-4" /></button>
@@ -451,7 +451,7 @@ const inputClsArea = 'w-full p-2.5 rounded-[6px] border border-gray-200 focus:bo
 
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div>
-        <label className="block text-[10px] font-black text-gray-500 uppercase tracking-wider mb-1.5">{label}</label>
+        <label className="block text-xs font-semibold text-slate-500 mb-1.5">{label}</label>
         {children}
     </div>
 );

@@ -105,7 +105,7 @@ const ContractRiskModal: React.FC<ContractRiskModalProps> = ({ isOpen, onClose, 
                 <div className="space-y-4">
                     {FACTORS.map(f => (
                         <div key={f.key} className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">{f.label}</label>
+                            <label className="text-xs font-semibold text-slate-500">{f.label}</label>
                             <div className="flex gap-2">
                                 {f.options.map((opt, idx) => (
                                     <button
@@ -126,7 +126,7 @@ const ContractRiskModal: React.FC<ContractRiskModalProps> = ({ isOpen, onClose, 
                     ))}
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Observações</label>
+                    <label className="text-xs font-semibold text-slate-500">Observações</label>
                     <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
                 </div>

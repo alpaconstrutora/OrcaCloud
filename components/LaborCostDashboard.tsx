@@ -79,7 +79,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
     if (runs.length === 0) return (
         <div className="bg-white rounded-3xl p-20 text-center border border-slate-100 shadow-sm">
             <BarChart3 className="w-16 h-16 text-slate-200 mx-auto mb-4" />
-            <h3 className="text-xl font-black text-slate-900 uppercase">Sem dados consolidados</h3>
+            <h3 className="text-xl font-black text-slate-900">Sem dados consolidados</h3>
             <p className="text-sm text-slate-400 max-w-xs mx-auto mt-2 mb-8">
                 Feche o primeiro ciclo de folha para visualizar o dashboard de custos por obra.
             </p>
@@ -97,7 +97,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
             {/* Header / Filter */}
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-100 shadow-sm">
                 <div>
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest flex items-center gap-2">
+                    <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-emerald-500" /> Analítico de Custos por Obra
                     </h3>
                     <p className="text-xs text-slate-400 font-bold uppercase mt-1">Baseado nos resultados da folha real</p>
@@ -143,7 +143,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         {/* Charts Area (CSS Based) */}
                         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-8 flex items-center gap-2">
+                            <h3 className="text-sm font-black text-slate-900 mb-8 flex items-center gap-2">
                                 <BarChart3 className="w-4 h-4 text-indigo-600" /> Comparativo por Obra
                             </h3>
                             <div className="space-y-6">
@@ -186,7 +186,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
 
                         {/* Recent Trends / List */}
                         <div className="bg-white p-8 rounded-3xl border border-slate-100 shadow-sm">
-                            <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6 flex items-center gap-2">
+                            <h3 className="text-sm font-black text-slate-900 mb-6 flex items-center gap-2">
                                 <DollarSign className="w-4 h-4 text-indigo-600" /> Detalhamento de Custos
                             </h3>
                             {/* Tabela padrão (§6.10) */}
@@ -219,7 +219,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                                     <UserCheck className="w-5 h-5" />
                                 </div>
                                 <div className="flex-1">
-                                    <h4 className="text-xs font-black text-slate-900 uppercase">Eficiência de Rateio</h4>
+                                    <h4 className="text-xs font-black text-slate-900">Eficiência de Rateio</h4>
                                     <p className="text-xs text-slate-500 font-medium">
                                         A alocação cobre {((summary.total - summary.unallocated) / summary.total * 100).toFixed(0)}% do custo total da empresa hoje.
                                     </p>

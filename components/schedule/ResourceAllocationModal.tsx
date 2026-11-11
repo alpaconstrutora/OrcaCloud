@@ -48,7 +48,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                 <div className="p-6 overflow-y-auto flex-1">
                     <div className="space-y-6">
                         <div>
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Recursos Alocados</h4>
+                            <h4 className="text-xs font-bold text-gray-400 mb-3">Recursos Alocados</h4>
                             <div className="space-y-2">
                                 {taskAllocations.map(alloc => {
                                     const role = alloc.resourceType === 'ROLE' ? schedule.resources?.roles.find(r => r.id === alloc.resourceId) : null;
@@ -88,7 +88,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                         </div>
 
                         <div className="pt-6 border-t border-gray-100">
-                            <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-3">Adicionar Novo Recurso</h4>
+                            <h4 className="text-xs font-bold text-gray-400 mb-3">Adicionar Novo Recurso</h4>
                             <form
                                 onSubmit={(e) => {
                                     e.preventDefault();
@@ -129,7 +129,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                             >
                                 <div className="space-y-4">
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Tipo de Recurso</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Tipo de Recurso</label>
                                         <div className="flex bg-gray-100 p-1 rounded-xl flex-wrap">
                                             {(['ROLE', 'WORKER', 'TEAM', 'MATERIAL', 'COST'] as const).map(type => (
                                                 <button
@@ -146,7 +146,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
 
                                     {allocationType !== 'COST' && (
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-500 uppercase ml-1">{TYPE_LABEL[allocationType]}</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">{TYPE_LABEL[allocationType]}</label>
                                             <select name="resourceId" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none bg-white text-sm">
                                                 <option value="">Selecione...</option>
                                                 {allocationType === 'ROLE' && schedule.resources?.roles.map(role => (
@@ -168,26 +168,26 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
 
                                 {allocationType === 'COST' ? (
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor Fixo (R$)</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Valor Fixo (R$)</label>
                                         <MoneyCentsInput value={custoFixo} onChange={setCustoFixo} required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" placeholder="Ex: mobilização, taxa" />
                                     </div>
                                 ) : allocationType === 'MATERIAL' ? (
                                     <div className="space-y-2">
-                                        <label className="text-xs font-bold text-gray-500 uppercase ml-1">Quantidade</label>
+                                        <label className="text-xs font-semibold text-slate-500 ml-1">Quantidade</label>
                                         <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Quantidade</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Quantidade</label>
                                             <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Horas/Dia</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Horas/Dia</label>
                                             <input name="hoursPerDay" type="number" step="0.5" defaultValue="8" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                         </div>
                                         <div className="space-y-2">
-                                            <label className="text-xs font-bold text-gray-500 uppercase ml-1">Hora Extra/Dia</label>
+                                            <label className="text-xs font-semibold text-slate-500 ml-1">Hora Extra/Dia</label>
                                             <input name="overtimeHours" type="number" step="0.5" placeholder="0" className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                         </div>
                                     </div>

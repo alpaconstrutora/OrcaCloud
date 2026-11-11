@@ -58,7 +58,7 @@ const AIInsightCard: React.FC<AIInsightCardProps> = ({
                     <div className={`p-2 rounded-xl bg-white shadow-sm ${iconStyles[type]}`}>
                         <Sparkles className="w-5 h-5" />
                     </div>
-                    <h4 className="font-black text-sm uppercase tracking-wider">{title}</h4>
+                    <h4 className="font-black text-sm">{title}</h4>
                 </div>
 
                 <p className="text-sm font-medium leading-relaxed mb-6 opacity-80">

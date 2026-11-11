@@ -101,7 +101,7 @@ const MaterialSelectionModal: React.FC<MaterialSelectionModalProps> = ({
                                 <Layers className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight">Seleção de Insumos da Composição</h3>
+                                <h3 className="text-xl font-black text-gray-900">Seleção de Insumos da Composição</h3>
                                 <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">Selecione os materiais e ajuste as quantidades para o pedido</p>
                             </div>
                         </div>

@@ -170,7 +170,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
         <form onSubmit={handleSubmit} className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
           <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Descrição</label>
+              <label className="text-xs font-semibold text-slate-500">Descrição</label>
               <textarea
                 value={form.description}
                 onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
@@ -181,7 +181,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               />
             </div>
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Severidade</label>
+              <label className="text-xs font-semibold text-slate-500">Severidade</label>
               <select
                 value={form.severity}
                 onChange={e => setForm(f => ({ ...f, severity: e.target.value as typeof form.severity }))}
@@ -193,7 +193,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               </select>
             </div>
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Prazo</label>
+              <label className="text-xs font-semibold text-slate-500">Prazo</label>
               <input
                 type="date"
                 value={form.dueDate}
@@ -202,7 +202,7 @@ const OperacionalNC: React.FC<Props> = ({ workOrderId }) => {
               />
             </div>
             <div className="col-span-2">
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Ação corretiva</label>
+              <label className="text-xs font-semibold text-slate-500">Ação corretiva</label>
               <textarea
                 value={form.correctiveAction}
                 onChange={e => setForm(f => ({ ...f, correctiveAction: e.target.value }))}

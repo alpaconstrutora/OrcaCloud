@@ -201,7 +201,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                 {/* Header */}
                 <div className="flex justify-between items-start mb-6">
                     <div>
-                        <h3 className="text-xl font-black text-slate-900 uppercase">Eventos: {employeeName}</h3>
+                        <h3 className="text-xl font-black text-slate-900">Eventos: {employeeName}</h3>
                         <div className="flex items-center gap-3 mt-1">
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Lançamento de Bônus e Descontos Manuais</p>
                             <button
@@ -224,7 +224,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                 <div className="flex-1 flex flex-col min-h-0">
                     <div className="grid grid-cols-1 md:grid-cols-12 gap-3 bg-slate-50 p-4 rounded-2xl mb-4 shadow-inner border border-slate-100">
                         <div className="md:col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Rubrica</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Rubrica</label>
                             <select
                                 value={selectedRubricCode}
                                 onChange={e => setSelectedRubricCode(e.target.value)}
@@ -239,7 +239,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             </select>
                         </div>
                         <div className="md:col-span-2">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Unidade</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Unidade</label>
                             <select
                                 value={eventUnit}
                                 onChange={e => setEventUnit(e.target.value as 'fixed' | 'days' | 'hours')}
@@ -252,7 +252,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                         </div>
                         {eventUnit !== 'fixed' && (
                             <div className="md:col-span-2 animate-in zoom-in duration-200">
-                                <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">
                                     Quantidade {eventUnit === 'days' ? '(Dias)' : '(Hrs)'}
                                 </label>
                                 <input
@@ -264,7 +264,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             </div>
                         )}
                         <div className={eventUnit === 'fixed' ? 'md:col-span-5' : 'md:col-span-3'}>
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Descrição Adicional</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição Adicional</label>
                             <input
                                 type="text" placeholder="Obs fixas ou detalhes"
                                 value={eventDescription}
@@ -273,7 +273,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             />
                         </div>
                         <div className="md:col-span-3">
-                            <label className="text-[9px] font-black text-slate-400 uppercase tracking-widest mb-1 block">Valor (R$)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Valor (R$)</label>
                             <div className="flex gap-2">
                                 <MoneyCentsInput
                                     id="payroll-event-valor"
@@ -312,7 +312,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                 {/* Conteúdo: histórico ou lançamentos */}
                 {showEventHistory ? (
                     <div className="flex-1 overflow-y-auto space-y-3 pr-2 scrollbar-hide">
-                        <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2 mb-4">Registro de Alterações</h4>
+                        <h4 className="text-xs font-black text-slate-400 pl-2 mb-4">Registro de Alterações</h4>
                         {eventHistory.length === 0 ? (
                             <div className="p-12 text-center text-slate-300 italic text-xs uppercase font-bold">Nenhum histórico registrado</div>
                         ) : (
@@ -337,7 +337,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                     <div className="flex-1 overflow-y-auto space-y-4 pr-2 scrollbar-hide">
                         {/* Verbas Automáticas */}
                         <div className="space-y-2">
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Memória de Cálculo (Automático)</h4>
+                            <h4 className="text-xs font-black text-slate-400 pl-2">Memória de Cálculo (Automático)</h4>
                             {autoItems.map(item => (
                                 <div key={item.id} className="flex items-center justify-between p-3 bg-slate-50/50 rounded-2xl border border-slate-100 opacity-60">
                                     <div>
@@ -356,7 +356,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                         {/* Recorrentes em aberto: o valor do mês ainda não foi lançado */}
                         {emAberto.length > 0 && run.status !== 'FECHADO' && (
                             <div className="space-y-2">
-                                <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Recorrentes em aberto (falta o valor do mês)</h4>
+                                <h4 className="text-xs font-black text-slate-400 pl-2">Recorrentes em aberto (falta o valor do mês)</h4>
                                 {emAberto.map(r => (
                                     <div key={r.code} className="flex items-center justify-between p-3 bg-amber-50/60 rounded-2xl border border-amber-100">
                                         <div>
@@ -380,7 +380,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
 
                         {/* Lançamentos Manuais */}
                         <div className="space-y-2">
-                            <h4 className="text-xs font-black text-slate-400 uppercase tracking-widest pl-2">Lançamentos Manuais</h4>
+                            <h4 className="text-xs font-black text-slate-400 pl-2">Lançamentos Manuais</h4>
                             {myEvents.length === 0 ? (
                                 <p className="text-center py-4 text-xs font-bold text-slate-300 uppercase italic">Nenhum evento manual lançado</p>
                             ) : (

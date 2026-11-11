@@ -137,7 +137,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
 
         <div className="space-y-3">
           <div className="space-y-1">
-            <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Projeto</label>
+            <label className="block text-xs font-semibold text-slate-500">Projeto</label>
             <div className="relative">
               <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
               <select
@@ -152,7 +152,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
 
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Tempo (Horas)</label>
+              <label className="block text-xs font-semibold text-slate-500">Tempo (Horas)</label>
               <div className="relative">
                 <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <input
@@ -163,7 +163,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
               </div>
             </div>
             <div className="space-y-1">
-              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Data da Atividade</label>
+              <label className="block text-xs font-semibold text-slate-500">Data da Atividade</label>
               <div className="relative">
                 <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <input
@@ -175,7 +175,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
           </div>
 
           <div className="space-y-1">
-            <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Atividade Realizada</label>
+            <label className="block text-xs font-semibold text-slate-500">Atividade Realizada</label>
             <input
               type="text" placeholder="Ex: Detalhamento de gesso no CAD ou Visita técnica à obra"
               value={descricaoAtividade} onChange={e => setDescricaoAtividade(e.target.value)}
@@ -198,7 +198,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <TrendingUp className="w-4 h-4 text-[#D47A55]" />
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">
+            <h2 className="text-xs font-black text-slate-500">
               Histórico — {projetoAtual?.name || 'Projeto'}
             </h2>
           </div>

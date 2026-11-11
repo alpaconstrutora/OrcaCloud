@@ -751,7 +751,7 @@ export const PriceTableManager: React.FC<Props> = ({ organizationId, buildingId,
             <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
                 <div className="flex items-center justify-between mb-4">
                     <div>
-                        <h3 className="font-black text-gray-900 text-sm uppercase tracking-wider">{cfg.title} — {buildingName}</h3>
+                        <h3 className="font-black text-gray-900 text-sm">{cfg.title} — {buildingName}</h3>
                         <p className="text-xs text-gray-400 font-medium mt-0.5">Versões com histórico; ativar grava o preço em todas as unidades de uma vez.</p>
                     </div>
                     <button

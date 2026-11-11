@@ -126,7 +126,7 @@ const FinancialClosePanel: React.FC<FinancialClosePanelProps> = ({ organizationI
         <div className="space-y-5 min-h-[500px]">
             {/* Header / seletor */}
             <div className="flex flex-wrap items-center justify-between gap-3 px-1">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                     <CalendarCheck className="w-4 h-4" />
                     Fechamento Mensal
                 </h4>

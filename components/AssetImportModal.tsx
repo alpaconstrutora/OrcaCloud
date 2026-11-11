@@ -572,7 +572,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
               {/* Informações e Instruções à Direita */}
               <div className="bg-slate-50 p-6 rounded-3xl border border-slate-100 flex flex-col justify-between">
                 <div className="space-y-4">
-                  <h4 className="font-black text-gray-800 text-xs uppercase tracking-widest">Instruções de Importação</h4>
+                  <h4 className="font-black text-gray-800 text-xs">Instruções de Importação</h4>
                   <ul className="text-xs font-medium text-gray-500 space-y-2.5">
                     <li className="flex items-start gap-2">
                       <span className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />

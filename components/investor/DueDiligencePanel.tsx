@@ -152,7 +152,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Due Diligence da Aquisição</h4>
+                    <h4 className="text-sm font-black text-gray-900">Due Diligence da Aquisição</h4>
                     <p className="text-xs text-gray-500 mt-1">Matriz de pendências — imóvel, proprietário, técnica e ambiental.</p>
                 </div>
                 <div className="flex items-center gap-2">

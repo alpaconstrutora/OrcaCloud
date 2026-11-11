@@ -117,7 +117,7 @@ const CommitteeGatePanel: React.FC<Props> = ({ opportunity, opportunityId, organ
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Comitê de Investimentos</h4>
+                    <h4 className="text-sm font-black text-gray-900">Comitê de Investimentos</h4>
                     <p className="text-xs text-gray-500 mt-1">Gates 1 a 6 — cada decisão libera a etapa seguinte do pipeline.</p>
                 </div>
                 <Button variant="ghost" size="sm" onClick={handleExportDossier} disabled={exporting} className="gap-2">

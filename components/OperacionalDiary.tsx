@@ -250,7 +250,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
 
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Campo</label>
+              <label className="text-xs font-semibold text-slate-500">Campo</label>
               <select
                 value={form.fieldCondition}
                 onChange={e => setForm(f => ({ ...f, fieldCondition: e.target.value as FieldCondition }))}
@@ -262,7 +262,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
               </select>
             </div>
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Trabalhadores presentes</label>
+              <label className="text-xs font-semibold text-slate-500">Trabalhadores presentes</label>
               <input
                 type="number"
                 min="0"
@@ -272,7 +272,7 @@ const OperacionalDiary: React.FC<Props> = ({ projectId, orgId }) => {
               />
             </div>
             <div className="col-span-2">
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Anotações gerais</label>
+              <label className="text-xs font-semibold text-slate-500">Anotações gerais</label>
               <textarea
                 value={form.generalNotes}
                 onChange={e => setForm(f => ({ ...f, generalNotes: e.target.value }))}

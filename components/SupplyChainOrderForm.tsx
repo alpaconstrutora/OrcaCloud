@@ -1656,7 +1656,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                                         <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
                                             <div className="flex items-center gap-2 px-2 shrink-0">
                                                 <Package className="w-4 h-4 shrink-0 text-blue-500" />
-                                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens do pedido</h3>
+                                                <h3 className="text-xs font-semibold text-gray-500">Itens do pedido</h3>
                                                 {/* §8 — contagem é texto simples, sem pílula/fundo/uppercase */}
                                                 {todasAsLinhas.length > 0 && (
                                                     <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
@@ -1844,7 +1844,7 @@ const SupplyChainOrderForm: React.FC<SupplyChainOrderFormProps> = ({ onBack, onS
                         {!embedded && (
                         <div className="space-y-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-6">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <CheckCircle2 className="w-4 h-4 text-green-500" />
                                     Resumo do Pedido
                                 </h3>

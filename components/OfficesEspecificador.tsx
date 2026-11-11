@@ -743,22 +743,22 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 { label: 'Foto (URL)', placeholder: 'https://images...', value: fotoUrl, setter: setFotoUrl, required: false },
               ].map(f => (
                 <div key={f.label} className="space-y-1">
-                  <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">{f.label}</label>
+                  <label className="block text-xs font-semibold text-slate-500">{f.label}</label>
                   <input type="text" placeholder={f.placeholder} value={f.value} onChange={e => f.setter(e.target.value)} className={`w-full ${CHIP}`} required={f.required} />
                 </div>
               ))}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Qtd</label>
+                  <label className="block text-xs font-semibold text-slate-500">Qtd</label>
                   <input type="number" value={quantidade} onChange={e => setQuantidade(e.target.value)} className={CHIP} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Valor Unit. (R$)</label>
+                  <label className="block text-xs font-semibold text-slate-500">Valor Unit. (R$)</label>
                   <MoneyCentsInput value={precoUnitario} onChange={v => setPrecoUnitario(v)} className={CHIP} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Status de Aprovação</label>
+                <label className="block text-xs font-semibold text-slate-500">Status de Aprovação</label>
                 <select value={statusAprovacao} onChange={e => setStatusAprovacao(e.target.value as any)} className={`w-full ${CHIP}`}>
                   <option value="PENDENTE">Pendente</option>
                   <option value="APROVADO">Aprovado</option>
@@ -766,7 +766,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Notas / Comentários</label>
+                <label className="block text-xs font-semibold text-slate-500">Notas / Comentários</label>
                 <textarea rows={2} value={comentarioCliente} onChange={e => setComentarioCliente(e.target.value)} className={`w-full ${CHIP_AREA} resize-none`} />
               </div>
             </div>
@@ -796,11 +796,11 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             </div>
             <div className="space-y-3.5">
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Nome / Prancha</label>
+                <label className="block text-xs font-semibold text-slate-500">Nome / Prancha</label>
                 <input type="text" placeholder="Ex: Prancha 02 - Layout Executivo" value={arqNome} onChange={e => setArqNome(e.target.value)} className={`w-full ${CHIP}`} required />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Extensão / Tipo</label>
+                <label className="block text-xs font-semibold text-slate-500">Extensão / Tipo</label>
                 <select value={arqTipo} onChange={e => setArqTipo(e.target.value as any)} className={`w-full ${CHIP}`}>
                   <option value="PLANTA">Modelo / Planta (DWG, SKP, RVT)</option>
                   <option value="PDF">Arquivo PDF</option>
@@ -808,7 +808,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">URL / Link do Arquivo</label>
+                <label className="block text-xs font-semibold text-slate-500">URL / Link do Arquivo</label>
                 <input type="text" placeholder="drive.google.com/..." value={arqUrl} onChange={e => setArqUrl(e.target.value)} className={`w-full ${CHIP}`} required />
               </div>
             </div>
@@ -832,16 +832,16 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
             <div className="space-y-3.5">
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Data Visita</label>
+                  <label className="block text-xs font-semibold text-slate-500">Data Visita</label>
                   <input type="date" value={rdoData} onChange={e => setRdoData(e.target.value)} className={`w-full ${CHIP}`} required />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Responsável</label>
+                  <label className="block text-xs font-semibold text-slate-500">Responsável</label>
                   <input type="text" value={rdoResponsavel} onChange={e => setRdoResponsavel(e.target.value)} className={`w-full ${CHIP}`} required />
                 </div>
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Status da Obra</label>
+                <label className="block text-xs font-semibold text-slate-500">Status da Obra</label>
                 <select value={rdoStatus} onChange={e => setRdoStatus(e.target.value as any)} className={`w-full ${CHIP}`}>
                   <option value="OK">Tudo Ok / Em Dia</option>
                   <option value="ATRASO">Atraso na entrega de material</option>
@@ -849,7 +849,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
                 </select>
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Vistoria e Ocorrências</label>
+                <label className="block text-xs font-semibold text-slate-500">Vistoria e Ocorrências</label>
                 <textarea rows={3} placeholder="Descreva os serviços realizados e o andamento geral..." value={rdoDescricao} onChange={e => setRdoDescricao(e.target.value)} className={`w-full ${CHIP_AREA} resize-none`} required />
               </div>
             </div>

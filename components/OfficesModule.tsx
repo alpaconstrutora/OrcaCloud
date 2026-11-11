@@ -206,7 +206,7 @@ export const OfficesModule: React.FC<OfficesModuleProps> = ({
         {/* Cabeçalho superior Desktop (Semelhante ao mockup de referência) */}
         <header className="hidden md:flex items-center justify-between px-6 py-4 bg-white border-b border-slate-200/50 shadow-sm shrink-0">
           <div>
-            <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest leading-none">
+            <h2 className="text-sm font-black text-slate-800 leading-none">
               {activeTab === 'DASHBOARD' && 'Painel Geral'}
               {activeTab === 'CRM' && 'Funil Comercial / CRM'}
               {activeTab === 'ESPECIFICADOR' && 'Projetos & Especificações'}

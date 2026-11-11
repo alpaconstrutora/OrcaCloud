@@ -168,7 +168,7 @@ const PublicOrderView: React.FC<Props> = ({ token }) => {
                 {/* Itens */}
                 <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
                     <div className="px-6 py-4 border-b border-gray-100">
-                        <h2 className="text-sm font-black text-gray-700 uppercase tracking-widest">Itens do Pedido</h2>
+                        <h2 className="text-sm font-black text-gray-700">Itens do Pedido</h2>
                     </div>
                     <div className="divide-y divide-gray-50">
                         {order.items?.map((item, i) => (

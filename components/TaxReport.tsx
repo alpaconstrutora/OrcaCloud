@@ -80,7 +80,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
                     {/* Resumo */}
                     <div className="bg-white border border-gray-100 rounded-3xl p-6 shadow-sm space-y-6">
-                        <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 flex items-center gap-2">
+                        <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                             <Info className="w-4 h-4" /> Resumo Consolidado
                         </h4>
                         <div>
@@ -107,7 +107,7 @@ const TaxReport: React.FC<TaxReportProps> = ({ investorContributions, activeProj
                     {/* Detalhamento */}
                     <div className="lg:col-span-2 bg-white border border-gray-100 rounded-3xl shadow-sm overflow-hidden">
                         <div className="px-8 py-6 border-b border-gray-50">
-                            <h3 className="text-sm font-black uppercase tracking-widest text-gray-900">Detalhamento por Empreendimento</h3>
+                            <h3 className="text-sm font-black text-gray-900">Detalhamento por Empreendimento</h3>
                         </div>
                         {assets.length === 0 ? (
                             <div className="p-12 text-center text-sm text-gray-400">Nenhum ativo com movimentação liquidada.</div>

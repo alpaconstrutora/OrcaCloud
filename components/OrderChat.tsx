@@ -134,7 +134,7 @@ const OrderChat: React.FC<OrderChatProps> = ({ orderId, currentUser, perfil, por
     return (
         <div className="flex flex-col h-[500px] bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-4 border-b border-gray-100 bg-gray-50/50 flex items-center justify-between">
-                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider flex items-center gap-2">
+                <h3 className="text-xs font-semibold text-gray-500 flex items-center gap-2">
                     <Send className={`w-4 h-4 ${A.icon}`} />
                     Conversa do pedido
                 </h3>

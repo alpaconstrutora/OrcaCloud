@@ -95,7 +95,7 @@ const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6
 const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
     </div>
 );
@@ -617,7 +617,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                 {/* Gráfico turnover */}
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Taxa de Turnover Mensal</h3>
+                                        <h3 className="text-xs font-black text-slate-400">Taxa de Turnover Mensal</h3>
                                         <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
                                             <span className="flex items-center gap-1"><span className="w-3 h-2 bg-amber-400 rounded-sm inline-block" />Real</span>
                                             {target?.turnover_max_pct && <span className="flex items-center gap-1"><span className="w-3 h-2 bg-red-300 rounded-sm inline-block" />Meta</span>}
@@ -628,7 +628,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                                 {/* Gráfico absenteísmo */}
                                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
                                     <div className="flex items-center justify-between mb-4">
-                                        <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest">Absenteísmo Mensal</h3>
+                                        <h3 className="text-xs font-black text-slate-400">Absenteísmo Mensal</h3>
                                         <div className="flex items-center gap-3 text-xs text-slate-400 font-bold">
                                             <span className="flex items-center gap-1"><span className="w-3 h-2 bg-rose-400 rounded-sm inline-block" />Real</span>
                                             {target?.absenteismo_max_pct && <span className="flex items-center gap-1"><span className="w-3 h-2 bg-red-300 rounded-sm inline-block" />Meta</span>}
@@ -731,7 +731,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
 
                             {/* Barras de retenção por coorte */}
                             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Taxa de Retenção por Coorte de Admissão</h3>
+                                <h3 className="text-xs font-black text-slate-400 mb-4">Taxa de Retenção por Coorte de Admissão</h3>
                                 <div className="space-y-3">
                                     {cohorts.slice(0, 18).map(c => (
                                         <SparkBar key={c.coorte_mes}
@@ -800,7 +800,7 @@ const LaborBIAnalytics: React.FC<LaborBIAnalyticsProps> = ({ orgId, employees, o
                         <>
                             {/* Barras eficiência por obra */}
                             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4">Eficiência de MO por Obra (%)</h3>
+                                <h3 className="text-xs font-black text-slate-400 mb-4">Eficiência de MO por Obra (%)</h3>
                                 <div className="space-y-3">
                                     {productivity.map(p => (
                                         <SparkBar key={p.project_id || 'sem-obra'}

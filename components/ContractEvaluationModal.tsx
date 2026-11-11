@@ -87,7 +87,7 @@ const ContractEvaluationModal: React.FC<ContractEvaluationModalProps> = ({ isOpe
                 )}
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Período de Referência</label>
+                        <label className="text-xs font-semibold text-slate-500">Período de Referência</label>
                         <input type="month" value={period} onChange={e => setPeriod(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
@@ -100,7 +100,7 @@ const ContractEvaluationModal: React.FC<ContractEvaluationModalProps> = ({ isOpe
                     {CRITERIA.map(c => (
                         <div key={c.key} className="space-y-2">
                             <div className="flex items-center justify-between">
-                                <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">{c.label}</label>
+                                <label className="text-xs font-semibold text-slate-500">{c.label}</label>
                                 <span className="text-xs text-gray-400">{c.weight}</span>
                             </div>
                             <div className="flex gap-2">
@@ -125,7 +125,7 @@ const ContractEvaluationModal: React.FC<ContractEvaluationModalProps> = ({ isOpe
                     <span className="text-sm text-gray-700">Ocorrência crítica no período (bloqueia novas contratações — Manual §17.1)</span>
                 </label>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Observações</label>
+                    <label className="text-xs font-semibold text-slate-500">Observações</label>
                     <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
                 </div>

@@ -779,7 +779,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
             )}
 
             {/* Seção Cargas */}
-            <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400 mt-4 mb-2">Esforços de Cálculo (NBR 6120)</h4>
+            <h4 className="font-bold text-xs text-slate-400 mt-4 mb-2">Esforços de Cálculo (NBR 6120)</h4>
 
             {element.tipo === 'VIGA' && (
               isContinua ? (
@@ -998,7 +998,7 @@ const ElementDimensionPanel: React.FC<Props> = ({ element, project, onBack }) =>
           {/* Detalhes Técnicos Derivados */}
           {result && (
             <div className="border-t border-slate-100 pt-4 space-y-3">
-              <h4 className="font-bold text-xs uppercase tracking-wider text-slate-400">Quantitativos Extraídos do Cálculo</h4>
+              <h4 className="font-bold text-xs text-slate-400">Quantitativos Extraídos do Cálculo</h4>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div className="bg-slate-50 border border-slate-100 rounded-2xl p-3 text-center">
                   <div className="text-xs font-black text-slate-400 uppercase tracking-wide">Volume Concreto</div>

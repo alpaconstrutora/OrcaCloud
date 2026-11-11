@@ -2867,7 +2867,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300" onClick={(e) => e.stopPropagation()}>
                         <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                             <div>
-                                <h3 className="text-lg font-black text-gray-900 uppercase">
+                                <h3 className="text-lg font-black text-gray-900">
                                     Cadastrar {registerEntityModal.kind === 'supplier' ? 'Credor' : 'Cliente'}
                                 </h3>
                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
@@ -2880,7 +2880,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         </div>
                         <div className="p-8 space-y-6">
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Nome / Razão Social</label>
+                                <label className="text-xs font-semibold text-slate-500 ml-1">Nome / Razão Social</label>
                                 <input
                                     type="text"
                                     value={registerEntityModal.name}
@@ -2892,7 +2892,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">CPF / CNPJ</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">CPF / CNPJ</label>
                                     <input
                                         type="text"
                                         value={registerEntityModal.document}
@@ -2909,7 +2909,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Tipo</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Tipo</label>
                                     <select
                                         value={registerEntityModal.type}
                                         onChange={(e) => setRegisterEntityModal(m => m && { ...m, type: e.target.value as 'PF' | 'PJ' })}
@@ -2947,7 +2947,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                     <div className="bg-white rounded-[2.5rem] w-full max-w-md shadow-2xl border border-gray-100 overflow-hidden animate-in zoom-in-95 duration-300">
                         <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                             <div>
-                                <h3 className="text-lg font-black text-gray-900 uppercase">
+                                <h3 className="text-lg font-black text-gray-900">
                                     {editingInternalTxId ? 'Editar Lançamento' : 'Novo Lançamento'}
                                 </h3>
                                 <p className="text-xs font-black text-gray-400 uppercase tracking-widest">
@@ -2967,7 +2967,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                         <div className="p-8 space-y-6">
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Data</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Data</label>
                                     <input 
                                         type="date" 
                                         value={newInternalTx.transaction_date}
@@ -2976,7 +2976,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     />
                                 </div>
                                 <div className="space-y-2">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Tipo</label>
+                                    <label className="text-xs font-semibold text-slate-500 ml-1">Tipo</label>
                                     <select 
                                         value={newInternalTx.direction}
                                         onChange={(e) => setNewInternalTx({...newInternalTx, direction: e.target.value as 'CREDIT' | 'DEBIT'})}
@@ -2988,7 +2988,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 </div>
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Valor (R$)</label>
+                                <label className="text-xs font-semibold text-slate-500 ml-1">Valor (R$)</label>
                                 <input 
                                     type="text" 
                                     value={newInternalTx.amount}
@@ -2998,7 +2998,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Descrição</label>
+                                <label className="text-xs font-semibold text-slate-500 ml-1">Descrição</label>
                                 <input 
                                     type="text" 
                                     value={newInternalTx.description}
@@ -3008,7 +3008,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                 />
                             </div>
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest ml-1">Cliente/Credor</label>
+                                <label className="text-xs font-semibold text-slate-500 ml-1">Cliente/Credor</label>
                                 <input
                                     type="text"
                                     value={newInternalTx.entity_name}
@@ -3720,7 +3720,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             Na aba Extrato o título da tela já diz isso, então não se repete. */}
                         {useAcoplada && activeView === 'pending' && (
                             <div className="flex items-center px-2 pt-2">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                                     <Download className="w-4 h-4" />
                                     Extrato
                                 </h4>
@@ -3730,7 +3730,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ? "flex flex-col md:flex-row gap-2.5 items-center p-2 border-b border-gray-100 bg-white"
                             : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
                             {!useAcoplada && (
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                            <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                                 <Download className="w-4 h-4" />
                                 Extrato Bancário
                             </h4>
@@ -4525,7 +4525,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                             ? "flex flex-wrap gap-3 items-center justify-between p-2 border-b border-gray-100 bg-white"
                             : "flex flex-wrap justify-between items-center gap-y-2 px-4"}>
                             <div className="flex flex-wrap items-center gap-4 gap-y-2">
-                                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                                <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                                     <Check className="w-4 h-4" />
                                     Lançamentos
                                 </h4>
@@ -4974,7 +4974,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             {/* Audit Logs Section */}
             {activeView === 'conciliated' && auditLogs.length > 0 && (
                 <div className="mt-8 space-y-4 animate-in slide-in-from-bottom-4 duration-500">
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] px-4 flex items-center gap-2">
+                    <h4 className="text-xs font-black text-gray-400 px-4 flex items-center gap-2">
                         <ShieldCheck className="w-4 h-4" />
                         Trilha de Auditoria Recente
                     </h4>

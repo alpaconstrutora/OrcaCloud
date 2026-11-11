@@ -389,7 +389,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
 
             <div className="bg-red-50 p-6 rounded-[2rem] border border-red-100 flex items-center justify-between">
                <div>
-                  <h3 className="text-sm font-black text-red-900 uppercase tracking-widest flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4" /> Alertas de Risco</h3>
+                  <h3 className="text-sm font-black text-red-900 flex items-center gap-2 mb-1"><AlertTriangle className="w-4 h-4" /> Alertas de Risco</h3>
                   <p className="text-xs font-bold text-red-700">Acompanhamento da esteira financeira</p>
                </div>
                <div className="flex gap-4">

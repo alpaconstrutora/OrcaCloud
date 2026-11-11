@@ -563,7 +563,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                         <div className="lg:col-span-2 space-y-6">
                             {/* General Info Card */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <FileText className="w-4 h-4 text-blue-500" />
                                     Dados da Cotação
                                 </h3>
@@ -574,7 +574,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                         Configurações do Sistema › Nomenclatura. */}
                                     {editingQuotationId && (
                                         <div className="md:col-span-2">
-                                            <label className="block text-sm font-medium text-gray-700 mb-1">Número da Cotação</label>
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Número da Cotação</label>
                                             <div className="relative">
                                                 <input
                                                     type="text"
@@ -600,7 +600,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     )}
 
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Título da Cotação</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título da Cotação</label>
                                         <input
                                             required
                                             type="text"
@@ -612,7 +612,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Obra / Orçamento</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Obra / Orçamento</label>
                                         <select
                                             required
                                             value={formData.projectId}
@@ -627,7 +627,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Prazo para Resposta</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prazo para Resposta</label>
                                         <input
                                             required
                                             type="date"
@@ -638,7 +638,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Descrição / Notas Adicionais</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição / Notas Adicionais</label>
                                         <textarea
                                             value={formData.description || ''}
                                             onChange={e => setFormData(prev => ({ ...prev, description: e.target.value }))}
@@ -649,7 +649,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Data de Entrega Desejada</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Data de Entrega Desejada</label>
                                         <input
                                             type="date"
                                             value={formData.deliveryDate}
@@ -659,7 +659,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Entrega</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Forma de Entrega</label>
                                         <select
                                             value={formData.deliveryMethod}
                                             onChange={e => setFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
@@ -670,7 +670,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Local de Entrega</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Local de Entrega</label>
                                         <input
                                             type="text"
                                             value={formData.deliveryLocation}
@@ -681,7 +681,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                     </div>
 
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Forma de Pagamento Preferencial</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Forma de Pagamento Preferencial</label>
                                         <select
                                             value={formData.paymentMethod}
                                             onChange={e => setFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
@@ -698,19 +698,19 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                                     <div className="md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-4 p-4 bg-gray-50 rounded-xl border border-gray-100 mt-2">
                                         <div>
-                                            <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-3">Condição de Pagamento</label>
-                                            <div className="flex bg-white rounded-lg p-1 border border-gray-200">
+                                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Condição de Pagamento</label>
+                                            <div className="flex h-9 bg-white rounded-[6px] p-0.5 border border-gray-200">
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Vista' }))}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                                    className={`flex-1 px-3 rounded-[4px] text-sm font-medium transition-all ${formData.paymentTermType === 'Vista' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
-                                                    À Vista
+                                                    À vista
                                                 </button>
                                                 <button
                                                     type="button"
                                                     onClick={() => setFormData(prev => ({ ...prev, paymentTermType: 'Parcelado' }))}
-                                                    className={`flex-1 py-1.5 px-3 rounded-md text-xs font-bold uppercase tracking-wider transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
+                                                    className={`flex-1 px-3 rounded-[4px] text-sm font-medium transition-all ${formData.paymentTermType === 'Parcelado' ? 'bg-indigo-600 text-white shadow-sm' : 'text-gray-700 hover:text-gray-900'}`}
                                                 >
                                                     Parcelado
                                                 </button>
@@ -719,7 +719,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                                         {formData.paymentTermType === 'Vista' ? (
                                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Prazo de Pagamento (Dias)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prazo de Pagamento (dias)</label>
                                                 <div className="relative">
                                                     <input
                                                         type="number"
@@ -728,12 +728,12 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         onChange={e => setFormData(prev => ({ ...prev, paymentDays: parseInt(e.target.value) || 0 }))}
                                                         className="w-full rounded-[6px] border border-gray-300 h-9 px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">Dias</div>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 pointer-events-none">dias</div>
                                                 </div>
                                             </div>
                                         ) : (
                                             <div className="animate-in fade-in slide-in-from-left-2 duration-300">
-                                                <label className="block text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-2">Quantidade de Parcelas</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Quantidade de Parcelas</label>
                                                 <div className="relative">
                                                     <input
                                                         type="number"
@@ -742,7 +742,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                                                         onChange={e => setFormData(prev => ({ ...prev, paymentInstallments: parseInt(e.target.value) || 1 }))}
                                                         className="w-full rounded-[6px] border border-gray-300 h-9 px-3 text-sm font-bold focus:ring-2 focus:ring-indigo-500 outline-none pr-12 bg-white"
                                                     />
-                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-bold text-gray-400 uppercase">X</div>
+                                                    <div className="absolute right-3 top-1/2 -translate-y-1/2 text-xs font-medium text-gray-500 pointer-events-none">x</div>
                                                 </div>
                                             </div>
                                         )}
@@ -753,7 +753,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                             {/* Items Section */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                         <Package className="w-4 h-4 text-blue-500" />
                                         Itens do Orçamento
                                     </h3>
@@ -869,7 +869,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                             {/* Manual Items Section */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
                                 <div className="flex items-center justify-between mb-4">
-                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                         <Plus className="w-4 h-4 text-blue-500" />
                                         Itens Manuais / Extras
                                     </h3>
@@ -953,7 +953,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
 
                             {/* Suppliers Section */}
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <Building2 className="w-4 h-4 text-blue-500" />
                                     Fornecedores Convidados
                                 </h3>
@@ -985,7 +985,7 @@ const SupplyChainQuotationForm: React.FC<SupplyChainQuotationFormProps> = ({ onB
                         {/* Summary Sidebar */}
                         <div className="space-y-6">
                             <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 sticky top-6">
-                                <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <h3 className="text-sm font-bold text-gray-900 mb-4 flex items-center gap-2">
                                     <Package className="w-4 h-4 text-blue-500" />
                                     Resumo da Solicitação
                                 </h3>

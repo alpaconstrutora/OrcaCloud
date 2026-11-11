@@ -2018,7 +2018,7 @@ const RentalsModule: React.FC<RentalsModuleProps> = ({ organizationId }) => {
                             {property.type === 'BUILDING' ? (property.address.split('-')[1]?.trim() || property.address) : (properties.find(p => p.id === property.parent_id)?.name || 'Unidade Independente')}
                         </span>
                     </div>
-                    <h3 className="text-xl font-black leading-tight mb-2 group-hover:text-blue-400 transition-colors uppercase">{property.name}</h3>
+                    <h3 className="text-xl font-black leading-tight mb-2 group-hover:text-blue-400 transition-colors">{property.name}</h3>
                     <div className="flex items-center gap-4 text-gray-300 font-bold text-xs uppercase tracking-widest">
                         <span>{property.type === 'BUILDING' ? 'Edifício' : property.type}</span>
                         <span>• {property.area} m²</span>

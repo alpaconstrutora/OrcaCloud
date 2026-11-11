@@ -904,7 +904,7 @@ const SupplierBulkCategoryModal: React.FC<SupplierBulkCategoryModalProps> = ({ c
                 </div>
 
                 <div className="px-6 py-5 space-y-3">
-                    <label className="text-xs font-bold uppercase tracking-widest text-gray-400 block">Nova categoria</label>
+                    <label className="block text-xs font-semibold text-slate-500">Nova categoria</label>
                     <input
                         type="text"
                         list="supplier-bulk-categories"

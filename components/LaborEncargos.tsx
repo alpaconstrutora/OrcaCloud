@@ -325,7 +325,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex items-center justify-between px-6 pt-6 pb-4 border-b border-slate-100">
                             <div>
-                                <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Contribuições de Terceiros / Outras Entidades</h2>
+                                <h2 className="text-sm font-black text-slate-900">Contribuições de Terceiros / Outras Entidades</h2>
                                 <p className="text-xs text-slate-400 font-medium mt-0.5">Incidem sobre a base do INSS — geram o título "Terceiros" em Tributos a Pagar</p>
                             </div>
                             <div className="flex items-center gap-2">
@@ -438,7 +438,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                     <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                         <div className="flex items-start justify-between px-6 pt-6 pb-4 border-b border-slate-100">
                             <div>
-                                <h2 className="text-sm font-black text-slate-900 uppercase tracking-widest">Encargos Patronais</h2>
+                                <h2 className="text-sm font-black text-slate-900">Encargos Patronais</h2>
                                 <p className="text-xs text-slate-400 font-medium mt-0.5">CPP, RAT e FAP desta organização — geram títulos em Tributos a Pagar. Salve no card acima.</p>
                             </div>
                             <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 rounded-xl">
@@ -529,7 +529,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                                 <Calculator className="w-5 h-5 text-indigo-600" />
                             </div>
                             <div>
-                                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Calculadora</h3>
+                                <h3 className="text-sm font-black text-slate-900">Calculadora</h3>
                                 <p className="text-xs text-slate-400 font-medium">Impacto real por competência</p>
                             </div>
                         </div>
@@ -581,7 +581,7 @@ const LaborEncargos: React.FC<LaborEncargosProps> = ({ orgId, organizations, onR
                         {/* Folha bruta — preenchida automaticamente ou editável */}
                         <div className="space-y-1.5">
                             <div className="flex items-center justify-between">
-                                <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Folha Bruta (R$)</label>
+                                <label className="text-xs font-semibold text-slate-500">Folha Bruta (R$)</label>
                                 {payrollSummary && (
                                     <button
                                         onClick={() => {

@@ -477,7 +477,7 @@ const DelaySimulator: React.FC<{
                         <>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Atividade</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Atividade</label>
                                     <select
                                         value={selectedId}
                                         onChange={e => setSelectedId(e.target.value)}
@@ -496,7 +496,7 @@ const DelaySimulator: React.FC<{
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Atraso (dias)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Atraso (dias)</label>
                                     <input
                                         type="number" min={1} max={365} value={delayDays}
                                         onChange={e => setDelayDays(Math.max(1, parseInt(e.target.value) || 1))}

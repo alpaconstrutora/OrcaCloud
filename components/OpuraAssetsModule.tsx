@@ -1739,7 +1739,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Obras com ativos */}
                 <div className="lg:col-span-2 bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                  <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">Localização de Ativos por Projeto</h3>
+                  <h3 className="font-black text-gray-800 text-sm mb-4">Localização de Ativos por Projeto</h3>
                   <div className="space-y-4">
                     {projects.map(proj => {
                       const count = assets.filter(a => a.current_project_id === proj.id).length;
@@ -1782,7 +1782,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
                 {/* Reservas Ativas */}
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm">
-                  <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider mb-4">Próximas Reservas</h3>
+                  <h3 className="font-black text-gray-800 text-sm mb-4">Próximas Reservas</h3>
                   <div className="space-y-3">
                     {reservations.slice(0, 5).map(res => {
                       const asset = assets.find(a => a.id === res.asset_id);
@@ -2959,7 +2959,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
             <form onSubmit={handleMoveAsset} className="space-y-4 text-xs font-semibold">
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Projeto de Destino</label>
+                <label className="text-xs font-semibold text-slate-500">Projeto de Destino</label>
                 {/* Sem `required`: a opção "Sede" tem valor "" e o navegador
                     recusava o envio — não dava para devolver o bem à central. */}
                 <select
@@ -2975,7 +2975,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Notas da Transferência</label>
+                <label className="text-xs font-semibold text-slate-500">Notas da Transferência</label>
                 <textarea
                   value={moveForm.notes}
                   onChange={(e) => setMoveForm(prev => ({ ...prev, notes: e.target.value }))}
@@ -3023,7 +3023,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
             <form onSubmit={handleReserveAsset} className="space-y-4 text-xs font-semibold">
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Obra Reservista</label>
+                <label className="text-xs font-semibold text-slate-500">Obra Reservista</label>
                 <select
                   required
                   value={reserveForm.project_id}
@@ -3038,7 +3038,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Colaborador Responsável</label>
+                <label className="text-xs font-semibold text-slate-500">Colaborador Responsável</label>
                 <select
                   value={reserveForm.responsible_employee_id}
                   onChange={(e) => setReserveForm(prev => ({ ...prev, responsible_employee_id: e.target.value }))}
@@ -3053,7 +3053,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Início</label>
+                  <label className="text-xs font-semibold text-slate-500">Data de Início</label>
                   <input
                     type="date"
                     required
@@ -3063,7 +3063,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Término</label>
+                  <label className="text-xs font-semibold text-slate-500">Data de Término</label>
                   <input
                     type="date"
                     required
@@ -3075,7 +3075,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Notas de Reserva</label>
+                <label className="text-xs font-semibold text-slate-500">Notas de Reserva</label>
                 <textarea
                   value={reserveForm.notes}
                   onChange={(e) => setReserveForm(prev => ({ ...prev, notes: e.target.value }))}
@@ -3350,7 +3350,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
             <form onSubmit={handleFinalizeMaintenance} className="space-y-4 text-xs font-semibold">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Execução Real</label>
+                  <label className="text-xs font-semibold text-slate-500">Data de Execução Real</label>
                   <input
                     type="date"
                     required
@@ -3361,7 +3361,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Custo Real Final (R$)</label>
+                  <label className="text-xs font-semibold text-slate-500">Custo Real Final (R$)</label>
                   <MoneyCentsInput
                     required
                     value={finishMaintForm.cost || ''}
@@ -3374,7 +3374,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Odômetro Final (Km)</label>
+                  <label className="text-xs font-semibold text-slate-500">Odômetro Final (Km)</label>
                   <input
                     type="number"
                     value={finishMaintForm.current_odometer || ''}
@@ -3385,7 +3385,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Horímetro Final (Horas)</label>
+                  <label className="text-xs font-semibold text-slate-500">Horímetro Final (Horas)</label>
                   <input
                     type="number"
                     value={finishMaintForm.current_hourmeter || ''}
@@ -3397,7 +3397,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Notas de Encerramento</label>
+                <label className="text-xs font-semibold text-slate-500">Notas de Encerramento</label>
                 <textarea
                   value={finishMaintForm.notes}
                   onChange={(e) => setFinishMaintForm(prev => ({ ...prev, notes: e.target.value }))}
@@ -3445,7 +3445,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
             <form onSubmit={handleCreateDocument} className="space-y-4 text-xs font-semibold">
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Tipo de Documento</label>
+                <label className="text-xs font-semibold text-slate-500">Tipo de Documento</label>
                 <select
                   value={docForm.type}
                   onChange={(e) => setDocForm(prev => ({ ...prev, type: e.target.value as AssetDocumentType }))}
@@ -3459,7 +3459,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Nome / Descrição do Documento</label>
+                <label className="text-xs font-semibold text-slate-500">Nome / Descrição do Documento</label>
                 <input
                   type="text"
                   required
@@ -3472,7 +3472,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Número do Documento / Apólice</label>
+                  <label className="text-xs font-semibold text-slate-500">Número do Documento / Apólice</label>
                   <input
                     type="text"
                     value={docForm.document_number}
@@ -3483,7 +3483,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-gray-400 uppercase tracking-widest text-[9px]">Data de Vencimento</label>
+                  <label className="text-xs font-semibold text-slate-500">Data de Vencimento</label>
                   <input
                     type="date"
                     value={docForm.expiration_date}
@@ -3494,7 +3494,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="text-gray-400 uppercase tracking-widest text-[9px]">Link / URL do Arquivo Anexo</label>
+                <label className="text-xs font-semibold text-slate-500">Link / URL do Arquivo Anexo</label>
                 <input
                   type="url"
                   value={docForm.file_url}

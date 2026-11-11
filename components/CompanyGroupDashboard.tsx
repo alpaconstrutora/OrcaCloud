@@ -194,7 +194,7 @@ const CompanyGroupDashboard: React.FC<Props> = ({ orgId, onBack }) => {
                     <ArrowLeft className="w-5 h-5" />
                 </button>
                 <div>
-                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight italic border-l-4 border-blue-600 pl-4">
+                    <h2 className="text-xl font-black text-gray-900 italic border-l-4 border-blue-600 pl-4">
                         Dashboard do Grupo
                     </h2>
                     <p className="text-gray-400 text-xs font-black uppercase tracking-widest mt-1 pl-4">

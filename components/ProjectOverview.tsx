@@ -354,7 +354,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                 {/* Ficha Técnica da Obra */}
                 {(settings.tipoObra || settings.valorEstimado || settings.mestreObras) && (
                     <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm p-6 space-y-5">
-                        <h2 className="text-sm font-black text-gray-400 uppercase tracking-widest flex items-center gap-2">
+                        <h2 className="text-sm font-black text-gray-400 flex items-center gap-2">
                             <Layers className="w-4 h-4" />
                             Ficha Técnica
                         </h2>
@@ -521,7 +521,7 @@ const ProjectOverview: React.FC<ProjectOverviewProps> = ({ settings, budget, pro
                         </div>
 
                         <div className="p-6 bg-gray-50/50 border-t border-gray-100">
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-4">Próximos Marcos</h4>
+                            <h4 className="text-xs font-black text-gray-400 mb-4">Próximos Marcos</h4>
                             <div className="space-y-3">
                                 {loading ? (
                                     <div className="space-y-2 animate-pulse">

@@ -100,7 +100,7 @@ export const WBSTemplateModal: React.FC<WBSTemplateModalProps> = ({
                             </button>
 
                             <div className="space-y-2">
-                                <h3 className="text-xs font-bold text-gray-500 uppercase tracking-wider">Modelos Salvos</h3>
+                                <h3 className="text-xs font-bold text-gray-500">Modelos Salvos</h3>
                                 {templates.length === 0 ? (
                                     <p className="text-sm text-gray-400 italic text-center py-4">Nenhum modelo salvo.</p>
                                 ) : (

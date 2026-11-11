@@ -289,7 +289,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                     {!allDone && (
                         <div className="space-y-3">
                             <div>
-                                <label htmlFor="lote-status" className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Mudar status</label>
+                                <label htmlFor="lote-status" className="block text-xs font-semibold text-slate-500 mb-1">Mudar status</label>
                                 <select
                                     id="lote-status"
                                     value={novoStatus}
@@ -351,7 +351,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Fornecedor</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Fornecedor</label>
                                 {/* "— Sem vínculo —" é uma linha DENTRO do drawer (não um link à parte — era onde
                                     o usuário procurava e não achava; print de 14/10/2026). */}
                                 <SupplierSelect
@@ -367,7 +367,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Obra / Projeto</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Obra / Projeto</label>
                                 <select
                                     value={projectId}
                                     onChange={e => setProjectId(e.target.value)}
@@ -381,7 +381,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Centro de Custo</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Centro de Custo</label>
                                 <CostCenterSelect
                                     costCenters={costCenters}
                                     value={costCenterId}
@@ -396,7 +396,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Plano de Contas</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Plano de Contas</label>
                                 <PlanoContasSelect
                                     planoContas={planoContas}
                                     value={planoDeContasId}
@@ -410,7 +410,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Conta Financeira</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Conta Financeira</label>
                                 <HierarchicalSelect
                                     items={contasFinanceiras}
                                     value={categoryId}
@@ -425,7 +425,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                             </div>
 
                             <div>
-                                <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Descrição</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
                                 <input
                                     type="text"
                                     value={descricao}

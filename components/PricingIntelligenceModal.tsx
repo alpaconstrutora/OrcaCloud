@@ -56,7 +56,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                             <BrainCircuit className="w-8 h-8" />
                         </div>
                         <div>
-                            <h2 className="text-2xl font-black uppercase tracking-tight">Inteligência de Precificação</h2>
+                            <h2 className="text-2xl font-black">Inteligência de Precificação</h2>
                             <p className="text-blue-100 font-bold text-xs uppercase tracking-widest opacity-80">Empreendimento: {buildingName}</p>
                         </div>
                     </div>
@@ -68,7 +68,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                     <div className="p-6 bg-blue-50 border border-blue-100 rounded-3xl flex items-start gap-4">
                         <Info className="w-6 h-6 text-blue-600 mt-1 flex-shrink-0" />
                         <div className="text-sm">
-                            <h4 className="font-black text-blue-900 uppercase tracking-widest mb-1 text-xs">Modelo Hedônico de Precificação</h4>
+                            <h4 className="font-black text-blue-900 mb-1 text-xs">Modelo Hedônico de Precificação</h4>
                             <p className="text-blue-700/80 font-medium leading-relaxed">
                                 Este modelo distribui o VGV alvo proporcionalmente entre todas as unidades, considerando pesos estatísticos para cada atributo. 
                                 <span className="font-bold text-blue-900 ml-1 italic">Evita unidades encalhadas por superprecificação manual.</span>
@@ -80,7 +80,7 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                         {/* Target VGV Section */}
                         <div className="space-y-6">
                             <div className="space-y-2">
-                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">VGV Alvo do Projeto (R$)</label>
+                                <label className="text-xs font-semibold text-slate-500 px-1">VGV Alvo do Projeto (R$)</label>
                                 <div className="relative flex items-center">
                                     <span className="absolute left-5 font-black text-gray-400">R$</span>
                                     <MoneyCentsInput
@@ -105,11 +105,11 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                             </label>
 
                             <div className="space-y-4">
-                                <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest flex items-center gap-2">
+                                <h3 className="text-xs font-black text-gray-900 flex items-center gap-2">
                                     <TrendingUp className="w-4 h-4 text-blue-600" /> Coeficiente de Andar
                                 </h3>
                                 <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100">
-                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-4">Valorização por Pavimento (%)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-4">Valorização por Pavimento (%)</label>
                                     <div className="flex items-center gap-6">
                                         <input
                                             type="range"
@@ -130,30 +130,30 @@ const PricingIntelligenceModal: React.FC<PricingIntelligenceModalProps> = ({ isO
                         {/* Weights Section */}
                         <div className="space-y-6">
                             <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
-                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Pesos por Atendimento</h4>
+                                <h4 className="text-xs font-black text-gray-900 mb-4 border-b border-gray-200 pb-2">Pesos por Atendimento</h4>
                                 
                                 <div className="grid grid-cols-2 gap-4">
                                     <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Frente</label>
+                                        <label className="text-xs font-semibold text-slate-500">Frente</label>
                                         <input type="number" step="0.01" value={config.position_weights.FRONT} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, FRONT: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Lateral</label>
+                                        <label className="text-xs font-semibold text-slate-500">Lateral</label>
                                         <input type="number" step="0.01" value={config.position_weights.LATERAL} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, LATERAL: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                     </div>
                                     <div className="space-y-1">
-                                        <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Fundos</label>
+                                        <label className="text-xs font-semibold text-slate-500">Fundos</label>
                                         <input type="number" step="0.01" value={config.position_weights.BACK} onChange={(e) => setConfig({...config, position_weights: {...config.position_weights, BACK: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                     </div>
                                 </div>
                             </div>
 
                             <div className="p-6 bg-gray-50 rounded-3xl border border-gray-100 space-y-4">
-                                <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 border-b border-gray-200 pb-2">Sol da Manhã/Tarde</h4>
+                                <h4 className="text-xs font-black text-gray-900 mb-4 border-b border-gray-200 pb-2">Sol da Manhã/Tarde</h4>
                                 <div className="grid grid-cols-2 gap-4">
                                     {Object.entries(config.orientation_weights).map(([key, val]) => (
                                         <div key={key} className="space-y-1">
-                                            <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{key}</label>
+                                            <label className="text-xs font-semibold text-slate-500">{key}</label>
                                             <input type="number" step="0.01" value={val} onChange={(e) => setConfig({...config, orientation_weights: {...config.orientation_weights, [key]: parseFloat(e.target.value)}})} className="w-full px-4 h-9 bg-white border border-gray-200 rounded-[6px] font-bold text-sm" />
                                         </div>
                                     ))}

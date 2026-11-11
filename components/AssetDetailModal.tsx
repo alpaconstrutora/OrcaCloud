@@ -152,7 +152,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
                                         <div className="p-2 bg-white/20 rounded-xl backdrop-blur-md">
                                             <Sparkles className="w-5 h-5 text-blue-200" />
                                         </div>
-                                        <h4 className="font-black text-xs uppercase tracking-[0.2em] text-blue-200">Parecer da Inteligência Artificial</h4>
+                                        <h4 className="font-black text-xs text-blue-200">Parecer da Inteligência Artificial</h4>
                                     </div>
 
                                     {loadingAI ? (
@@ -224,7 +224,7 @@ const AssetDetailModal: React.FC<AssetDetailModalProps> = ({ project, onClose, p
 
                             {/* VIP Financial & Compliance Section */}
                             <div className="bg-white border text-gray-900 border-gray-100 rounded-[2rem] p-6 space-y-4 shadow-sm">
-                                <h4 className="text-xs font-black uppercase tracking-wider text-gray-400 flex items-center gap-2">
+                                <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                                     <Wallet className="w-4 h-4" /> Gestão VIP
                                 </h4>
 

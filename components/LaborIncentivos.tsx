@@ -166,7 +166,7 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ chi
     <div className={`bg-white rounded-3xl border border-slate-100 shadow-sm p-6 ${className}`}>{children}</div>
 );
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">{children}</label>
+    <label className="block text-xs font-semibold text-slate-500 ml-1 mb-1.5">{children}</label>
 );
 const inputCls = 'w-full px-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none';
 // Área de texto não leva h-9: mantém a altura de várias linhas.
@@ -397,7 +397,7 @@ const LaunchTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<stri
 
             {/* Recent */}
             <Card className="lg:col-span-3">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">Lançamentos Recentes</h3>
+                <h3 className="text-sm font-black text-slate-900 mb-4">Lançamentos Recentes</h3>
                 <div className="space-y-2 max-h-[600px] overflow-y-auto">
                     {recent.length === 0 && <p className="text-center py-10 text-slate-300 text-xs font-bold uppercase">Nenhum lançamento ainda</p>}
                     {recent.map(ev => (
@@ -445,7 +445,7 @@ const ApprovalsTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
     return (
         <Card>
             <div className="flex items-center justify-between mb-4">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Aguardando Aprovação ({pending.length})</h3>
+                <h3 className="text-sm font-black text-slate-900">Aguardando Aprovação ({pending.length})</h3>
                 <span className="text-xs font-black text-amber-600">{brl(total)} em aberto</span>
             </div>
             {pending.length === 0 ? (
@@ -506,7 +506,7 @@ const HabitualityTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
                 <div className="flex items-start gap-4">
                     <div className="p-3 bg-rose-100 rounded-2xl"><ShieldAlert className="w-6 h-6 text-rose-600" /></div>
                     <div className="flex-1">
-                        <h3 className="text-sm font-black text-rose-900 uppercase tracking-tight">Guarda de Habitualidade</h3>
+                        <h3 className="text-sm font-black text-rose-900">Guarda de Habitualidade</h3>
                         <p className="text-xs font-bold text-rose-500 mt-0.5">
                             {habituals.length} incentivo(s) viraram verba habitual — risco de reflexos (FGTS, INSS, 13º, férias).
                             Passivo anual estimado: <strong>{brl(totalReflexo)}</strong>.
@@ -618,7 +618,7 @@ const RulesTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<strin
                     <div className="flex items-center gap-2">
                         <div className="p-2.5 bg-indigo-600 rounded-xl"><Play className="w-4 h-4 text-white" /></div>
                         <div>
-                            <h3 className="text-sm font-black text-indigo-900 uppercase tracking-tight">Rodar Regras da Competência</h3>
+                            <h3 className="text-sm font-black text-indigo-900">Rodar Regras da Competência</h3>
                             <p className="text-xs font-bold text-indigo-400 uppercase">Gera propostas PENDENTES — nunca paga automaticamente</p>
                         </div>
                     </div>
@@ -643,7 +643,7 @@ const RulesTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<strin
 
             {/* List + editor */}
             <div className="flex items-center justify-between">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Regras Configuradas</h3>
+                <h3 className="text-sm font-black text-slate-900">Regras Configuradas</h3>
                 <button onClick={async () => { const org = await resolveOrg(); if (org) setEditing(emptyRule(org)); }}
                     className="flex items-center gap-2 px-4 py-2 bg-slate-900 text-white rounded-xl font-black text-xs uppercase tracking-widest hover:bg-slate-800">
                     <Plus size={14} /> Nova Regra
@@ -792,7 +792,7 @@ const PerformanceTab: React.FC<{ orgId: string | null }> = ({ orgId }) => {
         const max = Math.max(1, ...rows.map(r => r.total));
         return (
             <Card>
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-4">{title}</h3>
+                <h3 className="text-sm font-black text-slate-900 mb-4">{title}</h3>
                 <div className="space-y-3">
                     {rows.length === 0 && <p className="text-center py-6 text-slate-300 text-xs font-bold uppercase">Sem dados</p>}
                     {rows.slice(0, 10).map((r, i) => (
@@ -857,7 +857,7 @@ const SimulatorTab: React.FC<{ projects: ProjectLite[] }> = ({ projects }) => {
     return (
         <div className="space-y-4">
             <Card className="space-y-4">
-                <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Simulador de Bônus por Produção</h3>
+                <h3 className="text-sm font-black text-slate-900">Simulador de Bônus por Produção</h3>
                 <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
                     <div className="md:col-span-2"><Label>Obra</Label>
                         <select className={inputCls} value={projectId} onChange={e => setProjectId(e.target.value)}>
@@ -884,7 +884,7 @@ const SimulatorTab: React.FC<{ projects: ProjectLite[] }> = ({ projects }) => {
                         <KpiCard label="Colaboradores" value={result.per_employee.length} icon={<Users />} color="emerald" />
                     </div>
                     <Card>
-                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-3">Distribuição por Colaborador</h3>
+                        <h3 className="text-sm font-black text-slate-900 mb-3">Distribuição por Colaborador</h3>
                         <div className="space-y-2">
                             {result.per_employee.length === 0 && <p className="text-center py-6 text-slate-300 text-xs font-bold uppercase">Sem produção registrada nesse filtro</p>}
                             {result.per_employee.map(e => (

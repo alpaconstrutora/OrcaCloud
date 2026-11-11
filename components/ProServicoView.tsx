@@ -593,7 +593,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Checklist Touch */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Etapas do Serviço</h2>
+        <h2 className="text-xs font-black text-slate-500">Etapas do Serviço</h2>
         <div className="space-y-2.5 bg-white p-4 border border-slate-200/40 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
           {checklist.map(item => (
             <div
@@ -616,7 +616,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Fotos Antes / Depois */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Fotos de Registro</h2>
+        <h2 className="text-xs font-black text-slate-500">Fotos de Registro</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
             <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Antes</span>
@@ -626,7 +626,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
+              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
                 📸 Adicionar
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoAntesUpload} />
               </label>
@@ -640,7 +640,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs uppercase font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
+              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
                 📸 Adicionar
                 <input type="file" accept="image/*" className="hidden" onChange={handleFotoDepoisUpload} />
               </label>
@@ -651,7 +651,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Assinatura Digital Touch */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Assinatura de Aceite</h2>
+        <h2 className="text-xs font-black text-slate-500">Assinatura de Aceite</h2>
         {assinaturaImagem ? (
           <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center gap-2">
             <img src={assinaturaImagem} alt="Assinatura" className="h-16 w-auto border-b border-slate-100 pb-2" />
@@ -720,7 +720,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Cobrança PIX - Copiar Código e QR Code */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Cobrança PIX</h2>
+        <h2 className="text-xs font-black text-slate-500">Cobrança PIX</h2>
         <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
           <span className="text-xs font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
           {pixCopiaECola ? (
@@ -762,7 +762,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           <>
             {/* Campo de Programar Recorrência */}
             <div className="space-y-1 bg-white p-3.5 border border-slate-200/40 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Programar Próxima Revisão / Limpeza</label>
+              <label className="block text-xs font-semibold text-slate-500">Programar Próxima Revisão / Limpeza</label>
               <select
                 value={recorrenciaMeses}
                 onChange={(e) => setRecorrenciaMeses(e.target.value)}

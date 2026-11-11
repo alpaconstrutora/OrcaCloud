@@ -19,7 +19,7 @@ import { useConfirm } from './ui/confirm';
 const inputCls = 'w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
 // Área de texto não leva h-9: mantém a altura de várias linhas.
 const inputClsArea = 'w-full rounded-[6px] border border-gray-200 px-3 py-2.5 text-sm font-medium text-gray-900 placeholder-gray-300 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all bg-white';
-const labelCls = 'block text-[10px] font-black text-gray-400 uppercase tracking-wider mb-1';
+const labelCls = 'block text-xs font-semibold text-slate-500 mb-1';
 
 // ─── Estado inicial do formulário ─────────────────────────────────────────────
 const emptyAccount = (supplierId: string, organizationId: string | null): Omit<SupplierBankAccount, 'id' | 'created_at' | 'updated_at'> => ({

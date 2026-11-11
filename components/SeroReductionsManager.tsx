@@ -94,7 +94,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
 
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
         <div>
-          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">CNPJ Emissor</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">CNPJ Emissor</label>
           <input
             type="text"
             value={form.nf_cnpj}
@@ -104,7 +104,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Nº NF-e</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Nº NF-e</label>
           <input
             type="text"
             value={form.nf_number}
@@ -114,7 +114,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Data Emissão</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Data Emissão</label>
           <input
             type="date"
             value={form.nf_date}
@@ -123,7 +123,7 @@ export const SeroReductionsManager: React.FC<SeroReductionsManagerProps> = ({ or
           />
         </div>
         <div>
-          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Valor Total NF</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Valor Total NF</label>
           <MoneyCentsInput
             value={form.nf_value}
             onChange={v => setForm(prev => ({ ...prev, nf_value: v }))}

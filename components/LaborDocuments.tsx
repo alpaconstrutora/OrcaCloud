@@ -331,7 +331,7 @@ const LaborDocuments: React.FC<LaborDocumentsProps> = ({ employees, orgId, onRef
                                         <span className="text-xs font-black uppercase tracking-widest text-slate-400">{CATEGORY_LABELS[doc.category]}</span>
                                         {getExpiryBadge(doc)}
                                     </div>
-                                    <h4 className="text-base font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors uppercase tracking-tight">{doc.title}</h4>
+                                    <h4 className="text-base font-black text-slate-900 leading-tight group-hover:text-indigo-600 transition-colors">{doc.title}</h4>
                                     <div className="flex flex-col gap-1.5 mt-3">
                                         <div className="flex items-center gap-2 text-xs text-slate-500 font-bold">
                                             <User className="w-3.5 h-3.5" />

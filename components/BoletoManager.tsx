@@ -1276,7 +1276,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                     <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-6 gap-3">
                         {/* Ano do vencimento — independente do mês */}
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Ano (vencimento)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Ano (vencimento)</label>
                             <select
                                 value={vencAno}
                                 onChange={(e) => setVencAno(e.target.value)}
@@ -1288,7 +1288,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Mês do vencimento — independente do ano */}
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Mês (vencimento)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Mês (vencimento)</label>
                             <select
                                 value={vencMes}
                                 onChange={(e) => setVencMes(e.target.value)}
@@ -1302,7 +1302,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Vencimento de */}
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento de</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Vencimento de</label>
                             <input
                                 type="date"
                                 value={vencDe}
@@ -1312,7 +1312,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Vencimento até */}
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Vencimento até</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Vencimento até</label>
                             <input
                                 type="date"
                                 value={vencAte}
@@ -1322,7 +1322,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Valor mínimo */}
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor mínimo (R$)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Valor mínimo (R$)</label>
                             <MoneyCentsInput
                                 placeholder="0,00"
                                 value={valorMin}
@@ -1332,7 +1332,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                         </div>
                         {/* Valor máximo */}
                         <div>
-                            <label className="text-xs font-bold uppercase tracking-widest text-gray-400 mb-1 block">Valor máximo (R$)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Valor máximo (R$)</label>
                             <MoneyCentsInput
                                 placeholder="—"
                                 value={valorMax}

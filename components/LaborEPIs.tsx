@@ -95,7 +95,7 @@ const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rou
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
     </div>
 );

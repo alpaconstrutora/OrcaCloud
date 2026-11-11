@@ -146,16 +146,16 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
             {/* Form */}
             {showForm && (
                 <div className="bg-emerald-50 border border-emerald-100 rounded-2xl p-5 space-y-4">
-                    <h3 className="text-sm font-black text-emerald-900 uppercase tracking-widest flex items-center gap-2">
+                    <h3 className="text-sm font-black text-emerald-900 flex items-center gap-2">
                         <Target className="w-4 h-4" /> Novo Registro de Produtividade
                     </h3>
                     <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                         <div className="col-span-2 md:col-span-3">
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Atividade / Serviço *</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Atividade / Serviço *</label>
                             <input value={form.activity_description} onChange={e => setForm(p => ({ ...p, activity_description: e.target.value }))} className={inputCls} placeholder="Ex: Alvenaria de vedação, Concretagem de laje..." />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Equipe</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Equipe</label>
                             <div className="relative">
                                 <select value={form.team_id} onChange={e => setForm(p => ({ ...p, team_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Nenhuma</option>
@@ -165,7 +165,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Colaborador</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Colaborador</label>
                             <div className="relative">
                                 <select value={form.employee_id} onChange={e => setForm(p => ({ ...p, employee_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Nenhum</option>
@@ -175,7 +175,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Obra</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Obra</label>
                             <div className="relative">
                                 <select value={form.project_id} onChange={e => setForm(p => ({ ...p, project_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Sem obra</option>
@@ -185,11 +185,11 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Etapa</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Etapa</label>
                             <input value={form.phase} onChange={e => setForm(p => ({ ...p, phase: e.target.value }))} className={inputCls} placeholder="Fundação, Estrutura..." />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Unidade</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Unidade</label>
                             <div className="relative">
                                 <select value={form.unit} onChange={e => setForm(p => ({ ...p, unit: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     {UNITS.map(u => <option key={u} value={u}>{u}</option>)}
@@ -198,19 +198,19 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Qtd Planejada</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Qtd Planejada</label>
                             <input type="number" min="0" step="0.01" value={form.planned_qty} onChange={e => setForm(p => ({ ...p, planned_qty: parseFloat(e.target.value) || 0 }))} className={inputCls} />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Qtd Realizada</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Qtd Realizada</label>
                             <input type="number" min="0" step="0.01" value={form.actual_qty} onChange={e => setForm(p => ({ ...p, actual_qty: parseFloat(e.target.value) || 0 }))} className={inputCls} />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Horas Gastas</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Horas Gastas</label>
                             <input type="number" min="0" step="0.5" value={form.hours_spent} onChange={e => setForm(p => ({ ...p, hours_spent: parseFloat(e.target.value) || 0 }))} className={inputCls} />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-emerald-700 uppercase tracking-widest block mb-1">Data</label>
+                            <label className="block text-xs font-semibold text-emerald-700 mb-1">Data</label>
                             <input type="date" value={form.date} onChange={e => setForm(p => ({ ...p, date: e.target.value }))} className={inputCls} />
                         </div>
                     </div>
@@ -239,7 +239,7 @@ const LaborProductivity: React.FC<LaborProductivityProps> = ({ employees, teams,
             {/* Team Ranking */}
             {teamRanking.length > 0 && (
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-5">
-                    <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                    <h3 className="text-xs font-black text-slate-400 mb-4 flex items-center gap-2">
                         <TrendingUp className="w-4 h-4 text-indigo-600" /> Ranking de Equipes por Produtividade
                     </h3>
                     <div className="space-y-3">

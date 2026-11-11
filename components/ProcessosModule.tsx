@@ -85,14 +85,14 @@ function StartInstanceModal({ open, onClose, organizationId, userId, templates, 
             <ModalHeader title="Iniciar processo" icon={<Workflow className="w-5 h-5 text-blue-600" />} onClose={onClose} />
             <ModalBody className="space-y-3">
                 <div>
-                    <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Template</label>
+                    <label className="text-xs font-semibold text-slate-500">Template</label>
                     <select value={templateId} onChange={e => setTemplateId(e.target.value)}
                         className="mt-1 w-full h-9 px-3 rounded-xl border border-gray-200 text-sm">
                         {templates.map(t => <option key={t.id} value={t.id}>{t.name}</option>)}
                     </select>
                 </div>
                 <div>
-                    <label className="text-xs font-bold text-gray-600 uppercase tracking-wide">Título da instância</label>
+                    <label className="text-xs font-semibold text-slate-500">Título da instância</label>
                     <input value={title} onChange={e => setTitle(e.target.value)}
                         className="mt-1 w-full h-9 px-3 rounded-xl border border-gray-200 text-sm" placeholder="Ex.: NF 1045 — Concreto Usinado" />
                 </div>
@@ -640,7 +640,7 @@ function ProcessDashboard({ organizationId }: { organizationId: string | null })
     return (
         <div className="p-4 space-y-6">
             <div>
-                <h3 className="text-xs font-black uppercase tracking-wide text-gray-500 mb-2">Processos por status</h3>
+                <h3 className="text-xs font-black text-gray-500 mb-2">Processos por status</h3>
                 <div className="flex flex-wrap gap-2">
                     {statusCounts.length === 0 && <p className="text-sm text-gray-400">Nenhum processo iniciado ainda.</p>}
                     {statusCounts.map(c => (
@@ -653,7 +653,7 @@ function ProcessDashboard({ organizationId }: { organizationId: string | null })
             </div>
 
             <div>
-                <h3 className="text-xs font-black uppercase tracking-wide text-gray-500 mb-2">Gargalos por etapa</h3>
+                <h3 className="text-xs font-black text-gray-500 mb-2">Gargalos por etapa</h3>
                 {bottlenecks.length === 0 ? (
                     <p className="text-sm text-gray-400">Sem dados suficientes ainda.</p>
                 ) : (

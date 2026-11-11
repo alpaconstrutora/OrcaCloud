@@ -2662,9 +2662,25 @@ mesmo vocabulário do `<thead>` sentence case (§6.2):
 > `REVISAO`) continua em caixa alta porque é o nome exato do placeholder (como as
 > siglas do §6.2). Também não se aplica a preview de impressão (etiqueta QR de
 > canteiro em `#printable-qr-label`).
-> ⚠️ **Pendência de propagação:** nasceu de correção pontual em
-> `OpuraDocsModule.tsx`. `SupplierModal.tsx`, `ClientModal.tsx` etc. ainda não
-> migraram — não tratar como "resolvido no app inteiro".
+> ✅ **Caixa alta saiu do app inteiro (11/11/2026).** Nasceu de correção pontual em
+> `OpuraDocsModule.tsx`; depois da padronização da altura dos campos (§30), uma
+> varredura achou 470 `<label>` e 293 títulos (`<h2>`/`<h3>`/`<h4>`) com `uppercase`
+> (ex.: "CONDIÇÃO DE PAGAMENTO" na Nova cotação). Regra aplicada por codemod:
+> - `<label>` → `text-xs font-semibold text-slate-500`, mantendo as classes de layout
+>   (`block`, `mb-*`, `flex`…) e a cor de destaque quando o painel é colorido
+>   (`text-emerald-700`, `text-blue-100`…);
+> - `<label>` que é botão (`cursor-pointer`: upload, checkbox) e títulos → só perdem
+>   `uppercase`/`tracking-*` (peso, tamanho e cor ficam; `text-[8–11px]` vira `text-xs`).
+>
+> 🔒 Trava: `__tests__/rotuloSemCaixaAltaGuard.test.ts` (catraca — o BASELINE só
+> diminui). Fora dela, por vocabulário próprio: portais §24, páginas públicas, Torres
+> (§31) e `CartaoRecibo`. No BASELINE, de propósito: folhas de relatório para
+> impressão (`ReportViewer`, `DiaryReportViewer`), cabeçalhos de seção dos painéis
+> laterais da Planta e os trechos de `InvestorDashboard`/`SupplierDashboard`
+> compartilhados com o portal.
+> ⚠️ **Ainda fora do §21 (sem caixa alta, mas em outro estilo):** ~700 rótulos em
+> `text-sm font-medium text-gray-700`, `text-xs font-bold text-gray-600` etc. Não são
+> "gritados"; padronizar é um passo separado.
 
 ---
 

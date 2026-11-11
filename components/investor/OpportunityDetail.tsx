@@ -432,7 +432,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                     <div className="space-y-8">
                                         {/* Resumo Executivo / Descrição */}
                                         <div className="bg-gray-50/50 rounded-3xl p-6 border border-gray-100 space-y-3">
-                                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Apresentação do Empreendimento</h4>
+                                            <h4 className="text-sm font-black text-gray-900">Apresentação do Empreendimento</h4>
                                             <p className="text-sm text-gray-600 leading-relaxed font-medium">{opportunityPresentation}</p>
                                         </div>
 
@@ -614,7 +614,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                     <div className="flex items-between justify-between">
                                                         <div className="flex items-center gap-2">
                                                             <SlidersHorizontal className="w-5 h-5 text-blue-650" />
-                                                            <h4 className="text-sm font-black text-blue-900 uppercase tracking-wider">Simulador de Cenários Interativo</h4>
+                                                            <h4 className="text-sm font-black text-blue-900">Simulador de Cenários Interativo</h4>
                                                         </div>
                                                         <Button
                                                             variant="ghost"

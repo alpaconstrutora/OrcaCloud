@@ -146,7 +146,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
           
           {/* Mapa Visual - Layout do Galpão */}
           <div className="lg:col-span-2 bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Layout de Alocação de Posições</h3>
+            <h3 className="text-xs font-black text-slate-400">Layout de Alocação de Posições</h3>
             
             <div className="border border-slate-200/80 rounded-2xl p-6 bg-slate-50 min-h-[300px] flex flex-wrap gap-4 items-center justify-center">
               {locations.length === 0 && (
@@ -203,7 +203,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
 
           {/* Legenda Lateral / Listagem */}
           <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Lista de Áreas Reguladas</h3>
+            <h3 className="text-xs font-black text-slate-400">Lista de Áreas Reguladas</h3>
 
             <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
               {locations.map(loc => {
@@ -247,7 +247,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
         <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-fadeIn">
           <div className="bg-white rounded-[32px] border border-slate-200/50 p-6 max-w-md w-full shadow-2xl space-y-6">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">
+              <h3 className="text-sm font-black text-slate-800">
                 {selectedLocation ? '✏ Editar Localização' : '➕ Nova Localização'}
               </h3>
               <button
@@ -260,7 +260,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
 
             <form onSubmit={handleSave} className="space-y-4">
               <div className="space-y-1">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Identificação / Nome</label>
+                <label className="block text-xs font-semibold text-slate-500">Identificação / Nome</label>
                 <input
                   type="text"
                   required
@@ -272,7 +272,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Tipo de Posição</label>
+                <label className="block text-xs font-semibold text-slate-500">Tipo de Posição</label>
                 <select
                   value={type}
                   onChange={(e) => setType(e.target.value)}
@@ -286,7 +286,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Empresa Vinculada (Segregação)</label>
+                <label className="block text-xs font-semibold text-slate-500">Empresa Vinculada (Segregação)</label>
                 <select
                   value={companyId}
                   onChange={(e) => setCompanyId(e.target.value)}
@@ -300,7 +300,7 @@ const EcommercePhysicalMap: React.FC<EcommercePhysicalMapProps> = ({
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Status</label>
+                <label className="block text-xs font-semibold text-slate-500">Status</label>
                 <select
                   value={status}
                   onChange={(e) => setStatus(e.target.value)}

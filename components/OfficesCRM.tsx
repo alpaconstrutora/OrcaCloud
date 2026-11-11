@@ -337,7 +337,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                 { label: 'Valor Estimado (R$)', icon: DollarSign, placeholder: '0', value: valorEstimado, setter: setValorEstimado, type: 'number', required: false },
               ] as const).map(f => (
                 <div key={f.label} className="space-y-1">
-                  <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">{f.label}</label>
+                  <label className="block text-xs font-semibold text-slate-500">{f.label}</label>
                   <div className="relative">
                     <f.icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                     <input
@@ -353,7 +353,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
               ))}
 
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Status do Funil</label>
+                <label className="block text-xs font-semibold text-slate-500">Status do Funil</label>
                 <div className="relative">
                   <Activity className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                   <select
@@ -367,7 +367,7 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Briefing / Detalhes</label>
+                <label className="block text-xs font-semibold text-slate-500">Briefing / Detalhes</label>
                 <div className="relative">
                   <MessageSquare className="absolute left-3.5 top-3 w-4 h-4 text-slate-300" />
                   <textarea

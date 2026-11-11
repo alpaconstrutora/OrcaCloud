@@ -576,7 +576,7 @@ const LocationForm: React.FC<{
         <div className="grid grid-cols-2 gap-2">
             {FIELD_LABELS.map(({ key, label: lbl, placeholder }) => (
                 <div key={key}>
-                    <label className="block text-[9px] font-bold text-gray-500 uppercase tracking-wide mb-0.5">{lbl}</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-0.5">{lbl}</label>
                     <input
                         type="text"
                         value={form[key] ?? ''}

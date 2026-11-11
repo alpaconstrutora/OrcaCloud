@@ -183,7 +183,7 @@ const StatusBar: React.FC = () => {
 
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div className="space-y-1.5">
-        <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
         {hint && <p className="text-[11px] text-slate-400 font-medium">{hint}</p>}
     </div>

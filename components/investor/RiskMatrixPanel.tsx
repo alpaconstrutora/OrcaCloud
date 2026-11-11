@@ -75,7 +75,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Registro de Riscos</h4>
+                    <h4 className="text-sm font-black text-gray-900">Registro de Riscos</h4>
                     <p className="text-xs text-gray-500 mt-1">Matriz probabilidade × impacto por categoria.</p>
                 </div>
                 <Button variant="primary" size="sm" onClick={() => setEditing(emptyRisk(organizationId, opportunityId) as OpportunityRisk)} className="gap-2">

@@ -557,7 +557,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
 
             <form onSubmit={handleSaveAccess} className="flex flex-col gap-4">
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Fornecedor / Prestador de Serviço</label>
+                <label className="text-xs font-semibold text-slate-500">Fornecedor / Prestador de Serviço</label>
                 <select
                   required
                   value={enableSupplierId}
@@ -579,7 +579,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
               </div>
 
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">E-mail de Login</label>
+                <label className="text-xs font-semibold text-slate-500">E-mail de Login</label>
                 <input
                   required
                   type="email"
@@ -633,7 +633,7 @@ export const SupplierPortalManager: React.FC<SupplierPortalManagerProps> = ({ or
                 dona do link é derivável — escolha manual aqui em vez de bloquear a ação. */}
             {!derivedTokenOrgId && (
               <div className="flex flex-col gap-1.5">
-                <label className="text-xs text-gray-400 uppercase font-bold">Organização responsável pelo link</label>
+                <label className="text-xs font-semibold text-slate-500">Organização responsável pelo link</label>
                 <select
                   value={tokenOrgOverride}
                   onChange={(e) => setTokenOrgOverride(e.target.value)}

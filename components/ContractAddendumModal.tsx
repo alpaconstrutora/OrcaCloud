@@ -80,7 +80,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                                 <Plus className="w-6 h-6 text-white" />
                             </div>
                             <div>
-                                <h2 className="text-xl font-medium tracking-tight uppercase leading-none">Novo Aditivo</h2>
+                                <h2 className="text-xl font-medium leading-none">Novo Aditivo</h2>
                                 <p className="text-blue-400 text-xs font-medium uppercase tracking-[0.2em] mt-2">Alteração de Valor ou Prazo</p>
                             </div>
                         </div>
@@ -96,7 +96,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                 {/* Form */}
                 <div className="p-10 space-y-8 overflow-y-auto">
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Descrição do Aditivo</label>
+                        <label className="text-xs font-semibold text-slate-500 ml-1">Descrição do Aditivo</label>
                         <div className="relative">
                             <FileText className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                             <input
@@ -111,7 +111,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
 
                     <div className="grid grid-cols-2 gap-6">
                         <div className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Impacto Financeiro (R$)</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Impacto Financeiro (R$)</label>
                             <div className="relative">
                                 <DollarSign className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-blue-500" />
                                 <input
@@ -125,7 +125,7 @@ const ContractAddendumModal: React.FC<ContractAddendumModalProps> = ({
                             <p className="text-xs text-gray-400 font-medium ml-1 uppercase">Use valores negativos para descontos.</p>
                         </div>
                         <div className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Nova Data de Término</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Nova Data de Término</label>
                             <div className="relative">
                                 <Calendar className="absolute left-6 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-300" />
                                 <input

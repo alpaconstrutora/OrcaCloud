@@ -203,7 +203,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                             <FileText className="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-black text-slate-900 uppercase">Recibo de Pagamento</h3>
+                            <h3 className="text-lg font-black text-slate-900">Recibo de Pagamento</h3>
                             <p className="text-xs font-bold text-slate-400 uppercase tracking-tighter">
                                 {run?.type === 'adiantamento' ? 'Adiantamento — ' : 'Referência: '}{formatMonthYear(run?.start_date || '')}
                             </p>
@@ -237,7 +237,7 @@ const PaystubModal: React.FC<PaystubModalProps> = ({ orgId, runId, employeeId, o
                         {/* Company Header */}
                         <div className="p-6 border-b border-slate-200 flex justify-between items-start bg-slate-50/50">
                             <div className="space-y-1">
-                                <h4 className="text-sm font-black text-slate-900 uppercase">{empregador?.nome}</h4>
+                                <h4 className="text-sm font-black text-slate-900">{empregador?.nome}</h4>
                                 <p className="text-xs font-bold text-slate-400 uppercase">{empregador?.documentoRotulo ?? 'CNPJ'}: {empregador?.documento || '—'}</p>
                                 {empregador?.endereco && (
                                     <p className="text-xs font-bold text-slate-400 uppercase">Endereço: {empregador.endereco}</p>

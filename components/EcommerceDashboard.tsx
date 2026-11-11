@@ -401,7 +401,7 @@ const EcommerceDashboard: React.FC<EcommerceDashboardProps> = ({
         <div className="bg-amber-50 border border-amber-200/80 p-4 rounded-2xl flex items-start gap-3 shadow-sm">
           <span className="text-xl">⚠️</span>
           <div>
-            <h4 className="text-xs font-black uppercase text-amber-800 tracking-wider">Aviso de Risco Regulatória (TTS)</h4>
+            <h4 className="text-xs font-black text-amber-800">Aviso de Risco Regulatória (TTS)</h4>
             <p className="text-xs font-medium text-amber-700 mt-0.5">
               O percentual interestadual de vendas da filial ({interestadualPct}%) está próximo da margem mínima permitida ({minShare}%). É altamente recomendado direcionar as próximas expedições para fora de Minas Gerais nos próximos {diasRestantes} dias para blindar o benefício.
             </p>
@@ -416,7 +416,7 @@ const EcommerceDashboard: React.FC<EcommerceDashboardProps> = ({
         <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">🗺️ Segregação Física de Estoque</h3>
+              <h3 className="text-sm font-black text-slate-800">🗺️ Segregação Física de Estoque</h3>
               <p className="text-xs text-slate-400">Verifique a demarcação das áreas exclusivas das filiais</p>
             </div>
             <button
@@ -457,7 +457,7 @@ const EcommerceDashboard: React.FC<EcommerceDashboardProps> = ({
         <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <h3 className="text-sm font-black text-slate-800 uppercase tracking-wider">📸 Trilha de Evidências</h3>
+              <h3 className="text-sm font-black text-slate-800">📸 Trilha de Evidências</h3>
               <p className="text-xs text-slate-400">Auditoria operacional e registro fotográfico de notas fiscais</p>
             </div>
             <button

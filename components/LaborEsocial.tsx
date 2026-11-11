@@ -151,7 +151,7 @@ const fmt = {
 const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-orange-100 focus:border-orange-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
         {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
@@ -256,7 +256,7 @@ const ConfigPanel: React.FC<{ orgId: string | null }> = ({ orgId }) => {
             </div>
 
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                     <Building2 className="w-4 h-4 text-orange-600" /> Dados do Empregador
                 </h3>
                 <div className="grid grid-cols-2 gap-4">
@@ -290,7 +290,7 @@ const ConfigPanel: React.FC<{ orgId: string | null }> = ({ orgId }) => {
             </div>
 
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                     <Shield className="w-4 h-4 text-orange-600" /> Certificado Digital
                 </h3>
                 <div className={`flex items-center gap-3 p-3 rounded-xl ${merged.cert_status === 'VALIDO' ? 'bg-emerald-50' : 'bg-slate-50'}`}>
@@ -324,7 +324,7 @@ const ConfigPanel: React.FC<{ orgId: string | null }> = ({ orgId }) => {
             </div>
 
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                     <Zap className="w-4 h-4 text-orange-600" /> Transmissão
                 </h3>
                 <label className="flex items-center gap-2 cursor-pointer">
@@ -706,7 +706,7 @@ const LaborEsocial: React.FC<LaborEsocialProps> = ({ orgId, employees, organizat
                     {alerts.length > 0 && (
                         <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                             <div className="px-5 py-4 border-b border-slate-100">
-                                <h3 className="text-xs font-black text-slate-400 uppercase tracking-widest flex items-center gap-2">
+                                <h3 className="text-xs font-black text-slate-400 flex items-center gap-2">
                                     <Bell className="w-4 h-4 text-orange-600" /> Pendências ({alerts.length})
                                 </h3>
                             </div>

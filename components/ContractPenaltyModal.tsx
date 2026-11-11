@@ -75,7 +75,7 @@ const ContractPenaltyModal: React.FC<ContractPenaltyModalProps> = ({ isOpen, onC
                     <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>
                 )}
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Tipo</label>
+                    <label className="text-xs font-semibold text-slate-500">Tipo</label>
                     <select
                         value={kind}
                         onChange={e => setKind(e.target.value as PenaltyKind)}
@@ -87,24 +87,24 @@ const ContractPenaltyModal: React.FC<ContractPenaltyModalProps> = ({ isOpen, onC
                     </select>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Motivo</label>
+                    <label className="text-xs font-semibold text-slate-500">Motivo</label>
                     <textarea rows={3} value={reason} onChange={e => setReason(e.target.value)}
                         placeholder="Descreva o fato que motiva a penalidade"
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Base de Cálculo (R$)</label>
+                        <label className="text-xs font-semibold text-slate-500">Base de Cálculo (R$)</label>
                         <input type="text" placeholder="0,00" value={baseValue} onChange={e => setBaseValue(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Valor da Multa (R$)</label>
+                        <label className="text-xs font-semibold text-slate-500">Valor da Multa (R$)</label>
                         <input type="text" required placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2 col-span-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prazo de Cura (padrão: 3 dias úteis)</label>
+                        <label className="text-xs font-semibold text-slate-500">Prazo de Cura (padrão: 3 dias úteis)</label>
                         <input type="date" value={cureDeadline} onChange={e => setCureDeadline(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>

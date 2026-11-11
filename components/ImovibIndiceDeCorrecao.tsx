@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImovibStudyUpdate } from '../types';
 import { contractIndexService, IndexName, ContractIndexValue } from '../services/contractIndexService';
 import { taxaMensalMedia } from '../utils/indiceVariacao';
@@ -43,6 +43,14 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
     const [texto, setTexto] = useState(taxa == null ? '' : String(taxa));
     useEffect(() => { setTexto(taxa == null ? '' : String(taxa)); }, [taxa]);
 
+    // Escolheu o índice com a taxa vazia: quando a série chegar, a taxa vira a média
+    // (item 2.6 do plano 2026-11-11 — antes, escolher o índice não mudava o cálculo).
+    // Guarda PARA QUAL índice o preenchimento foi pedido: a série de um índice
+    // trocado logo em seguida pode chegar depois e não pode gravar a taxa.
+    const preencherPara = useRef<string | null>(null);
+    const taxaRef = useRef(taxa);
+    taxaRef.current = taxa;
+
     const [media, setMedia] = useState<number | null>(null);
     const [motivo, setMotivo] = useState('Escolha o índice para sugerir a taxa pela série histórica.');
     useEffect(() => {
@@ -56,6 +64,11 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                 const m = taxaMensalMedia(porMes(valores), 12);
                 setMedia(m);
                 setMotivo(m == null ? `Não há série do ${nome} com dois meses ou mais. Cadastre em Contratos › Índices.` : '');
+                if (preencherPara.current !== nome) return;
+                preencherPara.current = null;
+                if (m != null && taxaRef.current == null) {
+                    salvar({ [campoTaxa]: Math.round(m * 10000) / 10000 } as ImovibStudyUpdate);
+                }
             })
             .catch(e => {
                 if (!vivo) return;
@@ -74,7 +87,10 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                 <select
                     id={idNome}
                     value={nome ?? ''}
-                    onChange={(e) => salvar({ [campoNome]: e.target.value || null } as ImovibStudyUpdate)}
+                    onChange={(e) => {
+                        preencherPara.current = e.target.value && taxa == null ? e.target.value : null;
+                        salvar({ [campoNome]: e.target.value || null } as ImovibStudyUpdate);
+                    }}
                     className="h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-slate-700 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 cursor-pointer"
                 >
                     <option value="">Sem índice próprio</option>
@@ -98,7 +114,7 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                     className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm"
                 />
             </div>
-            <div className="sm:col-span-2">
+            <div className="sm:col-span-2 flex flex-wrap items-center gap-3">
                 <button
                     type="button"
                     disabled={media == null}
@@ -108,6 +124,9 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                 >
                     {media == null ? 'Usar a média dos últimos 12 meses' : `Usar a média dos últimos 12 meses (${fmt(media)}% a.m.)`}
                 </button>
+                {taxa == null && (
+                    <span className="text-xs text-slate-500">Sem taxa própria: segue a inflação geral ({fmt(inflacaoGeral)}% a.m.).</span>
+                )}
             </div>
         </div>
     );

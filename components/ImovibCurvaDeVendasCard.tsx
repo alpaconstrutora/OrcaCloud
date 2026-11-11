@@ -36,8 +36,10 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
     const D = IMOVIB_DEFAULTS;
     const { pode, motivo } = useImovibEdicao();
     const tipo = (study.sales_curve_type ?? D.sales_curve_type) as TipoCurvaDeVendas;
-    const duracao = study.sales_duration_months ?? D.sales_duration_months;
-    const inicio = study.sales_start_month ?? D.sales_start_month;
+    // Mesma validação do motor (montarPremissas): valor impossível usa o padrão.
+    const mesValido = (x: number | null | undefined, padrao: number) => (x == null || Number.isNaN(x) || x < 1 ? padrao : Math.round(x));
+    const duracao = mesValido(study.sales_duration_months, D.sales_duration_months);
+    const inicio = mesValido(study.sales_start_month, D.sales_start_month);
     const vsoRegiao = study.vso_regional_percent ?? null;
 
     // Pesos da curva personalizada: rascunho local, grava ao sair de cada campo.
@@ -96,14 +98,14 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
 
                     {tipo === 'lancamento' && (
                         <>
-                            <ImovibInputRow label="Vendido no lançamento" desc="Percentual do VGV" value={study.sales_launch_percent ?? D.sales_launch_percent} onCommit={(v) => salvar({ sales_launch_percent: v })} />
-                            <ImovibInputRow label="Meses do lançamento" value={study.sales_launch_months ?? D.sales_launch_months} unidade="meses" step="1" onCommit={(v) => salvar({ sales_launch_months: Math.round(v) })} />
+                            <ImovibInputRow label="Vendido no lançamento" desc="Percentual do VGV" value={study.sales_launch_percent ?? D.sales_launch_percent} padrao={D.sales_launch_percent} onCommit={(v) => salvar({ sales_launch_percent: v })} />
+                            <ImovibInputRow label="Meses do lançamento" value={study.sales_launch_months ?? D.sales_launch_months} padrao={D.sales_launch_months} unidade="meses" step="1" onCommit={(v) => salvar({ sales_launch_months: v == null ? null : Math.round(v) })} />
                         </>
                     )}
 
                     {tipo === 'vso' && (
                         <>
-                            <ImovibInputRow label="VSO mensal" desc="Percentual do estoque que resta vendido a cada mês" value={study.sales_vso_percent ?? D.sales_vso_percent} onCommit={(v) => salvar({ sales_vso_percent: v })} />
+                            <ImovibInputRow label="VSO mensal" desc="Percentual do estoque que resta vendido a cada mês" value={study.sales_vso_percent ?? D.sales_vso_percent} padrao={D.sales_vso_percent} onCommit={(v) => salvar({ sales_vso_percent: v })} />
                             <button
                                 type="button"
                                 disabled={!(vsoRegiao != null && vsoRegiao > 0)}
@@ -154,7 +156,11 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
 
                 <ChartCard title="Vendas por mês" subtitle="VGV vendido no mês (eixo da esquerda) e estoque que resta (eixo da direita), sem correção.">
                     {dados.length === 0 || dados.every(d => d.vendas === 0) ? (
-                        <ChartEmpty>Sem VGV para distribuir: informe o preço de venda em Orçamento › Por torre.</ChartEmpty>
+                        <ChartEmpty>
+                            {math.vgvTotal > 0
+                                ? 'A curva não vende nada no prazo: com VSO de 0%, o estoque inteiro fica sem vender.'
+                                : 'Sem VGV para distribuir: informe o preço de venda em Orçamento › Por torre.'}
+                        </ChartEmpty>
                     ) : (
                         <>
                             <Legend items={[{ label: 'Vendas do mês', color: SERIE_PRINCIPAL }, { label: 'Estoque', color: SERIE_CONTEXTO }]} />

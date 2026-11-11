@@ -343,6 +343,16 @@ Unidade do `delta`: percentual para `preco`, `custo_obra`, `terreno`; meses para
 - **O que muda:** a aba "Indicadores" do Excel ganha os indicadores e os pontos de equilíbrio; "Fluxo de caixa" ganha uma coluna por linha e as colunas do projeto; "Premissas" ganha as premissas da Fase 1. A listagem ganha as colunas "Payback" e "Múltiplo", ocultas por padrão. A listagem **não** calcula ponto de equilíbrio.
 - **Como sei que terminou:** o teste do Excel afirma as linhas novas e que toda célula de valor é número; com 3 estudos a listagem abre sem atraso perceptível.
 
+**2.6 Pendências da revisão da Fase 1** *(acrescentado em 11/11: a mensagem que fechou a Fase 1 disse que estes pontos ficavam para a Fase 2)*
+- **Arquivos:** `components/ImovibInputRow.tsx`, `components/ImovibIndiceDeCorrecao.tsx`, `components/ImovibCurvaDeVendasCard.tsx`, `components/ImovibExecutiveSummary.tsx`, `components/ImovibDashboard.tsx`, `components/investor/OpportunityDetail.tsx`.
+- **O que muda:**
+  - apagar o campo e sair volta ao padrão (grava vazio, não 0), nos campos de premissa com padrão;
+  - escolher o índice com a taxa vazia preenche a taxa com a média da série, quando ela existe; sem série, a tela diz que a taxa segue a inflação geral;
+  - o texto "Receitas e Capital" que restou no Resumo vira "Receitas";
+  - "VGV líquido" ganha a explicação (receita dos compradores sem índice, pode passar do VGV com os juros do pós-chaves) no `title` da coluna da listagem e do cartão do portal;
+  - o gráfico da curva com VSO 0% diz que a VSO zerada não vende nada, em vez de pedir o preço; e usa o início das vendas já validado pelo motor.
+- **Como sei que terminou:** teste de componente para o campo que volta ao padrão e para o índice que preenche a taxa; os textos conferidos no navegador.
+
 ### Fase 3 — Sensibilidade, cenários e risco (bloco 10)
 
 **Interfaces que a fase entrega:**
@@ -715,12 +725,15 @@ Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/
 
 Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase1.js`): a listagem mostra o mesmo VPL e TIR do Resumo; Receitas, Capital e Dinâmica abrem nos 3 estudos com 0 escritas e 0 erros de console. Achado e corrigido na conferência: as barras do gráfico da curva sumiam ao lado da linha do estoque (eixo único). Migration do deságio (`aplicar_20271111850000`) aplicada em 11/11 com OK do usuário; coluna conferida no banco.
 
-**Fase 2 — Indicadores e fluxo:** 0 de 5
-- [ ] 2.1 Indicadores
-- [ ] 2.2 Variações e pontos de equilíbrio
-- [ ] 2.3 Resumo Executivo
-- [ ] 2.4 Fluxo aberto na Dinâmica
-- [ ] 2.5 Excel e listagem
+**Fase 2 — Indicadores e fluxo:** 6 de 6 no código (branch `feat/imovib-fase2`); publicação espera revisão e CI
+- [x] 2.1 Indicadores — `utils/imovibIndicadores.ts`. Razões sem base (sem VGV, sem saída) ficam vazias, não 0. Payback = último mês em que o acumulado volta a ficar ≥ 0 e assim fica.
+- [x] 2.2 Variações e pontos de equilíbrio — `utils/imovibVariacoes.ts`, `utils/imovibEquilibrio.ts`. Vendas mínimas = 100% + a variação de preço que zera o VPL (a receita do motor é linear no VGV). Cada busca < 50 ms.
+- [x] 2.3 Resumo Executivo — VPL e lucro separados; payback, múltiplo, retorno sobre o capital, mês da exposição; cartão de pontos de equilíbrio com margem-alvo editável (padrão 15%, não gravada). Sai o bloco "Simulação Completa".
+- [x] 2.4 Fluxo aberto na Dinâmica — `utils/imovibVisaoDoFluxo.ts`; grupos "Receitas e deduções", "Custos", "Financiamento".
+- [x] 2.5 Excel e listagem — colunas Payback e Múltiplo ocultas por padrão.
+- [x] 2.6 Pendências da revisão da Fase 1 — capital próprio e dívida não voltam ao padrão (vazio na dívida faria o motor usar o "% Financiado" legado).
+
+Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase2.js`): 0 escritas, 0 erros de console. No Bruninho, terreno máximo R$ 2.791.232 − terreno atual R$ 2.150.000 = R$ 641.232, o VPL do estudo (o terreno sai no mês 1, sem desconto). Achados e corrigidos: grupo "Receitas" somava impostos e corretagem (virou "Receitas e deduções"); erro de digitação no subtítulo da TIR.
 
 **Fase 3 — Risco:** 0 de 6
 - [ ] 3.1 Tornado

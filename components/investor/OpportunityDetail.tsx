@@ -23,6 +23,7 @@ import CommitteeGatePanel from './CommitteeGatePanel';
 import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
 import { useImovibMath } from '../../hooks/useImovibMath';
+import { TITULO_VGV_LIQUIDO } from '../../constants/imovibClassificacao';
 import { ImovibStudy } from '../../types';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
@@ -708,7 +709,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
 
                                             {/* KPIs Financeiros Detalhados */}
                                             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title={studyMath ? TITULO_VGV_LIQUIDO : undefined}>
                                                     <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">VGV Líquido</span>
                                                     <span className="text-lg font-black text-blue-900 font-mono">
                                                         {studyMath ? fmtBRL(studyMath.netVgvTotal) : op.vgv ? fmtBRL(op.vgv) : '—'}

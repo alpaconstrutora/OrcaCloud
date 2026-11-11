@@ -66,6 +66,7 @@ export const IMOVIB_DEFAULTS = {
     cancellation_resale_discount_percent: 10, // deságio da revenda da unidade distratada (decisão de 11/11)
     // Índices das vendas e da obra: vazio = inflation_rate (não têm padrão próprio).
     // Fase 2 — Indicadores e pontos de equilíbrio
+    margem_alvo_terreno_percent: 15, // margem líquida sobre o VGV usada no 'terreno máximo' do Resumo (editável na tela)
     // Fase 3 — Sensibilidade, cenários e risco
     // Fase 4 — Capital e financiamento
     // Fase 5 — Marcos, terreno, desembolso, rubricas

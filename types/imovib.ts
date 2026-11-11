@@ -526,12 +526,12 @@ export interface ImovibStudy {
     /** % ao mês. Vazio = inflation_rate. */
     sales_index_rate_monthly?: number | null;
     cost_index_rate_monthly?: number | null;
-    default_rate_percent?: number;
-    cancellation_rate_percent?: number;
+    default_rate_percent?: number | null;
+    cancellation_rate_percent?: number | null;
     funding_equity_percent?: number;
     funding_debt_percent?: number;
-    swap_financial_percent?: number;
-    swap_physical_percent?: number;
+    swap_financial_percent?: number | null;
+    swap_physical_percent?: number | null;
     capex_mode?: 'simplified' | 'detailed';
     capex_simplified_cost_sqm?: number;
     capex_simplified_area_sqm?: number;

@@ -50,13 +50,13 @@ const ImovibCapitalForm: React.FC<ImovibCapitalFormProps> = ({ study, onDataChan
                         label="Capital próprio (equity)"
                         desc="Exposição de caixa do incorporador"
                         value={study.funding_equity_percent ?? D.funding_equity_percent}
-                        onCommit={(v) => salvar({ funding_equity_percent: v })}
+                        onCommit={(v) => salvar({ funding_equity_percent: v ?? 0 })}
                     />
                     <ImovibInputRow
                         label="Financiamento à produção"
                         desc="Plano empresário ou banco — percentual do custo de obra"
                         value={study.funding_debt_percent ?? D.funding_debt_percent}
-                        onCommit={(v) => salvar({ funding_debt_percent: v })}
+                        onCommit={(v) => salvar({ funding_debt_percent: v ?? 0 })}
                     />
                 </div>
             </div>
@@ -75,13 +75,13 @@ const ImovibCapitalForm: React.FC<ImovibCapitalFormProps> = ({ study, onDataChan
                     <ImovibInputRow
                         label="Permuta financeira"
                         desc="Percentual do VGV que fica com o terrenista"
-                        value={study.swap_financial_percent ?? D.swap_financial_percent}
+                        value={study.swap_financial_percent ?? D.swap_financial_percent} padrao={D.swap_financial_percent}
                         onCommit={(v) => salvar({ swap_financial_percent: v })}
                     />
                     <ImovibInputRow
                         label="Permuta física"
                         desc="Percentual das unidades entregues ao terrenista"
-                        value={study.swap_physical_percent ?? D.swap_physical_percent}
+                        value={study.swap_physical_percent ?? D.swap_physical_percent} padrao={D.swap_physical_percent}
                         onCommit={(v) => salvar({ swap_physical_percent: v })}
                     />
                 </div>

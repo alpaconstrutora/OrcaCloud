@@ -39,22 +39,22 @@ const ImovibDistratoCard: React.FC<ImovibDistratoCardProps> = ({ study, salvar }
                 <ImovibInputRow
                     label="Distrato"
                     desc="Parte de cada safra que é cancelada"
-                    value={study.cancellation_rate_percent ?? D.cancellation_rate_percent}
+                    value={study.cancellation_rate_percent ?? D.cancellation_rate_percent} padrao={D.cancellation_rate_percent}
                     onCommit={(v) => salvar({ cancellation_rate_percent: v })}
                 />
                 <ImovibInputRow
                     label="Meses até o distrato"
                     desc="Contados do mês da venda"
-                    value={study.cancellation_lag_months ?? D.cancellation_lag_months}
+                    value={study.cancellation_lag_months ?? D.cancellation_lag_months} padrao={D.cancellation_lag_months}
                     unidade="meses"
                     step="1"
-                    onCommit={(v) => salvar({ cancellation_lag_months: Math.round(v) })}
+                    onCommit={(v) => salvar({ cancellation_lag_months: v == null ? null : Math.round(v) })}
                 />
                 <ImovibInputRow
                     label="Devolução ao comprador"
                     desc="Do que ele já pagou"
                     title={TITULO_DEVOLUCAO}
-                    value={study.cancellation_refund_percent ?? D.cancellation_refund_percent}
+                    value={study.cancellation_refund_percent ?? D.cancellation_refund_percent} padrao={D.cancellation_refund_percent}
                     onCommit={(v) => salvar({ cancellation_refund_percent: v })}
                 />
                 <label className="flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-[10px] border border-slate-100 cursor-pointer">
@@ -74,7 +74,7 @@ const ImovibDistratoCard: React.FC<ImovibDistratoCardProps> = ({ study, salvar }
                         label="Deságio da revenda"
                         desc="Desconto sobre o preço original da unidade"
                         title="Sem deságio, a retenção do que o comprador pagou faz o distrato dar lucro. O padrão de 10% é hipótese: ajuste ao mercado."
-                        value={study.cancellation_resale_discount_percent ?? D.cancellation_resale_discount_percent}
+                        value={study.cancellation_resale_discount_percent ?? D.cancellation_resale_discount_percent} padrao={D.cancellation_resale_discount_percent}
                         onCommit={(v) => salvar({ cancellation_resale_discount_percent: v })}
                     />
                 )}
@@ -84,7 +84,7 @@ const ImovibDistratoCard: React.FC<ImovibDistratoCardProps> = ({ study, salvar }
                 <ImovibInputRow
                     label="Inadimplência"
                     desc="Sobre parcelas de obra, intermediárias e pós-chaves"
-                    value={study.default_rate_percent ?? D.default_rate_percent}
+                    value={study.default_rate_percent ?? D.default_rate_percent} padrao={D.default_rate_percent}
                     onCommit={(v) => salvar({ default_rate_percent: v })}
                 />
             </fieldset>

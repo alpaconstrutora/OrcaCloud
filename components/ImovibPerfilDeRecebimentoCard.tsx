@@ -60,7 +60,7 @@ const ImovibPerfilDeRecebimentoCard: React.FC<ImovibPerfilDeRecebimentoCardProps
                         key={p.campo}
                         label={p.rotulo}
                         desc={p.desc}
-                        value={valores[p.campo]}
+                        value={valores[p.campo]} padrao={D[p.campo]}
                         onChange={(v) => setValores(prev => ({ ...prev, [p.campo]: v }))}
                         onCommit={(v) => salvar({ [p.campo]: v } as ImovibStudyUpdate)}
                     />
@@ -79,25 +79,25 @@ const ImovibPerfilDeRecebimentoCard: React.FC<ImovibPerfilDeRecebimentoCardProps
                     <ImovibInputRow
                         label="Intervalo das intermediárias"
                         desc="Meses entre uma intermediária e a seguinte, contados da venda"
-                        value={study.revenue_intermediate_interval_months ?? D.revenue_intermediate_interval_months}
+                        value={study.revenue_intermediate_interval_months ?? D.revenue_intermediate_interval_months} padrao={D.revenue_intermediate_interval_months}
                         unidade="meses"
                         step="1"
-                        onCommit={(v) => salvar({ revenue_intermediate_interval_months: Math.round(v) })}
+                        onCommit={(v) => salvar({ revenue_intermediate_interval_months: v == null ? null : Math.round(v) })}
                     />
                 )}
                 {comPosChaves && (
                     <>
                         <ImovibInputRow
                             label="Prazo do pós-chaves"
-                            value={study.post_handover_months ?? D.post_handover_months}
+                            value={study.post_handover_months ?? D.post_handover_months} padrao={D.post_handover_months}
                             unidade="meses"
                             step="1"
-                            onCommit={(v) => salvar({ post_handover_months: Math.round(v) })}
+                            onCommit={(v) => salvar({ post_handover_months: v == null ? null : Math.round(v) })}
                         />
                         <ImovibInputRow
                             label="Juro do pós-chaves"
                             desc="Parcela fixa (Price)"
-                            value={study.post_handover_rate_monthly ?? D.post_handover_rate_monthly}
+                            value={study.post_handover_rate_monthly ?? D.post_handover_rate_monthly} padrao={D.post_handover_rate_monthly}
                             unidade="% a.m."
                             onCommit={(v) => salvar({ post_handover_rate_monthly: v })}
                         />
@@ -106,10 +106,10 @@ const ImovibPerfilDeRecebimentoCard: React.FC<ImovibPerfilDeRecebimentoCardProps
                 <ImovibInputRow
                     label="Atraso do repasse"
                     desc="Meses entre as chaves e o dinheiro do banco"
-                    value={study.handover_delay_months ?? D.handover_delay_months}
+                    value={study.handover_delay_months ?? D.handover_delay_months} padrao={D.handover_delay_months}
                     unidade="meses"
                     step="1"
-                    onCommit={(v) => salvar({ handover_delay_months: Math.round(v) })}
+                    onCommit={(v) => salvar({ handover_delay_months: v == null ? null : Math.round(v) })}
                 />
             </fieldset>
         </div>

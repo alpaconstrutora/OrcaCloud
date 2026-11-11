@@ -33,12 +33,50 @@ export interface CentralControleBootstrap {
     bottlenecks: FonteDoPainel<ProcessStepBottleneck[]>;
     action_queue: FonteDoPainel<ActionQueueItem[]>;
     scorecards: FonteDoPainel<ProjectScorecard[]>;
+    meu_dia: FonteDoPainel<MeuDia>;
 }
 
-/** As seis chaves que a função SQL devolve — usada para não deixar buraco. */
+/** Quantidade e valor de um recorte de títulos a pagar. */
+export interface QtdValor { qtd: number; valor: number }
+
+export interface TarefaDoDia {
+    id: string;
+    org_id: string;
+    title: string;
+    due_date: string;
+    priority: 1 | 2 | 3 | 4;
+    source_module: string | null;
+    source_ref: { type: string; id: string; route?: string } | null;
+}
+
+export interface ContaDoDia {
+    id: string;
+    organization_id: string;
+    description: string | null;
+    party_name: string | null;
+    amount: number;
+    due_date: string;
+}
+
+/**
+ * Bloco `meu_dia` (11/11/2026, tela "Bom dia"). "Hoje" é o dia em São Paulo,
+ * calculado no banco. As aprovações pendentes e os alertas não vêm aqui: a
+ * tela os lê de `action_queue` (com `pode_aprovar`) e `financial_alerts`.
+ */
+export interface MeuDia {
+    hoje: string;
+    tarefas: { pendentes: TarefaDoDia[]; qtd_pendentes: number; concluidas_hoje: number };
+    contas_hoje: { pendentes: ContaDoDia[]; qtd_pendentes: number; pagas_hoje: number };
+    aprovacoes_hoje: number;
+    contas_7_dias: { atrasadas: QtdValor; vencem_em_2_dias: QtdValor; vencem_em_7_dias: QtdValor };
+    /** Linhas de extrato (contas ativas): últimos 30 dias e os 30 anteriores. */
+    conciliado: { conciliadas: number; pendentes: number; conciliadas_anterior: number; pendentes_anterior: number };
+}
+
+/** As chaves que a função SQL devolve — usada para não deixar buraco. */
 const FONTES = [
     'financial_alerts', 'divergences', 'approval_summary',
-    'bottlenecks', 'action_queue', 'scorecards',
+    'bottlenecks', 'action_queue', 'scorecards', 'meu_dia',
 ] as const;
 
 /** Converte uma fonte em `PromiseSettledResult`, para a tela seguir lendo

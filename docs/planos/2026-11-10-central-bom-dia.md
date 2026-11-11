@@ -102,7 +102,39 @@ Começa depois do PR da alçada (plano irmão). Um item por arquivo.
 
 ## Estado
 
-- [ ] 1 · [ ] 2 · [ ] 3 · [ ] 4 · [ ] 5 · [ ] 6 · [ ] 7
+11/11/2026, branch `feat/central-bom-dia` (a alçada do plano irmão entrou no #351):
+
+- [x] 1 migration `aplicar_20271111400000_central_meu_dia.sql` **aplicada em 11/11/2026** (o
+  usuário rodou; o classificador barra `db query` que cria função). Antes: bootstrap do banco
+  conferido idêntico ao arquivo; teste a seco como desenvolvedor@ → 7 fontes `ok`, Alpa: 1
+  tarefa minha, 0 contas hoje, 693 atrasadas (R$ 1,30 mi), extrato 3 de 7 (anterior 0 de 26);
+  2,1 s no banco. Depois, pela página (RLS, rede): 4,0–4,6 s em 5 chamadas (antes 3,8–4,5 s).
+  ⚠️ A PRIMEIRA chamada logo após substituir a função estourou o `statement_timeout` de 8 s do
+  `authenticated` (cache frio). A folga do bootstrap até 8 s é de ~2× — já era antes deste plano.
+- [x] 2 serviço: tipo `MeuDia` e fonte `meu_dia` em `centralControleService`.
+- [x] 3 `utils/meuDia.ts` + `__tests__/meuDia.test.ts` (23).
+- [x] 4 `components/central/*`: `CartaoCentral`, `NumeroQueSobe`, `Saudacao`, `MinhaFila`,
+  `CartaoContasSemana`, `CartaoCaixa`, `CartaoObras`, `CartaoConciliado`; `check-ui-standard` limpo.
+- [x] 5 `CentralControle.tsx` reescrita; regra do menu extraída do `Layout` para
+  `utils/modulosPermitidos.ts` (mesma decisão para menu e cartões). Conferida no navegador com
+  dado real (Alpa, desenvolvedor@): sem o bloco no banco (erro só nos cartões dele) e com ele;
+  1440 px, 390 px (iframe da mesma origem, sem rolagem horizontal, ordem fila → contas → caixa →
+  obras → conciliado) e Escuro Total. Corrigido na conferência: "Vencido há 3.482 dias" → "Vencido
+  desde 30/04/2017"; eixo do caixa quebrando; prazo cortado por detalhe longo na linha da fila;
+  "−R$ 16.641" quebrando no celular.
+- [x] 6 guia: §20.3 (saudação) e §28.7 (medidor semicircular).
+- [x] 7 `__tests__/components/CentralControle.test.tsx` (6): carregando, dia zerado, erro só
+  no cartão, sem permissão, fila só da alçada com destaque, concluir tarefa sem recarregar.
+
+Desvios do brief, decididos na implementação:
+- **Pílulas** filtram a Minha fila (Tudo · Aprovações · Tarefas · Contas de hoje · Alertas);
+  o filtro "Todas as obras" da Central antiga saiu (o cartão Obras cobre a leitura por obra).
+- "N transações aguardando aprovação" deixou de ser alerta: a fila já lista as aprovações.
+- **% conciliado** não existia em lugar nenhum do app: definido como linhas do extrato dos
+  últimos 30 dias (contas ativas) conciliadas por `fn_bank_tx_conciliado` ÷ (conciliadas +
+  pendentes); variação em pontos sobre os 30 dias anteriores. Em 11/11: 3 de 7.
+- "Tarefas" = as MINHAS (`user_id`), não as de espaços compartilhados que a RLS também mostra.
+- "Contas pagas hoje" = `payment_date` = hoje (não registra QUEM baixou).
 
 ## Verificação
 

@@ -30,13 +30,51 @@ export const baseDaRubrica = (item: Pick<ImovibCapexItem, 'category' | 'base'>):
     return 'obra';
 };
 
+/**
+ * O caixa do mês aberto por linha. Entradas positivas, saídas negativas; a soma
+ * das linhas é `MonthlyFlow.net`. Linha que o motor ainda não modela vale 0.
+ */
+export interface LinhasDoMes {
+    receitaSinal: number;
+    receitaParcelasObra: number;
+    receitaIntermediarias: number;
+    receitaRepasse: number;
+    receitaPosChaves: number;
+    devolucaoDistrato: number;
+    /** Deduções sobre a receita: categoria 7 das rubricas, ou o imposto da Dinâmica. */
+    impostos: number;
+    /** Categoria 5 das rubricas, ou a corretagem da Dinâmica. */
+    comercial: number;
+    /** Demais rubricas em % do VGV (categoria 8…). */
+    outrasDeducoes: number;
+    terreno: number;
+    rubricasTerreno: number;
+    obra: number;
+    rubricasObra: number;
+    /** Rubricas em R$ de base vgv, ao longo das vendas. */
+    rubricasVendas: number;
+    carregamentoDoEstoque: number;
+    liberacaoDivida: number;
+    /** Principal + juros pagos, inclusive a quitação do saldo no último mês. */
+    pagamentoDaDivida: number;
+    aporteDeTerceiros: number;
+    remuneracaoDeTerceiros: number;
+}
+
 export interface MonthlyFlow {
     month: number;
     name: string;
     rev: number;
     cost: number;
+    /** Caixa do acionista (do incorporador): depois da dívida. */
     net: number;
     acc: number;
+    /** Caixa do projeto: sem dívida nem terceiros. */
+    netProjeto: number;
+    accProjeto: number;
+    /** Juros que o saldo devedor rendeu no mês — informativo, fora da soma das linhas. */
+    jurosDoMes: number;
+    linhas: LinhasDoMes;
 }
 
 export interface ImovibMathOptions {
@@ -60,8 +98,12 @@ export interface ImovibAviso {
 export interface ImovibMathResult {
     monthlyFlows: MonthlyFlow[];
     maxExposure: number;
+    /** VPL e TIR do ACIONISTA (fluxo `net`, depois da dívida). */
     vpl: number;
     annualIrr: number;
+    /** VPL e TIR do PROJETO (fluxo `netProjeto`, sem dívida). Sem dívida, iguais aos do acionista. */
+    vplProjeto: number;
+    annualIrrProjeto: number;
     vgvTotal: number;
     netVgvTotal: number;
     constCostTotal: number;
@@ -187,6 +229,8 @@ const EMPTY_RESULT: ImovibMathResult = {
     maxExposure: 0,
     vpl: 0,
     annualIrr: NaN,
+    vplProjeto: 0,
+    annualIrrProjeto: NaN,
     vgvTotal: 0,
     netVgvTotal: 0,
     constCostTotal: 0,
@@ -226,6 +270,8 @@ interface Premissas {
     rubricaObra: number;
     rubricaVgvFixo: number;
     deducaoReceitaPct: number;
+    /** `deducaoReceitaPct` aberto nas três linhas de dedução (a soma é ele). */
+    deducaoPct: { impostos: number; comercial: number; outras: number };
     costDeltaMultiplier: number;
     vgvTotal: number;
     netVgvTotal: number;
@@ -402,6 +448,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let rubricaObra = 0;
     let rubricaVgvPct = 0;
     let rubricaVgvFixo = 0;
+    const rubricaPct = { impostos: 0, comercial: 0, outras: 0 };
     rubricas.forEach(item => {
         const v = Number(item.value) || 0;
         const pct = item.value_type === 'percent';
@@ -413,13 +460,20 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
                 rubricaObra += pct ? constCostTotal * v / 100 : v * costDeltaMultiplier;
                 break;
             case 'vgv':
-                if (pct) rubricaVgvPct += v / 100;
-                else rubricaVgvFixo += v;
+                if (pct) {
+                    rubricaVgvPct += v / 100;
+                    const cat = item.category || '';
+                    const linha = cat.startsWith('7.') ? 'impostos' : cat.startsWith('5.') ? 'comercial' : 'outras';
+                    rubricaPct[linha] += v / 100;
+                } else rubricaVgvFixo += v;
                 break;
         }
     });
     // Com rubricas, as deduções sobre a receita vêm delas.
     const deducaoReceitaPct = capexRubricasAtivas ? rubricaVgvPct : taxRate + brokerageFee;
+    const deducaoPct = capexRubricasAtivas
+        ? rubricaPct
+        : { impostos: taxRate, comercial: brokerageFee, outras: 0 };
 
     // Apply Swap Physical (reduces marketed VGV)
     const swapPhysical = val(study.swap_physical_percent, D.swap_physical_percent) / 100;
@@ -480,6 +534,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         rubricaObra,
         rubricaVgvFixo,
         deducaoReceitaPct,
+        deducaoPct,
         costDeltaMultiplier,
         vgvTotal,
         netVgvTotal,
@@ -505,6 +560,8 @@ interface Series {
     custoProprio: number[];
     /** Custo de obra do mês — a parte financiável. */
     custoObra: number[];
+    /** As mesmas entradas e saídas, abertas nas linhas de `LinhasDoMes` (sem dívida). */
+    linhas: LinhasDoMes[];
     totalGrossRev: number;
     somaInflacaoVendas: number;
     rubricaVgvTotal: number;
@@ -522,7 +579,7 @@ function montarSeries(P: Premissas): Series {
     const monthlyVgvFixo = salesDur > 0 ? P.rubricaVgvFixo / salesDur : 0;
 
     const S: Series = {
-        receitaBruta: [], deducaoReceita: [], custoProprio: [], custoObra: [],
+        receitaBruta: [], deducaoReceita: [], custoProprio: [], custoObra: [], linhas: [],
         totalGrossRev: 0, somaInflacaoVendas: 0, rubricaVgvTotal: 0,
     };
 
@@ -530,6 +587,7 @@ function montarSeries(P: Premissas): Series {
         const inflationMult = Math.pow(1 + inflation, m - 1);
         const emVendas = m >= salesStart && m < salesStart + salesDur;
         const emObra = m >= constStart && m < constStart + constDur;
+        const linhas = linhasZeradas();
 
         // J-Curve Revenue Aggregation
         let grossRev = 0;
@@ -537,6 +595,12 @@ function montarSeries(P: Premissas): Series {
         if (emObra) grossRev += monthlyConstRev;             // 2. Parcelas, ao longo da obra
         if (m === handoverMonth) grossRev += P.handoverVol;  // 3. Repasse / chaves, de uma vez
         grossRev = grossRev * inflationMult;
+        if (emVendas) linhas.receitaSinal = monthlyDownpayment * inflationMult;
+        if (emObra) linhas.receitaParcelasObra = monthlyConstRev * inflationMult;
+        if (m === handoverMonth) linhas.receitaRepasse = P.handoverVol * inflationMult;
+        linhas.impostos = -grossRev * P.deducaoPct.impostos;
+        linhas.comercial = -grossRev * P.deducaoPct.comercial;
+        linhas.outrasDeducoes = -grossRev * P.deducaoPct.outras;
 
         // Deduções sobre a receita: rubricas de base vgv (modo Completo) ou
         // imposto + corretagem da Dinâmica — nunca os dois.
@@ -546,37 +610,57 @@ function montarSeries(P: Premissas): Series {
         if (P.capexRubricasAtivas) S.rubricaVgvTotal += revenueDeduction;
 
         let proprio = 0;
-        if (m === 1) proprio += P.landCost + P.rubricaTerreno;
+        if (m === 1) {
+            proprio += P.landCost + P.rubricaTerreno;
+            linhas.terreno = -P.landCost;
+            linhas.rubricasTerreno = -P.rubricaTerreno;
+        }
         if (monthlyVgvFixo > 0 && emVendas) {
             const fixo = monthlyVgvFixo * inflationMult;
             proprio += fixo;
             S.rubricaVgvTotal += fixo;
+            linhas.rubricasVendas = -fixo;
+        }
+        if (emObra) {
+            linhas.obra = -(P.constCostTotal / constMonths) * inflationMult;
+            linhas.rubricasObra = -(P.rubricaObra / constMonths) * inflationMult;
         }
 
         S.receitaBruta.push(grossRev);
         S.deducaoReceita.push(revenueDeduction);
         S.custoProprio.push(proprio);
         S.custoObra.push(emObra ? monthlyConstCost * inflationMult : 0);
+        S.linhas.push(linhas);
     }
     return S;
 }
+
+const linhasZeradas = (): LinhasDoMes => ({
+    receitaSinal: 0, receitaParcelasObra: 0, receitaIntermediarias: 0, receitaRepasse: 0, receitaPosChaves: 0,
+    devolucaoDistrato: 0, impostos: 0, comercial: 0, outrasDeducoes: 0,
+    terreno: 0, rubricasTerreno: 0, obra: 0, rubricasObra: 0, rubricasVendas: 0, carregamentoDoEstoque: 0,
+    liberacaoDivida: 0, pagamentoDaDivida: 0, aporteDeTerceiros: 0, remuneracaoDeTerceiros: 0,
+});
 
 // ── 3. Financiamento ────────────────────────────────────────────────────────
 
 interface FluxoDoAcionista {
     monthlyFlows: MonthlyFlow[];
     net: number[];
+    netProjeto: number[];
     maxExposure: number;
     debtPayoffAtEnd: number;
 }
 
 function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
     let accumulatedFlow = 0;
+    let accProjeto = 0;
     let maxExposure = 0;
     let debtBalance = 0;
     let debtPayoffAtEnd = 0;
     const monthlyFlows: MonthlyFlow[] = [];
     const net: number[] = [];
+    const netProjetoDoMes: number[] = [];
 
     for (let m = 1; m <= P.duration; m++) {
         const i = m - 1;
@@ -588,18 +672,24 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         const financedCost = custoObra * P.actualFinPct;
         const equityCost = S.custoProprio[i] + (custoObra - financedCost);
 
+        const jurosDoMes = debtBalance * P.monthlyFinancingRate;
         debtBalance = debtBalance * (1 + P.monthlyFinancingRate);
         debtBalance += financedCost;
 
+        let debtPayment = 0;
         let investorRev = 0;
         if (netRev > 0) {
             if (debtBalance > 0) {
-                const debtPayment = Math.min(debtBalance, netRev);
+                debtPayment = Math.min(debtBalance, netRev);
                 debtBalance -= debtPayment;
                 investorRev = netRev - debtPayment;
             } else {
                 investorRev = netRev;
             }
+        } else {
+            // Deduções acima da receita do mês (só com percentuais somando mais de
+            // 100%): a diferença sai do caixa. Antes era descartada em silêncio.
+            investorRev = netRev;
         }
 
         let netFlow = investorRev - equityCost;
@@ -610,6 +700,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         // não mudava o VPL.
         if (m === P.duration && debtBalance > 0.005) {
             debtPayoffAtEnd = debtBalance;
+            debtPayment += debtBalance;
             netFlow -= debtBalance;
             debtBalance = 0;
         }
@@ -617,8 +708,16 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         accumulatedFlow += netFlow;
         if (accumulatedFlow < maxExposure) maxExposure = accumulatedFlow;
 
-        monthlyFlows.push({ month: m, name: `Mês ${m}`, rev: grossRev, cost: totalCost, net: netFlow, acc: accumulatedFlow });
+        const linhas: LinhasDoMes = { ...S.linhas[i], liberacaoDivida: financedCost, pagamentoDaDivida: -debtPayment };
+        const netProjeto = netFlow - linhas.liberacaoDivida - linhas.pagamentoDaDivida;
+        accProjeto += netProjeto;
+
+        monthlyFlows.push({
+            month: m, name: `Mês ${m}`, rev: grossRev, cost: totalCost, net: netFlow, acc: accumulatedFlow,
+            netProjeto, accProjeto, jurosDoMes, linhas,
+        });
         net.push(netFlow);
+        netProjetoDoMes.push(netProjeto);
     }
 
     if (debtPayoffAtEnd > 0) {
@@ -628,7 +727,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
             aba: 'funding',
         });
     }
-    return { monthlyFlows, net, maxExposure, debtPayoffAtEnd };
+    return { monthlyFlows, net, netProjeto: netProjetoDoMes, maxExposure, debtPayoffAtEnd };
 }
 
 // ── 4. Resultado ────────────────────────────────────────────────────────────
@@ -658,6 +757,9 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
     if (!isNaN(monthlyIrr) && isFinite(monthlyIrr)) {
         annualIrr = (Math.pow(1 + monthlyIrr, 12) - 1) * 100;
     }
+    const vplProjeto = calculateNPV(P.monthlyDiscount, F.netProjeto);
+    const tirProjeto = calcularTirMensal(F.netProjeto).taxa;
+    const annualIrrProjeto = Number.isFinite(tirProjeto) ? (Math.pow(1 + tirProjeto, 12) - 1) * 100 : NaN;
     if (tir.raizes > 1) {
         P.avisos.push({
             codigo: 'tir_multipla',
@@ -671,6 +773,8 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         maxExposure: F.maxExposure,
         vpl,
         annualIrr,
+        vplProjeto,
+        annualIrrProjeto,
         vgvTotal: P.vgvTotal,
         netVgvTotal: P.netVgvTotal,
         constCostTotal: P.constCostTotal,

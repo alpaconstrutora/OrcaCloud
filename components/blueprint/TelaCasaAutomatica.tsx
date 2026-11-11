@@ -11,7 +11,7 @@
  * alternativa e Lançar na barra das abas (`docs/planos/2026-10-22-casa-automatica-abas.md`).
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Building2, Check, CircleDot, ClipboardList, Droplets, HelpCircle, Home, Info, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
+import { AlertCircle, Building2, Check, ChevronDown, ChevronRight, CircleDot, ClipboardList, Droplets, HelpCircle, Home, Info, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
@@ -19,7 +19,7 @@ import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
-import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, type PadraoDaCasa } from '../../utils/blueprintPrograma';
+import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, normalizarProgramaCurto, type PadraoDaCasa } from '../../utils/blueprintPrograma';
 import { PREMISSAS_DA_CASA_PADRAO, type PremissasDaCasa } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
 import type { EstadoDoPasso, PassoDaCasa, PassosDaCasa } from '../../utils/blueprintCasaPeloEmpreendimento';
@@ -136,9 +136,9 @@ export function chuvaDaCasa(h: HipotesesPluviais): { texto: string; falta: boole
 const rotuloCls = 'text-xs font-semibold text-slate-500';
 const campoCls = 'h-9 w-full rounded-[6px] border border-gray-200 bg-white px-3 text-sm text-gray-900 tabular-nums focus:border-blue-500 focus:outline-none';
 
-function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode }) {
+function Campo({ rotulo, title, children }: { rotulo: string; title?: string; children: React.ReactNode }) {
   return (
-    <label className="block space-y-1.5">
+    <label className="block space-y-1.5" title={title}>
       <span className={rotuloCls}>{rotulo}</span>
       {children}
     </label>
@@ -149,12 +149,12 @@ function Campo({ rotulo, children }: { rotulo: string; children: React.ReactNode
  * Número com faixa: o TEXTO é livre enquanto se digita (limitar a cada tecla transformava o "5" de "5500" em 2000);
  * o valor sobe quando já cabe na faixa, e ao sair do campo ele volta para dentro dela. `anulavel`: vazio = `null`.
  */
-function Numero({ rotulo, valor, onValor, min, max, passo = 1, anulavel = false, placeholder }: { rotulo: string; valor: number | null; onValor: (v: number | null) => void; min: number; max: number; passo?: number; anulavel?: boolean; placeholder?: string }) {
+function Numero({ rotulo, valor, onValor, min, max, passo = 1, anulavel = false, placeholder, title }: { rotulo: string; valor: number | null; onValor: (v: number | null) => void; min: number; max: number; passo?: number; anulavel?: boolean; placeholder?: string; title?: string }) {
   const [texto, setTexto] = useState(valor == null ? '' : String(valor));
   useEffect(() => setTexto(valor == null ? '' : String(valor)), [valor]);
   const cabe = (v: number) => Number.isFinite(v) && v >= min && v <= max;
   return (
-    <Campo rotulo={rotulo}>
+    <Campo rotulo={rotulo} title={title}>
       <input
         type="number"
         min={min}
@@ -233,6 +233,9 @@ export default function TelaCasaAutomatica(props: Props) {
   const motivoDeLancar = motivoDeCriar ?? (prova && !prova.ok ? prova.motivo : undefined);
   // O padrão do CUB é o DA PRÉVIA (a área é dela); trocar o padrão no formulário só vale depois de gerar de novo.
   const padraoDaPrevia = casa.curtoDoPlano?.padrao ?? p.curto.padrao;
+  // A1 (11/11/2026): o que o motor vai corrigir no programa (as mesmas hipóteses padrão que ele usa), à vista ANTES de
+  // gerar — antes só aparecia no Relatório, depois da prévia.
+  const avisosDoPrograma = normalizarProgramaCurto(p.curto).avisos;
 
   const agir = async (nome: string, fn: () => Promise<void>) => {
     setOcupado(nome);
@@ -275,6 +278,7 @@ export default function TelaCasaAutomatica(props: Props) {
   const abaEfetiva: Aba = abas.some((a) => a.id === aba) ? aba : plano ? 'resultado' : 'programa';
 
   const avisoDeLancar = plano && plano.comandos.length > 0 && !casa.rodando ? motivoDeLancar : undefined;
+  const mensagemDoConstruir = props.peloEmpreendimento?.mensagem ?? null;
 
   return (
     <div className="space-y-6" data-testid="tela-casa">
@@ -303,7 +307,7 @@ export default function TelaCasaAutomatica(props: Props) {
         </TabsBar>
 
         {/* O estado das ações, logo abaixo delas — vale para todas as abas. */}
-        {((props.motivoParaNaoGerar && !casa.rodando) || casa.rodando || erro || casa.erro || props.lancado || avisoDeLancar) && (
+        {((props.motivoParaNaoGerar && !casa.rodando) || casa.rodando || erro || casa.erro || props.lancado || avisoDeLancar || mensagemDoConstruir) && (
           <div className="mb-3 space-y-2">
             {props.motivoParaNaoGerar && !casa.rodando && (
               <p className="text-xs text-amber-700" data-testid="motivo-gerar-casa">
@@ -322,76 +326,69 @@ export default function TelaCasaAutomatica(props: Props) {
             )}
             {props.lancado && <p className="rounded-[6px] border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm text-emerald-800">{props.lancado}</p>}
             {avisoDeLancar && <p className="text-xs text-amber-700">{avisoDeLancar}</p>}
+            {mensagemDoConstruir && (
+              <p
+                role={mensagemDoConstruir.erro ? 'alert' : 'status'}
+                className={mensagemDoConstruir.erro ? 'text-sm text-red-700' : 'text-sm text-gray-700'}
+                data-testid="mensagem-do-construir"
+              >
+                {mensagemDoConstruir.texto}
+              </p>
+            )}
           </div>
         )}
       </div>
 
-      {/* ── Construir pelo Empreendimento (25/10/2026): o que já está feito, o que o botão faz e onde ele pergunta ── */}
-      {props.peloEmpreendimento && (
-        <section className={`space-y-4 ${cardCls}`} data-testid="casa-pelo-empreendimento">
-          <SecaoTitulo
-            icon={Building2}
-            titulo={`Dados do Empreendimento "${props.peloEmpreendimento.nome}"`}
-            resumo="lote, zona e programa saem da ficha, do Mapa Regulatório e de Torres & Unidades"
-            acoes={
-              <Button
-                variant="secondary"
-                onClick={() => {
-                  const parada = props.peloEmpreendimento?.passos.parada;
-                  if (parada === 'UNIDADE') setAba('programa');
-                  props.peloEmpreendimento?.onConstruir();
-                }}
-                disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo || casa.rodando}
-                title={props.peloEmpreendimento.passos.motivoDoBotao ?? (casa.rodando ? 'Aguarde: a casa está sendo gerada' : undefined)}
-                data-testid="construir-pelo-empreendimento"
-              >
-                <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir pelo Empreendimento'}
-              </Button>
-            }
-          />
-          <ul className="space-y-2">
-            {props.peloEmpreendimento.passos.passos.map((x) => {
-              const { rotulo, cor, Icone } = DO_ESTADO[x.estado];
-              const onde = x.estado === 'PERGUNTAR' ? ONDE_RESPONDER[x.passo] : undefined;
-              return (
-                <li key={x.passo} className="flex items-start gap-2 text-sm text-gray-700" data-testid={`passo-${x.passo}`}>
-                  <Icone className={`mt-0.5 h-4 w-4 shrink-0 ${cor}`} aria-hidden />
-                  <span className="w-20 shrink-0 font-medium text-gray-900">{x.rotulo}</span>
-                  <span className={`w-28 shrink-0 ${cor}`}>{rotulo}</span>
-                  <span className="min-w-0 flex-1">
-                    {x.texto}
-                    {onde && (
-                      <button
-                        type="button"
-                        className="ml-2 font-medium text-blue-600 hover:text-blue-800"
-                        onClick={() => {
-                          if (x.passo === 'UNIDADE') setAba('programa');
-                          props.peloEmpreendimento?.onResolver(x.passo);
-                        }}
-                      >
-                        {onde}
-                      </button>
-                    )}
-                  </span>
-                </li>
-              );
-            })}
-          </ul>
-          {props.peloEmpreendimento.mensagem && (
-            <p
-              role={props.peloEmpreendimento.mensagem.erro ? 'alert' : 'status'}
-              className={props.peloEmpreendimento.mensagem.erro ? 'text-sm text-red-700' : 'text-sm text-gray-700'}
-              data-testid="mensagem-do-construir"
-            >
-              {props.peloEmpreendimento.mensagem.texto}
-            </p>
-          )}
-        </section>
-      )}
-
       {/* ── Programa: o que a casa tem e o que ela leva (um formulário, um card, §30) ── */}
       {abaEfetiva === 'programa' && (
         <div role="tabpanel" aria-label="Programa" className={`space-y-8 ${cardCls}`} data-testid="programa-da-casa">
+          {/* ── Construir pelo Empreendimento (25/10/2026): o que já está feito, o que o botão faz e onde ele pergunta. A2
+              (11/11/2026): mora na aba Programa, que é a das entradas; a mensagem do último Construir fica na faixa de estado. ── */}
+          {props.peloEmpreendimento && (
+            <section className="space-y-4" data-testid="casa-pelo-empreendimento">
+              <SecaoTitulo
+                icon={Building2}
+                titulo={`Dados do Empreendimento "${props.peloEmpreendimento.nome}"`}
+                resumo="lote, zona e programa saem da ficha, do Mapa Regulatório e de Torres & Unidades"
+                acoes={
+                  <Button
+                    variant="secondary"
+                    onClick={() => props.peloEmpreendimento?.onConstruir()}
+                    disabled={!!props.peloEmpreendimento.passos.motivoDoBotao || props.peloEmpreendimento.construindo || casa.rodando}
+                    title={props.peloEmpreendimento.passos.motivoDoBotao ?? (casa.rodando ? 'Aguarde: a casa está sendo gerada' : undefined)}
+                    data-testid="construir-pelo-empreendimento"
+                  >
+                    <Wand2 className="h-4 w-4" /> {props.peloEmpreendimento.construindo ? 'Construindo…' : 'Construir pelo Empreendimento'}
+                  </Button>
+                }
+              />
+              <ul className="space-y-2">
+                {props.peloEmpreendimento.passos.passos.map((x) => {
+                  const { rotulo, cor, Icone } = DO_ESTADO[x.estado];
+                  const onde = x.estado === 'PERGUNTAR' ? ONDE_RESPONDER[x.passo] : undefined;
+                  return (
+                    <li key={x.passo} className="flex items-start gap-2 text-sm text-gray-700" data-testid={`passo-${x.passo}`}>
+                      <Icone className={`mt-0.5 h-4 w-4 shrink-0 ${cor}`} aria-hidden />
+                      <span className="w-20 shrink-0 font-medium text-gray-900">{x.rotulo}</span>
+                      <span className={`w-28 shrink-0 ${cor}`}>{rotulo}</span>
+                      <span className="min-w-0 flex-1">
+                        {x.texto}
+                        {onde && (
+                          <button
+                            type="button"
+                            className="ml-2 font-medium text-blue-600 hover:text-blue-800"
+                            onClick={() => props.peloEmpreendimento?.onResolver(x.passo)}
+                          >
+                            {onde}
+                          </button>
+                        )}
+                      </span>
+                    </li>
+                  );
+                })}
+              </ul>
+            </section>
+          )}
           <section className="space-y-4">
             <SecaoTitulo
               icon={Home}
@@ -465,6 +462,13 @@ export default function TelaCasaAutomatica(props: Props) {
                 Garagem coberta
               </label>
             </div>
+            {avisosDoPrograma.length > 0 && (
+              <ul role="status" className="space-y-1 text-xs text-amber-700" data-testid="avisos-do-programa">
+                {avisosDoPrograma.map((a) => (
+                  <li key={a}>{a}</li>
+                ))}
+              </ul>
+            )}
           </section>
 
           <section className="space-y-4">
@@ -495,7 +499,7 @@ export default function TelaCasaAutomatica(props: Props) {
                   <option value="CENTRO">No centro</option>
                 </select>
               </Campo>
-              <Numero rotulo="Alternativas tentadas" valor={p.sementes} min={1} max={8} onValor={(v) => v != null && onPremissas({ ...p, sementes: Math.round(v) })} />
+              <Numero rotulo="Arranjos testados" title="Quantos arranjos da planta o gerador experimenta antes de escolher o de menos problemas" valor={p.sementes} min={1} max={8} onValor={(v) => v != null && onPremissas({ ...p, sementes: Math.round(v) })} />
               <div className="hidden md:block" />
               <Campo rotulo="Telhado">
                 <select aria-label="Tipo de telhado" className={campoCls} value={p.telhado.tipo} onChange={(e) => set('telhado', { tipo: e.target.value as PremissasDaCasa['telhado']['tipo'] })}>
@@ -755,11 +759,18 @@ export default function TelaCasaAutomatica(props: Props) {
               if (!lista.length) return null;
               return (
                 <div key={grupo}>
-                  <button type="button" onClick={() => setAberto(aberto === grupo ? null : grupo)} className="w-full text-left text-sm font-medium text-gray-700 hover:text-gray-900">
-                    {aberto === grupo ? '▾' : '▸'} {ROTULO_DA_PENDENCIA[grupo]} ({lista.length})
+                  <button
+                    type="button"
+                    onClick={() => setAberto(aberto === grupo ? null : grupo)}
+                    aria-expanded={aberto === grupo}
+                    aria-controls={`pendencias-${grupo}`}
+                    className="flex w-full items-center gap-1 text-left text-sm font-medium text-gray-700 hover:text-gray-900"
+                  >
+                    {aberto === grupo ? <ChevronDown className="h-4 w-4 shrink-0" aria-hidden /> : <ChevronRight className="h-4 w-4 shrink-0" aria-hidden />}
+                    {ROTULO_DA_PENDENCIA[grupo]} ({lista.length})
                   </button>
                   {aberto === grupo && (
-                    <ul className="mt-1 space-y-1 pl-4">
+                    <ul id={`pendencias-${grupo}`} className="mt-1 space-y-1 pl-5">
                       {lista.map((x, i) => (
                         <li key={i} className={`break-words text-sm ${grupo === 'VERIFICACAO' || grupo === 'SEM_SOLUCAO' || grupo === 'CONFLITO' ? 'text-red-700' : 'text-slate-600'}`}>
                           {x.texto}

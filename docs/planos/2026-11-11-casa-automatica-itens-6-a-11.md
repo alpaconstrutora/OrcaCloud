@@ -135,13 +135,36 @@ extração, cada um com o marco verde.
 Pronto quando: o marco passa SEM regravar o fixture; `blueprintCasaAutomatica.ts` só reexporta; nenhum arquivo novo
 passa de ~600 linhas; tsc e a suíte da CI verdes.
 
+## Execução da etapa A
+
+Aprovação do plano: "ok" (11/11/2026). Execução nesta sessão, por mim (tarefas pequenas, quase tudo em
+`components/blueprint/TelaCasaAutomatica.tsx`); testes em `__tests__/components/TelaCasaAutomatica.test.tsx`, escritos
+antes do código (falham primeiro).
+
+- **A1.** Testes: `avisos do programa no formulário` — premissas `{ dormitorios: 2, suites: 4 }` → o texto
+  "Suítes: 4 → 2 (no máximo uma por dormitório)." dentro de `data-testid="avisos-do-programa"`; `PREMISSAS_DA_CASA_PADRAO`
+  → o bloco não existe. Código: `const avisosDoPrograma = normalizarProgramaCurto(p.curto).avisos` (o motor chama com as
+  hipóteses padrão: `programaDaCasa(entrada.curto, hip.programa)` e as premissas não as mudam); lista `<ul role="status">`
+  âmbar, `text-xs`, abaixo da grade do Programa. Fica de fora o aviso das vagas descobertas, que só existe em
+  `programaDaCasa`.
+- **A2.** Testes: `cartão do Empreendimento só no Programa` — com prévia, aba Resultado: sem `casa-pelo-empreendimento`;
+  aba Programa: com ele; `mensagem-do-construir` visível com a aba Resultado. Código: o `<section>` vai para dentro do
+  painel da aba Programa (primeira seção do card, §30); a mensagem vai para a faixa de estado abaixo das abas.
+- **A3.** Testes: `relatório: grupo com aria-expanded e seta em ícone` — o grupo aberto (VERIFICACAO) tem
+  `aria-expanded="true"` e `aria-controls` apontando para a lista; clicar fecha (`"false"`); o texto do botão não contém
+  "▸"/"▾"; `getByLabelText('Arranjos testados')` existe com `title`. Código: `ChevronRight`/`ChevronDown` (lucide), `id`
+  da lista por grupo.
+- Fechamento: `npx tsc --noEmit -p .`, `bash scripts/check-ui-standard.sh components/blueprint/TelaCasaAutomatica.tsx`,
+  os testes da tela; conferência no app (roteiro `c:/tmp/pwtest/conferencia-casa-etapa-a.cjs`, planta descartável); PR
+  → CI → merge → `conferir-producao.sh`.
+
 ## Estado
 
 | Item | Situação |
 |---|---|
-| A1 | a fazer |
-| A2 | a fazer |
-| A3 | a fazer |
+| A1 | feito — teste da tela; conferido no app (aviso "Suítes: 4 → 2…" no formulário, some com o programa válido) |
+| A2 | feito — teste da tela; no app NÃO conferido (a planta descartável não tem Empreendimento ligado, o cartão não aparece) |
+| A3 | feito — testes da tela; conferido no app (4 grupos com `aria-expanded`, troca no clique, sem "▸", "Arranjos testados") |
 | B1 | a fazer |
 | B2 | a fazer |
 | B3 | a fazer |

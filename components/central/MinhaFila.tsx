@@ -232,10 +232,10 @@ function Linha({ item, hoje, onAprovar, onRejeitar, onConcluirTarefa, onNavigate
             <button type="button" onClick={() => onNavigate(destinoDo(item))}
                 className="flex-1 min-w-0 text-left rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40">
                 <span className="block text-sm text-gray-900 truncate">{tituloDo(item)}</span>
-                <span className="block text-xs text-gray-500 truncate">
-                    {partes.join(' · ')}
-                    {partes.length > 0 && prazo ? ' · ' : ''}
-                    {prazo && <span className={TOM_PRAZO[prazo.tom]}>{prazo.texto}</span>}
+                {/* O detalhe encolhe; o prazo nunca é cortado (é o que diz a urgência). */}
+                <span className="flex text-xs text-gray-500 min-w-0">
+                    {partes.length > 0 && <span className="truncate">{partes.join(' · ')}</span>}
+                    {prazo && <span className={`shrink-0 whitespace-nowrap ${TOM_PRAZO[prazo.tom]}`}>{partes.length > 0 ? ' · ' : ''}{prazo.texto}</span>}
                 </span>
             </button>
             {item.valor != null && item.valor !== 0 && (

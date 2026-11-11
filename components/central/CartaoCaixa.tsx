@@ -52,7 +52,7 @@ export function CartaoCaixa({ estado, onTentarDeNovo, pontos, periodo, onPeriodo
             onTentarDeNovo={onTentarDeNovo}
             acao={{ rotulo: 'Inteligência Financeira', onClick: () => onNavigate('financial-intelligence') }}
         >
-            <div className="flex items-end justify-between gap-3">
+            <div className="flex flex-wrap items-end justify-between gap-3">
                 <div className="min-w-0">
                     {final == null ? (
                         <p className="text-sm text-gray-500">Sem projeção para o período.</p>
@@ -62,7 +62,7 @@ export function CartaoCaixa({ estado, onTentarDeNovo, pontos, periodo, onPeriodo
                                 valor={final}
                                 animar={animar}
                                 formatar={fBRL}
-                                className={`text-[28px] leading-none font-semibold ${negativo ? 'text-red-600' : 'text-gray-900'}`}
+                                className={`text-[28px] leading-none font-semibold whitespace-nowrap ${negativo ? 'text-red-600' : 'text-gray-900'}`}
                             />
                             <p className="text-xs text-gray-500 mt-1">no fim de {periodo} dias</p>
                         </>

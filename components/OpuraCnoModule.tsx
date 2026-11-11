@@ -962,7 +962,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <input
                     value={cnoForm.cno_number}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, cno_number: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     placeholder="Ex: 51.218.49079/78"
                   />
                 </div>
@@ -972,7 +972,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <select
                     value={cnoForm.status}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, status: e.target.value as any }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                   >
                     <option value="rascunho">Rascunho</option>
                     <option value="documentacao_enviada">Documentação Enviada</option>
@@ -987,7 +987,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <input
                     value={cnoForm.alvara_numero}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, alvara_numero: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     placeholder="Nº Alvará / Ano"
                   />
                 </div>
@@ -997,7 +997,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <input
                     value={cnoForm.matricula_imovel}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, matricula_imovel: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     placeholder="Nº Matrícula e Cartório"
                   />
                 </div>
@@ -1008,7 +1008,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     type="number"
                     value={cnoForm.area_aprovada}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, area_aprovada: Number(e.target.value) }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                   />
                 </div>
 
@@ -1018,7 +1018,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     type="number"
                     value={cnoForm.area_real}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, area_real: Number(e.target.value) }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                   />
                 </div>
 
@@ -1027,7 +1027,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <select
                     value={cnoForm.padrao_construtivo || 'normal'}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, padrao_construtivo: e.target.value as any }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                   >
                     <option value="baixo">Baixo</option>
                     <option value="normal">Normal</option>
@@ -1040,7 +1040,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <select
                     value={cnoForm.responsavel_tipo || 'construtor'}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, responsavel_tipo: e.target.value as any }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                   >
                     <option value="proprietario">Proprietário</option>
                     <option value="incorporador">Incorporador</option>
@@ -1053,7 +1053,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   <input
                     value={cnoForm.art_rrt}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, art_rrt: e.target.value }))}
-                    className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     placeholder="Código do Registro Técnico"
                   />
                 </div>
@@ -1068,7 +1068,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <select
                       value={cnoForm.sero_category}
                       onChange={(e) => setCnoForm(prev => ({ ...prev, sero_category: e.target.value as any }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     >
                       <option value="obra_nova">Obra Nova</option>
                       <option value="acrescimo">Acréscimo/Ampliação</option>
@@ -1082,7 +1082,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <select
                       value={cnoForm.sero_destination}
                       onChange={(e) => setCnoForm(prev => ({ ...prev, sero_destination: e.target.value as any }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     >
                       <option value="residencial_unifamiliar">Residencial Unifamiliar</option>
                       <option value="residencial_multifamiliar">Residencial Multifamiliar</option>
@@ -1099,7 +1099,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <select
                       value={cnoForm.sero_type}
                       onChange={(e) => setCnoForm(prev => ({ ...prev, sero_type: e.target.value as any }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     >
                       <option value="alvenaria">Alvenaria</option>
                       <option value="madeira">Madeira</option>
@@ -1112,7 +1112,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <MoneyCentsInput
                       value={cnoForm.vau_value}
                       onChange={(v) => setCnoForm(prev => ({ ...prev, vau_value: v === '' ? 0 : Number(v) }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       placeholder="Ex: 2.450,00"
                     />
                   </div>
@@ -1195,7 +1195,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <input
                       value={simForm.scenario_name}
                       onChange={(e) => setSimForm(prev => ({ ...prev, scenario_name: e.target.value }))}
-                      className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     />
                   </div>
 
@@ -1205,7 +1205,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       <input
                         value={simForm.state}
                         onChange={(e) => setSimForm(prev => ({ ...prev, state: e.target.value.toUpperCase() }))}
-                        className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       />
                     </div>
                     <div className="space-y-1">
@@ -1213,7 +1213,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       <input
                         value={simForm.reference_date}
                         onChange={(e) => setSimForm(prev => ({ ...prev, reference_date: e.target.value }))}
-                        className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                         placeholder="YYYY-MM"
                       />
                     </div>
@@ -1224,7 +1224,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <select
                       value={simForm.social_charges}
                       onChange={(e) => setSimForm(prev => ({ ...prev, social_charges: e.target.value as any }))}
-                      className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     >
                       <option value="sem_desoneracao">Sem Desoneração</option>
                       <option value="com_desoneracao">Com Desoneração (Desonerado)</option>
@@ -1238,7 +1238,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                         type="number"
                         value={simForm.area_construida}
                         onChange={(e) => setSimForm(prev => ({ ...prev, area_construida: Number(e.target.value) }))}
-                        className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       />
                     </div>
                     <div className="space-y-1">
@@ -1246,7 +1246,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       <select
                         value={simForm.padrao}
                         onChange={(e) => setSimForm(prev => ({ ...prev, padrao: e.target.value as any }))}
-                        className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       >
                         <option value="baixo">Baixo</option>
                         <option value="normal">Normal</option>
@@ -1260,7 +1260,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <select
                       value={simForm.metodo_construtivo || 'convencional'}
                       onChange={(e) => setSimForm(prev => ({ ...prev, metodo_construtivo: e.target.value as any }))}
-                      className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     >
                       <option value="convencional">Alvenaria Convencional</option>
                       <option value="pre_moldado">Pré-Moldado de Concreto (Redutor 50%)</option>
@@ -1276,7 +1276,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <select
                       value={simForm.regime_contratacao || 'equipe_propria'}
                       onChange={(e) => setSimForm(prev => ({ ...prev, regime_contratacao: e.target.value as any }))}
-                      className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     >
                       <option value="equipe_propria">Mão de Obra Própria</option>
                       <option value="empreitada_global">Empreitada Global</option>
@@ -1462,7 +1462,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <input
                       value={dctfForm.declaration_number}
                       onChange={(e) => setDctfForm(prev => ({ ...prev, declaration_number: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       placeholder="Ex: 1234567890"
                     />
                   </div>
@@ -1473,7 +1473,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       type="date"
                       value={dctfForm.transmission_date}
                       onChange={(e) => setDctfForm(prev => ({ ...prev, transmission_date: e.target.value }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                     />
                   </div>
 
@@ -1483,7 +1483,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       <MoneyCentsInput
                         value={dctfForm.principal_amount}
                         onChange={(v) => setDctfForm(prev => ({ ...prev, principal_amount: v }))}
-                        className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                         placeholder="0,00"
                       />
                     </div>
@@ -1492,7 +1492,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       <MoneyCentsInput
                         value={dctfForm.fine_amount}
                         onChange={(v) => setDctfForm(prev => ({ ...prev, fine_amount: v }))}
-                        className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                        className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                         placeholder="0,00"
                       />
                     </div>
@@ -1503,7 +1503,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                     <MoneyCentsInput
                       value={dctfForm.interest_amount}
                       onChange={(v) => setDctfForm(prev => ({ ...prev, interest_amount: v }))}
-                      className="w-full px-4 py-3 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
+                      className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-indigo-600 transition-colors text-sm font-semibold"
                       placeholder="0,00"
                     />
                   </div>

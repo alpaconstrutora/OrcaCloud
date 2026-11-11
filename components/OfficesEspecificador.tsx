@@ -39,7 +39,9 @@ const CRONOGRAMA_PADRAO = [
 const BRL = (v: number) =>
   new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v || 0);
 
-const CHIP = 'bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] font-medium';
+const CHIP = 'bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-xs text-slate-700 outline-none focus:border-[#D47A55] font-medium';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const CHIP_AREA = 'bg-slate-50 border border-slate-200 rounded-[6px] px-3 py-2.5 text-xs text-slate-700 outline-none focus:border-[#D47A55] font-medium';
 
 export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ userId }) => {
   const [loading, setLoading] = useState(true);
@@ -765,7 +767,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
               </div>
               <div className="space-y-1">
                 <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Notas / Comentários</label>
-                <textarea rows={2} value={comentarioCliente} onChange={e => setComentarioCliente(e.target.value)} className={`w-full ${CHIP} resize-none`} />
+                <textarea rows={2} value={comentarioCliente} onChange={e => setComentarioCliente(e.target.value)} className={`w-full ${CHIP_AREA} resize-none`} />
               </div>
             </div>
             <div className="flex gap-3 pt-2">
@@ -848,7 +850,7 @@ export const OfficesEspecificador: React.FC<OfficesEspecificadorProps> = ({ user
               </div>
               <div className="space-y-1">
                 <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Vistoria e Ocorrências</label>
-                <textarea rows={3} placeholder="Descreva os serviços realizados e o andamento geral..." value={rdoDescricao} onChange={e => setRdoDescricao(e.target.value)} className={`w-full ${CHIP} resize-none`} required />
+                <textarea rows={3} placeholder="Descreva os serviços realizados e o andamento geral..." value={rdoDescricao} onChange={e => setRdoDescricao(e.target.value)} className={`w-full ${CHIP_AREA} resize-none`} required />
               </div>
             </div>
             <button type="submit" className="w-full py-2.5 bg-gradient-to-tr from-[#D47A55] to-[#C8643C] text-white font-black text-form-input uppercase tracking-widest rounded-xl shadow-md active:scale-95 transition-all">

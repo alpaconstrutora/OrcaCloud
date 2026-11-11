@@ -339,13 +339,13 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
                 <div key={f.label} className="space-y-1">
                   <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">{f.label}</label>
                   <div className="relative">
-                    <f.icon className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-300" />
+                    <f.icon className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                     <input
                       type={f.type}
                       placeholder={f.placeholder}
                       value={f.value}
                       onChange={e => f.setter(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] focus:bg-white transition-colors font-medium"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-[6px] pl-10 pr-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55] focus:bg-white transition-colors font-medium"
                       required={f.required}
                     />
                   </div>
@@ -355,11 +355,11 @@ const OfficesCRM: React.FC<OfficesCRMProps> = ({ userId }) => {
               <div className="space-y-1">
                 <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Status do Funil</label>
                 <div className="relative">
-                  <Activity className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-300" />
+                  <Activity className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                   <select
                     value={status}
                     onChange={e => setStatus(e.target.value as OfficesLeadStatus)}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
+                    className="w-full bg-slate-50 border border-slate-200 rounded-[6px] pl-10 pr-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
                   >
                     {STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
                   </select>

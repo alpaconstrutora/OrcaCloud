@@ -334,7 +334,7 @@ export function DocumentBatchEditModal({
                     value={normaOrgao}
                     onChange={(e) => setNormaOrgao(e.target.value)}
                     disabled={saving}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
                   />
                   <datalist id="ged-normas-orgaos-edicao-lote">
                     {NORMA_ORGAOS_SUGERIDOS.map((o) => <option key={o.value} value={o.value} />)}
@@ -346,7 +346,7 @@ export function DocumentBatchEditModal({
                     value={normaEdicao}
                     onChange={(e) => setNormaEdicao(e.target.value)}
                     disabled={saving}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
                   >
                     <option value="">Não alterar</option>
                     {opcoesEdicaoNorma(normaEdicao).map((ed) => (
@@ -360,7 +360,7 @@ export function DocumentBatchEditModal({
                     value={normaSituacao}
                     onChange={(e) => setNormaSituacao(e.target.value as OpuraNormaSituacao | '')}
                     disabled={saving}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
                   >
                     <option value="">— Não alterar —</option>
                     {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
@@ -377,7 +377,7 @@ export function DocumentBatchEditModal({
                       value={normaSubstituidaPor}
                       onChange={(e) => setNormaSubstituidaPor(e.target.value)}
                       disabled={saving}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
                     />
                   </div>
                 ) : (
@@ -393,7 +393,7 @@ export function DocumentBatchEditModal({
                 value={tipoDocumento}
                 onChange={(e) => setTipoDocumento(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               >
                 <option value="">— Não alterar —</option>
                 {documentTypes.map((t) => (
@@ -408,7 +408,7 @@ export function DocumentBatchEditModal({
                 value={disciplineCode}
                 onChange={(e) => setDisciplineCode(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               >
                 <option value="">— Não alterar —</option>
                 {disciplines.map((d) => (
@@ -428,7 +428,7 @@ export function DocumentBatchEditModal({
                 value={revisao}
                 onChange={(e) => setRevisao(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               />
             </div>
             )}
@@ -439,7 +439,7 @@ export function DocumentBatchEditModal({
                 value={status}
                 onChange={(e) => setStatus(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               >
                 <option value="">— Não alterar —</option>
                 {STATUS_OPTIONS.map((s) => (
@@ -455,7 +455,7 @@ export function DocumentBatchEditModal({
                 value={alertaDias}
                 onChange={(e) => setAlertaDias(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               >
                 <option value="">— Não alterar —</option>
                 {ALERTA_OPTIONS.map((d) => (
@@ -472,7 +472,7 @@ export function DocumentBatchEditModal({
                 value={dataEmissao}
                 onChange={(e) => setDataEmissao(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               />
             </div>
 
@@ -484,7 +484,7 @@ export function DocumentBatchEditModal({
                 value={dataValidade}
                 onChange={(e) => setDataValidade(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               />
             </div>
             )}
@@ -496,7 +496,7 @@ export function DocumentBatchEditModal({
                 onChange={(e) => setProjectId(e.target.value)}
                 disabled={saving || isMultiOrg}
                 title={isMultiOrg ? 'Documentos selecionados pertencem a organizações diferentes.' : undefined}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               >
                 <option value="">— Não alterar —</option>
                 {obras.map((o: any) => (
@@ -512,7 +512,7 @@ export function DocumentBatchEditModal({
                 onChange={(e) => setCompanyId(e.target.value)}
                 disabled={saving || isMultiOrg}
                 title={isMultiOrg ? 'Documentos selecionados pertencem a organizações diferentes.' : undefined}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               >
                 <option value="">— Não alterar —</option>
                 {companies.map((c) => (
@@ -532,7 +532,7 @@ export function DocumentBatchEditModal({
                 value={autorNome}
                 onChange={(e) => setAutorNome(e.target.value)}
                 disabled={saving}
-                className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
               />
             ) : (
               <>
@@ -550,7 +550,7 @@ export function DocumentBatchEditModal({
                     }
                   }}
                   disabled={saving}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
                 >
                   <option value="">— Não alterar —</option>
                   {suppliers.map((s) => (
@@ -566,7 +566,7 @@ export function DocumentBatchEditModal({
                     onChange={(e) => setAutorNome(e.target.value)}
                     disabled={saving}
                     autoFocus
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
                   />
                 )}
               </>
@@ -594,7 +594,7 @@ export function DocumentBatchEditModal({
               value={extensaoNova}
               onChange={(e) => setExtensaoNova(e.target.value)}
               disabled={saving}
-              className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+              className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
             >
               <option value="">— Não alterar —</option>
               {extensaoOptions.map((o) => (
@@ -632,7 +632,7 @@ export function DocumentBatchEditModal({
               value={addTagsInput}
               onChange={(e) => setAddTagsInput(e.target.value)}
               disabled={saving}
-              className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
+              className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-50"
             />
           </div>
 

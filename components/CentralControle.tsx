@@ -347,7 +347,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                         <select
                             value={selectedObra}
                             onChange={e => setSelectedObra(e.target.value)}
-                            className="text-sm font-normal px-3 py-2.5 rounded-xl border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-blue-400"
+                            className="text-sm font-normal px-3 h-9 rounded-[6px] border border-gray-200 bg-white text-gray-700 focus:outline-none focus:border-blue-400"
                             title="Filtrar por obra"
                         >
                             <option value="all">Todas as obras</option>

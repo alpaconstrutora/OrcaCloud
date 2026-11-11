@@ -120,7 +120,7 @@ const AIChat: React.FC<AIChatProps> = ({ budget, settings, isOpen, onClose }) =>
             onChange={(e) => setInputText(e.target.value)}
             onKeyDown={handleKeyDown}
             placeholder="Pergunte sobre custos, CUB, ou sugestões..."
-            className="flex-1 border border-gray-300 rounded-full px-4 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            className="flex-1 border border-gray-300 rounded-full px-4 h-9 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             disabled={isLoading}
           />
           <Button

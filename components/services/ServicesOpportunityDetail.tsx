@@ -732,7 +732,7 @@ const ServicesOpportunityDetail: React.FC<Props> = ({ opportunityId, organizatio
               <input
                 type="email"
                 autoFocus
-                className="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white"
+                className="w-full rounded-[6px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 h-9 text-sm text-gray-900 dark:text-white"
                 value={requestEmail}
                 onChange={e => setRequestEmail(e.target.value)}
                 placeholder="orcamento@empresa.com.br"

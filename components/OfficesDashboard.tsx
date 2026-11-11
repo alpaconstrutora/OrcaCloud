@@ -231,7 +231,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
               <select
                 value={periodo}
                 onChange={e => setPeriodo(e.target.value)}
-                className="appearance-none bg-white border border-slate-200/60 rounded-xl pl-3.5 pr-9 py-2.5 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#D47A55] cursor-pointer shadow-sm"
+                className="appearance-none bg-white border border-slate-200/60 rounded-[6px] pl-3.5 pr-9 h-9 text-xs font-black uppercase tracking-widest text-slate-600 outline-none focus:border-[#D47A55] cursor-pointer shadow-sm"
               >
                 <option>Última Semana</option>
                 <option>Último Mês</option>

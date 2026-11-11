@@ -467,7 +467,7 @@ export function BatchUploadSheet({
             <select
               value={orgId}
               onChange={(e) => setOrgId(e.target.value)}
-              className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+              className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
             >
               <option value="">Selecione uma organização...</option>
               {organizations.map((org) => (
@@ -523,7 +523,7 @@ export function BatchUploadSheet({
                     placeholder="Ex: ABNT"
                     value={defaultNormaOrgao}
                     onChange={(e) => setDefaultNormaOrgao(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                   <datalist id="ged-normas-orgaos-lote">
                     {NORMA_ORGAOS_SUGERIDOS.map((o) => <option key={o.value} value={o.value} />)}
@@ -534,7 +534,7 @@ export function BatchUploadSheet({
                   <select
                     value={defaultNormaEdicao}
                     onChange={(e) => setDefaultNormaEdicao(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Sem edição / ano</option>
                     {opcoesEdicaoNorma(defaultNormaEdicao).map((ed) => (
@@ -547,7 +547,7 @@ export function BatchUploadSheet({
                   <select
                     value={defaultNormaSituacao}
                     onChange={(e) => setDefaultNormaSituacao(e.target.value as OpuraNormaSituacao)}
-                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
                       <option key={value} value={value}>{s.label}</option>
@@ -561,7 +561,7 @@ export function BatchUploadSheet({
               <select
                 value={defaultTipo}
                 onChange={(e) => setDefaultTipo(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               >
                 <option value="">Nenhum</option>
                 {documentTypes.map((type) => (
@@ -574,7 +574,7 @@ export function BatchUploadSheet({
               <select
                 value={defaultDiscipline}
                 onChange={(e) => setDefaultDiscipline(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               >
                 <option value="">Nenhuma</option>
                 {disciplines.map((disc) => (
@@ -588,7 +588,7 @@ export function BatchUploadSheet({
                 value={defaultProjectId}
                 onChange={(e) => setDefaultProjectId(e.target.value)}
                 disabled={selectedProjectId !== 'all'}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-60"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-60"
               >
                 <option value="">Nenhum (Geral)</option>
                 {obras.map((o: any) => (
@@ -601,7 +601,7 @@ export function BatchUploadSheet({
               <select
                 value={defaultCompanyId}
                 onChange={(e) => setDefaultCompanyId(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               >
                 <option value="">Nenhuma</option>
                 {companies.map((c) => (
@@ -616,7 +616,7 @@ export function BatchUploadSheet({
                 placeholder="obra, fundação, AVCB, fiscal"
                 value={defaultTagsInput}
                 onChange={(e) => setDefaultTagsInput(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               />
             </div>
             <div className="space-y-1.5">
@@ -625,7 +625,7 @@ export function BatchUploadSheet({
                 type="date"
                 value={defaultEmissao}
                 onChange={(e) => setDefaultEmissao(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               />
             </div>
             {/* Norma não vence por data — é cancelada ou substituída. */}
@@ -636,7 +636,7 @@ export function BatchUploadSheet({
                 type="date"
                 value={defaultValidade}
                 onChange={(e) => setDefaultValidade(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
               />
             </div>
             )}

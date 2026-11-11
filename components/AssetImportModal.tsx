@@ -504,7 +504,7 @@ export const AssetImportModal: React.FC<AssetImportModalProps> = ({
                 required
                 value={selectedOrgId}
                 onChange={(e) => setSelectedOrgId(e.target.value)}
-                className="px-4 py-2 border border-gray-200 rounded-xl bg-white focus:border-blue-600 outline-none transition-colors text-sm font-semibold w-72"
+                className="px-4 h-9 border border-gray-200 rounded-[6px] bg-white focus:border-blue-600 outline-none transition-colors text-sm font-semibold w-72"
               >
                 <option value="">Selecione a Organização...</option>
                 {organizations.map((org) => (

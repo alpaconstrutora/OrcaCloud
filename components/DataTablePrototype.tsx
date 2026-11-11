@@ -146,7 +146,7 @@ export default function DataTablePrototype({ onBack }: { onBack: () => void }) {
             <input 
               type="text" 
               placeholder="Buscar insumos..." 
-              className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+              className="w-full pl-9 pr-4 h-9 bg-white border border-gray-200 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
             />
           </div>
           <button className="p-2 border border-gray-200 rounded-lg text-gray-500 hover:bg-gray-50 bg-white transition-colors shadow-sm">

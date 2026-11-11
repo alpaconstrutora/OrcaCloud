@@ -971,7 +971,7 @@ export default function OpuraGovernanceModule({
                   <select
                     value={newLimit.flow_type}
                     onChange={(e) => setNewLimit({ ...newLimit, flow_type: e.target.value as AuthorityFlowType })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                   >
                     <option value="compras">Compras</option>
                     <option value="pagamentos">Pagamentos</option>
@@ -984,7 +984,7 @@ export default function OpuraGovernanceModule({
                   <select
                     value={newLimit.target_type}
                     onChange={(e) => setNewLimit({ ...newLimit, target_type: e.target.value, target_id: '' })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                   >
                     <option value="role">Cargo</option>
                     <option value="employee">Pessoa</option>
@@ -998,7 +998,7 @@ export default function OpuraGovernanceModule({
                   value={newLimit.target_id}
                   required
                   onChange={(e) => setNewLimit({ ...newLimit, target_id: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                  className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                 >
                   <option value="">Selecione...</option>
                   {newLimit.target_type === 'role' && roles.map(r => (
@@ -1016,7 +1016,7 @@ export default function OpuraGovernanceModule({
                   <MoneyCentsInput
                     value={newLimit.limite_minimo}
                     onChange={(v) => setNewLimit({ ...newLimit, limite_minimo: v === '' ? 0 : Number(v) })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 focus:border-blue-500 focus:ring-0 text-white"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1024,7 +1024,7 @@ export default function OpuraGovernanceModule({
                   <MoneyCentsInput
                     value={newLimit.limite_maximo}
                     onChange={(v) => setNewLimit({ ...newLimit, limite_maximo: v === '' ? 0 : Number(v) })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 focus:border-blue-500 focus:ring-0 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 focus:border-blue-500 focus:ring-0 text-white"
                   />
                 </div>
               </div>
@@ -1077,7 +1077,7 @@ export default function OpuraGovernanceModule({
                   value={newDelegation.delegator_id}
                   required
                   onChange={(e) => setNewDelegation({ ...newDelegation, delegator_id: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                  className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                 >
                   <option value="">Selecione...</option>
                   {employees.filter(e => e.status === 'ATIVO').map(emp => (
@@ -1092,7 +1092,7 @@ export default function OpuraGovernanceModule({
                   value={newDelegation.delegatee_id}
                   required
                   onChange={(e) => setNewDelegation({ ...newDelegation, delegatee_id: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                  className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                 >
                   <option value="">Selecione...</option>
                   {employees.filter(e => e.status === 'ATIVO' && e.id !== newDelegation.delegator_id).map(emp => (
@@ -1107,7 +1107,7 @@ export default function OpuraGovernanceModule({
                   <select
                     value={newDelegation.flow_type}
                     onChange={(e) => setNewDelegation({ ...newDelegation, flow_type: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                   >
                     <option value="">Todos</option>
                     <option value="compras">Compras</option>
@@ -1121,7 +1121,7 @@ export default function OpuraGovernanceModule({
                     placeholder="Opcional"
                     value={newDelegation.limite_maximo}
                     onChange={(v) => setNewDelegation({ ...newDelegation, limite_maximo: v })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                   />
                 </div>
               </div>
@@ -1134,7 +1134,7 @@ export default function OpuraGovernanceModule({
                     required
                     value={newDelegation.data_inicio}
                     onChange={(e) => setNewDelegation({ ...newDelegation, data_inicio: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                   />
                 </div>
                 <div className="space-y-1">
@@ -1144,7 +1144,7 @@ export default function OpuraGovernanceModule({
                     required
                     value={newDelegation.data_fim}
                     onChange={(e) => setNewDelegation({ ...newDelegation, data_fim: e.target.value })}
-                    className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                    className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                   />
                 </div>
               </div>
@@ -1156,7 +1156,7 @@ export default function OpuraGovernanceModule({
                   placeholder="Ex: Férias do Diretor"
                   value={newDelegation.motivo}
                   onChange={(e) => setNewDelegation({ ...newDelegation, motivo: e.target.value })}
-                  className="w-full bg-gray-900 border border-gray-800 rounded-[1rem] p-3 text-white"
+                  className="w-full bg-gray-900 border border-gray-800 rounded-[6px] h-9 text-sm px-3 text-white"
                 />
               </div>
 

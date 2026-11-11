@@ -201,7 +201,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               placeholder="Ex: Alpa Refrigeração & Climatização"
               value={templateHeader}
               onChange={(e) => setTemplateHeader(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               required
             />
             <span className="block text-[8px] text-slate-400">Este nome aparecerá em destaque no cabeçalho do PDF dos seus orçamentos.</span>
@@ -212,7 +212,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             <select
               value={profissao}
               onChange={(e) => setProfissao(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
             >
               <option value="AR_CONDICIONADO">Ar-condicionado e Refrigeração</option>
               <option value="ELETRICISTA">Eletricista / Instalações Elétricas</option>
@@ -236,7 +236,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               <select
                 value={pixKeyType}
                 onChange={(e) => setPixKeyType(e.target.value as ProPixKeyType)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-2.5 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-2.5 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
               >
                 <option value="CPF">CPF</option>
                 <option value="CNPJ">CNPJ</option>
@@ -252,7 +252,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 placeholder="Insira a chave pix"
                 value={pixKey}
                 onChange={(e) => setPixKey(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
                 required
               />
             </div>

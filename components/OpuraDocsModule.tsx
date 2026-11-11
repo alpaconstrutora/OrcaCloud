@@ -3283,7 +3283,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     value={newDocOrgId}
                     onChange={(e) => setNewDocOrgId(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Selecione uma organização...</option>
                     {organizations.map(org => (
@@ -3332,7 +3332,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       placeholder="ABNT, ISO, MTE (NR)..."
                       value={newDocNormaOrgao}
                       onChange={(e) => setNewDocNormaOrgao(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -3343,7 +3343,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       placeholder="Ex: NBR 15575-1"
                       value={newDocNormaCodigo}
                       onChange={(e) => setNewDocNormaCodigo(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -3351,7 +3351,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={newDocNormaEdicao}
                       onChange={(e) => setNewDocNormaEdicao(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     >
                       <option value="">Sem edição / ano</option>
                       {opcoesEdicaoNorma(newDocNormaEdicao).map((ed) => (
@@ -3364,7 +3364,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={newDocNormaSituacao}
                       onChange={(e) => setNewDocNormaSituacao(e.target.value as OpuraNormaSituacao)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     >
                       {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
                         <option key={value} value={value}>{s.label}</option>
@@ -3379,7 +3379,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         placeholder="Ex: ABNT NBR 15575-1:2024"
                         value={newDocNormaSubstituidaPor}
                         onChange={(e) => setNewDocNormaSubstituidaPor(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                        className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                       />
                     </div>
                   )}
@@ -3396,7 +3396,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Nome simplificado"
                     value={newDocName}
                     onChange={(e) => { setNewDocName(e.target.value); setNewDocNameManual(e.target.value !== ''); }}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -3404,7 +3404,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <select
                       value={newDocType}
                       onChange={(e) => setNewDocType(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Nenhum</option>
                       {documentTypes.map((type) => (
@@ -3423,7 +3423,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <select
                       value={newDocDiscipline}
                       onChange={(e) => setNewDocDiscipline(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Nenhuma</option>
                       {disciplines.map((disc) => (
@@ -3469,7 +3469,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         setNewDocAutor(suppliers.find((s) => s.id === val)?.name || '');
                       }
                     }}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Nenhum</option>
                     {suppliers.map((s) => (
@@ -3484,7 +3484,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       value={newDocAutor}
                       onChange={(e) => setNewDocAutor(e.target.value)}
                       autoFocus
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     />
                   )}
                 </div>
@@ -3500,7 +3500,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Código/número dado pelo fornecedor..."
                     value={newDocNumeroFornecedor}
                     onChange={(e) => setNewDocNumeroFornecedor(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -3510,7 +3510,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Ex: Rev. A, 00..."
                     value={newDocRevisao}
                     onChange={(e) => setNewDocRevisao(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
               </div>
@@ -3524,7 +3524,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     type="date"
                     value={newDocEmissao}
                     onChange={(e) => setNewDocEmissao(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
                 {newDocCategory !== 'normas' && (<>
@@ -3534,7 +3534,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     type="date"
                     value={newDocValidade}
                     onChange={(e) => setNewDocValidade(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -3542,7 +3542,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <select
                     value={newDocAlertaDias}
                     onChange={(e) => setNewDocAlertaDias(parseInt(e.target.value))}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value={90}>90 dias antes</option>
                     <option value={60}>60 dias antes</option>
@@ -3563,7 +3563,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="obra, fundação, AVCB, fiscal"
                     value={newDocTagsInput}
                     onChange={(e) => setNewDocTagsInput(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                 </div>
 
@@ -3574,7 +3574,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     value={selectedProjectId !== 'all' ? selectedProjectId : newDocProjectId}
                     onChange={(e) => setNewDocProjectId(e.target.value)}
                     disabled={selectedProjectId !== 'all'}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-60"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25 disabled:opacity-60"
                   >
                     <option value="">Nenhum (Geral)</option>
                     {obras.map((o) => (
@@ -3591,7 +3591,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   <select
                     value={newDocCompanyId}
                     onChange={(e) => setNewDocCompanyId(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Nenhuma</option>
                     {companies.map((c) => (
@@ -3872,7 +3872,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         required
                         value={selectedApproverEmail}
                         onChange={(e) => setSelectedApproverEmail(e.target.value)}
-                        className="w-full px-3 py-2.5 border border-slate-200 rounded-[6px] text-form-input font-medium bg-white focus:outline-none"
+                        className="w-full px-3 h-9 border border-slate-200 rounded-[6px] text-form-input font-medium bg-white focus:outline-none"
                       >
                         <option value="">Selecione um Revisor...</option>
                         {orgMembers.map((member) => (
@@ -4024,7 +4024,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     value={createFolderOrgId}
                     onChange={(e) => setCreateFolderOrgId(e.target.value)}
                     required
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Selecione uma organização...</option>
                     {organizations.map(org => (
@@ -4041,7 +4041,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   placeholder="Ex: Projetos Executivos, Planilhas de Custos"
                   value={newFolderName}
                   onChange={(e) => setNewFolderName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   autoFocus
                 />
               </div>
@@ -4061,7 +4061,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       setFolderNamingMask(val);
                     }
                   }}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 >
                   <option value="none">Sem padrão (Livre)</option>
                   {namingPatterns.map(pat => (
@@ -4108,7 +4108,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Ex: [OBRA]-PL-[NUMERO]"
                     value={folderNamingMask}
                     onChange={(e) => setFolderNamingMask(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   />
                   <p className="text-xs text-slate-400 font-medium">
                     Use as tags: <span className="text-blue-600">[OBRA]</span>, <span className="text-blue-600">[DISCIPLINA]</span>, <span className="text-blue-600">[NUMERO]</span>, <span className="text-blue-600">[REVISAO]</span>.
@@ -4167,7 +4167,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <select
                   value={targetFolderId || ''}
                   onChange={(e) => setTargetFolderId(e.target.value || null)}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 >
                   <option value="">📁 Diretório Raiz</option>
                   {folders.map((folder) => (
@@ -4348,7 +4348,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     required
                     value={selectedShareWorkspaceId}
                     onChange={(e) => setSelectedShareWorkspaceId(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                   >
                     <option value="">Selecione um parceiro...</option>
                     {sortedShareWorkspaces.map((ws) => {
@@ -4450,7 +4450,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       required
                       value={selectedShareCreditRoomId}
                       onChange={(e) => setSelectedShareCreditRoomId(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     >
                       <option value="">Selecione uma operação de crédito...</option>
                       {portalShareCreditRooms.map((r) => {
@@ -4475,7 +4475,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       required
                       value={selectedShareEmployeeId}
                       onChange={(e) => setSelectedShareEmployeeId(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                     >
                       <option value="">Selecione um colaborador...</option>
                       {portalShareEmployees.map((emp) => {
@@ -4570,7 +4570,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     required
                                     value={editDocTokens[token] || ''}
                                     onChange={(e) => setEditDocTokens(prev => ({ ...prev, [token]: e.target.value }))}
-                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                    className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   >
                                     <option value="">Selecione uma Obra</option>
                                     {obras.map(o => (
@@ -4589,7 +4589,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                     required
                                     value={editDocTokens[token] || ''}
                                     onChange={(e) => setEditDocTokens(prev => ({ ...prev, [token]: e.target.value }))}
-                                    className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                    className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                   >
                                     <option value="">Selecione a Disciplina</option>
                                     {allowedDiscs.map(d => (
@@ -4608,7 +4608,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                                   placeholder={`Valor para ${cleanToken}`}
                                   value={editDocTokens[token] || ''}
                                   onChange={(e) => setEditDocTokens(prev => ({ ...prev, [token]: e.target.value.toUpperCase() }))}
-                                  className="w-full px-4 py-2.5 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                                  className="w-full px-4 h-9 bg-white border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                                 />
                               </div>
                             );
@@ -4636,7 +4636,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         required
                         value={editDocName}
                         onChange={(e) => setEditDocName(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                        className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                       />
                     </div>
                   );
@@ -4665,7 +4665,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocExtensao}
                       onChange={(e) => setEditDocExtensao(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">— Manter atual —</option>
                       {extensaoOptions.map((o) => (
@@ -4697,7 +4697,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       placeholder="ABNT, ISO, MTE (NR)..."
                       value={editDocNormaOrgao}
                       onChange={(e) => setEditDocNormaOrgao(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -4707,7 +4707,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       placeholder="Ex: NBR 15575-1"
                       value={editDocNormaCodigo}
                       onChange={(e) => setEditDocNormaCodigo(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     />
                   </div>
                   <div className="space-y-1.5">
@@ -4715,7 +4715,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocNormaEdicao}
                       onChange={(e) => setEditDocNormaEdicao(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Sem edição / ano</option>
                       {opcoesEdicaoNorma(editDocNormaEdicao).map((ed) => (
@@ -4728,7 +4728,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocNormaSituacao}
                       onChange={(e) => setEditDocNormaSituacao(e.target.value as OpuraNormaSituacao)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       {Object.entries(NORMA_SITUACOES).map(([value, s]) => (
                         <option key={value} value={value}>{s.label}</option>
@@ -4743,7 +4743,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         placeholder="Ex: ABNT NBR 15575-1:2024"
                         value={editDocNormaSubstituidaPor}
                         onChange={(e) => setEditDocNormaSubstituidaPor(e.target.value)}
-                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                        className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                       />
                     </div>
                   )}
@@ -4772,7 +4772,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         setEditDocAutor(suppliers.find((s) => s.id === val)?.name || '');
                       }
                     }}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                   >
                     <option value="">Nenhum</option>
                     {suppliers.map((s) => (
@@ -4787,7 +4787,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       onChange={(e) => setEditDocAutor(e.target.value)}
                       placeholder="Nome do autor ou responsável..."
                       autoFocus
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     />
                   )}
                 </div>
@@ -4801,7 +4801,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Código/número dado pelo fornecedor..."
                     value={editDocNumeroFornecedor}
                     onChange={(e) => setEditDocNumeroFornecedor(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -4811,7 +4811,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Ex: Rev. A, 00..."
                     value={editDocRevisao}
                     onChange={(e) => setEditDocRevisao(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -4825,7 +4825,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       type="date"
                       value={editDocEmissao}
                       onChange={(e) => setEditDocEmissao(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     />
                   </div>
 
@@ -4837,7 +4837,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           type="date"
                           value={editDocValidade}
                           onChange={(e) => setEditDocValidade(e.target.value)}
-                          className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                          className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                         />
                       </div>
 
@@ -4848,7 +4848,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           min={0}
                           value={editDocAlertaDias}
                           onChange={(e) => setEditDocAlertaDias(parseInt(e.target.value, 10) || 0)}
-                          className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                          className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                         />
                       </div>
                     </>
@@ -4863,7 +4863,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   placeholder="Estrutural, Revisado, Medição, Alpa"
                   value={editDocTagsInput}
                   onChange={(e) => setEditDocTagsInput(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                 />
               </div>
 
@@ -4873,7 +4873,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocType}
                       onChange={(e) => setEditDocType(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Nenhum (Livre)</option>
                       {documentTypes.map((type) => (
@@ -4889,7 +4889,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocDiscipline}
                       onChange={(e) => setEditDocDiscipline(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Nenhuma</option>
                       {disciplines.map((disc) => (
@@ -4902,7 +4902,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocProjectId}
                       onChange={(e) => setEditDocProjectId(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Nenhuma Obra</option>
                       {projects?.map(p => (
@@ -4915,7 +4915,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     <select
                       value={editDocCompanyId}
                       onChange={(e) => setEditDocCompanyId(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                      className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                     >
                       <option value="">Nenhuma Empresa</option>
                       {companies.map((c) => (
@@ -4933,7 +4933,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                 <select
                   value={editDocStatus}
                   onChange={(e) => setEditDocStatus(e.target.value as any)}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500"
                 >
                   <option value="ativo">✅ Ativo</option>
                   <option value="arquivado">📁 Arquivado</option>
@@ -4986,7 +4986,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   required
                   value={editFolderName}
                   onChange={(e) => setEditFolderName(e.target.value)}
-                  className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                  className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                 />
               </div>
 
@@ -5020,7 +5020,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                       setEditFolderMask(val);
                     }
                   }}
-                  className="w-full px-3 py-2.5 border border-slate-200 rounded-[6px] text-xs font-medium bg-white focus:outline-none"
+                  className="w-full px-3 h-9 border border-slate-200 rounded-[6px] text-xs font-medium bg-white focus:outline-none"
                 >
                   <option value="none">Sem validação (Livre)</option>
                   {namingPatterns.map(pat => (
@@ -5066,7 +5066,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                     placeholder="Ex: [OBRA]-TXT-[NUMERO]"
                     value={editFolderMask}
                     onChange={(e) => setEditFolderMask(e.target.value)}
-                    className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25 mt-2"
+                    className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25 mt-2"
                   />
                 )}
                 <p className="text-[10px] text-slate-400 font-medium leading-relaxed">
@@ -5190,7 +5190,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             placeholder="Nome"
                             value={newDocTypeName}
                             onChange={(e) => setNewDocTypeName(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
                         </div>
                         <button type="submit" className="w-full sm:w-auto px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-[6px] hover:bg-blue-700 transition-colors whitespace-nowrap">
@@ -5273,7 +5273,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             placeholder="ARQ"
                             value={newDiscCode}
                             onChange={(e) => setNewDiscCode(e.target.value.toUpperCase())}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
                         </div>
                         <div className="space-y-1 sm:col-span-2">
@@ -5285,7 +5285,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               placeholder="Arquitetura e Urbanismo"
                               value={newDiscName}
                               onChange={(e) => setNewDiscName(e.target.value)}
-                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                              className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                             />
                             <button type="submit" className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-[6px] hover:bg-blue-700 transition-colors whitespace-nowrap">
                               Adicionar
@@ -5392,7 +5392,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             placeholder="Ex: Padrão ALPA"
                             value={newPatName}
                             onChange={(e) => setNewPatName(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
                         </div>
                         <div className="space-y-1">
@@ -5404,7 +5404,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               placeholder="[OBRA]-[DISCIPLINA]-[NUMERO]-R[REVISAO]"
                               value={newPatMask}
                               onChange={(e) => setNewPatMask(e.target.value)}
-                              className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                              className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                             />
                             <button type="submit" className="px-4 py-1.5 bg-blue-600 text-white text-xs font-medium rounded-[6px] hover:bg-blue-700 transition-colors whitespace-nowrap">
                               Adicionar
@@ -5524,7 +5524,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                               setNewExtCode(v);
                               if (!newExtLabel) setNewExtMime(MIME_GUESS[v] || '');
                             }}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
                         </div>
                         <div className="space-y-1 sm:col-span-3">
@@ -5534,7 +5534,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             placeholder={newExtCode ? newExtCode.toUpperCase() : 'Revit'}
                             value={newExtLabel}
                             onChange={(e) => setNewExtLabel(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
                         </div>
                         <div className="space-y-1 sm:col-span-4">
@@ -5544,7 +5544,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                             placeholder={MIME_GUESS[newExtCode] || 'application/octet-stream'}
                             value={newExtMime}
                             onChange={(e) => setNewExtMime(e.target.value)}
-                            className="w-full px-3 py-2 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                            className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-xs font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                           />
                         </div>
                         <div className="space-y-1 sm:col-span-1">
@@ -5747,7 +5747,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           required
                           value={renameTokens[token] || ''}
                           onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value }))}
-                          className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                         >
                           <option value="">Selecione uma Obra</option>
                           {projects?.map(p => (
@@ -5769,7 +5769,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                           required
                           value={renameTokens[token] || ''}
                           onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value }))}
-                          className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                          className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                         >
                           <option value="">Selecione uma Disciplina</option>
                           {allowedDiscs.map(d => (
@@ -5791,7 +5791,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                         placeholder={`Valor para ${cleanToken}`}
                         value={renameTokens[token] || ''}
                         onChange={(e) => setRenameTokens(prev => ({ ...prev, [token]: e.target.value.toUpperCase() }))}
-                        className="w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
+                        className="w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-500/25"
                       />
                     </div>
                   );

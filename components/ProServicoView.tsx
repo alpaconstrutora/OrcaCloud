@@ -579,7 +579,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               type="datetime-local"
               value={dataAgendamento}
               onChange={(e) => setDataAgendamento(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500"
             />
           </div>
           <button
@@ -682,7 +682,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               placeholder="Nome de quem está assinando"
               value={assinaturaNome}
               onChange={(e) => setAssinaturaNome(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
 
             <canvas
@@ -766,7 +766,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               <select
                 value={recorrenciaMeses}
                 onChange={(e) => setRecorrenciaMeses(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 mt-1"
+                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 mt-1"
               >
                 <option value="">Não programar recorrência</option>
                 <option value="1">Daqui a 1 mês (Mensal)</option>

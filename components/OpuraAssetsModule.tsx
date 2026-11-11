@@ -2743,7 +2743,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     // Catálogo de marcas é por organização: trocar a org desvincula
                     // (o texto fica e será cadastrado na org nova ao salvar).
                     onChange={(e) => setAssetForm(prev => ({ ...prev, organization_id: e.target.value, brand_id: null, model_id: null }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   >
                     <option value="">Selecione a Organização...</option>
                     {organizations.map((org: any) => (
@@ -2760,7 +2760,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={assetForm.name}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, name: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Ex: Retroescavadeira JCB"
                   />
                 </div>
@@ -2771,7 +2771,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     onChange={(e) => setAssetForm(prev => ({ ...prev, code: e.target.value }))}
                     disabled={codigoTravadoPeloAlmoxarifado}
                     title={codigoTravadoPeloAlmoxarifado ? 'O ativo está vinculado ao Almoxarifado: o código patrimonial é o código do item e não muda' : undefined}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
                     placeholder="Gerado ao salvar (próximo número da série)"
                   />
                 </div>
@@ -2786,7 +2786,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       setAssetForm(prev => ({ ...prev, category: e.target.value as AssetCategory }));
                       setOrigemCampos(o => ({ ...o, category: 'manual' }));
                     }}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   >
                     {ASSET_CATEGORIES.map(c => <option key={c} value={c}>{ASSET_CATEGORY_LABELS[c]}</option>)}
                   </select>
@@ -2796,7 +2796,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <input
                     value={assetForm.subcategory}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, subcategory: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Ex: Escavadeira de Esteira"
                   />
                 </div>
@@ -2822,7 +2822,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <input
                     value={assetForm.serial_number}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, serial_number: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
               </div>
@@ -2839,7 +2839,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="date"
                     value={assetForm.purchase_date}
                     onChange={(e) => setAssetForm(prev => ({ ...prev, purchase_date: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
                 <div className="space-y-1">
@@ -2847,7 +2847,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <MoneyCentsInput
                     value={assetForm.purchase_value || ''}
                     onChange={(v) => setAssetForm(prev => ({ ...prev, purchase_value: v === '' ? 0 : Number(v) }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
               </div>
@@ -2862,7 +2862,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                       setAssetForm(prev => ({ ...prev, useful_life_months: parseInt(e.target.value, 10) || 60 }));
                       setOrigemCampos(o => ({ ...o, useful_life_months: 'manual' }));
                     }}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
                 <div className="space-y-1">
@@ -2870,7 +2870,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   <MoneyCentsInput
                     value={assetForm.residual_value || ''}
                     onChange={(v) => setAssetForm(prev => ({ ...prev, residual_value: v === '' ? 0 : Number(v) }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
               </div>
@@ -2965,7 +2965,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 <select
                   value={moveForm.destination_project_id}
                   onChange={(e) => setMoveForm(prev => ({ ...prev, destination_project_id: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                 >
                   <option value="">Sede / Central de Equipamentos</option>
                   {projects.map(p => (
@@ -3028,7 +3028,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   required
                   value={reserveForm.project_id}
                   onChange={(e) => setReserveForm(prev => ({ ...prev, project_id: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                 >
                   <option value="">Sede / Central de Equipamentos</option>
                   {projects.map(p => (
@@ -3042,7 +3042,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 <select
                   value={reserveForm.responsible_employee_id}
                   onChange={(e) => setReserveForm(prev => ({ ...prev, responsible_employee_id: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                 >
                   <option value="">Selecione o Responsável...</option>
                   {employees.map(emp => (
@@ -3059,7 +3059,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={reserveForm.start_date}
                     onChange={(e) => setReserveForm(prev => ({ ...prev, start_date: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
                 <div className="space-y-1">
@@ -3069,7 +3069,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={reserveForm.end_date}
                     onChange={(e) => setReserveForm(prev => ({ ...prev, end_date: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
               </div>
@@ -3140,7 +3140,9 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
         const subtitulo = maintModalMode === 'create' ? 'Abra ou agende uma intervenção corretiva ou preventiva em um bem.'
           : maintModalMode === 'edit' ? 'Altere os dados da ordem. Para mudar o status use Iniciar/Concluir/Cancelar na tabela.'
           : 'Ordem em modo de leitura. Use "Editar" para alterar.';
-        const campo = 'w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-default';
+        const campo = 'w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-default';
+        // Área de texto não leva h-9: mantém a altura de várias linhas.
+        const campoArea = 'w-full px-4 py-2.5 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold disabled:bg-gray-100 disabled:text-gray-600 disabled:cursor-default';
         const rotulo = 'text-xs font-semibold text-slate-500';
         return (
         <Sheet
@@ -3223,7 +3225,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={maintForm.description}
                     onChange={(e) => setMaintForm(prev => ({ ...prev, description: e.target.value }))}
-                    className={`${campo} py-2 h-20 resize-none`}
+                    className={`${campoArea} py-2 h-20 resize-none`}
                     placeholder="Descreva detalhadamente o serviço ou as falhas apresentadas..."
                   />
                 </div>
@@ -3354,7 +3356,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={finishMaintForm.executed_date}
                     onChange={(e) => setFinishMaintForm(prev => ({ ...prev, executed_date: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
 
@@ -3364,7 +3366,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     required
                     value={finishMaintForm.cost || ''}
                     onChange={(v) => setFinishMaintForm(prev => ({ ...prev, cost: v === '' ? 0 : Number(v) }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Custo real final do serviço"
                   />
                 </div>
@@ -3377,7 +3379,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="number"
                     value={finishMaintForm.current_odometer || ''}
                     onChange={(e) => setFinishMaintForm(prev => ({ ...prev, current_odometer: parseInt(e.target.value, 10) || '' }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Opcional"
                   />
                 </div>
@@ -3388,7 +3390,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="number"
                     value={finishMaintForm.current_hourmeter || ''}
                     onChange={(e) => setFinishMaintForm(prev => ({ ...prev, current_hourmeter: parseInt(e.target.value, 10) || '' }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Opcional"
                   />
                 </div>
@@ -3447,7 +3449,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                 <select
                   value={docForm.type}
                   onChange={(e) => setDocForm(prev => ({ ...prev, type: e.target.value as AssetDocumentType }))}
-                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                 >
                   <option value="seguro">Apólice de Seguro</option>
                   <option value="licenciamento">IPVA / Licenciamento</option>
@@ -3463,7 +3465,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   required
                   value={docForm.name}
                   onChange={(e) => setDocForm(prev => ({ ...prev, name: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   placeholder="Ex: Apólice Porto Seguro 2026"
                 />
               </div>
@@ -3475,7 +3477,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="text"
                     value={docForm.document_number}
                     onChange={(e) => setDocForm(prev => ({ ...prev, document_number: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                     placeholder="Opcional"
                   />
                 </div>
@@ -3486,7 +3488,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                     type="date"
                     value={docForm.expiration_date}
                     onChange={(e) => setDocForm(prev => ({ ...prev, expiration_date: e.target.value }))}
-                    className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                    className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   />
                 </div>
               </div>
@@ -3497,7 +3499,7 @@ export const OpuraAssetsModule: React.FC<OpuraAssetsModuleProps> = ({
                   type="url"
                   value={docForm.file_url}
                   onChange={(e) => setDocForm(prev => ({ ...prev, file_url: e.target.value }))}
-                  className="w-full px-4 py-2.5 border border-gray-100 rounded-xl bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
+                  className="w-full px-4 h-9 border border-gray-100 rounded-[6px] bg-gray-50 focus:bg-white outline-none focus:border-blue-600 transition-colors text-sm font-semibold"
                   placeholder="Ex: https://drive.google.com/..."
                 />
               </div>

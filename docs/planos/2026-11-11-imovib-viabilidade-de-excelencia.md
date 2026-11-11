@@ -735,13 +735,15 @@ Conferido no navegador em 11/11 (servidor da frente, usuário de leitura, escrit
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase2.js`): 0 escritas, 0 erros de console. No Bruninho, terreno máximo R$ 2.791.232 − terreno atual R$ 2.150.000 = R$ 641.232, o VPL do estudo (o terreno sai no mês 1, sem desconto). Achados e corrigidos: grupo "Receitas" somava impostos e corretagem (virou "Receitas e deduções"); erro de digitação no subtítulo da TIR.
 
-**Fase 3 — Risco:** 0 de 6
-- [ ] 3.1 Tornado
-- [ ] 3.2 Grade cruzada
-- [ ] 3.3 Cenários salvos
-- [ ] 3.4 Monte Carlo
-- [ ] 3.5 Matriz de riscos
-- [ ] 3.6 Testes de estresse prontos
+**Fase 3 — Risco:** 6 de 6 — revisada; migrations `aplicar_20271111900000` (cenários) e `aplicar_20271111910000` (riscos) aplicadas em 11/11 com OK do usuário (RLS pela organização do estudo, sem anon, conferido em `pg_policies`); publicação pelo PR #360
+- [x] 3.1 Tornado — 8 variáveis × 4 métricas, choques ajustáveis (hipóteses da tela, não gravadas). Revisão: uma barra por choque, colorida pelo próprio efeito (empilhar somava os dois quando caíam do mesmo lado); variável que faz a TIR sumir vai para o topo, marcada.
+- [x] 3.2 Grade cruzada — eixos de −2 a +2 vezes o choque da variável.
+- [x] 3.3 Cenários salvos — tabela comparativa, cenários padrão (UNIQUE impede duplicar), drawer (criar fecha, editar fica).
+- [x] 3.4 Monte Carlo — `prng` movido para `utils/prng.ts`. Chance de TIR abaixo da TMA sobre todos os sorteios (sem TIR e com VPL negativo conta como abaixo). Medido no navegador, Garden Cambuhy: 2.000 sorteios levavam ~7 s; com a busca da TIR acelerada (fator de desconto acumulado), 1,8 s. Padrão mantido em 2.000.
+- [x] 3.5 Matriz de riscos — StandardTable, drawer, mapa probabilidade × impacto; o texto livre continua como "Notas gerais de risco".
+- [x] 3.6 Testes de estresse prontos — uma barra por premissa e quatro atalhos; nada é gravado.
+
+Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase3.js`): aba abre sem erro com as tabelas novas, 0 escritas, 0 erros de console.
 
 **Fase 4 — Capital:** 0 de 5
 - [ ] 4.1 Financiamento à produção

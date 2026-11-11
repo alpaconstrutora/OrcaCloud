@@ -71,13 +71,13 @@ export interface GrupoDoEspelho {
 }
 
 /**
- * Os prismas ACIMA do solo, um grupo por status e um dos pisos sem unidade; grupo vazio não entra. O subsolo fica
- * fora do desenho (a lista por andar o mostra): debaixo do chão ele não se vê, e à mostra esconderia a torre.
+ * Os prismas, um grupo por status e um dos pisos sem unidade; grupo vazio não entra. O SUBSOLO entra (10/11/2026): a
+ * unidade lá embaixo é vendida como as outras (no Garden Cambuhy, 8 apartamentos da Torre B), e o estacionamento é
+ * piso neutro. A cena deixa o chão translúcido quando há subsolo, para ele aparecer através.
  */
 export function gruposDoEspelho(prismas: readonly PrismaDoEspelho[]): GrupoDoEspelho[] {
   const por = new Map<ChaveDoGrupo, PrismaDoEspelho[]>();
   for (const p of prismas) {
-    if (p.abaixoDoSolo) continue;
     const chave: ChaveDoGrupo = p.unitId && p.status ? p.status : 'piso';
     const lista = por.get(chave);
     if (lista) lista.push(p);

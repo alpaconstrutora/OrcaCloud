@@ -37,8 +37,17 @@ describe('gruposDoEspelho', () => {
     ]);
   });
 
-  it('o subsolo não entra no desenho', () => {
-    expect(gruposDoEspelho([prisma({ andar: -1, abaixoDoSolo: true })])).toEqual([]);
+  // 10/11/2026: o subsolo ficava fora do desenho. No Garden Cambuhy a Torre B tem 8 apartamentos nos pavimentos -1 e
+  // -2 (prédio em desnível) e as duas torres têm estacionamentos -1 a -4 — nada disso aparecia no 3D dos portais.
+  it('o subsolo entra no desenho: a unidade pelo status, o piso sem unidade (estacionamento) neutro', () => {
+    const grupos = gruposDoEspelho([
+      prisma({ unitId: 'ss1', andar: -1, abaixoDoSolo: true, status: 'reserved', baseMm: -3000, topoMm: 0 }),
+      prisma({ unitId: null, rotulo: null, status: null, andar: -2, abaixoDoSolo: true, baseMm: -6000, topoMm: -3000 }),
+    ]);
+    expect(grupos.map((g) => [g.chave, g.prismas.map((p) => p.andar)])).toEqual([
+      ['reserved', [-1]],
+      ['piso', [-2]],
+    ]);
   });
 });
 

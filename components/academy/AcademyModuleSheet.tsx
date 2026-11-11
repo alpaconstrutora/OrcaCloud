@@ -17,7 +17,9 @@ import type { AcademyModule } from '../../types/academy';
  * "obrigatório" não tinham como ser editados de jeito nenhum.
  */
 
-const inputCls = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
 const Campo: React.FC<{ label: string; ajuda?: string; children: React.ReactNode }> = ({ label, ajuda, children }) => (
     <div className="space-y-1.5">
@@ -102,7 +104,7 @@ const AcademyModuleSheet: React.FC<Props> = ({
                         <textarea
                             value={form.descricao}
                             onChange={e => set('descricao', e.target.value)}
-                            className={inputCls + ' resize-none h-20'}
+                            className={inputClsArea + ' resize-none h-20'}
                         />
                     </Campo>
 

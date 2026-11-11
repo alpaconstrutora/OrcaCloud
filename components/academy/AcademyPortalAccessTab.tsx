@@ -34,7 +34,7 @@ const TrainingPortalMobile = React.lazy(() => import('../training/TrainingPortal
  * (leituras com `p_ver_como`, autorizadas por membro da org; nada é gravado).
  */
 
-const inputCls = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
 const Campo: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">

@@ -104,7 +104,9 @@ const InputGroup: React.FC<{ label: string; children: React.ReactNode; icon?: Re
     </div>
 );
 
-const inputCls = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
+const inputCls = "w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
 
 const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, organizations = [], onClose, onSaved }) => {
     const isEditing = !!employee;
@@ -1279,7 +1281,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                 <textarea
                                     value={form.notes}
                                     onChange={e => setField('notes', e.target.value)}
-                                    className={inputCls + ' resize-none h-24'}
+                                    className={inputClsArea + ' resize-none h-24'}
                                     placeholder="Destaque informações importantes sobre o colaborador..."
                                 />
                             </InputGroup>

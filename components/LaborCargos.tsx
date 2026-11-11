@@ -41,7 +41,9 @@ const EMPTY_FUNCAO: FuncaoForm = { nome: '', descricao: '', department_id: '' };
 const BRL = (v: number | null | undefined) =>
     v != null ? v.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', minimumFractionDigits: 0 }) : null;
 
-const inputCls = "w-full bg-slate-50 border border-slate-200 rounded-xl p-3 focus:border-indigo-500 focus:ring-0 text-slate-900 outline-none text-sm";
+const inputCls = "w-full bg-slate-50 border border-slate-200 rounded-[6px] h-9 px-3 focus:border-indigo-500 focus:ring-0 text-slate-900 outline-none text-sm";
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = "w-full bg-slate-50 border border-slate-200 rounded-[6px] p-3 focus:border-indigo-500 focus:ring-0 text-slate-900 outline-none text-sm";
 const labelCls = "text-[10px] text-slate-500 font-black uppercase tracking-widest";
 
 // ── Org chart tree builder ──────────────────────────────────────────────────
@@ -778,7 +780,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                                 <div className="space-y-1">
                                     <label className={labelCls}>Descrição</label>
                                     <textarea placeholder="Resumo do cargo..." value={roleForm.descricao}
-                                        onChange={e => setRoleForm({ ...roleForm, descricao: e.target.value })} className={inputCls + ' h-16'} />
+                                        onChange={e => setRoleForm({ ...roleForm, descricao: e.target.value })} className={inputClsArea + ' h-16'} />
                                 </div>
                             </div>
                             <div className="space-y-3">
@@ -801,12 +803,12 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                                 <div className="space-y-1">
                                     <label className={labelCls}>Responsabilidades</label>
                                     <textarea placeholder="Uma por linha..." value={roleForm.responsabilidades}
-                                        onChange={e => setRoleForm({ ...roleForm, responsabilidades: e.target.value })} className={inputCls + ' h-20'} />
+                                        onChange={e => setRoleForm({ ...roleForm, responsabilidades: e.target.value })} className={inputClsArea + ' h-20'} />
                                 </div>
                                 <div className="space-y-1">
                                     <label className={labelCls}>Competências Requeridas</label>
                                     <textarea placeholder="Uma por linha (ex: AutoCAD, Liderança)..." value={roleForm.competencias}
-                                        onChange={e => setRoleForm({ ...roleForm, competencias: e.target.value })} className={inputCls + ' h-20'} />
+                                        onChange={e => setRoleForm({ ...roleForm, competencias: e.target.value })} className={inputClsArea + ' h-20'} />
                                 </div>
                             </div>
                             {roles.filter(r => r.id !== roleForm.id).length > 0 && (
@@ -861,7 +863,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
                             <div className="space-y-1">
                                 <label className={labelCls}>Descrição</label>
                                 <textarea placeholder="O que faz quem exerce essa função..." value={funcaoForm.descricao}
-                                    onChange={e => setFuncaoForm({ ...funcaoForm, descricao: e.target.value })} className={inputCls + ' h-20'} />
+                                    onChange={e => setFuncaoForm({ ...funcaoForm, descricao: e.target.value })} className={inputClsArea + ' h-20'} />
                             </div>
                             <div className="flex justify-end gap-3 pt-2 border-t border-slate-100">
                                 <button type="button" onClick={() => setIsFuncaoOpen(false)} className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs uppercase tracking-wider rounded-xl transition-all">Cancelar</button>

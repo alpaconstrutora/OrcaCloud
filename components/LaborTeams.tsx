@@ -82,7 +82,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
     };
 
     const activeEmployees = employees.filter(e => e.status === 'ATIVO');
-    const inputCls = "w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all";
+    const inputCls = "w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm outline-none focus:ring-2 focus:ring-indigo-100 transition-all";
 
     return (
         <div className="space-y-6">

@@ -1068,7 +1068,7 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                                             <select
                                                 value={alloc.project_id}
                                                 onChange={e => updateAllocation(idx, { project_id: e.target.value })}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                                className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                             >
                                                 {worksites.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                                             </select>
@@ -1079,7 +1079,7 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                                                 type="number" min="0" max="100"
                                                 value={alloc.allocation_percent}
                                                 onChange={e => updateAllocation(idx, { allocation_percent: Math.min(100, Math.max(0, parseInt(e.target.value) || 0)) })}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                                className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                             />
                                         </div>
                                         <ActionIconButton kind="delete" className="mt-5" onClick={() => setAllocations(allocations.filter((_, i) => i !== idx))} />
@@ -1153,7 +1153,7 @@ const AllocationSheet: React.FC<AllocationSheetProps> = ({
                                                 type="number" min="0" max="100" step="0.01"
                                                 value={linha.percent}
                                                 onChange={e => setSplits(splits.map((l, i) => i === idx ? { ...l, percent: Math.min(100, Math.max(0, parseFloat(e.target.value) || 0)) } : l))}
-                                                className="w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                                                className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
                                             />
                                         </div>
                                         <ActionIconButton kind="delete" className="mt-5" onClick={() => setSplits(splits.filter((_, i) => i !== idx))} />

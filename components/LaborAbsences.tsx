@@ -50,7 +50,9 @@ const BALANCE_STATUS_COLORS: Record<string, string> = {
     GOZADO:  'text-slate-500',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
@@ -342,7 +344,7 @@ const AbsenceForm: React.FC<AbsenceFormProps> = ({ orgId, employees, vacationBal
                     )}
 
                     <InputGroup label="Motivo / Observação">
-                        <textarea value={form.motivo || ''} onChange={e => set('motivo', e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Descreva o motivo ou observações relevantes..." />
+                        <textarea value={form.motivo || ''} onChange={e => set('motivo', e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="Descreva o motivo ou observações relevantes..." />
                     </InputGroup>
 
                     {/* Upload atestado */}
@@ -393,7 +395,7 @@ const RejectModal: React.FC<{ onConfirm: (reason: string) => void; onClose: () =
         <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-[10px] shadow-xl w-full max-w-sm p-6 space-y-4">
                 <h3 className="text-sm font-black text-slate-900">Motivo da rejeição</h3>
-                <textarea value={reason} onChange={e => setReason(e.target.value)} className={inputCls + ' resize-none h-24'} placeholder="Descreva o motivo (opcional)..." />
+                <textarea value={reason} onChange={e => setReason(e.target.value)} className={inputClsArea + ' resize-none h-24'} placeholder="Descreva o motivo (opcional)..." />
                 <div className="flex gap-3 justify-end">
                     <button onClick={onClose} className="h-9 px-4 text-sm font-medium text-slate-600 hover:bg-slate-100 rounded-[6px]">Cancelar</button>
                     <button onClick={() => onConfirm(reason)} className="h-9 px-4 bg-rose-600 text-white rounded-[6px] text-sm font-medium hover:bg-rose-700">Confirmar rejeição</button>

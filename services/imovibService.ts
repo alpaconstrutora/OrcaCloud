@@ -9,10 +9,16 @@ import { fetchAllPages } from '../lib/supabasePaginate';
 import {
     derivarEstruturaDoEmpreendimento, blocoSemLinha, TorreDaEstrutura, UnidadeDaEstrutura,
 } from '../utils/imovibEstrutura';
+import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
 const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, created_at, updated_at';
+
+// Listagem com métricas: metadados da tabela + tudo o que o motor lê
+// (CAMPOS_DO_MOTOR). Campo novo do motor entra lá, não aqui.
+const METADADOS_DA_LISTAGEM = 'id, organization_id, name, cnpj, developer, developer_name, manager, version, segment, sub_classification, phase, development_modality, zoning, created_at, updated_at';
+export const COLUNAS_DA_LISTAGEM = [METADADOS_DA_LISTAGEM, ...CAMPOS_DO_MOTOR].join(', ');
 
 // Só o que o motor lê do espelho para o VGV (computeImovibMath).
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
@@ -28,7 +34,7 @@ interface EmpreendimentoDaEstrutura {
     terreno_area: number | null;
 }
 
-interface VinculoDaEstrutura {
+export interface VinculoDaEstrutura {
     empreendimento: EmpreendimentoDaEstrutura;
     torres: TorreDaEstrutura[];
     unidades: UnidadeDaEstrutura[];
@@ -95,7 +101,7 @@ async function carregarVinculos(studies: { id: string; organization_id?: string 
 }
 
 /** Põe no estudo a estrutura que o motor lê: a do empreendimento vinculado, ou a antiga do estudo. */
-function aplicarEstrutura(study: ImovibStudy, blocosDoEstudo: ImovibBlock[], vinculo: VinculoDaEstrutura | undefined): void {
+export function aplicarEstrutura(study: ImovibStudy, blocosDoEstudo: ImovibBlock[], vinculo: VinculoDaEstrutura | undefined): void {
     if (!vinculo) {
         study.blocks = blocosDoEstudo;
         study.estrutura = { origem: 'estudo', torres: 0, unidades: 0, blocos_fora_do_calculo: [] };
@@ -152,8 +158,7 @@ export const imovibService = {
     async getStudiesWithMetrics(organizationId?: string | null): Promise<ImovibStudy[]> {
         let query = supabase
             .from('imovib_studies')
-            // metadados da listagem + todos os escalares lidos por computeImovibMath
-            .select('id, organization_id, name, cnpj, developer, developer_name, manager, version, segment, sub_classification, phase, development_modality, zoning, created_at, updated_at, land_cost, capex_mode, capex_simplified_cost_sqm, capex_simplified_area_sqm, construction_duration_months, sales_duration_months, construction_start_month, sales_start_month, inflation_rate, discount_rate, tax_rate, brokerage_fee, financing_percent, financing_rate_annual, funding_debt_percent, swap_physical_percent, swap_financial_percent, default_rate_percent, cancellation_rate_percent, revenue_downpayment_percent, revenue_construction_percent, revenue_handover_percent')
+            .select<string, ImovibStudy>(COLUNAS_DA_LISTAGEM)
             .order('created_at', { ascending: false });
 
         if (organizationId) {

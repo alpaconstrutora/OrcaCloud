@@ -2019,7 +2019,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                                 />
                                             </div>
                                             <div className="space-y-1.5">
-                                                <label htmlFor="data-retirada" className="block text-xs font-semibold text-gray-500">Data da retirada</label>
+                                                <label htmlFor="data-retirada" className="block text-xs font-semibold text-slate-500">Data da retirada</label>
                                                 <input
                                                     id="data-retirada"
                                                     type="date"

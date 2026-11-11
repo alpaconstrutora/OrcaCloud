@@ -180,7 +180,7 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
 
                 <form onSubmit={handleAuth} className="space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Email</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Email</label>
                         <div className="relative">
                             <Mail className="absolute left-3 top-2.5 w-5 h-5 text-gray-400" />
                             <input
@@ -197,7 +197,7 @@ const Auth: React.FC<AuthProps> = ({ group = ProfileGroup.USER, onBack }) => {
                     {view !== 'forgot-password' && (
                         <div>
                             <div className="flex justify-between items-center mb-1">
-                                <label className="block text-sm font-medium text-gray-700">Senha</label>
+                                <label className="block text-xs font-semibold text-slate-500">Senha</label>
                                 {view === 'login' && (
                                     <button
                                         type="button"

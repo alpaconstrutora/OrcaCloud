@@ -95,7 +95,7 @@ export const RegulatoryMapForm: React.FC<Props> = ({ organizationId, editing, on
 
                     {needsOrgPicker && (
                         <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">Organização</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Organização</label>
                             <select
                                 value={orgId}
                                 onChange={e => setOrgId(e.target.value)}
@@ -108,12 +108,12 @@ export const RegulatoryMapForm: React.FC<Props> = ({ organizationId, editing, on
                     )}
 
                     <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Cidade</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Cidade</label>
                         <CitySearchSelect value={city} onChange={setCity} />
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Nome do mapa</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Nome do mapa</label>
                         <input
                             value={name}
                             onChange={e => setName(e.target.value)}
@@ -124,7 +124,7 @@ export const RegulatoryMapForm: React.FC<Props> = ({ organizationId, editing, on
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">Lei de referência</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Lei de referência</label>
                             <input
                                 value={leiReferencia}
                                 onChange={e => setLeiReferencia(e.target.value)}
@@ -133,7 +133,7 @@ export const RegulatoryMapForm: React.FC<Props> = ({ organizationId, editing, on
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-gray-500 mb-1">Status</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
                             <select
                                 value={status}
                                 onChange={e => setStatus(e.target.value as RegulatoryMapStatus)}
@@ -145,7 +145,7 @@ export const RegulatoryMapForm: React.FC<Props> = ({ organizationId, editing, on
                     </div>
 
                     <div>
-                        <label className="block text-xs font-semibold text-gray-500 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <textarea
                             value={observacoes}
                             onChange={e => setObservacoes(e.target.value)}

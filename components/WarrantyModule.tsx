@@ -98,7 +98,7 @@ const SELECT_CLASS = `${FIELD_CLASS} appearance-none cursor-pointer`;
 /** Select com ícone-âncora à esquerda (vínculos: empreendimento, obra, cliente). */
 const SELECT_WITH_ICON_CLASS = `${SELECT_CLASS} pl-9`;
 const TEXTAREA_CLASS = 'w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all resize-none';
-const LABEL_CLASS = 'block text-xs font-semibold text-gray-500 mb-1';
+const LABEL_CLASS = 'block text-xs font-semibold text-slate-500 mb-1';
 
 /**
  * Botões de rodapé de formulário — §17.

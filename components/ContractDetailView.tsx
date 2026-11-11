@@ -4196,7 +4196,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                             )}
                             <div className="space-y-3">
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Índice Base (data de referência)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Índice Base (data de referência)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -4208,7 +4208,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     />
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Índice Atual (hoje)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Índice Atual (hoje)</label>
                                     <input
                                         type="number"
                                         step="0.01"
@@ -4230,7 +4230,7 @@ const ContractDetailView: React.FC<ContractDetailViewProps> = ({ contractId, onB
                                     </div>
                                 )}
                                 <div>
-                                    <label className="block text-xs font-medium text-gray-500 mb-1">Observação (opcional)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Observação (opcional)</label>
                                     <input
                                         type="text"
                                         value={reajusteNotes}
@@ -4472,7 +4472,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Código <span className="text-gray-300 font-normal normal-case">(opcional)</span></label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Código <span className="text-gray-300 font-normal normal-case">(opcional)</span></label>
                             <input
                                 type="text"
                                 value={form.code}
@@ -4482,7 +4482,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Unidade *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Unidade *</label>
                             <div className="flex gap-2">
                                 <select
                                     value={units.includes(form.unit) ? form.unit : form.unit ? '__custom__' : ''}
@@ -4504,7 +4504,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                             </div>
                         </div>
                         <div className="col-span-2">
-                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Descrição *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição *</label>
                             <input
                                 type="text"
                                 value={form.description}
@@ -4514,7 +4514,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Quantidade *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Quantidade *</label>
                             <input
                                 type="number"
                                 min={0.001}
@@ -4526,7 +4526,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-500 mb-1.5">Preço Unitário (R$)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Preço Unitário (R$)</label>
                             <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-sm font-bold text-gray-400 pointer-events-none select-none">R$</span>
                                 <input
@@ -4557,7 +4557,7 @@ const AvulsoItemModal: React.FC<AvulsoItemModalProps> = ({ initial, onConfirm, o
                         </label>
                         {saveToBase && (
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 mb-1.5">Base de dados *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Base de dados *</label>
                                 {databases.length === 0 ? (
                                     <p className="text-xs text-gray-400 italic">Carregando bases...</p>
                                 ) : (

@@ -1166,7 +1166,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         {/* Painel lateral direito — Status do relatório (lista vertical; cor por status, §8) */}
                         <aside className="lg:w-72 shrink-0 border-t lg:border-t-0 lg:border-l border-gray-100 p-6 space-y-6">
                             <div className="space-y-1.5">
-                                <label htmlFor="diario-data" className="text-sm font-semibold text-gray-900 flex items-center gap-1.5">
+                                <label htmlFor="diario-data" className="flex text-xs font-semibold text-slate-500 items-center gap-1.5">
                                     <Calendar className="w-4 h-4 text-gray-400" /> Data do diário
                                 </label>
                                 <input

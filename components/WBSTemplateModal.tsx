@@ -122,7 +122,7 @@ export const WBSTemplateModal: React.FC<WBSTemplateModalProps> = ({
                     ) : (
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Nome do Modelo</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Nome do Modelo</label>
                                 <input
                                     type="text"
                                     value={newTemplateName}

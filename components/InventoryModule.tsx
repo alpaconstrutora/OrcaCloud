@@ -140,7 +140,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
 
                 <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Almoxarifado</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Almoxarifado</label>
                         <select
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.warehouseId}
@@ -154,7 +154,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="col-span-2">
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Insumo *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Insumo *</label>
                             <StockItemSelect
                                 items={stockItems}
                                 value={form.inputDescription ? { inputCode: form.inputCode, inputDescription: form.inputDescription, inputUnit: form.inputUnit } : null}
@@ -163,7 +163,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                             />
                         </div>
                         <div>
-                            <label className="block text-form-label text-gray-700 mb-1">Quantidade *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Quantidade *</label>
                             <input
                                 type="number" min="0.0001" step="0.01"
                                 className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -173,7 +173,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                         </div>
                         {form.type === 'in' && (
                             <div>
-                                <label className="block text-form-label text-gray-700 mb-1">Custo unitário</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1">Custo unitário</label>
                                 <MoneyCentsInput
                                     className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                     value={form.unitCost ?? ''}
@@ -183,7 +183,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                             </div>
                         )}
                         <div>
-                            <label className="block text-form-label text-gray-700 mb-1">Data</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Data</label>
                             <input
                                 type="date"
                                 className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
@@ -194,7 +194,7 @@ const MovementModal: React.FC<MovementModalProps> = ({ warehouses, defaultType, 
                     </div>
 
                     <div>
-                        <label className="block text-form-label text-gray-700 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <input
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
@@ -281,7 +281,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
 
                 <div className="p-6 space-y-4">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Nome *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Nome *</label>
                         <input
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.name}
@@ -289,7 +289,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         />
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                         <select
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.type}
@@ -301,7 +301,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Obra (opcional)</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Obra (opcional)</label>
                         <select
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.projectId ?? ''}
@@ -312,7 +312,7 @@ const WarehouseModal: React.FC<WarehouseModalProps> = ({ orgId, projects, existi
                         </select>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <input
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
@@ -1438,7 +1438,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Origem *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Origem *</label>
                             <select
                                 className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.fromWarehouseId}
@@ -1448,7 +1448,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                             </select>
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Destino *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Destino *</label>
                             <select
                                 className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.toWarehouseId}
@@ -1459,13 +1459,13 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <input className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all" value={form.notes ?? ''} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} />
                     </div>
 
                     <div className="space-y-3">
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-semibold text-gray-900">Itens a Transferir</label>
+                            <label className="text-xs font-semibold text-slate-500">Itens a Transferir</label>
                             <Button variant="ghost" onClick={addItem} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 !py-1 !px-2 text-xs">
                                 <Plus className="w-3 h-3 mr-1" /> Adicionar
                             </Button>
@@ -1479,7 +1479,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                             {form.items.map((item, idx) => (
                                 <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 border border-gray-200 rounded-xl p-4">
                                     <div className="col-span-9">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Insumo</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Insumo</label>
                                         <StockItemSelect
                                             items={stockItems}
                                             value={item.inputDescription ? { inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit } : null}
@@ -1488,7 +1488,7 @@ const TransferModal: React.FC<TransferModalProps> = ({ warehouses, stockItems, o
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Qtd</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Qtd</label>
                                         <input type="number" min="0.001" step="0.01" className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500" value={item.quantity || ''} onChange={e => updateItem(idx, { quantity: parseFloat(e.target.value) || 0 })} />
                                     </div>
                                     <div className="col-span-1 flex justify-center pb-1.5">
@@ -1871,7 +1871,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
                     <div className="grid grid-cols-2 gap-4">
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Solicitante *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Solicitante *</label>
                             <input
                                 className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.requestedBy}
@@ -1880,7 +1880,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Almoxarifado</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Almoxarifado</label>
                             <select
                                 className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                                 value={form.warehouseId ?? ''}
@@ -1892,7 +1892,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                         </div>
                     </div>
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Observações</label>
                         <input
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={form.notes ?? ''}
@@ -1902,7 +1902,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
 
                     <div className="space-y-3">
                         <div className="flex items-center justify-between mb-2">
-                            <label className="text-sm font-semibold text-gray-900">Itens *</label>
+                            <label className="text-xs font-semibold text-slate-500">Itens *</label>
                             <Button variant="ghost" onClick={addItem} className="text-blue-600 hover:text-blue-700 hover:bg-blue-50 !py-1 !px-2 text-xs">
                                 <Plus className="w-3 h-3 mr-1" /> Adicionar
                             </Button>
@@ -1916,7 +1916,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                             {form.items.map((item, idx) => (
                                 <div key={idx} className="grid grid-cols-12 gap-3 items-end bg-gray-50/50 border border-gray-200 rounded-xl p-4">
                                     <div className="col-span-9">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Insumo *</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Insumo *</label>
                                         <StockItemSelect
                                             items={stockItems}
                                             value={item.inputDescription ? { inputCode: item.inputCode, inputDescription: item.inputDescription, inputUnit: item.inputUnit } : null}
@@ -1925,7 +1925,7 @@ const RequestModal: React.FC<RequestModalProps> = ({ orgId, warehouses, stockIte
                                         />
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="block text-xs font-medium text-gray-500 mb-1">Qtd *</label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1">Qtd *</label>
                                         <input
                                             type="number" min="0.001" step="0.01"
                                             className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500"
@@ -2019,7 +2019,7 @@ const ApproveModal: React.FC<ApproveModalProps> = ({ request, onClose, onDone })
 
                 <div className="flex-1 overflow-y-auto px-6 py-6 space-y-6">
                     <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Aprovado / Rejeitado por *</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Aprovado / Rejeitado por *</label>
                         <input
                             className="w-full bg-white border border-gray-200 rounded-[6px] px-3 h-9 text-sm text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
                             value={approvedBy}

@@ -545,7 +545,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
 
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">% mínimo do conteúdo</label>
+                            <label className="text-xs font-semibold text-slate-500">% mínimo do conteúdo</label>
                             <input
                                 type="number" min="0" max="100"
                                 value={versao.regra_percentual_minimo}
@@ -555,7 +555,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Nota mínima (vazio = sem prova)</label>
+                            <label className="text-xs font-semibold text-slate-500">Nota mínima (vazio = sem prova)</label>
                             <input
                                 type="number" min="0" max="10" step="0.1"
                                 value={versao.regra_nota_minima ?? ''}
@@ -565,7 +565,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Tentativas por avaliação</label>
+                            <label className="text-xs font-semibold text-slate-500">Tentativas por avaliação</label>
                             <input
                                 type="number" min="1"
                                 value={versao.regra_tentativas_max}
@@ -575,7 +575,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                             />
                         </div>
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Carga horária EAD (h)</label>
+                            <label className="text-xs font-semibold text-slate-500">Carga horária EAD (h)</label>
                             <input
                                 type="number" min="0" step="0.5"
                                 value={versao.carga_horaria_ead}
@@ -587,7 +587,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                     </div>
 
                     <div className="space-y-1.5">
-                        <label className="text-xs font-semibold text-gray-500">
+                        <label className="text-xs font-semibold text-slate-500">
                             O que mudou nesta versão
                             {versoes.some(v => v.status === 'PUBLICADA' && v.id !== versao.id) && ' *'}
                         </label>
@@ -627,7 +627,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
 
                     {versao.regra_exige_aceite && (
                         <div className="space-y-1.5">
-                            <label className="text-xs font-semibold text-gray-500">Texto do aceite</label>
+                            <label className="text-xs font-semibold text-slate-500">Texto do aceite</label>
                             <textarea
                                 value={versao.regra_texto_aceite ?? ''}
                                 onChange={e => salvarRegra('regra_texto_aceite', e.target.value)}

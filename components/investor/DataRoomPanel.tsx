@@ -218,7 +218,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1.5">Categoria</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
                             <select
                                 value={uploadCategory}
                                 onChange={e => setUploadCategory(e.target.value as DocumentCategory)}
@@ -232,7 +232,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                             </select>
                         </div>
                         <div>
-                            <label className="block text-form-label font-bold text-gray-600 mb-1.5">Descrição (opcional)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição (opcional)</label>
                             <input
                                 type="text"
                                 value={uploadDescription}

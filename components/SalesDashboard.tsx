@@ -153,7 +153,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
           linha do <h2>, num container rounded-[1.5rem] com input/select sem borda. */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-2">
-          <label className="flex items-center gap-1.5 text-sm font-medium text-gray-500">
+          <label className="flex text-xs font-semibold text-slate-500 items-center gap-1.5">
             <Clock className="w-4 h-4 text-gray-400" />
             Início
           </label>
@@ -164,7 +164,7 @@ export function SalesDashboard({ selectedBuildingId, mode = 'results', simulatio
             className="h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all cursor-pointer"
           />
 
-          <label className="flex items-center gap-1.5 text-sm font-medium text-gray-500 ml-2">Ciclo</label>
+          <label className="flex text-xs font-semibold text-slate-500 items-center gap-1.5 ml-2">Ciclo</label>
           <select
             value={periodMonths}
             onChange={(e) => setPeriodMonths(Number(e.target.value))}

@@ -139,7 +139,7 @@ export default function TelaMateriais({ materiais, carregando, indisponivel, uso
                 ))}
               </select>
             </label>
-            <label className="flex flex-col gap-1 text-xs font-medium text-slate-600">
+            <label className="flex text-xs font-semibold text-slate-500 flex-col gap-1">
               Custo (R$ / unidade)
               <MoneyCentsInput value={form.custo} onChange={(v) => setForm({ ...form, custo: v === '' ? 0 : Number(v) })} aria-label="Custo do material" className={campo} />
             </label>

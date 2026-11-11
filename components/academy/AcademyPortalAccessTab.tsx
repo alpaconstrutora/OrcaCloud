@@ -38,7 +38,7 @@ const inputCls = 'w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] 
 
 const Campo: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-semibold text-gray-500">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
     </div>
 );

@@ -210,7 +210,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                         <div className="grid grid-cols-1 gap-4">
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Título *</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
                                 <input
                                     type="text"
                                     required
@@ -221,7 +221,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Subtítulo / Tagline</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Subtítulo / Tagline</label>
                                 <input
                                     type="text"
                                     value={form.subtitle ?? ''}
@@ -232,7 +232,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             </div>
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">Status</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Status</label>
                                     <select
                                         value={form.status}
                                         onChange={e => set('status', e.target.value as OpportunityStatus)}
@@ -242,7 +242,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">Tipo</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tipo</label>
                                     <select
                                         value={form.opportunity_type ?? ''}
                                         onChange={e => set('opportunity_type', (e.target.value || undefined) as OpportunityType | undefined)}
@@ -254,7 +254,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 </div>
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">URL da imagem / thumbnail</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">URL da imagem / thumbnail</label>
                                 <input
                                     type="url"
                                     value={form.thumbnail_url ?? ''}
@@ -354,7 +354,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Meta de Captação (R$)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Meta de Captação (R$)</label>
                                 <MoneyCentsInput
                                     value={form.target_funding_value}
                                     onChange={v => set('target_funding_value', parseNum(v))}
@@ -363,7 +363,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Valor Já Captado (R$)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Valor Já Captado (R$)</label>
                                 <MoneyCentsInput
                                     value={form.current_funding_value}
                                     onChange={v => set('current_funding_value', parseNum(v))}
@@ -778,7 +778,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Cidade</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Cidade</label>
                                 <input
                                     type="text"
                                     value={form.location_city ?? ''}
@@ -788,7 +788,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Estado</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Estado</label>
                                 <input
                                     type="text"
                                     value={form.location_state ?? ''}
@@ -809,7 +809,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Área do terreno (m²)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área do terreno (m²)</label>
                                 <input
                                     type="number"
                                     value={fmtNum(form.land_area_m2)}
@@ -819,7 +819,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Área construída (m²)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Área construída (m²)</label>
                                 <input
                                     type="number"
                                     value={fmtNum(form.built_area_m2)}
@@ -829,7 +829,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Pavimentos</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Pavimentos</label>
                                 <input
                                     type="number"
                                     value={fmtNum(form.floors)}
@@ -839,7 +839,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Previsão de início</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Previsão de início</label>
                                 <input
                                     type="date"
                                     value={form.expected_start ?? ''}
@@ -858,7 +858,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">VGV (R$)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV (R$)</label>
                                 <MoneyCentsInput
                                     value={form.vgv}
                                     onChange={v => set('vgv', parseNum(v))}
@@ -867,7 +867,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Custo estimado (R$)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo estimado (R$)</label>
                                 <MoneyCentsInput
                                     value={form.cost_estimate}
                                     onChange={v => set('cost_estimate', parseNum(v))}
@@ -876,7 +876,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Custo/m² (R$)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo/m² (R$)</label>
                                 <MoneyCentsInput
                                     value={form.cost_per_m2}
                                     onChange={v => set('cost_per_m2', parseNum(v))}
@@ -885,7 +885,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Ticket mínimo (R$)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Ticket mínimo (R$)</label>
                                 <MoneyCentsInput
                                     value={form.ticket_min}
                                     onChange={v => set('ticket_min', parseNum(v))}
@@ -894,7 +894,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">ROI estimado (%)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">ROI estimado (%)</label>
                                 <input
                                     type="number"
                                     step="0.1"
@@ -905,7 +905,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 />
                             </div>
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">TIR estimada (%)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">TIR estimada (%)</label>
                                 <input
                                     type="number"
                                     step="0.1"
@@ -933,7 +933,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             {/* Duração */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div>
-                                    <label className="block text-form-label font-bold text-gray-600 mb-1.5">Duração prevista (meses)</label>
+                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Duração prevista (meses)</label>
                                     <input
                                         type="number"
                                         value={fmtNum(form.duration_months)}
@@ -952,7 +952,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-form-label font-bold text-gray-500 mb-1.5">Custo sobe (%) <span className="font-normal text-gray-400">ex: 15</span></label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo sobe (%) <span className="font-normal text-gray-400">ex: 15</span></label>
                                         <input
                                             type="number"
                                             step="0.1"
@@ -963,7 +963,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-form-label font-bold text-gray-500 mb-1.5">VGV cai (%) <span className="font-normal text-gray-400">ex: 10</span></label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV cai (%) <span className="font-normal text-gray-400">ex: 10</span></label>
                                         <input
                                             type="number"
                                             step="0.1"
@@ -984,7 +984,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                 </div>
                                 <div className="grid grid-cols-2 gap-3">
                                     <div>
-                                        <label className="block text-form-label font-bold text-gray-500 mb-1.5">Custo cai (%) <span className="font-normal text-gray-400">ex: 5</span></label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">Custo cai (%) <span className="font-normal text-gray-400">ex: 5</span></label>
                                         <input
                                             type="number"
                                             step="0.1"
@@ -995,7 +995,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-form-label font-bold text-gray-500 mb-1.5">VGV sobe (%) <span className="font-normal text-gray-400">ex: 8</span></label>
+                                        <label className="block text-xs font-semibold text-slate-500 mb-1.5">VGV sobe (%) <span className="font-normal text-gray-400">ex: 8</span></label>
                                         <input
                                             type="number"
                                             step="0.1"
@@ -1010,7 +1010,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
 
                             {/* Notas/premissas */}
                             <div>
-                                <label className="block text-form-label font-bold text-gray-600 mb-1.5">Premissas e observações</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Premissas e observações</label>
                                 <textarea
                                     rows={2}
                                     value={form.scenario_notes ?? ''}

@@ -250,7 +250,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                     <ModalBody className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Categoria</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
                                 <select
                                     value={editing.category}
                                     onChange={e => setEditing({ ...editing, category: e.target.value as DueDiligenceCategory })}
@@ -260,7 +260,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Criticidade</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Criticidade</label>
                                 <select
                                     value={editing.criticidade}
                                     onChange={e => setEditing({ ...editing, criticidade: e.target.value as DueDiligenceCriticidade })}
@@ -271,7 +271,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Título *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
                             <input
                                 type="text"
                                 value={editing.title}
@@ -281,7 +281,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Descrição</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Descrição</label>
                             <textarea
                                 rows={2}
                                 value={editing.description ?? ''}
@@ -291,7 +291,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Status</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Status</label>
                                 <select
                                     value={editing.status}
                                     onChange={e => setEditing({ ...editing, status: e.target.value as DueDiligenceStatus })}
@@ -301,7 +301,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Responsável (e-mail)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Responsável (e-mail)</label>
                                 <input
                                     type="email"
                                     value={editing.responsavel_email ?? ''}
@@ -310,7 +310,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prazo</label>
                                 <input
                                     type="date"
                                     value={editing.due_date ?? ''}
@@ -321,16 +321,16 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Impacto</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Impacto</label>
                                 <textarea rows={2} value={editing.impacto ?? ''} onChange={e => setEditing({ ...editing, impacto: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Mitigação</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mitigação</label>
                                 <textarea rows={2} value={editing.mitigacao ?? ''} onChange={e => setEditing({ ...editing, mitigacao: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Condição para aprovação</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Condição para aprovação</label>
                             <input
                                 type="text"
                                 value={editing.condicao_aprovacao ?? ''}

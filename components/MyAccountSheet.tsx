@@ -78,7 +78,7 @@ export default function MyAccountSheet({ open, onClose, member, email, organizat
             <h3 className="text-sm font-bold text-slate-900">Dados pessoais</h3>
             <div className="mt-3 space-y-3">
               <div>
-                <label htmlFor="my-account-name" className="mb-1 block text-xs font-medium text-slate-500">
+                <label htmlFor="my-account-name" className="block text-xs font-semibold text-slate-500 mb-1">
                   Nome completo
                 </label>
                 <input

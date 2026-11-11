@@ -1267,11 +1267,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <input type="text" placeholder="Buscar despesas..." value={expenseSearchTerm} onChange={e => setExpenseSearchTerm(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm w-full max-w-xs" />
                 <div className="flex flex-wrap gap-2 items-center">
                     <div className="flex items-center gap-1">
-                        <label className="text-form-label text-gray-400 whitespace-nowrap">De</label>
+                        <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">De</label>
                         <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm" />
                     </div>
                     <div className="flex items-center gap-1">
-                        <label className="text-form-label text-gray-400 whitespace-nowrap">Até</label>
+                        <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">Até</label>
                         <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm" />
                     </div>
                     {(filterDateFrom || filterDateTo) && (

@@ -621,7 +621,7 @@ const TaskEditSheet: React.FC<{
           <div>
             <div className="flex items-center gap-1.5 mb-1.5">
               <User className="w-3 h-3 text-slate-500" aria-hidden="true" />
-              <label htmlFor="tarefa-responsavel" className="text-xs font-semibold text-slate-600">Responsável</label>
+              <label htmlFor="tarefa-responsavel" className="text-xs font-semibold text-slate-500">Responsável</label>
             </div>
             <select
               id="tarefa-responsavel"
@@ -640,7 +640,7 @@ const TaskEditSheet: React.FC<{
         <div>
           <div className="flex items-center gap-1.5 mb-1.5">
             <AlignLeft className="w-3 h-3 text-slate-500" aria-hidden="true" />
-            <label htmlFor="tarefa-descricao" className="text-xs font-semibold text-slate-600">Descrição</label>
+            <label htmlFor="tarefa-descricao" className="text-xs font-semibold text-slate-500">Descrição</label>
           </div>
           <textarea
             id="tarefa-descricao"

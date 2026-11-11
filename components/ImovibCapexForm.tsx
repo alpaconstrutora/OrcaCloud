@@ -392,7 +392,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                 return (
                                     <div key={block.id} className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                         <span className="text-sm font-medium text-slate-700 min-w-[120px]">{block.name}</span>
-                                        <label className="flex items-center gap-2 text-sm text-slate-500">
+                                        <label className="flex text-xs font-semibold text-slate-500 items-center gap-2">
                                             Custo
                                             <MoneyCentsInput
                                                 value={custo}
@@ -402,7 +402,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             />
                                             <span className="text-slate-500">/m²</span>
                                         </label>
-                                        <label className="flex items-center gap-2 text-sm text-slate-500">
+                                        <label className="flex text-xs font-semibold text-slate-500 items-center gap-2">
                                             Venda
                                             <MoneyCentsInput
                                                 value={blockPrices[block.id] ?? block.sales_price_sqm ?? 0}

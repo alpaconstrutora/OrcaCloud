@@ -3164,7 +3164,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
             <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
                 {activeView === 'dashboard' ? (
                     <div className="flex flex-wrap items-center gap-2">
-                        <label htmlFor="conciliacao-posicao-em" className="text-sm font-medium text-gray-700 pl-1">Posição em</label>
+                        <label htmlFor="conciliacao-posicao-em" className="text-xs font-semibold text-slate-500 pl-1">Posição em</label>
                         <input
                             id="conciliacao-posicao-em"
                             type="date"

@@ -142,7 +142,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
                     <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
                         {/* Almoxarifado */}
                         <div>
-                            <label className="block text-form-label text-gray-400 mb-1">Almoxarifado de origem *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Almoxarifado de origem *</label>
                             <select
                                 className="w-full bg-gray-800 border border-gray-600 rounded px-3 h-9 text-sm text-white"
                                 value={warehouseId}
@@ -178,7 +178,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
                                         <div className="grid grid-cols-12 gap-2">
                                             {/* Seletor de insumo do saldo */}
                                             <div className="col-span-5">
-                                                <label className="block text-form-label text-gray-500 mb-1">Insumo (do estoque)</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Insumo (do estoque)</label>
                                                 <select
                                                     className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
                                                     value={line.inputCode ?? ''}
@@ -195,7 +195,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
 
                                             {/* Descrição manual (se não estiver no saldo) */}
                                             <div className="col-span-4">
-                                                <label className="block text-form-label text-gray-500 mb-1">Descrição</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição</label>
                                                 <input
                                                     className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
                                                     value={line.inputDescription}
@@ -206,7 +206,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
 
                                             {/* Un */}
                                             <div className="col-span-1">
-                                                <label className="block text-form-label text-gray-500 mb-1">Un</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Un</label>
                                                 <input
                                                     className="w-full bg-gray-900 border border-gray-600 rounded px-2 py-1.5 text-sm text-white"
                                                     value={line.inputUnit}
@@ -216,7 +216,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
 
                                             {/* Qtd */}
                                             <div className="col-span-2">
-                                                <label className="block text-form-label text-gray-500 mb-1">Quantidade</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Quantidade</label>
                                                 <input
                                                     type="number" min="0.001" step="0.01"
                                                     className={`w-full bg-gray-900 border rounded px-2 py-1.5 text-sm text-white ${line._insufficientStock ? 'border-yellow-500' : 'border-gray-600'}`}

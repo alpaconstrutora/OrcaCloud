@@ -804,7 +804,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
           <p className="text-xs font-black text-blue-700 uppercase tracking-widest">Novo Template</p>
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <label className="text-form-label font-bold text-slate-500">Nome *</label>
+              <label className="text-xs font-semibold text-slate-500">Nome *</label>
               <input
                 type="text"
                 value={newName}
@@ -816,7 +816,7 @@ const OperacionalTemplateManager: React.FC<Props> = ({ orgId }) => {
               />
             </div>
             <div>
-              <label className="text-form-input font-bold text-slate-500">Tipo de serviço</label>
+              <label className="text-xs font-semibold text-slate-500 text-form-input">Tipo de serviço</label>
               <input
                 type="text"
                 value={newServiceType}

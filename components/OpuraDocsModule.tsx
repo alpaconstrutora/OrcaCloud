@@ -4553,7 +4553,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
                   if (docFolder && docFolder.naming_mask) {
                     return (
                       <div className="space-y-4 bg-blue-50/50 p-4 rounded-[10px] border border-blue-100">
-                        <label className="text-sm font-semibold text-blue-800 flex items-center gap-2">
+                        <label className="flex text-xs font-semibold text-blue-800 items-center gap-2">
                           <Settings className="w-4 h-4" /> Componentes do Nome (Padrão: {docFolder.naming_mask})
                         </label>
                         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

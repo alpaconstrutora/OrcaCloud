@@ -221,7 +221,7 @@ const ServicesVisit: React.FC<Props> = ({ opportunityId, organizationId, onBack 
 
       {/* Observações */}
       <div>
-        <label className="block text-form-label font-medium text-gray-600 dark:text-gray-400 mb-1">Observações gerais</label>
+        <label className="block text-xs font-semibold text-slate-500 dark:text-gray-400 mb-1">Observações gerais</label>
         <textarea className={INPUT} rows={4} value={observations} onChange={e => setObservations(e.target.value)} />
       </div>
 

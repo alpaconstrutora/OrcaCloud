@@ -141,7 +141,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                     <ModalBody className="space-y-4">
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Categoria</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
                                 <select
                                     value={editing.category}
                                     onChange={e => setEditing({ ...editing, category: e.target.value as RiskCategory })}
@@ -151,7 +151,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Status</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Status</label>
                                 <select
                                     value={editing.status}
                                     onChange={e => setEditing({ ...editing, status: e.target.value as RiskStatus })}
@@ -162,7 +162,7 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                             </div>
                         </div>
                         <div>
-                            <label className="block text-xs font-bold text-gray-600 mb-1.5">Risco *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Risco *</label>
                             <input
                                 type="text"
                                 value={editing.title}
@@ -173,29 +173,29 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Causa</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Causa</label>
                                 <textarea rows={2} value={editing.causa ?? ''} onChange={e => setEditing({ ...editing, causa: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Consequência</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Consequência</label>
                                 <textarea rows={2} value={editing.consequencia ?? ''} onChange={e => setEditing({ ...editing, consequencia: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                         </div>
                         <div className="grid grid-cols-3 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Probabilidade (1-5)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Probabilidade (1-5)</label>
                                 <input type="number" min={1} max={5} value={editing.probabilidade}
                                     onChange={e => setEditing({ ...editing, probabilidade: Math.min(5, Math.max(1, Number(e.target.value))) })}
                                     className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Impacto (1-5)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Impacto (1-5)</label>
                                 <input type="number" min={1} max={5} value={editing.impacto}
                                     onChange={e => setEditing({ ...editing, impacto: Math.min(5, Math.max(1, Number(e.target.value))) })}
                                     className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Tendência</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Tendência</label>
                                 <select
                                     value={editing.tendencia ?? 'estavel'}
                                     onChange={e => setEditing({ ...editing, tendencia: e.target.value as RiskTendencia })}
@@ -209,21 +209,21 @@ const RiskMatrixPanel: React.FC<Props> = ({ opportunityId, organizationId }) => 
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Mitigação</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mitigação</label>
                                 <textarea rows={2} value={editing.mitigacao ?? ''} onChange={e => setEditing({ ...editing, mitigacao: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Contingência</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Contingência</label>
                                 <textarea rows={2} value={editing.contingencia ?? ''} onChange={e => setEditing({ ...editing, contingencia: e.target.value })} className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm resize-none" />
                             </div>
                         </div>
                         <div className="grid grid-cols-2 gap-4">
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Responsável (e-mail)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Responsável (e-mail)</label>
                                 <input type="email" value={editing.responsavel_email ?? ''} onChange={e => setEditing({ ...editing, responsavel_email: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-600 mb-1.5">Prazo</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prazo</label>
                                 <input type="date" value={editing.prazo ?? ''} onChange={e => setEditing({ ...editing, prazo: e.target.value })} className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm" />
                             </div>
                         </div>

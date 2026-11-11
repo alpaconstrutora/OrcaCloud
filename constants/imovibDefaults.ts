@@ -75,3 +75,20 @@ export const IMOVIB_DEFAULTS = {
 } as const;
 
 export type ImovibDefaultKey = keyof typeof IMOVIB_DEFAULTS;
+
+/**
+ * Fase 3 — choques padrão do tornado e dos testes de sensibilidade (editáveis na
+ * tela). Unidades: preço, custo de obra e terreno em %; prazos em meses; juros em
+ * pontos percentuais ao ano; índice da obra em pontos percentuais ao mês; distrato
+ * em pontos percentuais.
+ */
+export const IMOVIB_CHOQUES_PADRAO = {
+    preco: 10,
+    custo_obra: 10,
+    terreno: 10,
+    velocidade_vendas: 6,
+    prazo_obra: 3,
+    juros_financiamento: 2,
+    indice_obra: 0.2,
+    distrato: 5,
+} as const;

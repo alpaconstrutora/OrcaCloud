@@ -4828,18 +4828,18 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                         <div className="p-7 space-y-4">
                                             <div>
                                                 <label className="block text-xs font-semibold text-slate-500 mb-1.5">Título *</label>
-                                                <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
+                                                <input type="text" value={newRequestForm.title} onChange={e => setNewRequestForm(f => ({ ...f, title: e.target.value }))} placeholder="Ex: Torneira com vazamento" className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400" />
                                             </div>
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
                                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">Categoria</label>
-                                                    <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
+                                                    <select value={newRequestForm.category} onChange={e => setNewRequestForm(f => ({ ...f, category: e.target.value }))} className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
                                                     <label className="block text-xs font-semibold text-slate-500 mb-1.5">Prioridade</label>
-                                                    <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
+                                                    <select value={newRequestForm.priority} onChange={e => setNewRequestForm(f => ({ ...f, priority: e.target.value }))} className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400">
                                                         {['Baixa','Média','Alta','Urgente'].map(p => <option key={p}>{p}</option>)}
                                                     </select>
                                                 </div>
@@ -4853,7 +4853,7 @@ export const ClientArea: React.FC<ClientAreaProps> = ({ settings, budget, profil
                                                     <select
                                                         value={newRequestForm.unitId}
                                                         onChange={e => setNewRequestForm(f => ({ ...f, unitId: e.target.value }))}
-                                                        className="w-full p-3.5 bg-gray-50 border border-gray-200 rounded-[10px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400"
+                                                        className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[10px] text-sm font-medium text-gray-900 focus:outline-none focus:border-amber-400"
                                                     >
                                                         <option value="">Não é de uma unidade específica</option>
                                                         {condominio.unidades.map(u => (

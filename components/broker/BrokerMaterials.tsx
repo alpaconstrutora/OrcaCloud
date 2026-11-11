@@ -163,7 +163,7 @@ const BrokerMaterials: React.FC<BrokerMaterialsProps> = ({ organizationId, porta
                     <div className="relative flex-1 max-w-sm">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input type="text" value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar material..."
-                            className="w-full pl-10 pr-4 py-2.5 rounded-xl border border-gray-200 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
+                            className="w-full pl-10 pr-4 h-9 rounded-[6px] border border-gray-200 text-sm focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100" />
                     </div>
                     <div className={`${compacto ? 'hidden' : 'flex'} bg-gray-100 rounded-xl p-1`}>
                         <button onClick={() => setViewMode('grid')} className={`px-3 py-1.5 rounded-lg text-form-input font-bold transition-all ${viewMode === 'grid' ? 'bg-white text-indigo-600 shadow-sm' : 'text-gray-500'}`}>Grid</button>

@@ -217,7 +217,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.title}
                                     onChange={e => set('title', e.target.value)}
                                     placeholder="Ex: Residencial Vila Nova"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -227,7 +227,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.subtitle ?? ''}
                                     onChange={e => set('subtitle', e.target.value)}
                                     placeholder="Ex: Condomínio fechado alto padrão, 48 unidades"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div className="grid grid-cols-2 gap-4">
@@ -236,7 +236,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     <select
                                         value={form.status}
                                         onChange={e => set('status', e.target.value as OpportunityStatus)}
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                        className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     >
                                         {STATUSES.map(s => <option key={s} value={s}>{OPPORTUNITY_STATUS_LABELS[s]}</option>)}
                                     </select>
@@ -246,7 +246,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     <select
                                         value={form.opportunity_type ?? ''}
                                         onChange={e => set('opportunity_type', (e.target.value || undefined) as OpportunityType | undefined)}
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                        className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     >
                                         <option value="">Selecione...</option>
                                         {TYPES.map(t => <option key={t} value={t}>{OPPORTUNITY_TYPE_LABELS[t]}</option>)}
@@ -260,7 +260,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.thumbnail_url ?? ''}
                                     onChange={e => set('thumbnail_url', e.target.value)}
                                     placeholder="https://..."
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                         </div>
@@ -281,7 +281,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             <select
                                 value={form.project_id ?? ''}
                                 onChange={e => set('project_id', e.target.value || null)}
-                                className="flex-1 px-4 py-2.5 border border-indigo-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
+                                className="flex-1 px-4 h-9 border border-indigo-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-indigo-400/30 focus:border-indigo-400"
                             >
                                 <option value="">Sem vínculo</option>
                                 {projects.map(p => (
@@ -324,7 +324,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                             <select
                                 value={form.imovib_study_id ?? ''}
                                 onChange={e => set('imovib_study_id', e.target.value || null)}
-                                className="flex-1 px-4 py-2.5 border border-blue-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400"
+                                className="flex-1 px-4 h-9 border border-blue-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30 focus:border-blue-400"
                             >
                                 <option value="">Sem vínculo</option>
                                 {studies.map(s => (
@@ -359,7 +359,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.target_funding_value}
                                     onChange={v => set('target_funding_value', parseNum(v))}
                                     placeholder="Ex: 42500000"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -368,7 +368,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.current_funding_value}
                                     onChange={v => set('current_funding_value', parseNum(v))}
                                     placeholder="Ex: 30600000"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                         </div>
@@ -450,14 +450,14 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={newDistance.place}
                                     onChange={e => setNewDistance(prev => ({ ...prev, place: e.target.value }))}
                                     placeholder="Local (Ex: Shopping Cambuí, Aeroporto, etc.)"
-                                    className="flex-1 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="flex-1 px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                                 <input
                                     type="text"
                                     value={newDistance.distance}
                                     onChange={e => setNewDistance(prev => ({ ...prev, distance: e.target.value }))}
                                     placeholder="Ex: 500m / 5 min"
-                                    className="w-40 px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-40 px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                                 <Button
                                     size="icon"
@@ -506,14 +506,14 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={newRisk.title}
                                     onChange={e => setNewRisk(prev => ({ ...prev, title: e.target.value }))}
                                     placeholder="Risco (Ex: Licenciamento, Custo de Aço)"
-                                    className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                                 <input
                                     type="text"
                                     value={newRisk.mitigation}
                                     onChange={e => setNewRisk(prev => ({ ...prev, mitigation: e.target.value }))}
                                     placeholder="Mitigação (Ex: Projeto aprovado, Contrato fechado)"
-                                    className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                             </div>
                             <div className="flex gap-2 items-center">
@@ -521,7 +521,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     <select
                                         value={newRisk.probability}
                                         onChange={e => setNewRisk(prev => ({ ...prev, probability: e.target.value }))}
-                                        className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none"
+                                        className="flex-1 px-4 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none"
                                     >
                                         <option value="Baixa">Probabilidade: Baixa</option>
                                         <option value="Média">Probabilidade: Média</option>
@@ -530,7 +530,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     <select
                                         value={newRisk.impact}
                                         onChange={e => setNewRisk(prev => ({ ...prev, impact: e.target.value }))}
-                                        className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm bg-white focus:outline-none"
+                                        className="flex-1 px-4 h-9 border border-gray-200 rounded-[6px] text-sm bg-white focus:outline-none"
                                     >
                                         <option value="Baixo">Impacto: Baixo</option>
                                         <option value="Médio">Impacto: Médio</option>
@@ -602,14 +602,14 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={newMember.name}
                                     onChange={e => setNewMember(prev => ({ ...prev, name: e.target.value }))}
                                     placeholder="Nome (Ex: Dr. Silva, Alfa Construtora)"
-                                    className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                                 <input
                                     type="text"
                                     value={newMember.role}
                                     onChange={e => setNewMember(prev => ({ ...prev, role: e.target.value }))}
                                     placeholder="Função (Ex: Diretor de RI, Construtora)"
-                                    className="px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                                 <div className="flex gap-2">
                                     <input
@@ -617,7 +617,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         value={newMember.experience}
                                         onChange={e => setNewMember(prev => ({ ...prev, experience: e.target.value }))}
                                         placeholder="Experiência (Ex: 15 anos de mercado)"
-                                        className="flex-1 px-4 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                        className="flex-1 px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                     />
                                     <Button
                                         size="icon"
@@ -670,14 +670,14 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={newCompetitor.name}
                                     onChange={e => setNewCompetitor(prev => ({ ...prev, name: e.target.value }))}
                                     placeholder="Nome do Concorrente (Ex: Alfa Cambuí)"
-                                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                                 <input
                                     type="text"
                                     value={newCompetitor.price_per_m2}
                                     onChange={e => setNewCompetitor(prev => ({ ...prev, price_per_m2: e.target.value }))}
                                     placeholder="Preço médio/m² (Ex: 12500)"
-                                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                             </div>
                             <div className="grid grid-cols-3 gap-2">
@@ -686,21 +686,21 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={newCompetitor.sales_velocity_pct}
                                     onChange={e => setNewCompetitor(prev => ({ ...prev, sales_velocity_pct: e.target.value }))}
                                     placeholder="Venda mensal % (Ex: 4.5)"
-                                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                                 <input
                                     type="text"
                                     value={newCompetitor.appreciation_pct}
                                     onChange={e => setNewCompetitor(prev => ({ ...prev, appreciation_pct: e.target.value }))}
                                     placeholder="Valorização anual % (Ex: 12.0)"
-                                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                                 <input
                                     type="text"
                                     value={newCompetitor.distance_km}
                                     onChange={e => setNewCompetitor(prev => ({ ...prev, distance_km: e.target.value }))}
                                     placeholder="Distância km (Ex: 1.2)"
-                                    className="px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
+                                    className="px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30"
                                 />
                             </div>
                             <div className="flex justify-end">
@@ -784,7 +784,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.location_city ?? ''}
                                     onChange={e => set('location_city', e.target.value)}
                                     placeholder="Ex: São Paulo"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -795,7 +795,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     onChange={e => set('location_state', e.target.value)}
                                     placeholder="Ex: SP"
                                     maxLength={2}
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 uppercase"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 uppercase"
                                 />
                             </div>
                         </div>
@@ -815,7 +815,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={fmtNum(form.land_area_m2)}
                                     onChange={e => set('land_area_m2', parseNum(e.target.value))}
                                     placeholder="0"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -825,7 +825,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={fmtNum(form.built_area_m2)}
                                     onChange={e => set('built_area_m2', parseNum(e.target.value))}
                                     placeholder="0"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -835,7 +835,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={fmtNum(form.floors)}
                                     onChange={e => set('floors', parseNum(e.target.value) != null ? Math.round(parseNum(e.target.value)!) : null)}
                                     placeholder="0"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -844,7 +844,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     type="date"
                                     value={form.expected_start ?? ''}
                                     onChange={e => set('expected_start', e.target.value || null)}
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                         </div>
@@ -863,7 +863,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.vgv}
                                     onChange={v => set('vgv', parseNum(v))}
                                     placeholder="0,00"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -872,7 +872,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.cost_estimate}
                                     onChange={v => set('cost_estimate', parseNum(v))}
                                     placeholder="0,00"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -881,7 +881,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.cost_per_m2}
                                     onChange={v => set('cost_per_m2', parseNum(v))}
                                     placeholder="0,00"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -890,7 +890,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={form.ticket_min}
                                     onChange={v => set('ticket_min', parseNum(v))}
                                     placeholder="0,00"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -901,7 +901,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={fmtNum(form.roi_pct)}
                                     onChange={e => set('roi_pct', parseNum(e.target.value))}
                                     placeholder="0,0"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                             <div>
@@ -912,7 +912,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                     value={fmtNum(form.tir_pct)}
                                     onChange={e => set('tir_pct', parseNum(e.target.value))}
                                     placeholder="0,0"
-                                    className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                    className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                 />
                             </div>
                         </div>
@@ -939,7 +939,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                         value={fmtNum(form.duration_months)}
                                         onChange={e => set('duration_months', parseNum(e.target.value) != null ? Math.round(parseNum(e.target.value)!) : null)}
                                         placeholder="Ex: 24"
-                                        className="w-full px-4 py-2.5 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
+                                        className="w-full px-4 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400"
                                     />
                                 </div>
                             </div>
@@ -959,7 +959,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             value={fmtNum(form.scenario_cost_cons_pct)}
                                             onChange={e => set('scenario_cost_cons_pct', parseNum(e.target.value))}
                                             placeholder="15"
-                                            className="w-full px-3 py-2 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
+                                            className="w-full px-3 h-9 border border-red-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
                                         />
                                     </div>
                                     <div>
@@ -970,7 +970,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             value={fmtNum(form.scenario_vgv_cons_pct)}
                                             onChange={e => set('scenario_vgv_cons_pct', parseNum(e.target.value))}
                                             placeholder="10"
-                                            className="w-full px-3 py-2 border border-red-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
+                                            className="w-full px-3 h-9 border border-red-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-red-400/30 bg-white"
                                         />
                                     </div>
                                 </div>
@@ -991,7 +991,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             value={fmtNum(form.scenario_cost_opt_pct)}
                                             onChange={e => set('scenario_cost_opt_pct', parseNum(e.target.value))}
                                             placeholder="5"
-                                            className="w-full px-3 py-2 border border-emerald-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
+                                            className="w-full px-3 h-9 border border-emerald-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
                                         />
                                     </div>
                                     <div>
@@ -1002,7 +1002,7 @@ const OpportunityForm: React.FC<Props> = ({ initial, organizationId, onSave, onC
                                             value={fmtNum(form.scenario_vgv_opt_pct)}
                                             onChange={e => set('scenario_vgv_opt_pct', parseNum(e.target.value))}
                                             placeholder="8"
-                                            className="w-full px-3 py-2 border border-emerald-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
+                                            className="w-full px-3 h-9 border border-emerald-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-emerald-400/30 bg-white"
                                         />
                                     </div>
                                 </div>

@@ -254,7 +254,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 <select
                                     value={editing.category}
                                     onChange={e => setEditing({ ...editing, category: e.target.value as DueDiligenceCategory })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 >
                                     {CATEGORIES.map(c => <option key={c} value={c}>{DD_CATEGORY_LABELS[c]}</option>)}
                                 </select>
@@ -264,7 +264,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 <select
                                     value={editing.criticidade}
                                     onChange={e => setEditing({ ...editing, criticidade: e.target.value as DueDiligenceCriticidade })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 >
                                     {(['baixa', 'media', 'alta', 'critica'] as DueDiligenceCriticidade[]).map(c => <option key={c} value={c}>{DD_CRITICIDADE_LABELS[c]}</option>)}
                                 </select>
@@ -277,7 +277,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 value={editing.title}
                                 onChange={e => setEditing({ ...editing, title: e.target.value })}
                                 placeholder="Ex: Certidão de ônus reais atualizada"
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         <div>
@@ -295,7 +295,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 <select
                                     value={editing.status}
                                     onChange={e => setEditing({ ...editing, status: e.target.value as DueDiligenceStatus })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 >
                                     {(['pendente', 'em_analise', 'conforme', 'inconforme', 'nao_aplicavel'] as DueDiligenceStatus[]).map(s => <option key={s} value={s}>{DD_STATUS_LABELS[s]}</option>)}
                                 </select>
@@ -306,7 +306,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                     type="email"
                                     value={editing.responsavel_email ?? ''}
                                     onChange={e => setEditing({ ...editing, responsavel_email: e.target.value })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 />
                             </div>
                             <div>
@@ -315,7 +315,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                     type="date"
                                     value={editing.due_date ?? ''}
                                     onChange={e => setEditing({ ...editing, due_date: e.target.value })}
-                                    className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                    className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                                 />
                             </div>
                         </div>
@@ -335,7 +335,7 @@ const DueDiligencePanel: React.FC<Props> = ({ opportunityId, organizationId, use
                                 type="text"
                                 value={editing.condicao_aprovacao ?? ''}
                                 onChange={e => setEditing({ ...editing, condicao_aprovacao: e.target.value })}
-                                className="w-full px-3 py-2.5 border border-gray-200 rounded-xl text-sm"
+                                className="w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm"
                             />
                         </div>
                         {editing.ai_extracted && editing.ai_source_excerpt && (

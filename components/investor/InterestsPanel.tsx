@@ -73,7 +73,7 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                 <select
                     value={filterOpp}
                     onChange={e => setFilterOpp(e.target.value)}
-                    className="px-3 py-2 border border-gray-200 rounded-xl text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 max-w-[240px]"
+                    className="px-3 h-9 border border-gray-200 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 max-w-[240px]"
                 >
                     <option value="all">Todas as oportunidades</option>
                     {opportunities.map(o => (
@@ -153,7 +153,7 @@ const InterestsPanel: React.FC<Props> = ({ organizationId, opportunities }) => {
                                                 value={item.stage ?? 'lead'}
                                                 disabled={updating === item.id}
                                                 onChange={e => handleStageChange(item.id!, e.target.value as InterestStage)}
-                                                className="w-full appearance-none pl-3 pr-8 py-2 bg-gray-50 border border-gray-200 rounded-lg text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 cursor-pointer disabled:opacity-50"
+                                                className="w-full appearance-none pl-3 pr-8 h-9 bg-gray-50 border border-gray-200 rounded-[6px] text-xs font-bold text-gray-600 focus:outline-none focus:ring-2 focus:ring-blue-500/30 focus:border-blue-400 cursor-pointer disabled:opacity-50"
                                             >
                                                 {STAGES.map(s => (
                                                     <option key={s} value={s}>{INTEREST_STAGE_LABELS[s]}</option>

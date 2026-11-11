@@ -222,7 +222,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                             <select
                                 value={uploadCategory}
                                 onChange={e => setUploadCategory(e.target.value as DocumentCategory)}
-                                className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                                className="w-full px-3 h-9 border border-blue-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                             >
                                 {CATEGORIES.map(c => (
                                     <option key={c} value={c}>
@@ -238,7 +238,7 @@ const DataRoomPanel: React.FC<Props> = ({ opportunityId, organizationId, isAdmin
                                 value={uploadDescription}
                                 onChange={e => setUploadDescription(e.target.value)}
                                 placeholder="Ex: Sondagem SPT — mai/2026"
-                                className="w-full px-3 py-2 border border-blue-200 rounded-xl text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30"
+                                className="w-full px-3 h-9 border border-blue-200 rounded-[6px] text-sm bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/30"
                             />
                         </div>
                     </div>

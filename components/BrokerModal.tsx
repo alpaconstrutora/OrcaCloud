@@ -142,7 +142,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     value={formData.name}
                                     onChange={e => update({ name: e.target.value })}
                                     placeholder="Ex: João Silva"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
                             </div>
                         </div>
@@ -158,7 +158,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     value={formData.email}
                                     onChange={e => update({ email: e.target.value })}
                                     placeholder="joao@exemplo.com"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
                             </div>
                         </div>
@@ -173,7 +173,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     value={formData.phone}
                                     onChange={e => update({ phone: e.target.value })}
                                     placeholder="(00) 00000-0000"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
                             </div>
                         </div>
@@ -188,7 +188,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     value={formData.cpf}
                                     onChange={e => update({ cpf: e.target.value })}
                                     placeholder="000.000.000-00"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
                             </div>
                         </div>
@@ -203,7 +203,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     value={formData.creci}
                                     onChange={e => update({ creci: e.target.value })}
                                     placeholder="Ex: 12345-F"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
                             </div>
                         </div>
@@ -218,7 +218,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     value={formData.agency_name}
                                     onChange={e => update({ agency_name: e.target.value })}
                                     placeholder="Nome da Imobiliária"
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700 placeholder:text-gray-300"
                                 />
                             </div>
                         </div>
@@ -233,7 +233,7 @@ const BrokerModal: React.FC<BrokerModalProps> = ({ isOpen, onClose, onSave, init
                                     step="0.01"
                                     value={formData.commission_rate}
                                     onChange={e => update({ commission_rate: parseFloat(e.target.value) })}
-                                    className="w-full pl-11 pr-4 py-3.5 bg-gray-50 border border-gray-200 rounded-2xl focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700"
+                                    className="w-full pl-11 pr-4 h-9 text-sm bg-gray-50 border border-gray-200 rounded-[6px] focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all font-bold text-gray-700"
                                 />
                             </div>
                         </div>

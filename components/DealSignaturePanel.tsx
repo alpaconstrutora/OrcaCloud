@@ -163,7 +163,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
                                         value={row.email}
                                         onChange={(e) => setSigner(i, { email: e.target.value })}
                                         placeholder="email@cliente.com"
-                                        className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
+                                        className="w-full px-3 h-9 bg-white border border-purple-200 rounded-[6px] text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
                                     />
                                 </div>
                                 <div>
@@ -173,7 +173,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
                                         value={row.phone}
                                         onChange={(e) => setSigner(i, { phone: e.target.value })}
                                         placeholder="(11) 99999-9999"
-                                        className="w-full px-3 py-2 bg-white border border-purple-200 rounded-xl text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
+                                        className="w-full px-3 h-9 bg-white border border-purple-200 rounded-[6px] text-form-input font-bold text-gray-700 outline-none focus:border-purple-400 transition-all"
                                     />
                                 </div>
                             </div>

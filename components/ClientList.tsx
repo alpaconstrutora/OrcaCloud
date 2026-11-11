@@ -1367,7 +1367,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
                             <div>
                                 <label className="text-xs font-semibold text-slate-500 block mb-1">Título *</label>
                                 <input
-                                    className="w-full rounded-[6px] border border-gray-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300"
+                                    className="w-full rounded-[6px] border border-gray-200 px-4 h-9 text-sm font-medium outline-none focus:ring-2 focus:ring-orange-300"
                                     placeholder="Ex: Informação sobre manutenção"
                                     value={comunicadoForm.title}
                                     onChange={e => setComunicadoForm(p => ({ ...p, title: e.target.value }))}

@@ -385,7 +385,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     <User className="w-3.5 h-3.5 inline mr-1" />Nome Completo *
                                 </label>
                                 <input type="text" value={buyerName} onChange={e => setBuyerName(e.target.value)}
-                                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
+                                    className="w-full h-9 px-3 rounded-[6px] border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
                                     placeholder="Nome do comprador" />
                             </div>
                             <div>
@@ -393,7 +393,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     <CreditCard className="w-3.5 h-3.5 inline mr-1" />CPF *
                                 </label>
                                 <input type="text" value={buyerCpf} onChange={e => setBuyerCpf(formatCpf(e.target.value))}
-                                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
+                                    className="w-full h-9 px-3 rounded-[6px] border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
                                     placeholder="000.000.000-00" maxLength={14} />
                             </div>
                             <div>
@@ -401,7 +401,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     <Mail className="w-3.5 h-3.5 inline mr-1" />E-mail
                                 </label>
                                 <input type="email" value={buyerEmail} onChange={e => setBuyerEmail(e.target.value)}
-                                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
+                                    className="w-full h-9 px-3 rounded-[6px] border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
                                     placeholder="email@exemplo.com" />
                             </div>
                             <div>
@@ -409,7 +409,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     <Phone className="w-3.5 h-3.5 inline mr-1" />Telefone
                                 </label>
                                 <input type="text" value={buyerPhone} onChange={e => setBuyerPhone(formatPhone(e.target.value))}
-                                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
+                                    className="w-full h-9 px-3 rounded-[6px] border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
                                     placeholder="(00) 00000-0000" maxLength={15} />
                             </div>
                             <div>
@@ -417,7 +417,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     <DollarSign className="w-3.5 h-3.5 inline mr-1" />Renda Mensal
                                 </label>
                                 <MoneyCentsInput value={buyerIncome} onChange={v => setBuyerIncome(v === '' ? 0 : Number(v))}
-                                    className="w-full p-3 rounded-xl border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
+                                    className="w-full h-9 px-3 rounded-[6px] border border-gray-200 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 transition-all text-sm font-medium"
                                     placeholder="R$ 0,00" />
                             </div>
                         </div>
@@ -441,7 +441,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                         Prazo do Contrato (Meses)
                                     </label>
                                     <select value={monthlyInstallments} onChange={e => setMonthlyInstallments(Number(e.target.value))}
-                                        className="w-full p-2.5 rounded-lg border border-blue-200 text-sm font-bold bg-white mb-2">
+                                        className="w-full h-9 px-3 rounded-[6px] border border-blue-200 text-sm font-bold bg-white mb-2">
                                         {[12, 24, 30, 36, 48].map(n => (
                                             <option key={n} value={n}>{n} meses</option>
                                         ))}
@@ -480,7 +480,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                     </p>
                                 ) : (
                                     <select value={selectedPlanId} onChange={e => setSelectedPlanId(e.target.value)}
-                                        className="w-full p-2.5 rounded-lg border border-indigo-200 text-sm font-bold bg-white">
+                                        className="w-full h-9 px-3 rounded-[6px] border border-indigo-200 text-sm font-bold bg-white">
                                         <option value="">Selecione um plano…</option>
                                         {plans.map(p => (
                                             <option key={p.id} value={p.id}>
@@ -511,7 +511,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                         Parcelas Mensais
                                     </label>
                                     <select value={monthlyInstallments} onChange={e => setMonthlyInstallments(Number(e.target.value))}
-                                        className="w-full p-2.5 rounded-lg border border-blue-200 text-sm font-bold bg-white mb-2">
+                                        className="w-full h-9 px-3 rounded-[6px] border border-blue-200 text-sm font-bold bg-white mb-2">
                                         {[12, 24, 36, 48, 60, 72, 84, 96, 120].filter(n => n <= maxInstallments).map(n => (
                                             <option key={n} value={n}>{n}x</option>
                                         ))}
@@ -713,7 +713,7 @@ const BrokerProposalSimulator: React.FC<BrokerProposalSimulatorProps> = ({
                                                     ...(prev ?? Object.fromEntries(proRata.map(p => [p.property_id, p.allocated_value]))),
                                                     [a.property_id]: v === '' ? 0 : Number(v),
                                                 }))}
-                                                className="w-40 pl-9 pr-3 py-2 bg-white border border-gray-200 focus:border-indigo-400 rounded-xl outline-none text-sm text-right text-gray-700 transition-all"
+                                                className="w-40 pl-9 pr-3 h-9 bg-white border border-gray-200 focus:border-indigo-400 rounded-[6px] outline-none text-sm text-right text-gray-700 transition-all"
                                                 placeholder="0,00"
                                             />
                                         </div>

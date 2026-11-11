@@ -258,6 +258,39 @@ describe('TelaCasaAutomatica (F10)', () => {
     cleanup();
   });
 
+  it('A1 (11/11/2026): o programa inválido é avisado no formulário, antes de gerar — com o que o motor vai usar', () => {
+    tela({ premissas: { ...PREMISSAS_DA_CASA_PADRAO, curto: { ...PREMISSAS_DA_CASA_PADRAO.curto, dormitorios: 2, suites: 4 } } });
+    const avisos = screen.getByTestId('avisos-do-programa');
+    expect(avisos.textContent).toContain('Suítes: 4 → 2 (no máximo uma por dormitório).');
+    cleanup();
+    tela();
+    expect(screen.queryByTestId('avisos-do-programa')).toBeNull();
+    cleanup();
+  });
+
+  it('A3 (11/11/2026): os grupos do relatório dizem aberto/fechado (aria-expanded) e a seta é ícone, não texto', () => {
+    tela({ casa: casa({ plano }) });
+    aba('Relatório');
+    const rel = screen.getByTestId('pendencias-da-casa');
+    const verif = within(rel).getByRole('button', { name: /verificação/i });
+    expect(verif.getAttribute('aria-expanded')).toBe('true');
+    const lista = document.getElementById(verif.getAttribute('aria-controls')!);
+    expect(lista?.textContent).toContain('3 trecho(s) passando por porta ou janela');
+    expect(rel.textContent).not.toMatch(/[▸▾]/);
+    fireEvent.click(verif);
+    expect(verif.getAttribute('aria-expanded')).toBe('false');
+    cleanup();
+  });
+
+  it('A3 (11/11/2026): "Alternativas tentadas" virou "Arranjos testados", com a explicação no title', () => {
+    tela();
+    aba('Hipóteses');
+    const campo = screen.getByLabelText('Arranjos testados');
+    expect(campo.closest('label')?.getAttribute('title')).toMatch(/arranjos/);
+    expect(screen.queryByText('Alternativas tentadas')).toBeNull();
+    cleanup();
+  });
+
   it('o número é livre enquanto se digita: o "5" de "5500" não vira 2000; sai do campo, volta para a faixa', () => {
     const p = tela();
     aba('Hipóteses');
@@ -453,6 +486,20 @@ describe('TelaCasaAutomatica › Construir pelo Empreendimento (25/10/2026)', ()
     const botao = screen.getByTestId('construir-pelo-empreendimento') as HTMLButtonElement;
     expect(botao.disabled).toBe(true);
     expect(botao.title).toMatch(/paredes/);
+    cleanup();
+  });
+
+  it('A2 (11/11/2026): o cartão mora na aba Programa; a mensagem do Construir fica à vista em qualquer aba', () => {
+    tela({
+      casa: casa({ plano }),
+      peloEmpreendimento: { nome: 'Garden', passos: passos(null), construindo: false, onConstruir: vi.fn(), onResolver: vi.fn(), mensagem: { texto: 'Feito: lote lançado. Gerando a prévia…', erro: false } },
+    });
+    // Com a prévia a tela abre no Resultado: o cartão não está, a mensagem está.
+    expect(screen.getByTestId('previa-da-casa')).toBeTruthy();
+    expect(screen.queryByTestId('casa-pelo-empreendimento')).toBeNull();
+    expect(screen.getByTestId('mensagem-do-construir').textContent).toBe('Feito: lote lançado. Gerando a prévia…');
+    aba('Programa');
+    expect(within(screen.getByTestId('programa-da-casa')).getByTestId('casa-pelo-empreendimento')).toBeTruthy();
     cleanup();
   });
 

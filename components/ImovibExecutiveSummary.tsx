@@ -1,10 +1,12 @@
-import React, { useRef, useState } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
 import { ImovibStudy } from '../types';
 import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
+import ImovibPontosDeEquilibrioCard from './ImovibPontosDeEquilibrioCard';
+import { calcularIndicadores } from '../utils/imovibIndicadores';
 import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Banknote } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
@@ -14,6 +16,8 @@ import html2canvas from 'html2canvas';
 import { coresCompativeisNaCopia } from '../utils/html2canvasCores';
 import * as XLSX from 'xlsx';
 import { useToast } from '../hooks/useToast';
+import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEquilibrio } from '../utils/imovibEquilibrio';
+import { GRUPOS_DO_FLUXO } from '../utils/imovibVisaoDoFluxo';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -56,41 +60,89 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
     const D = IMOVIB_DEFAULTS;
     const tma = premissa(study.discount_rate, D.discount_rate);
     const tirDefinida = Number.isFinite(m.annualIrr);
+    const tirProjetoDefinida = Number.isFinite(m.annualIrrProjeto);
     const rubricas = m.capexRubricasAtivas;
+    const ind = calcularIndicadores(m, tma);
+    const margemAlvo = D.margem_alvo_terreno_percent;
+    const ponto = (p: PontoDeEquilibrio): [number | null, string | null] =>
+        p.valor == null ? [null, p.motivo === 'sem_vgv' ? 'Sem VGV no estudo' : 'Não existe: o alvo não é atingido'] : [p.valor, null];
+    const [terrenoVpl, obsTerrenoVpl] = ponto(terrenoMaximo(study, { tipo: 'vpl_zero' }));
+    const [terrenoMargem, obsTerrenoMargem] = ponto(terrenoMaximo(study, { tipo: 'margem', pct: margemAlvo }));
+    const [preco, obsPreco] = ponto(precoMinimo(study));
+    const [custo, obsCusto] = ponto(custoMaximoDeObra(study));
+    const [vendas, obsVendas] = ponto(vendasMinimas(study));
+    const vazio = (x: number | null, motivo: string) => (x == null ? motivo : null);
 
     const indicadores: Linha[] = [
         ['Indicador', 'Valor', 'Unidade', 'Observação'],
         ['VGV bruto', m.vgvTotal, 'R$', null],
-        ['VGV líquido', m.netVgvTotal, 'R$', 'Receita dos compradores sem índice: VGV vendido depois das permutas, menos inadimplência e devolução de distratos'],
+        ['VGV líquido', m.netVgvTotal, 'R$', 'Receita dos compradores sem índice: VGV vendido depois das permutas, menos inadimplência e devolução de distratos; inclui os juros do pós-chaves'],
+        ['Estoque não vendido', m.estoqueNaoVendidoPct * 100, '% do VGV vendável', 'Fica fora da receita'],
         ['Custo de obra', m.constCostTotal, 'R$', null],
         ['Terreno', m.landCost, 'R$', null],
         ['Rubricas do CAPEX no cálculo — sobre o terreno', m.capexRubricas.terreno, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
         ['Rubricas do CAPEX no cálculo — sobre a obra', m.capexRubricas.obra, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
         ['Rubricas do CAPEX no cálculo — sobre o VGV', m.capexRubricas.vgv, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
         ['Rubricas do CAPEX no cálculo — total', m.capexRubricas.total, 'R$', rubricas ? null : 'Sem rubricas no cálculo'],
-        ['VPL', m.vpl, 'R$', `Descontado à TMA de ${tma.toLocaleString('pt-BR')}% a.a.`],
-        ['TIR', tirDefinida ? m.annualIrr : null, '% a.a.', tirDefinida ? null : 'Sem TIR: o fluxo não troca de sinal'],
+        ['VPL', m.vpl, 'R$', `Do acionista, descontado à TMA de ${tma.toLocaleString('pt-BR')}% a.a.`],
+        ['TIR', tirDefinida ? m.annualIrr : null, '% a.a.', tirDefinida ? 'Do acionista' : 'Sem TIR: o fluxo não troca de sinal'],
+        ['VPL do projeto', m.vplProjeto, 'R$', 'Sem o financiamento'],
+        ['TIR do projeto', tirProjetoDefinida ? m.annualIrrProjeto : null, '% a.a.', tirProjetoDefinida ? 'Sem o financiamento' : 'Sem TIR: o fluxo não troca de sinal'],
+        ['TIR modificada', ind.tirModificadaAnual, '% a.a.', vazio(ind.tirModificadaAnual, 'Sem entrada ou sem saída de caixa') ?? 'Saídas e entradas à TMA'],
+        ['Lucro líquido', ind.lucroLiquido, 'R$', 'Soma do caixa do acionista'],
+        ['Margem líquida sobre o VGV', ind.margemLiquidaSobreVgv == null ? null : ind.margemLiquidaSobreVgv * 100, '%', vazio(ind.margemLiquidaSobreVgv, 'Sem VGV')],
+        ['Margem sobre o custo', ind.margemSobreCusto == null ? null : ind.margemSobreCusto * 100, '%', vazio(ind.margemSobreCusto, 'Sem custo')],
+        ['Payback simples', ind.paybackSimplesMes, 'mês', vazio(ind.paybackSimplesMes, 'O caixa acumulado não volta ao positivo')],
+        ['Payback descontado', ind.paybackDescontadoMes, 'mês', vazio(ind.paybackDescontadoMes, 'O caixa descontado não volta ao positivo')],
+        ['Múltiplo do capital', ind.multiploDoCapital, 'x', vazio(ind.multiploDoCapital, 'Sem saída de caixa') ?? 'Entradas ÷ saídas'],
+        ['Retorno sobre o capital', ind.retornoSobreCapital == null ? null : ind.retornoSobreCapital * 100, '%', vazio(ind.retornoSobreCapital, 'Sem exposição de caixa') ?? 'Lucro ÷ exposição máxima'],
         ['Exposição máxima de caixa', m.maxExposure, 'R$', null],
+        ['Mês da exposição máxima', ind.mesDaExposicaoMaxima, 'mês', vazio(ind.mesDaExposicaoMaxima, 'O caixa nunca fica negativo')],
+        ['Valor máximo do terreno (VPL zero)', terrenoVpl, 'R$', obsTerrenoVpl],
+        [`Terreno para margem de ${margemAlvo.toLocaleString('pt-BR')}%`, terrenoMargem, 'R$', obsTerrenoMargem ?? 'Margem líquida sobre o VGV'],
+        ['Variação de preço que zera o VPL', preco, '%', obsPreco],
+        ['Variação do custo de obra que zera o VPL', custo, '%', obsCusto],
+        ['Vendas mínimas', vendas, '% do VGV', obsVendas],
         ['TMA', tma, '% a.a.', null],
         ['Duração', m.duration, 'meses', null],
     ];
 
     const naoEntra = rubricas ? 'Não entra no cálculo: vem das rubricas do CAPEX (modo Completo)' : null;
+    const inflacao = premissa(study.inflation_rate, D.inflation_rate);
+    const ROTULO_CURVA: Record<string, string> = { linear: 'Linear', lancamento: 'Lançamento forte', vso: 'VSO (sobre o estoque)', custom: 'Personalizada' };
+    const tipoCurva = study.sales_curve_type ?? D.sales_curve_type;
+    const revende = study.cancellation_resale ?? D.cancellation_resale;
     const premissas: Linha[] = [
         ['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação'],
         ['Cronograma', 'Início das vendas', premissa(study.sales_start_month, D.sales_start_month), 'mês', null],
         ['Cronograma', 'Duração das vendas', premissa(study.sales_duration_months, D.sales_duration_months), 'meses', null],
         ['Cronograma', 'Início da obra', premissa(study.construction_start_month, D.construction_start_month), 'mês', null],
         ['Cronograma', 'Duração da obra', premissa(study.construction_duration_months, D.construction_duration_months), 'meses', null],
-        ['Taxas', 'Inflação', premissa(study.inflation_rate, D.inflation_rate), '% a.m.', null],
+        ['Taxas', 'Inflação geral', inflacao, '% a.m.', null],
         ['Taxas', 'TMA', tma, '% a.a.', null],
         ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', naoEntra],
         ['Taxas', 'Corretagem', premissa(study.brokerage_fee, D.brokerage_fee), '%', naoEntra],
-        ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', null],
-        ['Taxas', 'Distratos', premissa(study.cancellation_rate_percent, D.cancellation_rate_percent), '%', null],
+        ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', 'Sobre parcelas de obra, intermediárias e pós-chaves'],
+        ['Curva de vendas', 'Tipo da curva', ROTULO_CURVA[tipoCurva] ?? tipoCurva, null, null],
+        ['Curva de vendas', 'Vendido no lançamento', premissa(study.sales_launch_percent, D.sales_launch_percent), '%', tipoCurva === 'lancamento' ? null : 'Só na curva de lançamento'],
+        ['Curva de vendas', 'Meses do lançamento', premissa(study.sales_launch_months, D.sales_launch_months), 'meses', tipoCurva === 'lancamento' ? null : 'Só na curva de lançamento'],
+        ['Curva de vendas', 'VSO mensal', premissa(study.sales_vso_percent, D.sales_vso_percent), '% do estoque', tipoCurva === 'vso' ? null : 'Só na curva VSO'],
         ['Perfil de recebimento', 'Sinal / ato', premissa(study.revenue_downpayment_percent, D.revenue_downpayment_percent), '%', null],
         ['Perfil de recebimento', 'Mensais / obra', premissa(study.revenue_construction_percent, D.revenue_construction_percent), '%', null],
+        ['Perfil de recebimento', 'Intermediárias', premissa(study.revenue_intermediate_percent, D.revenue_intermediate_percent), '%', null],
+        ['Perfil de recebimento', 'Intervalo das intermediárias', premissa(study.revenue_intermediate_interval_months, D.revenue_intermediate_interval_months), 'meses', null],
         ['Perfil de recebimento', 'Repasse bancário / chaves', premissa(study.revenue_handover_percent, D.revenue_handover_percent), '%', null],
+        ['Perfil de recebimento', 'Atraso do repasse', premissa(study.handover_delay_months, D.handover_delay_months), 'meses', null],
+        ['Perfil de recebimento', 'Pós-chaves', premissa(study.revenue_post_handover_percent, D.revenue_post_handover_percent), '%', null],
+        ['Perfil de recebimento', 'Prazo do pós-chaves', premissa(study.post_handover_months, D.post_handover_months), 'meses', null],
+        ['Perfil de recebimento', 'Juro do pós-chaves', premissa(study.post_handover_rate_monthly, D.post_handover_rate_monthly), '% a.m.', 'Price'],
+        ['Distrato', 'Distrato', premissa(study.cancellation_rate_percent, D.cancellation_rate_percent), '% de cada safra', 'Só vendas antes das chaves; acontece no máximo nas chaves'],
+        ['Distrato', 'Meses até o distrato', premissa(study.cancellation_lag_months, D.cancellation_lag_months), 'meses', null],
+        ['Distrato', 'Devolução ao comprador', premissa(study.cancellation_refund_percent, D.cancellation_refund_percent), '% do pago', null],
+        ['Distrato', 'Revender a unidade distratada', revende ? 'Sim' : 'Não', null, null],
+        ['Distrato', 'Deságio da revenda', premissa(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent), '%', revende ? null : 'Sem revenda'],
+        ['Índices', 'Índice da obra', premissa(study.cost_index_rate_monthly, inflacao), '% a.m.', study.cost_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_obra ?? null)],
+        ['Índices', 'Índice das vendas', premissa(study.sales_index_rate_monthly, inflacao), '% a.m.', study.sales_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_vendas ?? null)],
         ['Financiamento', 'Capital próprio (equity)', premissa(study.funding_equity_percent, D.funding_equity_percent), '%', null],
         // Mesma regra do motor (actualFinPct): campo novo preenchido vale; vazio → "% Financiado" legado.
         ['Financiamento', 'Financiamento à produção / dívida', study.funding_debt_percent != null ? study.funding_debt_percent : premissa(study.financing_percent, D.financing_percent), '%', study.funding_debt_percent == null && (study.financing_percent ?? 0) > 0 ? 'valor legado (% Financiado)' : null],
@@ -99,9 +151,16 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Financiamento', 'Permuta física', premissa(study.swap_physical_percent, D.swap_physical_percent), '%', null],
     ];
 
+    const linhasDoFluxo = GRUPOS_DO_FLUXO.flatMap(g => g.linhas);
     const fluxo: Linha[] = [
-        ['Mês do projeto', 'Mês', 'Receitas (R$)', 'Custos (R$)', 'Caixa líquido do mês (R$)', 'Exposição acumulada (R$)'],
-        ...m.monthlyFlows.map(f => [f.month, f.name, f.rev, f.cost, f.net, f.acc]),
+        ['Mês do projeto', 'Mês', 'Receitas (R$)', 'Custos (R$)',
+            ...linhasDoFluxo.map(l => `${l.rotulo} (R$)`),
+            'Caixa líquido do mês (R$)', 'Exposição acumulada (R$)', 'Caixa do projeto (R$)', 'Acumulado do projeto (R$)'],
+        ...m.monthlyFlows.map(f => [
+            f.month, f.name, f.rev, f.cost,
+            ...linhasDoFluxo.map(l => f.linhas[l.chave]),
+            f.net, f.acc, f.netProjeto, f.accProjeto,
+        ]),
     ];
 
     return { indicadores, premissas, fluxo };
@@ -123,12 +182,11 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
     const [isExporting, setIsExporting] = useState(false);
     const { showToast } = useToast();
 
-    // Calculate Net Margin
-    const netProfit = cashFlowData.vpl; // Technically VPL is discounted. Let's calculate plain Net Profit
-    // Net profit = VGV - Total Construction Cost - Land Cost - Total Taxes - Total Brokerage - Total Interest Paid
-    // Sum of all net flows gives us the undiscounted total profit.
-    const totalNetProfit = cashFlowData.monthlyFlows.reduce((acc, f) => acc + f.net, 0);
-    const netMargin = cashFlowData.vgvTotal > 0 ? (totalNetProfit / cashFlowData.vgvTotal) * 100 : 0;
+    // Indicadores de decisão (item 2.3 do plano 2026-11-11): VPL e lucro em
+    // cartões separados — antes o cartão "Lucro Líquido (VPL)" misturava os dois.
+    const tma = premissa(study.discount_rate, IMOVIB_DEFAULTS.discount_rate);
+    const ind = useMemo(() => calcularIndicadores(cashFlowData, tma), [cashFlowData, tma]);
+    const mesDoEstudo = (m: number | null) => (m == null ? '—' : `Mês ${m}`);
 
     const exportToExcel = () => {
         try {
@@ -136,7 +194,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60]), 'Premissas');
-            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, 24, 24]), 'Fluxo de caixa');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, ...planilha.fluxo[0].slice(4, -4).map(() => 20), 24, 24, 24, 24]), 'Fluxo de caixa');
             XLSX.writeFile(wb, `Imovib_${nomeDeArquivo(study.name)}_Viabilidade.xlsx`);
         } catch (err) {
             console.error('Error exporting Excel:', err);
@@ -247,13 +305,20 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                 )}
 
                 {/* KPIs principais — componente canônico (guia §4) */}
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <KpiCard
-                        label="Lucro Líquido (VPL)"
+                        label="VPL"
                         value={formatCurrency(cashFlowData.vpl)}
-                        sub={`Margem Líquida Bruta: ${formatPercent(netMargin)}`}
+                        sub={`Descontado à TMA de ${tma.toLocaleString('pt-BR')}% a.a.`}
                         icon={<Coins className="w-4 h-4" />}
                         color="emerald"
+                    />
+                    <KpiCard
+                        label="Lucro líquido"
+                        value={formatCurrency(ind.lucroLiquido)}
+                        sub={ind.margemLiquidaSobreVgv == null ? 'Sem VGV para calcular a margem' : `Margem de ${formatPercent(ind.margemLiquidaSobreVgv * 100)} sobre o VGV`}
+                        icon={<Coins className="w-4 h-4" />}
+                        color="teal"
                     />
                     <KpiCard
                         label="TIR (Taxa Int. Retorno)"
@@ -274,6 +339,40 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                         color="red"
                     />
                 </div>
+
+                {/* Indicadores de prazo e de capital (item 2.3) */}
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
+                    <KpiCard
+                        label="Payback"
+                        value={mesDoEstudo(ind.paybackSimplesMes)}
+                        sub={ind.paybackSimplesMes == null ? 'O caixa acumulado não volta ao positivo' : `Descontado: ${mesDoEstudo(ind.paybackDescontadoMes)}`}
+                        icon={<Activity className="w-4 h-4" />}
+                        color="blue"
+                    />
+                    <KpiCard
+                        label="Múltiplo do capital"
+                        value={ind.multiploDoCapital == null ? '—' : `${ind.multiploDoCapital.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}×`}
+                        sub="Entradas ÷ saídas de caixa"
+                        icon={<Coins className="w-4 h-4" />}
+                        color="indigo"
+                    />
+                    <KpiCard
+                        label="Retorno sobre o capital"
+                        value={ind.retornoSobreCapital == null ? '—' : formatPercent(ind.retornoSobreCapital * 100)}
+                        sub="Lucro ÷ exposição máxima"
+                        icon={<Wallet className="w-4 h-4" />}
+                        color="violet"
+                    />
+                    <KpiCard
+                        label="Mês da exposição máxima"
+                        value={mesDoEstudo(ind.mesDaExposicaoMaxima)}
+                        sub="Quando o caixa chega ao fundo"
+                        icon={<Wallet className="w-4 h-4" />}
+                        color="red"
+                    />
+                </div>
+
+                <ImovibPontosDeEquilibrioCard study={study} />
 
                 {/* KPIs secundários */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -301,17 +400,6 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                         icon={<Wallet className="w-4 h-4" />}
                         color="orange"
                     />
-                </div>
-
-                <div className="bg-white border border-gray-100 rounded-[10px] p-6 flex flex-col items-center justify-center text-center">
-                    <div className="w-12 h-12 bg-slate-50 rounded-[10px] border border-gray-100 flex items-center justify-center mb-3 text-slate-400">
-                        <PieChart className="w-6 h-6" />
-                    </div>
-                    <h3 className="text-lg font-semibold text-gray-900 mb-1">Simulação Completa</h3>
-                    <p className="text-sm text-gray-500 max-w-md">
-                        Os indicadores acima vêm do mesmo cálculo da Estática, do Espelho de vendas e da listagem: blocos e espelho (VGV), Orçamento (CAPEX), Receitas e Capital e Premissas Dinâmicas.
-                        Utilize este resumo para validação de comitê de investimento.
-                    </p>
                 </div>
 
                 {/* Recharts Visualization (S-Curve inside summary) */}

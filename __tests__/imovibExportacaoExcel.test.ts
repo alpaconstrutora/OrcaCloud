@@ -72,8 +72,12 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         expect(linha(premissas, 'Repasse bancário / chaves', 1)[2]).toBe(70);
         expect(linha(premissas, 'Financiamento à produção / dívida', 1)[2]).toBe(60);
         const grupos = new Set(premissas.slice(1).map(l => l[0]));
-        expect([...grupos]).toEqual(['Cronograma', 'Taxas', 'Perfil de recebimento', 'Financiamento']);
-        for (const l of premissas.slice(1)) expect(typeof l[2]).toBe('number');
+        expect([...grupos]).toEqual(['Cronograma', 'Taxas', 'Curva de vendas', 'Perfil de recebimento', 'Distrato', 'Índices', 'Financiamento']);
+        // Número em toda premissa, exceto as duas que são escolha (tipo da curva, revenda).
+        for (const l of premissas.slice(1)) {
+            if (l[1] === 'Tipo da curva' || l[1] === 'Revender a unidade distratada') expect(typeof l[2]).toBe('string');
+            else expect(typeof l[2], String(l[1])).toBe('number');
+        }
     });
 
     it('fluxo sem troca de sinal: TIR vazia com o motivo, não NaN na célula', () => {
@@ -91,5 +95,47 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         const { fluxo } = montarPlanilhaImovib(s, m);
         expect(fluxo[0][0]).toBe('Mês do projeto');
         expect(fluxo.length).toBe(m.monthlyFlows.length + 1);
+    });
+
+    it('2.5 — Indicadores: indicadores de decisão e pontos de equilíbrio, como número', () => {
+        const s = estudo();
+        const m = computeImovibMath(s);
+        const { indicadores } = montarPlanilhaImovib(s, m);
+        for (const rotulo of ['Lucro líquido', 'Margem líquida sobre o VGV', 'Payback simples', 'Payback descontado', 'Múltiplo do capital',
+            'Retorno sobre o capital', 'TIR modificada', 'Mês da exposição máxima', 'VPL do projeto', 'TIR do projeto',
+            'Valor máximo do terreno (VPL zero)', 'Terreno para margem de 15%', 'Variação de preço que zera o VPL',
+            'Variação do custo de obra que zera o VPL', 'Vendas mínimas', 'Estoque não vendido']) {
+            const l = linha(indicadores, rotulo);
+            expect(l[1] === null || typeof l[1] === 'number', rotulo).toBe(true);
+        }
+        expect(linha(indicadores, 'Lucro líquido')[1]).toBeCloseTo(m.monthlyFlows.reduce((a, f) => a + f.net, 0), 4);
+        expect(linha(indicadores, 'VPL do projeto')[1]).toBe(m.vplProjeto);
+    });
+
+    it('2.5 — Premissas da Fase 1 entram com o padrão do motor', () => {
+        const s = estudo();
+        const { premissas } = montarPlanilhaImovib(s, computeImovibMath(s));
+        expect(linha(premissas, 'Tipo da curva', 1)[2]).toBe('Linear');
+        expect(linha(premissas, 'Deságio da revenda', 1)[2]).toBe(10);
+        expect(linha(premissas, 'Revender a unidade distratada', 1)[2]).toBe('Sim');
+        expect(linha(premissas, 'Intermediárias', 1)[2]).toBe(0);
+    });
+
+    it('2.5 — Fluxo de caixa: uma coluna por linha e as colunas do projeto; as linhas somam o caixa', () => {
+        const s = estudo({ funding_debt_percent: 50 });
+        const m = computeImovibMath(s);
+        const { fluxo } = montarPlanilhaImovib(s, m);
+        const cab = fluxo[0];
+        const col = (nome: string) => cab.indexOf(nome);
+        expect(col('Sinal (R$)')).toBeGreaterThan(0);
+        expect(col('Liberação da dívida (R$)')).toBeGreaterThan(0);
+        expect(col('Caixa do projeto (R$)')).toBeGreaterThan(0);
+        const primeiraLinha = col('Sinal (R$)');
+        const ultimaLinha = col('Remuneração de terceiros (R$)');
+        fluxo.slice(1).forEach((l, i) => {
+            const somaLinhas = (l.slice(primeiraLinha, ultimaLinha + 1) as number[]).reduce((a, b) => a + b, 0);
+            expect(somaLinhas).toBeCloseTo(m.monthlyFlows[i].net, 4);
+            expect(l[col('Caixa do projeto (R$)')]).toBeCloseTo(m.monthlyFlows[i].netProjeto, 6);
+        });
     });
 });

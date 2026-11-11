@@ -97,7 +97,10 @@ interface Props {
     drawerDescription?: string;
     searchPlaceholder?: string;
     /** 'md' (padrão) é o campo de formulário; 'sm' é o gatilho compacto h-9
-     *  para barras de cabeçalho/toolbar, no recorte dos outros controles. */
+     *  para barras de cabeçalho/toolbar, no recorte dos outros controles.
+     *  Os dois têm 36px (§16/§30): até 10/11/2026 o 'md' era `py-4 rounded-2xl`
+     *  (~54px) e destoava dos campos do formulário em volta. O 'md' é branco
+     *  como os campos; o 'sm', cinza como os controles de toolbar. */
     size?: 'md' | 'sm';
     /** Gatilho desabilitado (só o campo fechado; o drawer não abre). */
     disabled?: boolean;
@@ -373,7 +376,7 @@ const HierarchicalSelect: React.FC<Props> = ({
             className={`w-full flex items-center justify-between gap-2 text-left focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${
                 triggerClassName ?? (size === 'sm'
                     ? 'h-9 bg-gray-50 border border-gray-200 rounded-[6px] pl-3 pr-2'
-                    : 'bg-gray-50/50 border border-gray-100 rounded-2xl pl-4 pr-3 py-4')
+                    : 'h-9 bg-white border border-gray-200 rounded-[6px] pl-3 pr-2')
             }`}
         >
             {selected ? (
@@ -390,7 +393,7 @@ const HierarchicalSelect: React.FC<Props> = ({
                     {selected.parentName && !compact && (
                         <span className="text-sm font-medium text-gray-400 truncate shrink-0">{selected.parentName} ›</span>
                     )}
-                    <span className={`text-sm text-gray-900 truncate ${compact ? 'font-normal' : size === 'sm' ? 'font-medium' : 'font-bold'}`}>{selected.name}</span>
+                    <span className={`text-sm text-gray-900 truncate ${compact ? 'font-normal' : 'font-medium'}`}>{selected.name}</span>
                 </span>
             ) : fallbackLabel ? (
                 <span className="text-sm font-normal text-gray-900 truncate flex-1 min-w-0" title={fallbackLabel}>{fallbackLabel}</span>

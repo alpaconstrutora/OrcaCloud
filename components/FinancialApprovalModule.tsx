@@ -2,7 +2,7 @@ import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
     AlertCircle, Check, CheckCircle2, ChevronDown, ChevronUp,
-    Loader2, Plus, Send, Settings, Shield, X,
+    Loader2, Plus, Send, Settings, Shield, Users, X,
 } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
@@ -16,8 +16,11 @@ import { purchaseRequestService } from '../services/purchaseRequestService';
 import { docGenDocumentoService } from '../services/docGenDocumentoService';
 import { approvalService, type ApprovalPendingSummary, type ActionQueueItem } from '../services/approvalService';
 import type {
-    FinancialApprovalConfig, ApprovalStep,
+    FinancialApprovalConfig, ApprovalStep, ApprovalApprover, MembroAprovador,
 } from '../types/financial';
+import { approvalApproversService } from '../services/approvalApproversService';
+import QuemAprovaSheet, { type AlvoDaAlcada } from './financeiro/QuemAprovaSheet';
+import { temAcessoTotal } from '../lib/acessoTotal';
 import Button from './ui/Button';
 import { formatMoney as fmt, formatDateBR as fmtDate } from './ui/Format';
 import { useConfirm } from './ui/confirm';
@@ -26,6 +29,7 @@ import { darfService } from '../services/darfService';
 import { chavePorMes, chavePorNome, chavePorRotulo, MESES } from '../utils/agruparLinhas';
 import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
 import { itensDoLote, tiposPresentes } from '../utils/filaAprovacao';
+import { motivoSemAlcada, vezDeTexto, juntarNomes, ENTIDADES_POR_TIPO } from '../utils/alcada';
 import { ORIGEM_PT, origemLabel } from '../utils/origemLabel';
 
 // ─── dispatch por entidade ───────────────────────────────────
@@ -253,7 +257,7 @@ const QUEUE_COLUMNS: StandardTableColumn[] = [
     { key: 'project_name', label: 'Obra',       sortable: true, width: 140 },
     { key: 'due_date',     label: 'Vencimento', sortable: true, width: 110 },
     { key: 'amount',       label: 'Valor',      sortable: true, width: 130, align: 'right' },
-    { key: 'status',       label: 'Status',     sortable: true, width: 110 },
+    { key: 'status',       label: 'Status',     sortable: true, width: 190 },
 ];
 
 type EntityFilter = 'all' | ActionQueueItem['entity'];
@@ -453,9 +457,19 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                 if (item.pago_sem_alcada) {
                     return <span className="text-sm font-normal text-red-600" title="Baixado pela conciliação ou pelo Asaas antes de a alçada aprovar.">Pago sem aprovação</span>;
                 }
-                return item.approval_status === 'RASCUNHO'
-                    ? <span className="text-sm font-normal text-gray-600">Rascunho</span>
-                    : <span className="text-sm font-normal text-amber-700">{queueStatusLabel(item)}</span>;
+                if (item.approval_status === 'RASCUNHO') {
+                    return <span className="text-sm font-normal text-gray-600">Rascunho</span>;
+                }
+                {
+                    // Alçada por usuário (10/11/2026): de quem é a vez. Vazio = qualquer pessoa.
+                    const vez = vezDeTexto(item.vez_de);
+                    return (
+                        <span className="flex flex-col min-w-0">
+                            <span className="text-sm font-normal text-amber-700">{queueStatusLabel(item)}</span>
+                            {vez && <span className="text-xs font-normal text-gray-500 line-clamp-2 break-words" title={vez}>{vez}</span>}
+                        </span>
+                    );
+                }
             default:
                 return null;
         }
@@ -562,20 +576,24 @@ function ApprovalQueue({ organizationId, userEmail, config }: QueueProps) {
                                         Enviar p/ aprovação
                                     </button>
                                 ) : (
-                                    <>
+                                    // Fora da alçada: desligados e com o motivo no hover — no
+                                    // <span>, porque botão desligado não recebe o hover.
+                                    <span className="inline-flex" title={motivoSemAlcada(item) ?? undefined}>
                                         <button
                                             onClick={() => setModal({ item, mode: 'approve' })}
-                                            className={`${ACTION_LINK} text-green-700 hover:text-green-800 hover:bg-green-50`}
+                                            disabled={!!motivoSemAlcada(item)}
+                                            className={`${ACTION_LINK} text-green-700 hover:text-green-800 hover:bg-green-50 disabled:hover:bg-transparent disabled:cursor-not-allowed`}
                                         >
                                             Aprovar
                                         </button>
                                         <button
                                             onClick={() => setModal({ item, mode: 'reject' })}
-                                            className={`${ACTION_LINK} text-red-600 hover:text-red-700 hover:bg-red-50`}
+                                            disabled={!!motivoSemAlcada(item)}
+                                            className={`${ACTION_LINK} text-red-600 hover:text-red-700 hover:bg-red-50 disabled:hover:bg-transparent disabled:cursor-not-allowed`}
                                         >
                                             Rejeitar
                                         </button>
-                                    </>
+                                    </span>
                                 )}
                                 <ActionIconButton
                                     kind="history"
@@ -651,18 +669,44 @@ const CONFIG_COLUMNS: StandardTableColumn[] = [
     { key: 'required_levels', label: 'Níveis',       sortable: true, width: 100 },
     { key: 'level1_label',    label: 'Nível 1',      sortable: true, width: 200 },
     { key: 'level2_label',    label: 'Nível 2',      sortable: true, width: 220 },
+    { key: 'aprova1',         label: 'Aprova o nível 1', sortable: true, width: 220 },
+    { key: 'aprova2',         label: 'Aprova o nível 2', sortable: true, width: 220 },
     { key: 'is_active',       label: 'Status',       sortable: true, width: 110 },
 ];
+
+/** Nomes de quem aprova o nível; vazio = qualquer pessoa da organização. */
+function nomesDoNivel(aprovadores: ApprovalApprover[], level: 1 | 2, faixaId?: string, entityType?: string): string {
+    return juntarNomes(aprovadores
+        .filter(a => a.level === level && (faixaId ? a.faixa_id === faixaId : a.entity_type === entityType))
+        .map(a => a.nome ?? '')
+        .sort((x, y) => x.localeCompare(y, 'pt-BR')));
+}
+
+function CelulaQuemAprova({ nomes }: { nomes: string }) {
+    return nomes
+        ? <span className="block truncate text-sm font-normal text-gray-700" title={nomes}>{nomes}</span>
+        : <span className="text-sm font-normal text-gray-600" title="Ninguém definido: qualquer pessoa da organização aprova este nível.">Qualquer pessoa</span>;
+}
 
 interface ConfigTableProps {
     items: FinancialApprovalConfig[];
     loading: boolean;
     onEdit: (item: FinancialApprovalConfig) => void;
     onDelete: (item: FinancialApprovalConfig) => void;
+    aprovadores: ApprovalApprover[];
+    onQuemAprova: (item: FinancialApprovalConfig) => void;
+    /** `null` = pode editar faixas; senão, o motivo (botões desligados mostram no hover). */
+    motivoSomenteLeitura: string | null;
 }
-function ApprovalConfigTable({ items, loading, onEdit, onDelete }: ConfigTableProps) {
+function ApprovalConfigTable({ items, loading, onEdit, onDelete, aprovadores, onQuemAprova, motivoSomenteLeitura }: ConfigTableProps) {
     function renderCell(key: string, item: FinancialApprovalConfig) {
         switch (key) {
+            case 'aprova1':
+                return <CelulaQuemAprova nomes={nomesDoNivel(aprovadores, 1, item.id)} />;
+            case 'aprova2':
+                return item.required_levels === 2
+                    ? <CelulaQuemAprova nomes={nomesDoNivel(aprovadores, 2, item.id)} />
+                    : <span className="text-sm font-normal text-gray-400">—</span>;
             case 'faixa_min':
                 return <span className="text-sm font-medium text-gray-800">{fmt(item.faixa_min)}</span>;
             case 'faixa_max':
@@ -700,15 +744,21 @@ function ApprovalConfigTable({ items, loading, onEdit, onDelete }: ConfigTablePr
                 // "Sem limite" ordena depois de qualquer valor
                 if (key === 'faixa_max') return i.faixa_max ?? Number.MAX_SAFE_INTEGER;
                 if (key === 'level2_label') return i.required_levels === 2 ? (i.level2_label ?? '') : null;
+                if (key === 'aprova1') return nomesDoNivel(aprovadores, 1, i.id);
+                if (key === 'aprova2') return i.required_levels === 2 ? nomesDoNivel(aprovadores, 2, i.id) : null;
                 return (i as unknown as Record<string, string | number | boolean | null | undefined>)[key];
             }}
             renderCell={renderCell}
             actions={{
-                width: 110,
+                width: 150,
                 render: item => (
                     <>
-                        <ActionIconButton kind="edit" onClick={() => onEdit(item)} />
-                        <ActionIconButton kind="delete" onClick={() => onDelete(item)} />
+                        <ActionIconButton kind="settings" title="Quem aprova" icon={<Users className="w-4 h-4" />} onClick={() => onQuemAprova(item)} />
+                        {/* Desligados com motivo no <span>: botão desligado não recebe o hover. */}
+                        <span className="inline-flex gap-1" title={motivoSomenteLeitura ?? undefined}>
+                            <ActionIconButton kind="edit" disabled={!!motivoSomenteLeitura} onClick={() => onEdit(item)} />
+                            <ActionIconButton kind="delete" disabled={!!motivoSomenteLeitura} onClick={() => onDelete(item)} />
+                        </span>
                     </>
                 ),
             }}
@@ -722,6 +772,37 @@ function ApprovalConfigTable({ items, loading, onEdit, onDelete }: ConfigTablePr
                 icon: <AlertCircle className="w-12 h-12 text-amber-400 mx-auto mb-4" />,
                 title: 'Nenhuma faixa configurada — os títulos estão exigindo 1 nível de aprovação',
                 subtitle: 'Sem faixa, o sistema assume 1 nível para qualquer valor e todo título enviado fica parado na fila até alguém aprovar. Crie as faixas para definir a partir de que valor cada nível é exigido.',
+            }}
+        />
+    );
+}
+
+// ─── Itens sem valor — quem aprova por TIPO (10/11/2026) ─────
+
+type LinhaTipo = (typeof ENTIDADES_POR_TIPO)[number];
+
+const TIPO_COLUMNS: StandardTableColumn[] = [
+    { key: 'rotulo',  label: 'Tipo de item',     sortable: true, width: 220 },
+    { key: 'aprova1', label: 'Aprova o nível 1', sortable: true, width: 260 },
+    { key: 'aprova2', label: 'Aprova o nível 2', sortable: true, width: 260 },
+];
+
+function ItensSemValorTable({ aprovadores, onQuemAprova }: { aprovadores: ApprovalApprover[]; onQuemAprova: (t: LinhaTipo) => void }) {
+    return (
+        <StandardTable<LinhaTipo>
+            storageKey="financeiro:aprovacao:tipos"
+            columns={TIPO_COLUMNS}
+            rows={[...ENTIDADES_POR_TIPO]}
+            rowKey={t => t.entity}
+            searchText={t => `${t.rotulo} ${nomesDoNivel(aprovadores, 1, undefined, t.entity)} ${nomesDoNivel(aprovadores, 2, undefined, t.entity)}`}
+            searchPlaceholder="Buscar por tipo ou aprovador..."
+            sortValue={(key, t) => key === 'rotulo' ? t.rotulo : nomesDoNivel(aprovadores, key === 'aprova2' ? 2 : 1, undefined, t.entity)}
+            renderCell={(key, t) => key === 'rotulo'
+                ? <span className="text-sm font-medium text-gray-800">{t.rotulo}</span>
+                : <CelulaQuemAprova nomes={nomesDoNivel(aprovadores, key === 'aprova2' ? 2 : 1, undefined, t.entity)} />}
+            actions={{
+                width: 80,
+                render: t => <ActionIconButton kind="settings" title="Quem aprova" icon={<Users className="w-4 h-4" />} onClick={() => onQuemAprova(t)} />,
             }}
         />
     );
@@ -882,7 +963,7 @@ type Tab = 'fila' | 'config';
 // §19.1/§20 — o título acompanha a aba ativa.
 const VIEW_HEADERS: Record<Tab, { title: string; subtitle: string }> = {
     fila:   { title: 'Aprovação Financeira', subtitle: 'Itens acima da alçada aguardando envio, aprovação ou rejeição — fluxo multinível por faixa de valor.' },
-    config: { title: 'Faixas de Alçada',     subtitle: 'Limites de valor e níveis de aprovação exigidos em cada faixa.' },
+    config: { title: 'Faixas de Alçada',     subtitle: 'Limites de valor, níveis de aprovação exigidos e quem aprova cada nível.' },
 };
 
 interface Props {
@@ -911,6 +992,55 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
     }, [organizationId]);
 
     useEffect(() => { loadConfig(); }, [loadConfig]);
+
+    // Alçada por usuário (10/11/2026): quem aprova cada nível + quem pode definir isso.
+    const [aprovadores, setAprovadores] = useState<ApprovalApprover[]>([]);
+    const [membros, setMembros] = useState<MembroAprovador[]>([]);
+    const [quemAprova, setQuemAprova] = useState<{ titulo: string; descricao: string; alvo: AlvoDaAlcada; niveis: { level: 1 | 2; rotulo: string }[] } | null>(null);
+
+    // Sem organização no topo ("Todas"), o serviço não filtra e a RLS recorta (REGRA #5).
+    useEffect(() => {
+        if (tab !== 'config') return;
+        let vivo = true;
+        const org = organizationId || null;
+        Promise.all([approvalApproversService.listar(org), approvalApproversService.membros(org)])
+            .then(([a, m]) => { if (vivo) { setAprovadores(a); setMembros(m); } })
+            .catch(e => { if (vivo) setConfigError(e instanceof Error ? e.message : 'Erro ao carregar aprovadores'); });
+        return () => { vivo = false; };
+    }, [tab, organizationId]);
+
+    // Dono/admin da organização (ou acesso total) define faixas e aprovadores — a RLS
+    // recusa os demais; aqui só se explica antes de a pessoa tentar.
+    const motivoSomenteLeitura = useMemo(() => {
+        const eu = membros.find(m => m.email.toLowerCase() === userEmail.toLowerCase());
+        const ehGestor = temAcessoTotal(userEmail) || eu?.role === 'owner' || eu?.role === 'admin';
+        if (organizationId && ehGestor) return null;
+        return organizationId
+            ? 'Só o dono ou um administrador da organização altera faixas e define quem aprova. Você pode consultar.'
+            : 'Selecione uma organização específica no topo para alterar faixas e aprovadores.';
+    }, [organizationId, userEmail, membros]);
+
+    function abrirQuemAprovaFaixa(item: FinancialApprovalConfig) {
+        if (!item.id) return;
+        const ate = item.faixa_max != null ? `até ${fmt(item.faixa_max)}` : 'sem limite';
+        setQuemAprova({
+            titulo: 'Quem aprova esta faixa',
+            descricao: `Itens com valor a partir de ${fmt(item.faixa_min)}, ${ate}: títulos, DARF, contratos e pedidos.`,
+            alvo: { faixaId: item.id },
+            niveis: item.required_levels === 2
+                ? [{ level: 1, rotulo: item.level1_label }, { level: 2, rotulo: item.level2_label ?? 'Nível 2' }]
+                : [{ level: 1, rotulo: item.level1_label }],
+        });
+    }
+
+    function abrirQuemAprovaTipo(t: LinhaTipo) {
+        setQuemAprova({
+            titulo: `Quem aprova: ${t.rotulo}`,
+            descricao: 'Item sem valor: a alçada é pelo tipo, não pela faixa.',
+            alvo: { entityType: t.entity },
+            niveis: [{ level: 1, rotulo: 'Nível 1' }, { level: 2, rotulo: 'Nível 2 (quando exigido)' }],
+        });
+    }
 
     function openNew() {
         setEditing({
@@ -965,7 +1095,7 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
             {/* 1. Título (§20) — h1 solto, muda com a aba */}
             <div>
                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">{header.title}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{header.subtitle}</p>
+                <p className="text-gray-500 text-sm mt-1.5 font-medium">{header.subtitle}</p>
             </div>
 
             {/* 2. Toolbar de abas (§19.1) — ação primária §17 à direita */}
@@ -980,8 +1110,8 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
                 {tab === 'config' && (
                     <button
                         onClick={openNew}
-                        disabled={!organizationId}
-                        title={!organizationId ? 'Selecione uma organização específica para criar uma faixa de alçada' : undefined}
+                        disabled={!!motivoSomenteLeitura}
+                        title={motivoSomenteLeitura ?? undefined}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                         <Plus className="w-[15px] h-[15px]" />
@@ -1011,8 +1141,37 @@ export default function FinancialApprovalModule({ organizationId = '', userEmail
                         loading={configLoading}
                         onEdit={item => setEditing({ ...item })}
                         onDelete={handleDelete}
+                        aprovadores={aprovadores}
+                        onQuemAprova={abrirQuemAprovaFaixa}
+                        motivoSomenteLeitura={motivoSomenteLeitura}
                     />
+                    <div className="mt-6 space-y-3">
+                        <div>
+                            <h2 className="text-base font-semibold text-gray-900">Itens sem valor</h2>
+                            <p className="text-sm text-gray-500 mt-1">
+                                Revisão de planta, ofício, solicitação de compra e etapa de processo não têm faixa: quem aprova é definido por tipo.
+                                {!organizationId && ' Com "Todas as organizações" no topo, a lista junta as pessoas de todas elas.'}
+                            </p>
+                        </div>
+                        <ItensSemValorTable aprovadores={aprovadores} onQuemAprova={abrirQuemAprovaTipo} />
+                    </div>
                 </div>
+            )}
+
+            {quemAprova && (
+                <QuemAprovaSheet
+                    open
+                    onClose={() => setQuemAprova(null)}
+                    titulo={quemAprova.titulo}
+                    descricao={quemAprova.descricao}
+                    organizationId={organizationId}
+                    alvo={quemAprova.alvo}
+                    niveis={quemAprova.niveis}
+                    membros={membros}
+                    aprovadores={aprovadores}
+                    onChange={setAprovadores}
+                    motivoSomenteLeitura={motivoSomenteLeitura}
+                />
             )}
 
             {editing && (

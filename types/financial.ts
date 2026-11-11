@@ -1071,6 +1071,31 @@ export interface FinancialApprovalConfig {
     created_at?: string;
 }
 
+/**
+ * Quem aprova um nível (10/11/2026, alçada por usuário). Exatamente um de
+ * `faixa_id` (itens com valor) ou `entity_type` (itens sem valor). Nível sem
+ * linha = liberado a todos. Ver utils/alcada.ts.
+ */
+export interface ApprovalApprover {
+    id: string;
+    organization_id: string;
+    faixa_id: string | null;
+    entity_type: 'blueprint_snapshot' | 'doc_gen_documento' | 'purchase_request' | 'process_step' | null;
+    level: 1 | 2;
+    user_id: string;
+    /** Nome de exibição (membro da org); preenchido pelo serviço. */
+    nome?: string;
+    email?: string | null;
+}
+
+/** Membro da organização que pode ser escolhido como aprovador. */
+export interface MembroAprovador {
+    user_id: string;
+    nome: string;
+    email: string;
+    role: string;
+}
+
 export interface ApprovalQueueItem {
     id: string;
     organization_id: string;

@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import type { ApprovalStep, ApprovalStatus } from '../types/financial';
 import { niveisAprovadosNaRodada } from '../utils/situacaoAprovacaoTitulo';
+import { mensagemDaAlcada } from '../utils/alcada';
 
 /**
  * Entidade de um item da fila. `darf` não passa por `submit/approve/reject`
@@ -33,6 +34,13 @@ export interface ActionQueueItem {
      * PEDIDO, PLANTA, SOLICITACAO_COMPRA, OFICIO). Coluna e filtro "Origem" da fila.
      */
     origem?: string | null;
+    /**
+     * Alçada por usuário (10/11/2026): quem está logado pode aprovar o nível da vez?
+     * Nível sem ninguém cadastrado = `true` (liberado). Ver utils/alcada.ts.
+     */
+    pode_aprovar?: boolean;
+    /** Nomes de quem aprova o nível da vez; vazio = qualquer pessoa. */
+    vez_de?: string[];
 }
 
 // ============================================================
@@ -323,7 +331,8 @@ export const approvalService = {
             .single();
         if (error) {
             console.error('[approvalService] approve (update):', error);
-            throw new Error(`Erro ao aprovar: ${error.message}`);
+            // Gatilho da alçada (ALCADA_NAO_PERMITE) já traz a frase para o usuário.
+            throw new Error(mensagemDaAlcada(error.message) ?? `Erro ao aprovar: ${error.message}`);
         }
         return data;
     },
@@ -374,7 +383,7 @@ export const approvalService = {
             .single();
         if (error) {
             console.error('[approvalService] reject (update):', error);
-            throw new Error(`Erro ao rejeitar: ${error.message}`);
+            throw new Error(mensagemDaAlcada(error.message) ?? `Erro ao rejeitar: ${error.message}`);
         }
         return data;
     },

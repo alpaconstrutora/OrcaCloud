@@ -5,6 +5,7 @@ import { processService } from './processService';
 import { resolverCategoriaPorNomes } from './financialCategoryResolver';
 import { storageService } from './storageService';
 import { caminhoDoAnexoDarf, normalizarLinhaDigitavel } from '../utils/darf';
+import { mensagemDaAlcada } from '../utils/alcada';
 
 /**
  * DARF — guia que agrupa tributos (plano docs/planos/2026-10-21-agrupar-tributos-em-darf.md).
@@ -31,7 +32,7 @@ const COLUNAS_DARF = 'id,organization_id,competencia,due_date,codigo_barras,nume
 
 /** Erro do PostgREST com a frase do banco — é ela que diz ao usuário o que fazer. */
 function erro(e: { message?: string } | null | undefined, padrao: string): Error {
-    return new Error(e?.message || padrao);
+    return new Error(mensagemDaAlcada(e?.message) ?? (e?.message || padrao));
 }
 
 function dadosDoForm(form: FormDarf, documentoPath: string | null, documentoNome: string | null) {

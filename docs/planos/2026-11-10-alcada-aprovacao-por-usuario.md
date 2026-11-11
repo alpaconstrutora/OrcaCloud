@@ -1,0 +1,161 @@
+# Alçada de aprovação por usuário
+
+## Pedido original
+
+> assista este video para criarmos nosssa tela de bom dia ao usuário: https://www.instagram.com/reel/DfQBn-BBG1Y/?utm_source=ig_web_copy_link&xtok=NTc4MTIwNjQ2YQ==
+>
+> Sessão: 0def919a-cb9d-4de6-b7d1-efd5d79d3424 · 10/11/2026
+
+Este plano nasceu **dentro** do pedido acima. Ao desenhar a "Minha fila" da tela Bom
+dia (plano irmão: `2026-11-10-central-bom-dia.md`), o usuário escolheu "Aprovações que
+esperam por mim → só as da minha alçada". Na verificação descobri que **não existe
+alçada por usuário**: `financial_approval_config` guarda só faixa de valor, número de
+níveis e os RÓTULOS dos níveis ("Gestor", "Financeiro / Diretoria"); qualquer pessoa
+que abra Aprovações aprova qualquer nível (`FinancialApprovalModule.tsx:65` só calcula
+o próximo nível). Apresentada a correção, o usuário escolheu:
+
+> "Criar alçada por usuário agora" (10/11/2026)
+
+e depois aprovou o desenho abaixo com "sim" (10/11/2026).
+
+## Decisões tomadas com o usuário
+
+| Data | Pergunta | Resposta |
+|---|---|---|
+| 10/11 | Como definir quem aprova cada nível? | **Por faixa de valor**: cada faixa ganha aprovadores do nível 1 e do nível 2 |
+| 10/11 | Itens sem valor (planta, ofício, SC sem preço)? | **Aprovadores por tipo** (lista própria por tipo) |
+| 10/11 | Travar no banco ou só organizar a fila? | **Travar no banco**; nível sem ninguém cadastrado continua liberado a todos |
+| 10/11 | A mesma pessoa pode aprovar os dois níveis? | **Pode**, se estiver nas duas listas |
+| 10/11 | Quem edita faixas e aprovadores? | **Só dono/admin da organização** (+ desenvolvedor@ / superadmin). Hoje qualquer membro edita as faixas (`fac_v3_*`) |
+| 10/11 | Solicitação de compra: faixa ou tipo? | **Sempre por tipo** (o pedido e o título que nascem dela passam pela faixa) |
+
+## Fatos levantados (10/11/2026, `origin/main` 3a727a82)
+
+- Tabelas com `approval_chain` (7): `internal_transactions`, `contracts`,
+  `purchase_orders`, `process_instance_steps`, `blueprint_snapshots`,
+  `purchase_requests`, `doc_gen_documentos`.
+- Caminhos de escrita de um passo da cadeia:
+  - **UPDATE do navegador** por `approvalService.approve/reject` (títulos, contratos,
+    pedidos, planta, ofício, SC, etapa de processo; e `ProlaboreReconciliationPanel`);
+  - **RPC `fn_darf_aprovar` / `fn_darf_rejeitar`**: grava a cadeia em TODOS os
+    títulos-membro do DARF (`internal_transactions.darf_id`). Para a faixa, o valor é o
+    TOTAL do DARF, não o do membro.
+  - Nenhum outro escritor de `'action','APROVADO'` no banco nem nas Edge Functions.
+- `approved_by` é **e-mail** (texto vindo do cliente). Gatilhos do sistema também
+  ESVAZIAM a cadeia (reenvio, edição de título); isso não é aprovação e tem de passar.
+- Fila: `fn_approval_action_queue` (última versão em
+  `aplicar_20271109300000_tributo_so_com_darf_fechado.sql`) tem 5 ramos: transaction,
+  darf, blueprint_snapshot, purchase_request, doc_gen_documento.
+
+## Desenho
+
+1. **Dados**: tabela `approval_approvers`: `organization_id`, `faixa_id`
+   (→ `financial_approval_config.id`, ON DELETE CASCADE) **ou** `entity_type`
+   (`blueprint_snapshot` · `doc_gen_documento` · `purchase_request` · `process_step`),
+   `level` (1|2), `user_id`, `created_at`, `created_by`. CHECK: exatamente um de
+   `faixa_id`/`entity_type`. Únicos por (alvo, nível, usuário).
+2. **Regra** `fn_alcada_pode_aprovar(org, entity, valor, nível, email) → boolean`:
+   - entity com valor (transaction, darf, contract, purchase_order) → faixa que contém
+     o valor; entity por tipo → linhas do tipo;
+   - lista vazia para aquele nível → `true` (liberado, como hoje);
+   - senão → `true` só se o e-mail é de um `user_id` da lista (via `organization_members`).
+3. **Trava**: gatilho `BEFORE UPDATE OF approval_chain` nas 7 tabelas →
+   `fn_alcada_trava_passo()`. Só age quando a cadeia CRESCE com passo novo
+   `APROVADO`/`REJEITADO` e há usuário autenticado (`auth.uid()` não nulo). Exige
+   `approved_by` = e-mail do JWT e `fn_alcada_pode_aprovar(...)`. Rejeição usa a lista
+   do nível da vez. Esvaziar a cadeia e escrita de `service_role` passam.
+4. **Fila**: `fn_approval_action_queue` ganha `pode_aprovar boolean` e `vez_de text[]`
+   (nomes de quem pode aprovar o nível da vez; vazio = qualquer um).
+5. **Tela de configuração** (Aprovações › Faixas): coluna/drawer "Aprova o nível 1" e
+   "Aprova o nível 2" por faixa; seção "Itens sem valor" com uma linha por tipo. Só
+   dono/admin vê os controles de edição; os outros veem só leitura com o motivo.
+6. **Tela de aprovação**: "Vez de: Fulano, Beltrano" no item; aprovar/rejeitar
+   desligados para quem não pode, com `title` dizendo o motivo.
+
+## Plano
+
+Um item por arquivo. **O que muda** · **como sei que terminou**.
+
+1. `supabase/migrations/aplicar_<prefixo>_alcada_por_usuario.sql`. **Muda**: tabela
+   `approval_approvers` + RLS (SELECT membro da org; INSERT/UPDATE/DELETE só
+   dono/admin ou `is_superadmin()`); RLS de `financial_approval_config` restringe
+   escrita a dono/admin; `fn_alcada_pode_aprovar`; `fn_alcada_trava_passo` + 7
+   gatilhos; `fn_approval_action_queue` com `pode_aprovar`/`vez_de`. Respostas da
+   REGRA #7 escritas no cabeçalho; `REVOKE … FROM PUBLIC, anon` em toda função nova.
+   **Pronto quando**: aplicada com `db query --linked -f` (nunca `db push`); prefixo
+   conferido contra TODOS os nomes (memória: colisões) e `migrationsPrefixo.test`
+   verde; as consultas da seção Verificação dão o resultado esperado.
+2. `types/financial.ts`. **Muda**: tipo `ApprovalApprover`; `pode_aprovar`/`vez_de`
+   em `ActionQueueItem` (em `services/approvalService.ts`). **Pronto quando**:
+   `npm run typecheck` verde.
+3. `services/approvalApproversService.ts` (novo). **Muda**: listar/adicionar/remover
+   aprovadores por faixa e por tipo. **Pronto quando**: teste unitário do mapeamento
+   e typecheck verdes.
+4. `services/approvalService.ts`. **Muda**: o erro do gatilho
+   (`ALCADA_NAO_PERMITE`) vira mensagem legível ("Este nível é aprovado por …").
+   **Pronto quando**: teste cobre a tradução do erro.
+5. `components/FinancialApprovalModule.tsx`. **Muda**: aprovadores por faixa e
+   seção "Itens sem valor" (escolha de usuário por drawer, padrão do guia); "Vez de"
+   na fila; botões desligados com motivo. **Pronto quando**:
+   `bash scripts/check-ui-standard.sh components/FinancialApprovalModule.tsx` sem
+   achado; conferido no navegador (dono edita; membro comum vê só leitura com motivo;
+   usuário fora da lista vê o botão desligado com o motivo).
+6. `components/CentralControle.tsx`. **Muda**: a fila atual da Central respeita
+   `pode_aprovar` (desliga e explica), até o plano irmão redesenhar a tela.
+   **Pronto quando**: conferido no navegador.
+7. `__tests__/alcadaPorUsuario.test.ts` (novo). **Muda**: regra de faixa × tipo,
+   lista vazia = liberado, mesma pessoa nos dois níveis, valor do DARF = total.
+   **Pronto quando**: `npx vitest run __tests__/alcadaPorUsuario.test.ts` verde.
+
+## Estado
+
+10/11/2026, commits 26a50411 + 50c42c0e (branch `feat/alcada-aprovacao-por-usuario`, sem push):
+
+- [x] 1 migration: `aplicar_20271111150000_alcada_por_usuario.sql` **aplicada em 11/11/2026**
+  (`db query --linked -f`, rodada pelo usuário). Antes, teste a seco no banco remoto
+  (transação desfeita), como usuário autenticado, todos os casos como esperado: membro não
+  cadastra aprovador (42501) nem altera faixa (0 linhas); com Bruna no N1, a fila do Iago traz
+  o título com `pode_aprovar=f`, `vez_de={bruna.pereira}`; Iago aprovar/rejeitar/gravar em nome
+  da Bruna → `ALCADA_NAO_PERMITE`; Bruna `pode=t` e aprova; esvaziar a cadeia e escrita do
+  sistema passam; próximo nível 2,1,1. Conferido depois de aplicar: tabela, 0 aprovadores,
+  7 gatilhos, policies `fac_v5_*` + `aa_*`, fila com as colunas novas, `anon` sem EXECUTE.
+  Prefixo reconferido contra `origin/main` 576a8c2f; nenhuma migration nova toca na fila.
+- [x] 2 tipos: `ApprovalApprover`, `MembroAprovador`; `pode_aprovar`/`vez_de` em `ActionQueueItem`.
+- [x] 3 serviço: `services/approvalApproversService.ts` (aceita org `null` = "Todas", REGRA #5).
+- [x] 4 erro legível: `utils/alcada.mensagemDaAlcada` em `approvalService` e `darfService`;
+  faixa de não-admin explica em vez do `PGRST116`/`42501`.
+- [x] 5 tela de Aprovações: conferida no navegador em 11/11 (dev server da frente, banco real,
+  como desenvolvedor@): colunas "Aprova o nível 1/2" ("Qualquer pessoa"), "Itens sem valor" com os
+  4 tipos, drawer "Quem aprova" com os membros; com "Todas as organizações" no topo, "Nova faixa"
+  e editar/excluir desligados com o motivo. "Vez de" e botões desligados com o motivo conferidos
+  com a resposta da fila trocada SÓ na página (`pode_aprovar=false`, `vez_de=[bruna.pereira]`):
+  o nome saía cortado → coluna Status 150→190 px e o texto quebra em até 2 linhas.
+  **Não feito na tela**: marcar alguém de verdade no drawer (gravaria em produção; a permissão
+  foi negada) e entrar como membro comum. Os dois estão cobertos no teste a seco do item 1
+  (membro → 42501; Bruna marcada → Iago recusado).
+- [x] 6 Central: conferida (fila com aprovar/rejeitar ligados sem aprovadores; com a resposta
+  trocada na página, desligados com o motivo). Os botões perdiam o nome acessível ao desligar
+  (o `title` some) → `aria-label` fixo. O bootstrap falhou 2× na primeira carga após login/HMR
+  ("Não foi possível carregar" nos 6 blocos) e passou em todas as recargas seguintes; a fila
+  leva ~270 ms para 132 itens, o bootstrap ~3,8 s (as outras fontes) — é a rajada já conhecida,
+  não a alçada.
+- [x] 7 testes: `__tests__/alcadaPorUsuario.test.ts` (14) cobre a parte da tela; a regra
+  em si é do banco e fica na seção Verificação (não roda no Vitest).
+
+Desvio registrado: `fn_alcada_pode_aprovar` não recebe e-mail (o desenho dizia
+`(org, entity, valor, nível, email)`): usa a identidade de quem chama (`auth.uid()` /
+e-mail do JWT), que é o que o gatilho precisa e não deixa perguntar "fulano pode?".
+
+## Verificação
+
+No banco (como usuário autenticado, não como `postgres`, que pula a RLS e não tem JWT):
+
+- faixa sem aprovadores → aprovar funciona como hoje;
+- faixa com aprovador A no nível 1 → B recebe `ALCADA_NAO_PERMITE`; A aprova;
+- A nas duas listas de um item de 2 níveis → A aprova o 1 e o 2;
+- `approved_by` diferente do e-mail logado → recusado;
+- DARF: faixa decidida pelo total do DARF;
+- reenvio/edição que esvazia a cadeia continua funcionando;
+- membro comum não consegue inserir em `approval_approvers` nem alterar faixa.
+
+Na tela: os três perfis do item 5. Suíte inteira (`npm run ci`) verde antes do merge.

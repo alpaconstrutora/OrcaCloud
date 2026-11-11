@@ -92,14 +92,16 @@ Pedidos seguintes, na mesma sessão:
 
 ## Estado
 
-- [ ] 1. migration — escrita e conferida em modo leitura (consulta da função rodada com a org
-      Alpa: out/26 = R$ 3,13 mi a receber / R$ 1,83 mi a pagar, bate com 28/10). **Falta
-      aplicar** (usuário).
+- [x] 1. migration — conferida em modo leitura (Alpa, out/26 = R$ 3,13 mi a receber /
+      R$ 1,83 mi a pagar, bate com 28/10); aplicada pelo usuário em 11/11 e reaplicada com a
+      regra do mês completo (7a). ACL: só authenticated/service_role.
 - [x] 2. service — `getHistory` (tsc limpo)
 - [x] 3. lib + testes — 7 casos em `__tests__/dashboardFinanceiro.test.ts`
 - [x] 4. KpiCard + teste — `__tests__/components/KpiCardDestaque.test.tsx` (6 casos)
-- [ ] 5. FinancialDashboard — código pronto, check-ui-standard limpo; **falta ver a tela**
-      (depende da migration aplicada e de login na porta do dev server)
+- [x] 5. FinancialDashboard — vista em localhost:3100 com dados reais ("Todas"), claro e
+      Escuro Total: vencidos com linha e "↑ +0,4% / +0,2% vs. out/26", nenhum sólido (piora
+      < 2%), saldo sem linha (só set/26 completo). Org Alpa sozinha conferida só pela consulta
+      (jul–set/26), não na tela.
 - [x] 6. guia — §4.4 (nota) e §4.5.2 nova
 
 ## Verificação

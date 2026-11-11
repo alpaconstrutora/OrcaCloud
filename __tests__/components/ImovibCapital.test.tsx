@@ -22,6 +22,7 @@ import ImovibCapitalForm from '../../components/ImovibCapitalForm';
 import { ImovibEdicaoProvider } from '../../hooks/useImovibEdicao';
 import { ConfirmProvider } from '../../components/ui/confirm';
 import { baseStudy } from '../fixtures/imovibEstudos';
+import { computeImovibMath } from '../../utils/imovibMotor';
 
 const estudo = (over: Record<string, unknown> = {}) => ({ ...baseStudy({ funding_debt_percent: 60, ...over }), organization_id: 'org', version: '1.0', created_at: '', updated_at: '' });
 const tela = (opts: { somenteLeitura?: boolean; over?: Record<string, unknown>; onDataChanged?: () => void } = {}) => render(
@@ -78,6 +79,26 @@ describe('Aba Capital', () => {
         expect(screen.getByText('Mútuo do sócio')).toBeTruthy();
     });
 
+    it('4.4 — carência escondida (BULLET) não trava o botão e grava 0', async () => {
+        const user = userEvent.setup();
+        svc.salvarFonte.mockImplementation(async (f: Record<string, unknown>) => ({ ...f, id: 'f1' }));
+        tela();
+        await user.click(screen.getByRole('button', { name: 'Nova fonte' }));
+        await user.type(screen.getByLabelText('Nome'), 'Mútuo');
+        await user.type(screen.getByLabelText('Valor (R$)'), '100000');
+        await user.type(screen.getByLabelText('Juros (% a.a.)'), '10');
+        await user.selectOptions(screen.getByLabelText('Amortização'), 'PRICE');
+        await user.clear(screen.getByLabelText('Carência do principal (meses)'));
+        await user.type(screen.getByLabelText('Carência do principal (meses)'), '10');
+        await user.selectOptions(screen.getByLabelText('Amortização'), 'BULLET');
+        await user.clear(screen.getByLabelText('Prazo (meses)'));
+        await user.type(screen.getByLabelText('Prazo (meses)'), '6');
+        const criar = screen.getByRole('button', { name: 'Criar fonte' });
+        expect(criar.hasAttribute('disabled')).toBe(false);
+        await user.click(criar);
+        expect(svc.salvarFonte).toHaveBeenCalledWith(expect.objectContaining({ amortization: 'BULLET', term_months: 6, grace_months: 0 }));
+    });
+
     it('4.4 — por participação, o drawer pede a participação e não os juros', async () => {
         const user = userEvent.setup();
         tela();
@@ -95,6 +116,20 @@ describe('Aba Capital', () => {
         await user.click(within(secao).getByText('Ano 1'));
         expect(within(secao).getByText('Mês 1')).toBeTruthy();
         expect(within(secao).getByText('Mês 12')).toBeTruthy();
+    });
+
+    it('4.3 + 4.4 — com fonte por participação, o cartão abre a parte das fontes e o lucro do incorporador é o do Resumo', () => {
+        const fonte = { id: 'f1', study_id: 'estudo-teste', name: 'SCP', kind: 'scp', amount: 1_000_000, entry_month: 3, remuneration: 'participacao', rate_annual: null, profit_share_percent: 30, amortization: 'BULLET', term_months: null, grace_months: null, sort_order: 0 };
+        const over = { funding_sources: [fonte], min_cash_balance: 2_000_000 };
+        tela({ over });
+        const r = computeImovibMath(estudo(over) as never);
+        const lucro = r.monthlyFlows.reduce((a, f) => a + f.net, 0);
+        // O Testing Library normaliza o espaço não separável do "R$ " na tela, não no texto procurado.
+        const fmt = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v).replace(/\s/g, ' ');
+        const secao = screen.getByRole('region', { name: 'Aportes e distribuições' });
+        expect(within(secao).getByText('Lucro do incorporador')).toBeTruthy();
+        expect(within(secao).getByText(fmt(lucro))).toBeTruthy();
+        expect(within(secao).getByRole('columnheader', { name: /Para as fontes/ })).toBeTruthy();
     });
 
     it('só leitura: nada grava e os botões dizem por quê', () => {

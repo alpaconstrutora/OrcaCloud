@@ -16,6 +16,11 @@ export interface LinhaDeAporte {
     distribuicao: number;
     /** Caixa no fim do mês, depois do aporte e da distribuição. */
     caixa: number;
+    /**
+     * Parte da distribuição que vai para as fontes por participação (capital de
+     * volta + a parte delas no lucro). Preenchida pelo motor; o resto é do incorporador.
+     */
+    paraTerceiros: number;
 }
 
 export function aportesEDistribuicoes(fluxoDoAcionista: number[], caixaMinimo: number): LinhaDeAporte[] {
@@ -40,7 +45,7 @@ export function aportesEDistribuicoes(fluxoDoAcionista: number[], caixaMinimo: n
         }
         const distribuicao = ultimo ? caixa : Math.max(0, caixa - minimo - reserva[i]);
         caixa -= distribuicao;
-        linhas.push({ mes: i + 1, aporte, distribuicao, caixa });
+        linhas.push({ mes: i + 1, aporte, distribuicao, caixa, paraTerceiros: 0 });
     }
     return linhas;
 }

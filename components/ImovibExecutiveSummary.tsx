@@ -180,8 +180,8 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
     ];
 
     const aportes: Linha[] = [
-        ['Mês', 'Aporte (R$)', 'Distribuição (R$)', 'Caixa no fim do mês (R$)'],
-        ...m.aportes.map(a => [a.mes, a.aporte, a.distribuicao, a.caixa]),
+        ['Mês', 'Aporte (R$)', 'Distribuição (R$)', 'Para as fontes por participação (R$)', 'Caixa no fim do mês (R$)'],
+        ...m.aportes.map(a => [a.mes, a.aporte, a.distribuicao, a.paraTerceiros, a.caixa]),
     ];
 
     return { indicadores, premissas, fluxo, aportes };
@@ -216,7 +216,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60]), 'Premissas');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, ...planilha.fluxo[0].slice(4, -4).map(() => 20), 24, 24, 24, 24]), 'Fluxo de caixa');
-            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.aportes, [10, 18, 20, 26]), 'Aportes');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.aportes, [10, 18, 20, 34, 26]), 'Aportes');
             XLSX.writeFile(wb, `Imovib_${nomeDeArquivo(study.name)}_Viabilidade.xlsx`);
         } catch (err) {
             console.error('Error exporting Excel:', err);

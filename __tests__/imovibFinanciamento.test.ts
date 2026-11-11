@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fluxoDaDivida, PremissasDoFinanciamento, composicaoDoCapital } from '../utils/imovibFinanciamento';
 import { computeImovibMath } from '../utils/imovibMotor';
-import { baseStudy } from './fixtures/imovibEstudos';
+import { baseStudy, instancia } from './fixtures/imovibEstudos';
 
 /** Financiamento à produção com regras de liberação e pagamento (item 4.1 do plano docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md). */
 
@@ -47,6 +47,14 @@ describe('4.1 — fluxoDaDivida', () => {
         const d = fluxoDaDivida(CUSTO, RECEITA, REPASSE, VENDAS, { ...PADRAO, vendasMinimasPct: 75 });
         expect(soma(d.liberacao)).toBe(0);
         expect(d.naoLiberado).toBe(300);
+        expect(d.naoLiberadoPelaDefasagem).toBe(0);
+    });
+
+    it('defasagem que passa do horizonte: o não liberado é da defasagem', () => {
+        const d = fluxoDaDivida(CUSTO, RECEITA, REPASSE, VENDAS, { ...PADRAO, defasagemDaLiberacao: 5 });
+        // Horizonte de 9 meses: os custos dos meses 5 e 6 (50 cada) cairiam nos meses 10 e 11.
+        expect(d.naoLiberadoPelaDefasagem).toBe(100);
+        expect(d.naoLiberado).toBe(100);
     });
 
     it('juros pagos todo mês: o saldo devedor no fim da obra é menor que com juros capitalizados', () => {
@@ -117,6 +125,19 @@ describe('4.1 — motor com as regras do financiamento', () => {
         expect(c.find(x => x.chave === 'divida')!.valor).toBe(r.capital.divida);
         expect(c.find(x => x.chave === 'proprio')!.valor).toBe(-r.maxExposure);
         expect(composicaoDoCapital({ proprio: 0, divida: 0, permuta: 0, terceiros: 0 }).every(x => x.pct === 0)).toBe(true);
+    });
+
+    it('4.2 — unidade PERMUTADO do espelho entra na fatia da permuta', () => {
+        const espelho = Array.from({ length: 40 }, (_, i) => instancia(`u${i}`, 'b1', 700_000, i < 8 ? 'PERMUTADO' : 'DISPONÍVEL'));
+        const r = computeImovibMath(baseStudy({ unit_instances: espelho }));
+        expect(r.capital.permuta).toBe(8 * 700_000);
+    });
+
+    it('aviso de liberação culpa a defasagem quando é ela que passa do fim do estudo', () => {
+        const r = computeImovibMath(comDivida({ financing_min_sales_percent: 1, financing_release_lag_months: 200 }));
+        const aviso = r.avisos.find(a => a.codigo === 'financiamento_nao_liberado')!;
+        expect(aviso.mensagem).toMatch(/defasagem/);
+        expect(aviso.mensagem).not.toMatch(/venda acumulada/);
     });
 
     it('o fluxo do projeto não muda com as regras do financiamento', () => {

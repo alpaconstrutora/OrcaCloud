@@ -15,6 +15,7 @@ describe('4.3 — aportesEDistribuicoes', () => {
         expect(l.map(x => x.distribuicao)).toEqual([0, 0, 60, 0, 120]);
         expect(l.map(x => x.caixa)).toEqual([0, 0, 20, 0, 0]);
         expect(l.map(x => x.mes)).toEqual([1, 2, 3, 4, 5]);
+        expect(l.every(x => x.paraTerceiros === 0)).toBe(true);
     });
 
     it('distribuições menos aportes é a soma do fluxo, e o caixa nunca fica abaixo do mínimo antes do último mês', () => {

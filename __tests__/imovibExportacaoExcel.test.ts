@@ -101,7 +101,7 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         const s = estudo();
         const m = computeImovibMath(s);
         const { aportes } = montarPlanilhaImovib(s, m);
-        expect(aportes[0]).toEqual(['Mês', 'Aporte (R$)', 'Distribuição (R$)', 'Caixa no fim do mês (R$)']);
+        expect(aportes[0]).toEqual(['Mês', 'Aporte (R$)', 'Distribuição (R$)', 'Para as fontes por participação (R$)', 'Caixa no fim do mês (R$)']);
         expect(aportes.length).toBe(m.duration + 1);
         const soma = (c: number) => aportes.slice(1).reduce((a, l) => a + (l[c] as number), 0);
         expect(soma(2) - soma(1)).toBeCloseTo(m.monthlyFlows.reduce((a, f) => a + f.net, 0), 2);

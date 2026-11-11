@@ -34,8 +34,10 @@ export interface FluxoDaDivida {
     saldo: number[];
     /** Saldo que a receita não amortizou, quitado no último mês. */
     quitacaoNoFim: number;
-    /** Custo financiável que o banco nunca liberou (exigência de vendas não cumprida a tempo). */
+    /** Custo financiável que o banco nunca liberou (exigência de vendas não cumprida a tempo, ou defasagem). */
     naoLiberado: number;
+    /** A parte de `naoLiberado` cuja liberação cairia depois do fim do estudo, pela defasagem. */
+    naoLiberadoPelaDefasagem: number;
 }
 
 export const ROTULO_DOS_JUROS_NA_OBRA: Record<PremissasDoFinanciamento['jurosNaObra'], string> = {
@@ -86,14 +88,17 @@ export function fluxoDaDivida(
     // liberação cairia depois do horizonte não é financiado.
     const agendado = new Array<number>(n).fill(0);
     let ultimoMesDeObra = -1;
-    let naoLiberado = 0;
+    let naoLiberadoPelaDefasagem = 0;
     for (let i = 0; i < n; i++) {
         const financiado = custoDeObraPorMes[i] * p.fracaoDaObra;
+        // Custo ou fração negativos (só com dado inválido) não viram liberação
+        // negativa — o motor de antes lançava; nenhum estudo real tem esse caso.
         if (!(financiado > 0)) continue;
         ultimoMesDeObra = i;
         if (i + defasagem < n) agendado[i + defasagem] += financiado;
-        else naoLiberado += financiado;
+        else naoLiberadoPelaDefasagem += financiado;
     }
+    let naoLiberado = naoLiberadoPelaDefasagem;
 
     // Exigência de vendas: o banco só libera depois que a venda acumulada chega
     // ao mínimo, e então libera tudo o que estava retido. Depois do fim da obra
@@ -139,5 +144,5 @@ export function fluxoDaDivida(
         saldoFim.push(saldo);
     }
 
-    return { liberacao, pagamento, juros, saldo: saldoFim, quitacaoNoFim, naoLiberado };
+    return { liberacao, pagamento, juros, saldo: saldoFim, quitacaoNoFim, naoLiberado, naoLiberadoPelaDefasagem };
 }

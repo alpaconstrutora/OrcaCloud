@@ -72,15 +72,32 @@ describe('4.4 — motor com outras fontes', () => {
         expect(r.capital.terceiros).toBe(1_000_000);
     });
 
-    it('uma fonte com 30% de participação reduz o lucro do incorporador em 30% do lucro distribuído', () => {
+    it('uma fonte com 30% de participação recebe o capital de volta e 30% do LUCRO; o incorporador fica com 70% do lucro', () => {
         const s = baseStudy({ funding_sources: [fonte({ remuneration: 'participacao', profit_share_percent: 30 })] });
         const r = computeImovibMath(s);
-        const distribuido = soma(r.aportes.map(a => a.distribuicao));
-        const participacao = soma(r.monthlyFlows.map(f => f.linhas.remuneracaoDeTerceiros));
-        expect(participacao).toBeCloseTo(-0.3 * distribuido, 2);
-        // Sem a participação, o incorporador ficaria com o fluxo antes dela.
-        const antes = soma(r.monthlyFlows.map(f => f.net)) - participacao;
-        expect(soma(r.monthlyFlows.map(f => f.net))).toBeCloseTo(antes - 0.3 * distribuido, 2);
+        const lucro = soma(r.aportes.map(a => a.distribuicao)) - soma(r.aportes.map(a => a.aporte)) - 1_000_000;
+        expect(lucro).toBeGreaterThan(0);
+        const paraAFonte = -soma(r.monthlyFlows.map(f => f.linhas.remuneracaoDeTerceiros));
+        expect(paraAFonte).toBeCloseTo(1_000_000 + 0.3 * lucro, 2);
+        expect(soma(r.monthlyFlows.map(f => f.net))).toBeCloseTo(0.7 * lucro, 2);
+        expect(soma(r.aportes.map(a => a.paraTerceiros))).toBeCloseTo(paraAFonte, 2);
+    });
+
+    it('a parte da fonte por participação não depende do caixa mínimo (reserva é liquidez, não lucro)', () => {
+        const comFonte = (min: number) => computeImovibMath(baseStudy({ min_cash_balance: min, funding_sources: [fonte({ remuneration: 'participacao', profit_share_percent: 30 })] }));
+        const a = comFonte(0);
+        const b = comFonte(2_000_000);
+        const paraAFonte = (r: ReturnType<typeof computeImovibMath>) => soma(r.monthlyFlows.map(f => f.linhas.remuneracaoDeTerceiros));
+        expect(paraAFonte(b)).toBeCloseTo(paraAFonte(a), 2);
+        expect(soma(b.monthlyFlows.map(f => f.net))).toBeCloseTo(soma(a.monthlyFlows.map(f => f.net)), 2);
+    });
+
+    it('estudo com prejuízo: a fonte por participação recebe só parte do capital de volta, sem lucro', () => {
+        const s = baseStudy({ land_cost: 30_000_000, funding_sources: [fonte({ remuneration: 'participacao', profit_share_percent: 30 })] });
+        const r = computeImovibMath(s);
+        const paraAFonte = -soma(r.monthlyFlows.map(f => f.linhas.remuneracaoDeTerceiros));
+        expect(paraAFonte).toBeGreaterThanOrEqual(0);
+        expect(paraAFonte).toBeLessThan(1_000_000);
     });
 
     it('o fluxo do projeto não muda com nenhuma fonte', () => {

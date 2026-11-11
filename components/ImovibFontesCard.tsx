@@ -175,6 +175,8 @@ function FonteSheet({ fonte, study, proximaOrdem, onClose, onSalva }: {
     if (!fonte) return null;
     const nova = fonte === 'nova';
     const juros = form.remuneration === 'juros';
+    // BULLET não amortiza antes do vencimento: a carência fica escondida e não conta.
+    const usaCarencia = juros && form.amortization !== 'BULLET';
     const n = (s: string) => (s.trim() === '' ? NaN : Number(s));
     const valor = n(form.amount);
     const mes = n(form.entry_month);
@@ -189,7 +191,7 @@ function FonteSheet({ fonte, study, proximaOrdem, onClose, onSalva }: {
                 : !(Number.isInteger(mes) && mes >= 1) ? 'O mês de entrada é um número inteiro a partir de 1.'
                     : juros && !(taxa >= 0) ? 'Informe a taxa de juros (% ao ano).'
                         : juros && !(Number.isInteger(prazo) && prazo >= 1) ? 'O prazo é um número inteiro de meses, a partir de 1.'
-                            : juros && !(Number.isInteger(carencia) && carencia >= 0 && carencia < prazo) ? 'A carência é um número inteiro de meses, menor que o prazo.'
+                            : usaCarencia && !(Number.isInteger(carencia) && carencia >= 0 && carencia < prazo) ? 'A carência é um número inteiro de meses, menor que o prazo.'
                                 : !juros && !(parte > 0 && parte <= 100) ? 'A participação vai de mais de 0% até 100% de cada distribuição.'
                                     : !mudou ? 'Nada foi alterado.' : undefined;
     const mudar = <K extends keyof Formulario>(k: K, v: Formulario[K]) => { setForm(prev => ({ ...prev, [k]: v })); setMudou(true); };
@@ -211,7 +213,7 @@ function FonteSheet({ fonte, study, proximaOrdem, onClose, onSalva }: {
                 profit_share_percent: juros ? null : parte,
                 amortization: form.amortization,
                 term_months: juros ? prazo : null,
-                grace_months: juros ? carencia : null,
+                grace_months: !juros ? null : usaCarencia ? carencia : 0,
                 sort_order: nova ? proximaOrdem : fonte.sort_order,
             });
             setMudou(false);
@@ -269,7 +271,7 @@ function FonteSheet({ fonte, study, proximaOrdem, onClose, onSalva }: {
                                     </select>
                                 </div>
                                 {campo('imovib-fonte-prazo', 'Prazo (meses)', 'term_months', { type: 'number', min: 1, step: 1 })}
-                                {form.amortization !== 'BULLET' && campo('imovib-fonte-carencia', 'Carência do principal (meses)', 'grace_months', { type: 'number', min: 0, step: 1 })}
+                                {usaCarencia && campo('imovib-fonte-carencia', 'Carência do principal (meses)', 'grace_months', { type: 'number', min: 0, step: 1 })}
                             </>
                         ) : (
                             campo('imovib-fonte-participacao', 'Participação (% de cada distribuição)', 'profit_share_percent', { type: 'number', min: 0, max: 100, step: 1 })

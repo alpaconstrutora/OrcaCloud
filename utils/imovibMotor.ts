@@ -4,7 +4,7 @@ import { curvaDeVendas, TipoCurvaDeVendas } from './imovibCurvas';
 import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
 import { fluxoDaDivida, PremissasDoFinanciamento } from './imovibFinanciamento';
 import { aportesEDistribuicoes, LinhaDeAporte } from './imovibAportes';
-import { fluxoDasFontes } from './imovibFontes';
+import { fluxoDasFontes, partilhaDasDistribuicoes } from './imovibFontes';
 
 /**
  * Motor dos Estudos de Viabilidade (Imovib) — cálculo puro, sem React.
@@ -349,6 +349,8 @@ interface Premissas {
     vgvTotal: number;
     /** VGV depois das permutas: a base das vendas e da exigência de vendas do financiamento. */
     vgvVendavel: number;
+    /** Preço das unidades PERMUTADO do espelho (já fora do VGV). */
+    permutaDoEspelho: number;
     netVgvTotal: number;
     estoqueNaoVendidoPct: number;
     vendasPorMes: number[];
@@ -419,6 +421,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     const vgvPorBloco: ImovibMathResult['vgvPorBloco'] = {};
     const instancias = study.unit_instances || [];
     let espelhoTemPermutada = false;
+    let permutaDoEspelho = 0;
     const blocosSemPreco: string[] = [];
 
     study.blocks?.forEach(block => {
@@ -442,9 +445,12 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         let blockVgv: number;
         if (doBloco.length > 0) {
             if (doBloco.some(i => i.status === 'PERMUTADO')) espelhoTemPermutada = true;
+            const precoDa = (i: typeof doBloco[number]) => ((i.price || 0) > 0 ? i.price : (i.private_area || 0) * precoM2);
             blockVgv = doBloco
                 .filter(i => i.status !== 'PERMUTADO')
-                .reduce((acc, i) => acc + ((i.price || 0) > 0 ? i.price : (i.private_area || 0) * precoM2), 0);
+                .reduce((acc, i) => acc + precoDa(i), 0);
+            // Fora do VGV, mas é capital do terrenista: entra na fatia da permuta (item 4.2).
+            permutaDoEspelho += doBloco.filter(i => i.status === 'PERMUTADO').reduce((acc, i) => acc + precoDa(i), 0);
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
         } else {
             blockVgv = blockVendavelArea * precoM2;
@@ -718,6 +724,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         costDeltaMultiplier,
         vgvTotal,
         vgvVendavel,
+        permutaDoEspelho,
         netVgvTotal,
         estoqueNaoVendidoPct,
         vendasPorMes,
@@ -841,7 +848,8 @@ interface FluxoDoAcionista {
  * Ordem: dívida à produção (utils/imovibFinanciamento.ts) → fontes a juros
  * (utils/imovibFontes.ts) → aportes e distribuições sobre esse caixa
  * (utils/imovibAportes.ts) → a parte das fontes por participação em cada
- * distribuição. `net` é o caixa do incorporador depois de tudo isso;
+ * distribuição: capital de volta e a fatia delas no LUCRO
+ * (partilhaDasDistribuicoes). `net` é o caixa do incorporador depois de tudo isso;
  * `netProjeto`, o caixa sem dívida nem terceiros.
  */
 function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
@@ -884,6 +892,10 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
     }
 
     const aportes = aportesEDistribuicoes(antes.map(a => a.netFlow), P.caixaMinimo);
+    if (T && T.participacao > 0) {
+        partilhaDasDistribuicoes(aportes, T.aporteParticipacao, T.participacao)
+            .forEach((v, i) => { aportes[i].paraTerceiros = v; });
+    }
 
     // 2ª passada: participação das fontes em cada distribuição e o fluxo final.
     let accumulatedFlow = 0;
@@ -897,10 +909,9 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         const { debtPayment } = antes[i];
         let netFlow = antes[i].netFlow;
         let remuneracaoDeTerceiros = T ? T.remuneracao[i] : 0;
-        if (T && T.participacao > 0) {
-            const parte = aportes[i].distribuicao * T.participacao;
-            netFlow -= parte;
-            remuneracaoDeTerceiros -= parte;
+        if (aportes[i].paraTerceiros > 0) {
+            netFlow -= aportes[i].paraTerceiros;
+            remuneracaoDeTerceiros -= aportes[i].paraTerceiros;
         }
 
         accumulatedFlow += netFlow;
@@ -934,12 +945,13 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
     }
     if (D.naoLiberado > 0.005) {
         const { vendasMinimasPct, defasagemDaLiberacao } = P.financiamento;
-        const porque = vendasMinimasPct > 0
-            ? `a venda acumulada não chega a ${Number(vendasMinimasPct.toFixed(2)).toLocaleString('pt-BR')}% do VGV vendável até o fim da obra${defasagemDaLiberacao > 0 ? ' e da defasagem' : ''}`
-            : `a defasagem de ${defasagemDaLiberacao} meses joga a liberação para depois do fim do estudo`;
+        const porVendas = D.naoLiberado - D.naoLiberadoPelaDefasagem;
+        const motivos: string[] = [];
+        if (porVendas > 0.005) motivos.push(`${fmtBRL(porVendas)} porque a venda acumulada não chega a ${Number(vendasMinimasPct.toFixed(2)).toLocaleString('pt-BR')}% do VGV vendável até o fim da obra${defasagemDaLiberacao > 0 ? ' e da defasagem' : ''}`);
+        if (D.naoLiberadoPelaDefasagem > 0.005) motivos.push(`${fmtBRL(D.naoLiberadoPelaDefasagem)} porque a defasagem de ${defasagemDaLiberacao} meses joga a liberação para depois do fim do estudo`);
         P.avisos.push({
             codigo: 'financiamento_nao_liberado',
-            mensagem: `${fmtBRL(D.naoLiberado)} do financiamento à produção não são liberados: ${porque}. Esse custo sai do capital próprio.`,
+            mensagem: `${fmtBRL(D.naoLiberado)} do financiamento à produção não são liberados: ${motivos.join('; ')}. Esse custo sai do capital próprio.`,
             aba: 'capital',
         });
     }
@@ -1013,7 +1025,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         capital: {
             proprio: Math.max(0, -F.maxExposure),
             divida: F.dividaLiberada,
-            permuta: Math.max(0, P.vgvTotal - P.vgvVendavel),
+            permuta: Math.max(0, P.vgvTotal - P.vgvVendavel) + P.permutaDoEspelho,
             terceiros: F.aporteDeTerceiros,
         },
         aportes: F.aportes,

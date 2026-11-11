@@ -16,6 +16,8 @@ import { buildSchedule } from './debtAmortization';
 export interface FluxoDasFontes {
     /** Dinheiro que entra no mês (≥ 0, índice 0 = mês 1). */
     aporte: number[];
+    /** A parte de `aporte` que vem das fontes por participação. */
+    aporteParticipacao: number[];
     /** Parcelas das fontes a juros (≤ 0). */
     remuneracao: number[];
     /** Fração de cada distribuição que vai para as fontes por participação (0,3 = 30%). */
@@ -55,6 +57,7 @@ const MESES = (n: number) => `${n} ${n === 1 ? 'mês' : 'meses'}`;
 export function fluxoDasFontes(fontes: ImovibFundingSource[], duracao: number): FluxoDasFontes {
     const n = Math.max(0, duracao);
     const aporte = new Array<number>(n).fill(0);
+    const aporteParticipacao = new Array<number>(n).fill(0);
     const remuneracao = new Array<number>(n).fill(0);
     const avisos: string[] = [];
     let participacao = 0;
@@ -70,6 +73,7 @@ export function fluxoDasFontes(fontes: ImovibFundingSource[], duracao: number): 
         aporte[entrada - 1] += valor;
 
         if (f.remuneration === 'participacao') {
+            aporteParticipacao[entrada - 1] += valor;
             participacao += (Number(f.profit_share_percent) || 0) / 100;
             continue;
         }
@@ -101,5 +105,33 @@ export function fluxoDasFontes(fontes: ImovibFundingSource[], duracao: number): 
     if (participacao > 1 + 1e-9) {
         avisos.push(`As fontes por participação somam ${(participacao * 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% das distribuições: passam de 100%, e o incorporador entrega mais do que distribui.`);
     }
-    return { aporte, remuneracao, participacao, avisos };
+    return { aporte, aporteParticipacao, remuneracao, participacao, avisos };
+}
+
+/**
+ * Quanto de cada distribuição vai para as fontes por participação (≥ 0, um valor
+ * por mês). As distribuições devolvem primeiro o capital ainda não devolvido — o
+ * que o incorporador aportou e o que as fontes trouxeram, na proporção do que
+ * falta a cada um; só o que passa disso é lucro, e as fontes ficam com
+ * `participacao` dele. Assim a parte delas não depende do caixa mínimo (reserva é
+ * liquidez, não lucro). Retorno preferencial e taxa de performance ficam fora
+ * (plano, "Fora do escopo").
+ */
+export function partilhaDasDistribuicoes(
+    aportes: { aporte: number; distribuicao: number }[],
+    aporteParticipacao: number[],
+    participacao: number,
+): number[] {
+    let capitalDoIncorporador = 0;
+    let capitalDasFontes = 0;
+    return aportes.map((l, i) => {
+        capitalDoIncorporador += l.aporte;
+        capitalDasFontes += aporteParticipacao[i] ?? 0;
+        const emAberto = capitalDoIncorporador + capitalDasFontes;
+        const devolvido = Math.min(l.distribuicao, emAberto);
+        const dasFontes = emAberto > 0 ? devolvido * (capitalDasFontes / emAberto) : 0;
+        capitalDasFontes -= dasFontes;
+        capitalDoIncorporador -= devolvido - dasFontes;
+        return dasFontes + (l.distribuicao - devolvido) * participacao;
+    });
 }

@@ -747,12 +747,14 @@ Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura,
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase3.js`): aba abre sem erro com as tabelas novas, 0 escritas, 0 erros de console.
 
-**Fase 4 — Capital:** 0 de 5 — migrations `aplicar_20271111950000` (colunas do financiamento, caixa mínimo, origem da TMA) e `aplicar_20271111960000` (tabela `imovib_funding_sources` e função do portal com as fontes) aplicadas em 11/11 com OK do usuário (*"Pode aplicar"*): 6 colunas, 4 policies só `authenticated`, anon sem SELECT, função com `funding_sources` e EXECUTE de anon/authenticated
-- [ ] 4.1 Financiamento à produção
-- [ ] 4.2 Capital próprio calculado (D2)
-- [ ] 4.3 Aportes e distribuições
-- [ ] 4.4 Outras fontes de capital (D3)
-- [ ] 4.5 TMA justificada
+**Fase 4 — Capital:** 5 de 5 — revisada; migrations `aplicar_20271111950000` (colunas do financiamento, caixa mínimo, origem da TMA) e `aplicar_20271111960000` (tabela `imovib_funding_sources` e função do portal com as fontes) aplicadas em 11/11 com OK do usuário (*"Pode aplicar"*): 6 colunas, 4 policies só `authenticated`, anon sem SELECT, função com `funding_sources` e EXECUTE de anon/authenticated
+- [x] 4.1 Financiamento à produção — `utils/imovibFinanciamento.ts`. Premissas em frações e juros mensais (não %), para o padrão repetir o motor antigo operação por operação: regressão verde sem edição. Exigência de vendas libera de uma vez o que ficou retido; depois do último mês de obra + defasagem nada é liberado (aviso `financiamento_nao_liberado`, que separa o motivo: vendas ou defasagem). A taxa continua na Dinâmica.
+- [x] 4.2 Capital próprio calculado (D2) — cartão "De onde vem o dinheiro": próprio (módulo da exposição), financiamento liberado, permuta (percentuais + unidades PERMUTADO do espelho), outras fontes; fatias somam 100%. O Portal do Investidor mostra as mesmas fatias. Nenhum código lê `funding_equity_percent`.
+- [x] 4.3 Aportes e distribuições — `utils/imovibAportes.ts`; reserva calculada de trás para frente; no último mês a SPE devolve todo o caixa. Tabela por ano abrindo os meses; aba "Aportes" no Excel.
+- [x] 4.4 Outras fontes de capital (D3) — `utils/imovibFontes.ts`. A juros: cronograma de `buildSchedule` (vencimento depois do horizonte = quitação do saldo no último mês, com aviso). Por participação: as distribuições devolvem primeiro o capital aportado (incorporador e fontes, na proporção do que falta a cada um) e a fonte fica com a sua % do LUCRO — a 1ª versão aplicava a % à distribuição bruta (a fonte levava parte do capital do incorporador e o resultado dependia do caixa mínimo; achado da revisão). Listagem, detalhe e portal carregam as fontes.
+- [x] 4.5 TMA justificada — "De onde vem esta taxa" na Dinâmica; sai na linha da TMA no Excel (Indicadores e Premissas).
+
+Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase4.js`): listagem = Resumo (R$ 3.998.485 e R$ 641.232, os mesmos de antes da fase); aba Capital, aportes por ano e mês, drawer de nova fonte (motivo no botão) e origem da TMA abrem; 0 escritas, 0 erros de console. Adiados da revisão: as fatias de "De onde vem o dinheiro" não incluem o dinheiro dos compradores durante a obra (o plano pede "somam 100%"); fonte por participação que entra depois do pico de exposição não avisa.
 
 **Fase 5 — Tempo e custos:** 0 de 9
 - [ ] 5.1 Marcos e datas

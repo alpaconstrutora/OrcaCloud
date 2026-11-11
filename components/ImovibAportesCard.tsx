@@ -21,6 +21,7 @@ interface LinhaDoAno {
     ate: number;
     aporte: number;
     distribuicao: number;
+    paraTerceiros: number;
     caixa: number;
 }
 
@@ -32,6 +33,12 @@ const COLUNAS: StandardTableColumn[] = [
     { key: 'aporte', label: 'Aporte', width: 160, align: 'right' },
     { key: 'distribuicao', label: 'Distribuição', width: 160, align: 'right' },
     { key: 'caixa', label: 'Caixa no fim', width: 160, align: 'right' },
+];
+// Só com fonte por participação: quanto de cada distribuição vai para ela.
+const COLUNAS_COM_PARTICIPACAO: StandardTableColumn[] = [
+    ...COLUNAS.slice(0, 3),
+    { key: 'paraTerceiros', label: 'Para as fontes', width: 160, align: 'right' },
+    COLUNAS[3],
 ];
 
 /**
@@ -58,6 +65,7 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
                 ate: doAno[doAno.length - 1].mes,
                 aporte: doAno.reduce((a, m) => a + m.aporte, 0),
                 distribuicao: doAno.reduce((a, m) => a + m.distribuicao, 0),
+                paraTerceiros: doAno.reduce((a, m) => a + m.paraTerceiros, 0),
                 caixa: doAno[doAno.length - 1].caixa,
             });
         }
@@ -66,6 +74,7 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
 
     const totalAportado = meses.reduce((a, m) => a + m.aporte, 0);
     const totalDistribuido = meses.reduce((a, m) => a + m.distribuicao, 0);
+    const totalParaTerceiros = meses.reduce((a, m) => a + m.paraTerceiros, 0);
     const ultimoAporte = [...meses].reverse().find(m => m.aporte > 0.5)?.mes ?? null;
     const temParticipacao = (study.funding_sources ?? []).some(f => f.remuneration === 'participacao');
 
@@ -80,7 +89,7 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
                         <h2 id="imovib-aportes-titulo" className="text-lg font-semibold text-gray-900">Aportes e distribuições</h2>
                         <p className="text-slate-500 text-sm">
                             Aporta quando o caixa ficaria abaixo do mínimo; distribui o que sobra além do que os meses seguintes vão consumir.
-                            {temParticipacao ? ' As fontes por participação recebem a parte delas de cada distribuição.' : ''}
+                            {temParticipacao ? ' As distribuições devolvem primeiro o capital aportado; as fontes por participação recebem o capital delas e a parte delas no lucro.' : ''}
                         </p>
                     </div>
                 </div>
@@ -97,13 +106,13 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
                 <KpiCard label="Total aportado" value={fmtBRL(totalAportado)} sub={ultimoAporte != null ? `Último aporte no mês ${ultimoAporte}` : 'Nenhum aporte'} color="rose" />
-                <KpiCard label="Total distribuído" value={fmtBRL(totalDistribuido)} color="emerald" />
-                <KpiCard label="Distribuído menos aportado" value={fmtBRL(totalDistribuido - totalAportado)} sub="O lucro do caixa" color="indigo" />
+                <KpiCard label="Total distribuído" value={fmtBRL(totalDistribuido)} sub={temParticipacao ? `${fmtBRL(totalParaTerceiros)} para as fontes por participação` : undefined} color="emerald" />
+                <KpiCard label="Lucro do incorporador" value={fmtBRL(totalDistribuido - totalParaTerceiros - totalAportado)} sub="Distribuído a ele menos o que aportou" color="indigo" />
             </div>
 
             <StandardTable<LinhaDoAno>
                 storageKey="imovib:aportes"
-                columns={COLUNAS}
+                columns={temParticipacao ? COLUNAS_COM_PARTICIPACAO : COLUNAS}
                 rows={anos}
                 rowKey={l => l.id}
                 dense
@@ -120,6 +129,7 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
                         );
                         case 'aporte': return <span className="text-sm text-gray-700">{valor(l.aporte)}</span>;
                         case 'distribuicao': return <span className="text-sm text-gray-700">{valor(l.distribuicao)}</span>;
+                        case 'paraTerceiros': return <span className="text-sm text-gray-700">{valor(l.paraTerceiros)}</span>;
                         case 'caixa': return <span className="text-sm text-gray-700">{valor(l.caixa)}</span>;
                         default: return null;
                     }
@@ -128,7 +138,8 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
                     k === 'periodo' ? <span className="text-sm font-semibold text-gray-900">Total</span>
                         : k === 'aporte' ? <span className="text-sm font-semibold text-gray-900">{fmtBRL(linhas.reduce((a, l) => a + l.aporte, 0))}</span>
                             : k === 'distribuicao' ? <span className="text-sm font-semibold text-gray-900">{fmtBRL(linhas.reduce((a, l) => a + l.distribuicao, 0))}</span>
-                                : null}
+                                : k === 'paraTerceiros' ? <span className="text-sm font-semibold text-gray-900">{fmtBRL(linhas.reduce((a, l) => a + l.paraTerceiros, 0))}</span>
+                                    : null}
                 renderExpanded={(l, visibleCount) => aberto !== l.ano ? null : (
                     <tr className="bg-gray-50/50">
                         <td colSpan={visibleCount} className="px-6 py-3">
@@ -138,6 +149,7 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
                                         <th className="text-left font-semibold py-1">Mês</th>
                                         <th className="text-right font-semibold py-1">Aporte</th>
                                         <th className="text-right font-semibold py-1">Distribuição</th>
+                                        {temParticipacao && <th className="text-right font-semibold py-1">Para as fontes</th>}
                                         <th className="text-right font-semibold py-1">Caixa no fim</th>
                                     </tr>
                                 </thead>
@@ -147,6 +159,7 @@ const ImovibAportesCard: React.FC<ImovibAportesCardProps> = ({ study, resultado,
                                             <td className="py-1">Mês {m.mes}</td>
                                             <td className="py-1 text-right">{valor(m.aporte)}</td>
                                             <td className="py-1 text-right">{valor(m.distribuicao)}</td>
+                                            {temParticipacao && <td className="py-1 text-right">{valor(m.paraTerceiros)}</td>}
                                             <td className="py-1 text-right">{valor(m.caixa)}</td>
                                         </tr>
                                     ))}

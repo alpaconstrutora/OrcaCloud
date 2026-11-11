@@ -1,4 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
@@ -38,7 +40,8 @@ describe('0.6 — estudo do portal por link', () => {
         const raw = rawSemPrecoNoBloco({
             unit_instances: [],
             estrutura_do_empreendimento: {
-                empreendimento: { id: 'emp', name: 'Garden', organization_id: 'org', imovib_study_id: 'estudo-teste', blueprint_study_id: null, terreno_area: 1000 },
+                // Só o nome: é o que a migration devolve a anon (ver o teste da migration abaixo).
+                empreendimento: { name: 'Garden' },
                 torres: [{ id: 't1', empreendimento_id: 'emp', name: 'Torre A', imovib_block_id: 'b1', construction_cost_sqm: null, sales_price_sqm: null, sort_order: 0 }],
                 unidades: [
                     { id: 'x1', tower_id: 't1', typology: '2Q', private_area: 60, common_area: 15, price: 600_000, is_vendavel: true },
@@ -51,6 +54,14 @@ describe('0.6 — estudo do portal por link', () => {
         expect(estudo.blocks?.map(b => b.name)).toEqual(['Torre A']);
         expect(computeImovibMath(estudo).totalPrivateArea).toBe(120);
         expect('estrutura_do_empreendimento' in estudo).toBe(false);
+    });
+
+    it('a migration devolve do empreendimento só o nome, e as chaves que o cliente lê', () => {
+        const sql = readFileSync(resolve(__dirname, '../supabase/migrations/aplicar_20271111700000_investor_portal_estudo_mesma_estrutura.sql'), 'utf-8')
+            .replace(/^\s*--.*$/gm, ' ');
+        const emp = /'empreendimento',\s*jsonb_build_object\(([^)]*)\)/.exec(sql)?.[1] ?? '';
+        expect([...emp.matchAll(/'([a-z_]+)'\s*,/g)].map(m => m[1])).toEqual(['name']);
+        for (const chave of ["'torres'", "'unidades'", "'unit_instances'", "'estrutura_do_empreendimento'"]) expect(sql).toContain(chave);
     });
 
     it('sem estudo na resposta devolve null', () => {

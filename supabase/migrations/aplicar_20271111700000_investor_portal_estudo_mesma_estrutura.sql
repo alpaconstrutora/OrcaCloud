@@ -26,7 +26,8 @@
 --      org do token ligada a este estudo — as mesmas duas travas de antes. O
 --      que passa a sair (preço por unidade do espelho e das unidades do
 --      empreendimento) é só o do estudo dessa oportunidade, e só as colunas que
---      o motor lê para calcular o VGV que o portal já mostra.
+--      o motor lê para calcular o VGV que o portal já mostra. Do empreendimento
+--      sai só o nome (o aviso do motor o cita); id, planta e terreno ficam fora.
 --   P2 (quem mais executa?): a ACL tinha `=X` (PUBLIC). REVOKE de PUBLIC aqui e
 --      GRANT explícito a anon e authenticated, que são quem chama (portal por
 --      link, sem login). A autorização é o token, dentro da função.
@@ -128,10 +129,7 @@ BEGIN
 
     IF FOUND THEN
         v_estrutura := jsonb_build_object(
-            'empreendimento', jsonb_build_object(
-                'id', v_emp.id, 'name', v_emp.name, 'organization_id', v_emp.organization_id,
-                'imovib_study_id', v_emp.imovib_study_id, 'blueprint_study_id', v_emp.blueprint_study_id,
-                'terreno_area', v_emp.terreno_area),
+            'empreendimento', jsonb_build_object('name', v_emp.name),
             'torres', COALESCE(
                 (SELECT jsonb_agg(jsonb_build_object(
                     'id', t.id, 'empreendimento_id', t.empreendimento_id, 'name', t.name,

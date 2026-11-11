@@ -82,10 +82,24 @@ describe('0.3 — linhas do fluxo', () => {
         expect(total(comFinanceira, 'impostos')).toBe(0);
     });
 
-    it('deduções acima de 100% da receita aparecem no caixa (não somem)', () => {
+    it('deduções acima de 100% da receita aparecem no caixa (não somem) e geram aviso', () => {
         const r = computeImovibMath(baseStudy({ tax_rate: 80, brokerage_fee: 40 }));
         for (const f of r.monthlyFlows) expect(somaLinhas(f.linhas)).toBeCloseTo(f.net, 4);
         const mesComReceita = r.monthlyFlows.find(f => f.rev > 0 && f.cost === 0)!;
         expect(mesComReceita.net).toBeLessThan(0);
+        expect(r.avisos.find(a => a.codigo === 'receita_liquida_negativa')?.aba).toBe('viability_dynamic');
+    });
+
+    it('contingências acima de 100% do VGV deixam a receita negativa e geram aviso', () => {
+        const r = computeImovibMath(baseStudy({ default_rate_percent: 60, cancellation_rate_percent: 50 }));
+        expect(r.netVgvTotal).toBeLessThan(0);
+        for (const f of r.monthlyFlows) expect(somaLinhas(f.linhas)).toBeCloseTo(f.net, 4);
+        expect(r.avisos.find(a => a.codigo === 'receita_liquida_negativa')?.aba).toBe('funding');
+    });
+
+    it('percentuais normais não geram o aviso', () => {
+        for (const estudo of Object.values(ESTUDOS_DE_REGRESSAO)) {
+            expect(computeImovibMath(estudo()).avisos.map(a => a.codigo)).not.toContain('receita_liquida_negativa');
+        }
     });
 });

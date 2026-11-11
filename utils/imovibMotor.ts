@@ -90,7 +90,7 @@ export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -510,6 +510,23 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     const cancellationRate = val(study.cancellation_rate_percent, D.cancellation_rate_percent) / 100;
 
     const netVgvTotal = marketedVgv * (1 - (swapFinancial + defaultRate + cancellationRate));
+
+    // Percentuais que passam de 100% deixam a receita líquida negativa, e ela sai
+    // do caixa (antes era descartada em silêncio). O cálculo segue como veio; avisa.
+    const pctBR = (x: number) => Number((x * 100).toFixed(2)).toLocaleString('pt-BR');
+    if (netVgvTotal < 0) {
+        avisos.push({
+            codigo: 'receita_liquida_negativa',
+            mensagem: `Permuta, inadimplência e distrato somam mais de 100% do VGV: a receita líquida fica negativa (${fmtBRL(netVgvTotal)}) e sai do caixa.`,
+            aba: 'funding',
+        });
+    } else if (deducaoReceitaPct > 1) {
+        avisos.push({
+            codigo: 'receita_liquida_negativa',
+            mensagem: `As deduções sobre a receita somam ${pctBR(deducaoReceitaPct)}%: passam da receita e a diferença sai do caixa.`,
+            aba: capexRubricasAtivas ? 'capex' : 'viability_dynamic',
+        });
+    }
 
     // Revenue Curve Distribution (J-Curve Profile)
     const downpaymentPctRaw = val(study.revenue_downpayment_percent, D.revenue_downpayment_percent);

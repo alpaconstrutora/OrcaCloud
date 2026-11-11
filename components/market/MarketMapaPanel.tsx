@@ -34,7 +34,7 @@ export default function MarketMapaPanel({
     <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Market Map™</h3>
+          <h3 className="text-xs font-black text-slate-400">Market Map™</h3>
           <span className="text-xs text-slate-500 font-semibold">Selecione uma camada e clique no mapa para analisar a vocação imobiliária</span>
         </div>
 

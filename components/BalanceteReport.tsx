@@ -133,7 +133,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
             {/* Filtros */}
             <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">De</label>
+                    <label className="text-xs font-semibold text-slate-500">De</label>
                     <input
                         type="date"
                         value={dateFrom}
@@ -142,7 +142,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Até</label>
+                    <label className="text-xs font-semibold text-slate-500">Até</label>
                     <input
                         type="date"
                         value={dateTo}
@@ -151,7 +151,7 @@ const BalanceteReport: React.FC<Props> = ({ organizationId }) => {
                     />
                 </div>
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Regime</label>
+                    <label className="text-xs font-semibold text-slate-500">Regime</label>
                     <select
                         value={regime}
                         onChange={e => setRegime(e.target.value as RegimeContabil)}

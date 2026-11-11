@@ -860,7 +860,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
               {/* Painel Principal de Score */}
               <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm flex flex-col justify-between items-center text-center">
-                <h3 className="font-black text-gray-800 text-sm uppercase tracking-wider w-full text-left">Compliance Previdenciário</h3>
+                <h3 className="font-black text-gray-800 text-sm w-full text-left">Compliance Previdenciário</h3>
                 
                 <div className="my-8 relative flex items-center justify-center">
                   <div className={`w-36 h-36 rounded-full border-8 flex flex-col items-center justify-center shadow-lg
@@ -958,7 +958,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Número do CNO</label>
+                  <label className="text-xs font-semibold text-slate-500">Número do CNO</label>
                   <input
                     value={cnoForm.cno_number}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, cno_number: e.target.value }))}
@@ -968,7 +968,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Status da Regularização</label>
+                  <label className="text-xs font-semibold text-slate-500">Status da Regularização</label>
                   <select
                     value={cnoForm.status}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, status: e.target.value as any }))}
@@ -983,7 +983,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Alvará de Construção</label>
+                  <label className="text-xs font-semibold text-slate-500">Alvará de Construção</label>
                   <input
                     value={cnoForm.alvara_numero}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, alvara_numero: e.target.value }))}
@@ -993,7 +993,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Matrícula do Imóvel</label>
+                  <label className="text-xs font-semibold text-slate-500">Matrícula do Imóvel</label>
                   <input
                     value={cnoForm.matricula_imovel}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, matricula_imovel: e.target.value }))}
@@ -1003,7 +1003,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Área Aprovada (m²)</label>
+                  <label className="text-xs font-semibold text-slate-500">Área Aprovada (m²)</label>
                   <input
                     type="number"
                     value={cnoForm.area_aprovada}
@@ -1013,7 +1013,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Área Real de Aferição (m²)</label>
+                  <label className="text-xs font-semibold text-slate-500">Área Real de Aferição (m²)</label>
                   <input
                     type="number"
                     value={cnoForm.area_real}
@@ -1023,7 +1023,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Padrão Construtivo</label>
+                  <label className="text-xs font-semibold text-slate-500">Padrão Construtivo</label>
                   <select
                     value={cnoForm.padrao_construtivo || 'normal'}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, padrao_construtivo: e.target.value as any }))}
@@ -1036,7 +1036,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Responsabilidade</label>
+                  <label className="text-xs font-semibold text-slate-500">Responsabilidade</label>
                   <select
                     value={cnoForm.responsavel_tipo || 'construtor'}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, responsavel_tipo: e.target.value as any }))}
@@ -1049,7 +1049,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">ART / RRT Vinculada</label>
+                  <label className="text-xs font-semibold text-slate-500">ART / RRT Vinculada</label>
                   <input
                     value={cnoForm.art_rrt}
                     onChange={(e) => setCnoForm(prev => ({ ...prev, art_rrt: e.target.value }))}
@@ -1064,7 +1064,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 <h4 className="font-bold text-gray-800 mb-4">Enquadramento SERO (Aferição Indireta)</h4>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Categoria da Obra</label>
+                    <label className="text-xs font-semibold text-slate-500">Categoria da Obra</label>
                     <select
                       value={cnoForm.sero_category}
                       onChange={(e) => setCnoForm(prev => ({ ...prev, sero_category: e.target.value as any }))}
@@ -1078,7 +1078,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
                   
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Destinação</label>
+                    <label className="text-xs font-semibold text-slate-500">Destinação</label>
                     <select
                       value={cnoForm.sero_destination}
                       onChange={(e) => setCnoForm(prev => ({ ...prev, sero_destination: e.target.value as any }))}
@@ -1095,7 +1095,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Tipo (Estrutura)</label>
+                    <label className="text-xs font-semibold text-slate-500">Tipo (Estrutura)</label>
                     <select
                       value={cnoForm.sero_type}
                       onChange={(e) => setCnoForm(prev => ({ ...prev, sero_type: e.target.value as any }))}
@@ -1108,7 +1108,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Valor VAU (Atualizado)</label>
+                    <label className="text-xs font-semibold text-slate-500">Valor VAU (Atualizado)</label>
                     <MoneyCentsInput
                       value={cnoForm.vau_value}
                       onChange={(v) => setCnoForm(prev => ({ ...prev, vau_value: v === '' ? 0 : Number(v) }))}
@@ -1191,7 +1191,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Nome do Cenário</label>
+                    <label className="text-xs font-semibold text-slate-500">Nome do Cenário</label>
                     <input
                       value={simForm.scenario_name}
                       onChange={(e) => setSimForm(prev => ({ ...prev, scenario_name: e.target.value }))}
@@ -1201,7 +1201,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Estado (UF)</label>
+                      <label className="text-xs font-semibold text-slate-500">Estado (UF)</label>
                       <input
                         value={simForm.state}
                         onChange={(e) => setSimForm(prev => ({ ...prev, state: e.target.value.toUpperCase() }))}
@@ -1209,7 +1209,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Ref. Date</label>
+                      <label className="text-xs font-semibold text-slate-500">Ref. Date</label>
                       <input
                         value={simForm.reference_date}
                         onChange={(e) => setSimForm(prev => ({ ...prev, reference_date: e.target.value }))}
@@ -1220,7 +1220,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Desoneração (CPRB)</label>
+                    <label className="text-xs font-semibold text-slate-500">Desoneração (CPRB)</label>
                     <select
                       value={simForm.social_charges}
                       onChange={(e) => setSimForm(prev => ({ ...prev, social_charges: e.target.value as any }))}
@@ -1233,7 +1233,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Área (m²)</label>
+                      <label className="text-xs font-semibold text-slate-500">Área (m²)</label>
                       <input
                         type="number"
                         value={simForm.area_construida}
@@ -1242,7 +1242,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Padrão</label>
+                      <label className="text-xs font-semibold text-slate-500">Padrão</label>
                       <select
                         value={simForm.padrao}
                         onChange={(e) => setSimForm(prev => ({ ...prev, padrao: e.target.value as any }))}
@@ -1256,7 +1256,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Método Construtivo</label>
+                    <label className="text-xs font-semibold text-slate-500">Método Construtivo</label>
                     <select
                       value={simForm.metodo_construtivo || 'convencional'}
                       onChange={(e) => setSimForm(prev => ({ ...prev, metodo_construtivo: e.target.value as any }))}
@@ -1272,7 +1272,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-xs font-bold text-gray-400 uppercase tracking-widest">Regime de Contratação</label>
+                    <label className="text-xs font-semibold text-slate-500">Regime de Contratação</label>
                     <select
                       value={simForm.regime_contratacao || 'equipe_propria'}
                       onChange={(e) => setSimForm(prev => ({ ...prev, regime_contratacao: e.target.value as any }))}
@@ -1355,7 +1355,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                 {/* Lista de Simulações Gravadas */}
                 {simulations.length > 0 && (
                   <div className="mt-6 border-t border-gray-100 pt-6">
-                    <h4 className="text-xs font-black uppercase tracking-widest text-gray-400 mb-3">Simulações de Cenários</h4>
+                    <h4 className="text-xs font-black text-gray-400 mb-3">Simulações de Cenários</h4>
                     <div className="space-y-2 max-h-48 overflow-y-auto">
                       {simulations.map(sim => (
                         <div key={sim.id} className="flex items-center justify-between p-3 border border-gray-50 hover:border-gray-100 rounded-xl text-xs">
@@ -1458,7 +1458,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                 <div className="space-y-4">
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Nº do Recibo / Declaração</label>
+                    <label className="text-xs font-semibold text-slate-500">Nº do Recibo / Declaração</label>
                     <input
                       value={dctfForm.declaration_number}
                       onChange={(e) => setDctfForm(prev => ({ ...prev, declaration_number: e.target.value }))}
@@ -1468,7 +1468,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Data de Transmissão</label>
+                    <label className="text-xs font-semibold text-slate-500">Data de Transmissão</label>
                     <input
                       type="date"
                       value={dctfForm.transmission_date}
@@ -1479,7 +1479,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
 
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-1">
-                      <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Valor Principal</label>
+                      <label className="text-xs font-semibold text-slate-500">Valor Principal</label>
                       <MoneyCentsInput
                         value={dctfForm.principal_amount}
                         onChange={(v) => setDctfForm(prev => ({ ...prev, principal_amount: v }))}
@@ -1488,7 +1488,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Multa (R$)</label>
+                      <label className="text-xs font-semibold text-slate-500">Multa (R$)</label>
                       <MoneyCentsInput
                         value={dctfForm.fine_amount}
                         onChange={(v) => setDctfForm(prev => ({ ...prev, fine_amount: v }))}
@@ -1499,7 +1499,7 @@ export const OpuraCnoModule: React.FC<OpuraCnoModuleProps> = ({
                   </div>
 
                   <div className="space-y-1">
-                    <label className="text-form-label font-bold text-gray-400 uppercase tracking-widest">Juros (R$)</label>
+                    <label className="text-xs font-semibold text-slate-500">Juros (R$)</label>
                     <MoneyCentsInput
                       value={dctfForm.interest_amount}
                       onChange={(v) => setDctfForm(prev => ({ ...prev, interest_amount: v }))}

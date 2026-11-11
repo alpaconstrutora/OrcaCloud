@@ -121,7 +121,7 @@ export default function PainelEtapas({ etapas, quadro, selecao, semEtapa, etapaE
 
       {etapas.length > 0 && (
         <div className="rounded-[10px] border border-slate-200 bg-white p-3">
-          <label className="flex items-center justify-between gap-2 text-xs font-semibold uppercase tracking-wide text-slate-600">
+          <label className="flex text-xs font-semibold text-slate-500 items-center justify-between gap-2">
             Etapa em vista
             <select value={etapaEmVista ?? ''} onChange={(e) => onEtapaEmVista(e.target.value || null)} aria-label="Etapa em vista no desenho" className={`${campo} normal-case tracking-normal`} data-testid="etapa-em-vista">
               <option value="">Todas (sem linha do tempo)</option>

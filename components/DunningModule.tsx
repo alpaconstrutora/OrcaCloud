@@ -127,7 +127,7 @@ function RuleModal({
                     <div className="grid grid-cols-2 gap-4">
                         {/* Nome */}
                         <div className="col-span-2">
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Nome da regra *</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Nome da regra *</label>
                             <input
                                 type="text"
                                 value={form.name}
@@ -139,7 +139,7 @@ function RuleModal({
 
                         {/* Offset */}
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">
                                 Disparar em (dias do vencimento)
                             </label>
                             <input
@@ -153,7 +153,7 @@ function RuleModal({
 
                         {/* Hora */}
                         <div>
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Horário de envio (BRT)</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-1">Horário de envio (BRT)</label>
                             <select
                                 value={form.trigger_hour}
                                 onChange={e => patch({ trigger_hour: parseInt(e.target.value) })}
@@ -181,7 +181,7 @@ function RuleModal({
 
                     {/* Assunto */}
                     <div>
-                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Assunto do e-mail</label>
+                        <label className="block text-xs font-semibold text-slate-500 mb-1">Assunto do e-mail</label>
                         <input
                             type="text"
                             value={form.subject_template}
@@ -204,7 +204,7 @@ function RuleModal({
                     {/* Corpo */}
                     <div>
                         <div className="flex items-center justify-between mb-1">
-                            <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide">Corpo do e-mail (HTML)</label>
+                            <label className="block text-xs font-semibold text-slate-500">Corpo do e-mail (HTML)</label>
                             <div className="flex bg-gray-100 rounded-lg overflow-hidden">
                                 {(['edit', 'preview'] as const).map(tab => (
                                     <button

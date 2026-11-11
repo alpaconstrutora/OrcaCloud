@@ -86,29 +86,29 @@ const ContractInterfaceModal: React.FC<ContractInterfaceModalProps> = ({ isOpen,
                     <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>
                 )}
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Interface / Evento</label>
+                    <label className="text-xs font-semibold text-slate-500">Interface / Evento</label>
                     <input type="text" placeholder="Ex: Liberação de frente, Projeto/revisão, Material crítico…" value={interfaceEvent} onChange={e => setInterfaceEvent(e.target.value)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Responsável Primário</label>
+                        <label className="text-xs font-semibold text-slate-500">Responsável Primário</label>
                         <input type="text" value={primaryResponsible} onChange={e => setPrimaryResponsible(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Apoio</label>
+                        <label className="text-xs font-semibold text-slate-500">Apoio</label>
                         <input type="text" value={support} onChange={e => setSupport(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prazo / Gatilho</label>
+                    <label className="text-xs font-semibold text-slate-500">Prazo / Gatilho</label>
                     <input type="text" placeholder="Ex: D-5 antes da mobilização" value={deadlineTrigger} onChange={e => setDeadlineTrigger(e.target.value)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Evidência Esperada</label>
+                    <label className="text-xs font-semibold text-slate-500">Evidência Esperada</label>
                     <input type="text" value={evidence} onChange={e => setEvidence(e.target.value)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>

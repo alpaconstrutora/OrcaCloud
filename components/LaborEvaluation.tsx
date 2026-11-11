@@ -161,7 +161,7 @@ const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6
 // Área de texto não leva h-9: mantém a altura de várias linhas.
 const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-300 transition-all';
 const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
-    <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{children}</label>
+    <label className="text-xs font-semibold text-slate-500">{children}</label>
 );
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5"><FieldLabel>{label}</FieldLabel>{children}</div>

@@ -305,7 +305,7 @@ const AddCityModal: React.FC<{
         </p>
 
         <div>
-          <label className="block text-form-label font-bold uppercase tracking-wider text-slate-500 mb-1">Estado *</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Estado *</label>
           <select
             value={stateId}
             onChange={e => setStateId(e.target.value)}
@@ -320,7 +320,7 @@ const AddCityModal: React.FC<{
         </div>
 
         <div>
-          <label className="block text-form-label font-bold uppercase tracking-wider text-slate-500 mb-1">Nome *</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Nome *</label>
           <input
             value={name}
             onChange={e => setName(e.target.value)}
@@ -332,7 +332,7 @@ const AddCityModal: React.FC<{
         </div>
 
         <div>
-          <label className="block text-form-label font-bold uppercase tracking-wider text-slate-500 mb-1">
+          <label className="block text-xs font-semibold text-slate-500 mb-1">
             Código IBGE (opcional)
           </label>
           <input

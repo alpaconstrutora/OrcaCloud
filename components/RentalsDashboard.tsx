@@ -116,7 +116,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
               <div className="p-3 bg-purple-100/50 rounded-2xl text-purple-600 group-hover:scale-110 transition-transform"><DollarSign className="w-6 h-6" /></div>
               <span className="text-xs font-black text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded-lg">+8.2%</span>
             </div>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Receita Mensal</h3>
+            <h3 className="text-xs font-black text-gray-400 leading-none mb-1">Receita Mensal</h3>
             <div className="text-2xl font-black text-gray-900 tracking-tight">{formatCurrency(metrics.receitaMensal)}</div>
             <p className="text-xs text-gray-400 font-bold mt-1">VGV em contratos ativos</p>
           </div>
@@ -130,7 +130,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
               <div className="p-3 bg-emerald-100/50 rounded-2xl text-emerald-600"><Percent className="w-6 h-6" /></div>
               <div className="flex items-center gap-1 text-emerald-500 bg-emerald-50 px-2 py-0.5 rounded text-xs font-black uppercase"><Activity className="w-3 h-3"/> Alinhado</div>
             </div>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Yield Mensal Médio</h3>
+            <h3 className="text-xs font-black text-gray-400 leading-none mb-1">Yield Mensal Médio</h3>
             <div className="text-2xl font-black text-gray-900 tracking-tight">{metrics.yieldMensal.toFixed(2)}%</div>
             <p className="text-xs text-gray-400 font-bold mt-1">Retorno sobre o patrimônio</p>
           </div>
@@ -144,7 +144,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
                     <div className="p-3 bg-blue-100/50 rounded-2xl text-blue-600"><Key className="w-6 h-6" /></div>
                     <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded-lg">{metrics.unidadesDisponiveis} un. livres</span>
                 </div>
-                <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Taxa de Ocupação</h3>
+                <h3 className="text-xs font-black text-gray-400 leading-none mb-1">Taxa de Ocupação</h3>
                 <div className="text-2xl font-black text-gray-900 tracking-tight">{metrics.taxaOcupacao.toFixed(1)}%</div>
                 <div className="w-full bg-gray-100 h-1 rounded-full mt-3 overflow-hidden">
                     <div className="bg-blue-600 h-full rounded-full transition-all duration-1000" style={{ width: `${metrics.taxaOcupacao}%` }} />
@@ -160,7 +160,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
               <div className="p-3 bg-white/10 rounded-2xl text-blue-400"><Building2 className="w-6 h-6" /></div>
               <span className="text-xs font-black text-blue-400 uppercase tracking-widest">Ativo Rentável</span>
             </div>
-            <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest leading-none mb-1">VGV Patrimonial</h3>
+            <h3 className="text-xs font-black text-gray-400 leading-none mb-1">VGV Patrimonial</h3>
             <div className="text-2xl font-black text-white tracking-tight">{formatCurrency(metrics.valorTotalPatrimonio)}</div>
             <p className="text-xs text-gray-500 font-bold mt-1">{metrics.unidadesTotal} unidades totais</p>
           </div>
@@ -206,7 +206,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
         {/* Tipologia e Canais */}
         <div className="space-y-6">
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
-            <h3 className="text-sm font-black text-gray-900 tracking-widest uppercase mb-6 leading-none flex items-center gap-2">
+            <h3 className="text-sm font-black text-gray-900 mb-6 leading-none flex items-center gap-2">
               <div className="w-1.5 h-4 bg-purple-600 rounded-full" />
               Mix de Tipologia
             </h3>
@@ -242,7 +242,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
           </div>
 
           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col justify-between">
-            <h3 className="text-sm font-black text-gray-900 tracking-widest uppercase mb-4 leading-none flex items-center gap-2">
+            <h3 className="text-sm font-black text-gray-900 mb-4 leading-none flex items-center gap-2">
               <div className="w-1.5 h-4 bg-emerald-600 rounded-full" />
               Fontes de Locação
             </h3>
@@ -266,7 +266,7 @@ export function RentalsDashboard({ selectedBuildingId, organizationId: propOrgan
       {/* 3. RECEBÍVEIS — Inadimplência + Próximos Vencimentos */}
       <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
-          <h3 className="text-sm font-black text-gray-900 tracking-widest uppercase leading-none flex items-center gap-2">
+          <h3 className="text-sm font-black text-gray-900 leading-none flex items-center gap-2">
             <div className="w-1.5 h-4 bg-blue-600 rounded-full" />
             Próximos Vencimentos
           </h3>

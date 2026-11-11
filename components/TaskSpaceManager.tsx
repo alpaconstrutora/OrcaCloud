@@ -242,7 +242,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
         {tab === 'settings' && (
           <div className="px-6 py-5 space-y-5 overflow-y-auto flex-1">
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Nome</label>
+              <label className="text-xs font-semibold text-slate-500">Nome</label>
               <input
                 autoFocus
                 value={name}
@@ -253,7 +253,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
             </div>
 
             <div>
-              <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Cor</label>
+              <label className="text-xs font-semibold text-slate-500">Cor</label>
               <div className="mt-2 flex flex-wrap gap-2">
                 {COLOR_PALETTE.map(c => (
                   <button
@@ -396,7 +396,7 @@ const TaskSpaceManager: React.FC<Props> = ({ space, orgId, onClose, onChanged, o
                 {/* Adicionar membro */}
                 {eligible.length > 0 && (
                   <div>
-                    <label className="text-xs font-black text-slate-500 uppercase tracking-widest">Adicionar membro</label>
+                    <label className="text-xs font-semibold text-slate-500">Adicionar membro</label>
                     <div className="mt-1.5 flex gap-2">
                       <select
                         value={addingId}

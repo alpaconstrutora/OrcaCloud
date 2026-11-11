@@ -27,8 +27,8 @@ export default function MarketOfertasPanel({
     <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm flex flex-col h-fit min-h-[500px] space-y-6">
       <div className="border-b border-slate-100 pb-3 flex justify-between items-center gap-2">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Ofertas da Praça</h3>
-          <h2 className="text-sm font-black text-slate-800 uppercase tracking-tight flex items-center gap-1.5 mt-0.5">
+          <h3 className="text-xs font-black text-slate-400">Ofertas da Praça</h3>
+          <h2 className="text-sm font-black text-slate-800 flex items-center gap-1.5 mt-0.5">
             🏢 Concorrência ({total})
           </h2>
         </div>

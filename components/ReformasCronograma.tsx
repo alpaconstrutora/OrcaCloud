@@ -200,7 +200,7 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
 
       {/* Lista de Etapas */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Cronograma</h2>
+        <h2 className="text-xs font-black text-slate-400">Cronograma</h2>
 
         {cronograma.length === 0 ? (
           <div className="text-center py-12 border border-dashed border-white/5 rounded-3xl bg-white/5 px-4 text-xs text-slate-500">

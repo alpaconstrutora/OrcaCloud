@@ -303,7 +303,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         {/* Funil comercial (substitui Top Countries Customers) */}
         <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <h2 className="text-xs font-black text-slate-500 flex items-center gap-1.5">
               <Users className="w-3.5 h-3.5 text-[#D47A55]" /> Funil de Projetos
             </h2>
             <Button variant="ghost" size="icon" onClick={() => onNavigate('CRM')}>
@@ -343,7 +343,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
         {/* Horas por projeto (substitui Top Traffic by Source — chips) */}
         <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
           <div className="flex items-center justify-between mb-4">
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500 flex items-center gap-1.5">
+            <h2 className="text-xs font-black text-slate-500 flex items-center gap-1.5">
               <Clock className="w-3.5 h-3.5 text-[#D47A55]" /> Horas por Projeto
             </h2>
             <Button variant="ghost" size="icon" onClick={() => onNavigate('TIMESHEET')}>
@@ -379,7 +379,7 @@ const OfficesDashboard: React.FC<OfficesDashboardProps> = ({ userId, onNavigate 
       {/* ── Tabela: Propostas Recentes (substitui Recent Invoices) ─────── */}
       <div className="bg-white border border-slate-200/50 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Propostas Recentes</h2>
+          <h2 className="text-xs font-black text-slate-500">Propostas Recentes</h2>
           <div className="flex items-center gap-2">
             <Button variant="secondary" size="sm" className="text-[9px] uppercase tracking-widest">
               <Filter className="w-3 h-3" /> Filtrar

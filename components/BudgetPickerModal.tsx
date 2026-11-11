@@ -133,7 +133,7 @@ const BudgetPickerModal: React.FC<BudgetPickerModalProps> = ({
                             <ListTree className="w-5 h-5 text-white" />
                         </div>
                         <div>
-                            <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight leading-none">Importar do Orçamento</h3>
+                            <h3 className="text-lg font-black text-gray-900 leading-none">Importar do Orçamento</h3>
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">
                                 Selecione grupo, etapa, subetapa ou item individual
                             </p>

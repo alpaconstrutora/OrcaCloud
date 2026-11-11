@@ -146,7 +146,7 @@ const PlanoContasImportModal: React.FC<Props> = ({
                 {/* Header */}
                 <div className="flex items-center justify-between px-8 py-6 border-b border-gray-100">
                     <div>
-                        <h2 className="text-lg font-black text-gray-900 uppercase tracking-tight">
+                        <h2 className="text-lg font-black text-gray-900">
                             Importar Plano de Contas
                         </h2>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">

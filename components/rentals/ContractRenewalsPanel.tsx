@@ -37,7 +37,7 @@ const fimApos = (inicio: string, meses: number) => {
     return dt.toISOString().slice(0, 10);
 };
 
-const LABEL = 'text-xs font-black text-gray-400 uppercase tracking-widest px-1';
+const LABEL = 'text-xs font-semibold text-slate-500 px-1';
 const INPUT = 'w-full px-6 h-9 text-sm bg-gray-50 border border-transparent focus:bg-white focus:border-purple-500 rounded-[6px] outline-none font-bold text-gray-700 transition-all shadow-inner';
 
 /**

@@ -105,7 +105,7 @@ const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6
 const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
     </div>
 );
@@ -433,7 +433,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                         <div className="space-y-5">
                             {/* Resumo */}
                             <div className="bg-slate-50 rounded-2xl border border-slate-200 p-5 space-y-3">
-                                <h3 className="text-xs font-black text-slate-500 uppercase tracking-widest">Resumo do Processo</h3>
+                                <h3 className="text-xs font-black text-slate-500">Resumo do Processo</h3>
                                 <div className="grid grid-cols-2 gap-3">
                                     {[
                                         { label: 'Colaborador',  value: selectedEmployee?.name || '—' },

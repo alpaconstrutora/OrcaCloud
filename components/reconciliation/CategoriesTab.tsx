@@ -37,7 +37,7 @@ export default function CategoriesTab({
     return (
         <div className="space-y-6 animate-in slide-in-from-bottom-4 duration-500">
             <div className="flex justify-between items-center px-4">
-                <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] flex items-center gap-2">
+                <h4 className="text-xs font-black text-gray-400 flex items-center gap-2">
                     <Tag className="w-4 h-4" />
                     Gestão de Categorias
                 </h4>

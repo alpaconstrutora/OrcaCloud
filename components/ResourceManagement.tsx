@@ -906,7 +906,7 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
 
                         <div className="bg-white p-6 rounded-3xl border shadow-sm">
                             <div className="flex items-center justify-between mb-8">
-                                <h4 className="text-sm font-black uppercase text-gray-900 flex items-center gap-2">
+                                <h4 className="text-sm font-black text-gray-900 flex items-center gap-2">
                                     <BarChartIcon className="w-4 h-4 text-blue-600" /> Histograma de Recursos
                                 </h4>
                                 <select 
@@ -1094,7 +1094,7 @@ const ResourceImportModal: React.FC<{
                             )}
                             {showWorkers && filteredWorkers.length > 0 && (
                                 <div className="mb-6">
-                                    <h4 className="text-xs font-black uppercase mb-3 text-gray-400 tracking-widest">Trabalhadores ({filteredWorkers.length})</h4>
+                                    <h4 className="text-xs font-black mb-3 text-gray-400">Trabalhadores ({filteredWorkers.length})</h4>
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredWorkers.map(w => {
                                             const roleName = selectedOrg?.resources?.roles.find(r => r.id === w.roleId)?.name || 'Sem cargo';
@@ -1117,7 +1117,7 @@ const ResourceImportModal: React.FC<{
                             )}
                             {showTeams && filteredTeams.length > 0 && (
                                 <div className="mb-6">
-                                    <h4 className="text-xs font-black uppercase mb-3 text-gray-400 tracking-widest">Equipes ({filteredTeams.length})</h4>
+                                    <h4 className="text-xs font-black mb-3 text-gray-400">Equipes ({filteredTeams.length})</h4>
                                     <div className="grid grid-cols-2 gap-3">
                                         {filteredTeams.map(t => (
                                             <label key={t.id} className="flex items-center gap-3 p-3 border rounded-xl cursor-pointer hover:bg-gray-50 transition-all">

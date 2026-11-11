@@ -84,7 +84,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                                 </div>
                                 <div>
                                     <p className="text-xs font-medium text-blue-400 uppercase tracking-[0.2em]">{initialData ? 'Edição de Fatura' : 'Nova Fatura de Consumo'}</p>
-                                    <h2 className="text-3xl font-medium tracking-tight uppercase leading-none">{contract.title}</h2>
+                                    <h2 className="text-3xl font-medium leading-none">{contract.title}</h2>
                                 </div>
                             </div>
                             <p className="text-gray-400 font-medium text-sm max-w-xl">
@@ -104,7 +104,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                 <div className="flex-1 overflow-y-auto p-12 bg-white space-y-8">
                     <div className="grid grid-cols-2 gap-8">
                         <div className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Mês de Referência</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Mês de Referência</label>
                             <input
                                 type="date"
                                 required
@@ -115,7 +115,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Data de Vencimento</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Data de Vencimento</label>
                             <input
                                 type="date"
                                 value={dueDate}
@@ -125,7 +125,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Valor Total (R$)</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Valor Total (R$)</label>
                             <input
                                 type="text"
                                 required
@@ -137,7 +137,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                         </div>
 
                         <div className="space-y-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Consumo (Ex: kWh, m³) - Opcional</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Consumo (Ex: kWh, m³) - Opcional</label>
                             <input
                                 type="text"
                                 placeholder="0,00"
@@ -148,7 +148,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                         </div>
 
                         <div className="space-y-2 col-span-2">
-                            <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest ml-1">Status de Pagamento</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Status de Pagamento</label>
                             <div className="flex gap-4">
                                 {['Pendente', 'Pago', 'Atrasado', 'Cancelado'].map((s) => (
                                     <button

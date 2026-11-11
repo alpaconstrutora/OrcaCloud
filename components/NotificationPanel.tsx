@@ -86,7 +86,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                             <Bell className="w-5 h-5" />
                         </div>
                         <div>
-                            <h2 className="text-sm font-black text-gray-900 uppercase tracking-widest">Notificações</h2>
+                            <h2 className="text-sm font-black text-gray-900">Notificações</h2>
                             <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Acompanhe seus alertas</p>
                         </div>
                     </div>
@@ -156,7 +156,7 @@ const NotificationPanel: React.FC<NotificationPanelProps> = ({ email, onClose, o
                                 )}
                                 <div className="flex items-start justify-between gap-4">
                                     <div className="flex-1 min-w-0">
-                                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-tight mb-1">{n.title}</h3>
+                                        <h3 className="text-xs font-black text-gray-900 mb-1">{n.title}</h3>
                                         <p className="text-sm text-gray-600 font-medium leading-relaxed mb-3">{n.message}</p>
                                         <div className="flex items-center gap-4">
                                             <span className="flex items-center gap-1 text-xs font-bold text-gray-400">

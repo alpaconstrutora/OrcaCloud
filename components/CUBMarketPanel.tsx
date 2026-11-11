@@ -10,7 +10,7 @@ const CUBMarketPanel: React.FC = () => {
         <div className="bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
             <div className="px-8 py-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/30">
                 <div>
-                    <h3 className="text-sm font-black uppercase tracking-widest text-gray-900 flex items-center gap-2">
+                    <h3 className="text-sm font-black text-gray-900 flex items-center gap-2">
                         <Map className="w-5 h-5 text-blue-600" />
                         Painel CUB Interstadual
                     </h3>

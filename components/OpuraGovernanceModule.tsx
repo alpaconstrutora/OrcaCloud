@@ -340,7 +340,7 @@ export default function OpuraGovernanceModule({
             <Shield className="w-8 h-8" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-black text-white uppercase tracking-tight">Selecionar Organização Ativa</h2>
+            <h2 className="text-2xl font-black text-white">Selecionar Organização Ativa</h2>
             <p className="text-sm text-gray-400">
               Para gerenciar o organograma, cargos, alçadas e comitês de governança, selecione uma organização ativa do seu grupo econômico abaixo:
             </p>
@@ -967,7 +967,7 @@ export default function OpuraGovernanceModule({
             <form onSubmit={handleCreateLimit} className="space-y-4 text-sm">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Fluxo</label>
+                  <label className="text-xs font-semibold text-slate-500">Fluxo</label>
                   <select
                     value={newLimit.flow_type}
                     onChange={(e) => setNewLimit({ ...newLimit, flow_type: e.target.value as AuthorityFlowType })}
@@ -980,7 +980,7 @@ export default function OpuraGovernanceModule({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Alvo da Alçada</label>
+                  <label className="text-xs font-semibold text-slate-500">Alvo da Alçada</label>
                   <select
                     value={newLimit.target_type}
                     onChange={(e) => setNewLimit({ ...newLimit, target_type: e.target.value, target_id: '' })}
@@ -993,7 +993,7 @@ export default function OpuraGovernanceModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Selecionar Alvo</label>
+                <label className="text-xs font-semibold text-slate-500">Selecionar Alvo</label>
                 <select
                   value={newLimit.target_id}
                   required
@@ -1012,7 +1012,7 @@ export default function OpuraGovernanceModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Mínimo (R$)</label>
+                  <label className="text-xs font-semibold text-slate-500">Mínimo (R$)</label>
                   <MoneyCentsInput
                     value={newLimit.limite_minimo}
                     onChange={(v) => setNewLimit({ ...newLimit, limite_minimo: v === '' ? 0 : Number(v) })}
@@ -1020,7 +1020,7 @@ export default function OpuraGovernanceModule({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Máximo (R$)</label>
+                  <label className="text-xs font-semibold text-slate-500">Máximo (R$)</label>
                   <MoneyCentsInput
                     value={newLimit.limite_maximo}
                     onChange={(v) => setNewLimit({ ...newLimit, limite_maximo: v === '' ? 0 : Number(v) })}
@@ -1072,7 +1072,7 @@ export default function OpuraGovernanceModule({
 
             <form onSubmit={handleCreateDelegation} className="space-y-4 text-sm">
               <div className="space-y-1">
-                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Delegador (Quem se afasta)</label>
+                <label className="text-xs font-semibold text-slate-500">Delegador (Quem se afasta)</label>
                 <select
                   value={newDelegation.delegator_id}
                   required
@@ -1087,7 +1087,7 @@ export default function OpuraGovernanceModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Substituto (Quem aprova)</label>
+                <label className="text-xs font-semibold text-slate-500">Substituto (Quem aprova)</label>
                 <select
                   value={newDelegation.delegatee_id}
                   required
@@ -1103,7 +1103,7 @@ export default function OpuraGovernanceModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Fluxo</label>
+                  <label className="text-xs font-semibold text-slate-500">Fluxo</label>
                   <select
                     value={newDelegation.flow_type}
                     onChange={(e) => setNewDelegation({ ...newDelegation, flow_type: e.target.value })}
@@ -1116,7 +1116,7 @@ export default function OpuraGovernanceModule({
                   </select>
                 </div>
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Limite Máx (R$)</label>
+                  <label className="text-xs font-semibold text-slate-500">Limite Máx (R$)</label>
                   <MoneyCentsInput
                     placeholder="Opcional"
                     value={newDelegation.limite_maximo}
@@ -1128,7 +1128,7 @@ export default function OpuraGovernanceModule({
 
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Início</label>
+                  <label className="text-xs font-semibold text-slate-500">Início</label>
                   <input
                     type="datetime-local"
                     required
@@ -1138,7 +1138,7 @@ export default function OpuraGovernanceModule({
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Término</label>
+                  <label className="text-xs font-semibold text-slate-500">Término</label>
                   <input
                     type="datetime-local"
                     required
@@ -1150,7 +1150,7 @@ export default function OpuraGovernanceModule({
               </div>
 
               <div className="space-y-1">
-                <label className="text-form-label text-gray-500 font-bold uppercase tracking-wider">Motivo da Ausência</label>
+                <label className="text-xs font-semibold text-slate-500">Motivo da Ausência</label>
                 <input
                   type="text"
                   placeholder="Ex: Férias do Diretor"

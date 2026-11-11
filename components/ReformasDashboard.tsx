@@ -183,7 +183,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
       {/* Seletor de Reforma Ativa */}
       {projetos.length > 0 ? (
         <div className="space-y-1 bg-[#0D1224] p-4 border border-white/5 rounded-2xl">
-          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Selecionar Reforma Ativa</label>
+          <label className="block text-xs font-semibold text-slate-500">Selecionar Reforma Ativa</label>
           <select
             value={activeProjectId}
             onChange={(e) => handleSelectProject(e.target.value)}
@@ -278,7 +278,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
             <div className="space-y-3">
               {/* Nome do Cliente */}
               <div className="space-y-1">
-                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Nome do Cliente</label>
+                <label className="block text-xs font-semibold text-slate-500">Nome do Cliente</label>
                 <input
                   type="text"
                   placeholder="Ex: João da Silva"
@@ -291,7 +291,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
 
               {/* Endereço */}
               <div className="space-y-1">
-                <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Endereço da Obra</label>
+                <label className="block text-xs font-semibold text-slate-500">Endereço da Obra</label>
                 <input
                   type="text"
                   placeholder="Rua, Número, Bairro, Apto"
@@ -304,7 +304,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
               {/* Orçamento e Data Início */}
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1">
-                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Orçamento (R$)</label>
+                  <label className="block text-xs font-semibold text-slate-500">Orçamento (R$)</label>
                   <MoneyCentsInput
                     placeholder="0,00"
                     value={orcamentoTotal}
@@ -313,7 +313,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                   />
                 </div>
                 <div className="space-y-1">
-                  <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Data de Início</label>
+                  <label className="block text-xs font-semibold text-slate-500">Data de Início</label>
                   <input
                     type="date"
                     value={dataInicio}

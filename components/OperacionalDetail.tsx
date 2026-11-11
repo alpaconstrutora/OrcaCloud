@@ -123,7 +123,7 @@ const TransitionModal: React.FC<{
         )}
 
         <div>
-          <label className="text-form-label font-black text-slate-500 uppercase tracking-widest block mb-1.5">
+          <label className="block text-xs font-semibold text-slate-500 mb-1.5">
             Motivo / Observação
           </label>
           <textarea

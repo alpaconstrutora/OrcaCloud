@@ -189,7 +189,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
 
       {/* Serviços de Hoje (Agenda) */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Serviços para Hoje</h2>
+        <h2 className="text-xs font-black text-slate-500">Serviços para Hoje</h2>
         {servicosHoje.length === 0 ? (
           <div className="text-center py-8 px-4 bg-white border border-dashed border-slate-200 rounded-[24px] text-xs text-slate-400">
             Nenhum serviço agendado para hoje.
@@ -250,7 +250,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       {/* Serviços para Oferecer de Novo (Recorrência) */}
       {recorrentes.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
+          <h2 className="text-xs font-black text-teal-600 flex items-center gap-1.5">
             🔔 Serviços para Oferecer de Novo
           </h2>
           <div className="space-y-3">
@@ -285,7 +285,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       {/* Orçamentos Recentes */}
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Orçamentos Enviados</h2>
+          <h2 className="text-xs font-black text-slate-500">Orçamentos Enviados</h2>
           <button
             onClick={onNewOrcamento}
             className="text-xs font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
@@ -356,7 +356,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       {/* Próximos Serviços */}
       {proximosServicos.length > 0 && (
         <div className="space-y-3">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Próximos Serviços</h2>
+          <h2 className="text-xs font-black text-slate-500">Próximos Serviços</h2>
           <div className="space-y-3">
             {proximosServicos.slice(0, 3).map(s => (
               <div

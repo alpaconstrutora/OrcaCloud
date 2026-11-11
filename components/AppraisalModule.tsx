@@ -204,7 +204,7 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                 {/* Comparáveis */}
                 <div className="space-y-3">
                     <div className="flex items-center justify-between">
-                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Comparáveis (Amostra de Mercado)</h4>
+                        <h4 className="text-sm font-black text-gray-900">Comparáveis (Amostra de Mercado)</h4>
                         <Button size="sm" onClick={() => setEditingComparable(emptyComparable(organizationId, selected.id!) as AppraisalComparable)} className="gap-2">
                             <Plus className="w-4 h-4" /> Novo comparável
                         </Button>
@@ -253,7 +253,7 @@ const AppraisalModule: React.FC<Props> = ({ organizationId, userEmail }) => {
                 {calc && comparables.length > 0 && (
                     <div className="space-y-3">
                         <div className="flex items-center justify-between">
-                            <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Resultado — Método Comparativo Direto</h4>
+                            <h4 className="text-sm font-black text-gray-900">Resultado — Método Comparativo Direto</h4>
                             <Button variant="ghost" size="sm" onClick={handleRecalculate} disabled={saving} className="gap-2">
                                 <Calculator className="w-4 h-4" /> Recalcular e salvar
                             </Button>

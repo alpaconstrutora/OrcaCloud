@@ -315,7 +315,7 @@ const PlanningPickerModal: React.FC<{
 // ── Field wrapper ─────────────────────────────────────────────────────────────
 const Field: React.FC<{ label: string; required?: boolean; children: React.ReactNode; colSpan?: number }> = ({ label, required, children, colSpan }) => (
   <div className={colSpan === 2 ? 'col-span-2' : colSpan === 3 ? 'col-span-3' : ''}>
-    <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">
+    <label className="text-xs font-semibold text-slate-500">
       {label} {required && <span className="text-red-500">*</span>}
     </label>
     <div className="mt-1">{children}</div>

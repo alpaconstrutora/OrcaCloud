@@ -1030,7 +1030,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 <div className="lg:col-span-2 bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm h-96 flex flex-col">
                     <div className="flex justify-between items-center mb-8">
                         <div>
-                            <h3 className="text-sm font-normal text-gray-400 uppercase tracking-[0.2em]">Fluxo de Caixa</h3>
+                            <h3 className="text-sm font-normal text-gray-400">Fluxo de Caixa</h3>
                             <p className="text-xs text-gray-400 mt-1 uppercase tracking-widest font-normal">Entradas vs Saídas Mensais</p>
                         </div>
                         <div className="flex gap-4">
@@ -1055,7 +1055,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
                 <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col items-center justify-center relative overflow-hidden h-96">
                     <div className="absolute top-0 left-0 w-full p-8">
-                        <h3 className="text-sm font-normal text-gray-400 uppercase tracking-[0.2em] mb-1">Status de Recebimento</h3>
+                        <h3 className="text-sm font-normal text-gray-400 mb-1">Status de Recebimento</h3>
                         <p className="text-xs text-gray-400 uppercase tracking-widest font-normal">Composição da Carteira</p>
                     </div>
                     <div className="w-full h-full pt-12">
@@ -1077,7 +1077,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     <div className="flex justify-between items-center">
                         <h3 className="text-sm font-bold">{commercialProject ? 'Consolidado da Carteira' : 'Resumo do Contrato'}</h3>
                         <div className="flex gap-2">
-                            <label className="text-[9px] font-black text-blue-600 hover:text-blue-800 uppercase tracking-tighter bg-blue-50 px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer">
+                            <label className="text-xs font-black text-blue-600 hover:text-blue-800 bg-blue-50 px-2 py-1 rounded-lg transition-all flex items-center gap-1 cursor-pointer">
                                 <FileDown className="w-3 h-3" />
                                 Conciliação Bancária
                                 <input type="file" className="hidden" accept=".csv,.ofx,.txt" onChange={handleImportStatement} />
@@ -1087,11 +1087,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
-                            <label className="text-sm font-normal text-gray-400 uppercase tracking-widest ml-1">{commercialProject ? 'Total em Contratos' : 'Valor Total da Negociação'}</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">{commercialProject ? 'Total em Contratos' : 'Valor Total da Negociação'}</label>
                             <MoneyCentsInput value={financialInfo.totalValue} onChange={v => handleSaveMultiple({ totalValue: v === '' ? 0 : Number(v) })} className="w-full bg-gray-50 h-9 px-3 rounded-[6px] border border-gray-200 text-sm font-normal text-indigo-900 focus:bg-white focus:border-indigo-500 outline-none transition-all" placeholder="Valor Total" />
                         </div>
                         <div className="space-y-1">
-                            <label className="text-sm font-normal text-gray-400 uppercase tracking-widest ml-1">Modalidade de Pagamento</label>
+                            <label className="text-xs font-semibold text-slate-500 ml-1">Modalidade de Pagamento</label>
                             <select value={financialInfo.paymentMethod} onChange={e => handleSaveMultiple({ paymentMethod: e.target.value })} className="w-full bg-gray-50 h-9 px-3 rounded-[6px] border border-gray-200 text-sm font-normal text-gray-700 focus:bg-white focus:border-indigo-500 outline-none transition-all">
                                 <option value="Parcelamento Próprio">Parcelamento Próprio</option><option value="Permuta">Permuta</option><option value="À Vista">À Vista</option>
                             </select>
@@ -1400,7 +1400,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 <div className="lg:col-span-2 bg-white rounded-3xl border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-6 border-b border-gray-50 flex justify-between items-center bg-gray-50/50">
-                        <h3 className="text-sm font-normal text-gray-400 uppercase tracking-widest">Performance por Imóvel</h3>
+                        <h3 className="text-sm font-normal text-gray-400">Performance por Imóvel</h3>
                         {/* §8: texto simples colorido — sem pílula, fundo ou uppercase. */}
                         <span className="text-sm font-normal text-indigo-600">KPIs consolidados</span>
                     </div>
@@ -1447,7 +1447,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     </table>
                 </div>
                 <div className="bg-white p-6 rounded-3xl border border-gray-100 shadow-sm h-[500px] flex flex-col">
-                    <h3 className="text-sm font-normal text-gray-400 uppercase tracking-widest mb-6">Comparativo de Receitas</h3>
+                    <h3 className="text-sm font-normal text-gray-400 mb-6">Comparativo de Receitas</h3>
                     <div className="flex-1 min-h-0">
                         <ResponsiveContainer width="100%" height="100%" minHeight={300}>
                             <BarChart data={profitabilityByProperty} layout="vertical" margin={{ left: 20 }}>
@@ -1478,7 +1478,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
             <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
                 <div className="p-8 border-b border-gray-50 flex justify-between items-center">
                     <div>
-                        <h4 className="text-sm font-black text-gray-900 uppercase tracking-widest">Movimentação Unificada</h4>
+                        <h4 className="text-sm font-black text-gray-900">Movimentação Unificada</h4>
                         <p className="text-xs text-gray-400 font-bold uppercase mt-1">Todas as entradas e saídas do projeto</p>
                     </div>
                 </div>
@@ -1642,7 +1642,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
 
                         <div className="space-y-6">
                             <div className="group">
-                                <label className="text-sm font-normal text-gray-400 uppercase tracking-widest mb-2 block group-focus-within:text-blue-600 transition-colors">Data do Pagamento</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-2 group-focus-within:text-blue-600 transition-colors">Data do Pagamento</label>
                                 <input
                                     type="date"
                                     value={payingInstallment?.date || ''}

@@ -64,7 +64,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
                             <XCircle className="w-5 h-5" />
                         </div>
                         <div>
-                            <h3 className="text-base font-black text-red-900 uppercase tracking-wide">Distrato / Cancelamento</h3>
+                            <h3 className="text-base font-black text-red-900">Distrato / Cancelamento</h3>
                             <p className="text-xs text-red-600 font-bold">Esta ação libera a unidade no espelho de vendas.</p>
                         </div>
                     </div>
@@ -90,7 +90,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
 
                     {/* Motivo */}
                     <div className="space-y-2">
-                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest">Motivo do Distrato *</label>
+                        <label className="text-xs font-semibold text-slate-500">Motivo do Distrato *</label>
                         <div className="grid grid-cols-1 gap-2">
                             {DISTRATO_REASONS.map(r => (
                                 <button
@@ -120,7 +120,7 @@ const DealCancelModal: React.FC<DealCancelModalProps> = ({ isOpen, deal, organiz
 
                     {/* Valor de devolução */}
                     <div className="space-y-2">
-                        <label className="text-xs font-black text-gray-500 uppercase tracking-widest">
+                        <label className="text-xs font-semibold text-slate-500">
                             Valor a Devolver ao Cliente (R$)
                         </label>
                         <MoneyCentsInput

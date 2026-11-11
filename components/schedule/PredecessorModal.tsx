@@ -85,7 +85,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                 <div className="p-6 overflow-y-auto flex-1 bg-white">
                     <div className="space-y-6">
                         <div>
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Predecessores Atuais</h4>
+                            <h4 className="text-xs font-black text-gray-400 mb-3">Predecessores Atuais</h4>
                             <div className="space-y-2">
                                 {predecessors.map(p => {
                                     const task = allTasks.find(t => t.id === p.id);
@@ -130,7 +130,7 @@ export const PredecessorModal: React.FC<PredecessorModalProps> = ({
                         </div>
 
                         <div className="pt-6 border-t border-gray-100">
-                            <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Adicionar Novo Predecessor</h4>
+                            <h4 className="text-xs font-black text-gray-400 mb-3">Adicionar Novo Predecessor</h4>
                             <div className="space-y-2">
                                 {allTasks.filter(t => !predecessors.some(p => p.id === t.id)).map(task => {
                                     const nodeColors: Record<string, string> = {

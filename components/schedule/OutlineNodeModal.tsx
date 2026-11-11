@@ -55,7 +55,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                 </div>
                 <div className="px-6 py-4 space-y-4">
                     <div>
-                        <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Nome</label>
+                        <label className="text-xs font-semibold text-slate-500">Nome</label>
                         <input
                             autoFocus
                             value={name}
@@ -68,7 +68,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
 
                     {showNature && (
                         <div>
-                            <label className="text-xs font-bold text-gray-500 uppercase tracking-wide">Natureza</label>
+                            <label className="text-xs font-semibold text-slate-500">Natureza</label>
                             <div className="mt-1.5 flex flex-wrap gap-1.5">
                                 <button
                                     type="button"
@@ -107,7 +107,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                             {recurring && (
                                 <div className="grid grid-cols-3 gap-2 pl-6">
                                     <div>
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase">A cada</label>
+                                        <label className="text-xs font-semibold text-slate-500">A cada</label>
                                         <div className="flex items-center gap-1">
                                             <input type="number" min={1} value={interval} onChange={e => setInterval(Math.max(1, parseInt(e.target.value, 10) || 1))} className="w-12 px-2 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200" />
                                             <select value={frequency} onChange={e => setFrequency(e.target.value as RecurrenceRule['frequency'])} className="flex-1 px-1.5 py-1.5 text-xs border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200 bg-white">
@@ -118,7 +118,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                                         </div>
                                     </div>
                                     <div className="col-span-2">
-                                        <label className="text-[10px] font-bold text-gray-400 uppercase">Nº de ocorrências</label>
+                                        <label className="text-xs font-semibold text-slate-500">Nº de ocorrências</label>
                                         <input type="number" min={1} max={365} value={count} onChange={e => setCount(Math.max(1, Math.min(365, parseInt(e.target.value, 10) || 1)))} className="w-full px-2 py-1.5 text-sm border border-gray-200 rounded-lg outline-none focus:ring-2 focus:ring-indigo-200" />
                                     </div>
                                     <p className="col-span-3 text-[10px] text-gray-400 leading-tight">

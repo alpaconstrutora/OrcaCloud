@@ -71,7 +71,7 @@ const ContractAcceptanceModal: React.FC<ContractAcceptanceModalProps> = ({ isOpe
                 )}
                 <div className="space-y-2">
                     <div className="flex items-center justify-between">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Lista de Pendências</label>
+                        <label className="text-xs font-semibold text-slate-500">Lista de Pendências</label>
                         <button type="button" onClick={addPendingItem} className="text-xs font-medium text-blue-600 hover:text-blue-800 flex items-center gap-1">
                             <Plus className="w-3.5 h-3.5" /> Adicionar
                         </button>
@@ -100,7 +100,7 @@ const ContractAcceptanceModal: React.FC<ContractAcceptanceModalProps> = ({ isOpe
                     )}
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Observações</label>
+                    <label className="text-xs font-semibold text-slate-500">Observações</label>
                     <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
                 </div>

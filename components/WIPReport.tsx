@@ -118,7 +118,7 @@ const WIPReport: React.FC<Props> = ({ organizationId }) => {
             {/* Filtros */}
             <div className="flex flex-wrap items-end gap-3 bg-white border border-slate-200 rounded-2xl px-5 py-4 shadow-sm">
                 <div className="flex flex-col gap-1">
-                    <label className="text-xs font-black text-slate-400 uppercase tracking-widest">Posição em</label>
+                    <label className="text-xs font-semibold text-slate-500">Posição em</label>
                     <input
                         type="date"
                         value={dateTo}

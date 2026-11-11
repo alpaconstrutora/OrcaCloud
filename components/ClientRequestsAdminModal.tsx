@@ -280,13 +280,13 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     <textarea className="w-full rounded-xl border border-blue-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-400 resize-none" rows={2} placeholder="Descrição" value={newReq.description} onChange={e => setNewReq(p => ({ ...p, description: e.target.value }))} />
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Categoria</label>
+                                            <label className="block text-xs font-semibold text-blue-500 mb-1">Categoria</label>
                                             <select className="w-full rounded-[6px] border border-blue-200 px-3 h-9 text-sm bg-white outline-none" value={newReq.category} onChange={e => setNewReq(p => ({ ...p, category: e.target.value }))}>
                                                 {['Elétrica','Hidráulica','Estrutural','Pintura','Serralheria','Geral','Outro'].map(c => <option key={c}>{c}</option>)}
                                             </select>
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black text-blue-500 uppercase tracking-widest block mb-1">Prioridade</label>
+                                            <label className="block text-xs font-semibold text-blue-500 mb-1">Prioridade</label>
                                             <select className="w-full rounded-[6px] border border-blue-200 px-3 h-9 text-sm bg-white outline-none" value={newReq.priority} onChange={e => setNewReq(p => ({ ...p, priority: e.target.value as any }))}>
                                                 {['Baixa','Média','Alta','Urgente'].map(c => <option key={c}>{c}</option>)}
                                             </select>
@@ -334,18 +334,18 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         <div className="space-y-3 pt-3 border-t border-gray-100">
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
-                                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
                                                     <select className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm bg-white outline-none" value={editingReqData.status} onChange={e => setEditingReqData(p => ({ ...p, status: e.target.value as any }))}>
                                                         {['Aberto','Em Andamento','Aguardando','Resolvido','Cancelado'].map(s => <option key={s}>{s}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Responsável</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Responsável</label>
                                                     <input className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-blue-300" placeholder="Nome" value={editingReqData.assigned_to ?? ''} onChange={e => setEditingReqData(p => ({ ...p, assigned_to: e.target.value }))} />
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Notas Internas</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Notas Internas</label>
                                                 <textarea className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-blue-300 resize-none" rows={2} value={editingReqData.admin_notes ?? ''} onChange={e => setEditingReqData(p => ({ ...p, admin_notes: e.target.value }))} />
                                             </div>
                                             <div className="flex items-center justify-between">
@@ -378,11 +378,11 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     <p className="text-xs font-black text-indigo-600 uppercase tracking-widest">Nova Ordem de Serviço</p>
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Número *</label>
+                                            <label className="block text-xs font-semibold text-indigo-500 mb-1">Número *</label>
                                             <input className="w-full rounded-[6px] border border-indigo-200 px-4 h-9 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400" placeholder="OS-2026-001" value={newOs.number} onChange={e => setNewOs(p => ({ ...p, number: e.target.value }))} />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Prioridade</label>
+                                            <label className="block text-xs font-semibold text-indigo-500 mb-1">Prioridade</label>
                                             <select className="w-full rounded-[6px] border border-indigo-200 px-3 h-9 text-sm bg-white outline-none" value={newOs.priority} onChange={e => setNewOs(p => ({ ...p, priority: e.target.value as any }))}>
                                                 {['Baixa','Média','Alta','Urgente'].map(c => <option key={c}>{c}</option>)}
                                             </select>
@@ -392,11 +392,11 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                     <textarea className="w-full rounded-xl border border-indigo-200 px-4 py-2.5 text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-400 resize-none" rows={2} placeholder="Descrição" value={newOs.description} onChange={e => setNewOs(p => ({ ...p, description: e.target.value }))} />
                                     <div className="grid grid-cols-2 gap-3">
                                         <div>
-                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Data Agendada</label>
+                                            <label className="block text-xs font-semibold text-indigo-500 mb-1">Data Agendada</label>
                                             <input type="date" className="w-full rounded-[6px] border border-indigo-200 px-3 h-9 text-sm bg-white outline-none" value={newOs.scheduled_date} onChange={e => setNewOs(p => ({ ...p, scheduled_date: e.target.value }))} />
                                         </div>
                                         <div>
-                                            <label className="text-[9px] font-black text-indigo-500 uppercase tracking-widest block mb-1">Valor (R$)</label>
+                                            <label className="block text-xs font-semibold text-indigo-500 mb-1">Valor (R$)</label>
                                             <MoneyCentsInput className="w-full rounded-[6px] border border-indigo-200 px-3 h-9 text-sm bg-white outline-none" placeholder="0,00" value={newOs.value} onChange={v => setNewOs(p => ({ ...p, value: v }))} />
                                         </div>
                                     </div>
@@ -444,22 +444,22 @@ const ClientRequestsAdminModal: React.FC<Props> = ({ client, organizationId, onC
                                         <div className="space-y-3 pt-3 border-t border-gray-100">
                                             <div className="grid grid-cols-2 gap-3">
                                                 <div>
-                                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Status</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Status</label>
                                                     <select className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm bg-white outline-none" value={editingOsData.status} onChange={e => setEditingOsData(p => ({ ...p, status: e.target.value as any }))}>
                                                         {['Aberta','Em Execução','Concluída','Cancelada'].map(s => <option key={s}>{s}</option>)}
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Responsável</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1">Responsável</label>
                                                     <input className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm outline-none focus:ring-2 focus:ring-indigo-300" placeholder="Nome" value={editingOsData.assigned_to ?? ''} onChange={e => setEditingOsData(p => ({ ...p, assigned_to: e.target.value }))} />
                                                 </div>
                                             </div>
                                             <div>
-                                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Data Agendada</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Data Agendada</label>
                                                 <input type="date" className="w-full rounded-[6px] border border-gray-200 px-3 h-9 text-sm bg-white outline-none" value={editingOsData.scheduled_date ?? ''} onChange={e => setEditingOsData(p => ({ ...p, scheduled_date: e.target.value }))} />
                                             </div>
                                             <div>
-                                                <label className="text-[9px] font-black text-gray-400 uppercase tracking-widest block mb-1">Notas Internas</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1">Notas Internas</label>
                                                 <textarea className="w-full rounded-xl border border-gray-200 px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-indigo-300 resize-none" rows={2} value={editingOsData.admin_notes ?? ''} onChange={e => setEditingOsData(p => ({ ...p, admin_notes: e.target.value }))} />
                                             </div>
                                             <div className="flex items-center justify-between">

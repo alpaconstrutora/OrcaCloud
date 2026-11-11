@@ -232,7 +232,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                 {/* Evolution Line Chart */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-[400px] flex flex-col">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Evolução de Horas no Período</h3>
+                        <h3 className="text-sm font-black text-slate-900">Evolução de Horas no Período</h3>
                         <Activity className="w-5 h-5 text-slate-300" />
                     </div>
                     <div className="flex-1">
@@ -260,7 +260,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                 {/* Worker Effort Bar Chart */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 h-[400px] flex flex-col">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Esforço por Colaborador (Horas)</h3>
+                        <h3 className="text-sm font-black text-slate-900">Esforço por Colaborador (Horas)</h3>
                         <Link2 className="w-5 h-5 text-slate-300" />
                     </div>
                     <div className="flex-1">
@@ -282,7 +282,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
 
                 {/* Project Distribution Pie Chart */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col min-h-[400px]">
-                    <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest mb-6">Distribuição por Obra</h3>
+                    <h3 className="text-sm font-black text-slate-900 mb-6">Distribuição por Obra</h3>
                     <div className="flex-1 flex flex-col md:flex-row items-center justify-center gap-8">
                         <div className="flex-1 h-[300px]">
                             <ResponsiveContainer width="100%" height="100%">
@@ -319,7 +319,7 @@ const LaborDashboard: React.FC<LaborDashboardProps> = ({ projects, onBack }) => 
                 {/* Recent Logs Table */}
                 <div className="bg-white p-6 rounded-3xl shadow-sm border border-slate-100 flex flex-col min-h-[400px]">
                     <div className="flex items-center justify-between mb-6">
-                        <h3 className="text-sm font-black text-slate-900 uppercase tracking-widest">Registros de Mão de Obra</h3>
+                        <h3 className="text-sm font-black text-slate-900">Registros de Mão de Obra</h3>
                         <div className="relative">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
                             <input 

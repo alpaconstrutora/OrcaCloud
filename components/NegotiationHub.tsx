@@ -177,7 +177,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                         <Gavel className="w-6 h-6" />
                     </div>
                     <div>
-                        <h3 className="text-lg font-black text-gray-900 uppercase tracking-tight">Sala de Negociação</h3>
+                        <h3 className="text-lg font-black text-gray-900">Sala de Negociação</h3>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Pedido {order.number} • {order.projectName}</p>
                     </div>
                 </div>
@@ -300,7 +300,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                 {/* Control Panel (Side) */}
                 <div className="w-80 border-l border-gray-100 p-6 bg-white space-y-6">
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-[0.2em] mb-4 flex items-center gap-2">
+                    <h4 className="text-xs font-black text-gray-400 mb-4 flex items-center gap-2">
                         <Tag className={`w-3 h-3 ${A.text}`} />
                         Sua Contraproposta
                     </h4>
@@ -308,7 +308,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                     <div className="space-y-4">
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Nova Data</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 px-1">Nova Data</label>
                                 <input
                                     type="date"
                                     value={proposedDate}
@@ -317,7 +317,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 />
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Método</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 px-1">Método</label>
                                 <select
                                     value={proposedPaymentMethod}
                                     onChange={(e) => setProposedPaymentMethod(e.target.value)}
@@ -333,7 +333,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                         <div className="grid grid-cols-2 gap-3">
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Condição</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 px-1">Condição</label>
                                 <select
                                     value={proposedTermType}
                                     onChange={(e) => setProposedTermType(e.target.value as any)}
@@ -344,7 +344,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                                 </select>
                             </div>
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Prazo (Dias)</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 px-1">Prazo (Dias)</label>
                                 <input
                                     type="number"
                                     value={proposedDays}
@@ -356,7 +356,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
 
                         {proposedTermType === 'Parcelado' && (
                             <div>
-                                <label className="block text-xs font-bold text-gray-400 uppercase mb-1 px-1">Nr. Parcelas</label>
+                                <label className="block text-xs font-semibold text-slate-500 mb-1 px-1">Nr. Parcelas</label>
                                 <input
                                     type="number"
                                     value={proposedInstallments}
@@ -367,7 +367,7 @@ const NegotiationHub: React.FC<NegotiationHubProps> = ({ order, currentUserEmail
                         )}
 
                         <div>
-                            <label className="block text-xs font-bold text-gray-400 uppercase mb-3 px-1">Preços dos Itens</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-3 px-1">Preços dos Itens</label>
                             <div className="space-y-3 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
                                 {proposedItems.map((item, idx) => (
                                     <div key={idx} className="p-3 bg-gray-50 rounded-xl border border-gray-100">

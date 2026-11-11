@@ -157,7 +157,7 @@ export const StockConsumptionModal: React.FC<Props> = ({
                         {/* Linhas de consumo */}
                         <div>
                             <div className="flex items-center justify-between mb-2">
-                                <label className="text-form-label text-gray-400 uppercase font-medium">Itens consumidos</label>
+                                <label className="text-xs font-semibold text-slate-500">Itens consumidos</label>
                                 <button
                                     onClick={addLine}
                                     className="flex items-center gap-1 text-button text-blue-400 hover:text-blue-300"

@@ -630,7 +630,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
 
                             {isLinkingPlanningOpen && (
                                 <div className="absolute top-full right-0 mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-gray-100 p-4 z-50 animate-in fade-in slide-in-from-top-2 duration-200">
-                                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-widest mb-3 px-1">Selecionar Planejamento</h4>
+                                    <h4 className="text-xs font-bold text-gray-400 mb-3 px-1">Selecionar Planejamento</h4>
                                     <div className="max-h-60 overflow-y-auto space-y-1">
                                         {projects
                                             .filter(p => p.settings?.classification === 'PLANEJAMENTO')
@@ -764,7 +764,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                 <div className="space-y-10">
                                     {/* Weather Conditions */}
                                     <section>
-                                        <h3 className="text-[14px] font-medium text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <h3 className="text-[14px] font-medium text-gray-800 mb-4 flex items-center gap-2">
                                             <CloudSun className="w-5 h-5 text-indigo-500" />
                                             Condições Climáticas e Previsão
                                         </h3>
@@ -826,7 +826,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                         sugestões (organizations[].resources) virou <datalist>: dentro da tabela um
                                         popover absoluto seria cortado pelo overflow. */}
                                     <section>
-                                        <h3 className="text-[14px] font-medium text-gray-800 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <h3 className="text-[14px] font-medium text-gray-800 mb-4 flex items-center gap-2">
                                             <MoreHorizontal className="w-5 h-5 text-indigo-500" />
                                             Efetivo de Mão de Obra
                                         </h3>
@@ -968,7 +968,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     {/* Activities */}
                                     <section>
                                         <div className="flex justify-between items-center mb-4">
-                                            <h3 className="text-[14px] font-medium text-gray-800 uppercase tracking-widest flex items-center gap-2">
+                                            <h3 className="text-[14px] font-medium text-gray-800 flex items-center gap-2">
                                                 <CheckCircle2 className="w-5 h-5 text-indigo-500" />
                                                 Atividades do Dia
                                             </h3>
@@ -1072,7 +1072,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                 <div className="space-y-8 animate-in slide-in-from-right-4 duration-300">
                                     <section className="bg-white rounded-3xl border border-gray-100 p-8 shadow-sm">
                                         <div className="flex justify-between items-center mb-6">
-                                            <h3 className="text-[14px] font-medium text-gray-800 uppercase tracking-widest flex items-center gap-2">
+                                            <h3 className="text-[14px] font-medium text-gray-800 flex items-center gap-2">
                                                 <Paperclip className="w-5 h-5 text-indigo-500" />
                                                 Relato Geral / Justificativas
                                             </h3>
@@ -1086,7 +1086,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     </section>
 
                                     <section className="bg-red-50/30 rounded-3xl border border-red-100 p-8 shadow-sm">
-                                        <h3 className="text-[14px] font-medium text-red-600 uppercase tracking-widest mb-4 flex items-center gap-2">
+                                        <h3 className="text-[14px] font-medium text-red-600 mb-4 flex items-center gap-2">
                                             <Ban className="w-5 h-5" />
                                             Impedimentos / Paralisações (opcional)
                                         </h3>

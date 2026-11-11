@@ -44,7 +44,7 @@ const BRL = (v: number | null | undefined) =>
 const inputCls = "w-full bg-slate-50 border border-slate-200 rounded-[6px] h-9 px-3 focus:border-indigo-500 focus:ring-0 text-slate-900 outline-none text-sm";
 // Área de texto não leva h-9: mantém a altura de várias linhas.
 const inputClsArea = "w-full bg-slate-50 border border-slate-200 rounded-[6px] p-3 focus:border-indigo-500 focus:ring-0 text-slate-900 outline-none text-sm";
-const labelCls = "text-[10px] text-slate-500 font-black uppercase tracking-widest";
+const labelCls = "text-xs font-semibold text-slate-500";
 
 // ── Org chart tree builder ──────────────────────────────────────────────────
 function buildOrgTree(roles: OrgRole[]): { trees: RoleNode[]; isolated: OrgRole[] } {
@@ -538,7 +538,7 @@ const LaborCargos: React.FC<LaborCargosProps> = ({ orgId, organizations, onRefre
             ) : companies.length === 0 ? (
                 <div className="bg-amber-50 border border-amber-200 rounded-2xl p-8 text-center text-amber-800 max-w-lg mx-auto">
                     <Building2 className="w-10 h-10 mx-auto mb-3 text-amber-500" />
-                    <h3 className="font-black text-sm uppercase tracking-wider">Nenhuma empresa cadastrada</h3>
+                    <h3 className="font-black text-sm">Nenhuma empresa cadastrada</h3>
                 </div>
             ) : activeTab === 'cargos' ? (
                 <>

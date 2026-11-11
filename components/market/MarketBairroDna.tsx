@@ -61,7 +61,7 @@ export default function MarketBairroDna({ bairro, tipos, stats: st, indicadores:
     <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-sm space-y-4">
       <div className="flex items-center justify-between border-b border-slate-100 pb-3">
         <div>
-          <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">DNA do Bairro™</h3>
+          <h3 className="text-xs font-black text-slate-400">DNA do Bairro™</h3>
           <h2 className="text-base font-black text-slate-900 tracking-tight">🏢 Bairro: {bairro.name}</h2>
           <p className="text-xs text-slate-500 font-semibold mt-0.5">Médias de {descricaoDosTipos(tipos)} — troque em "Tipos", no mapa.</p>
         </div>

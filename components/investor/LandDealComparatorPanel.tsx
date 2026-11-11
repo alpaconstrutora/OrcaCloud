@@ -153,7 +153,7 @@ const LandDealComparatorPanel: React.FC<Props> = ({ opportunityId, organizationI
         <div className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
-                    <h4 className="text-sm font-black text-gray-900 uppercase tracking-wider">Comparador de Modelos de Aquisição</h4>
+                    <h4 className="text-sm font-black text-gray-900">Comparador de Modelos de Aquisição</h4>
                     <p className="text-xs text-gray-500 mt-1">Compra direta × permuta física × permuta financeira × opção × sociedade.</p>
                 </div>
                 <Button variant="primary" size="sm" onClick={() => setEditing(emptyScenario(organizationId, opportunityId) as LandDealScenario)} className="gap-2">

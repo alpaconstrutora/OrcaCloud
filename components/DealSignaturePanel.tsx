@@ -94,7 +94,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
                     <FileSignature className="w-4 h-4" />
                 </div>
                 <div>
-                    <h4 className="text-sm font-black text-purple-900 uppercase tracking-wide">Assinatura Eletrônica</h4>
+                    <h4 className="text-sm font-black text-purple-900">Assinatura Eletrônica</h4>
                     <p className="text-xs text-purple-600">Powered by ZapSign — validade jurídica garantida</p>
                 </div>
                 {statusCfg && (
@@ -134,7 +134,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
                 /* Formulário de envio */
                 <div className="space-y-3">
                     <div>
-                        <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">Contrato (PDF)</label>
+                        <label className="block text-xs font-semibold text-purple-700 mb-1">Contrato (PDF)</label>
                         <label className="flex items-center gap-3 px-4 py-3 bg-white border border-purple-200 rounded-xl cursor-pointer hover:border-purple-400 transition-all">
                             <Upload className="w-4 h-4 text-purple-500 shrink-0" />
                             <span className="text-xs font-bold text-purple-700 truncate">
@@ -157,7 +157,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
                             )}
                             <div className="grid grid-cols-2 gap-3">
                                 <div>
-                                    <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">E-mail do signatário</label>
+                                    <label className="block text-xs font-semibold text-purple-700 mb-1">E-mail do signatário</label>
                                     <input
                                         type="email"
                                         value={row.email}
@@ -167,7 +167,7 @@ const DealSignaturePanel: React.FC<DealSignaturePanelProps> = ({ deal, client, c
                                     />
                                 </div>
                                 <div>
-                                    <label className="text-xs font-black text-purple-700 uppercase tracking-widest mb-1 block">WhatsApp (opcional)</label>
+                                    <label className="block text-xs font-semibold text-purple-700 mb-1">WhatsApp (opcional)</label>
                                     <input
                                         type="tel"
                                         value={row.phone}

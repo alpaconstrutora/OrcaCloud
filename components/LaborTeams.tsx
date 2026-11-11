@@ -104,7 +104,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
             {showForm && (
                 <div className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5 space-y-4">
                     <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-black text-indigo-900 uppercase tracking-widest">
+                        <h3 className="text-sm font-black text-indigo-900">
                             {editingTeam ? 'Editar Equipe' : 'Nova Equipe'}
                         </h3>
                         <button onClick={() => setShowForm(false)} className="p-1.5 bg-white/60 hover:bg-white rounded-lg transition-colors">
@@ -113,11 +113,11 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Nome da Equipe *</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Nome da Equipe *</label>
                             <input value={form.name} onChange={e => setForm(p => ({ ...p, name: e.target.value }))} className={inputCls} placeholder="Ex: Equipe A - Alvenaria" />
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Encarregado</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Encarregado</label>
                             <div className="relative">
                                 <select value={form.foreman_employee_id} onChange={e => setForm(p => ({ ...p, foreman_employee_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Nenhum</option>
@@ -127,7 +127,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Obra de Alocação</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Obra de Alocação</label>
                             <div className="relative">
                                 <select value={form.project_id} onChange={e => setForm(p => ({ ...p, project_id: e.target.value }))} className={inputCls + ' appearance-none pr-6'}>
                                     <option value="">Sem obra</option>
@@ -139,7 +139,7 @@ const LaborTeams: React.FC<LaborTeamsProps> = ({ teams, employees, projects, org
                             </div>
                         </div>
                         <div>
-                            <label className="text-[9px] font-black text-indigo-600 uppercase tracking-widest block mb-1">Descrição</label>
+                            <label className="block text-xs font-semibold text-indigo-600 mb-1">Descrição</label>
                             <input value={form.description} onChange={e => setForm(p => ({ ...p, description: e.target.value }))} className={inputCls} placeholder="Descrição ou especialidade..." />
                         </div>
                     </div>

@@ -107,7 +107,7 @@ export default function BankStatementImportDrawer({
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm p-4">
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                         <div className="flex flex-col gap-1">
-                            <label className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Conta bancária</label>
+                            <label className="text-xs font-semibold text-slate-500">Conta bancária</label>
                             <select
                                 value={selectedAccountId || ''}
                                 onChange={(e) => onSelectAccount(e.target.value)}
@@ -120,7 +120,7 @@ export default function BankStatementImportDrawer({
                             </select>
                         </div>
                         <div className="flex flex-col gap-1">
-                            <label className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold">Competência</label>
+                            <label className="text-xs font-semibold text-slate-500">Competência</label>
                             <div className="flex gap-2">
                                 <select
                                     value={year}

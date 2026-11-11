@@ -270,7 +270,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
 
         {/* Notas Manuais adicionais */}
         <div className="space-y-1.5">
-          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Notas Manuais ou Observações</label>
+          <label className="block text-xs font-semibold text-slate-500">Notas Manuais ou Observações</label>
           <textarea
             value={manualNotes}
             onChange={(e) => setManualNotes(e.target.value)}
@@ -281,7 +281,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
 
         {/* Fotos upload */}
         <div className="space-y-2">
-          <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Evidências Visuais (Fotos)</label>
+          <label className="block text-xs font-semibold text-slate-500">Evidências Visuais (Fotos)</label>
           <div className="flex flex-wrap gap-2.5">
             {/* Botão Câmera */}
             <label className="w-14 h-14 bg-[#070913] border border-white/5 hover:border-orange-500/30 rounded-xl flex items-center justify-center cursor-pointer transition-all active:scale-95 shrink-0">
@@ -350,7 +350,7 @@ const ReformasDiarios: React.FC<ReformasDiariosProps> = ({ userId }) => {
 
       {/* Histórico Cronológico de Diários */}
       <div className="space-y-3.5">
-        <h2 className="text-xs font-black uppercase tracking-widest text-slate-400">Histórico de Relatórios</h2>
+        <h2 className="text-xs font-black text-slate-400">Histórico de Relatórios</h2>
         {diarios.length === 0 ? (
           <div className="text-center py-8 border border-dashed border-white/5 rounded-3xl bg-white/5 px-4 text-xs text-slate-500">
             Nenhum diário registrado para esta reforma ainda.

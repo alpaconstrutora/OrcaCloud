@@ -335,7 +335,7 @@ export function DocumentMarkupViewer({ document: doc, userEmail, onClose }: Prop
       {/* Barra Superior */}
       <div className="bg-slate-900 border-b border-slate-800 px-6 py-4 flex flex-wrap items-center justify-between gap-4 text-white">
         <div className="space-y-0.5">
-          <h3 className="font-black uppercase tracking-wider text-sm">{doc.nome}</h3>
+          <h3 className="font-black text-sm">{doc.nome}</h3>
           <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest">
             Anotações de PDF • Revisão V{doc.active_version?.version_number || 1}
           </p>

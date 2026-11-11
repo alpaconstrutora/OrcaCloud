@@ -142,12 +142,12 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
           <span className="block text-xs font-black uppercase tracking-widest text-[#D47A55]">Nova Inspiração</span>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Título</label>
+              <label className="block text-xs font-semibold text-slate-500">Título</label>
               <input type="text" placeholder="Ex: Nicho de Madeira Iluminado" value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
             </div>
             <div className="space-y-1">
-              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Categoria</label>
+              <label className="block text-xs font-semibold text-slate-500">Categoria</label>
               <select value={novaCat} onChange={e => setNovaCat(e.target.value)}
                 className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
                 {Object.entries(CAT_LABELS).filter(([k]) => k !== 'TODOS').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
@@ -155,12 +155,12 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
             </div>
           </div>
           <div className="space-y-1">
-            <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Link da Imagem (URL)</label>
+            <label className="block text-xs font-semibold text-slate-500">Link da Imagem (URL)</label>
             <input type="url" placeholder="https://images.unsplash.com/..." value={novaUrl} onChange={e => setNovaUrl(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
           </div>
           <div className="space-y-1">
-            <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Descrição / Notas técnicas</label>
+            <label className="block text-xs font-semibold text-slate-500">Descrição / Notas técnicas</label>
             <textarea rows={2} placeholder="Descreva materiais, paleta de cores ou marcenaria..." value={novaDesc} onChange={e => setNovaDesc(e.target.value)}
               className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] resize-none" />
           </div>
@@ -270,7 +270,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
             </div>
 
             <div className="space-y-1.5">
-              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Selecione o Projeto</label>
+              <label className="block text-xs font-semibold text-slate-500">Selecione o Projeto</label>
               {projetos.length === 0 ? (
                 <span className="block text-xs text-slate-400 italic">Nenhum projeto cadastrado no banco.</span>
               ) : (

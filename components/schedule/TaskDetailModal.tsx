@@ -151,7 +151,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Localização na WBS */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <Layers className="w-3.5 h-3.5" /> Localização
                         </h3>
                         <div className="grid grid-cols-1 gap-2">
@@ -163,7 +163,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Cronograma — editável */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <Calendar className="w-3.5 h-3.5" /> Cronograma
                         </h3>
                         <div className="grid grid-cols-2 gap-3">
@@ -258,7 +258,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Progresso — editável */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <TrendingUp className="w-3.5 h-3.5" /> Progresso
                         </h3>
                         <div className="bg-gray-50 rounded-xl border border-gray-100 p-3 space-y-2">
@@ -289,7 +289,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Custos */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <TrendingDown className="w-3.5 h-3.5" /> Custos
                         </h3>
                         <div className="grid grid-cols-2 gap-3">
@@ -316,7 +316,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     {/* Medição de Empreitada — só quando há contrato vinculado a este item */}
                     {measurement && measurement.measured > 0 && (
                         <section>
-                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                                 <CheckCircle2 className="w-3.5 h-3.5" /> Medição (Empreitada)
                             </h3>
                             <div className="grid grid-cols-3 gap-2 bg-indigo-50/50 border border-indigo-100 rounded-xl p-3">
@@ -329,7 +329,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Item SINAPI */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <Package className="w-3.5 h-3.5" /> Item
                         </h3>
                         <div className="bg-gray-50 border border-gray-100 rounded-xl p-3 space-y-2">
@@ -353,7 +353,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     {/* Restrição */}
                     {itemSchedule?.constraintType && itemSchedule.constraintType !== 'ASAP' && (
                         <section>
-                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                                 <Clock className="w-3.5 h-3.5" /> Restrição
                             </h3>
                             <div className="bg-amber-50 border border-amber-100 rounded-xl p-3 space-y-2">
@@ -368,7 +368,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
                     {/* Predecessores — editável via PredecessorModal */}
                     <section>
                         <div className="flex items-center justify-between mb-3">
-                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest">
+                            <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400">
                                 <Link2 className="w-3.5 h-3.5" /> Predecessores ({itemSchedule?.predecessors?.length || 0})
                             </h3>
                             <button
@@ -413,7 +413,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* Equipe — editável */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <Users className="w-3.5 h-3.5" /> Equipe
                         </h3>
                         <div className="grid grid-cols-3 gap-3">
@@ -461,7 +461,7 @@ export const TaskDetailModal: React.FC<TaskDetailModalProps> = ({
 
                     {/* IDs internos */}
                     <section>
-                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 uppercase tracking-widest mb-3">
+                        <h3 className="flex items-center gap-1.5 text-xs font-black text-gray-400 mb-3">
                             <Hash className="w-3.5 h-3.5" /> Referência
                         </h3>
                         <div className="grid grid-cols-1 gap-1.5 text-xs font-mono text-gray-400 bg-gray-50 border border-gray-100 rounded-xl p-3">

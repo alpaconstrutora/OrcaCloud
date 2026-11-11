@@ -425,7 +425,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         <div className="space-y-4 flex-1">
           {/* Modelos Rápidos por Profissão */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Carregar Modelo Rápido</label>
+            <label className="block text-xs font-semibold text-slate-500">Carregar Modelo Rápido</label>
             <select
               value={selectedTemplateIndex}
               onChange={(e) => {
@@ -477,7 +477,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Seletor de Cliente */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Cliente</label>
+            <label className="block text-xs font-semibold text-slate-500">Cliente</label>
             {/* Drawer padrão do app; "Cadastrar novo" deixou de ser uma <option> disfarçada
                 e virou o botão ao lado, que abre o formulário inline abaixo. */}
             <div className="flex items-center gap-2">
@@ -533,7 +533,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           {/* Descrição do Serviço */}
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Serviço a ser realizado</label>
+              <label className="block text-xs font-semibold text-slate-500">Serviço a ser realizado</label>
               <button
                 type="button"
                 onClick={handleVoiceInput}
@@ -562,7 +562,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
             </span>
             <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unidade</label>
+                <label className="block text-xs font-semibold text-slate-500">Unidade</label>
                 <input
                   type="text"
                   placeholder="Ex: m², un, h"
@@ -572,7 +572,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Qtd</label>
+                <label className="block text-xs font-semibold text-slate-500">Qtd</label>
                 <input
                   type="number"
                   placeholder="Ex: 100"
@@ -590,7 +590,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unitário (R$)</label>
+                <label className="block text-xs font-semibold text-slate-500">Unitário (R$)</label>
                 <MoneyCentsInput
                   placeholder="Ex: 200,00"
                   value={valorUnitario}
@@ -618,7 +618,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Valor */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Valor Cobrado (R$)</label>
+            <label className="block text-xs font-semibold text-slate-500">Valor Cobrado (R$)</label>
             <MoneyCentsInput
               placeholder="0,00"
               value={valor}
@@ -630,7 +630,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
           <div className="grid grid-cols-2 gap-4">
             {/* Validade */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Validade (dias)</label>
+              <label className="block text-xs font-semibold text-slate-500">Validade (dias)</label>
               <input
                 type="number"
                 value={validadeDias}
@@ -641,7 +641,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
             {/* Garantia */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Garantia (dias)</label>
+              <label className="block text-xs font-semibold text-slate-500">Garantia (dias)</label>
               <input
                 type="number"
                 value={garantiaDias}
@@ -653,7 +653,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Observações */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-black uppercase tracking-widest text-slate-500">Observações adicionais</label>
+            <label className="block text-xs font-semibold text-slate-500">Observações adicionais</label>
             <textarea
               rows={2}
               placeholder="Ex: Não incluso quebra de alvenaria. Chave Pix para pagamento no rodapé do documento."

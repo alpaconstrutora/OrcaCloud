@@ -1347,7 +1347,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                 {/* Dados Técnicos Dinâmicos por Tipo de Obra */}
                 {formData.tipoObra && formData.tipoObra !== 'outro' && (
                   <div className="border border-blue-100 rounded-xl bg-blue-50/30 p-5 space-y-4">
-                    <h3 className="text-xs font-bold text-blue-600 uppercase tracking-widest flex items-center gap-2">
+                    <h3 className="text-xs font-bold text-blue-600 flex items-center gap-2">
                       <Settings2 className="w-4 h-4" />
                       Dados Técnicos — {obraTypes.find(t => t.slug === formData.tipoObra)?.name ?? TIPO_OBRA_LABELS[formData.tipoObra as TipoObra]}
                     </h3>
@@ -1608,7 +1608,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
                 {/* Datas Reais */}
                 <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
                     <Calendar className="w-4 h-4" />
                     Datas
                   </h3>
@@ -1642,7 +1642,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
                 {/* Equipe de Campo */}
                 <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
                     <Users className="w-4 h-4" />
                     Equipe de Campo
                   </h3>
@@ -1666,7 +1666,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
                 {/* Registro Documental */}
                 <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
                     <FileText className="w-4 h-4" />
                     Registro Documental
                   </h3>
@@ -1794,7 +1794,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
 
                 {obraTab === 'endereco' && (<div className="space-y-6">
                 <div>
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
                     <MapPin className="w-4 h-4" />
                     Localização da Obra
                   </h3>
@@ -1849,7 +1849,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                 {obraTab === 'financeiro' && (<div className="space-y-6">
                 {/* Gestão Financeira */}
                 <div>
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
                     <TrendingUp className="w-4 h-4" />
                     Gestão Financeira
                   </h3>
@@ -1901,7 +1901,7 @@ const ProjectModal: React.FC<ProjectModalProps> = ({ isOpen, onClose, onSubmit, 
                     Financeira. Uma obra pode ter VÁRIOS: a coluna `project_id`
                     não tem índice único (20270907000000). */}
                 <div className="border-t border-gray-100 pt-6">
-                  <h3 className="text-sm font-bold text-gray-400 uppercase tracking-widest mb-4 flex items-center gap-2">
+                  <h3 className="text-sm font-bold text-gray-400 mb-4 flex items-center gap-2">
                     <Layers className="w-4 h-4" />
                     Centros de Custo
                   </h3>

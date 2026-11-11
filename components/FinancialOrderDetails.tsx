@@ -152,7 +152,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
 
             return (
                 <div className="space-y-3">
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Cronograma de Parcelas</h4>
+                    <h4 className="text-xs font-black text-gray-400 px-1">Cronograma de Parcelas</h4>
                     <div className="bg-gray-50 rounded-2xl border border-gray-100 divide-y divide-gray-200 overflow-hidden">
                         {Array.from({ length: count }).map((_, i) => {
                             const dueDate = new Date(baseDate);
@@ -182,7 +182,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
 
             return (
                 <div className="space-y-3">
-                    <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest px-1">Condição À Vista</h4>
+                    <h4 className="text-xs font-black text-gray-400 px-1">Condição À Vista</h4>
                     <div className="bg-emerald-50/50 p-6 rounded-2xl border border-emerald-100 flex items-center justify-between">
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-white rounded-xl border border-emerald-100">
@@ -209,7 +209,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                         <Wallet className="w-6 h-6 text-indigo-600" />
                     </div>
                     <div>
-                        <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight">Financeiro do Pedido</h2>
+                        <h2 className="text-xl font-black text-gray-900">Financeiro do Pedido</h2>
                         <p className="text-xs font-bold text-gray-400 uppercase tracking-widest mt-0.5">#{order.number || order.id.slice(0, 8)} • {fmt(totalValue)}</p>
                     </div>
                 </div>
@@ -223,7 +223,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                     {/* Info Card */}
                     <div className="bg-white p-8 rounded-[2rem] border border-gray-100 shadow-sm space-y-4">
-                        <h3 className="text-xs font-black text-gray-400 uppercase tracking-widest">Resumo do Pedido</h3>
+                        <h3 className="text-xs font-black text-gray-400">Resumo do Pedido</h3>
                         <div className="space-y-4">
                             <div className="flex justify-between items-center py-2 border-b border-gray-50">
                                 <span className="text-xs font-bold text-gray-500 uppercase tracking-widest">Status de Suprimentos</span>
@@ -246,7 +246,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                     <div className={`p-8 rounded-[2rem] border transition-all duration-500 flex flex-col justify-between ${isApproved ? 'bg-emerald-50/30 border-emerald-100 shadow-emerald-50/50' : 'bg-rose-50/30 border-rose-100 shadow-rose-50/50'}`}>
                         <div className="flex justify-between items-start">
                             <div>
-                                <h3 className={`text-xs font-black uppercase tracking-widest mb-1 ${isApproved ? 'text-emerald-600' : 'text-rose-600'}`}>Status de Aprovação</h3>
+                                <h3 className={`text-xs font-black mb-1 ${isApproved ? 'text-emerald-600' : 'text-rose-600'}`}>Status de Aprovação</h3>
                                 <p className="text-xl font-black text-gray-900 tracking-tight">{isApproved ? 'APROVADO P/ PAGAMENTO' : 'AGUARDANDO APROVAÇÃO'}</p>
                             </div>
                             <div className={`p-3 rounded-2xl ${isApproved ? 'bg-white text-emerald-500 border border-emerald-100' : 'bg-white text-rose-500 border border-rose-100'}`}>
@@ -283,13 +283,13 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
 
                 {/* Allocation Section */}
                 <div className="space-y-6">
-                    <h3 className="text-xs font-black text-gray-900 uppercase tracking-[0.2em] flex items-center gap-3">
+                    <h3 className="text-xs font-black text-gray-900 flex items-center gap-3">
                         <Filter className="w-4 h-4 text-indigo-600" />
                         Alocação do Gasto
                     </h3>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                         <div className="space-y-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Conta de Pagamento</label>
+                            <label className="text-xs font-semibold text-slate-500 px-1">Conta de Pagamento</label>
                             <div className="relative group">
                                 <Building2 className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-indigo-500 transition-colors pointer-events-none" />
                                 <select
@@ -306,7 +306,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                             </div>
                         </div>
                         <div className="space-y-3">
-                            <label className="text-xs font-black text-gray-400 uppercase tracking-[0.15em] px-1">Centro de Custo</label>
+                            <label className="text-xs font-semibold text-slate-500 px-1">Centro de Custo</label>
                             {/* valueField="name": o pedido guarda o centro de custo em TEXTO
                                 (legado); o CostCenterSelect grava o nome achatado "Grupo > Filho",
                                 o mesmo que a lista devolve. */}
@@ -332,7 +332,7 @@ const FinancialOrderDetails: React.FC<FinancialOrderDetailsProps> = ({ orderId, 
                             <div className="p-3 bg-white rounded-xl shadow-sm">
                                 <AlertCircle className="w-6 h-6 text-amber-500" />
                             </div>
-                            <h4 className="text-sm font-black text-amber-900 uppercase tracking-widest leading-tight">Nota Gerencial</h4>
+                            <h4 className="text-sm font-black text-amber-900 leading-tight">Nota Gerencial</h4>
                         </div>
                         <p className="text-xs font-bold text-amber-800 leading-relaxed italic">
                             "As parcelas listadas ao lado são calculadas automaticamente com base na entrega do pedido. A aprovação financeira é necessária para liberar o pagamento no fluxo de caixa real."

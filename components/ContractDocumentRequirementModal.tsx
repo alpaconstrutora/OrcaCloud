@@ -95,12 +95,12 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                     <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>
                 )}
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Documento</label>
+                    <label className="text-xs font-semibold text-slate-500">Documento</label>
                     <input type="text" placeholder="Ex: CND, FGTS, ART/RRT, Apólice…" value={document} onChange={e => setDocument(e.target.value)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Fase Exigida</label>
+                    <label className="text-xs font-semibold text-slate-500">Fase Exigida</label>
                     <select value={phase} onChange={e => setPhase(e.target.value as DocumentRequirementPhase)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500">
                         {(Object.keys(PHASE_LABELS) as DocumentRequirementPhase[]).map(p => (
@@ -109,7 +109,7 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                     </select>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Validade do Último Envio</label>
+                    <label className="text-xs font-semibold text-slate-500">Validade do Último Envio</label>
                     <input type="date" value={lastValidUntil} onChange={e => setLastValidUntil(e.target.value)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                 </div>
@@ -123,7 +123,7 @@ const ContractDocumentRequirementModal: React.FC<ContractDocumentRequirementModa
                 </label>
                 {isSstCritical && (
                     <div className="space-y-2">
-                        <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Prazo de Comunicação (horas)</label>
+                        <label className="text-xs font-semibold text-slate-500">Prazo de Comunicação (horas)</label>
                         <input type="number" min="0" placeholder="Ex: 24" value={communicationDeadlineHours} onChange={e => setCommunicationDeadlineHours(e.target.value)}
                             className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     </div>

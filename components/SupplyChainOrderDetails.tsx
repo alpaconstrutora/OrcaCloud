@@ -1314,7 +1314,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <div className="flex flex-col md:flex-row gap-2.5 md:items-center">
                             <div className="flex items-center gap-2 px-2 shrink-0">
                                 <Package className={`w-4 h-4 shrink-0 ${A.chipAltIcon}`} />
-                                <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Itens do pedido</h3>
+                                <h3 className="text-xs font-semibold text-gray-500">Itens do pedido</h3>
                                 {/* Com filtro ligado, a contagem diz "N de M" — é o que
                                     impede a tabela de parecer curta sem explicação. */}
                                 <span className="text-sm font-normal text-gray-400 whitespace-nowrap">
@@ -1588,7 +1588,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     gravaria nada e falharia calado. */}
                 {!ehComprador && abaDetalhe === 'dados' && (
                     <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
                             <FileText className={`w-4 h-4 ${A.icon}`} />
                             Dados gerais
                         </h3>
@@ -1661,7 +1661,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                                 resolvida, para o fornecedor ver que o dado
                                 deveria estar ali e cobrar o comprador. */}
                             <div className="pt-5 border-t border-gray-100">
-                                <h4 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                                <h4 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
                                     <Building2 className={`w-4 h-4 ${A.icon}`} />
                                     Comprador
                                 </h4>
@@ -1715,7 +1715,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     formulário estava atrás do gate. */}
                 {!ehComprador && abaDetalhe === 'financeiro' && (
                     <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-4 flex items-center gap-2">
+                        <h3 className="text-xs font-semibold text-gray-500 mb-4 flex items-center gap-2">
                             <HandCoins className={`w-4 h-4 ${A.icon}`} />
                             Condições de pagamento
                         </h3>
@@ -1851,7 +1851,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     2026-10-19. Escala compacta do §16, como o resto do cromo. */}
                 {abaDetalhe === 'recebimento' && subAbaRecebimento === 'rastreamento' && (
                     <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-2 flex items-center gap-2">
+                        <h3 className="text-xs font-semibold text-gray-500 mb-2 flex items-center gap-2">
                             <Truck className={`w-4 h-4 ${A.icon}`} />
                             Rastreamento logístico
                         </h3>
@@ -2083,7 +2083,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         {receipts.map((receipt, rIdx) => (
                             <div key={receipt.id} className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                                 <div className="flex items-center justify-between">
-                                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                                         {receipt.status === 'Recebido' ? (
                                             <CheckCircle2 className="w-4 h-4 text-green-500" />
                                         ) : receipt.status === 'Divergência' ? (
@@ -2193,7 +2193,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-4">
                         <div className="flex items-center gap-2">
                             <AlertTriangle className="w-4 h-4 text-amber-500" />
-                            <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest">
+                            <h3 className="text-xs font-black text-gray-900">
                                 Divergências
                             </h3>
                             <span className="ml-auto px-2 py-0.5 rounded-lg text-xs font-black bg-amber-100 text-amber-700">
@@ -2314,7 +2314,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     junto do chat. Fora das abas, apareciam repetidos nas quatro. */}
                 {abaDetalhe === 'comunicacao' && notifLogs.length > 0 && (
                     <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
-                        <h3 className="text-xs font-black text-gray-900 uppercase tracking-widest mb-4 flex items-center gap-3">
+                        <h3 className="text-xs font-black text-gray-900 mb-4 flex items-center gap-3">
                             <div className={`p-2 rounded-xl ${A.chipAlt}`}>
                                 <Zap className={`w-4 h-4 ${A.chipAltIcon}`} />
                             </div>
@@ -2396,7 +2396,7 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         <div className="absolute -top-10 -right-10 w-24 h-24 bg-white/10 rounded-full blur-2xl" />
 
                         <div>
-                            <h3 className="text-xs font-semibold text-white/60 uppercase tracking-wider mb-1">Status interno</h3>
+                            <h3 className="text-xs font-semibold text-white/60 mb-1">Status interno</h3>
                             <p className="text-sm font-medium leading-snug">
                                 Este pedido encontra-se no estágio de <span className="bg-white/20 px-2 py-0.5 rounded-md text-white">{rotuloStatusLogistico(order.status, pedidoFob)}</span>.
                             </p>

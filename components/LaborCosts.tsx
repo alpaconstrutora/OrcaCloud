@@ -199,7 +199,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, onNewEmployee
             {hasAnyData ? (
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6">
                     <div className="flex items-center justify-between mb-5">
-                        <h3 className="text-sm font-black text-slate-700 uppercase tracking-widest">
+                        <h3 className="text-sm font-black text-slate-700">
                             Custo de Mão de Obra {view === 'employees' ? 'por Colaborador' : view === 'projects' ? 'por Obra' : 'por Equipe'}
                         </h3>
                         <div className="flex items-center gap-4 text-xs font-black uppercase tracking-widest text-slate-400">
@@ -233,7 +233,7 @@ const LaborCosts: React.FC<LaborCostsProps> = ({ employees, orgId, onNewEmployee
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-16 text-center">
                     <div className="max-w-md mx-auto">
                         <DollarSign className="w-16 h-16 mx-auto mb-6 text-slate-200" />
-                        <h3 className="text-xl font-black text-slate-900 uppercase tracking-tight">Nenhum colaborador ativo</h3>
+                        <h3 className="text-xl font-black text-slate-900">Nenhum colaborador ativo</h3>
                         <p className="text-sm text-slate-500 mt-2 mb-8">
                             Cadastre seus colaboradores com custo diário ou salário para começar a acompanhar os custos de mão de obra.
                         </p>

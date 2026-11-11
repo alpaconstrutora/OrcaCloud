@@ -195,7 +195,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </span>
 
           <div className="space-y-1.5">
-            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Nome Comercial / Fantasia</label>
+            <label className="block text-xs font-semibold text-slate-500">Nome Comercial / Fantasia</label>
             <input
               type="text"
               placeholder="Ex: Alpa Refrigeração & Climatização"
@@ -208,7 +208,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Profissão Principal</label>
+            <label className="block text-xs font-semibold text-slate-500">Profissão Principal</label>
             <select
               value={profissao}
               onChange={(e) => setProfissao(e.target.value)}
@@ -232,7 +232,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
           <div className="grid grid-cols-3 gap-2.5">
             <div className="col-span-1 space-y-1.5">
-              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Tipo de Chave</label>
+              <label className="block text-xs font-semibold text-slate-500">Tipo de Chave</label>
               <select
                 value={pixKeyType}
                 onChange={(e) => setPixKeyType(e.target.value as ProPixKeyType)}
@@ -246,7 +246,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               </select>
             </div>
             <div className="col-span-2 space-y-1.5">
-              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Chave PIX</label>
+              <label className="block text-xs font-semibold text-slate-500">Chave PIX</label>
               <input
                 type="text"
                 placeholder="Insira a chave pix"
@@ -268,7 +268,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           </span>
 
           <div className="space-y-1.5">
-            <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Mensagem / Rodapé do PDF</label>
+            <label className="block text-xs font-semibold text-slate-500">Mensagem / Rodapé do PDF</label>
             <textarea
               rows={2}
               placeholder="Ex: Obrigado pela preferência! Garantia de 90 dias conforme CDC."
@@ -293,7 +293,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             </span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Título do Modelo</label>
+                <label className="block text-xs font-semibold text-slate-500">Título do Modelo</label>
                 <input
                   type="text"
                   placeholder="Ex: Instalação de Ar-condicionado de Janela"
@@ -303,7 +303,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Valor Unitário / Estimado (R$)</label>
+                <label className="block text-xs font-semibold text-slate-500">Valor Unitário / Estimado (R$)</label>
                 <input
                   type="text"
                   placeholder="Ex: 350,00"
@@ -315,7 +315,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Unidade de Medida</label>
+                <label className="block text-xs font-semibold text-slate-500">Unidade de Medida</label>
                 <input
                   type="text"
                   placeholder="Ex: Área (m2), metro, unidade"
@@ -325,7 +325,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Quantidade Padrão</label>
+                <label className="block text-xs font-semibold text-slate-500">Quantidade Padrão</label>
                 <input
                   type="number"
                   placeholder="Ex: 100"
@@ -349,7 +349,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             )}
 
             <div className="space-y-1">
-              <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Descrição Detalhada do Serviço</label>
+              <label className="block text-xs font-semibold text-slate-500">Descrição Detalhada do Serviço</label>
               <textarea
                 rows={2}
                 placeholder="Descreva o que está incluso no serviço..."
@@ -385,7 +385,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Seus Modelos ({templatesCustom.length})</label>
+              <label className="block text-xs font-semibold text-slate-500">Seus Modelos ({templatesCustom.length})</label>
               <div className="divide-y divide-slate-100 bg-slate-50/30 rounded-2xl border border-slate-200/40 overflow-hidden animate-fadeIn">
                 {templatesCustom.map((t) => {
                   const hasUnitInfo = t.unidade && t.quantidade;

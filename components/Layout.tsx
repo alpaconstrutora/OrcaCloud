@@ -1736,7 +1736,7 @@ const Layout: React.FC<LayoutProps> = ({
               <Bell className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1 min-w-0">
-              <h4 className="text-sm font-black uppercase tracking-tight mb-1 truncate">{toast.title}</h4>
+              <h4 className="text-sm font-black mb-1 truncate">{toast.title}</h4>
               <p className="text-xs font-medium text-indigo-100 leading-relaxed">{toast.message}</p>
             </div>
             <button onClick={() => setToast(null)} className="p-1 hover:bg-white/10 rounded-lg transition-colors">

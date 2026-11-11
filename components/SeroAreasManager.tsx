@@ -77,7 +77,7 @@ export const SeroAreasManager: React.FC<SeroAreasManagerProps> = ({ organization
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <div>
-          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Tipo de Área</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo de Área</label>
           <select
             value={form.area_type}
             onChange={e => setForm(prev => ({ ...prev, area_type: e.target.value as 'principal' | 'complementar' }))}
@@ -90,7 +90,7 @@ export const SeroAreasManager: React.FC<SeroAreasManagerProps> = ({ organization
 
         {form.area_type === 'complementar' && (
           <div>
-            <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Cobertura</label>
+            <label className="block text-xs font-semibold text-slate-500 mb-1">Cobertura</label>
             <select
               value={form.is_covered ? 'sim' : 'nao'}
               onChange={e => setForm(prev => ({ ...prev, is_covered: e.target.value === 'sim' }))}
@@ -103,7 +103,7 @@ export const SeroAreasManager: React.FC<SeroAreasManagerProps> = ({ organization
         )}
 
         <div>
-          <label className="block text-xs font-bold text-gray-700 uppercase tracking-wide mb-1">Área Total (m²)</label>
+          <label className="block text-xs font-semibold text-slate-500 mb-1">Área Total (m²)</label>
           <input
             type="number"
             value={form.total_area}

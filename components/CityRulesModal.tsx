@@ -220,7 +220,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
         {/* Header */}
         <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-slate-900 text-white">
           <div>
-            <h3 className="text-sm font-black uppercase tracking-wider">
+            <h3 className="text-sm font-black">
               ⚙️ Regras de Vocação Imobiliária
             </h3>
             <p className="text-xs text-slate-400 font-semibold mt-0.5">
@@ -252,13 +252,13 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
 
           {/* Seção de Limites de Preço/m² */}
           <div className="space-y-3">
-            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
+            <h4 className="text-xs font-black text-slate-400 border-b border-slate-100 pb-1.5">
               Limites de Transição por Padrão Construtivo (R$ / m²)
             </h4>
             
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-slate-50 p-4 rounded-2xl">
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
                   Econômico ➜ Médio
                 </label>
                 <div className="relative rounded-xl shadow-sm">
@@ -275,7 +275,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
                   Médio ➜ Médio-Alto
                 </label>
                 <div className="relative rounded-xl shadow-sm">
@@ -292,7 +292,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
                   Médio-Alto ➜ Alto Padrão
                 </label>
                 <div className="relative rounded-xl shadow-sm">
@@ -309,7 +309,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
               </div>
 
               <div>
-                <label className="block text-xs font-black text-slate-500 uppercase tracking-wider mb-1">
+                <label className="block text-xs font-semibold text-slate-500 mb-1">
                   Alto Padrão ➜ Luxo
                 </label>
                 <div className="relative rounded-xl shadow-sm">
@@ -329,7 +329,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
 
           {/* Abas e Mix de Tipologias */}
           <div className="space-y-4">
-            <h4 className="text-xs font-black uppercase tracking-widest text-slate-400 border-b border-slate-100 pb-1.5">
+            <h4 className="text-xs font-black text-slate-400 border-b border-slate-100 pb-1.5">
               Personalização do Mix de Tipologias Recomendadas
             </h4>
 
@@ -419,7 +419,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                         >
                           {/* Nome */}
                           <div className="col-span-1 md:col-span-6">
-                            <label className="block md:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                            <label className="block text-xs font-semibold text-slate-500 md:hidden mb-1">
                               Nome da Tipologia
                             </label>
                             <input
@@ -433,7 +433,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
 
                           {/* Área */}
                           <div className="col-span-1 md:col-span-3">
-                            <label className="block md:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                            <label className="block text-xs font-semibold text-slate-500 md:hidden mb-1">
                               Área Privativa (m²)
                             </label>
                             <div className="relative rounded-lg shadow-sm">
@@ -452,7 +452,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
 
                           {/* Mix */}
                           <div className="col-span-1 md:col-span-2">
-                            <label className="block md:hidden text-[9px] font-black text-slate-400 uppercase tracking-wider mb-1">
+                            <label className="block text-xs font-semibold text-slate-500 md:hidden mb-1">
                               Mix Recomendado (%)
                             </label>
                             <div className="relative rounded-lg shadow-sm">

@@ -136,7 +136,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
                     <div className="bg-white rounded-2xl border border-gray-100 overflow-hidden shadow-sm">
                         <div className="px-6 py-4 bg-gray-50/50 border-b border-gray-100 flex items-center gap-3">
                             <Package className="w-4 h-4 text-indigo-500" />
-                            <h4 className="text-xs font-black text-gray-900 uppercase tracking-widest">Itens do Pedido</h4>
+                            <h4 className="text-xs font-black text-gray-900">Itens do Pedido</h4>
                             <span className="ml-auto text-xs font-bold text-gray-400">
                                 Informe a quantidade efetivamente recebida por item
                             </span>
@@ -218,7 +218,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
 
                     {/* Photo Upload */}
                     <div className="space-y-2">
-                        <label className="text-form-label font-black text-gray-400 uppercase tracking-widest">Foto do Comprovante / Carga</label>
+                        <label className="text-xs font-semibold text-slate-500">Foto do Comprovante / Carga</label>
                         <div className="relative group">
                             <input
                                 type="file"
@@ -243,7 +243,7 @@ const OrderReceiptModal: React.FC<OrderReceiptModalProps> = ({ order, onClose, o
 
                     {/* Notes */}
                     <div className="space-y-2">
-                        <label className="text-form-label font-black text-gray-400 uppercase tracking-widest">Observações Adicionais</label>
+                        <label className="text-xs font-semibold text-slate-500">Observações Adicionais</label>
                         <textarea
                             value={receiptNotes}
                             onChange={e => setReceiptNotes(e.target.value)}

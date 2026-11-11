@@ -82,7 +82,7 @@ export const InvestmentSimulator: React.FC<InvestmentSimulatorProps> = ({
                 {/* Inputs do Simulador */}
                 <div className="space-y-4">
                     <div>
-                        <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-2">
+                        <label className="block text-xs font-semibold text-slate-500 mb-2">
                             Valor do Aporte
                         </label>
                         <div className="relative">
@@ -112,7 +112,7 @@ export const InvestmentSimulator: React.FC<InvestmentSimulatorProps> = ({
 
                     <div className="grid grid-cols-2 gap-3">
                         <div>
-                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                                 Modalidade
                             </label>
                             <select
@@ -125,7 +125,7 @@ export const InvestmentSimulator: React.FC<InvestmentSimulatorProps> = ({
                             </select>
                         </div>
                         <div>
-                            <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-1.5">
+                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                                 Prazo Simulado
                             </label>
                             <select

@@ -122,7 +122,7 @@ const PedidoParcelasComprador: React.FC<{ pedido: PurchaseOrder }> = ({ pedido }
         <div className="bg-white p-6 rounded-[10px] shadow-sm border border-gray-100 space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
                 <div>
-                    <h3 className="text-sm font-bold text-gray-900 uppercase tracking-wider flex items-center gap-2">
+                    <h3 className="text-sm font-bold text-gray-900 flex items-center gap-2">
                         <Receipt className="w-4 h-4 text-emerald-500" />
                         Parcelas no Contas a Pagar
                     </h3>

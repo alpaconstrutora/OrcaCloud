@@ -69,7 +69,7 @@ const ContractRetentionReleaseModal: React.FC<ContractRetentionReleaseModalProps
                     <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">{error}</div>
                 )}
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Marco</label>
+                    <label className="text-xs font-semibold text-slate-500">Marco</label>
                     <select
                         value={kind}
                         onChange={e => setKind(e.target.value as RetentionReleaseKind)}
@@ -81,7 +81,7 @@ const ContractRetentionReleaseModal: React.FC<ContractRetentionReleaseModalProps
                     </select>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Valor a Liberar (R$)</label>
+                    <label className="text-xs font-semibold text-slate-500">Valor a Liberar (R$)</label>
                     <input type="text" placeholder="0,00" value={amount} onChange={e => setAmount(e.target.value)}
                         className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500" />
                     <div className="flex gap-2 pt-1">
@@ -91,7 +91,7 @@ const ContractRetentionReleaseModal: React.FC<ContractRetentionReleaseModalProps
                     </div>
                 </div>
                 <div className="space-y-2">
-                    <label className="text-form-label font-medium text-gray-400 uppercase tracking-widest">Observações</label>
+                    <label className="text-xs font-semibold text-slate-500">Observações</label>
                     <textarea rows={3} value={notes} onChange={e => setNotes(e.target.value)}
                         className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-xl text-sm font-medium focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 resize-none" />
                 </div>

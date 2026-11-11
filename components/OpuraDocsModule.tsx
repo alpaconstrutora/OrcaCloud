@@ -2699,7 +2699,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             {/* Distribuição por Categoria */}
             <div className="lg:col-span-1 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
               <div>
-                <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">Distribuição por Categoria</h4>
+                <h4 className="font-black text-slate-800 text-sm">Distribuição por Categoria</h4>
                 <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Volume de documentos no acervo</p>
               </div>
 
@@ -2726,7 +2726,7 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
             <div className="lg:col-span-2 bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-6">
               <div className="flex items-center justify-between">
                 <div>
-                  <h4 className="font-black text-slate-800 text-sm uppercase tracking-wide">Documentos Críticos & Alertas</h4>
+                  <h4 className="font-black text-slate-800 text-sm">Documentos Críticos & Alertas</h4>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Ações corretivas pendentes</p>
                 </div>
                 <span className="text-sm font-normal text-red-600">

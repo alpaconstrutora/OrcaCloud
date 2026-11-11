@@ -207,7 +207,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
           
           {/* Coluna da Esquerda: Lista de checklists */}
           <div className="bg-white border border-slate-200/60 p-6 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.02)] space-y-4">
-            <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Obrigações Regulares</h3>
+            <h3 className="text-xs font-black text-slate-400">Obrigações Regulares</h3>
 
             <div className="space-y-3">
               {checklists.length === 0 && (
@@ -264,11 +264,11 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
                   
                   {/* Formulário de Envio */}
                   <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Anexar Evidência Operacional</h3>
+                    <h3 className="text-xs font-black text-slate-400">Anexar Evidência Operacional</h3>
                     
                     <form onSubmit={handleUploadEvidence} className="space-y-4">
                       <div className="space-y-1">
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Tipo de Operação</label>
+                        <label className="block text-xs font-semibold text-slate-500">Tipo de Operação</label>
                         <select
                           value={operationType}
                           onChange={(e) => setOperationType(e.target.value)}
@@ -281,7 +281,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Identificador (NF-e ou Pedido)</label>
+                        <label className="block text-xs font-semibold text-slate-500">Identificador (NF-e ou Pedido)</label>
                         <input
                           type="text"
                           required
@@ -293,7 +293,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
                       </div>
 
                       <div className="space-y-1">
-                        <label className="block text-xs font-black text-slate-400 uppercase tracking-widest">Foto / Arquivo Comprovante</label>
+                        <label className="block text-xs font-semibold text-slate-500">Foto / Arquivo Comprovante</label>
                         <input
                           type="file"
                           required
@@ -322,7 +322,7 @@ const EcommerceChecklists: React.FC<EcommerceChecklistsProps> = ({
 
                   {/* Lista de Evidências Anexadas (Dossiê) */}
                   <div className="space-y-4">
-                    <h3 className="text-xs font-black uppercase tracking-widest text-slate-400">Trilha de Evidências Existentes</h3>
+                    <h3 className="text-xs font-black text-slate-400">Trilha de Evidências Existentes</h3>
                     
                     {evidences.length === 0 ? (
                       <div className="text-center py-12 bg-slate-50 border border-dashed border-slate-200 rounded-2xl text-xs text-slate-400">

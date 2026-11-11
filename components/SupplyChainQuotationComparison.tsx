@@ -578,7 +578,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
             {responses.length === 0 && (
                 <div className="bg-white p-20 rounded-[2.5rem] border border-gray-100 shadow-sm text-center">
                     <Info className="w-12 h-12 text-gray-200 mx-auto mb-4" />
-                    <h2 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-2">Aguardando Propostas</h2>
+                    <h2 className="text-xl font-black text-gray-900 mb-2">Aguardando Propostas</h2>
                     <p className="text-gray-400 text-sm font-medium max-w-sm mx-auto">
                         Assim que os fornecedores responderem, as propostas aparecerão aqui para comparação.
                     </p>
@@ -591,7 +591,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                     <div className="bg-white rounded-3xl shadow-2xl w-full mx-auto max-w-4xl overflow-hidden flex flex-col max-h-[90vh]">
                         <div className="px-8 py-6 border-b border-gray-100 flex items-center justify-between bg-indigo-50/30">
                             <div>
-                                <h3 className="text-lg font-black text-indigo-900 uppercase tracking-tight">Fazer Contraproposta</h3>
+                                <h3 className="text-lg font-black text-indigo-900">Fazer Contraproposta</h3>
                                 <p className="text-sm text-indigo-600 font-medium">Negociando com {responses.find(r => r.id === negotiatingId)?.supplierName}</p>
                             </div>
                             <button
@@ -621,9 +621,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                 <div className="space-y-8">
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                         <div className="space-y-4">
-                                            <h4 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em] mb-4">Logística de Entrega</h4>
+                                            <h4 className="text-xs font-black text-indigo-600 mb-4">Logística de Entrega</h4>
                                             <div>
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1.5">Data de Entrega</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Data de Entrega</label>
                                                 <input
                                                     type="date"
                                                     value={counterFormData.deliveryDate}
@@ -632,7 +632,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 />
                                             </div>
                                             <div>
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1.5">Método de Entrega</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Método de Entrega</label>
                                                 <select
                                                     value={counterFormData.deliveryMethod}
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, deliveryMethod: e.target.value }))}
@@ -642,7 +642,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                 </select>
                                             </div>
                                             <div>
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1.5">Local de Entrega</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Local de Entrega</label>
                                                 <input
                                                     type="text"
                                                     value={counterFormData.deliveryLocation}
@@ -653,9 +653,9 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                             </div>
                                         </div>
                                         <div className="space-y-4">
-                                            <h4 className="text-xs font-black text-indigo-600 uppercase tracking-[0.2em] mb-4">Condições Financeiras</h4>
+                                            <h4 className="text-xs font-black text-indigo-600 mb-4">Condições Financeiras</h4>
                                             <div>
-                                                <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1.5">Forma de Pagamento</label>
+                                                <label className="block text-xs font-semibold text-slate-500 mb-1.5">Forma de Pagamento</label>
                                                 <select
                                                     value={counterFormData.paymentMethod}
                                                     onChange={(e) => setCounterFormData(prev => ({ ...prev, paymentMethod: e.target.value }))}
@@ -671,7 +671,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                             </div>
                                             <div className="grid grid-cols-2 gap-4">
                                                 <div>
-                                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1.5">Condição</label>
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">Condição</label>
                                                     <select
                                                         value={counterFormData.paymentTermType}
                                                         onChange={(e) => setCounterFormData(prev => ({ ...prev, paymentTermType: e.target.value as 'Vista' | 'Parcelado' }))}
@@ -682,7 +682,7 @@ const SupplyChainQuotationComparison: React.FC<SupplyChainQuotationComparisonPro
                                                     </select>
                                                 </div>
                                                 <div>
-                                                    <label className="text-xs font-black text-gray-400 uppercase tracking-widest block mb-1.5">
+                                                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                                                         {counterFormData.paymentTermType === 'Vista' ? 'Prazo (Dias)' : 'Parcelas (X)'}
                                                     </label>
                                                     <input

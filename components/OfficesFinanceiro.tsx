@@ -122,7 +122,7 @@ export const OfficesFinanceiro: React.FC = () => {
       <div className="bg-white border border-slate-200/50 p-5 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-5">
         <div className="flex items-center justify-between">
           <div>
-            <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Evolução Mensal</h2>
+            <h2 className="text-xs font-black text-slate-500">Evolução Mensal</h2>
             <p className="text-xs font-black text-slate-800 mt-0.5">Fluxo de Caixa — Semestre Atual</p>
           </div>
           <button className="text-slate-300 hover:text-[#D47A55]">
@@ -169,7 +169,7 @@ export const OfficesFinanceiro: React.FC = () => {
       {/* ── Tabela de Parcelas ────────────────────────────────────────────── */}
       <div className="bg-white border border-slate-200/50 rounded-[28px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] overflow-hidden">
         <div className="flex items-center justify-between px-5 py-4 border-b border-slate-100">
-          <h2 className="text-xs font-black uppercase tracking-widest text-slate-500">Cronograma de Parcelas</h2>
+          <h2 className="text-xs font-black text-slate-500">Cronograma de Parcelas</h2>
           <div className="flex items-center gap-2">
             <button className="flex items-center gap-1.5 bg-slate-50 border border-slate-200/70 px-3 py-1.5 rounded-lg text-[9px] font-black uppercase tracking-widest text-slate-500 hover:text-[#D47A55] transition-colors">
               <Filter className="w-3 h-3" /> Filtrar

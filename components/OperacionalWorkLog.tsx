@@ -178,7 +178,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
         <form onSubmit={handleSubmit} className="bg-slate-50 rounded-2xl p-4 space-y-3 border border-slate-100">
           <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Data</label>
+              <label className="text-xs font-semibold text-slate-500">Data</label>
               <input
                 type="date"
                 value={form.logDate}
@@ -188,7 +188,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               />
             </div>
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Equipe</label>
+              <label className="text-xs font-semibold text-slate-500">Equipe</label>
               <select
                 value={form.teamId}
                 onChange={e => setForm(f => ({ ...f, teamId: e.target.value }))}
@@ -199,7 +199,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               </select>
             </div>
             <div>
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Horas</label>
+              <label className="text-xs font-semibold text-slate-500">Horas</label>
               <input
                 type="number"
                 min="0"
@@ -212,7 +212,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
             </div>
             {measurementUnit && (
               <div>
-                <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">{measurementUnit}</label>
+                <label className="text-xs font-semibold text-slate-500">{measurementUnit}</label>
                 <input
                   type="number"
                   min="0"
@@ -225,7 +225,7 @@ const OperacionalWorkLog: React.FC<Props> = ({ workOrderId, measurementUnit, onL
               </div>
             )}
             <div className="col-span-2 md:col-span-3">
-              <label className="text-form-label font-black text-slate-500 uppercase tracking-wide">Observações</label>
+              <label className="text-xs font-semibold text-slate-500">Observações</label>
               <textarea
                 value={form.notes}
                 onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}

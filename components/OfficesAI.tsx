@@ -200,7 +200,7 @@ Com base na sua solicitação sobre **"${text}"**, recomendo estruturar os segui
         return <h1 key={idx} className="text-sm font-black text-white tracking-tight mt-3 mb-1.5 border-b border-white/5 pb-1">{line.substring(2)}</h1>;
       }
       if (line.startsWith('**') && line.endsWith('**')) {
-        return <h2 key={idx} className="text-xs font-black text-[#D47A55] tracking-widest uppercase mt-2.5 mb-1">{line.replace(/\*\*/g, '')}</h2>;
+        return <h2 key={idx} className="text-xs font-black text-[#D47A55] mt-2.5 mb-1">{line.replace(/\*\*/g, '')}</h2>;
       }
       if (line.startsWith('### ')) {
         return <h3 key={idx} className="text-xs font-bold text-white tracking-tight mt-2.5 mb-1">{line.substring(4)}</h3>;

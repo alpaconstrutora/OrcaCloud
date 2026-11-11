@@ -353,7 +353,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-3">
                 <Activity className="w-6 h-6 text-blue-200" />
-                <h2 className="text-xl font-black tracking-tight uppercase">BI: Composição de BDI & Fator K</h2>
+                <h2 className="text-xl font-black">BI: Composição de BDI & Fator K</h2>
               </div>
               <div className="flex items-center gap-2 px-3 py-1 bg-white/20 rounded-lg text-xs font-bold">
                 BDI CALCULADO: {totalBdiPerc.toFixed(2)}%
@@ -371,7 +371,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                 { label: 'Desp Fin (%)', key: 'finance', color: 'purple' }
               ].map(item => (
                 <div key={item.key} className="space-y-2">
-                  <label className="text-xs font-bold text-blue-100 uppercase tracking-widest">{item.label}</label>
+                  <label className="text-xs font-semibold text-blue-100">{item.label}</label>
                   <input
                     type="number"
                     value={bdiComposition[item.key as keyof typeof bdiComposition]}
@@ -546,7 +546,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
 
                     {snapshots.length > 0 && (
                       <div className="pt-6 border-t border-gray-100 space-y-4">
-                        <h4 className="text-xs font-black text-gray-400 uppercase tracking-widest">Cenários Salvos ({snapshots.length})</h4>
+                        <h4 className="text-xs font-black text-gray-400">Cenários Salvos ({snapshots.length})</h4>
                         <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2">
                           {snapshots.map((snap) => (
                             <div key={snap.id} className="p-3 bg-gray-50 border border-gray-100 rounded-xl hover:border-orange-200 transition-all group">
@@ -939,7 +939,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                       {/* Milestones Table */}
                       <div className="mt-8 bg-white rounded-3xl border border-gray-100 shadow-xl overflow-hidden">
                         <div className="p-6 border-b border-gray-50 bg-gray-50/50 flex items-center justify-between">
-                          <h4 className="text-sm font-black text-gray-900 tracking-tight uppercase">Cronograma de Desembolso Mensal (Projetado)</h4>
+                          <h4 className="text-sm font-black text-gray-900">Cronograma de Desembolso Mensal (Projetado)</h4>
                           <div className="px-3 py-1 bg-white border border-gray-100 rounded-full text-xs font-bold text-gray-500 italic">
                             Beta Distribution Mode
                           </div>
@@ -1012,7 +1012,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                         <div className="p-8 bg-white rounded-3xl border border-gray-100 shadow-xl relative">
                           <span className="absolute -top-3 left-8 px-3 py-1 bg-emerald-600 text-white text-xs font-black rounded-full uppercase tracking-widest leading-none">Estudo Comparativo</span>
                           <div className="mb-6">
-                            <label className="block text-xs font-black text-gray-400 uppercase mb-2">Selecionar Padrão Alternativo</label>
+                            <label className="block text-xs font-semibold text-slate-500 mb-2">Selecionar Padrão Alternativo</label>
                             <select
                               value={compareStandard}
                               onChange={async (e) => {
@@ -1180,7 +1180,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
                               <span className="flex items-center justify-center w-8 h-8 rounded-full bg-purple-600 text-white text-xs font-black">
                                 {ms.percentage}%
                               </span>
-                              <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">{ms.label}</h4>
+                              <h4 className="text-sm font-black text-gray-900">{ms.label}</h4>
                             </div>
                             <div className="space-y-1">
                               <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">Valor do Marco</p>
@@ -1212,7 +1212,7 @@ const ParametricEstimator: React.FC<ParametricEstimatorProps> = ({
 
                   {/* Critical Inputs Section (NBR 12.721) */}
                   <div className="pt-8 border-t border-gray-100">
-                    <h4 className="text-sm font-black text-gray-400 uppercase tracking-widest mb-6">Insumos de Maior Volatilidade (NBR 12.721)</h4>
+                    <h4 className="text-sm font-black text-gray-400 mb-6">Insumos de Maior Volatilidade (NBR 12.721)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
                       {[
                         { title: 'Cimento & Concreto', impact: 'Alto', trend: 'up', icon: '🏗️' },

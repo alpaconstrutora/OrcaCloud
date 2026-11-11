@@ -389,7 +389,7 @@ const NewConstraintForm: React.FC<{
     <div className="bg-white border border-blue-100 rounded-xl p-4 space-y-3 shadow-sm">
         <div className="grid grid-cols-2 gap-3">
             <div className="col-span-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Atividade *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Atividade *</label>
                 <select
                     value={form.scheduleItemId}
                     onChange={e => onChange({ scheduleItemId: e.target.value })}
@@ -404,7 +404,7 @@ const NewConstraintForm: React.FC<{
 
             {!fixedCategory && (
                 <div>
-                    <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Categoria *</label>
+                    <label className="block text-xs font-semibold text-slate-500 mb-1">Categoria *</label>
                     <select
                         value={form.category}
                         onChange={e => onChange({ category: e.target.value as ConstraintCategory })}
@@ -418,7 +418,7 @@ const NewConstraintForm: React.FC<{
             )}
 
             <div className={fixedCategory ? 'col-span-2' : ''}>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Responsável</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Responsável</label>
                 <input
                     type="text"
                     value={form.responsible}
@@ -429,7 +429,7 @@ const NewConstraintForm: React.FC<{
             </div>
 
             <div className="col-span-2">
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Descrição *</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Descrição *</label>
                 <input
                     type="text"
                     value={form.description}
@@ -441,7 +441,7 @@ const NewConstraintForm: React.FC<{
             </div>
 
             <div>
-                <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1">Prazo para remoção</label>
+                <label className="block text-xs font-semibold text-slate-500 mb-1">Prazo para remoção</label>
                 <input
                     type="date"
                     value={form.dueDate}

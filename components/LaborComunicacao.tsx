@@ -64,7 +64,7 @@ const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6
 const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div className="space-y-1.5">
-        <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
+        <label className="text-xs font-semibold text-slate-500">{label}</label>
         {children}
         {hint && <p className="text-xs text-slate-400">{hint}</p>}
     </div>
@@ -417,7 +417,7 @@ const CommDetail: React.FC<CommDetailProps> = ({ comm, onBack, onDispatch, dispa
             {comm.status === 'ENVIADO' && (
                 <div className="bg-white rounded-3xl border border-slate-100 shadow-sm overflow-hidden">
                     <div className="px-5 py-4 border-b border-slate-100">
-                        <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                        <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                             <Eye className="w-4 h-4 text-teal-600" /> Rastreio de Leitura
                         </h3>
                         {receipts.length > 0 && (
@@ -526,7 +526,7 @@ const WppConfigPanel: React.FC<WppConfigPanelProps> = ({ orgId }) => {
             </div>
 
             <div className="bg-white rounded-3xl border border-slate-100 shadow-sm p-6 space-y-4">
-                <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
+                <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
                     <Phone className="w-4 h-4 text-teal-600" /> Integração WhatsApp
                 </h3>
 

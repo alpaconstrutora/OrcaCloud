@@ -119,7 +119,7 @@ const FiscalDeadLetterLoteModal: React.FC<Props> = ({ jobs, action, onClose, onD
           {/* Motivo do arquivamento — some após conclusão total */}
           {!isReplay && !allDone && (
             <div>
-              <label className="text-[11px] uppercase tracking-wide text-gray-400 font-semibold mb-1.5 block">
+              <label className="block text-xs font-semibold text-slate-500 mb-1.5">
                 Motivo (opcional — aplicado a todos)
               </label>
               <textarea

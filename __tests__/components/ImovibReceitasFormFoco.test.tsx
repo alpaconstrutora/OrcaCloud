@@ -122,3 +122,14 @@ describe('ImovibReceitasForm — pesos da curva personalizada', () => {
         expect(updateStudy).toHaveBeenCalledWith('estudo-1', { sales_curve_custom: [5, 3, 0] });
     });
 });
+
+describe('ImovibReceitasForm — gráfico da curva sem vendas (item 2.6)', () => {
+    it('com VGV e VSO de 0%: diz que a VSO zerada não vende, em vez de pedir o preço', () => {
+        const comVgv = {
+            ...(estudo as object), sales_curve_type: 'vso', sales_vso_percent: 0,
+            blocks: [{ id: 'b1', name: 'Torre', sales_price_sqm: 10_000, construction_cost_sqm: 4_000, units: [{ id: 'u', quantity: 10, private_area: 70, common_area: 10 }] }],
+        };
+        render(<ImovibReceitasForm study={comVgv as never} onDataChanged={vi.fn()} />);
+        expect(screen.getByText(/com VSO de 0%, o estoque inteiro fica sem vender/)).toBeInTheDocument();
+    });
+});

@@ -6,8 +6,14 @@ export interface ImovibInputRowProps {
     value: number;
     /** A cada tecla com número válido — atualiza o estado do pai (soma 100%, etc.). */
     onChange?: (valor: number) => void;
-    /** Ao sair do campo — grava. */
-    onCommit: (valor: number) => void;
+    /** Ao sair do campo — grava. `null` = campo apagado, volta ao padrão (só com `padrao`). */
+    onCommit: (valor: number | null) => void;
+    /**
+     * Padrão da premissa. Com ele, apagar o campo e sair grava vazio (`null`) e o
+     * campo mostra o padrão — o motor usa o padrão quando a coluna está vazia.
+     * Sem ele, campo apagado grava 0.
+     */
+    padrao?: number;
     /** Texto depois do número, dentro do campo. */
     unidade?: string;
     step?: string;
@@ -25,7 +31,7 @@ export interface ImovibInputRowProps {
  * "12,5" o navegador entrega "" para um <input type="number"> (entrada
  * incompleta), e converter isso em 0 na hora fazia o React trocar o "12," por "0".
  */
-const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onChange, onCommit, unidade = '%', step = '0.01', title }) => {
+const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onChange, onCommit, unidade = '%', step = '0.01', title, padrao }) => {
     const [texto, setTexto] = useState<string>(String(value));
     const [editando, setEditando] = useState(false);
     // Valor de quando o campo ganhou o foco: sair sem mudar não grava. Comparar
@@ -51,7 +57,7 @@ const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onC
                 <input
                     type="number"
                     value={texto}
-                    title={title}
+                    title={title ?? (padrao != null ? `Apague o campo para voltar ao padrão (${padrao.toLocaleString('pt-BR')} ${unidade}).` : undefined)}
                     onFocus={() => { valorAoFocar.current = value; setEditando(true); }}
                     onChange={(e) => {
                         setTexto(e.target.value);
@@ -60,6 +66,12 @@ const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onC
                     }}
                     onBlur={() => {
                         setEditando(false);
+                        if (texto.trim() === '' && padrao != null) {
+                            setTexto(String(padrao));
+                            onChange?.(padrao);
+                            onCommit(null);
+                            return;
+                        }
                         const n = parseFloat(texto) || 0;
                         setTexto(String(n));
                         onChange?.(n);

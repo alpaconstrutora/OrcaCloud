@@ -39,3 +39,26 @@ describe('ImovibInputRow', () => {
         expect(campo.value).toBe('7');
     });
 });
+
+describe('ImovibInputRow — campo apagado volta ao padrão (item 2.6)', () => {
+    it('com padrão: apagar e sair grava vazio (null) e mostra o padrão', async () => {
+        const user = userEvent.setup();
+        const onCommit = vi.fn();
+        render(<ImovibInputRow label="Meses até o distrato" value={4} padrao={12} onCommit={onCommit} />);
+        const campo = screen.getByLabelText('Meses até o distrato') as HTMLInputElement;
+        await user.clear(campo);
+        await user.tab();
+        expect(onCommit).toHaveBeenCalledWith(null);
+        expect(campo.value).toBe('12');
+    });
+
+    it('sem padrão: apagar e sair continua gravando 0', async () => {
+        const user = userEvent.setup();
+        const onCommit = vi.fn();
+        render(<ImovibInputRow label="Permuta física" value={4} onCommit={onCommit} />);
+        const campo = screen.getByLabelText('Permuta física') as HTMLInputElement;
+        await user.clear(campo);
+        await user.tab();
+        expect(onCommit).toHaveBeenCalledWith(0);
+    });
+});

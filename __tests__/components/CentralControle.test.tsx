@@ -104,9 +104,11 @@ describe('CentralControle · tela "Bom dia"', () => {
     it('dia zerado: nada esperando e a barra "Seu dia" cheia', async () => {
         bootstrap.mockResolvedValue(painel());
         montar();
-        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live]' })).toBeInTheDocument();
+        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live] > span' })).toBeInTheDocument();
         expect(screen.getByText('Nada pendente')).toBeInTheDocument();
         expect(screen.getByText('100%')).toBeInTheDocument();
+        // Abrir a tela com o dia já zerado não "fecha o dia" (a onda é da transição).
+        expect(document.querySelector('.central-dia-fechado')).toBeNull();
     });
 
     it('fonte com erro derruba só o cartão dela', async () => {
@@ -172,8 +174,34 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(botao).toHaveTextContent('Concluída');
         await userEvent.click(botao);
         expect(atualizarTarefa).toHaveBeenCalledTimes(1);
-        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live]' })).toBeInTheDocument();
+        expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live] > span' })).toBeInTheDocument();
         expect(screen.getByText('1 de 1 concluídos')).toBeInTheDocument();
         expect(bootstrap).toHaveBeenCalledTimes(1);
+        // O último pendente saiu: "Seu dia" fecha (onda nos quadradinhos).
+        expect(document.querySelector('.central-dia-fechado')).not.toBeNull();
+    });
+
+    it('o foco vai para o novo "Mais urgente" quando o anterior sai', async () => {
+        const tarefa = (id: string, title: string, due_date: string) =>
+            ({ id, org_id: 'o1', title, due_date, priority: 2, source_module: 'manual', source_ref: null });
+        bootstrap.mockResolvedValue(painel({
+            meu_dia: { ok: true, data: meuDia({
+                tarefas: {
+                    pendentes: [
+                        tarefa('t1', 'Ligar para o fornecedor', '2026-11-09T15:00:00Z'),
+                        tarefa('t2', 'Conferir medição', '2026-11-11T15:00:00Z'),
+                    ],
+                    qtd_pendentes: 2, concluidas_hoje: 0,
+                },
+            }) },
+        }));
+        montar();
+        const fila = cartao('Minha fila');
+        await waitFor(() => expect(within(fila).getByText('Ligar para o fornecedor')).toBeInTheDocument());
+        await userEvent.click(within(fila).getByRole('button', { name: 'Concluir tarefa' }));
+        await waitFor(() => expect(within(fila).getByText('Conferir medição')).toBeInTheDocument());
+        await waitFor(() => expect(within(fila).queryByText('Ligar para o fornecedor')).not.toBeInTheDocument());
+        // Sem isto o foco caía no <body> e quem usa teclado recomeçava do topo.
+        await waitFor(() => expect(within(fila).getByRole('button', { name: 'Concluir tarefa' })).toHaveFocus());
     });
 });

@@ -2715,8 +2715,16 @@ abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
     com `inert`. Trocar de pílula esmaece a fila; esqueleto → dado esmaece (200ms).
   - **Primeira carga:** medidor varre o arco (máscara) e barras de Obras crescem, no
     tempo e curva do número que sobe (700ms, expo-out). Atualizar não repete.
+  - **Contadores** das pílulas e dos grupos trocam descendo de cima quando o valor
+    MUDA (`NumeroQueTroca`); a frase-resumo esmaece no lugar (o `<p aria-live>` fica).
+  - **Dia fechado:** quando o último pendente sai (havia >0, agora 0), os quadradinhos
+    de "Seu dia" sobem e voltam em onda, uma vez (`.central-dia-fechado`). Abrir a tela
+    com o dia já zerado não comemora.
+  - **Foco:** se o item resolvido sai e o foco ficou perdido (`<body>`), ele vai para
+    quem ocupou o lugar — mesmo grupo e índice, ou o novo "Mais urgente"; senão o
+    cabeçalho do grupo. Foco que está em outro lugar não é tocado.
   - `prefers-reduced-motion`: nada desloca nem cresce; o item resolvido só esmaece
-    no lugar e sai.
+    no lugar e sai; contadores só esmaecem; sem onda.
 
 > ❌ Não copiar para outras telas: a exceção é da tela de entrada. Lista, cadastro e
 > painel analítico seguem o §20.

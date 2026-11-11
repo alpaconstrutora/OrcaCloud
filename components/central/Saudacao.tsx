@@ -24,6 +24,20 @@ interface Props {
 
 export function Saudacao({ saudacao, nome, contagem, carregando, onAtualizar }: Props) {
     const pct = contagem ? (contagem.total === 0 ? 100 : (contagem.feitos / contagem.total) * 100) : 0;
+
+    // "Dia fechado": o último pendente acabou de sair (havia >0, agora 0). Abrir a
+    // tela com o dia já zerado não comemora nada.
+    const pendentesAntes = React.useRef<number | null>(null);
+    const [diaFechado, setDiaFechado] = React.useState(false);
+    const pendentes = contagem?.pendentes ?? null;
+    React.useEffect(() => {
+        if (pendentes == null) return;
+        const antes = pendentesAntes.current;
+        pendentesAntes.current = pendentes;
+        if (pendentes > 0) setDiaFechado(false);
+        else if (antes != null && antes > 0) setDiaFechado(true);
+    }, [pendentes]);
+
     return (
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">
             <div className="min-w-0 central-entra">
@@ -31,14 +45,17 @@ export function Saudacao({ saudacao, nome, contagem, carregando, onAtualizar }: 
                     {saudacao}{nome ? `, ${nome}` : ''}
                 </h1>
                 {contagem ? (
-                    <p className="text-gray-500 text-base mt-1.5 max-w-[60ch]" aria-live="polite">{fraseResumo(contagem)}</p>
+                    <p className="text-gray-500 text-base mt-1.5 max-w-[60ch]" aria-live="polite">
+                        {/* A frase nova esmaece no lugar da antiga; o <p> fica (região viva estável). */}
+                        <span key={fraseResumo(contagem)} className="central-aparece">{fraseResumo(contagem)}</span>
+                    </p>
                 ) : (
                     <div className="h-5 w-72 max-w-full mt-2.5 rounded-[4px] bg-gray-100 motion-safe:animate-pulse" aria-hidden="true" />
                 )}
             </div>
 
             <div className="flex items-end gap-3 shrink-0">
-                <div className="w-[176px]">
+                <div className={`w-[176px] ${diaFechado ? 'central-dia-fechado' : ''}`}>
                     <p className="text-xs text-gray-500 mb-1.5">Seu dia</p>
                     {contagem ? (
                         <SegmentedProgress

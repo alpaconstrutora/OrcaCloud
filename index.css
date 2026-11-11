@@ -669,5 +669,35 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
     .central-troca { animation: central-aparece 200ms ease-out both; }
 }
 @keyframes central-varre { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+
+/* Contador que troca (NumeroQueTroca): o número novo desce de cima — a fila
+   baixou. E o "dia fechado": quando o último pendente sai, os 12 quadradinhos
+   de "Seu dia" (SegmentedProgress) sobem e voltam em onda, da esquerda para a
+   direita, uma vez. Na própria cor dos segmentos: vale nos dois temas. */
+.central-troca-numero { animation: central-aparece 200ms ease-out both; }
+@media (prefers-reduced-motion: no-preference) {
+    .central-troca-numero { animation: central-troca-numero 260ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .central-dia-fechado [aria-hidden="true"] > span { animation: central-onda 420ms cubic-bezier(0.16, 1, 0.3, 1) both; transform-origin: bottom center; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(2)  { animation-delay: 30ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(3)  { animation-delay: 60ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(4)  { animation-delay: 90ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(5)  { animation-delay: 120ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(6)  { animation-delay: 150ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(7)  { animation-delay: 180ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(8)  { animation-delay: 210ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(9)  { animation-delay: 240ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(10) { animation-delay: 270ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(11) { animation-delay: 300ms; }
+    .central-dia-fechado [aria-hidden="true"] > span:nth-child(12) { animation-delay: 330ms; }
+}
+@keyframes central-troca-numero {
+    from { opacity: 0; transform: translateY(-60%); }
+    to   { opacity: 1; transform: none; }
+}
+@keyframes central-onda {
+    0%   { transform: none; }
+    40%  { transform: scaleY(1.5); }
+    100% { transform: none; }
+}
 @keyframes central-cresce { from { transform: scaleX(0); } to { transform: none; } }
 .theme-midnight .central-trilho { stroke: var(--opura-mid-raised); }

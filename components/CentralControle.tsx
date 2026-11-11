@@ -24,6 +24,7 @@ import { CartaoContasSemana } from './central/CartaoContasSemana';
 import { CartaoCaixa, type PeriodoCaixa } from './central/CartaoCaixa';
 import { CartaoObras } from './central/CartaoObras';
 import { CartaoConciliado } from './central/CartaoConciliado';
+import { NumeroQueTroca } from './central/NumeroQueTroca';
 import type { EstadoDoCartao } from './central/CartaoCentral';
 
 /**
@@ -307,7 +308,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                         className={`h-8 px-3.5 inline-flex items-center gap-1.5 rounded-full border text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 ${filtro === p.chave ? 'bg-blue-600 border-blue-600 text-white' : 'bg-white border-gray-200 text-gray-700 hover:bg-gray-50'}`}
                     >
                         {p.rotulo}
-                        {p.qtd != null && <span className={`tabular-nums text-xs ${filtro === p.chave ? 'text-blue-100' : 'text-gray-500'}`}>{p.qtd.toLocaleString('pt-BR')}</span>}
+                        {p.qtd != null && <NumeroQueTroca valor={p.qtd} className={`text-xs ${filtro === p.chave ? 'text-blue-100' : 'text-gray-500'}`} />}
                     </button>
                 ))}
             </div>

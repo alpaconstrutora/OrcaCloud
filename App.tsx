@@ -7,6 +7,7 @@ import LoginGateway from './components/LoginGateway';
 // Suspense ali viraria um piscar de loader antes do formulário.
 import PortalLogin from './components/portal/PortalLogin';
 import { entradaDoPortal, entradaDaUrlAtual, rotaDeEntradaDoPortal } from './lib/entradasDoPortal';
+import { tokenDoCelularDaUrl } from './services/celular/celularLinkService';
 
 const AIChat      = React.lazy(() => import('./components/AIChat'));
 const ProjectModal = React.lazy(() => import('./components/ProjectModal'));
@@ -180,6 +181,7 @@ import { partnerPortalTokenService } from './services/partnerPortalTokenService'
 import { supplierPortalTokenService } from './services/supplierPortalTokenService';
 const ClientArea = React.lazy(() => import('./components/ClientArea').then(m => ({ default: m.ClientArea })));
 const BrokerPortal = React.lazy(() => import('./components/BrokerPortal'));
+const CelularTokenGate = React.lazy(() => import('./components/celular/CelularTokenGate'));
 const InvestorDashboardPublic = React.lazy(() => import('./components/InvestorDashboard'));
 // Portal de Crédito — casca própria, fora do <Layout>: o credor não é membro de
 // organização nenhuma, então nada do app interno se aplica a ele.
@@ -661,6 +663,14 @@ const App: React.FC = () => {
     return null;
   }, []);
 
+  // Link do celular (/celular?token=): Minhas Tarefas sem login. `null` = o endereço NÃO é
+  // /celular; '' = é /celular mas sem token utilizável (o gate mostra a recusa sem chamar RPC).
+  const celularToken = React.useMemo(() => {
+    const { pathname, search } = window.location;
+    if (pathname !== '/celular' && pathname !== '/celular/') return null;
+    return tokenDoCelularDaUrl(pathname, search) ?? '';
+  }, []);
+
   const sindicoPortalToken = React.useMemo(() => {
     if (window.location.pathname === '/portal-sindico') {
       return new URLSearchParams(window.location.search).get('token');
@@ -793,6 +803,12 @@ const App: React.FC = () => {
   if (investorPortalToken) return <InvestorPortalTokenGate token={investorPortalToken} />;
   if (partnerPortalToken) return <PartnerPortalTokenGate token={partnerPortalToken} />;
   if (supplierPortalToken) return <SupplierPortalTokenGate token={supplierPortalToken} />;
+  // ⚠️ `celularToken === ''` TAMBÉM entra: /celular sem token cai na recusa, não no login.
+  if (celularToken !== null) return (
+    <React.Suspense fallback={<div className="min-h-[100dvh] bg-[#eef2ff] flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-slate-400" /></div>}>
+      <CelularTokenGate token={celularToken} />
+    </React.Suspense>
+  );
   if (sindicoPortalToken) return (
     <React.Suspense fallback={<div className="h-screen flex items-center justify-center"><Loader2 className="w-6 h-6 animate-spin text-gray-400" /></div>}>
       <SindicoPortal token={sindicoPortalToken} />

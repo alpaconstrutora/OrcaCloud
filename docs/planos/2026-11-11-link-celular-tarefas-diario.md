@@ -429,10 +429,23 @@ Vitest, Playwright (harness fora do repo).
 - [x] Task 1 `f4a8922d` · [x] Task 2 `57e99095` · [x] Task 3 `1f8cc825` · [x] Task 4 `1c38a778` · [x] Task 5 `c4cc0bf1` · [x] Task 6 `fdfbdc7f` · [ ] Task 7
 - [x] Correções da revisão final (gestor só gera para `member`, revogação com a tela aberta,
   gatilho de saída da org, criar = `tasks_insert`, sem barra de aba única) — `fa2a00e6`
-  (banco), `3f1c251e` (front). Ensaio BEGIN/ROLLBACK com as duas migrations → `TUDO OK`;
-  migrations ainda NÃO aplicadas.
+  (banco), `3f1c251e` (front). Ensaio BEGIN/ROLLBACK com as duas migrations → `TUDO OK`.
+  (Hashes de antes do rebase em `origin/main`; no `main` os commits têm outros SHAs.)
+- [x] Visualizador também sem "Gerar link" do gestor (decisão do usuário, 2026-11-11: "só `member`, ajustar a tela").
+- [x] Prefixos: o `main` recebeu `aplicar_20271111900000_imovib_scenarios` e `aplicar_20271111910000_imovib_risks`
+  no mesmo dia → migrations do link renomeadas para **`aplicar_20271111950000_link_celular_tabela_e_gemeos.sql`** e
+  **`aplicar_20271111960000_link_celular_rpcs_tarefas.sql`** (conteúdo igual).
+- [x] Task 7 · Step 1: suíte 13.128 testes (conta fecha) — 1 falha **pré-existente** fora desta frente
+  (`espelhoDoInvestidor.test.ts` lê `aplicar_20271110200000_torre_contorno_na_planta.sql`, idêntico ao `main`, CRLF ×
+  `\n` no teste; CI do `main` verde no mesmo commit de base); `npm run build` ✓; `verificar:build` exit 0.
+- [x] Task 7 · Step 2 (aval do usuário, 2026-11-11): ensaio final `TUDO OK` sem resíduo → as duas migrations
+  **aplicadas em produção** (exit 0); `scripts/teste-link-celular-tarefas.sql` no banco real → `TUDO OK`;
+  `check-rls-postura.sh` 9/9; `anon` executa só `celular_*`; `user_mobile_links` com RLS e 0 policy.
+- [x] Task 7 · Step 3: sonda com a chave anon — tabela, resolver e `mobile_link_generate` → *permission denied*;
+  `celular_sessao`/`celular_tarefas_listar` com token falso → 42501 `link inválido ou vencido`.
+- [ ] Task 7 · Step 4: push em `main` + `conferir-producao.sh` · [ ] Step 5: prova real no celular (usuário)
 - [ ] Plano de implementação Parte 2 (F3–F5) — depois de F2 no ar
-- [ ] F1 · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
+- [x] F1 (banco no ar) · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
 
 ## Rollback (Parte 1)
 

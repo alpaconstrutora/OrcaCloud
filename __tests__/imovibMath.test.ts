@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeImovibMath, calcularTirMensal } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import { baseStudy, withCost } from './fixtures/imovibEstudos';
 
 /**
  * Motor dos Estudos de Viabilidade (Imovib).
@@ -9,44 +10,6 @@ import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
  * (docs/planos/2026-10-12-imovib-viabilidade-correcoes.md, Fase 1). Cada um
  * reproduz um erro medido no motor antigo e afirma o comportamento correto.
  */
-
-// Estudo-base: 40 unidades de 70 m² privativos + 20 m² comuns, R$ 10.000/m² de
-// venda, R$ 4.500/m² de obra, terreno de R$ 5 mi. Todas as premissas que o
-// motor lê vêm preenchidas, para o teste não depender de padrão.
-const baseStudy = (over: Record<string, any> = {}): any => ({
-    id: 'estudo-teste',
-    name: 'Estudo teste',
-    construction_duration_months: 24,
-    sales_duration_months: 24,
-    construction_start_month: 6,
-    sales_start_month: 1,
-    inflation_rate: 0,
-    discount_rate: 12,
-    tax_rate: 4,
-    brokerage_fee: 5,
-    financing_percent: 0,
-    financing_rate_annual: 10,
-    revenue_downpayment_percent: 10,
-    revenue_construction_percent: 20,
-    revenue_handover_percent: 70,
-    default_rate_percent: 0,
-    cancellation_rate_percent: 0,
-    funding_debt_percent: 0,
-    swap_financial_percent: 0,
-    swap_physical_percent: 0,
-    land_cost: 5_000_000,
-    blocks: [{
-        id: 'b1', name: 'Torre A', sales_price_sqm: 10_000, construction_cost_sqm: 4_500,
-        units: [{ id: 'u1', quantity: 40, private_area: 70, common_area: 20 }],
-    }],
-    ...over,
-});
-
-const withCost = (costSqm: number, over: Record<string, any> = {}) => {
-    const s = baseStudy(over);
-    s.blocks = [{ ...s.blocks[0], construction_cost_sqm: costSqm }];
-    return s;
-};
 
 const sum = (xs: number[]) => xs.reduce((a, b) => a + b, 0);
 

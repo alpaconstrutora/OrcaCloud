@@ -144,10 +144,11 @@ export interface ImovibMathResult {
     /**
      * De onde vem o dinheiro do empreendimento (item 4.2, decisão D2), em R$:
      * capital próprio necessário (módulo da exposição máxima), dívida liberada,
-     * permuta (VGV entregue ao terrenista) e outras fontes. Fatias:
-     * composicaoDoCapital em utils/imovibFinanciamento.ts.
+     * permuta (VGV entregue ao terrenista) e outras fontes; e (item 4B.1) o que
+     * os compradores pagam até as chaves, sem o repasse, depois das deduções e
+     * da devolução de distrato. Fatias: composicaoDoCapital em utils/imovibFinanciamento.ts.
      */
-    capital: { proprio: number; divida: number; permuta: number; terceiros: number };
+    capital: { proprio: number; divida: number; vendasNaObra: number; permuta: number; terceiros: number };
     /** Aportes e distribuições mês a mês (item 4.3), sobre o caixa antes da participação das fontes. */
     aportes: LinhaDeAporte[];
     /**
@@ -311,7 +312,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     vgvBase: 0,
     vgvPorBloco: {},
     debtPayoffAtEnd: 0,
-    capital: { proprio: 0, divida: 0, permuta: 0, terceiros: 0 },
+    capital: { proprio: 0, divida: 0, vendasNaObra: 0, permuta: 0, terceiros: 0 },
     aportes: [],
     capexRubricasAtivas: false,
     capexRubricas: { terreno: 0, obra: 0, vgv: 0, total: 0 },
@@ -901,6 +902,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
     let accumulatedFlow = 0;
     let accProjeto = 0;
     let maxExposure = 0;
+    let mesDaExposicao = 0;
     const monthlyFlows: MonthlyFlow[] = [];
     const net: number[] = [];
     const netProjetoDoMes: number[] = [];
@@ -915,7 +917,10 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         }
 
         accumulatedFlow += netFlow;
-        if (accumulatedFlow < maxExposure) maxExposure = accumulatedFlow;
+        if (accumulatedFlow < maxExposure) {
+            maxExposure = accumulatedFlow;
+            mesDaExposicao = m;
+        }
 
         const linhas: LinhasDoMes = {
             ...S.linhas[i],
@@ -956,6 +961,21 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         });
     }
     T?.avisos.forEach(mensagem => P.avisos.push({ codigo: 'fontes_de_capital', mensagem, aba: 'capital' }));
+    // Item 4B.2: fonte que entra depois do pico de exposição não financia a obra.
+    if (mesDaExposicao > 0) {
+        for (const f of fontes) {
+            const entrada = Math.round(f.entry_month || 1);
+            if (!((Number(f.amount) || 0) > 0) || entrada <= mesDaExposicao || entrada > n) continue;
+            const custo = f.remuneration === 'participacao'
+                ? `vira caixa para distribuir, e a fonte leva ${(Number(f.profit_share_percent) || 0).toLocaleString('pt-BR')}% do lucro`
+                : 'e a fonte rende juros mesmo assim';
+            P.avisos.push({
+                codigo: 'fontes_de_capital',
+                mensagem: `"${f.name}" entra no mês ${entrada}, depois do pico de exposição do incorporador (mês ${mesDaExposicao}): o dinheiro não financia a obra ${custo}.`,
+                aba: 'capital',
+            });
+        }
+    }
 
     return {
         monthlyFlows, net, netProjeto: netProjetoDoMes, maxExposure, debtPayoffAtEnd: D.quitacaoNoFim, aportes,
@@ -1025,6 +1045,8 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         capital: {
             proprio: Math.max(0, -F.maxExposure),
             divida: F.dividaLiberada,
+            vendasNaObra: S.linhas.slice(0, P.constStart + P.constDur - 1).reduce((acc, l) =>
+                acc + (l.receitaSinal + l.receitaParcelasObra + l.receitaIntermediarias) * (1 - P.deducaoReceitaPct) + l.devolucaoDistrato, 0),
             permuta: Math.max(0, P.vgvTotal - P.vgvVendavel) + P.permutaDoEspelho,
             terceiros: F.aporteDeTerceiros,
         },

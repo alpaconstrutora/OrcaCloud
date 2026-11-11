@@ -109,6 +109,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Financiamento liberado', m.capital.divida, 'R$', null],
         ['Permuta', m.capital.permuta, 'R$', 'VGV entregue ao terrenista'],
         ['Outras fontes de capital', m.capital.terceiros, 'R$', null],
+        ['Vendas durante a obra', m.capital.vendasNaObra, 'R$', 'Pago pelos compradores até as chaves, sem o repasse, depois das deduções e da devolução de distrato'],
         ['Valor máximo do terreno (VPL zero)', terrenoVpl, 'R$', obsTerrenoVpl],
         [`Terreno para margem de ${margemAlvo.toLocaleString('pt-BR')}%`, terrenoMargem, 'R$', obsTerrenoMargem ?? 'Margem líquida sobre o VGV'],
         ['Variação de preço que zera o VPL', preco, '%', obsPreco],

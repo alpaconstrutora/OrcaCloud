@@ -138,7 +138,7 @@ Não existem e este plano cria: função de variação acumulada de índice, cá
 
 ## Plano
 
-Ordem: **0 → 1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9 → 10**. As Fases 0 a 3 fecham as lacunas que mais pesam na decisão. Cada fase publica sozinha.
+Ordem: **0 → 1 → 2 → 3 → 4 → 4B → 5 → 6 → 7 → 8 → 9 → 10**. As Fases 0 a 3 fecham as lacunas que mais pesam na decisão. Cada fase publica sozinha.
 
 ### Fase 0 — Fundações do motor (nenhum número muda)
 
@@ -461,6 +461,24 @@ export function aportesEDistribuicoes(fluxoDoAcionista: number[], caixaMinimo: n
 - **O que muda:** ao lado da TMA, o campo "De onde vem esta taxa" (`discount_rate_basis`), que vai para o memorial (item 10.1) e para o relatório.
 - **Como sei que terminou:** o texto grava, reaparece ao reabrir e sai no Excel na linha da TMA.
 
+### Fase 4B — Complementos do capital (os dois adiados da revisão da Fase 4)
+
+> abrir nova fase:
+> 1. As fatias de "De onde vem o dinheiro" não incluem o dinheiro dos compradores durante a obra, porque o plano pede que elas somem 100%.
+> 2. Não há aviso quando uma fonte por participação entra depois do pico de exposição.
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-11
+
+**4B.1 Vendas durante a obra como fatia do dinheiro**
+- **Arquivos:** `utils/imovibMotor.ts` (`capital.vendasNaObra`), `utils/imovibFinanciamento.ts` (`composicaoDoCapital`, rótulo e cor), `components/ImovibCapitalForm.tsx`, `components/ImovibExecutiveSummary.tsx` (linha nos Indicadores), `__tests__/imovibFinanciamento.test.ts`.
+- **O que muda:** quinta fatia, "Vendas durante a obra": o que os compradores pagam à incorporadora até o mês das chaves (sinal, parcelas de obra e intermediárias), menos impostos, comissão, outras deduções e devolução de distrato do mesmo período. O repasse e o pós-chaves ficam fora: chegam depois da obra. As cinco fatias continuam somando 100%, agora do "dinheiro do empreendimento".
+- **Como sei que terminou:** o teste afirma que a fatia é a soma dessas linhas do fluxo até o mês das chaves, que estudo com 0% de sinal, parcelas e intermediárias tem a fatia zerada, e que as cinco somam 100%; o Excel traz "Vendas durante a obra" nos Indicadores.
+
+**4B.2 Aviso de fonte que entra depois do pico de exposição**
+- **Arquivos:** `utils/imovibMotor.ts`, `__tests__/imovibFontes.test.ts`.
+- **O que muda:** toda outra fonte (a juros ou por participação) cujo mês de entrada é posterior ao mês da exposição máxima do incorporador gera aviso `fontes_de_capital` na aba Capital. Por participação: o dinheiro não financia a obra, vira caixa para distribuir e a fonte leva a sua parte do lucro. A juros: paga juros sem financiar a obra. O cálculo segue como veio.
+- **Como sei que terminou:** o teste afirma que a fonte que entra depois do mês da exposição máxima avisa (com o nome dela e os dois meses) e a que entra antes não avisa.
+
 ### Fase 5 — Tempo e custos: marcos, terreno, desembolso, rubricas (blocos 11, 5 e 1)
 
 **Interfaces que a fase entrega:**
@@ -755,6 +773,12 @@ Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura,
 - [x] 4.5 TMA justificada — "De onde vem esta taxa" na Dinâmica; sai na linha da TMA no Excel (Indicadores e Premissas).
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase4.js`): listagem = Resumo (R$ 3.998.485 e R$ 641.232, os mesmos de antes da fase); aba Capital, aportes por ano e mês, drawer de nova fonte (motivo no botão) e origem da TMA abrem; 0 escritas, 0 erros de console. Adiados da revisão: as fatias de "De onde vem o dinheiro" não incluem o dinheiro dos compradores durante a obra (o plano pede "somam 100%"); fonte por participação que entra depois do pico de exposição não avisa.
+
+**Fase 4B — Complementos do capital:** 2 de 2 (sem migration)
+- [x] 4B.1 Vendas durante a obra como fatia do dinheiro — `capital.vendasNaObra`: sinal, parcelas e intermediárias até o mês das chaves × (1 − deduções) + devolução de distrato do período. Medido: Garden 52,9% próprio / 47,1% vendas na obra; Bruninho 71,5% / 28,5%. Nenhum estudo tem unidade PERMUTADO (conferido no banco), por isso a permuta segue em R$ 0.
+- [x] 4B.2 Aviso de fonte depois do pico de exposição — aviso `fontes_de_capital` com o nome da fonte, o mês de entrada e o mês do pico; diz o que a fonte leva (parte do lucro ou juros).
+
+Conferido no navegador em 11/11 (Garden e Bruninho, roteiro `c:/tmp/pwtest/imovib_fase4.js`): cinco fatias, 0 escritas, 0 erros de console.
 
 **Fase 5 — Tempo e custos:** 0 de 9
 - [ ] 5.1 Marcos e datas

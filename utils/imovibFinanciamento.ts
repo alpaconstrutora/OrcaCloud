@@ -50,23 +50,25 @@ export const ROTULO_DA_AMORTIZACAO: Record<PremissasDoFinanciamento['amortizaCom
     repasse: 'Só o repasse bancário',
 };
 
-export type ChaveDoCapital = 'proprio' | 'divida' | 'permuta' | 'terceiros';
+export type ChaveDoCapital = 'proprio' | 'divida' | 'vendasNaObra' | 'permuta' | 'terceiros';
 
 export const ROTULO_DO_CAPITAL: Record<ChaveDoCapital, string> = {
     proprio: 'Capital próprio necessário',
     divida: 'Financiamento à produção',
+    vendasNaObra: 'Vendas durante a obra',
     permuta: 'Permuta',
     terceiros: 'Outras fontes',
 };
 
 /** Uma cor por fonte (aba Capital e Portal do Investidor; próprio e dívida eram as do portal). */
 export const COR_DO_CAPITAL: Record<ChaveDoCapital, string> = {
-    proprio: '#4f46e5', divida: '#06b6d4', permuta: '#f59e0b', terceiros: '#10b981',
+    proprio: '#4f46e5', divida: '#06b6d4', vendasNaObra: '#8b5cf6', permuta: '#f59e0b', terceiros: '#10b981',
 };
 
 /**
- * Fatias de cada fonte no dinheiro do empreendimento (item 4.2, decisão D2), na
- * ordem fixa de ROTULO_DO_CAPITAL. Somam 100%; sem dinheiro nenhum, todas 0.
+ * Fatias de cada fonte no dinheiro do empreendimento (item 4.2, decisão D2; as
+ * vendas durante a obra desde o item 4B.1), na ordem fixa de ROTULO_DO_CAPITAL.
+ * Somam 100%; sem dinheiro nenhum, todas 0.
  */
 export function composicaoDoCapital(c: Record<ChaveDoCapital, number>): { chave: ChaveDoCapital; valor: number; pct: number }[] {
     const chaves = Object.keys(ROTULO_DO_CAPITAL) as ChaveDoCapital[];

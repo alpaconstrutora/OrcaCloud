@@ -39,13 +39,14 @@ describe('Aba Capital', () => {
         svc.updateStudy.mockResolvedValue({});
     });
 
-    it('4.2 — o capital próprio é calculado: quatro fatias que somam 100%, sem o campo digitado', () => {
+    it('4.2 e 4B.1 — o capital próprio é calculado: cinco fatias (com as vendas durante a obra) que somam 100%, sem o campo digitado', () => {
         tela();
         const secao = screen.getByRole('region', { name: 'De onde vem o dinheiro' });
         // No KPI e na legenda da barra.
         expect(within(secao).getAllByText('Capital próprio necessário')).toHaveLength(2);
+        expect(within(secao).getAllByText('Vendas durante a obra')).toHaveLength(2);
         const pcts = within(secao).getAllByText(/% do total$/).map(e => parseFloat(e.textContent!.replace(',', '.')));
-        expect(pcts).toHaveLength(4);
+        expect(pcts).toHaveLength(5);
         expect(pcts.reduce((a, b) => a + b, 0)).toBeCloseTo(100, 0);
         expect(screen.queryByText('Capital próprio (equity)')).toBeNull();
     });

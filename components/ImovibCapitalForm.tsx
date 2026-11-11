@@ -24,8 +24,8 @@ interface ImovibCapitalFormProps {
 
 const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 const fmtPct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
-const COR_DO_KPI: Record<ChaveDoCapital, 'indigo' | 'cyan' | 'amber' | 'emerald'> = {
-    proprio: 'indigo', divida: 'cyan', permuta: 'amber', terceiros: 'emerald',
+const COR_DO_KPI: Record<ChaveDoCapital, 'indigo' | 'cyan' | 'violet' | 'amber' | 'emerald'> = {
+    proprio: 'indigo', divida: 'cyan', vendasNaObra: 'violet', permuta: 'amber', terceiros: 'emerald',
 };
 
 /** Linha "rótulo + lista de escolha" no mesmo desenho de ImovibInputRow. */
@@ -89,11 +89,11 @@ const ImovibCapitalForm: React.FC<ImovibCapitalFormProps> = ({ study, onDataChan
                         <h2 id="imovib-capital-composicao" className="text-lg font-semibold text-gray-900">De onde vem o dinheiro</h2>
                         <p className="text-slate-500 text-sm">
                             Calculado pelo fluxo de caixa. O capital próprio necessário é a maior exposição de caixa do incorporador
-                            {mesDaExposicao != null ? ` (mês ${mesDaExposicao})` : ''}; o resto é o que o banco libera, a permuta e as outras fontes.
+                            {mesDaExposicao != null ? ` (mês ${mesDaExposicao})` : ''}; o resto é o que o banco libera, o que os compradores pagam até as chaves (sem o repasse), a permuta e as outras fontes.
                         </p>
                     </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
                     {composicao.map(c => (
                         <KpiCard
                             key={c.chave}

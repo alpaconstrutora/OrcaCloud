@@ -28,6 +28,7 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 | Data | Pergunta | Resposta |
 |---|---|---|
 | 2026-11-11 | Planejar só as duas lacunas principais (curva de vendas e indicadores) ou todas? | **Todas**: *"escreva um plano completo para todos"*. Os 13 blocos entram no escopo. |
+| 2026-11-11 | Por onde começar? (a mensagem anterior dizia "se as recomendações servirem, começo pela Fase 0") | *"comece pela Fase 0"*. A recomendação de D6 (corrigir a função do portal já na Fase 0) foi tratada como aceita; a migration foi escrita e **não aplicada** — aplicar pede OK explícito. As outras decisões (D1–D5, D7) só travam fases seguintes e seguem em aberto. |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
@@ -682,13 +683,15 @@ Condições que o pedido não descreve e que mais provavelmente derrubam quem us
 
 ## Estado
 
-**Fase 0 — Fundações:** 0 de 6
-- [ ] 0.1 Teste de regressão
-- [ ] 0.2 Motor fora do hook, em camadas
-- [ ] 0.3 Fluxo aberto por linha e visão do projeto
-- [ ] 0.4 Lista única de campos do motor
-- [ ] 0.5 Padrões novos num lugar só
-- [ ] 0.6 Portal do Investidor com a mesma estrutura (D6)
+**Fase 0 — Fundações:** 5 de 6 (código dos seis feito; 0.6 espera a migration ser aplicada)
+- [x] 0.1 Teste de regressão — 2ff86e5b. O estudo com dívida usa juro de 14% a.a., não 12%: a 12%, igual à TMA, o VPL sai idêntico ao do estudo base e o teste não pegaria erro de dívida.
+- [x] 0.2 Motor fora do hook, em camadas — 9decdc04. Testes do motor verdes sem edição.
+- [x] 0.3 Fluxo aberto por linha e visão do projeto — 806f7530, d8c3e219. `estoqueNaoVendidoPct`, `totalSellableArea` e `unidadesVendaveis` ficam para 1.4 e 8.1, que os calculam. Mudança de número: receita líquida negativa (deduções acima de 100% da receita, ou permuta + inadimplência + distrato acima de 100% do VGV) passou a sair do caixa — antes era descartada — e gera o aviso `receita_liquida_negativa`. Nenhum estudo de regressão muda.
+- [x] 0.4 Lista única de campos do motor — 2db98dfa. A listagem seleciona as mesmas 37 colunas de antes (conferido por diff). **Não conferido no navegador**: o roteiro de Playwright precisa da senha do usuário de leitura.
+- [x] 0.5 Padrões novos num lugar só — 95ba3a54. O critério virou o teste `__tests__/imovibPadroes.test.ts`, que aceita `?? 0`, `|| 0` e `|| 1` (guardas de campo vazio) e recusa qualquer outro número.
+- [ ] 0.6 Portal do Investidor com a mesma estrutura (D6) — código 32926c9a, d8c3e219; migration `aplicar_20271111700000_investor_portal_estudo_mesma_estrutura.sql` **não aplicada**. Medido em 11/11: a única oportunidade publicada ligada a estudo ("Quintino Bocaiúva", estudo Bruninho, 1 token ativo) tem preço/m² 0 no bloco e R$ 9.999.998 no espelho (16 unidades); pelo link o VGV calculado é 0, no app é R$ 10,0 mi. O cliente aceita a resposta antiga e a nova. Falta: aplicar a migration e conferir o VGV pelo link.
+
+Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/segurancaMigrations.test.ts` só reconhece funções delimitadas por `$$` ou `$function$`; com `$X$` ou outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde. Pelo menos dez migrations posteriores ao corte usam outro delimitador. Não corrigido aqui.
 
 **Fase 1 — Receitas:** 0 de 7
 - [ ] 1.1 Curvas de venda

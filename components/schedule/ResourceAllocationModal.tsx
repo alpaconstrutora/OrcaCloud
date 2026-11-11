@@ -147,7 +147,7 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                     {allocationType !== 'COST' && (
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">{TYPE_LABEL[allocationType]}</label>
-                                            <select name="resourceId" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none bg-white text-sm">
+                                            <select name="resourceId" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none bg-white text-sm">
                                                 <option value="">Selecione...</option>
                                                 {allocationType === 'ROLE' && schedule.resources?.roles.map(role => (
                                                     <option key={role.id} value={role.id}>{role.name}</option>
@@ -169,26 +169,26 @@ export const ResourceAllocationModal: React.FC<ResourceAllocationModalProps> = (
                                 {allocationType === 'COST' ? (
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-gray-500 uppercase ml-1">Valor Fixo (R$)</label>
-                                        <MoneyCentsInput value={custoFixo} onChange={setCustoFixo} required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" placeholder="Ex: mobilização, taxa" />
+                                        <MoneyCentsInput value={custoFixo} onChange={setCustoFixo} required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" placeholder="Ex: mobilização, taxa" />
                                     </div>
                                 ) : allocationType === 'MATERIAL' ? (
                                     <div className="space-y-2">
                                         <label className="text-xs font-bold text-gray-500 uppercase ml-1">Quantidade</label>
-                                        <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
+                                        <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-3 gap-4">
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Quantidade</label>
-                                            <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
+                                            <input name="quantity" type="number" step="0.1" defaultValue="1" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Horas/Dia</label>
-                                            <input name="hoursPerDay" type="number" step="0.5" defaultValue="8" required className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
+                                            <input name="hoursPerDay" type="number" step="0.5" defaultValue="8" required className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                         </div>
                                         <div className="space-y-2">
                                             <label className="text-xs font-bold text-gray-500 uppercase ml-1">Hora Extra/Dia</label>
-                                            <input name="overtimeHours" type="number" step="0.5" placeholder="0" className="w-full px-4 py-2 rounded-xl border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
+                                            <input name="overtimeHours" type="number" step="0.5" placeholder="0" className="w-full px-4 h-9 rounded-[6px] border border-gray-200 focus:ring-2 focus:ring-blue-100 outline-none text-sm" />
                                         </div>
                                     </div>
                                 )}

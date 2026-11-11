@@ -767,18 +767,18 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                 {isAdding && (
                     <div ref={formularioRef} className="mb-6 bg-white p-6 rounded-3xl border shadow-sm">
                         <form onSubmit={activeTab === 'roles' ? handleSaveRole : activeTab === 'workers' ? handleSaveWorker : activeTab === 'materials' ? handleSaveMaterial : handleSaveTeam} className="space-y-4">
-                            <input name="name" defaultValue={editingRole?.name || editingWorker?.name || editingTeam?.name || editingMaterial?.name || ''} placeholder="Nome" className="w-full p-3 border rounded-xl" required />
+                            <input name="name" defaultValue={editingRole?.name || editingWorker?.name || editingTeam?.name || editingMaterial?.name || ''} placeholder="Nome" className="w-full h-9 text-sm px-3 border rounded-[6px]" required />
                             {activeTab === 'roles' && (
                                 <>
-                                    <input name="costPerHour" type="number" step="0.01" defaultValue={editingRole?.costPerHour} placeholder="Custo por hora" className="w-full p-3 border rounded-xl" />
-                                    <input name="overtimeCostPerHour" type="number" step="0.01" defaultValue={editingRole?.overtimeCostPerHour} placeholder="Custo/hora extra (opcional — padrão 1,5x)" className="w-full p-3 border rounded-xl" />
-                                    <input name="costPerUse" type="number" step="0.01" defaultValue={editingRole?.costPerUse} placeholder="Custo por uso (ex: deslocamento, opcional)" className="w-full p-3 border rounded-xl" />
+                                    <input name="costPerHour" type="number" step="0.01" defaultValue={editingRole?.costPerHour} placeholder="Custo por hora" className="w-full h-9 text-sm px-3 border rounded-[6px]" />
+                                    <input name="overtimeCostPerHour" type="number" step="0.01" defaultValue={editingRole?.overtimeCostPerHour} placeholder="Custo/hora extra (opcional — padrão 1,5x)" className="w-full h-9 text-sm px-3 border rounded-[6px]" />
+                                    <input name="costPerUse" type="number" step="0.01" defaultValue={editingRole?.costPerUse} placeholder="Custo por uso (ex: deslocamento, opcional)" className="w-full h-9 text-sm px-3 border rounded-[6px]" />
                                     <ResourceCalendarField initialWorkDays={editingRole?.workDays} />
                                 </>
                             )}
                             {activeTab === 'workers' && (
                                 <>
-                                    <select name="roleId" defaultValue={editingWorker?.roleId} className="w-full p-3 border rounded-xl" required>
+                                    <select name="roleId" defaultValue={editingWorker?.roleId} className="w-full h-9 text-sm px-3 border rounded-[6px]" required>
                                         <option value="">Selecionar Função</option>
                                         {resources.roles.map(r => <option key={r.id} value={r.id}>{r.name}</option>)}
                                     </select>
@@ -787,8 +787,8 @@ export const ResourceManagement: React.FC<ResourceManagementProps> = ({
                             )}
                             {activeTab === 'materials' && (
                                 <>
-                                    <input name="unit" defaultValue={editingMaterial?.unit} placeholder="Unidade (ex: m³, kg, un)" className="w-full p-3 border rounded-xl" required />
-                                    <input name="costPerUnit" type="number" step="0.01" defaultValue={editingMaterial?.costPerUnit} placeholder="Custo por unidade" className="w-full p-3 border rounded-xl" required />
+                                    <input name="unit" defaultValue={editingMaterial?.unit} placeholder="Unidade (ex: m³, kg, un)" className="w-full h-9 text-sm px-3 border rounded-[6px]" required />
+                                    <input name="costPerUnit" type="number" step="0.01" defaultValue={editingMaterial?.costPerUnit} placeholder="Custo por unidade" className="w-full h-9 text-sm px-3 border rounded-[6px]" required />
                                 </>
                             )}
                             <div className="flex justify-end gap-2">
@@ -1072,7 +1072,7 @@ const ResourceImportModal: React.FC<{
                         ))}
                     </div>
                     <div className="flex-1 p-6 flex flex-col">
-                        <input type="text" placeholder={`Buscar ${initialTab === 'workers' ? 'trabalhadores' : initialTab === 'roles' ? 'cargos' : 'recursos'}...`} value={search} onChange={e => setSearch(e.target.value)} className="w-full p-3 bg-gray-100 rounded-xl mb-6 outline-none" />
+                        <input type="text" placeholder={`Buscar ${initialTab === 'workers' ? 'trabalhadores' : initialTab === 'roles' ? 'cargos' : 'recursos'}...`} value={search} onChange={e => setSearch(e.target.value)} className="w-full h-9 text-sm px-3 bg-gray-100 rounded-[6px] mb-6 outline-none" />
                         <div className="flex-1 overflow-y-auto">
                             {showRoles && filteredRoles.length > 0 && (
                                 <div className="mb-6">

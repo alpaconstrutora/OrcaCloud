@@ -167,7 +167,7 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
             placeholder="Nome da etapa (Ex: Pintura, Demolição, Pias)"
             value={tarefa}
             onChange={(e) => setTarefa(e.target.value)}
-            className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+            className="w-full bg-[#070913] border border-white/5 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
             required
           />
 
@@ -177,13 +177,13 @@ const ReformasCronograma: React.FC<ReformasCronogramaProps> = ({ userId }) => {
               placeholder="Responsável (opcional)"
               value={responsavel}
               onChange={(e) => setResponsavel(e.target.value)}
-              className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+              className="w-full bg-[#070913] border border-white/5 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
             />
             <input
               type="date"
               value={dataLimite}
               onChange={(e) => setDataLimite(e.target.value)}
-              className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+              className="w-full bg-[#070913] border border-white/5 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
             />
           </div>
         </div>

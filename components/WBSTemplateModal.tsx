@@ -128,7 +128,7 @@ export const WBSTemplateModal: React.FC<WBSTemplateModalProps> = ({
                                     value={newTemplateName}
                                     onChange={(e) => setNewTemplateName(e.target.value)}
                                     placeholder="Ex: Padrão Minha Casa Minha Vida"
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] focus:outline-none focus:ring-2 focus:ring-blue-500"
                                     autoFocus
                                 />
                             </div>

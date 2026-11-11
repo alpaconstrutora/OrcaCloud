@@ -3019,7 +3019,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="space-y-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-1">Nome {wbsModal.type === 'PHASE' ? 'da Etapa' : 'da Subetapa'}</label>
-                  <input type="text" autoFocus placeholder={wbsModal.type === 'PHASE' ? "Ex: Instalações Elétricas" : "Ex: Tubulações"} className="w-full rounded-[6px] border border-gray-300 p-2.5 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={wbsModal.value} onChange={(e) => setWbsModal({ ...wbsModal, value: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleConfirmWBSAction()} />
+                  <input type="text" autoFocus placeholder={wbsModal.type === 'PHASE' ? "Ex: Instalações Elétricas" : "Ex: Tubulações"} className="w-full rounded-[6px] border border-gray-300 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none" value={wbsModal.value} onChange={(e) => setWbsModal({ ...wbsModal, value: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && handleConfirmWBSAction()} />
                 </div>
                 <div className="flex gap-2 pt-2">
                   <button onClick={() => setWbsModal({ ...wbsModal, isOpen: false })} className="flex-1 px-4 py-2 border border-gray-300 rounded-[6px] text-gray-700 hover:bg-gray-50 font-medium transition-colors">Cancelar</button>
@@ -3119,7 +3119,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="col-span-3">
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                       <select
-                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.type}
                         onChange={(e) => setNewItem({ ...newItem, type: e.target.value as SinapiType })}
                       >
@@ -3133,7 +3133,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <input
                         type="text"
                         placeholder="Ex: Cimento Portland CP-III-40 ensacado"
-                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.description}
                         onChange={(e) => setNewItem({ ...newItem, description: e.target.value })}
                       />
@@ -3143,7 +3143,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <input
                         type="text"
                         placeholder="kg"
-                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm text-center focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.unit}
                         onChange={(e) => setNewItem({ ...newItem, unit: e.target.value })}
                       />
@@ -3151,7 +3151,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="col-span-2">
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Preço Base (R$)</label>
                       <MoneyCentsInput
-                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm text-right focus:ring-2 focus:ring-blue-500 outline-none font-medium"
                         value={newItem.price}
                         onChange={(v) => setNewItem({ ...newItem, price: v === '' ? 0 : Number(v) })}
                       />
@@ -3159,7 +3159,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <div className="col-span-9">
                       <label className="block text-xs font-semibold text-slate-500 mb-1">Grupo (Categoria)</label>
                       <select
-                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
+                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white font-medium"
                         value={newItem.category}
                         onChange={(e) => setNewItem({ ...newItem, category: e.target.value })}
                       >
@@ -3192,7 +3192,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <input
                       type="text"
                       placeholder="Ex: 98546"
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                       value={searchCode}
                       onChange={(e) => setSearchCode(e.target.value)}
                     />
@@ -3200,7 +3200,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="col-span-2">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Tipo</label>
                     <select
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchType}
                       onChange={(e) => setSearchType(e.target.value)}
                     >
@@ -3212,7 +3212,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="col-span-3">
                     <label className="block text-xs font-semibold text-slate-500 mb-1">Grupo</label>
                     <select
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-white"
                       value={searchGroupFilter}
                       onChange={(e) => setSearchGroupFilter(e.target.value)}
                     >
@@ -3231,13 +3231,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           autoFocus
                           type="text"
                           placeholder="Buscar por descrição..."
-                          className="w-full pl-9 pr-4 py-2 bg-white border border-gray-200 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
+                          className="w-full pl-9 pr-4 h-9 bg-white border border-gray-200 rounded-[6px] text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                           value={searchTerm}
                           onChange={(e) => setSearchTerm(e.target.value)}
                         />
                       </div>
                       <select
-                        className="rounded-[6px] border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
+                        className="rounded-[6px] border border-gray-200 px-3 h-9 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-gray-50 text-gray-600 cursor-pointer min-w-[120px]"
                         value={searchScope}
                         onChange={(e) => setSearchScope(e.target.value as 'description' | 'category' | 'both')}
                         title="Escopo da busca"
@@ -3248,7 +3248,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       </select>
 
                       <select
-                        className="rounded-[6px] border border-gray-200 px-3 py-2 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
+                        className="rounded-[6px] border border-gray-200 px-3 h-9 text-form-input font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-all bg-blue-50 text-blue-700 border-blue-100 cursor-pointer min-w-[130px]"
                         value={searchMode}
                         onChange={(e) => setSearchMode(e.target.value as 'exact' | 'all-words')}
                         title="Modo da busca"
@@ -3538,7 +3538,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <select
                       value={selectedDetailsItem.precisionClass || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, precisionClass: e.target.value ? e.target.value as BudgetEntry['precisionClass'] : undefined } : prev)}
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
                       <option value="">Não definida</option>
                       <option value="A">A - Projeto executivo</option>
@@ -3553,7 +3553,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <select
                       value={selectedDetailsItem.status || 'Rascunho'}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, status: e.target.value as BudgetEntry['status'] } : prev)}
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none bg-white"
                     >
                       {['Rascunho', 'Em revisão', 'Aguardando aprovação', 'Aprovado', 'Congelado', 'Substituído', 'Cancelado'].map(status => <option key={status} value={status}>{status}</option>)}
                     </select>
@@ -3563,7 +3563,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <input
                       value={selectedDetailsItem.discipline || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, discipline: e.target.value } : prev)}
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Ex: Estrutura"
                     />
                   </div>
@@ -3572,7 +3572,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <input
                       value={selectedDetailsItem.responsible || ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, responsible: e.target.value } : prev)}
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Nome ou equipe"
                     />
                   </div>
@@ -3590,7 +3590,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <input
                         value={(selectedDetailsItem.location as any)?.[key] || ''}
                         onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, location: { ...(prev.location || {}), [key]: e.target.value } } : prev)}
-                        className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                        className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       />
                     </div>
                   ))}
@@ -3614,7 +3614,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       step="0.0001"
                       value={selectedDetailsItem.calculationMemory?.result ?? ''}
                       onChange={(e) => setSelectedDetailsItem(prev => prev ? { ...prev, calculationMemory: { ...(prev.calculationMemory || {}), result: e.target.value === '' ? undefined : Number(e.target.value) } } : prev)}
-                      className="w-full rounded-[6px] border border-gray-200 p-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+                      className="w-full rounded-[6px] border border-gray-200 h-9 px-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
                       placeholder="Quantidade auditável"
                     />
                     <label className="mt-4 flex items-center gap-2 text-sm font-bold text-gray-600">

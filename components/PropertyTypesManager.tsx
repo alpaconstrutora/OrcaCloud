@@ -161,13 +161,13 @@ const PropertyTypesManager: React.FC<PropertyTypesManagerProps> = ({
                                 onChange={e => setNewCode(e.target.value.toUpperCase().replace(/[^A-Z0-9_]/g, ''))}
                                 placeholder="CÓDIGO"
                                 maxLength={30}
-                                className="w-28 px-3 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-mono font-bold text-sm text-gray-700 placeholder-gray-300 transition-all"
+                                className="w-28 px-3 h-9 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-[6px] outline-none font-mono font-bold text-sm text-gray-700 placeholder-gray-300 transition-all"
                             />
                             <input
                                 value={newLabel}
                                 onChange={e => setNewLabel(e.target.value)}
                                 placeholder="Descrição do tipo"
-                                className="flex-1 px-3 py-2 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-xl outline-none font-bold text-sm text-gray-700 transition-all"
+                                className="flex-1 px-3 h-9 bg-gray-50 border border-transparent focus:bg-white focus:border-blue-500 rounded-[6px] outline-none font-bold text-sm text-gray-700 transition-all"
                                 onKeyDown={e => e.key === 'Enter' && handleCreate()}
                             />
                             <button

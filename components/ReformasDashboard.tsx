@@ -187,7 +187,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
           <select
             value={activeProjectId}
             onChange={(e) => handleSelectProject(e.target.value)}
-            className="w-full bg-[#070913] border border-white/5 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500 mt-1.5"
+            className="w-full bg-[#070913] border border-white/5 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500 mt-1.5"
           >
             {projetos.map(p => (
               <option key={p.id} value={p.id}>{p.nome_cliente}</option>
@@ -284,7 +284,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                   placeholder="Ex: João da Silva"
                   value={nomeCliente}
                   onChange={(e) => setNomeCliente(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
                   required
                 />
               </div>
@@ -297,7 +297,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                   placeholder="Rua, Número, Bairro, Apto"
                   value={endereco}
                   onChange={(e) => setEndereco(e.target.value)}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
                 />
               </div>
 
@@ -309,7 +309,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                     placeholder="0,00"
                     value={orcamentoTotal}
                     onChange={(v) => setOrcamentoTotal(v)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
                   />
                 </div>
                 <div className="space-y-1">
@@ -318,7 +318,7 @@ const ReformasDashboard: React.FC<ReformasDashboardProps> = ({ userId, onNavigat
                     type="date"
                     value={dataInicio}
                     onChange={(e) => setDataInicio(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2.5 text-form-input text-white outline-none focus:border-orange-500"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-[6px] px-3 h-9 text-form-input text-white outline-none focus:border-orange-500"
                     required
                   />
                 </div>

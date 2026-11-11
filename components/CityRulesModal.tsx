@@ -268,7 +268,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <MoneyCentsInput
                     value={limits.ecoToMed}
                     onChange={(v) => handleLimitChange('ecoToMed', v === '' ? 0 : Number(v))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="3.200,00"
                   />
                 </div>
@@ -285,7 +285,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <MoneyCentsInput
                     value={limits.medToMedAlt}
                     onChange={(v) => handleLimitChange('medToMedAlt', v === '' ? 0 : Number(v))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="4.300,00"
                   />
                 </div>
@@ -302,7 +302,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <MoneyCentsInput
                     value={limits.medAltToAlto}
                     onChange={(v) => handleLimitChange('medAltToAlto', v === '' ? 0 : Number(v))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="5.500,00"
                   />
                 </div>
@@ -319,7 +319,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                   <MoneyCentsInput
                     value={limits.altoToLuxo}
                     onChange={(v) => handleLimitChange('altoToLuxo', v === '' ? 0 : Number(v))}
-                    className="block w-full pl-8 pr-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                    className="block w-full pl-8 pr-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-800 focus:outline-none focus:ring-1 focus:ring-indigo-500"
                     placeholder="7.500,00"
                   />
                 </div>
@@ -426,7 +426,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                               type="text"
                               value={t.tipo}
                               onChange={(e) => handleUpdateTipologia(index, 'tipo', e.target.value)}
-                              className="w-full px-3 py-2 border border-slate-200 rounded-lg text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                              className="w-full px-3 h-9 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                               placeholder="Ex: 2 Dorms c/ Suíte"
                             />
                           </div>
@@ -441,7 +441,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                                 type="number"
                                 value={t.area}
                                 onChange={(e) => handleUpdateTipologia(index, 'area', e.target.value)}
-                                className="w-full pr-8 pl-3 py-2 border border-slate-200 rounded-lg text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                className="w-full pr-8 pl-3 h-9 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                                 placeholder="65"
                               />
                               <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
@@ -460,7 +460,7 @@ export const CityRulesModal: React.FC<CityRulesModalProps> = ({
                                 type="number"
                                 value={t.mix}
                                 onChange={(e) => handleUpdateTipologia(index, 'mix', e.target.value)}
-                                className="w-full pr-6 pl-3 py-2 border border-slate-200 rounded-lg text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
+                                className="w-full pr-6 pl-3 h-9 border border-slate-200 rounded-[6px] text-form-input font-semibold text-slate-700 focus:outline-none focus:ring-1 focus:ring-indigo-500 bg-white"
                                 placeholder="60"
                               />
                               <div className="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">

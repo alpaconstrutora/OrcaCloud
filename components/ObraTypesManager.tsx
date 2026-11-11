@@ -68,7 +68,7 @@ const TypeForm: React.FC<{
         <div className="col-span-2">
           <label className="block text-form-label font-semibold text-slate-600 mb-1">Nome *</label>
           <input
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={form.name}
             onChange={e => set('name', e.target.value)}
             placeholder="Ex: Infraestrutura Urbana"
@@ -80,7 +80,7 @@ const TypeForm: React.FC<{
             Slug (identificador) *
           </label>
           <input
-            className={`w-full rounded-lg border border-slate-200 px-3 py-2 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none ${lockSlug ? 'bg-slate-50 text-slate-800 cursor-not-allowed' : ''}`}
+            className={`w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none ${lockSlug ? 'bg-slate-50 text-slate-800 cursor-not-allowed' : ''}`}
             value={form.slug}
             onChange={e => { if (!lockSlug) { setSlugTouched(true); set('slug', e.target.value); } }}
             readOnly={lockSlug}
@@ -107,7 +107,7 @@ const TypeForm: React.FC<{
         <div className="col-span-2">
           <label className="block text-form-label font-semibold text-slate-600 mb-1">Descrição</label>
           <input
-            className="w-full rounded-lg border border-slate-200 px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
+            className="w-full rounded-[6px] border border-slate-200 px-3 h-9 text-sm focus:ring-2 focus:ring-blue-500 outline-none"
             value={form.description}
             onChange={e => set('description', e.target.value)}
             placeholder="Descrição opcional do tipo de obra"

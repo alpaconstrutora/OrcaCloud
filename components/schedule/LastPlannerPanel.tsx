@@ -554,7 +554,7 @@ const WeeklyView: React.FC<{
                                 value={failureReason}
                                 onChange={e => setFailureReason(e.target.value)}
                                 placeholder="Ou descreva o motivo…"
-                                className="w-full text-button border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
+                                className="w-full text-button border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:ring-2 focus:ring-red-500 focus:border-red-500 outline-none"
                             />
                         </div>
                         <div className="flex justify-end gap-2 pt-1">

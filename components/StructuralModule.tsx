@@ -99,7 +99,7 @@ const SteelForm: React.FC<{
         <select
           value={f.tipo}
           onChange={e => set('tipo', e.target.value)}
-          className="rounded-lg border border-slate-200 px-2 py-2 text-sm font-medium text-slate-900 bg-white"
+          className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm font-medium text-slate-900 bg-white"
         >
           {STEEL_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
         </select>
@@ -109,7 +109,7 @@ const SteelForm: React.FC<{
         <input
           type="number" step="0.1" value={f.bitolaMm}
           onChange={e => set('bitolaMm', e.target.value)} onBlur={onBitolaBlur}
-          className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
+          className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
         />
       </label>
       <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
@@ -117,7 +117,7 @@ const SteelForm: React.FC<{
         <input
           type="number" step="0.001" value={f.pesoLinearKgM}
           onChange={e => set('pesoLinearKgM', e.target.value)}
-          className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
+          className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
         />
       </label>
       <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
@@ -125,7 +125,7 @@ const SteelForm: React.FC<{
         <input
           type="number" step="0.5" value={f.comprimentoBarraM}
           onChange={e => set('comprimentoBarraM', e.target.value)}
-          className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
+          className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
         />
       </label>
       <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
@@ -133,7 +133,7 @@ const SteelForm: React.FC<{
         <MoneyCentsInput
           value={f.custoKg}
           onChange={v => set('custoKg', v)}
-          className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
+          className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
         />
       </label>
       <label className="text-form-label font-bold text-slate-500 flex flex-col gap-1">
@@ -141,7 +141,7 @@ const SteelForm: React.FC<{
         <input
           type="number" step="1" value={f.perdaPctPadrao}
           onChange={e => set('perdaPctPadrao', e.target.value)}
-          className="rounded-lg border border-slate-200 px-2 py-2 text-sm bg-white"
+          className="rounded-[6px] border border-slate-200 px-2 h-9 text-sm bg-white"
         />
       </label>
       <div className="flex items-center gap-2">

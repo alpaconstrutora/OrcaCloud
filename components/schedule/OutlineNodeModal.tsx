@@ -62,7 +62,7 @@ export const OutlineNodeModal: React.FC<OutlineNodeModalProps> = ({
                             onChange={e => setName(e.target.value)}
                             onKeyDown={e => { if (e.key === 'Enter') submit(); if (e.key === 'Escape') onCancel(); }}
                             placeholder={`Nome ${mode === 'create' ? 'da nova ' : 'd'}${TYPE_LABEL[nodeType].toLowerCase()}`}
-                            className="mt-1.5 w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                            className="mt-1.5 w-full px-3 h-9 text-sm border border-gray-200 rounded-[6px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
                         />
                     </div>
 

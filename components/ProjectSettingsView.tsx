@@ -112,7 +112,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <select
                                 value={formData.status || 'Em Andamento'}
                                 onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             >
                                 <option value="Em Andamento">Em Andamento</option>
                                 <option value="Finalizado">Finalizado</option>
@@ -125,7 +125,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <select
                                 value={formData.budgetType || 'ANALYTIC'}
                                 onChange={(e) => setFormData({ ...formData, budgetType: e.target.value as any })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             >
                                 <option value="ANALYTIC">Analítico (Detalhado)</option>
                                 <option value="PARAMETRIC">Paramétrico (Estimado)</option>
@@ -136,7 +136,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <select
                                 value={formData.budgetStatus || 'Em Andamento'}
                                 onChange={(e) => setFormData({ ...formData, budgetStatus: e.target.value as any })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             >
                                 <option value="Em Andamento">Em Andamento (Aberto)</option>
                                 <option value="Fechado">Fechado (Bloqueado)</option>
@@ -148,12 +148,12 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-500 px-1">Área Prox. (m²)</label>
                             <div className="relative">
-                                <Ruler className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                                <Ruler className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="number"
                                     value={formData.area}
                                     onChange={(e) => setFormData({ ...formData, area: Number(e.target.value) })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 />
                             </div>
                         </div>
@@ -162,7 +162,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <select
                                 value={formData.standard}
                                 onChange={(e) => setFormData({ ...formData, standard: e.target.value })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             >
                                 {Object.entries(CUB_STANDARDS_DATA).map(([key, data]) => (
                                     <option key={key} value={key}>{data.label}</option>
@@ -187,7 +187,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <select
                                 value={formData.database}
                                 onChange={(e) => setFormData({ ...formData, database: e.target.value })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             >
                                 <option value="SINAPI">SINAPI</option>
                                 <option value="Própria">Base Própria</option>
@@ -196,13 +196,13 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-500 px-1">Mês de Referência</label>
                             <div className="relative">
-                                <Calendar className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                                <Calendar className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="text"
                                     value={formData.referenceMonth}
                                     onChange={(e) => setFormData({ ...formData, referenceMonth: e.target.value })}
                                     placeholder="MM/YYYY"
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 />
                             </div>
                         </div>
@@ -211,11 +211,11 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                     <div className="space-y-1.5">
                         <label className="text-xs font-semibold text-slate-500 px-1">Localidade (Estado)</label>
                         <div className="relative">
-                            <Globe className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                            <Globe className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <select
                                 value={formData.location}
                                 onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                             >
                                 {Object.keys(BASE_CUB_RATES).sort().map(uf => (
                                     <option key={uf} value={uf}>{uf} - Preços e CUB {uf}</option>
@@ -238,26 +238,26 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-500 px-1">BDI Padrão (%)</label>
                             <div className="relative">
-                                <Percent className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                                <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="number"
                                     step="0.01"
                                     value={formData.bdi}
                                     onChange={(e) => setFormData({ ...formData, bdi: Number(e.target.value) })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 />
                             </div>
                         </div>
                         <div className="space-y-1.5">
                             <label className="text-xs font-semibold text-slate-500 px-1">Encargos Sociais (LS %)</label>
                             <div className="relative">
-                                <Percent className="absolute left-3 top-3 w-4 h-4 text-gray-400" />
+                                <Percent className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                 <input
                                     type="number"
                                     step="0.01"
                                     value={formData.ls}
                                     onChange={(e) => setFormData({ ...formData, ls: Number(e.target.value) })}
-                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                                    className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 pl-10 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                                 />
                             </div>
                         </div>
@@ -268,7 +268,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                         <select
                             value={formData.socialChargesMode}
                             onChange={(e) => setFormData({ ...formData, socialChargesMode: e.target.value })}
-                            className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
+                            className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 text-sm font-bold text-gray-700 outline-none focus:ring-2 focus:ring-blue-500 transition-all"
                         >
                             <option value="Sem Desoneração">Sem Desoneração</option>
                             <option value="Com Desoneração">Com Desoneração</option>
@@ -305,7 +305,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                             <div key={item.key} className="space-y-1.5">
                                 <label className="text-[10px] font-semibold text-slate-500 px-1 whitespace-nowrap">{item.label} (%)</label>
                                 <div className="relative">
-                                    <item.icon className="absolute left-3 top-3 w-3.5 h-3.5 text-gray-400" />
+                                    <item.icon className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
                                     <input
                                         type="number"
                                         step="0.01"
@@ -321,7 +321,7 @@ const ProjectSettingsView: React.FC<ProjectSettingsViewProps> = ({ settings, onU
                                                 bdi: calculateBdi(newComp)
                                             });
                                         }}
-                                        className="w-full bg-gray-50 border border-gray-200 rounded-[6px] p-2.5 pl-9 text-form-input font-bold text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 transition-all"
+                                        className="w-full bg-gray-50 border border-gray-200 rounded-[6px] h-9 px-3 pl-9 text-form-input font-bold text-gray-700 outline-none focus:ring-2 focus:ring-purple-500 transition-all"
                                     />
                                 </div>
                             </div>

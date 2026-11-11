@@ -1088,11 +1088,11 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                     <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                             <label className="text-sm font-normal text-gray-400 uppercase tracking-widest ml-1">{commercialProject ? 'Total em Contratos' : 'Valor Total da Negociação'}</label>
-                            <MoneyCentsInput value={financialInfo.totalValue} onChange={v => handleSaveMultiple({ totalValue: v === '' ? 0 : Number(v) })} className="w-full bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-sm font-normal text-indigo-900 focus:bg-white focus:border-indigo-500 outline-none transition-all" placeholder="Valor Total" />
+                            <MoneyCentsInput value={financialInfo.totalValue} onChange={v => handleSaveMultiple({ totalValue: v === '' ? 0 : Number(v) })} className="w-full bg-gray-50 h-9 px-3 rounded-[6px] border border-gray-200 text-sm font-normal text-indigo-900 focus:bg-white focus:border-indigo-500 outline-none transition-all" placeholder="Valor Total" />
                         </div>
                         <div className="space-y-1">
                             <label className="text-sm font-normal text-gray-400 uppercase tracking-widest ml-1">Modalidade de Pagamento</label>
-                            <select value={financialInfo.paymentMethod} onChange={e => handleSaveMultiple({ paymentMethod: e.target.value })} className="w-full bg-gray-50 p-2.5 rounded-xl border border-gray-200 text-sm font-normal text-gray-700 focus:bg-white focus:border-indigo-500 outline-none transition-all">
+                            <select value={financialInfo.paymentMethod} onChange={e => handleSaveMultiple({ paymentMethod: e.target.value })} className="w-full bg-gray-50 h-9 px-3 rounded-[6px] border border-gray-200 text-sm font-normal text-gray-700 focus:bg-white focus:border-indigo-500 outline-none transition-all">
                                 <option value="Parcelamento Próprio">Parcelamento Próprio</option><option value="Permuta">Permuta</option><option value="À Vista">À Vista</option>
                             </select>
                         </div>
@@ -1140,14 +1140,14 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                 </div>
                 {isAdding && (
                     <div className="p-4 bg-indigo-50/30 grid grid-cols-1 md:grid-cols-5 gap-3 border-b border-indigo-100 items-end">
-                        <input type="text" value={installmentForm.description} onChange={e => setInstallmentForm({ ...installmentForm, description: e.target.value })} placeholder="Desc." className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                        <MoneyCentsInput value={installmentForm.value} onChange={v => setInstallmentForm({ ...installmentForm, value: v === '' ? 0 : Number(v) })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                        <input type="date" value={installmentForm.dueDate} onChange={e => setInstallmentForm({ ...installmentForm, dueDate: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
+                        <input type="text" value={installmentForm.description} onChange={e => setInstallmentForm({ ...installmentForm, description: e.target.value })} placeholder="Desc." className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
+                        <MoneyCentsInput value={installmentForm.value} onChange={v => setInstallmentForm({ ...installmentForm, value: v === '' ? 0 : Number(v) })} placeholder="Valor" className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
+                        <input type="date" value={installmentForm.dueDate} onChange={e => setInstallmentForm({ ...installmentForm, dueDate: e.target.value })} className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
                         <div className="flex gap-2">
-                            <input type="number" value={installmentForm.commissionRate || ''} onChange={e => setInstallmentForm({ ...installmentForm, commissionRate: parseFloat(e.target.value) || 0 })} placeholder="Comissão %" className="w-1/2 p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                            <input type="text" value={installmentForm.brokerName || ''} onChange={e => setInstallmentForm({ ...installmentForm, brokerName: e.target.value })} placeholder="Corretor" className="w-1/2 p-2 rounded-lg border border-gray-200 text-sm bg-white" />
+                            <input type="number" value={installmentForm.commissionRate || ''} onChange={e => setInstallmentForm({ ...installmentForm, commissionRate: parseFloat(e.target.value) || 0 })} placeholder="Comissão %" className="w-1/2 h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
+                            <input type="text" value={installmentForm.brokerName || ''} onChange={e => setInstallmentForm({ ...installmentForm, brokerName: e.target.value })} placeholder="Corretor" className="w-1/2 h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
                         </div>
-                        <select value={installmentForm.dealId || ''} onChange={e => { const d = commercialDeals.find(x => x.id === e.target.value) as RichPropertyDeal | undefined; setInstallmentForm({ ...installmentForm, dealId: e.target.value, dealType: d?.type, clientName: d?.client_name, propertyName: d?.property_name }); }} className="p-2 rounded-lg border border-gray-200 text-sm bg-white"><option value="">Vínculo?</option>{commercialDeals.map(d => <option key={d.id} value={d.id}>{(d as RichPropertyDeal).property_name || 'Contrato'}</option>)}</select>
+                        <select value={installmentForm.dealId || ''} onChange={e => { const d = commercialDeals.find(x => x.id === e.target.value) as RichPropertyDeal | undefined; setInstallmentForm({ ...installmentForm, dealId: e.target.value, dealType: d?.type, clientName: d?.client_name, propertyName: d?.property_name }); }} className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white"><option value="">Vínculo?</option>{commercialDeals.map(d => <option key={d.id} value={d.id}>{(d as RichPropertyDeal).property_name || 'Contrato'}</option>)}</select>
                         <div className="flex gap-1"><button onClick={handleSaveInstallment} className="p-2 bg-indigo-600 text-white rounded-lg"><Save className="w-4 h-4" /></button><button onClick={() => setIsAdding(false)} className="p-2 bg-white border border-gray-200 text-gray-400 rounded-lg"><X className="w-4 h-4" /></button></div>
                     </div>
                 )}
@@ -1264,20 +1264,20 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
     const renderDespesas = () => (
         <div className="space-y-6 animate-in fade-in duration-300">
             <div className="flex flex-wrap justify-between items-center gap-2 mb-4">
-                <input type="text" placeholder="Buscar despesas..." value={expenseSearchTerm} onChange={e => setExpenseSearchTerm(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm w-full max-w-xs" />
+                <input type="text" placeholder="Buscar despesas..." value={expenseSearchTerm} onChange={e => setExpenseSearchTerm(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm w-full max-w-xs" />
                 <div className="flex flex-wrap gap-2 items-center">
                     <div className="flex items-center gap-1">
                         <label className="text-form-label text-gray-400 whitespace-nowrap">De</label>
-                        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm" />
+                        <input type="date" value={filterDateFrom} onChange={e => setFilterDateFrom(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm" />
                     </div>
                     <div className="flex items-center gap-1">
                         <label className="text-form-label text-gray-400 whitespace-nowrap">Até</label>
-                        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm" />
+                        <input type="date" value={filterDateTo} onChange={e => setFilterDateTo(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm" />
                     </div>
                     {(filterDateFrom || filterDateTo) && (
                         <button onClick={() => { setFilterDateFrom(''); setFilterDateTo(''); }} className="text-button text-gray-700 hover:text-gray-900 px-2 py-1 rounded-lg border border-gray-200 bg-white">✕ Limpar datas</button>
                     )}
-                    <select value={originFilter} onChange={e => setOriginFilter(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm">
+                    <select value={originFilter} onChange={e => setOriginFilter(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm">
                         <option value="all">Todas as Origens</option>
                         <option value="Pedidos">Pedidos</option>
                         <option value="Contrato">Contrato</option>
@@ -1286,15 +1286,15 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         <option value="Geral">Geral</option>
                         <option value="Folha de Pagamento">Folha de Pagamento</option>
                     </select>
-                    <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-white border border-gray-200 p-2 rounded-xl text-sm"><option value="all">Todas as Categorias</option>{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
+                    <select value={categoryFilter} onChange={e => setCategoryFilter(e.target.value)} className="bg-white border border-gray-200 h-9 px-3 rounded-[6px] text-sm"><option value="all">Todas as Categorias</option>{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
                     <Button variant="danger" onClick={() => setIsAddingTransaction(true)} className="shadow-md"><Plus className="w-4 h-4" /> NOVA DESPESA</Button>
                 </div>
             </div>
             {isAddingTransaction && (
                 <div className="p-4 bg-red-50/30 grid grid-cols-1 md:grid-cols-6 gap-3 border border-red-100 rounded-2xl items-end">
-                    <input type="text" value={txForm.description} onChange={e => setTxForm({ ...txForm, description: e.target.value })} placeholder="Descrição" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                    <MoneyCentsInput value={txForm.value} onChange={v => setTxForm({ ...txForm, value: v === '' ? 0 : Number(v) })} placeholder="Valor" className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
-                    <select value={txForm.category} onChange={e => setTxForm({ ...txForm, category: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white">{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
+                    <input type="text" value={txForm.description} onChange={e => setTxForm({ ...txForm, description: e.target.value })} placeholder="Descrição" className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
+                    <MoneyCentsInput value={txForm.value} onChange={v => setTxForm({ ...txForm, value: v === '' ? 0 : Number(v) })} placeholder="Valor" className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
+                    <select value={txForm.category} onChange={e => setTxForm({ ...txForm, category: e.target.value })} className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white">{EXPENSE_CATEGORIES.map(c => <option key={c.value} value={c.value}>{c.label}</option>)}</select>
                     <SupplierSelect
                         suppliers={suppliersList}
                         value={txForm.supplierId || ''}
@@ -1302,7 +1302,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                         placeholder="Fornecedor (opcional)"
                         size="sm"
                     />
-                    <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} className="p-2 rounded-lg border border-gray-200 text-sm bg-white" />
+                    <input type="date" value={txForm.date} onChange={e => setTxForm({ ...txForm, date: e.target.value })} className="h-9 px-3 rounded-[6px] border border-gray-200 text-sm bg-white" />
                     <div className="flex gap-1"><Button variant="danger" size="icon" onClick={handleSaveTransaction}><Save className="w-4 h-4" /></Button><Button variant="secondary" size="icon" onClick={() => setIsAddingTransaction(false)}><X className="w-4 h-4" /></Button></div>
                 </div>
             )}
@@ -1647,7 +1647,7 @@ const ProjectFinancialManager: React.FC<ProjectFinancialManagerProps> = ({ setti
                                     type="date"
                                     value={payingInstallment?.date || ''}
                                     onChange={e => payingInstallment && setPayingInstallment({ ...payingInstallment, date: e.target.value })}
-                                    className="w-full bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white p-4 rounded-2xl text-sm font-normal transition-all outline-none shadow-sm"
+                                    className="w-full bg-gray-50 border-2 border-transparent focus:border-blue-500 focus:bg-white h-9 px-3 rounded-[6px] text-sm font-normal transition-all outline-none shadow-sm"
                                 />
                             </div>
 

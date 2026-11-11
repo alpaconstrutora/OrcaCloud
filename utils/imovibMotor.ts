@@ -279,7 +279,7 @@ export const CAMPOS_DO_MOTOR = [
     'revenue_post_handover_percent', 'post_handover_months', 'post_handover_rate_monthly', 'handover_delay_months',
     'cancellation_lag_months', 'cancellation_refund_percent', 'cancellation_resale', 'cancellation_resale_discount_percent',
     'sales_index_rate_monthly', 'cost_index_rate_monthly',
-    // Fase 4 (migration aplicar_20271111950000)
+    // Fase 4 (migration aplicar_20271111970000)
     'financing_release_lag_months', 'financing_min_sales_percent', 'financing_interest_mode', 'financing_amortization',
     'min_cash_balance',
 ] as const satisfies readonly (keyof ImovibStudy)[];

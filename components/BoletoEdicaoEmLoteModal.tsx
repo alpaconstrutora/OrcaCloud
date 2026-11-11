@@ -295,7 +295,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     value={novoStatus}
                                     onChange={e => { setNovoStatus(e.target.value as BoletoStatus | ''); setMotivoStatus(''); setResult(null); }}
                                     disabled={saving}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-900 outline-none focus:border-blue-400 disabled:opacity-50"
+                                    className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 outline-none focus:border-blue-400 disabled:opacity-50"
                                 >
                                     <option value="">— Não alterar —</option>
                                     {STATUS_DO_LOTE.map(s => <option key={s} value={s}>{STATUS_LABELS[s]}</option>)}
@@ -372,7 +372,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     value={projectId}
                                     onChange={e => setProjectId(e.target.value)}
                                     disabled={saving}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                    className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
                                 >
                                     <option value="">— Não alterar —</option>
                                     <option value={SEM_VINCULO}>— Sem vínculo —</option>
@@ -432,7 +432,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                     onChange={e => setDescricao(e.target.value)}
                                     disabled={saving}
                                     placeholder="— Não alterar —"
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                    className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
                                 />
                             </div>
 

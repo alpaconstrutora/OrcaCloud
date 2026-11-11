@@ -120,14 +120,14 @@ const CashFlowDashboard: React.FC<CashFlowDashboardProps> = ({ organizationId })
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
                     <span className="text-gray-400 text-sm">até</span>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
                     <select
                         value={granularity}
                         onChange={e => setGranularity(e.target.value as CashFlowGranularity)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400"
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400"
                     >
                         <option value="day">Diário</option>
                         <option value="week">Semanal</option>

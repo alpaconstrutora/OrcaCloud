@@ -2886,7 +2886,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     value={registerEntityModal.name}
                                     onChange={(e) => setRegisterEntityModal(m => m && { ...m, name: e.target.value })}
                                     placeholder="Nome do cliente/credor"
-                                    className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                    className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                     autoFocus
                                 />
                             </div>
@@ -2905,7 +2905,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                             });
                                         }}
                                         placeholder="Documento do extrato"
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+                                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -2913,7 +2913,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <select
                                         value={registerEntityModal.type}
                                         onChange={(e) => setRegisterEntityModal(m => m && { ...m, type: e.target.value as 'PF' | 'PJ' })}
-                                        className="w-full px-4 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
+                                        className="w-full px-4 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 cursor-pointer"
                                     >
                                         <option value="PF">Pessoa Física</option>
                                         <option value="PJ">Pessoa Jurídica</option>
@@ -2972,7 +2972,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                         type="date" 
                                         value={newInternalTx.transaction_date}
                                         onChange={(e) => setNewInternalTx({...newInternalTx, transaction_date: e.target.value})}
-                                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                        className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                     />
                                 </div>
                                 <div className="space-y-2">
@@ -2980,7 +2980,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     <select 
                                         value={newInternalTx.direction}
                                         onChange={(e) => setNewInternalTx({...newInternalTx, direction: e.target.value as 'CREDIT' | 'DEBIT'})}
-                                        className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
+                                        className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all cursor-pointer"
                                     >
                                         <option value="DEBIT">Saída / Débito</option>
                                         <option value="CREDIT">Entrada / Crédito</option>
@@ -2994,7 +2994,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     value={newInternalTx.amount}
                                     onChange={(e) => setNewInternalTx({...newInternalTx, amount: e.target.value})}
                                     placeholder="0,00"
-                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -3004,7 +3004,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     value={newInternalTx.description}
                                     onChange={(e) => setNewInternalTx({...newInternalTx, description: e.target.value})}
                                     placeholder="Ex: Pagamento Credor X"
-                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 />
                             </div>
                             <div className="space-y-2">
@@ -3014,7 +3014,7 @@ const BankReconciliation: React.FC<BankReconciliationProps> = ({ organizationId,
                                     value={newInternalTx.entity_name}
                                     onChange={(e) => setNewInternalTx({...newInternalTx, entity_name: e.target.value})}
                                     placeholder="Ex: João da Silva / Loja de Ferragens"
-                                    className="w-full px-5 py-3 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
+                                    className="w-full px-5 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-bold focus:outline-none focus:ring-2 focus:ring-blue-500/20 transition-all"
                                 />
                             </div>
                         </div>

@@ -154,7 +154,9 @@ function rotulosDosNiveis(item: ActionQueueItem, config: FinancialApprovalConfig
 // ─── ApproveRejectModal ──────────────────────────────────────
 // Exportado: `CentralControle.tsx` reaproveita o mesmo modal.
 
-const INPUT_CLASS = 'w-full border border-gray-200 rounded-[6px] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
+const INPUT_CLASS = 'w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const INPUT_CLASS_AREA = 'w-full border border-gray-200 rounded-[6px] px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
 const LABEL_CLASS = 'block text-xs font-semibold text-slate-500 mb-1';
 
 export interface ApproveRejectModalProps {
@@ -218,7 +220,7 @@ export function ApproveRejectModal({ item, mode, userEmail, config, onDone, onCl
                             placeholder={isApprove ? 'Ex: Orçamento verificado, aprovado.' : 'Informe o motivo…'}
                             value={notes}
                             onChange={e => setNotes(e.target.value)}
-                            className={`${INPUT_CLASS} resize-none`}
+                            className={`${INPUT_CLASS_AREA} resize-none`}
                         />
                     </div>
                     <div className="flex gap-3">

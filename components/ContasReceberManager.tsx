@@ -336,7 +336,7 @@ function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: No
                             placeholder={clients.length ? 'Selecione ou digite o cliente' : 'Nome do cliente'}
                             value={form.party_name}
                             onChange={e => setForm(f => ({ ...f, party_name: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                         <datalist id="contas-receber-clientes">
                             {clients.map(c => <option key={c.id} value={c.name} />)}
@@ -349,7 +349,7 @@ function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: No
                             placeholder="Descrição do recebível"
                             value={form.description}
                             onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
                     <div className="grid grid-cols-2 gap-3">
@@ -359,7 +359,7 @@ function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: No
                                 placeholder="0,00"
                                 value={form.amount}
                                 onChange={v => setForm(f => ({ ...f, amount: v }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                         <div>
@@ -368,7 +368,7 @@ function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: No
                                 type="date"
                                 value={form.due_date}
                                 onChange={e => setForm(f => ({ ...f, due_date: e.target.value }))}
-                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                             />
                         </div>
                     </div>
@@ -379,7 +379,7 @@ function NovoLancamentoModal({ organizationId, receivable, onSave, onClose }: No
                             placeholder="Ex: Medição, Parcela, Locação..."
                             value={form.category}
                             onChange={e => setForm(f => ({ ...f, category: e.target.value }))}
-                            className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                         />
                     </div>
                 </div>
@@ -572,13 +572,13 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                         <span className="text-xs text-gray-400 font-bold">Multa (%)</span>
                                         <input type="number" min={0} step="0.1" value={fine}
                                             onChange={e => setFine(e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                     <div>
                                         <span className="text-xs text-gray-400 font-bold">Juros ao mês (%)</span>
                                         <input type="number" min={0} step="0.1" value={interest}
                                             onChange={e => setInterest(e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                 </div>
                             </div>
@@ -589,13 +589,13 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                         <span className="text-xs text-gray-400 font-bold">Desconto (%)</span>
                                         <input type="number" min={0} step="0.1" value={discount}
                                             onChange={e => setDiscount(e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                     <div>
                                         <span className="text-xs text-gray-400 font-bold">Até (dias antes)</span>
                                         <input type="number" min={0} step="1" value={discountDays}
                                             onChange={e => setDiscountDays(e.target.value)}
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
+                                            className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-green-500" />
                                     </div>
                                 </div>
                             </div>
@@ -660,7 +660,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                                 <MoneyCentsInput
                                                     value={editAmount}
                                                     onChange={v => setEditAmount(v)}
-                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                                    className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                                 />
                                             </div>
                                             <div>
@@ -669,7 +669,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                                     type="date"
                                                     value={editDue}
                                                     onChange={e => setEditDue(e.target.value)}
-                                                    className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                                    className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                                 />
                                             </div>
                                         </div>
@@ -679,7 +679,7 @@ function EmitirCobrancaModal({ organizationId, receivable, existing, onDone, onC
                                                 type="text"
                                                 value={editDesc}
                                                 onChange={e => setEditDesc(e.target.value)}
-                                                className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
+                                                className="w-full border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:ring-2 focus:ring-amber-500"
                                             />
                                         </div>
                                         <div>

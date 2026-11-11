@@ -159,7 +159,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                                     onChange={e => setOrganizationId(e.target.value)}
                                     disabled={saving || organizacoes.length < 2}
                                     title={organizacoes.length < 2 ? 'A conta só atende a organização dona. Para lançar em outra, marque "Atende também" na conta (Minha Organização › Contas).' : undefined}
-                                    className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                    className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
                                 >
                                     <option value="">— Não alterar —</option>
                                     {organizacoes.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
@@ -178,7 +178,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                                 value={category}
                                 onChange={e => setCategory(e.target.value)}
                                 disabled={saving}
-                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
                             >
                                 <option value="">— Não alterar —</option>
                                 {categories.map(c => <option key={c} value={c}>{c}</option>)}
@@ -221,7 +221,7 @@ const BankTxEdicaoEmLoteModal: React.FC<BankTxEdicaoEmLoteModalProps> = ({
                                 value={projectId}
                                 onChange={e => setProjectId(e.target.value)}
                                 disabled={saving}
-                                className="w-full px-3 py-2.5 bg-white border border-gray-200 rounded-xl text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
+                                className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 outline-none focus:border-blue-400 disabled:opacity-50"
                             >
                                 <option value="">— Não alterar —</option>
                                 {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}

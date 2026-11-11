@@ -785,7 +785,7 @@ const SavePlanningVersionModal: React.FC<{ onCancel: () => void; onSave: (descri
                         onChange={e => setDescription(e.target.value)}
                         onKeyDown={e => { if (e.key === 'Enter' && description.trim()) onSave(description); }}
                         placeholder="Ex.: Cronograma aprovado pelo cliente"
-                        className="mt-1.5 w-full px-3 py-2 text-sm border border-gray-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
+                        className="mt-1.5 w-full px-3 h-9 text-sm border border-gray-200 rounded-[6px] focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-300"
                     />
                 </div>
                 <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-end gap-2">

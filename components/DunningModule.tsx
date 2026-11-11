@@ -133,7 +133,7 @@ function RuleModal({
                                 value={form.name}
                                 onChange={e => patch({ name: e.target.value })}
                                 placeholder="Ex: 1ª Cobrança — 7 dias atraso"
-                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full text-sm border border-gray-200 rounded-[6px] px-3 h-9 focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                         </div>
 
@@ -146,7 +146,7 @@ function RuleModal({
                                 type="number"
                                 value={form.days_offset}
                                 onChange={e => patch({ days_offset: parseInt(e.target.value) || 0 })}
-                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full text-sm border border-gray-200 rounded-[6px] px-3 h-9 focus:ring-2 focus:ring-blue-500 outline-none"
                             />
                             <p className="text-xs text-gray-400 mt-1">{fmtOffset(form.days_offset)}</p>
                         </div>
@@ -157,7 +157,7 @@ function RuleModal({
                             <select
                                 value={form.trigger_hour}
                                 onChange={e => patch({ trigger_hour: parseInt(e.target.value) })}
-                                className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                                className="w-full text-sm border border-gray-200 rounded-[6px] px-3 h-9 focus:ring-2 focus:ring-blue-500 outline-none"
                             >
                                 {[7, 8, 9, 10, 11, 12, 14, 16, 18].map(h => (
                                     <option key={h} value={h}>{String(h).padStart(2, '0')}:00</option>
@@ -186,7 +186,7 @@ function RuleModal({
                             type="text"
                             value={form.subject_template}
                             onChange={e => patch({ subject_template: e.target.value })}
-                            className="w-full text-sm border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none"
+                            className="w-full text-sm border border-gray-200 rounded-[6px] px-3 h-9 focus:ring-2 focus:ring-blue-500 outline-none"
                         />
                         <div className="flex flex-wrap gap-1 mt-1.5">
                             {DUNNING_VARS.slice(0, 4).map(v => (

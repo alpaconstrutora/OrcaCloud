@@ -110,7 +110,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                                 required
                                 value={referenceMonth}
                                 onChange={e => setReferenceMonth(e.target.value)}
-                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                className="w-full px-6 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                             />
                         </div>
 
@@ -120,7 +120,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                                 type="date"
                                 value={dueDate}
                                 onChange={e => setDueDate(e.target.value)}
-                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                className="w-full px-6 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                             />
                         </div>
 
@@ -132,7 +132,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                                 placeholder="0,00"
                                 value={totalValue}
                                 onChange={e => setTotalValue(e.target.value)}
-                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                className="w-full px-6 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                             />
                         </div>
 
@@ -143,7 +143,7 @@ const UtilityBillModal: React.FC<UtilityBillModalProps> = ({
                                 placeholder="0,00"
                                 value={consumptionMetric}
                                 onChange={e => setConsumptionMetric(e.target.value)}
-                                className="w-full px-6 py-4 bg-gray-50 border border-gray-100 rounded-2xl text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
+                                className="w-full px-6 h-9 bg-gray-50 border border-gray-100 rounded-[6px] text-sm font-semibold focus:outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 transition-all"
                             />
                         </div>
 

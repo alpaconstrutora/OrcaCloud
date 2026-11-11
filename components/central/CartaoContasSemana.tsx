@@ -44,6 +44,7 @@ function fBRL(v: number): string {
 export function CartaoContasSemana({ estado, onTentarDeNovo, dados, animar, onNavigate }: Props) {
     const total = dados ? FAIXAS.reduce((s, f) => s + dados[f.chave].qtd, 0) : 0;
     const atrasadas = dados?.atrasadas.qtd ?? 0;
+    const idMascara = `central-varre-${React.useId().replace(/[^a-zA-Z0-9_-]/g, '')}`;
 
     // Fatias com um respiro de 1,5% entre si; faixa vazia não ocupa espaço.
     const fatias: { cor: string; d: string }[] = [];
@@ -72,7 +73,17 @@ export function CartaoContasSemana({ estado, onTentarDeNovo, dados, animar, onNa
                         <svg viewBox="0 0 200 104" className="w-full" role="img"
                             aria-label={`${total} títulos: ${FAIXAS.map(f => `${dados[f.chave].qtd} ${f.rotulo.toLowerCase()}`).join(', ')}`}>
                             <path d={arco(0, 1)} fill="none" stroke="#f1f5f9" strokeWidth={ESPESSURA} className="central-trilho" />
-                            {fatias.map((f, i) => <path key={i} d={f.d} fill="none" stroke={f.cor} strokeWidth={ESPESSURA} />)}
+                            {/* Na primeira carga as faixas são reveladas por UMA máscara que
+                                varre o arco da esquerda para a direita, junto com o número
+                                do centro: atrasadas → 2 dias → 7 dias, a ordem da urgência. */}
+                            {animar && (
+                                <mask id={idMascara} maskUnits="userSpaceOnUse" x="0" y="0" width="200" height="104">
+                                    <path d={arco(0, 1)} fill="none" stroke="white" strokeWidth={ESPESSURA + 2} pathLength={1} className="central-varre" />
+                                </mask>
+                            )}
+                            <g mask={animar ? `url(#${idMascara})` : undefined}>
+                                {fatias.map((f, i) => <path key={i} d={f.d} fill="none" stroke={f.cor} strokeWidth={ESPESSURA} />)}
+                            </g>
                         </svg>
                         <div className="absolute inset-x-0 bottom-0 flex flex-col items-center">
                             <NumeroQueSobe valor={total} animar={animar} className="text-[28px] leading-none font-semibold text-gray-900" />

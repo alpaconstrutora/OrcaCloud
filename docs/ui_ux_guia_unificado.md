@@ -2705,6 +2705,18 @@ abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
 - O subtítulo é a **frase-resumo do dia** (só as partes ≠ 0), não uma descrição da tela.
 - Aparece **sem esperar o banco** (nome + hora); a frase mostra esqueleto até a contagem.
 - Entrada curta uma vez (`.central-entra`, `index.css`), nenhuma com `prefers-reduced-motion`.
+- **Movimento da tela** (classes `.central-*` em `index.css`; 11/11/2026) — o movimento
+  explica o que mudou, nunca se repete ao atualizar:
+  - **Item resolvido** (concluir tarefa, aprovar/rejeitar): o ícone enche de verde na
+    hora, a linha recolhe em 220ms (`.central-recolhe` + `data-saindo`) e só então o
+    item sai do estado — é aí que "Seu dia" acende um segmento. A gravação no banco
+    NÃO espera a animação. O novo "Mais urgente" entra no lugar (`.central-troca`).
+  - **Grupo da fila** abre/fecha deslizando (grade `1fr ↔ 0fr`); fechado fica no DOM
+    com `inert`. Trocar de pílula esmaece a fila; esqueleto → dado esmaece (200ms).
+  - **Primeira carga:** medidor varre o arco (máscara) e barras de Obras crescem, no
+    tempo e curva do número que sobe (700ms, expo-out). Atualizar não repete.
+  - `prefers-reduced-motion`: nada desloca nem cresce; o item resolvido só esmaece
+    no lugar e sai.
 
 > ❌ Não copiar para outras telas: a exceção é da tela de entrada. Lista, cadastro e
 > painel analítico seguem o §20.

@@ -1,5 +1,5 @@
 import React from 'react';
-import { Check, ChevronDown, ChevronRight, X, CircleCheck } from 'lucide-react';
+import { Check, ChevronRight, X, CircleCheck } from 'lucide-react';
 import { CartaoCentral, type EstadoDoCartao } from './CartaoCentral';
 import { ENTITY_TAG } from '../FinancialApprovalModule';
 import type { ActionQueueItem } from '../../services/approvalService';
@@ -12,6 +12,11 @@ import { diasDeAtraso, type FilaDoDia, type ItemDaFila } from '../../utils/meuDi
  *
  * No alto, o item mais urgente em destaque (vencido > vence hoje > alerta alto),
  * com a ação na mão. Abaixo, um grupo recolhível por origem.
+ *
+ * Movimento (index.css, `.central-*`): o item resolvido recolhe antes de sair
+ * (`saindo`), o novo destaque entra no lugar do anterior, o grupo abre e fecha
+ * deslizando e a troca de filtro esmaece. Nada disso desloca com
+ * `prefers-reduced-motion`.
  */
 export type FiltroDaFila = 'tudo' | 'aprovacoes' | 'tarefas' | 'contas' | 'alertas';
 
@@ -73,6 +78,8 @@ interface Props {
     onTentarDeNovo: () => void;
     fila: FilaDoDia;
     destaque: ItemDaFila | null;
+    /** Chaves dos itens resolvidos que estão saindo da fila (a linha recolhe). */
+    saindo: ReadonlySet<string>;
     hoje: string;
     filtro: FiltroDaFila;
     /** Aprovações PENDENTES da organização inteira (minhas e de outras alçadas). */
@@ -88,7 +95,7 @@ interface Props {
 }
 
 export function MinhaFila(props: Props) {
-    const { estado, onTentarDeNovo, fila, destaque, hoje, filtro, className } = props;
+    const { estado, onTentarDeNovo, fila, destaque, saindo, filtro, className } = props;
     const [abertos, setAbertos] = React.useState<Record<string, boolean>>({ aprovacoes: true, tarefas: true, contas: true, alertas: false });
 
     const grupos = GRUPOS.filter(g => filtro === 'tudo' || g.chave === filtro);
@@ -111,8 +118,12 @@ export function MinhaFila(props: Props) {
                     <p className="text-xs text-gray-500">Quando algo chegar à sua alçada ou vencer, aparece aqui.</p>
                 </div>
             ) : (
-                <div className="flex flex-col gap-4">
-                    {destaque && filtro === 'tudo' && <Destaque item={destaque} {...props} />}
+                <div key={filtro} className="flex flex-col gap-4 central-aparece">
+                    {destaque && filtro === 'tudo' && (
+                        <div key={destaque.chave} className="central-recolhe" data-saindo={saindo.has(destaque.chave)}>
+                            <div className="central-troca"><Destaque item={destaque} {...props} /></div>
+                        </div>
+                    )}
 
                     {grupos.map(g => {
                         const itens = fila[g.chave].filter(i => !(filtro === 'tudo' && destaque && i.chave === destaque.chave));
@@ -130,14 +141,16 @@ export function MinhaFila(props: Props) {
                                     disabled={filtro !== 'tudo'}
                                     className="w-full flex items-center gap-2 text-left rounded-[6px] -mx-1 px-1 py-1 hover:bg-gray-50 disabled:hover:bg-transparent disabled:cursor-default focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                                 >
-                                    {filtro === 'tudo' && (aberto
-                                        ? <ChevronDown className="w-4 h-4 text-gray-500" aria-hidden="true" />
-                                        : <ChevronRight className="w-4 h-4 text-gray-500" aria-hidden="true" />)}
+                                    {filtro === 'tudo' && (
+                                        <ChevronRight className={`w-4 h-4 text-gray-500 transition-transform duration-200 motion-reduce:transition-none ${aberto ? 'rotate-90' : ''}`} aria-hidden="true" />
+                                    )}
                                     <span className="text-sm font-medium text-gray-800">{g.titulo}</span>
                                     <span className="text-xs text-gray-500 tabular-nums">{qtd.toLocaleString('pt-BR')}</span>
                                 </button>
-                                {aberto && (
-                                    <div id={idLista}>
+                                {/* Sempre no DOM para abrir e fechar deslizando; fechado = `inert`
+                                    (fora do Tab e do leitor de tela). */}
+                                <div id={idLista} className="central-recolhe" data-fechado={!aberto} inert={!aberto}>
+                                    <div>
                                         {itens.length === 0 ? (
                                             <p className="text-sm text-gray-500 py-2">Nada aqui hoje.</p>
                                         ) : (
@@ -148,12 +161,12 @@ export function MinhaFila(props: Props) {
                                         <button
                                             type="button"
                                             onClick={() => props.onNavigate(g.destino)}
-                                            className="mt-1 text-xs font-medium text-blue-600 hover:text-blue-800 rounded-[6px] px-1 -mx-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
+                                            className="mt-1 mb-0.5 text-xs font-medium text-blue-600 hover:text-blue-800 rounded-[6px] px-1 -mx-1 py-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40"
                                         >
                                             {g.verTodas(g.chave === 'aprovacoes' ? props.totalAprovacoesDaOrg : qtd)}
                                         </button>
                                     </div>
-                                )}
+                                </div>
                             </div>
                         );
                     })}
@@ -172,8 +185,9 @@ function destinoDo(item: ItemDaFila): string {
     }
 }
 
-function Destaque({ item, hoje, onAprovar, onRejeitar, onConcluirTarefa, onNavigate }: { item: ItemDaFila } & Props) {
+function Destaque({ item, hoje, saindo, onAprovar, onRejeitar, onConcluirTarefa, onNavigate }: { item: ItemDaFila } & Props) {
     const prazo = prazoTexto(item.prazo, hoje);
+    const resolvido = saindo.has(item.chave);
     const detalhe = detalheDo(item);
     const botaoPrimario = 'h-9 px-4 inline-flex items-center gap-1.5 rounded-[6px] bg-blue-600 text-white text-sm font-medium hover:bg-blue-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40 focus-visible:ring-offset-2';
     const botaoSecundario = 'h-9 px-4 inline-flex items-center gap-1.5 rounded-[6px] border border-gray-200 bg-white text-gray-700 text-sm font-medium hover:bg-gray-50 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40';
@@ -189,17 +203,17 @@ function Destaque({ item, hoje, onAprovar, onRejeitar, onConcluirTarefa, onNavig
             <div className="mt-3 flex flex-wrap gap-2">
                 {item.tipo === 'aprovacao' && (
                     <>
-                        <button type="button" className={botaoPrimario} onClick={() => onAprovar(item.aprovacao)}>
+                        <button type="button" className={botaoPrimario} disabled={resolvido} onClick={() => onAprovar(item.aprovacao)}>
                             <Check className="w-4 h-4" aria-hidden="true" /> Aprovar
                         </button>
-                        <button type="button" className={botaoSecundario} onClick={() => onRejeitar(item.aprovacao)}>
+                        <button type="button" className={botaoSecundario} disabled={resolvido} onClick={() => onRejeitar(item.aprovacao)}>
                             <X className="w-4 h-4" aria-hidden="true" /> Rejeitar
                         </button>
                     </>
                 )}
                 {item.tipo === 'tarefa' && (
-                    <button type="button" className={botaoPrimario} onClick={() => onConcluirTarefa(item.tarefa.id)}>
-                        <Check className="w-4 h-4" aria-hidden="true" /> Concluir tarefa
+                    <button type="button" className={botaoPrimario} disabled={resolvido} onClick={() => onConcluirTarefa(item.tarefa.id)}>
+                        <Check className="w-4 h-4" aria-hidden="true" /> {resolvido ? 'Concluída' : 'Concluir tarefa'}
                     </button>
                 )}
                 <button type="button" className={item.tipo === 'aprovacao' || item.tipo === 'tarefa' ? 'h-9 px-2 text-sm font-medium text-blue-600 hover:text-blue-800 rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40' : botaoPrimario} onClick={() => onNavigate(destinoDo(item))}>
@@ -210,49 +224,55 @@ function Destaque({ item, hoje, onAprovar, onRejeitar, onConcluirTarefa, onNavig
     );
 }
 
-function Linha({ item, hoje, onAprovar, onRejeitar, onConcluirTarefa, onNavigate }: { item: ItemDaFila } & Props) {
+function Linha({ item, hoje, saindo, onAprovar, onRejeitar, onConcluirTarefa, onNavigate }: { item: ItemDaFila } & Props) {
     const prazo = prazoTexto(item.prazo, hoje);
+    const resolvido = saindo.has(item.chave);
     const partes = [item.tipo === 'aprovacao' ? ENTITY_TAG[item.aprovacao.entity] : null, detalheDo(item)].filter(Boolean);
     const icone ='h-8 w-8 inline-flex items-center justify-center rounded-[6px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40';
     return (
-        <li className="flex items-center gap-3 py-2.5">
-            {item.tipo === 'alerta' && (
-                <span
-                    className={`w-2 h-2 rounded-full shrink-0 ${item.alerta.severity === 'HIGH' ? 'bg-red-500' : item.alerta.severity === 'MEDIUM' ? 'bg-amber-500' : 'bg-gray-400'}`}
-                    aria-label={item.alerta.severity === 'HIGH' ? 'Alta prioridade' : item.alerta.severity === 'MEDIUM' ? 'Média prioridade' : 'Baixa prioridade'}
-                    role="img"
-                />
-            )}
-            {item.tipo === 'tarefa' && (
-                <button type="button" onClick={() => onConcluirTarefa(item.tarefa.id)} aria-label={`Concluir tarefa ${item.tarefa.title}`} title="Concluir tarefa"
-                    className={`${icone} -ml-1.5 text-gray-400 hover:text-emerald-600 hover:bg-emerald-50`}>
-                    <CircleCheck className="w-4 h-4" aria-hidden="true" />
+        <li className="central-recolhe" data-saindo={resolvido}>
+            {/* O padding mora DENTRO do recorte: no próprio filho da grade ele
+                impediria a linha de recolher até zero. */}
+            <div><div className="flex items-center gap-3 py-2.5">
+                {item.tipo === 'alerta' && (
+                    <span
+                        className={`w-2 h-2 rounded-full shrink-0 ${item.alerta.severity === 'HIGH' ? 'bg-red-500' : item.alerta.severity === 'MEDIUM' ? 'bg-amber-500' : 'bg-gray-400'}`}
+                        aria-label={item.alerta.severity === 'HIGH' ? 'Alta prioridade' : item.alerta.severity === 'MEDIUM' ? 'Média prioridade' : 'Baixa prioridade'}
+                        role="img"
+                    />
+                )}
+                {item.tipo === 'tarefa' && (
+                    <button type="button" onClick={() => onConcluirTarefa(item.tarefa.id)} disabled={resolvido} aria-label={`Concluir tarefa ${item.tarefa.title}`} title="Concluir tarefa"
+                        className={`${icone} -ml-1.5 ${resolvido ? 'text-white' : 'text-gray-400 hover:text-emerald-600 hover:bg-emerald-50'}`}>
+                        {/* Resolvida: o círculo enche de verde na hora, antes de a linha recolher. */}
+                        <CircleCheck className={`w-4 h-4 transition-colors duration-150 ${resolvido ? 'fill-emerald-500' : 'fill-transparent'}`} aria-hidden="true" />
+                    </button>
+                )}
+                <button type="button" onClick={() => onNavigate(destinoDo(item))}
+                    className="flex-1 min-w-0 text-left rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40">
+                    <span className="block text-sm text-gray-900 truncate">{tituloDo(item)}</span>
+                    {/* O detalhe encolhe; o prazo nunca é cortado (é o que diz a urgência). */}
+                    <span className="flex text-xs text-gray-500 min-w-0">
+                        {partes.length > 0 && <span className="truncate">{partes.join(' · ')}</span>}
+                        {prazo && <span className={`shrink-0 whitespace-nowrap ${TOM_PRAZO[prazo.tom]}`}>{partes.length > 0 ? ' · ' : ''}{prazo.texto}</span>}
+                    </span>
                 </button>
-            )}
-            <button type="button" onClick={() => onNavigate(destinoDo(item))}
-                className="flex-1 min-w-0 text-left rounded-[6px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500/40">
-                <span className="block text-sm text-gray-900 truncate">{tituloDo(item)}</span>
-                {/* O detalhe encolhe; o prazo nunca é cortado (é o que diz a urgência). */}
-                <span className="flex text-xs text-gray-500 min-w-0">
-                    {partes.length > 0 && <span className="truncate">{partes.join(' · ')}</span>}
-                    {prazo && <span className={`shrink-0 whitespace-nowrap ${TOM_PRAZO[prazo.tom]}`}>{partes.length > 0 ? ' · ' : ''}{prazo.texto}</span>}
-                </span>
-            </button>
-            {item.valor != null && item.valor !== 0 && (
-                <span className="text-sm font-medium text-gray-800 tabular-nums shrink-0">{fBRL(item.valor)}</span>
-            )}
-            {item.tipo === 'aprovacao' && (
-                <span className="flex items-center gap-0.5 shrink-0">
-                    <button type="button" onClick={() => onAprovar(item.aprovacao)} aria-label={`Aprovar ${tituloDo(item)}`} title="Aprovar"
-                        className={`${icone} text-emerald-600 hover:bg-emerald-50`}>
-                        <Check className="w-4 h-4" aria-hidden="true" />
-                    </button>
-                    <button type="button" onClick={() => onRejeitar(item.aprovacao)} aria-label={`Rejeitar ${tituloDo(item)}`} title="Rejeitar"
-                        className={`${icone} text-red-500 hover:bg-red-50`}>
-                        <X className="w-4 h-4" aria-hidden="true" />
-                    </button>
-                </span>
-            )}
+                {item.valor != null && item.valor !== 0 && (
+                    <span className="text-sm font-medium text-gray-800 tabular-nums shrink-0">{fBRL(item.valor)}</span>
+                )}
+                {item.tipo === 'aprovacao' && (
+                    <span className="flex items-center gap-0.5 shrink-0">
+                        <button type="button" onClick={() => onAprovar(item.aprovacao)} disabled={resolvido} aria-label={`Aprovar ${tituloDo(item)}`} title="Aprovar"
+                            className={`${icone} text-emerald-600 hover:bg-emerald-50`}>
+                            <Check className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                        <button type="button" onClick={() => onRejeitar(item.aprovacao)} disabled={resolvido} aria-label={`Rejeitar ${tituloDo(item)}`} title="Rejeitar"
+                            className={`${icone} text-red-500 hover:bg-red-50`}>
+                            <X className="w-4 h-4" aria-hidden="true" />
+                        </button>
+                    </span>
+                )}
+            </div></div>
         </li>
     );
 }

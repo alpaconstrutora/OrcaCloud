@@ -46,6 +46,8 @@ interface Props {
 /** Fonte do painel: ainda carregando, com erro, ou o dado. */
 type Fonte<T> = { estado: 'carregando' } | { estado: 'erro' } | { estado: 'ok'; data: T };
 const CARREGANDO = { estado: 'carregando' } as const;
+/** Tempo da linha recolhendo (`.central-recolhe` em index.css) antes do item sair do estado. */
+const SAIDA_MS = 220;
 
 function estadoDe(f: Fonte<unknown>): EstadoDoCartao {
     return f.estado;
@@ -235,8 +237,22 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
     const nome = comoChamar(organizations, userEmail || profile.email);
 
     // ── Ações (estado local, §22: nada de recarregar o painel inteiro) ─────
+    // O item resolvido primeiro SAI da fila (a linha recolhe, `saindo`) e só
+    // então some do estado — e é aí que "Seu dia" avança um segmento. A
+    // gravação no banco não espera a animação.
+    const [saindo, setSaindo] = React.useState<ReadonlySet<string>>(() => new Set());
+    const saidas = React.useRef<ReturnType<typeof setTimeout>[]>([]);
+    React.useEffect(() => () => saidas.current.forEach(clearTimeout), []);
+    const tirarDaFila = React.useCallback((chave: string, aplicar: () => void) => {
+        setSaindo(s => new Set(s).add(chave));
+        saidas.current.push(setTimeout(() => {
+            aplicar();
+            setSaindo(s => { const n = new Set(s); n.delete(chave); return n; });
+        }, SAIDA_MS));
+    }, []);
+
     const concluirTarefa = React.useCallback(async (id: string) => {
-        setMeuDia(m => m.estado !== 'ok' ? m : {
+        tirarDaFila(`tarefa:${id}`, () => setMeuDia(m => m.estado !== 'ok' ? m : {
             estado: 'ok',
             data: {
                 ...m.data,
@@ -246,20 +262,22 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                     concluidas_hoje: m.data.tarefas.concluidas_hoje + 1,
                 },
             },
-        });
+        }));
         try {
             await taskService.update(id, { status: 'done' });
         } catch (err) {
             console.error('[CentralControle] concluir tarefa:', err);
             load();
         }
-    }, [load]);
+    }, [load, tirarDaFila]);
 
     const aprovacaoFeita = React.useCallback((item: ActionQueueItem) => {
         setApprovalModal(null);
-        setFila(f => f.estado !== 'ok' ? f : { estado: 'ok', data: f.data.filter(i => !(i.entity === item.entity && i.id === item.id)) });
-        setMeuDia(m => m.estado !== 'ok' ? m : { estado: 'ok', data: { ...m.data, aprovacoes_hoje: m.data.aprovacoes_hoje + 1 } });
-    }, []);
+        tirarDaFila(`aprovacao:${item.entity}:${item.id}`, () => {
+            setFila(f => f.estado !== 'ok' ? f : { estado: 'ok', data: f.data.filter(i => !(i.entity === item.entity && i.id === item.id)) });
+            setMeuDia(m => m.estado !== 'ok' ? m : { estado: 'ok', data: { ...m.data, aprovacoes_hoje: m.data.aprovacoes_hoje + 1 } });
+        });
+    }, [tirarDaFila]);
 
     const pilulas: { chave: FiltroDaFila; rotulo: string; qtd: number | null }[] = [
         { chave: 'tudo', rotulo: 'Tudo', qtd: contagem?.pendentes ?? null },
@@ -310,6 +328,7 @@ const CentralControle: React.FC<Props> = ({ organizationId, userEmail = '', onNa
                         onTentarDeNovo={load}
                         fila={filaDoDia}
                         destaque={destaque}
+                        saindo={saindo}
                         hoje={hoje}
                         filtro={filtro}
                         totalAprovacoesDaOrg={totalAprovacoesDaOrg}

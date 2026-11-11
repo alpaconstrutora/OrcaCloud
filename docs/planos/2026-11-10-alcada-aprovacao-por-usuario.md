@@ -111,10 +111,15 @@ Um item por arquivo. **O que muda** · **como sei que terminou**.
 
 10/11/2026, commits 26a50411 + 50c42c0e (branch `feat/alcada-aprovacao-por-usuario`, sem push):
 
-- [ ] 1 migration: **escrita** (`aplicar_20271111150000_alcada_por_usuario.sql`, prefixo
-  conferido, `migrationsPrefixo.test` verde), **NÃO aplicada**. O teste a seco no banco
-  remoto (transação desfeita no fim) foi barrado pelo classificador de permissões:
-  aguarda autorização do usuário para (a) o teste a seco e (b) a aplicação.
+- [x] 1 migration: `aplicar_20271111150000_alcada_por_usuario.sql` **aplicada em 11/11/2026**
+  (`db query --linked -f`, rodada pelo usuário). Antes, teste a seco no banco remoto
+  (transação desfeita), como usuário autenticado, todos os casos como esperado: membro não
+  cadastra aprovador (42501) nem altera faixa (0 linhas); com Bruna no N1, a fila do Iago traz
+  o título com `pode_aprovar=f`, `vez_de={bruna.pereira}`; Iago aprovar/rejeitar/gravar em nome
+  da Bruna → `ALCADA_NAO_PERMITE`; Bruna `pode=t` e aprova; esvaziar a cadeia e escrita do
+  sistema passam; próximo nível 2,1,1. Conferido depois de aplicar: tabela, 0 aprovadores,
+  7 gatilhos, policies `fac_v5_*` + `aa_*`, fila com as colunas novas, `anon` sem EXECUTE.
+  Prefixo reconferido contra `origin/main` 576a8c2f; nenhuma migration nova toca na fila.
 - [x] 2 tipos: `ApprovalApprover`, `MembroAprovador`; `pode_aprovar`/`vez_de` em `ActionQueueItem`.
 - [x] 3 serviço: `services/approvalApproversService.ts` (aceita org `null` = "Todas", REGRA #5).
 - [x] 4 erro legível: `utils/alcada.mensagemDaAlcada` em `approvalService` e `darfService`;

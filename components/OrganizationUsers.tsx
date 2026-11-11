@@ -11,10 +11,14 @@ import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 import { temAcessoTotal } from '../lib/acessoTotal';
+import LinkDoCelularBloco from './celular/LinkDoCelularBloco';
 
 // §6.3: toda coluna de valor único é ordenável. "Função / Cargo" é composta
 // (papel + nome do cargo customizado opcional na mesma célula) — exceção
 // legítima documentada, igual ao padrão de "Contato" em SupplierList.tsx.
+/** Convite antigo só por e-mail (`user_id` NULL): sem conta de acesso não há link do celular. */
+const MOTIVO_SEM_CONTA = 'Esta pessoa ainda não tem conta de acesso — o link do celular só pode ser gerado depois que ela entrar no sistema.';
+
 const MEMBER_COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Membro', sortable: true },
@@ -1578,6 +1582,24 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         </div>
                                     </div>
                                 </div>
+                            </div>
+                            {/* Link do celular (Minhas Tarefas sem login) — §30: seção com título + linha.
+                                O link é da CONTA (user_id) na organização desta tela; convite antigo só por
+                                e-mail ainda não tem conta, então o bloco aparece desligado dizendo o motivo.
+                                Os botões do bloco são type="button": estão dentro deste <form>. */}
+                            <div className="space-y-4 pt-2">
+                                <div className="flex items-center gap-2 border-b border-gray-100 pb-3">
+                                    <h4 className="text-sm font-semibold text-gray-900">Link do celular</h4>
+                                    <span className="text-xs text-gray-400">abre Minhas Tarefas no celular, sem senha</span>
+                                </div>
+                                {editingMember.userId && organizationId ? (
+                                    <LinkDoCelularBloco userId={editingMember.userId} orgId={organizationId} nomePessoa={editMemberName.trim() || editingMember.name} />
+                                ) : (
+                                    <div className="space-y-2">
+                                        <Button type="button" disabled title={MOTIVO_SEM_CONTA}>Gerar link</Button>
+                                        <p className="text-xs text-slate-500">{organizationId ? MOTIVO_SEM_CONTA : 'Não foi possível identificar a organização desta tela.'}</p>
+                                    </div>
+                                )}
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setEditingMember(null)} className="px-4 py-2 text-sm text-gray-600 hover:bg-gray-100 rounded-lg transition-colors">Cancelar</button>

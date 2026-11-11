@@ -5,6 +5,7 @@ import { useStore } from '../store/useStore';
 import NotificationPanel from './NotificationPanel';
 import PreferencesSheet, { type ThemeMode } from './PreferencesSheet';
 import MyAccountSheet from './MyAccountSheet';
+import MeuLinkCelularSheet from './celular/MeuLinkCelularSheet';
 import ContextSelector from './ContextSelector';
 import { notificationService } from '../services/notificationService';
 import { taskService } from '../services/taskService';
@@ -167,10 +168,11 @@ const Layout: React.FC<LayoutProps> = ({
   isNotificationOpen = false,
   setIsNotificationOpen = () => { }
 }) => {
-  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab, projectId } = useStore();
+  const { logout, companies, activeEmpresaId, setActiveEmpresaId, managementTab, setManagementTab, projectId, session } = useStore();
   const [isMobileMenuOpen, setIsMobileMenuOpen] = React.useState(false);
   const [isProfileMenuOpen, setIsProfileMenuOpen] = React.useState(false);
   const [isMyAccountOpen, setIsMyAccountOpen] = React.useState(false);
+  const [isMeuLinkCelularOpen, setIsMeuLinkCelularOpen] = React.useState(false);
   const profileMenuRef = React.useRef<HTMLDivElement>(null);
   const activeEmpresa = companies.find(c => c.id === activeEmpresaId) ?? null;
 
@@ -1466,6 +1468,17 @@ const Layout: React.FC<LayoutProps> = ({
                       <User className="h-4 w-4 text-slate-400" />
                       <span className="flex-1">Minha conta</span>
                     </button>
+                    {session?.user?.id && (
+                      <button
+                        type="button"
+                        onClick={() => { setIsProfileMenuOpen(false); setIsMeuLinkCelularOpen(true); }}
+                        className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm text-slate-700 hover:bg-slate-50"
+                        role="menuitem"
+                      >
+                        <Smartphone className="h-4 w-4 text-slate-400" />
+                        <span className="flex-1">Meu link do celular</span>
+                      </button>
+                    )}
                     <button
                       type="button"
                       onClick={() => { setIsProfileMenuOpen(false); setIsPreferencesOpen(true); }}
@@ -1689,6 +1702,15 @@ const Layout: React.FC<LayoutProps> = ({
         roleLabel={myAccountRoleLabel}
         onSaved={handleMyAccountSaved}
       />
+
+      {session?.user?.id && (
+        <MeuLinkCelularSheet
+          open={isMeuLinkCelularOpen}
+          onClose={() => setIsMeuLinkCelularOpen(false)}
+          userId={session.user.id}
+          nomePessoa={currentMember?.name ?? userName}
+        />
+      )}
     </div>
     </NavContext.Provider>
   );

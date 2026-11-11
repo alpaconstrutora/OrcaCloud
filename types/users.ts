@@ -517,6 +517,8 @@ export interface OrganizationMember {
     role: OrganizationRole;
     customRoleId?: string;
     joinedAt: string;
+    /** `auth.users.id` do membro. `null`/ausente = convite antigo só por e-mail, ainda sem conta de acesso. */
+    userId?: string | null;
     permissions: UserPermissions;
     /** Produto Òpura que este membro utiliza (default: 'platform') */
     productContext?: ProductContext;

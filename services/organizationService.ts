@@ -24,7 +24,7 @@ export const organizationService = {
         // Fetch members and custom roles in parallel
         const [membersResult, rolesResult] = await Promise.all([
             supabase.from('organization_members')
-                .select('id, code, organization_id, name, email, role, custom_role_id, joined_at, permissions, cargo, department_id, phone, registro_profissional, assinatura_path')
+                .select('id, code, organization_id, name, email, role, custom_role_id, joined_at, user_id, permissions, cargo, department_id, phone, registro_profissional, assinatura_path')
                 .in('organization_id', orgIds),
             supabase.from('organization_custom_roles')
                 .select('id, organization_id, name, permissions')
@@ -161,6 +161,8 @@ export const organizationService = {
                     role: m.role,
                     customRoleId: m.custom_role_id,
                     joinedAt: m.joined_at,
+                    // Conta de acesso do membro; NULL em convite antigo só por e-mail (link do celular exige conta).
+                    userId: m.user_id ?? null,
                     permissions: m.permissions || {},
                     // Dados de signatário (Documentos › Ofícios) — ver OrganizationMember.
                     cargo: m.cargo ?? null,

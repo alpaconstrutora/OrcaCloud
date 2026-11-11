@@ -27,16 +27,17 @@ export function Saudacao({ saudacao, nome, contagem, carregando, onAtualizar }: 
 
     // "Dia fechado": o último pendente acabou de sair (havia >0, agora 0). Abrir a
     // tela com o dia já zerado não comemora nada.
+    // Derivado no MESMO render em que a contagem muda (não num efeito): a onda
+    // nasce junto com a frase "Nada esperando…", sem um segundo render no meio.
     const pendentesAntes = React.useRef<number | null>(null);
-    const [diaFechado, setDiaFechado] = React.useState(false);
+    const fechou = React.useRef(false);
     const pendentes = contagem?.pendentes ?? null;
-    React.useEffect(() => {
-        if (pendentes == null) return;
-        const antes = pendentesAntes.current;
+    if (pendentes != null && pendentes !== pendentesAntes.current) {
+        if (pendentes > 0) fechou.current = false;
+        else if (pendentesAntes.current != null && pendentesAntes.current > 0) fechou.current = true;
         pendentesAntes.current = pendentes;
-        if (pendentes > 0) setDiaFechado(false);
-        else if (antes != null && antes > 0) setDiaFechado(true);
-    }, [pendentes]);
+    }
+    const diaFechado = fechou.current;
 
     return (
         <div className="flex flex-col gap-5 md:flex-row md:items-end md:justify-between">

@@ -4,12 +4,12 @@ import {
   Loader2, CheckCircle2, Check, X, ArrowLeft, FolderOpen, Folder, User, AlignLeft,
   Tag, AlertCircle, CalendarDays,
 } from 'lucide-react'
-import { supabase } from '../lib/supabase'
 import Button from './ui/Button'
 import { useOrgWriteTarget } from '../hooks/useOrgContext'
-import { taskSpaceService, TaskSpaceWithMeta } from '../services/taskSpaceService'
-import { taskStatusService, TaskStatus } from '../services/taskService'
-import { type Task, TASK_COLS } from '../services/celular/tarefasFonte'
+import {
+  type Task, type TaskSpaceWithMeta, type TaskStatus, type PatchTarefa, type EscopoTarefas,
+  SESSAO_EXPIRADA, useTarefasFonte,
+} from '../services/celular/tarefasFonte'
 import { statusesOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
 import {
   startOfDay, addDays, isoDate, dayOf, isOverdue, isNewTask, groupBySection, onDay,
@@ -93,16 +93,10 @@ function useToday(): Date {
   return today
 }
 
-/** Responsáveis da organização da tarefa — mesma regra do desktop (`TasksModule.loadEmployees`). */
-async function listAssignable(orgId: string): Promise<EmployeeOption[]> {
-  let q = supabase.from('employees').select('id, name').eq('status', 'ATIVO').order('name')
-  if (orgId) {
-    const { data: shared } = await supabase.from('employee_org_shares').select('employee_id').eq('target_org_id', orgId)
-    const sharedIds = (shared ?? []).map((s: { employee_id: string }) => s.employee_id)
-    q = q.or(sharedIds.length > 0 ? `org_id.eq.${orgId},id.in.(${sharedIds.join(',')})` : `org_id.eq.${orgId}`)
-  }
-  const { data } = await q
-  return (data ?? []) as EmployeeOption[]
+/** Recorte da lista que a fonte entende: a pasta virtual vira "espaço sem pasta"; a Entrada, nenhum recorte. */
+const escopoDe = (scope: FolderSel | null): EscopoTarefas | null => {
+  if (!scope) return null
+  return scope.id === NO_FOLDER ? { spaceId: scope.space_id, semPasta: true } : { folderId: scope.id }
 }
 
 // ── Bottom sheet ──────────────────────────────────────────────────────────────
@@ -532,14 +526,16 @@ const TaskEditSheet: React.FC<{
   const [saving,     setSaving]     = useState(false)
   const [error,      setError]      = useState<string | null>(null)
   const [employees,  setEmployees]  = useState<EmployeeOption[]>([])
+  const fonte = useTarefasFonte()
 
-  useEffect(() => { listAssignable(task.org_id).then(setEmployees).catch(() => setEmployees([])) }, [task.org_id])
+  // Responsáveis da organização da tarefa — mesma regra do desktop (`TasksModule.loadEmployees`).
+  useEffect(() => { fonte.listarResponsaveis(task.org_id).then(setEmployees).catch(() => setEmployees([])) }, [fonte, task.org_id])
 
   const save = async () => {
     if (!title.trim()) { setError('Informe o título da tarefa.'); return }
     setSaving(true); setError(null)
     const chosen = statuses.find(s => s.id === statusId)
-    const { data, error: e } = await supabase.from('tasks').update({
+    const patch: PatchTarefa = {
       title:                title.trim(),
       description:          desc.trim() || null,
       start_date:           toIso(startDate),
@@ -547,12 +543,17 @@ const TaskEditSheet: React.FC<{
       priority,
       status_id:            statusId || null,
       // status concluído na lista de status = tarefa concluída (igual ao desktop)
-      ...(chosen ? { status: chosen.is_done ? 'done' : 'open' } : {}),
+      ...(chosen ? { status: chosen.is_done ? 'done' as const : 'open' as const } : {}),
       assignee_employee_id: assigneeId || null,
-    }).eq('id', task.id).select(TASK_COLS).single()
-    setSaving(false)
-    if (e || !data) { console.error('[tarefas mobile] salvar', e); setError(falha('salvar a tarefa')); return }
-    onSaved(data as Task)
+    }
+    try {
+      const salva = await fonte.atualizarTarefa(task.id, patch)
+      setSaving(false)
+      onSaved(salva)
+    } catch (e) {
+      console.error('[tarefas mobile] salvar', e)
+      setSaving(false); setError(falha('salvar a tarefa'))
+    }
   }
 
   return (
@@ -664,6 +665,7 @@ const AddTaskSheet: React.FC<{
   const [priority,  setPriority]  = useState(3)
   const [saving,    setSaving]    = useState(false)
   const [error,     setError]     = useState<string | null>(null)
+  const fonte = useTarefasFonte()
 
   const realFolder = folder && folder.id !== NO_FOLDER ? folder : null
   const where      = space ? [space.name, realFolder?.name].filter(Boolean).join(' › ') : null
@@ -671,27 +673,28 @@ const AddTaskSheet: React.FC<{
   const save = async () => {
     if (!title.trim()) { setError('Informe o nome da tarefa.'); return }
     setSaving(true); setError(null)
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { setError('Sua sessão expirou. Entre de novo para criar a tarefa.'); setSaving(false); return }
     // REGRA #5: nunca org_id nulo — a org vem do espaço, do topo, ou é perguntada.
     const orgId = await resolveOrg()
     if (!orgId) { setSaving(false); return }
-    const { data, error: e } = await supabase.from('tasks').insert({
-      title:         title.trim(),
-      description:   desc.trim() || null,
-      start_date:    toIso(startDate),
-      due_date:      toIso(dueDate),
-      priority,
-      status:        'open',
-      source_module: 'manual',
-      org_id:        orgId,
-      user_id:       user.id,
-      space_id:      space?.id ?? null,
-      folder_id:     realFolder?.id ?? null,
-    }).select(TASK_COLS).single()
-    setSaving(false)
-    if (e || !data) { console.error('[tarefas mobile] criar', e); setError(falha('criar a tarefa')); return }
-    onCreated(data as Task)
+    try {
+      const nova = await fonte.criarTarefa({
+        orgId,
+        title:       title.trim(),
+        description: desc.trim() || null,
+        start_date:  toIso(startDate),
+        due_date:    toIso(dueDate),
+        priority,
+        space_id:    space?.id ?? null,
+        folder_id:   realFolder?.id ?? null,
+      })
+      setSaving(false)
+      onCreated(nova)
+    } catch (e) {
+      console.error('[tarefas mobile] criar', e)
+      setSaving(false)
+      // Sessão acabada tem mensagem própria; qualquer outra falha é a genérica de conexão.
+      setError(e instanceof Error && e.message === SESSAO_EXPIRADA ? SESSAO_EXPIRADA : falha('criar a tarefa'))
+    }
   }
 
   return (
@@ -760,6 +763,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
   const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const loadSeq    = useRef(0)
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget()
+  const fonte = useTarefasFonte()
 
   const showToast = useCallback((t: ToastState) => {
     clearTimeout(toastTimer.current)
@@ -773,94 +777,74 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
   const loadTasks = useCallback(async (scope: FolderSel | null) => {
     const seq = ++loadSeq.current
     setLoading(true); setLoadError(false)
-    let q = supabase
-      .from('tasks')
-      .select(TASK_COLS)
-      .eq('status', 'open')
-      .is('parent_task_id', null)
-      .order('due_date', { ascending: true, nullsFirst: false })
-      .order('priority', { ascending: true })
-      .limit(TASK_LIMIT)
-    if (orgId) q = q.eq('org_id', orgId)
-    if (scope) {
-      q = scope.id === NO_FOLDER
-        ? q.eq('space_id', scope.space_id).is('folder_id', null)
-        : q.eq('folder_id', scope.id)
-    }
-    const { data, error } = await q
-    if (seq !== loadSeq.current) return   // outra carga começou depois desta
-    if (error) {
+    try {
+      // A fonte devolve a lista e o nome das obras juntos: a lista aparece quando os dois chegam.
+      const { tarefas, nomesObras } = await fonte.listarTarefas(orgId, escopoDe(scope), TASK_LIMIT)
+      if (seq !== loadSeq.current) return   // outra carga começou depois desta
+      setTasks(tarefas)
+      setProjectNames(nomesObras)
+      setTruncated(tarefas.length === TASK_LIMIT)
+      setLoadedScope(scope)
+      setLoading(false)
+    } catch (error) {
+      if (seq !== loadSeq.current) return
       console.error('[tarefas mobile] carregar', error)
       setLoadError(true); setLoading(false)
-      return
     }
-    const rows = (data ?? []) as Task[]
-    setTasks(rows)
-    setTruncated(rows.length === TASK_LIMIT)
-    setLoadedScope(scope)
-    setLoading(false)
-
-    // Nome da obra só das tarefas na tela (antes: as 200 primeiras obras da org).
-    const ids = [...new Set(rows.map(t => t.project_id).filter((id): id is string => !!id))]
-    if (ids.length) {
-      const { data: pd } = await supabase.from('projects').select('id, name').in('id', ids)
-      setProjectNames(new Map((pd ?? []).map((p: { id: string; name: string }) => [p.id, p.name])))
-    }
-  }, [orgId])
+  }, [fonte, orgId])
 
   const loadSpaces = useCallback(async () => {
     setLoadingSpaces(true); setSpacesError(false)
     try {
-      setSpaces(await taskSpaceService.listSpaces(orgId ?? ''))
+      setSpaces(await fonte.listarEspacos(orgId))
     } catch (e) {
       console.error('[tarefas mobile] espaços', e)
       setSpacesError(true)
     } finally {
       setLoadingSpaces(false)
     }
-  }, [orgId])
+  }, [fonte, orgId])
 
   useEffect(() => {
     loadTasks(null)
     loadSpaces()
-    ;(orgId ? taskStatusService.list(orgId) : taskStatusService.listAll())
+    fonte.listarStatus(orgId)
       .then(setStatuses)
       .catch(() => setStatuses([]))
-  }, [orgId, loadTasks, loadSpaces])
+  }, [fonte, orgId, loadTasks, loadSpaces])
 
   // ── Concluir / desfazer ──
   const reopen = useCallback(async (task: Task) => {
     hideToast()
     const ownStatuses = statusesOfOrg(statuses, task.org_id).length > 0
     setTasks(prev => (prev.some(t => t.id === task.id) ? prev : [...prev, task]))
-    const { error } = await supabase.from('tasks')
-      .update({ status: 'open', ...(ownStatuses ? { status_id: task.status_id ?? null } : {}) })
-      .eq('id', task.id)
-    if (error) {
+    try {
+      await fonte.atualizarTarefa(task.id, { status: 'open', ...(ownStatuses ? { status_id: task.status_id ?? null } : {}) })
+    } catch (error) {
       console.error('[tarefas mobile] desfazer', error)
       setTasks(prev => prev.filter(t => t.id !== task.id))
       showToast({ message: falha('desfazer'), tone: 'error' })
     }
-  }, [statuses, hideToast, showToast])
+  }, [fonte, statuses, hideToast, showToast])
 
   const complete = useCallback(async (task: Task) => {
     setCompleting(prev => new Set(prev).add(task.id))
     // Mesmo critério do desktop: com status próprios, grava o status "concluído" da org da tarefa.
     const ownStatuses = statusesOfOrg(statuses, task.org_id).length > 0
-    const patch = { status: 'done', ...(ownStatuses ? { status_id: doneStatusOfOrg(statuses, task.org_id)?.id ?? null } : {}) }
-    const [{ error }] = await Promise.all([
-      supabase.from('tasks').update(patch).eq('id', task.id),
+    const patch: PatchTarefa = { status: 'done', ...(ownStatuses ? { status_id: doneStatusOfOrg(statuses, task.org_id)?.id ?? null } : {}) }
+    const [gravou] = await Promise.all([
+      fonte.atualizarTarefa(task.id, patch).then(() => ({ ok: true as const }), (error: unknown) => ({ ok: false as const, error })),
       new Promise(r => setTimeout(r, 450)),   // o check fica visível antes de a tarefa sair
     ])
     setCompleting(prev => { const n = new Set(prev); n.delete(task.id); return n })
-    if (error) {
-      console.error('[tarefas mobile] concluir', error)
+    if (!gravou.ok) {
+      console.error('[tarefas mobile] concluir', gravou.error)
       showToast({ message: falha('concluir a tarefa'), tone: 'error' })
       return
     }
     setTasks(prev => prev.filter(t => t.id !== task.id))
     showToast({ message: 'Tarefa concluída', tone: 'success', action: { label: 'Desfazer', run: () => reopen(task) } })
-  }, [statuses, showToast, reopen])
+  }, [fonte, statuses, showToast, reopen])
 
   // ── Recortes ──
   const dueDays = useMemo(
@@ -918,10 +902,12 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
   const goToday = () => setWeekStart(weekStartOf(today))
 
   const resolveCreateOrg = useCallback(async (): Promise<string | null> => {
+    // Pelo link do celular não há seletor do topo nem sessão: a org é a do espaço (ou a recebida).
+    if (fonte.modo === 'link') return selectedSpace?.org_id ?? orgId ?? null
     if (selectedSpace) return selectedSpace.org_id
     const target = await resolveWriteOrg('single')
     return target && target.kind === 'org' ? target.orgId : null
-  }, [selectedSpace, resolveWriteOrg])
+  }, [fonte.modo, selectedSpace, orgId, resolveWriteOrg])
 
   const onCreated = (task: Task) => {
     setShowAddTask(false)

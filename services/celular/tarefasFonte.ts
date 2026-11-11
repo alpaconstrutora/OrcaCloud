@@ -41,6 +41,12 @@ export interface Task {
 
 export const TASK_COLS = 'id, org_id, title, description, start_date, due_date, priority, status, status_id, source_module, space_id, folder_id, project_id, assignee_employee_id, alert_at, parent_task_id, created_at'
 
+// Reexportados para a tela não importar os serviços de dados só por causa dos tipos.
+export type { TaskSpaceWithMeta, TaskStatus }
+
+/** Mensagem da fonte logada quando a sessão acabou antes de criar — a tela mostra como veio. */
+export const SESSAO_EXPIRADA = 'Sua sessão expirou. Entre de novo para criar a tarefa.'
+
 /** Recorte da lista: uma pasta, um espaço, ou o espaço sem pasta (`semPasta` + `spaceId`). */
 export interface EscopoTarefas { spaceId?: string; folderId?: string; semPasta?: boolean }
 
@@ -124,7 +130,7 @@ export const fonteLogada: TarefasFonte = {
 
   async criarTarefa(dados) {
     const { data: { user } } = await supabase.auth.getUser()
-    if (!user) throw new Error('Sua sessão expirou. Entre de novo para criar a tarefa.')
+    if (!user) throw new Error(SESSAO_EXPIRADA)
     const { data, error } = await supabase.from('tasks').insert({
       title:         dados.title,
       description:   dados.description,

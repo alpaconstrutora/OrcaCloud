@@ -57,7 +57,7 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
     const cor = (delta: number) => (delta >= 0 ? COR_MELHOR : COR_PIOR);
 
     return (
-        <ChartCard title="Gráfico tornado" subtitle={`Quanto cada premissa move ${ROTULO_DA_METRICA[metrica].toLowerCase()} do estudo, para cima e para baixo. Base: ${formatarMetrica(metrica, base)}.`}>
+        <ChartCard title="Gráfico tornado" subtitle={`Quanto cada premissa move a métrica (${ROTULO_DA_METRICA[metrica]}), para cima e para baixo. Estudo como está: ${formatarMetrica(metrica, base)}`}>
             <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                 <Legend items={[{ label: 'Piora', color: COR_PIOR }, { label: 'Melhora', color: COR_MELHOR }]} />
                 <div className="flex items-center gap-2">

@@ -107,7 +107,7 @@ const LaborCostDashboard: React.FC<LaborCostDashboardProps> = ({ orgId, organiza
                     <select
                         value={selectedRun?.id || ''}
                         onChange={(e) => setSelectedRun(runs.find(r => r.id === e.target.value) || null)}
-                        className="text-form-input font-black text-slate-700 bg-slate-50 border border-slate-200 px-4 py-2 rounded-xl outline-none"
+                        className="text-form-input font-black text-slate-700 bg-slate-50 border border-slate-200 px-4 h-9 rounded-[6px] outline-none"
                     >
                         {runs.map(r => (
                             <option key={r.id} value={r.id}>

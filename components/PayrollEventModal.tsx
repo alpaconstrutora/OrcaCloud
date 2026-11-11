@@ -228,7 +228,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             <select
                                 value={selectedRubricCode}
                                 onChange={e => setSelectedRubricCode(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="">Selecione...</option>
                                 {rubrics
@@ -243,7 +243,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                             <select
                                 value={eventUnit}
                                 onChange={e => setEventUnit(e.target.value as 'fixed' | 'days' | 'hours')}
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
                             >
                                 <option value="fixed">Valor (R$)</option>
                                 <option value="days">Dias</option>
@@ -259,7 +259,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                     type="number" step="0.01" placeholder="0.00"
                                     value={eventQuantity}
                                     onChange={e => setEventQuantity(parseFloat(e.target.value) || 0)}
-                                    className="w-full px-3 py-2 bg-indigo-50 border border-indigo-200 rounded-xl text-form-input font-black text-indigo-700 focus:ring-2 focus:ring-indigo-500 outline-none"
+                                    className="w-full px-3 h-9 bg-indigo-50 border border-indigo-200 rounded-[6px] text-form-input font-black text-indigo-700 focus:ring-2 focus:ring-indigo-500 outline-none"
                                 />
                             </div>
                         )}
@@ -269,7 +269,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                 type="text" placeholder="Obs fixas ou detalhes"
                                 value={eventDescription}
                                 onChange={e => setEventDescription(e.target.value)}
-                                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
+                                className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-bold focus:ring-2 focus:ring-indigo-500 outline-none"
                             />
                         </div>
                         <div className="md:col-span-3">
@@ -281,7 +281,7 @@ const PayrollEventModal: React.FC<PayrollEventModalProps> = ({
                                     value={eventAmount}
                                     onChange={v => setEventAmount(v === '' ? 0 : Number(v))}
                                     readOnly={eventUnit !== 'fixed'}
-                                    className={`w-full px-3 py-2 border border-slate-200 rounded-xl text-button font-bold focus:ring-2 focus:ring-indigo-500 outline-none ${eventUnit !== 'fixed' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'}`}
+                                    className={`w-full px-3 h-9 text-sm border border-slate-200 rounded-[6px] text-button font-bold focus:ring-2 focus:ring-indigo-500 outline-none ${eventUnit !== 'fixed' ? 'bg-slate-100 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-900'}`}
                                 />
                                 <button
                                     disabled={isExecuting || !selectedRubricCode}

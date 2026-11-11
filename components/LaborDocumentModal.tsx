@@ -134,7 +134,9 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
 
     const sortedEmployees = [...employees].sort((a, b) => a.name.localeCompare(b.name));
 
-    const inputClass = 'w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all';
+    const inputClass = 'w-full px-4 h-9 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClassArea = 'w-full px-4 py-2.5 bg-slate-50/50 border border-slate-200 rounded-[6px] text-sm font-medium text-slate-900 focus:outline-none focus:ring-2 focus:ring-blue-500/25 focus:border-blue-500 transition-all';
     const labelClass = 'text-xs font-semibold text-slate-500';
 
     return (
@@ -293,7 +295,7 @@ const LaborDocumentModal: React.FC<LaborDocumentModalProps> = ({ employees, orgI
                             rows={3}
                             value={form.notes}
                             onChange={(e) => updateForm({ notes: e.target.value })}
-                            className={`${inputClass} resize-none`}
+                            className={`${inputClassArea} resize-none`}
                             placeholder="Informações adicionais sobre o documento..."
                         />
                     </div>

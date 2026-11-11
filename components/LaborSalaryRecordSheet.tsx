@@ -58,7 +58,9 @@ interface LaborSalaryRecordSheetProps {
     onSubmit: (data: SalaryRecordSubmit) => Promise<void>;
 }
 
-const inputCls = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
+const inputCls = "w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = "w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all";
 const labelCls = "text-xs font-semibold text-slate-500";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
@@ -251,7 +253,7 @@ const LaborSalaryRecordSheet: React.FC<LaborSalaryRecordSheetProps> = ({
 
                 <div className="space-y-1.5">
                     <label className={labelCls}>Observações</label>
-                    <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={inputCls} placeholder="Ex: acordo coletivo 2026, promoção a encarregado…" />
+                    <textarea value={notes} onChange={e => setNotes(e.target.value)} rows={3} className={inputClsArea} placeholder="Ex: acordo coletivo 2026, promoção a encarregado…" />
                 </div>
 
                 {/* Anexo — só no lançamento novo; trocar arquivo de registro existente

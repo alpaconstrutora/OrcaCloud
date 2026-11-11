@@ -157,7 +157,9 @@ const AGRUPAR_PDI = {
     title: 'Agrupar os itens do PDI',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-violet-100 focus:border-violet-300 transition-all';
 const FieldLabel: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{children}</label>
 );
@@ -293,7 +295,7 @@ const CycleForm: React.FC<CycleFormProps> = ({ orgId, cycle, onClose, onSaved })
                         </Field>
                     </div>
                     <Field label="Descrição">
-                        <textarea className={`${inputCls} resize-none`} rows={2} value={form.descricao}
+                        <textarea className={`${inputClsArea} resize-none`} rows={2} value={form.descricao}
                             onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
                             placeholder="Objetivo do ciclo..." />
                     </Field>
@@ -447,7 +449,7 @@ const EvalForm: React.FC<EvalFormProps> = ({ response, competencias, onClose, on
                                         </span>
                                     </div>
                                 </div>
-                                <input className="w-full px-3 py-2 bg-white border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-1 focus:ring-violet-200 transition-all"
+                                <input className="w-full px-3 h-9 bg-white border border-slate-200 rounded-[6px] text-form-input font-medium outline-none focus:ring-1 focus:ring-violet-200 transition-all"
                                     placeholder="Comentário sobre esta competência (opcional)"
                                     value={r.comentario || ''}
                                     onChange={e => setRespostas(p => p.map(x => x.competencia_id === comp.id ? { ...x, comentario: e.target.value } : x))} />
@@ -457,17 +459,17 @@ const EvalForm: React.FC<EvalFormProps> = ({ response, competencias, onClose, on
 
                     <div className="space-y-3 pt-2">
                         <Field label="Pontos fortes">
-                            <textarea className={`${inputCls} resize-none text-form-input`} rows={2}
+                            <textarea className={`${inputClsArea} resize-none text-form-input`} rows={2}
                                 value={pontosFortes} onChange={e => setPontosFortes(e.target.value)}
                                 placeholder="Principais pontos fortes observados..." />
                         </Field>
                         <Field label="Pontos de melhoria">
-                            <textarea className={`${inputCls} resize-none text-form-input`} rows={2}
+                            <textarea className={`${inputClsArea} resize-none text-form-input`} rows={2}
                                 value={pontosMelhoria} onChange={e => setPontosMelhoria(e.target.value)}
                                 placeholder="Principais oportunidades de desenvolvimento..." />
                         </Field>
                         <Field label="Comentário geral">
-                            <textarea className={`${inputCls} resize-none text-form-input`} rows={2}
+                            <textarea className={`${inputClsArea} resize-none text-form-input`} rows={2}
                                 value={comentarioGeral} onChange={e => setComentarioGeral(e.target.value)}
                                 placeholder="Observações adicionais..." />
                         </Field>
@@ -596,7 +598,7 @@ const PdiForm: React.FC<PdiFormProps> = ({ orgId, item, employees, onClose, onSa
                             value={form.acao} onChange={e => setForm(p => ({ ...p, acao: e.target.value }))} />
                     </Field>
                     <Field label="Descrição">
-                        <textarea className={`${inputCls} resize-none`} rows={2}
+                        <textarea className={`${inputClsArea} resize-none`} rows={2}
                             value={form.descricao} onChange={e => setForm(p => ({ ...p, descricao: e.target.value }))}
                             placeholder="Contexto e objetivo desta ação..." />
                     </Field>

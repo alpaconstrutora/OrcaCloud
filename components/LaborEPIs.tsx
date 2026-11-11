@@ -89,7 +89,9 @@ const AGRUPAR_ENTREGAS = {
     title: 'Agrupar as entregas',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
@@ -317,7 +319,7 @@ const EpiDeliveryForm: React.FC<DeliveryFormProps> = ({ orgId, employees, catalo
                         <input value={form.motivo} onChange={e => setForm(p => ({ ...p, motivo: e.target.value }))} className={inputCls} placeholder="Ex: Admissão, Desgaste, Perda, NR-18..." />
                     </InputGroup>
                     <InputGroup label="Observações">
-                        <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} className={inputCls + ' resize-none h-16'} />
+                        <textarea value={form.notes} onChange={e => setForm(p => ({ ...p, notes: e.target.value }))} className={inputClsArea + ' resize-none h-16'} />
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 bg-slate-50/50">

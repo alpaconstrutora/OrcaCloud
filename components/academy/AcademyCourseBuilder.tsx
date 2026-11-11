@@ -35,7 +35,9 @@ const ABAS: Array<{ id: Aba; label: string }> = [
     { id: 'versoes',    label: 'Versões' },
 ];
 
-const inputCls = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
 interface Props {
     course: TrainingCourse;
@@ -594,7 +596,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                             onChange={e => salvarRegra('notas_versao', e.target.value)}
                             disabled={somenteLeitura}
                             placeholder="Ex: incluída a NR-35 revisão 2026 e novo procedimento de ancoragem."
-                            className={inputCls + ' resize-none h-20'}
+                            className={inputClsArea + ' resize-none h-20'}
                         />
                         <p className="text-xs text-gray-400">
                             Aparece para quem for fazer a reciclagem e fica no histórico de versões.
@@ -631,7 +633,7 @@ const AcademyCourseBuilder: React.FC<Props> = ({ course, orgId, podeEditar, onVo
                                 onChange={e => salvarRegra('regra_texto_aceite', e.target.value)}
                                 disabled={somenteLeitura}
                                 placeholder="Declaro que participei do treinamento e compreendi o conteúdo apresentado."
-                                className={inputCls + ' resize-none h-20'}
+                                className={inputClsArea + ' resize-none h-20'}
                             />
                         </div>
                     )}

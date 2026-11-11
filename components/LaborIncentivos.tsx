@@ -168,7 +168,9 @@ const Card: React.FC<{ children: React.ReactNode; className?: string }> = ({ chi
 const Label: React.FC<{ children: React.ReactNode }> = ({ children }) => (
     <label className="text-xs font-black text-slate-400 uppercase tracking-widest ml-1 mb-1.5 block">{children}</label>
 );
-const inputCls = 'w-full px-4 py-2.5 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none';
+const inputCls = 'w-full px-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-4 py-2.5 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all outline-none';
 
 // ════════════════════════════════════════════════════════════
 // 1) LANÇAMENTOS
@@ -371,7 +373,7 @@ const LaunchTab: React.FC<{ orgId: string | null; resolveOrg: () => Promise<stri
 
                 <div>
                     <Label>Justificativa (obrigatória)</Label>
-                    <textarea className={`${inputCls} h-20 resize-none`} value={justification} onChange={e => setJustification(e.target.value)} placeholder="Motivo do incentivo, meta atingida, etc." />
+                    <textarea className={`${inputClsArea} h-20 resize-none`} value={justification} onChange={e => setJustification(e.target.value)} placeholder="Motivo do incentivo, meta atingida, etc." />
                 </div>
 
                 <div>

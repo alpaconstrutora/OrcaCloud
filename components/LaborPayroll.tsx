@@ -533,7 +533,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                                 <label className="text-xs font-semibold text-slate-500">Tipo de folha</label>
                                 <select
                                     id="payroll_type"
-                                    className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                    className="w-full px-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                     onChange={e => {
                                         const subtype = document.getElementById('payroll_subtype_container');
                                         if (subtype) subtype.style.display = e.target.value === 'decimo_terceiro' ? 'block' : 'none';
@@ -548,7 +548,7 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                             </div>
                             <div id="payroll_subtype_container" className="space-y-2" style={{ display: 'none' }}>
                                 <label className="text-xs font-semibold text-slate-500">Parcela (13º)</label>
-                                <select id="payroll_subtype" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500">
+                                <select id="payroll_subtype" className="w-full px-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500">
                                     <option value="1_parcela">1ª Parcela (50%)</option>
                                     <option value="2_parcela">2ª Parcela (Integral com desc.)</option>
                                 </select>
@@ -556,12 +556,12 @@ const LaborPayroll: React.FC<LaborPayrollProps> = ({ orgId, initialTab = 'ciclos
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500">Início do período</label>
-                                    <input id="payroll_start" type="date" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                    <input id="payroll_start" type="date" className="w-full px-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0]} />
                                 </div>
                                 <div className="space-y-2">
                                     <label className="text-xs font-semibold text-slate-500">Fim do período</label>
-                                    <input id="payroll_end" type="date" className="w-full px-4 py-3 bg-slate-50 border-none rounded-xl text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
+                                    <input id="payroll_end" type="date" className="w-full px-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-900 outline-none focus:ring-2 focus:ring-indigo-500"
                                         defaultValue={new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0).toISOString().split('T')[0]} />
                                 </div>
                             </div>

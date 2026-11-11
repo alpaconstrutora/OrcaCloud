@@ -100,7 +100,9 @@ const MOTIVO_SEM_ELEGIVEL = 'Nenhum colaborador ativo ou afastado sem processo d
 
 const checklistFeitos = (t: TerminationRecord) => (t.checklist || []).length;
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
@@ -280,7 +282,7 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                             </div>
 
                             <InputGroup label="Motivo detalhado">
-                                <textarea value={form.motivo || ''} onChange={e => set('motivo', e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Descreva o motivo do desligamento..." />
+                                <textarea value={form.motivo || ''} onChange={e => set('motivo', e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="Descreva o motivo do desligamento..." />
                             </InputGroup>
 
                             {/* Info sobre tipo */}
@@ -403,10 +405,10 @@ const TerminationWizard: React.FC<TerminationWizardProps> = ({ orgId, employees,
                             {form.entrevista_realizada && (
                                 <>
                                     <InputGroup label="Motivo real informado pelo colaborador">
-                                        <textarea value={form.entrevista_motivo_real || ''} onChange={e => set('entrevista_motivo_real', e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="O que o colaborador relatou como motivação real para saída..." />
+                                        <textarea value={form.entrevista_motivo_real || ''} onChange={e => set('entrevista_motivo_real', e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="O que o colaborador relatou como motivação real para saída..." />
                                     </InputGroup>
                                     <InputGroup label="Pontos de melhoria levantados">
-                                        <textarea value={form.entrevista_pontos || ''} onChange={e => set('entrevista_pontos', e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Sugestões, críticas ou elogios mencionados..." />
+                                        <textarea value={form.entrevista_pontos || ''} onChange={e => set('entrevista_pontos', e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="Sugestões, críticas ou elogios mencionados..." />
                                     </InputGroup>
                                     <div className="space-y-2">
                                         <p className="text-xs font-black text-slate-500 uppercase tracking-widest">Recontrataria este colaborador?</p>

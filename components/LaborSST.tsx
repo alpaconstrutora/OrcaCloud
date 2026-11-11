@@ -58,7 +58,9 @@ const AGRUPAR_CHECKLISTS = {
     title: 'Agrupar os checklists',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
@@ -194,7 +196,7 @@ const AccidentForm: React.FC<AccidentFormProps> = ({ orgId, employees, projects,
                         </InputGroup>
                     </div>
                     <InputGroup label="Descrição do Acidente *">
-                        <textarea value={form.descricao || ''} onChange={e => set('descricao', e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Descreva o que ocorreu..." />
+                        <textarea value={form.descricao || ''} onChange={e => set('descricao', e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="Descreva o que ocorreu..." />
                     </InputGroup>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                         <InputGroup label="Local do Acidente">
@@ -226,7 +228,7 @@ const AccidentForm: React.FC<AccidentFormProps> = ({ orgId, employees, projects,
                         </div>
                     </div>
                     <InputGroup label="Medidas Corretivas">
-                        <textarea value={form.medidas_corretivas || ''} onChange={e => set('medidas_corretivas', e.target.value)} className={inputCls + ' resize-none h-16'} placeholder="Ações preventivas adotadas..." />
+                        <textarea value={form.medidas_corretivas || ''} onChange={e => set('medidas_corretivas', e.target.value)} className={inputClsArea + ' resize-none h-16'} placeholder="Ações preventivas adotadas..." />
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
@@ -375,7 +377,7 @@ const RegDocForm: React.FC<RegDocFormProps> = ({ orgId, projects, doc, onClose, 
                         </div>
                     </InputGroup>
                     <InputGroup label="Observações">
-                        <textarea value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} className={inputCls + ' resize-none h-16'} placeholder="Notas adicionais, nº do documento, localização do arquivo..." />
+                        <textarea value={form.observacoes || ''} onChange={e => set('observacoes', e.target.value)} className={inputClsArea + ' resize-none h-16'} placeholder="Notas adicionais, nº do documento, localização do arquivo..." />
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">

@@ -90,7 +90,9 @@ const TIPO_CONFIG: Record<TurnoverTipo, { label: string; color: string; bg: stri
 const ROTULO_TIPO_MOV: Record<string, string> = Object.fromEntries(Object.entries(TIPO_CONFIG).map(([k, v]) => [k, v.label]));
 const SEM_GRUPO_MOV: Record<string, string> = { org: 'Sem organização', colaborador: 'Sem colaborador', tipo: 'Sem tipo' };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-sky-100 focus:border-sky-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
@@ -243,7 +245,7 @@ const EventForm: React.FC<EventFormProps> = ({ orgId, employees, onClose, onSave
                         </div>
                     </Field>
                     <Field label="Motivo / Observação">
-                        <textarea className={`${inputCls} resize-none`} rows={2}
+                        <textarea className={`${inputClsArea} resize-none`} rows={2}
                             value={form.motivo || ''} onChange={e => set('motivo', e.target.value)}
                             placeholder="Descreva o contexto da movimentação..." />
                     </Field>

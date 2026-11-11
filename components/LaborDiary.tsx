@@ -17,7 +17,9 @@ import { STALE } from '../lib/queryClient';
 import { useConfirm } from './ui/confirm';
 import { usePersistedState } from './ui/TableUtils';
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
@@ -177,10 +179,10 @@ const DiaryForm: React.FC<DiaryFormProps> = ({ orgId, employees, teams, projects
 
                     {/* Atividades */}
                     <InputGroup label="Atividades Realizadas">
-                        <textarea value={form.atividades || ''} onChange={e => setForm(p => ({ ...p, atividades: e.target.value }))} className={inputCls + ' resize-none h-20'} placeholder="Descreva as atividades do dia..." />
+                        <textarea value={form.atividades || ''} onChange={e => setForm(p => ({ ...p, atividades: e.target.value }))} className={inputClsArea + ' resize-none h-20'} placeholder="Descreva as atividades do dia..." />
                     </InputGroup>
                     <InputGroup label="Ocorrências / Observações">
-                        <textarea value={form.ocorrencias || ''} onChange={e => setForm(p => ({ ...p, ocorrencias: e.target.value }))} className={inputCls + ' resize-none h-16'} placeholder="Problemas, atrasos, visitas, etc." />
+                        <textarea value={form.ocorrencias || ''} onChange={e => setForm(p => ({ ...p, ocorrencias: e.target.value }))} className={inputClsArea + ' resize-none h-16'} placeholder="Problemas, atrasos, visitas, etc." />
                     </InputGroup>
 
                     {/* Trabalhadores */}
@@ -347,10 +349,10 @@ const LaborDiary: React.FC<LaborDiaryProps> = ({ orgId, employees, teams, projec
                 <div className="flex items-center gap-2">
                     <div className="relative">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
+                        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar..." className="pl-8 pr-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-medium outline-none focus:ring-2 focus:ring-indigo-100 w-40" />
                     </div>
                     <div className="relative">
-                        <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="pl-3 pr-7 py-2 bg-slate-50 border border-slate-200 rounded-xl text-form-input font-medium outline-none appearance-none">
+                        <select value={filterProject} onChange={e => setFilterProject(e.target.value)} className="pl-3 pr-7 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-form-input font-medium outline-none appearance-none">
                             <option value="">Todas as obras</option>
                             {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                         </select>

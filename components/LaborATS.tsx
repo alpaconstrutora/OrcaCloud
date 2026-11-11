@@ -54,7 +54,9 @@ const ORIGEM_LABELS: Record<CandidateOrigem, string> = {
     CATHO: 'Catho', INFOJOBS: 'InfoJobs', OUTROS: 'Outros',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-indigo-100 focus:border-indigo-300 transition-all';
 const InputGroup: React.FC<{ label: string; children: React.ReactNode }> = ({ label, children }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
@@ -179,10 +181,10 @@ const JobForm: React.FC<JobFormProps> = ({ orgId, job, projects, onClose, onSave
                         </InputGroup>
                     </div>
                     <InputGroup label="Descrição">
-                        <textarea value={form.descricao || ''} onChange={e => set('descricao', e.target.value)} className={inputCls + ' resize-none h-20'} />
+                        <textarea value={form.descricao || ''} onChange={e => set('descricao', e.target.value)} className={inputClsArea + ' resize-none h-20'} />
                     </InputGroup>
                     <InputGroup label="Requisitos">
-                        <textarea value={form.requisitos || ''} onChange={e => set('requisitos', e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Experiência mínima, habilidades, documentação..." />
+                        <textarea value={form.requisitos || ''} onChange={e => set('requisitos', e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="Experiência mínima, habilidades, documentação..." />
                     </InputGroup>
                 </div>
                 <div className="px-6 py-4 border-t flex justify-end gap-3 bg-slate-50/50">
@@ -484,7 +486,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                                 <input value={editForm.disponibilidade} onChange={e => setEditForm(p => ({ ...p, disponibilidade: e.target.value }))} className={inputCls} placeholder="Ex: Imediata, 30 dias..." />
                             </InputGroup>
                             <InputGroup label="Observações">
-                                <textarea value={editForm.observacoes} onChange={e => setEditForm(p => ({ ...p, observacoes: e.target.value }))} className={inputCls + ' resize-none h-16'} />
+                                <textarea value={editForm.observacoes} onChange={e => setEditForm(p => ({ ...p, observacoes: e.target.value }))} className={inputClsArea + ' resize-none h-16'} />
                             </InputGroup>
                         </div>
                     ) : (
@@ -517,7 +519,7 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                         <div className="p-4 bg-emerald-50 rounded-2xl border border-emerald-100 space-y-3">
                             <p className="text-xs font-black text-emerald-800 uppercase tracking-tight">Contratar este candidato</p>
                             <div className="flex items-center gap-3">
-                                <input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} className="flex-1 px-3 py-2 bg-white border border-emerald-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-200" />
+                                <input type="date" value={hireDate} onChange={e => setHireDate(e.target.value)} className="flex-1 px-3 h-9 bg-white border border-emerald-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-emerald-200" />
                                 <button onClick={handleHire} disabled={hiring}
                                     className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-xl font-bold text-sm hover:bg-emerald-700 disabled:opacity-50">
                                     {hiring ? <Loader2 className="w-4 h-4 animate-spin" /> : <UserCheck className="w-4 h-4" />}
@@ -566,9 +568,9 @@ const CandidatePanel: React.FC<CandidatePanelProps> = ({ candidate, orgId, onClo
                     {/* Nova nota */}
                     <div className="space-y-2">
                         <p className="text-xs font-black text-slate-400 uppercase tracking-widest">Nova Anotação</p>
-                        <textarea value={newNote} onChange={e => setNewNote(e.target.value)} className={inputCls + ' resize-none h-20'} placeholder="Registre interação, feedback, observação..." />
+                        <textarea value={newNote} onChange={e => setNewNote(e.target.value)} className={inputClsArea + ' resize-none h-20'} placeholder="Registre interação, feedback, observação..." />
                         <div className="flex items-center gap-2">
-                            <input type="number" min="0" max="10" step="0.5" value={newNota ?? ''} onChange={e => setNewNota(parseFloat(e.target.value) || undefined)} className="w-24 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm text-center outline-none" placeholder="Nota" />
+                            <input type="number" min="0" max="10" step="0.5" value={newNota ?? ''} onChange={e => setNewNota(parseFloat(e.target.value) || undefined)} className="w-24 px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm text-center outline-none" placeholder="Nota" />
                             <button onClick={handleAddNote} disabled={savingNote || !newNote.trim()}
                                 className="flex items-center gap-2 flex-1 justify-center px-4 py-2 bg-indigo-600 text-white rounded-xl font-bold text-sm hover:bg-indigo-700 disabled:opacity-50">
                                 {savingNote ? <Loader2 className="w-4 h-4 animate-spin" /> : <MessageSquare className="w-4 h-4" />}

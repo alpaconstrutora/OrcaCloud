@@ -23,7 +23,9 @@ const ALVOS: Array<{ id: AcademyAssignmentAlvo; label: string; ajuda: string }> 
     { id: 'TODOS',       label: 'Toda a organização', ajuda: 'Todos os colaboradores ativos.' },
 ];
 
-const inputCls = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2 bg-white border border-gray-200 rounded-[6px] text-sm font-normal outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 
 export interface AlvoOpcao { id: string; nome: string }
 
@@ -201,7 +203,7 @@ const AcademyAssignmentSheet: React.FC<Props> = ({
                         <textarea
                             value={form.observacoes}
                             onChange={e => set('observacoes', e.target.value)}
-                            className={inputCls + ' resize-none h-16'}
+                            className={inputClsArea + ' resize-none h-16'}
                         />
                     </div>
 

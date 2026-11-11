@@ -59,7 +59,9 @@ const WPP_PROVIDERS: Record<WppProvider, string> = {
     WPPCONNECT: 'WPPConnect',
 };
 
-const inputCls = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all';
+const inputCls = 'w-full px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const inputClsArea = 'w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all';
 const Field: React.FC<{ label: string; children: React.ReactNode; hint?: string }> = ({ label, children, hint }) => (
     <div className="space-y-1.5">
         <label className="text-xs font-black text-slate-500 uppercase tracking-widest">{label}</label>
@@ -215,7 +217,7 @@ const CommForm: React.FC<CommFormProps> = ({ orgId, comm, employees, projects, o
                     </Field>
 
                     <Field label="Conteúdo">
-                        <textarea className={`${inputCls} resize-none`} rows={4}
+                        <textarea className={`${inputClsArea} resize-none`} rows={4}
                             placeholder="Mensagem completa..."
                             value={form.conteudo} onChange={e => set('conteudo', e.target.value)} />
                     </Field>
@@ -709,11 +711,11 @@ const LaborComunicacao: React.FC<LaborComunicacaoProps> = ({ orgId, employees, p
                     <div className="flex items-center gap-3">
                         <div className="relative flex-1 max-w-sm">
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
-                            <input className="w-full pl-9 pr-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all"
+                            <input className="w-full pl-9 pr-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-medium outline-none focus:ring-2 focus:ring-teal-100 focus:border-teal-300 transition-all"
                                 placeholder="Buscar por título ou conteúdo..."
                                 value={search} onChange={e => setSearch(e.target.value)} />
                         </div>
-                        <select className="px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold text-slate-600 outline-none focus:ring-2 focus:ring-teal-100 transition-all"
+                        <select className="px-3 h-9 bg-slate-50 border border-slate-200 rounded-[6px] text-sm font-bold text-slate-600 outline-none focus:ring-2 focus:ring-teal-100 transition-all"
                             value={filterTipo} onChange={e => setFilterTipo(e.target.value as CommTipo | '')}>
                             <option value="">Todos os tipos</option>
                             {(Object.entries(TIPO_CONFIG) as [CommTipo, typeof TIPO_CONFIG[CommTipo]][]).map(([k, v]) => (

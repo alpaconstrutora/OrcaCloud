@@ -28,7 +28,7 @@ interface Props {
 
 type SubTab = 'socios' | 'prolabore' | 'dividendos';
 
-const cls = "w-full px-3 py-2 border border-gray-200 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
+const cls = "w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white";
 
 function currentMonthISO(): string {
     const d = new Date();

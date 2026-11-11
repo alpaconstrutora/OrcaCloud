@@ -590,7 +590,7 @@ const LaborRubrics: React.FC = () => {
                                                 placeholder="EX: SALARIO"
                                                 value={formData.code}
                                                 onChange={(e) => setFormData({ ...formData, code: e.target.value.toUpperCase() })}
-                                                className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all disabled:opacity-50 uppercase"
+                                                className="w-full px-5 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all disabled:opacity-50 uppercase"
                                             />
                                             {editingRubric && <p className="text-[9px] text-slate-400 font-bold ml-1 italic">* Código não pode ser alterado após criação.</p>}
                                         </div>
@@ -601,7 +601,7 @@ const LaborRubrics: React.FC = () => {
                                                 placeholder="EX: Salário Base"
                                                 value={formData.name}
                                                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                                                className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                className="w-full px-5 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
                                             />
                                         </div>
 
@@ -705,7 +705,7 @@ const LaborRubrics: React.FC = () => {
                                                             const v = parseInt(e.target.value);
                                                             setFormData({ ...formData, dia_lancamento: isNaN(v) ? undefined : Math.min(28, Math.max(1, v)) });
                                                         }}
-                                                        className="w-full px-5 py-3 bg-violet-50 border border-violet-100 rounded-2xl text-sm font-bold text-slate-700 focus:ring-2 focus:ring-violet-500 transition-all"
+                                                        className="w-full px-5 h-9 bg-violet-50 border border-violet-100 rounded-[6px] text-sm font-bold text-slate-700 focus:ring-2 focus:ring-violet-500 transition-all"
                                                     />
                                                     <p className="text-[9px] text-violet-600 font-bold ml-1 italic">
                                                         * Dia do mês (1–28) em que o lançamento será criado no financeiro. Se não informado, usa o último dia da folha.
@@ -815,7 +815,7 @@ const LaborRubrics: React.FC = () => {
                                                             ...formData,
                                                             calculation_config: { ...formData.calculation_config, amount: v === '' ? 0 : Number(v) }
                                                         })}
-                                                        className="w-full pl-12 pr-4 py-3 bg-slate-50 border-none rounded-2xl text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                        className="w-full pl-12 pr-4 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
                                                     />
                                                 </div>
                                                 <p className="text-xs text-slate-400 font-bold ml-1 italic">Este valor será aplicado automaticamente em todas as folhas.</p>
@@ -832,7 +832,7 @@ const LaborRubrics: React.FC = () => {
                                                             ...formData,
                                                             calculation_config: { ...formData.calculation_config, base: e.target.value }
                                                         })}
-                                                        className="w-full px-5 py-3 bg-slate-50 border-none rounded-2xl text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all appearance-none uppercase"
+                                                        className="w-full px-5 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all appearance-none uppercase"
                                                     >
                                                         <option value="SALARIO">Salário Base</option>
                                                         <option value="TOTAL_PROVENTOS">Total de Proventos</option>
@@ -851,7 +851,7 @@ const LaborRubrics: React.FC = () => {
                                                                 ...formData,
                                                                 calculation_config: { ...formData.calculation_config, percentage: parseFloat(e.target.value) / 100 }
                                                             })}
-                                                            className="w-full pl-5 pr-12 py-3 bg-slate-50 border-none rounded-2xl text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
+                                                            className="w-full pl-5 pr-12 h-9 bg-slate-50 border-none rounded-[6px] text-sm font-black text-slate-700 focus:ring-2 focus:ring-indigo-500 transition-all"
                                                         />
                                                         <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-black text-sm">%</span>
                                                     </div>

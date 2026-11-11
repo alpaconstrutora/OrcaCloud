@@ -121,7 +121,7 @@ export function recebimentoPorSafra(
 
     const sem = { total: 0 };
     vendasPorMes.forEach((V, i) => {
-        if (!(V > 0)) return;
+        if (!V) return; // venda negativa (permuta acima de 100%) também entra: o motor avisa
         const s = i + 1;
         const mesDoDistrato = s + defasagem;
         const distrata = taxaDistrato > 0 && mesDoDistrato <= horizonte;

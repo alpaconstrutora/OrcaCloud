@@ -1,5 +1,7 @@
 import { ImovibStudy, ImovibCapexItem, ImovibCapexBase } from '../types';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+import { curvaDeVendas, TipoCurvaDeVendas } from './imovibCurvas';
+import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
 
 /**
  * Motor dos Estudos de Viabilidade (Imovib) — cálculo puro, sem React.
@@ -90,7 +92,7 @@ export type ImovibAba = 'premises' | 'capex' | 'funding' | 'viability_dynamic';
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -105,7 +107,14 @@ export interface ImovibMathResult {
     vplProjeto: number;
     annualIrrProjeto: number;
     vgvTotal: number;
+    /**
+     * Receita que os compradores pagam, a valores de hoje (sem índice): VGV
+     * vendável (depois das permutas) × fração vendida pela curva, menos a
+     * inadimplência, mais os juros do pós-chaves, menos a devolução do distrato.
+     */
     netVgvTotal: number;
+    /** Fração do VGV vendável que a curva de vendas não vende no prazo (0 a 1). Fica fora da receita. */
+    estoqueNaoVendidoPct: number;
     constCostTotal: number;
     duration: number;
     landCost: number;
@@ -233,6 +242,12 @@ export const CAMPOS_DO_MOTOR = [
     'financing_percent', 'financing_rate_annual', 'funding_debt_percent',
     'swap_physical_percent', 'swap_financial_percent', 'default_rate_percent', 'cancellation_rate_percent',
     'revenue_downpayment_percent', 'revenue_construction_percent', 'revenue_handover_percent',
+    // Fase 1 (migration aplicar_20271111800000)
+    'sales_curve_type', 'sales_launch_percent', 'sales_launch_months', 'sales_vso_percent', 'sales_curve_custom',
+    'revenue_intermediate_percent', 'revenue_intermediate_interval_months',
+    'revenue_post_handover_percent', 'post_handover_months', 'post_handover_rate_monthly', 'handover_delay_months',
+    'cancellation_lag_months', 'cancellation_refund_percent', 'cancellation_resale',
+    'sales_index_rate_monthly', 'cost_index_rate_monthly',
 ] as const satisfies readonly (keyof ImovibStudy)[];
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
@@ -251,6 +266,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     annualIrrProjeto: NaN,
     vgvTotal: 0,
     netVgvTotal: 0,
+    estoqueNaoVendidoPct: 0,
     constCostTotal: 0,
     duration: 0,
     landCost: 0,
@@ -277,7 +293,9 @@ interface Premissas {
     constStart: number;
     salesStart: number;
     duration: number;
-    inflation: number;
+    /** Índices das vendas e da obra, fração ao mês. */
+    indiceVendas: number;
+    indiceObra: number;
     monthlyDiscount: number;
     monthlyFinancingRate: number;
     actualFinPct: number;
@@ -293,15 +311,15 @@ interface Premissas {
     costDeltaMultiplier: number;
     vgvTotal: number;
     netVgvTotal: number;
+    estoqueNaoVendidoPct: number;
     constCostTotal: number;
     baseVgvTotal: number;
     vgvPorBloco: ImovibMathResult['vgvPorBloco'];
     totalBlockArea: number;
     totalPrivateArea: number;
     totalCommonArea: number;
-    downpaymentVol: number;
-    constructionVol: number;
-    handoverVol: number;
+    /** Recebimento de todas as safras, sem índice e já sem a inadimplência. */
+    recebimento: SerieDeRecebimento;
 }
 
 function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premissas {
@@ -331,10 +349,14 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         });
     }
 
-    // Total duration is dictated by whichever finishes last
-    const duration = Math.max(constStart + constDur - 1, salesStart + salesDur - 1, 1);
+    // Último mês da obra ou das vendas. O fluxo vai além quando ainda há
+    // recebimento (repasse atrasado, pós-chaves, revenda de distrato).
+    const duracaoBase = Math.max(constStart + constDur - 1, salesStart + salesDur - 1, 1);
 
-    const inflation = val(study.inflation_rate, D.inflation_rate) / 100; // Monthly
+    const inflationPct = val(study.inflation_rate, D.inflation_rate); // % ao mês
+    // Índices das vendas e da obra: vazios, seguem a inflação geral.
+    const indiceVendas = val(study.sales_index_rate_monthly, inflationPct) / 100;
+    const indiceObra = val(study.cost_index_rate_monthly, inflationPct) / 100;
     const discount = val(study.discount_rate, D.discount_rate) / 100; // Expected Annual
     const monthlyDiscount = Math.pow(1 + discount, 1 / 12) - 1; // Convert annual to monthly
 
@@ -504,20 +526,93 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     }
     const marketedVgv = vgvTotal * (1 - swapPhysical);
 
-    // Apply Contingencies (Default, Cancellation, Swap Financial)
+    // Permuta financeira: parte do VGV fica com o terrenista. O que sobra é o
+    // VGV vendável. Inadimplência e distrato NÃO descontam mais o VGV: entram no
+    // calendário de cada safra (item 1.4 do plano 2026-11-11).
     const swapFinancial = val(study.swap_financial_percent, D.swap_financial_percent) / 100;
+    const vgvVendavel = marketedVgv * (1 - swapFinancial);
     const defaultRate = val(study.default_rate_percent, D.default_rate_percent) / 100;
-    const cancellationRate = val(study.cancellation_rate_percent, D.cancellation_rate_percent) / 100;
 
-    const netVgvTotal = marketedVgv * (1 - (swapFinancial + defaultRate + cancellationRate));
+    // Curva de vendas: fração do VGV vendável vendida em cada mês de venda.
+    const curva = curvaDeVendas({
+        tipo: (study.sales_curve_type ?? D.sales_curve_type) as TipoCurvaDeVendas,
+        duracao: salesDur,
+        lancamentoPct: val(study.sales_launch_percent, D.sales_launch_percent),
+        lancamentoMeses: val(study.sales_launch_months, D.sales_launch_months),
+        vsoPct: val(study.sales_vso_percent, D.sales_vso_percent),
+        pesos: study.sales_curve_custom ?? [],
+    });
+    const fracaoVendida = curva.reduce((a, b) => a + b, 0);
+    // Abaixo de 1e-9 é resto de ponto flutuante (a linear soma 1 − 4e-16), não estoque.
+    const estoqueNaoVendidoPct = curva.length > 0 && 1 - fracaoVendida > 1e-9 ? 1 - fracaoVendida : 0;
+    const pctBR = (x: number) => Number((x * 100).toFixed(2)).toLocaleString('pt-BR');
+    if (estoqueNaoVendidoPct > 0) {
+        avisos.push({
+            codigo: 'estoque_nao_vendido',
+            mensagem: `A curva de vendas não vende tudo no prazo: ${pctBR(estoqueNaoVendidoPct)}% do VGV vendável (${fmtBRL(vgvVendavel * estoqueNaoVendidoPct)}) fica em estoque, fora da receita.`,
+            aba: 'funding',
+        });
+    }
+    const vendasPorMes: number[] = [];
+    for (let m = 1; m < salesStart; m++) vendasPorMes.push(0);
+    curva.forEach(f => vendasPorMes.push(f * vgvVendavel));
+
+    // Perfil de recebimento de cada safra (percentuais do valor vendido).
+    const sinalPct = val(study.revenue_downpayment_percent, D.revenue_downpayment_percent);
+    const parcelasObraPct = val(study.revenue_construction_percent, D.revenue_construction_percent);
+    const intermediariasPct = val(study.revenue_intermediate_percent, D.revenue_intermediate_percent);
+    const repassePct = val(study.revenue_handover_percent, D.revenue_handover_percent);
+    const posChavesPct = val(study.revenue_post_handover_percent, D.revenue_post_handover_percent);
+    const posChavesMeses = val(study.post_handover_months, D.post_handover_months);
+    const revenueSum = sinalPct + parcelasObraPct + intermediariasPct + repassePct + posChavesPct;
+    if (Math.abs(revenueSum - 100) > 0.01) {
+        avisos.push({
+            codigo: 'recebimento_nao_soma_100',
+            mensagem: `O perfil de recebimento soma ${Number(revenueSum.toFixed(2)).toLocaleString('pt-BR')}% (sinal + parcelas de obra + intermediárias + repasse + pós-chaves deveria ser 100%). O cálculo usa os valores como estão.`,
+            aba: 'funding',
+        });
+    }
+    if (posChavesPct > 0 && !(posChavesMeses > 0)) {
+        avisos.push({
+            codigo: 'pos_chaves_sem_prazo',
+            mensagem: `O pós-chaves tem ${pctBR(posChavesPct / 100)}% do valor, mas prazo de 0 meses: o valor foi recebido inteiro nas chaves.`,
+            aba: 'funding',
+        });
+    }
+
+    const handoverMonth = constStart + constDur - 1; // chaves = último mês da obra
+    const recebimento = recebimentoPorSafra(vendasPorMes, {
+        sinalPct,
+        parcelasObraPct,
+        intermediariasPct,
+        intermediariasIntervalo: val(study.revenue_intermediate_interval_months, D.revenue_intermediate_interval_months),
+        repassePct,
+        atrasoDoRepasse: val(study.handover_delay_months, D.handover_delay_months),
+        posChavesPct,
+        posChavesMeses,
+        posChavesJurosMensal: val(study.post_handover_rate_monthly, D.post_handover_rate_monthly),
+    }, handoverMonth, {
+        taxaPct: val(study.cancellation_rate_percent, D.cancellation_rate_percent),
+        defasagemMeses: val(study.cancellation_lag_months, D.cancellation_lag_months),
+        devolucaoPct: val(study.cancellation_refund_percent, D.cancellation_refund_percent),
+        revende: study.cancellation_resale ?? D.cancellation_resale,
+    }, duracaoBase);
+
+    // Inadimplência: só sobre o que o comprador paga direto à incorporadora.
+    // Sinal é pago na assinatura e o repasse vem do banco.
+    for (const linha of ['parcelasObra', 'intermediarias', 'posChaves'] as const) {
+        recebimento[linha] = recebimento[linha].map(v => v * (1 - defaultRate));
+    }
+    const duration = Math.max(duracaoBase, recebimento.sinal.length);
+    const netVgvTotal = (Object.values(recebimento) as number[][])
+        .reduce((acc, serie) => acc + serie.reduce((a, b) => a + b, 0), 0);
 
     // Percentuais que passam de 100% deixam a receita líquida negativa, e ela sai
     // do caixa (antes era descartada em silêncio). O cálculo segue como veio; avisa.
-    const pctBR = (x: number) => Number((x * 100).toFixed(2)).toLocaleString('pt-BR');
-    if (netVgvTotal < 0) {
+    if (vgvVendavel < 0 || defaultRate > 1) {
         avisos.push({
             codigo: 'receita_liquida_negativa',
-            mensagem: `Permuta, inadimplência e distrato somam mais de 100% do VGV: a receita líquida fica negativa (${fmtBRL(netVgvTotal)}) e sai do caixa.`,
+            mensagem: `Permutas ou inadimplência passam de 100%: a receita líquida fica negativa (${fmtBRL(netVgvTotal)}) e sai do caixa.`,
             aba: 'funding',
         });
     } else if (deducaoReceitaPct > 1) {
@@ -525,19 +620,6 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'receita_liquida_negativa',
             mensagem: `As deduções sobre a receita somam ${pctBR(deducaoReceitaPct)}%: passam da receita e a diferença sai do caixa.`,
             aba: capexRubricasAtivas ? 'capex' : 'viability_dynamic',
-        });
-    }
-
-    // Revenue Curve Distribution (J-Curve Profile)
-    const downpaymentPctRaw = val(study.revenue_downpayment_percent, D.revenue_downpayment_percent);
-    const constructionPctRaw = val(study.revenue_construction_percent, D.revenue_construction_percent);
-    const handoverPctRaw = val(study.revenue_handover_percent, D.revenue_handover_percent);
-    const revenueSum = downpaymentPctRaw + constructionPctRaw + handoverPctRaw;
-    if (Math.abs(revenueSum - 100) > 0.01) {
-        avisos.push({
-            codigo: 'recebimento_nao_soma_100',
-            mensagem: `O perfil de recebimento soma ${Number(revenueSum.toFixed(2)).toLocaleString('pt-BR')}% (sinal + obra + repasse deveria ser 100%). O cálculo usa os valores como estão.`,
-            aba: 'funding',
         });
     }
 
@@ -558,7 +640,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         constStart,
         salesStart,
         duration,
-        inflation,
+        indiceVendas,
+        indiceObra,
         monthlyDiscount,
         monthlyFinancingRate,
         actualFinPct,
@@ -573,15 +656,14 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         costDeltaMultiplier,
         vgvTotal,
         netVgvTotal,
+        estoqueNaoVendidoPct,
         constCostTotal,
         baseVgvTotal,
         vgvPorBloco,
         totalBlockArea,
         totalPrivateArea,
         totalCommonArea,
-        downpaymentVol: netVgvTotal * (downpaymentPctRaw / 100),
-        constructionVol: netVgvTotal * (constructionPctRaw / 100),
-        handoverVol: netVgvTotal * (handoverPctRaw / 100),
+        recebimento,
     };
 }
 
@@ -591,6 +673,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
 interface Series {
     receitaBruta: number[];
     deducaoReceita: number[];
+    /** Devolução do distrato ao comprador (≤ 0), corrigida pelo índice das vendas. */
+    devolucao: number[];
     /** Saídas pagas com capital próprio: terreno e rubricas de terreno (mês 1), rubricas em R$ de base vgv. */
     custoProprio: number[];
     /** Custo de obra do mês — a parte financiável. */
@@ -603,36 +687,34 @@ interface Series {
 }
 
 function montarSeries(P: Premissas): Series {
-    const { duration, salesStart, salesDur, constStart, constDur, inflation } = P;
-
-    const monthlyDownpayment = salesDur > 0 ? P.downpaymentVol / salesDur : 0;
-    const monthlyConstRev = constDur > 0 ? P.constructionVol / constDur : 0;
-    const handoverMonth = constStart + constDur - 1; // Paid at the end of construction
+    const { duration, salesStart, salesDur, constStart, constDur, recebimento: R } = P;
 
     const constMonths = Math.max(1, constDur);
     const monthlyConstCost = (P.constCostTotal + P.rubricaObra) / constMonths;
     const monthlyVgvFixo = salesDur > 0 ? P.rubricaVgvFixo / salesDur : 0;
 
     const S: Series = {
-        receitaBruta: [], deducaoReceita: [], custoProprio: [], custoObra: [], linhas: [],
+        receitaBruta: [], deducaoReceita: [], devolucao: [], custoProprio: [], custoObra: [], linhas: [],
         totalGrossRev: 0, somaInflacaoVendas: 0, rubricaVgvTotal: 0,
     };
 
     for (let m = 1; m <= duration; m++) {
-        const inflationMult = Math.pow(1 + inflation, m - 1);
+        const i = m - 1;
+        const multVendas = Math.pow(1 + P.indiceVendas, m - 1);
+        const multObra = Math.pow(1 + P.indiceObra, m - 1);
         const emVendas = m >= salesStart && m < salesStart + salesDur;
         const emObra = m >= constStart && m < constStart + constDur;
         const linhas = linhasZeradas();
 
-        // J-Curve Revenue Aggregation
-        let grossRev = 0;
-        if (emVendas) grossRev += monthlyDownpayment;        // 1. Sinal, ao longo das vendas
-        if (emObra) grossRev += monthlyConstRev;             // 2. Parcelas, ao longo da obra
-        if (m === handoverMonth) grossRev += P.handoverVol;  // 3. Repasse / chaves, de uma vez
-        grossRev = grossRev * inflationMult;
-        if (emVendas) linhas.receitaSinal = monthlyDownpayment * inflationMult;
-        if (emObra) linhas.receitaParcelasObra = monthlyConstRev * inflationMult;
-        if (m === handoverMonth) linhas.receitaRepasse = P.handoverVol * inflationMult;
+        // Recebimento das safras (item 1.2), corrigido pelo índice das vendas.
+        linhas.receitaSinal = (R.sinal[i] ?? 0) * multVendas;
+        linhas.receitaParcelasObra = (R.parcelasObra[i] ?? 0) * multVendas;
+        linhas.receitaIntermediarias = (R.intermediarias[i] ?? 0) * multVendas;
+        linhas.receitaRepasse = (R.repasse[i] ?? 0) * multVendas;
+        linhas.receitaPosChaves = (R.posChaves[i] ?? 0) * multVendas;
+        linhas.devolucaoDistrato = (R.devolucaoDistrato[i] ?? 0) * multVendas;
+        const grossRev = linhas.receitaSinal + linhas.receitaParcelasObra + linhas.receitaIntermediarias
+            + linhas.receitaRepasse + linhas.receitaPosChaves;
         linhas.impostos = -grossRev * P.deducaoPct.impostos;
         linhas.comercial = -grossRev * P.deducaoPct.comercial;
         linhas.outrasDeducoes = -grossRev * P.deducaoPct.outras;
@@ -640,7 +722,7 @@ function montarSeries(P: Premissas): Series {
         // Deduções sobre a receita: rubricas de base vgv (modo Completo) ou
         // imposto + corretagem da Dinâmica — nunca os dois.
         S.totalGrossRev += grossRev;
-        if (emVendas) S.somaInflacaoVendas += inflationMult;
+        if (emVendas) S.somaInflacaoVendas += multVendas;
         const revenueDeduction = grossRev * P.deducaoReceitaPct;
         if (P.capexRubricasAtivas) S.rubricaVgvTotal += revenueDeduction;
 
@@ -651,20 +733,21 @@ function montarSeries(P: Premissas): Series {
             linhas.rubricasTerreno = -P.rubricaTerreno;
         }
         if (monthlyVgvFixo > 0 && emVendas) {
-            const fixo = monthlyVgvFixo * inflationMult;
+            const fixo = monthlyVgvFixo * multVendas;
             proprio += fixo;
             S.rubricaVgvTotal += fixo;
             linhas.rubricasVendas = -fixo;
         }
         if (emObra) {
-            linhas.obra = -(P.constCostTotal / constMonths) * inflationMult;
-            linhas.rubricasObra = -(P.rubricaObra / constMonths) * inflationMult;
+            linhas.obra = -(P.constCostTotal / constMonths) * multObra;
+            linhas.rubricasObra = -(P.rubricaObra / constMonths) * multObra;
         }
 
         S.receitaBruta.push(grossRev);
         S.deducaoReceita.push(revenueDeduction);
+        S.devolucao.push(linhas.devolucaoDistrato);
         S.custoProprio.push(proprio);
-        S.custoObra.push(emObra ? monthlyConstCost * inflationMult : 0);
+        S.custoObra.push(emObra ? monthlyConstCost * multObra : 0);
         S.linhas.push(linhas);
     }
     return S;
@@ -700,7 +783,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
     for (let m = 1; m <= P.duration; m++) {
         const i = m - 1;
         const grossRev = S.receitaBruta[i];
-        const netRev = grossRev - S.deducaoReceita[i];
+        const netRev = grossRev - S.deducaoReceita[i] + S.devolucao[i];
         const custoObra = S.custoObra[i];
 
         const totalCost = S.custoProprio[i] + custoObra;
@@ -812,6 +895,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         annualIrrProjeto,
         vgvTotal: P.vgvTotal,
         netVgvTotal: P.netVgvTotal,
+        estoqueNaoVendidoPct: P.estoqueNaoVendidoPct,
         constCostTotal: P.constCostTotal,
         duration: P.duration,
         landCost: P.landCost,

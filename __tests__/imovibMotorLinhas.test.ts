@@ -90,8 +90,8 @@ describe('0.3 — linhas do fluxo', () => {
         expect(r.avisos.find(a => a.codigo === 'receita_liquida_negativa')?.aba).toBe('viability_dynamic');
     });
 
-    it('contingências acima de 100% do VGV deixam a receita negativa e geram aviso', () => {
-        const r = computeImovibMath(baseStudy({ default_rate_percent: 60, cancellation_rate_percent: 50 }));
+    it('permuta acima de 100% do VGV deixa a receita negativa e gera aviso', () => {
+        const r = computeImovibMath(baseStudy({ swap_financial_percent: 110 }));
         expect(r.netVgvTotal).toBeLessThan(0);
         for (const f of r.monthlyFlows) expect(somaLinhas(f.linhas)).toBeCloseTo(f.net, 4);
         expect(r.avisos.find(a => a.codigo === 'receita_liquida_negativa')?.aba).toBe('funding');

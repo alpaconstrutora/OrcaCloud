@@ -144,12 +144,12 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Título</label>
               <input type="text" placeholder="Ex: Nicho de Madeira Iluminado" value={novoTitulo} onChange={e => setNovoTitulo(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
+                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
             </div>
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Categoria</label>
               <select value={novaCat} onChange={e => setNovaCat(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
+                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
                 {Object.entries(CAT_LABELS).filter(([k]) => k !== 'TODOS').map(([k, v]) => <option key={k} value={k}>{v}</option>)}
               </select>
             </div>
@@ -157,7 +157,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
           <div className="space-y-1">
             <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Link da Imagem (URL)</label>
             <input type="url" placeholder="https://images.unsplash.com/..." value={novaUrl} onChange={e => setNovaUrl(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]" required />
           </div>
           <div className="space-y-1">
             <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Descrição / Notas técnicas</label>
@@ -275,7 +275,7 @@ export const OfficesBiblioteca: React.FC<OfficesBibliotecaProps> = ({ userId }) 
                 <span className="block text-xs text-slate-400 italic">Nenhum projeto cadastrado no banco.</span>
               ) : (
                 <select value={projetoVinculoId} onChange={e => setProjetoVinculoId(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
+                  className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55]">
                   {projetos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
                 </select>
               )}

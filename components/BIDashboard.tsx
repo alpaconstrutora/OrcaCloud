@@ -180,10 +180,10 @@ const BIDashboard: React.FC<BIDashboardProps> = ({ organizationId, onNavigate })
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                     <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
                     <span className="text-gray-400 text-sm">até</span>
                     <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-                        className="border border-gray-200 rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-blue-400" />
+                        className="border border-gray-200 rounded-[6px] px-3 h-9 text-sm focus:outline-none focus:border-blue-400" />
                     <Button onClick={load} disabled={loading}
                         className="text-sm gap-2">
                         <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />

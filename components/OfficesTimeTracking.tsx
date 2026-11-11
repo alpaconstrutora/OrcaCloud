@@ -139,11 +139,11 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
           <div className="space-y-1">
             <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Projeto</label>
             <div className="relative">
-              <Briefcase className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-300" />
+              <Briefcase className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
               <select
                 value={selectedProjetoId}
                 onChange={e => setSelectedProjetoId(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
+                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] pl-10 pr-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
               >
                 {projetos.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
               </select>
@@ -154,21 +154,21 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Tempo (Horas)</label>
               <div className="relative">
-                <Clock className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-300" />
+                <Clock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <input
                   type="number" step="0.5" min="0.5" placeholder="Ex: 1.5 ou 4"
                   value={horas} onChange={e => setHoras(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-[6px] pl-10 pr-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
                 />
               </div>
             </div>
             <div className="space-y-1">
               <label className="block text-[8px] font-black uppercase tracking-widest text-slate-400">Data da Atividade</label>
               <div className="relative">
-                <Calendar className="absolute left-3.5 top-2.5 w-4 h-4 text-slate-300" />
+                <Calendar className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-300" />
                 <input
                   type="date" value={dataLancamento} onChange={e => setDataLancamento(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 rounded-xl pl-10 pr-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
+                  className="w-full bg-slate-50 border border-slate-200 rounded-[6px] pl-10 pr-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
                 />
               </div>
             </div>
@@ -179,7 +179,7 @@ const OfficesTimeTracking: React.FC<OfficesTimeTrackingProps> = ({ userId }) => 
             <input
               type="text" placeholder="Ex: Detalhamento de gesso no CAD ou Visita técnica à obra"
               value={descricaoAtividade} onChange={e => setDescricaoAtividade(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-[#D47A55] font-medium"
             />
           </div>
         </div>

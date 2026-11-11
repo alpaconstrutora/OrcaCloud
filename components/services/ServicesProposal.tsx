@@ -20,7 +20,9 @@ interface Props {
   onBack: () => void;
 }
 
-const INPUT = 'w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+const INPUT = 'w-full rounded-[6px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 h-9 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+// Área de texto não leva h-9: mantém a altura de várias linhas.
+const INPUT_AREA = 'w-full rounded-[6px] border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
 const LABEL = 'block text-xs font-medium text-gray-600 dark:text-gray-400 mb-1';
 
 const fmt = (n: number) =>
@@ -315,7 +317,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
       <div className="space-y-4">
         <div>
           <label className={LABEL}>Escopo do serviço</label>
-          <textarea className={INPUT} rows={5} value={form.scope} onChange={set('scope')} placeholder="Descreva o que será executado..." />
+          <textarea className={INPUT_AREA} rows={5} value={form.scope} onChange={set('scope')} placeholder="Descreva o que será executado..." />
         </div>
         <div className="grid grid-cols-2 gap-4">
           <div>
@@ -329,7 +331,7 @@ const ServicesProposal: React.FC<Props> = ({ opportunityId, organizationId, onBa
         </div>
         <div>
           <label className={LABEL}>Condições de pagamento</label>
-          <textarea className={INPUT} rows={3} value={form.payment_terms} onChange={set('payment_terms')} placeholder="Ex: 30% na assinatura, 40% na entrega..." />
+          <textarea className={INPUT_AREA} rows={3} value={form.payment_terms} onChange={set('payment_terms')} placeholder="Ex: 30% na assinatura, 40% na entrega..." />
         </div>
       </div>
 

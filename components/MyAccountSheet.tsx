@@ -87,7 +87,7 @@ export default function MyAccountSheet({ open, onClose, member, email, organizat
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="Seu nome"
-                  className="w-full rounded-lg border border-slate-300 px-3 py-2 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
+                  className="w-full rounded-[6px] border border-slate-300 px-3 h-9 text-sm text-slate-900 focus:border-orange-500 focus:outline-none focus:ring-1 focus:ring-orange-500"
                 />
               </div>
               <ReadOnlyField icon={Mail} label="E-mail de login" value={email ?? '—'} />

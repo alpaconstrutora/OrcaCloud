@@ -36,7 +36,7 @@ const emptySchedule = (orgId: string): NewSchedule => ({
     active: true,
 });
 
-const inputCls = 'w-full rounded-xl border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 py-2 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
+const inputCls = 'w-full rounded-[6px] border border-gray-200 dark:border-gray-600 bg-white dark:bg-gray-800 px-3 h-9 text-sm text-gray-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500';
 const labelCls = 'block text-xs font-medium text-gray-500 dark:text-gray-400 mb-1';
 
 const BIReportScheduler: React.FC<Props> = ({

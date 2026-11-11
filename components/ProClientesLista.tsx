@@ -157,21 +157,21 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
               placeholder="Nome do Cliente"
               value={nome}
               onChange={(e) => setNome(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <input
               type="tel"
               placeholder="WhatsApp / Telefone (com DDD)"
               value={telefone}
               onChange={(e) => setTelefone(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <input
               type="text"
               placeholder="Endereço de execução"
               value={endereco}
               onChange={(e) => setEndereco(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
             />
             <textarea
               rows={2}

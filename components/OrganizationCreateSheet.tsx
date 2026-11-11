@@ -52,7 +52,7 @@ const EMPTY: FormState = {
     street: '', number: '', neighborhood: '', city: '', state: '', zipCode: '',
 };
 
-const inputCls = 'w-full px-3 py-2 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-all';
+const inputCls = 'w-full px-3 h-9 border border-gray-200 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 bg-white transition-all';
 const labelCls = 'block text-xs font-semibold text-gray-500 mb-1';
 
 const Field: React.FC<{ label: string; children: React.ReactNode; required?: boolean }> = ({ label, children, required }) => (

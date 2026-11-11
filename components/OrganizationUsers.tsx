@@ -1498,17 +1498,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Nome</label>
                                 <input type="text" required value={editMemberName} onChange={(e) => setEditMemberName(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                                    className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">E-mail</label>
                                 <input type="email" required value={editMemberEmail} onChange={(e) => setEditMemberEmail(e.target.value)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500" />
+                                    className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500" />
                             </div>
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Função</label>
                                 <select value={editMemberRole} onChange={(e) => setEditMemberRole(e.target.value as OrganizationRole)}
-                                    className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                    className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500">
                                     <option value="admin">Administrador</option>
                                     <option value="member">Membro</option>
                                     <option value="viewer">Visualizador</option>
@@ -1609,7 +1609,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             required
                                             value={newMemberName}
                                             onChange={(e) => setNewMemberName(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500"
                                             placeholder="Nome"
                                         />
                                     </div>
@@ -1620,7 +1620,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             required
                                             value={newMemberEmail}
                                             onChange={(e) => setNewMemberEmail(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                            className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500"
                                             placeholder="email@empresa.com"
                                         />
                                     </div>
@@ -1630,7 +1630,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Função Base</label>
                                         <select value={newMemberRole} onChange={(e) => handleRoleChangeWithDefaults(e.target.value as OrganizationRole)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                            className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="member">Membro</option>
                                             <option value="admin">Administrador</option>
                                             <option value="viewer">Visualizador</option>
@@ -1639,7 +1639,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Cargo Template (Opcional)</label>
                                         <select value={newMemberCustomRoleId} onChange={(e) => handleCustomRoleSelect(e.target.value)}
-                                            className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500">
+                                            className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500">
                                             <option value="">Nenhum (Usar Permissões Customizadas)</option>
                                             {customRoles.map(role => (
                                                 <option key={role.id} value={role.id}>{role.name}</option>
@@ -1744,7 +1744,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         required
                                         value={roleFormData.name}
                                         onChange={(e) => setRoleFormData(prev => ({ ...prev, name: e.target.value }))}
-                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg outline-none focus:ring-2 focus:ring-blue-500"
+                                        className="w-full px-3 h-9 text-sm border border-gray-300 rounded-[6px] outline-none focus:ring-2 focus:ring-blue-500"
                                         placeholder="Ex: Engenheiro Junior"
                                     />
                                 </div>

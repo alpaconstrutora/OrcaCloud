@@ -464,7 +464,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   }
                 }
               }}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             >
               <option value="">Selecione um modelo...</option>
               {getTodosTemplates().map((t: any, index) => (
@@ -510,21 +510,21 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   placeholder="Nome completo do cliente"
                   value={novoClienteNome}
                   onChange={(e) => setNovoClienteNome(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+                  className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
                 />
                 <input
                   type="tel"
                   placeholder="Telefone (com DDD)"
                   value={novoClienteTelefone}
                   onChange={(e) => setNovoClienteTelefone(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+                  className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
                 />
                 <input
                   type="text"
                   placeholder="Endereço de execução (opcional)"
                   value={novoClienteEndereco}
                   onChange={(e) => setNovoClienteEndereco(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-3 py-2 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+                  className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
                 />
               </div>
             </div>
@@ -623,7 +623,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               placeholder="0,00"
               value={valor}
               onChange={(v) => setValor(v)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
             />
           </div>
 
@@ -635,7 +635,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 type="number"
                 value={validadeDias}
                 onChange={(e) => setValidadeDias(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+                className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
               />
             </div>
 
@@ -646,7 +646,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                 type="number"
                 value={garantiaDias}
                 onChange={(e) => setGarantiaDias(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+                className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
               />
             </div>
           </div>

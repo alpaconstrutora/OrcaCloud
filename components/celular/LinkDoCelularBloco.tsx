@@ -15,7 +15,8 @@ import {
  *
  * Quem pode o quê é decidido no BANCO (`mobile_link_*`): a própria pessoa para si; o gestor da
  * organização revoga/consulta o de qualquer membro, mas GERA só para quem tem papel `member`
- * (admin/owner geram o próprio — a tela avisa por `motivoGerarBloqueado`). Recusa chega como
+ * (admin/owner geram o próprio; visualizador não recebe link gerado pelo gestor — a tela avisa por
+ * `motivoGerarBloqueado`). Recusa chega como
  * 42501 e vira o texto de permissão.
  *
  * O token só existe em claro na URL devolvida por `gerarLinkCelular`. Ela fica só neste estado
@@ -59,16 +60,23 @@ function mensagemDoErro(e: unknown, acao: string): string {
 /** Texto enviado por WhatsApp — o endereço vai junto, para a pessoa tocar e abrir. */
 export const textoDoWhatsapp = (url: string) => `Seu link do OrçaCloud no celular: ${url}`
 
-/** Por que o gestor não gera o link de um admin/owner (o banco recusa do mesmo jeito). */
-export const MOTIVO_GERAR_SO_O_PROPRIO = 'Admin e owner geram o próprio link, pelo menu da conta › Meu link do celular'
+/** Por que o gestor não gera o link de quem não é membro comum (o banco recusa do mesmo jeito). */
+export const MOTIVO_GERAR_SO_O_PROPRIO = 'O gestor só gera link para membros comuns. Admin e owner geram o próprio, pelo menu da conta › Meu link do celular.'
+
+/**
+ * Motivo para desligar "Gerar link" ao gestor editar alguém: o banco só deixa gerar para quem é
+ * `member` (papel SALVO), exceto o próprio usuário. `undefined` = liberado.
+ */
+export const motivoGerarBloqueadoPara = (papelSalvo: string, ehOProprio: boolean): string | undefined =>
+  !ehOProprio && papelSalvo !== 'member' ? MOTIVO_GERAR_SO_O_PROPRIO : undefined
 
 interface Props {
   userId: string
   orgId: string
   nomePessoa: string
   /**
-   * Gerar desligado por regra (não por estado), com o motivo — ex.: gestor editando um
-   * admin/owner, que só gera o próprio link. Revogar e consultar continuam.
+   * Gerar desligado por regra (não por estado), com o motivo — ex.: gestor editando alguém que
+   * não é membro comum (admin/owner geram o próprio link; visualizador não recebe). Revogar e consultar continuam.
    */
   motivoGerarBloqueado?: string
 }

@@ -217,6 +217,24 @@ export const calcularTirMensal = (cashFlows: number[]): { taxa: number; raizes: 
     return { taxa, raizes: raizes.length };
 };
 
+/**
+ * Colunas de `imovib_studies` que o motor lê. A listagem (imovibService,
+ * COLUNAS_DA_LISTAGEM) seleciona a partir daqui: coluna nova lida pelo motor
+ * entra AQUI, e a migration que a cria vai ao banco antes do código (senão a
+ * listagem quebra com 42703). Blocos, rubricas, espelho e estrutura vêm
+ * montados em memória e não estão na lista.
+ * Guarda: __tests__/imovibCamposDoMotor.test.ts.
+ */
+export const CAMPOS_DO_MOTOR = [
+    'land_cost',
+    'capex_mode', 'capex_simplified_cost_sqm', 'capex_simplified_area_sqm',
+    'construction_duration_months', 'sales_duration_months', 'construction_start_month', 'sales_start_month',
+    'inflation_rate', 'discount_rate', 'tax_rate', 'brokerage_fee',
+    'financing_percent', 'financing_rate_annual', 'funding_debt_percent',
+    'swap_physical_percent', 'swap_financial_percent', 'default_rate_percent', 'cancellation_rate_percent',
+    'revenue_downpayment_percent', 'revenue_construction_percent', 'revenue_handover_percent',
+] as const satisfies readonly (keyof ImovibStudy)[];
+
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
 const val = (x: number | null | undefined, padrao: number): number =>
     x == null || Number.isNaN(x) ? padrao : x;

@@ -695,14 +695,24 @@ Condições que o pedido não descreve e que mais provavelmente derrubam quem us
 
 Achado fora do escopo, ao fazer o 0.6: a guarda `secdefSemRevoke` de `__tests__/segurancaMigrations.test.ts` só reconhece funções delimitadas por `$$` ou `$function$`; com `$X$` ou outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde. Pelo menos dez migrations posteriores ao corte usam outro delimitador. Não corrigido aqui.
 
-**Fase 1 — Receitas:** 0 de 7
-- [ ] 1.1 Curvas de venda
-- [ ] 1.2 Recebimento por safra, com distrato
-- [ ] 1.3 Colunas das premissas de receita
-- [ ] 1.4 Motor usa curva e safra (D1) — colar aqui a tabela antes → depois dos 3 estudos
-- [ ] 1.5 Aba Receitas: curva de vendas (D7)
-- [ ] 1.6 Aba Receitas: perfil de recebimento e distrato
-- [ ] 1.7 Índices separados
+**Fase 1 — Receitas:** 7 de 7 no código (branch `feat/imovib-fase1`); a publicação espera revisão e CI
+- [x] 1.1 Curvas de venda — `utils/imovibCurvas.ts`.
+- [x] 1.2 Recebimento por safra, com distrato — `utils/imovibRecebimento.ts`. O `horizonte` corta o distrato e é o tamanho mínimo das séries; repasse atrasado, pós-chaves e revenda podem passar dele. Pós-chaves com 0 meses sai inteiro nas chaves, com aviso.
+- [x] 1.3 Colunas das premissas de receita — migration `aplicar_20271111800000_imovib_receitas_por_safra.sql` **aplicada em 11/11** com OK do usuário; 16 colunas conferidas no banco.
+- [x] 1.4 Motor usa curva e safra (D1). `netVgvTotal` passou a ser a receita dos compradores sem índice. Antes → depois, estudos do banco com as colunas novas vazias:
+
+  | Estudo | VGV líquido | VPL | TIR a.a. | Exposição máxima | Prazo |
+  |---|---|---|---|---|---|
+  | Garden Cambuhy | R$ 10.716.160 → R$ 11.619.723 | R$ 3.482.437 → R$ 4.036.814 | 186,2% → 142,55% | −R$ 2.347.203 → −R$ 2.754.409 | 36 → 37 meses |
+  | Bruninho | R$ 9.199.998 → R$ 9.975.722 | R$ 164.093 → R$ 678.901 | 14,37% → 20,35% | −R$ 5.285.761 → −R$ 5.656.506 | 36 → 37 meses |
+  | Davi Bueno | sem VGV — sem mudança | | | | |
+
+  O maior efeito vem do distrato: antes descontava 5% do VGV; agora a unidade distratada é revendida e a incorporadora retém 25% do que o comprador pagou (padrão editável). A inadimplência de 3% passou a incidir só sobre parcelas, intermediárias e pós-chaves.
+- [x] 1.5 Aba Receitas: curva de vendas (D7) — abas Receitas e Capital; `ImovibFundingForm` apagado. O gráfico lê `vendasPorMes` do motor.
+- [x] 1.6 Aba Receitas: perfil de recebimento e distrato — `ImovibInputRow` só grava quando o valor muda.
+- [x] 1.7 Índices separados — `utils/indiceVariacao.ts`, `components/ImovibIndiceDeCorrecao.tsx`.
+
+Telas **não conferidas no navegador**: o roteiro de Playwright precisa da senha do usuário de leitura.
 
 **Fase 2 — Indicadores e fluxo:** 0 de 5
 - [ ] 2.1 Indicadores

@@ -42,8 +42,8 @@ export const IMOVIB_DEFAULTS = {
     default_rate_percent: 3,
     cancellation_rate_percent: 5,
 
-    // Estrutura de capital e permutas
-    funding_equity_percent: 100,
+    // Estrutura de capital e permutas. O capital próprio é calculado desde a
+    // Fase 4 (D2); a coluna funding_equity_percent fica no banco, sem uso.
     funding_debt_percent: 0,
     swap_financial_percent: 0,
     swap_physical_percent: 0,

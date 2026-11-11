@@ -24,6 +24,29 @@ export interface FluxoDasFontes {
     avisos: string[];
 }
 
+export const ROTULO_DO_TIPO_DE_FONTE: Record<ImovibFundingSource['kind'], string> = {
+    mutuo: 'Mútuo', cri: 'CRI', scp: 'SCP', investidor: 'Investidor', outro: 'Outro',
+};
+
+export const ROTULO_DO_SISTEMA: Record<ImovibFundingSource['amortization'], string> = {
+    BULLET: 'Tudo no vencimento', PRICE: 'Price', SAC: 'SAC',
+};
+
+const num = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 2 });
+
+/** "12% a.a., tudo no vencimento em 24 meses" ou "30% de cada distribuição" — coluna da tabela. */
+export function comoEPaga(f: ImovibFundingSource): string {
+    if (f.remuneration === 'participacao') return `${num(Number(f.profit_share_percent) || 0)}% de cada distribuição`;
+    const prazo = Math.max(1, Math.round(f.term_months || 1));
+    const carencia = (f.grace_months ?? 0) > 0 && f.amortization !== 'BULLET' ? `, carência de ${MESES(f.grace_months!)}` : '';
+    const sistema = f.amortization === 'BULLET' ? 'tudo no vencimento' : ROTULO_DO_SISTEMA[f.amortization];
+    return `${num(Number(f.rate_annual) || 0)}% a.a., ${sistema} em ${MESES(prazo)}${carencia}`;
+}
+
+/** "Mútuo, entra no mês 3, 12% a.a., tudo no vencimento em 24 meses" — Excel. */
+export const descreverFonte = (f: ImovibFundingSource): string =>
+    `${ROTULO_DO_TIPO_DE_FONTE[f.kind]}, entra no mês ${f.entry_month}, ${comoEPaga(f)}`;
+
 // Data qualquer: o cronograma só precisa da sequência de meses, e a parcela k
 // cai no mês `entrada + k` do estudo.
 const DATA_DA_ENTRADA = '2001-01-15';

@@ -34,6 +34,19 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
 
     const [inflationRate, setInflationRate] = useState(initial(study.inflation_rate, D.inflation_rate));
     const [discountRate, setDiscountRate] = useState(initial(study.discount_rate, D.discount_rate));
+    // Item 4.5 do plano 2026-11-11: de onde vem a TMA (vai para o Excel e, na Fase 10, para o memorial).
+    const [origemDaTma, setOrigemDaTma] = useState(study.discount_rate_basis ?? '');
+    const salvarOrigemDaTma = async () => {
+        const texto = origemDaTma.trim();
+        if (texto === (study.discount_rate_basis ?? '').trim()) return;
+        try {
+            await imovibService.updateStudy(study.id, { discount_rate_basis: texto || null });
+            onDataChanged();
+        } catch (e) {
+            console.error(e);
+            showToast(`Erro ao salvar a origem da TMA: ${(e as Error).message}`, 'error');
+        }
+    };
 
     // Advanced Finance
     const [taxRate, setTaxRate] = useState(initial(study.tax_rate, D.tax_rate));
@@ -178,6 +191,18 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 value={discountRate}
                                 onChange={(e) => setDiscountRate(e.target.value)}
                                 onBlur={handleSave}
+                                className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
+                            />
+                        </div>
+                        <div className="col-span-2">
+                            <label htmlFor="imovib-origem-tma" className="block text-xs font-semibold text-slate-500 mb-1.5">De onde vem esta taxa</label>
+                            <input
+                                id="imovib-origem-tma"
+                                type="text"
+                                value={origemDaTma}
+                                placeholder="Ex.: CDI + 4 p.p., custo de oportunidade dos sócios"
+                                onChange={(e) => setOrigemDaTma(e.target.value)}
+                                onBlur={() => void salvarOrigemDaTma()}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>

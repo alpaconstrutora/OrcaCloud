@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fluxoDaDivida, PremissasDoFinanciamento } from '../utils/imovibFinanciamento';
+import { fluxoDaDivida, PremissasDoFinanciamento, composicaoDoCapital } from '../utils/imovibFinanciamento';
 import { computeImovibMath } from '../utils/imovibMotor';
 import { baseStudy } from './fixtures/imovibEstudos';
 
@@ -107,6 +107,16 @@ describe('4.1 — motor com as regras do financiamento', () => {
         const r = computeImovibMath(comDivida({ financing_min_sales_percent: 101 }));
         const aviso = r.avisos.find(a => a.codigo === 'financiamento_nao_liberado');
         expect(aviso?.aba).toBe('capital');
+    });
+
+    it('4.2 — as fatias do capital somam 100%, e sem dinheiro nenhum ficam vazias', () => {
+        const r = computeImovibMath(comDivida({ swap_financial_percent: 10 }));
+        const c = composicaoDoCapital(r.capital);
+        expect(c.map(x => x.chave)).toEqual(['proprio', 'divida', 'permuta', 'terceiros']);
+        expect(c.reduce((a, x) => a + x.pct, 0)).toBeCloseTo(100, 9);
+        expect(c.find(x => x.chave === 'divida')!.valor).toBe(r.capital.divida);
+        expect(c.find(x => x.chave === 'proprio')!.valor).toBe(-r.maxExposure);
+        expect(composicaoDoCapital({ proprio: 0, divida: 0, permuta: 0, terceiros: 0 }).every(x => x.pct === 0)).toBe(true);
     });
 
     it('o fluxo do projeto não muda com as regras do financiamento', () => {

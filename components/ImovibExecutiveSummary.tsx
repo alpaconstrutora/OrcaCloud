@@ -18,6 +18,8 @@ import * as XLSX from 'xlsx';
 import { useToast } from '../hooks/useToast';
 import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEquilibrio } from '../utils/imovibEquilibrio';
 import { GRUPOS_DO_FLUXO } from '../utils/imovibVisaoDoFluxo';
+import { ROTULO_DOS_JUROS_NA_OBRA, ROTULO_DA_AMORTIZACAO } from '../utils/imovibFinanciamento';
+import { descreverFonte } from '../utils/imovibFontes';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -49,6 +51,7 @@ export interface PlanilhaImovib {
     indicadores: Linha[];
     premissas: Linha[];
     fluxo: Linha[];
+    aportes: Linha[];
 }
 
 /**
@@ -59,6 +62,7 @@ export interface PlanilhaImovib {
 export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): PlanilhaImovib {
     const D = IMOVIB_DEFAULTS;
     const tma = premissa(study.discount_rate, D.discount_rate);
+    const origemDaTma = study.discount_rate_basis?.trim() || null;
     const tirDefinida = Number.isFinite(m.annualIrr);
     const tirProjetoDefinida = Number.isFinite(m.annualIrrProjeto);
     const rubricas = m.capexRubricasAtivas;
@@ -100,12 +104,17 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Retorno sobre o capital', ind.retornoSobreCapital == null ? null : ind.retornoSobreCapital * 100, '%', vazio(ind.retornoSobreCapital, 'Sem exposição de caixa') ?? 'Lucro ÷ exposição máxima'],
         ['Exposição máxima de caixa', m.maxExposure, 'R$', null],
         ['Mês da exposição máxima', ind.mesDaExposicaoMaxima, 'mês', vazio(ind.mesDaExposicaoMaxima, 'O caixa nunca fica negativo')],
+        // Fase 4 (D2): o capital próprio é calculado, não digitado.
+        ['Capital próprio necessário', m.capital.proprio, 'R$', 'Módulo da exposição máxima de caixa'],
+        ['Financiamento liberado', m.capital.divida, 'R$', null],
+        ['Permuta', m.capital.permuta, 'R$', 'VGV entregue ao terrenista'],
+        ['Outras fontes de capital', m.capital.terceiros, 'R$', null],
         ['Valor máximo do terreno (VPL zero)', terrenoVpl, 'R$', obsTerrenoVpl],
         [`Terreno para margem de ${margemAlvo.toLocaleString('pt-BR')}%`, terrenoMargem, 'R$', obsTerrenoMargem ?? 'Margem líquida sobre o VGV'],
         ['Variação de preço que zera o VPL', preco, '%', obsPreco],
         ['Variação do custo de obra que zera o VPL', custo, '%', obsCusto],
         ['Vendas mínimas', vendas, '% do VGV vendável', obsVendas ?? 'No ritmo da curva de vendas'],
-        ['TMA', tma, '% a.a.', null],
+        ['TMA', tma, '% a.a.', origemDaTma],
         ['Duração', m.duration, 'meses', null],
     ];
 
@@ -121,7 +130,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Cronograma', 'Início da obra', premissa(study.construction_start_month, D.construction_start_month), 'mês', null],
         ['Cronograma', 'Duração da obra', premissa(study.construction_duration_months, D.construction_duration_months), 'meses', null],
         ['Taxas', 'Inflação geral', inflacao, '% a.m.', null],
-        ['Taxas', 'TMA', tma, '% a.a.', null],
+        ['Taxas', 'TMA', tma, '% a.a.', origemDaTma],
         ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', naoEntra],
         ['Taxas', 'Corretagem', premissa(study.brokerage_fee, D.brokerage_fee), '%', naoEntra],
         ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', 'Sobre parcelas de obra, intermediárias e pós-chaves'],
@@ -145,12 +154,17 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Distrato', 'Deságio da revenda', premissa(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent), '%', revende ? null : 'Sem revenda'],
         ['Índices', 'Índice da obra', premissa(study.cost_index_rate_monthly, inflacao), '% a.m.', study.cost_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_obra ?? null)],
         ['Índices', 'Índice das vendas', premissa(study.sales_index_rate_monthly, inflacao), '% a.m.', study.sales_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_vendas ?? null)],
-        ['Financiamento', 'Capital próprio (equity)', premissa(study.funding_equity_percent, D.funding_equity_percent), '%', null],
         // Mesma regra do motor (actualFinPct): campo novo preenchido vale; vazio → "% Financiado" legado.
         ['Financiamento', 'Financiamento à produção / dívida', study.funding_debt_percent != null ? study.funding_debt_percent : premissa(study.financing_percent, D.financing_percent), '%', study.funding_debt_percent == null && (study.financing_percent ?? 0) > 0 ? 'valor legado (% Financiado)' : null],
         ['Financiamento', 'Taxa do financiamento', premissa(study.financing_rate_annual, D.financing_rate_annual), '% a.a.', null],
+        ['Financiamento', 'Defasagem da liberação', premissa(study.financing_release_lag_months, D.financing_release_lag_months), 'meses', null],
+        ['Financiamento', 'Vendas mínimas para liberar', premissa(study.financing_min_sales_percent, D.financing_min_sales_percent), '% do VGV vendável', null],
+        ['Financiamento', 'Juros do financiamento na obra', ROTULO_DOS_JUROS_NA_OBRA[study.financing_interest_mode ?? D.financing_interest_mode], null, null],
+        ['Financiamento', 'Amortização do financiamento', ROTULO_DA_AMORTIZACAO[study.financing_amortization ?? D.financing_amortization], null, null],
+        ['Financiamento', 'Caixa mínimo', premissa(study.min_cash_balance, D.min_cash_balance), 'R$', 'Aportes e distribuições'],
         ['Financiamento', 'Permuta financeira', premissa(study.swap_financial_percent, D.swap_financial_percent), '%', null],
         ['Financiamento', 'Permuta física', premissa(study.swap_physical_percent, D.swap_physical_percent), '%', null],
+        ...(study.funding_sources ?? []).map((f): Linha => ['Outras fontes', f.name, Number(f.amount) || 0, 'R$', descreverFonte(f)]),
     ];
 
     const linhasDoFluxo = GRUPOS_DO_FLUXO.flatMap(g => g.linhas);
@@ -165,7 +179,12 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ]),
     ];
 
-    return { indicadores, premissas, fluxo };
+    const aportes: Linha[] = [
+        ['Mês', 'Aporte (R$)', 'Distribuição (R$)', 'Caixa no fim do mês (R$)'],
+        ...m.aportes.map(a => [a.mes, a.aporte, a.distribuicao, a.caixa]),
+    ];
+
+    return { indicadores, premissas, fluxo, aportes };
 }
 
 /** Nome de arquivo sem espaço nem caractere proibido no Windows. */
@@ -197,6 +216,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60]), 'Premissas');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, ...planilha.fluxo[0].slice(4, -4).map(() => 20), 24, 24, 24, 24]), 'Fluxo de caixa');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.aportes, [10, 18, 20, 26]), 'Aportes');
             XLSX.writeFile(wb, `Imovib_${nomeDeArquivo(study.name)}_Viabilidade.xlsx`);
         } catch (err) {
             console.error('Error exporting Excel:', err);

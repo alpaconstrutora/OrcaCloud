@@ -73,11 +73,55 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         expect(linha(premissas, 'Financiamento à produção / dívida', 1)[2]).toBe(60);
         const grupos = new Set(premissas.slice(1).map(l => l[0]));
         expect([...grupos]).toEqual(['Cronograma', 'Taxas', 'Curva de vendas', 'Perfil de recebimento', 'Distrato', 'Índices', 'Financiamento']);
-        // Número em toda premissa, exceto as duas que são escolha (tipo da curva, revenda).
+        // Número em toda premissa, exceto as que são escolha (tipo da curva, revenda, regras do financiamento).
+        const ESCOLHAS = ['Tipo da curva', 'Revender a unidade distratada', 'Juros do financiamento na obra', 'Amortização do financiamento'];
         for (const l of premissas.slice(1)) {
-            if (l[1] === 'Tipo da curva' || l[1] === 'Revender a unidade distratada') expect(typeof l[2]).toBe('string');
+            if (ESCOLHAS.includes(String(l[1]))) expect(typeof l[2]).toBe('string');
             else expect(typeof l[2], String(l[1])).toBe('number');
         }
+    });
+
+    it('4.1 e 4.2 — regras do financiamento nas Premissas; capital próprio NECESSÁRIO (R$) nos Indicadores, sem o % digitado', () => {
+        const s = estudo({ funding_debt_percent: 60, financing_min_sales_percent: 30, financing_interest_mode: 'paga_mensal' });
+        const m = computeImovibMath(s);
+        const { premissas, indicadores } = montarPlanilhaImovib(s, m);
+        expect(linha(premissas, 'Vendas mínimas para liberar', 1)[2]).toBe(30);
+        expect(linha(premissas, 'Defasagem da liberação', 1)[2]).toBe(0);
+        expect(linha(premissas, 'Juros do financiamento na obra', 1)[2]).toBe('Pagos todo mês');
+        expect(linha(premissas, 'Amortização do financiamento', 1)[2]).toBe('Toda a receita líquida');
+        expect(linha(premissas, 'Caixa mínimo', 1)[2]).toBe(0);
+        expect(premissas.some(l => l[1] === 'Capital próprio (equity)')).toBe(false);
+        expect(linha(indicadores, 'Capital próprio necessário')[1]).toBe(m.capital.proprio);
+        expect(linha(indicadores, 'Financiamento liberado')[1]).toBe(m.capital.divida);
+        expect(linha(indicadores, 'Permuta')[1]).toBe(m.capital.permuta);
+        expect(linha(indicadores, 'Outras fontes de capital')[1]).toBe(m.capital.terceiros);
+    });
+
+    it('4.3 — aba Aportes: uma linha por mês, e distribuições menos aportes é o lucro', () => {
+        const s = estudo();
+        const m = computeImovibMath(s);
+        const { aportes } = montarPlanilhaImovib(s, m);
+        expect(aportes[0]).toEqual(['Mês', 'Aporte (R$)', 'Distribuição (R$)', 'Caixa no fim do mês (R$)']);
+        expect(aportes.length).toBe(m.duration + 1);
+        const soma = (c: number) => aportes.slice(1).reduce((a, l) => a + (l[c] as number), 0);
+        expect(soma(2) - soma(1)).toBeCloseTo(m.monthlyFlows.reduce((a, f) => a + f.net, 0), 2);
+    });
+
+    it('4.4 — cada outra fonte entra nas Premissas com o valor e como é paga', () => {
+        const fonte = { id: 'f1', study_id: 'estudo-teste', name: 'Mútuo do sócio', kind: 'mutuo', amount: 1_000_000, entry_month: 3, remuneration: 'juros', rate_annual: 12, profit_share_percent: null, amortization: 'BULLET', term_months: 24, grace_months: 0, sort_order: 0 };
+        const s = estudo({ funding_sources: [fonte] });
+        const { premissas } = montarPlanilhaImovib(s, computeImovibMath(s));
+        const l = linha(premissas, 'Mútuo do sócio', 1);
+        expect(l[0]).toBe('Outras fontes');
+        expect(l[2]).toBe(1_000_000);
+        expect(l[4]).toMatch(/mês 3.*12% a\.a\..*24 meses/);
+    });
+
+    it('4.5 — a origem da TMA sai na linha da TMA', () => {
+        const s = estudo({ discount_rate_basis: 'CDI + 4 p.p. (custo de oportunidade do sócio)' });
+        const { premissas, indicadores } = montarPlanilhaImovib(s, computeImovibMath(s));
+        expect(linha(premissas, 'TMA', 1)[4]).toBe('CDI + 4 p.p. (custo de oportunidade do sócio)');
+        expect(linha(indicadores, 'TMA')[3]).toBe('CDI + 4 p.p. (custo de oportunidade do sócio)');
     });
 
     it('fluxo sem troca de sinal: TIR vazia com o motivo, não NaN na célula', () => {

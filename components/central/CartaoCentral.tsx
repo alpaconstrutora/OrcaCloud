@@ -66,7 +66,9 @@ export function CartaoCentral({ titulo, subtitulo, estado, onTentarDeNovo, acao,
                         )}
                     </div>
                 )}
-                {estado === 'ok' && children}
+                {/* O dado chega esmaecendo sobre o lugar do esqueleto; atualizar não
+                    repete (o estado não volta a "carregando"). */}
+                {estado === 'ok' && <div className="flex-1 flex flex-col min-h-0 central-aparece">{children}</div>}
             </div>
         </section>
     );

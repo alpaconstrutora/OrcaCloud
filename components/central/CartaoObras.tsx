@@ -50,7 +50,7 @@ export function CartaoObras({ estado, onTentarDeNovo, scorecards, animar, onNavi
                                 <li key={s.risco} className="grid grid-cols-[72px_1fr_auto] items-center gap-3 text-sm">
                                     <span className="text-gray-700">{s.rotulo}</span>
                                     <span className="h-2 rounded-full bg-gray-100 overflow-hidden" aria-hidden="true">
-                                        <span className={`block h-full rounded-full ${s.barra}`} style={{ width: `${(n / maior) * 100}%` }} />
+                                        <span className={`block h-full rounded-full ${s.barra} ${animar ? 'central-cresce' : ''}`} style={{ width: `${(n / maior) * 100}%` }} />
                                     </span>
                                     <span className="tabular-nums font-medium text-gray-900 w-8 text-right">{n.toLocaleString('pt-BR')}</span>
                                 </li>

@@ -633,4 +633,41 @@ fieldset.imovib-ro:disabled :is(input, select, textarea, button) {
     from { opacity: 0; transform: translateY(6px); }
     to   { opacity: 1; transform: none; }
 }
+
+/* Movimento da tela "Bom dia" (11/11/2026). Regra: o movimento explica o que
+   mudou; nada se repete ao atualizar. Com `prefers-reduced-motion`, nada se
+   desloca nem cresce, mas os esmaecimentos que confirmam a ação continuam.
+   - .central-aparece: conteúdo que chega (esqueleto → dado, troca de filtro).
+   - .central-recolhe: linha/grupo que fecha. Grade de 1 linha (1fr ↔ 0fr) com o
+     filho em overflow hidden; `data-fechado` fecha. Usada no item que sai da
+     fila (concluído/aprovado) e no grupo recolhível.
+   - .central-varre / .central-cresce: medidor e barras na PRIMEIRA carga, no
+     mesmo tempo e curva do número que sobe (NumeroQueSobe, 700 ms). */
+.central-aparece { animation: central-aparece 200ms ease-out both; }
+@keyframes central-aparece { from { opacity: 0; } to { opacity: 1; } }
+
+.central-recolhe {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: opacity 160ms ease-out;
+}
+/* O recorte ganha 8px de folga nas laterais (margem negativa + padding) para não
+   cortar o anel de foco nem o botão de concluir, que tem margem negativa. */
+.central-recolhe > * { min-height: 0; overflow: hidden; margin-inline: -8px; padding-inline: 8px; }
+.central-recolhe[data-fechado="true"] { grid-template-rows: 0fr; }
+/* Com menos movimento, o item resolvido só esmaece no lugar e sai em seguida. */
+.central-recolhe[data-saindo="true"] { opacity: 0; }
+
+@media (prefers-reduced-motion: no-preference) {
+    .central-recolhe { transition: grid-template-rows 220ms cubic-bezier(0.16, 1, 0.3, 1), opacity 160ms ease-out; }
+    .central-recolhe[data-saindo="true"] { grid-template-rows: 0fr; }
+    .central-troca { animation: central-entra 240ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .central-varre { stroke-dasharray: 1; animation: central-varre 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+    .central-cresce { transform-origin: left center; animation: central-cresce 700ms cubic-bezier(0.16, 1, 0.3, 1) both; }
+}
+@media (prefers-reduced-motion: reduce) {
+    .central-troca { animation: central-aparece 200ms ease-out both; }
+}
+@keyframes central-varre { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+@keyframes central-cresce { from { transform: scaleX(0); } to { transform: none; } }
 .theme-midnight .central-trilho { stroke: var(--opura-mid-raised); }

@@ -167,6 +167,11 @@ describe('CentralControle · tela "Bom dia"', () => {
         const botao = await screen.findByRole('button', { name: 'Concluir tarefa' });
         await userEvent.click(botao);
         expect(atualizarTarefa).toHaveBeenCalledWith('t1', { status: 'done' });
+        // Enquanto a linha recolhe, o botão trava: um segundo clique não grava de novo.
+        expect(botao).toBeDisabled();
+        expect(botao).toHaveTextContent('Concluída');
+        await userEvent.click(botao);
+        expect(atualizarTarefa).toHaveBeenCalledTimes(1);
         expect(await screen.findByText('Nada esperando por você hoje.', { selector: 'p[aria-live]' })).toBeInTheDocument();
         expect(screen.getByText('1 de 1 concluídos')).toBeInTheDocument();
         expect(bootstrap).toHaveBeenCalledTimes(1);

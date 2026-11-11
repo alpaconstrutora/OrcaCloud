@@ -44,6 +44,8 @@ export function Saudacao({ saudacao, nome, contagem, carregando, onAtualizar }: 
                         <SegmentedProgress
                             percent={pct}
                             tone="emerald"
+                            // O segmento que o item resolvido acende chega em cor, não de estalo.
+                            className="[&_span]:transition-colors [&_span]:duration-300"
                             hint={contagem.total === 0 ? 'Nada pendente' : `${contagem.feitos} de ${contagem.total} concluídos`}
                             title="Concluídos hoje: aprovações que você deu, tarefas que concluiu e contas pagas. Pendentes: o que está na sua fila."
                         />

@@ -35,11 +35,13 @@ function ImovibSelectRow<T extends string>({ id, label, desc, value, opcoes, onC
     return (
         <div className="flex items-center justify-between p-4 bg-slate-50 rounded-[10px] border border-slate-100 hover:border-slate-300 transition-colors">
             <div className="flex-1 pr-4">
-                <label htmlFor={id} className="text-sm font-semibold text-slate-800 block mb-0.5">{label}</label>
+                {/* Mesmo desenho do ImovibInputRow: título da linha em <span>, não rótulo de campo (§21). */}
+                <span id={`${id}-titulo`} className="text-sm font-semibold text-slate-800 block mb-0.5">{label}</span>
                 {desc && <span className="text-xs text-slate-500 block">{desc}</span>}
             </div>
             <select
                 id={id}
+                aria-labelledby={`${id}-titulo`}
                 value={value}
                 onChange={e => { if (e.target.value !== value) onCommit(e.target.value as T); }}
                 className="w-48 shrink-0 h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-slate-800 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 cursor-pointer"

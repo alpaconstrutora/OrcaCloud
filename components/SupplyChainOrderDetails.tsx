@@ -924,20 +924,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
         }
     };
 
-    const handleDuplicateOrder = async () => {
-        if (!order) return;
-        try {
-            setLoading(true);
-            await orderService.duplicateOrder(order.id);
-            notify("Pedido duplicado com sucesso! O novo pedido está como Rascunho.");
-        } catch (error) {
-            console.error("Error duplicating order:", error);
-            notify(error instanceof Error ? error.message : "Erro ao duplicar o pedido.", "error");
-        } finally {
-            setLoading(false);
-        }
-    };
-
     const handleWhatsAppShare = async () => {
         if (!order) return;
 
@@ -1218,10 +1204,11 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                         Negociar
                     </button>
 
-                    {/* Duplicar, excluir e WhatsApp são ferramentas administrativas do
+                    {/* Excluir e WhatsApp são ferramentas administrativas do
                         time de compras — indisponíveis no link público (§ mesma razão de excluir/
                         duplicar já combinada: ação destrutiva/administrativa não pertence a um link
-                        copiável por qualquer um). */}
+                        copiável por qualquer um). Duplicar fica na coluna Ações
+                        da tabela de Pedidos de Compra. */}
                     <button
                         onClick={() => window.print()}
                         className="h-9 w-9 flex items-center justify-center bg-white border border-gray-200 text-gray-500 hover:text-blue-600 hover:border-blue-200 rounded-[6px] transition-all shadow-sm active:scale-95"
@@ -1232,8 +1219,6 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
 
                     {ehComprador && (
                         <>
-                            <ActionIconButton kind="duplicate" title="Duplicar Pedido" onClick={handleDuplicateOrder} />
-
                             <ActionIconButton
                                 kind="delete"
                                 disabled={!canDeleteOrder(order.status)}

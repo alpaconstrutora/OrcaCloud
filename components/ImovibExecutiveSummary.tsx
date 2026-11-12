@@ -8,7 +8,7 @@ import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import ImovibPontosDeEquilibrioCard from './ImovibPontosDeEquilibrioCard';
-import { calcularIndicadores } from '../utils/imovibIndicadores';
+import { calcularIndicadores, textoDoPayback, motivoSemPayback } from '../utils/imovibIndicadores';
 import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Banknote, ClipboardCheck } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
@@ -105,8 +105,8 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Lucro líquido', ind.lucroLiquido, 'R$', 'Soma do caixa do acionista'],
         ['Margem líquida sobre o VGV', ind.margemLiquidaSobreVgv == null ? null : ind.margemLiquidaSobreVgv * 100, '%', vazio(ind.margemLiquidaSobreVgv, 'Sem VGV')],
         ['Margem sobre o custo', ind.margemSobreCusto == null ? null : ind.margemSobreCusto * 100, '%', vazio(ind.margemSobreCusto, 'Sem custo')],
-        ['Payback simples', ind.paybackSimplesMes, 'mês', vazio(ind.paybackSimplesMes, 'O caixa acumulado não volta ao positivo')],
-        ['Payback descontado', ind.paybackDescontadoMes, 'mês', vazio(ind.paybackDescontadoMes, 'O caixa descontado não volta ao positivo')],
+        ['Payback simples', ind.paybackSimplesMes, 'mês', vazio(ind.paybackSimplesMes, motivoSemPayback(ind))],
+        ['Payback descontado', ind.paybackDescontadoMes, 'mês', vazio(ind.paybackDescontadoMes, motivoSemPayback(ind, true))],
         ['Múltiplo do capital', ind.multiploDoCapital, 'x', vazio(ind.multiploDoCapital, 'Sem saída de caixa') ?? 'Entradas ÷ saídas'],
         ['Retorno sobre o capital', ind.retornoSobreCapital == null ? null : ind.retornoSobreCapital * 100, '%', vazio(ind.retornoSobreCapital, 'Sem exposição de caixa') ?? 'Lucro ÷ exposição máxima'],
         ['Exposição máxima de caixa', m.maxExposure, 'R$', null],
@@ -420,8 +420,8 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
                     <KpiCard
                         label="Payback"
-                        value={mesDoEstudo(ind.paybackSimplesMes)}
-                        sub={ind.paybackSimplesMes == null ? 'O caixa acumulado não volta ao positivo' : `Descontado: ${mesDoEstudo(ind.paybackDescontadoMes)}`}
+                        value={textoDoPayback(ind)}
+                        sub={ind.paybackSimplesMes == null ? motivoSemPayback(ind) : `Descontado: ${mesDoEstudo(ind.paybackDescontadoMes)}`}
                         icon={<Activity className="w-4 h-4" />}
                         color="blue"
                     />

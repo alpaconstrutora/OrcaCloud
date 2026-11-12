@@ -26,6 +26,8 @@ export interface IndicadoresDoEstudo {
     /** TIR modificada (saídas financiadas e entradas reinvestidas à TMA), % a.a. */
     tirModificadaAnual: number | null;
     mesDaExposicaoMaxima: number | null;
+    /** O caixa acumulado nunca fica negativo: não há o que recuperar, payback não se aplica. */
+    semExposicao: boolean;
     terrenoSobreVgv: number | null;
     obraSobreVgv: number | null;
 }
@@ -65,17 +67,30 @@ export function calcularIndicadores(r: ImovibMathResult, tmaAnualPct: number): I
         tirModificadaAnual = (Math.pow(1 + mensal, 12) - 1) * 100;
     }
 
+    // Caixa acumulado nunca negativo: o payback seria "Mês 1" sem nunca ter havido o que
+    // recuperar (pendência da Fase 2). Fica vazio, e a tela diz "Sem exposição".
+    let acumulado = 0;
+    const semExposicao = net.length > 0 && net.every(v => (acumulado += v) >= 0);
     return {
         lucroLiquido: lucro,
         margemLiquidaSobreVgv: porVgv(lucro),
         margemSobreCusto: custo > 0 ? lucro / custo : null,
-        paybackSimplesMes: payback(net),
-        paybackDescontadoMes: payback(net.map((v, i) => v / Math.pow(1 + tmaMensal, i))),
+        paybackSimplesMes: semExposicao ? null : payback(net),
+        paybackDescontadoMes: semExposicao ? null : payback(net.map((v, i) => v / Math.pow(1 + tmaMensal, i))),
         multiploDoCapital: saidas > 0 ? entradas / saidas : null,
         retornoSobreCapital: r.maxExposure < 0 ? lucro / -r.maxExposure : null,
         tirModificadaAnual,
         mesDaExposicaoMaxima,
+        semExposicao,
         terrenoSobreVgv: porVgv(r.landCost),
         obraSobreVgv: porVgv(r.constCostTotal),
     };
 }
+
+/** O payback como as telas mostram: "Mês N", "Sem exposição" (caixa nunca negativo) ou "—". */
+export const textoDoPayback = (ind: Pick<IndicadoresDoEstudo, 'paybackSimplesMes' | 'semExposicao'>, mes: number | null = ind.paybackSimplesMes): string =>
+    ind.semExposicao ? 'Sem exposição' : mes == null ? '—' : `Mês ${mes}`;
+
+/** Por que não há payback (Excel, subtítulos). */
+export const motivoSemPayback = (ind: Pick<IndicadoresDoEstudo, 'semExposicao'>, descontado = false): string =>
+    ind.semExposicao ? 'Sem exposição: o caixa nunca fica negativo' : descontado ? 'O caixa descontado não volta ao positivo' : 'O caixa acumulado não volta ao positivo';

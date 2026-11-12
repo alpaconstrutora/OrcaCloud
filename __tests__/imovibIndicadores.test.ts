@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { calcularIndicadores } from '../utils/imovibIndicadores';
+import { calcularIndicadores, textoDoPayback } from '../utils/imovibIndicadores';
 import { computeImovibMath } from '../utils/imovibMotor';
 import type { ImovibMathResult } from '../utils/imovibMotor';
 import { baseStudy } from './fixtures/imovibEstudos';
@@ -51,7 +51,9 @@ describe('2.1 — calcularIndicadores', () => {
         expect(i.multiploDoCapital).toBeNull();
         expect(i.retornoSobreCapital).toBeNull();
         expect(i.mesDaExposicaoMaxima).toBeNull();
-        expect(i.paybackSimplesMes).toBe(1);
+        // Era "Mês 1"; sem exposição não há o que recuperar (pendência da Fase 2).
+        expect(i.paybackSimplesMes).toBeNull();
+        expect(i.semExposicao).toBe(true);
     });
 
     it('TIR modificada: uma saída no início e uma entrada no fim dão a própria taxa', () => {
@@ -76,5 +78,22 @@ describe('2.1 — calcularIndicadores', () => {
         const i = calcularIndicadores(resultado([-100, 50], { vgvTotal: 0 }), 12);
         expect(i.margemLiquidaSobreVgv).toBeNull();
         expect(i.terrenoSobreVgv).toBeNull();
+    });
+});
+
+describe('pendência da Fase 2 — payback de fluxo que nunca fica negativo', () => {
+    it('caixa acumulado nunca negativo: sem payback e "Sem exposição", não "Mês 1"', () => {
+        const ind = calcularIndicadores(resultado([10, 20, 30]), 12);
+        expect(ind.semExposicao).toBe(true);
+        expect(ind.paybackSimplesMes).toBeNull();
+        expect(ind.paybackDescontadoMes).toBeNull();
+        expect(textoDoPayback(ind)).toBe('Sem exposição');
+    });
+
+    it('fluxo comum: "Mês N"; fluxo que nunca volta ao positivo: "—"', () => {
+        expect(textoDoPayback(calcularIndicadores(resultado([-100, -50, 80, 120]), 12))).toMatch(/^Mês \d+$/);
+        const nunca = calcularIndicadores(resultado([-100, 10, 10]), 12);
+        expect(nunca.semExposicao).toBe(false);
+        expect(textoDoPayback(nunca)).toBe('—');
     });
 });

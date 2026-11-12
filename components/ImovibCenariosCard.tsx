@@ -3,7 +3,7 @@ import { Layers, Loader2, AlertCircle, Plus } from 'lucide-react';
 import { ImovibStudy, ImovibScenario } from '../types';
 import { imovibService } from '../services/imovibService';
 import { computeImovibMath } from '../utils/imovibMotor';
-import { calcularIndicadores } from '../utils/imovibIndicadores';
+import { calcularIndicadores, textoDoPayback } from '../utils/imovibIndicadores';
 import { aplicarCenario } from '../utils/imovibCenarios';
 import { Choques, VARIAVEIS_DO_ESTUDO, ROTULO_DA_VARIAVEL, UNIDADE_DA_VARIAVEL } from '../utils/imovibVariacoes';
 import { IMOVIB_DEFAULTS, IMOVIB_CENARIOS_PADRAO } from '../constants/imovibDefaults';
@@ -68,7 +68,7 @@ const ImovibCenariosCard: React.FC<ImovibCenariosCardProps> = ({ study, cenarios
         { rotulo: 'TIR', valor: c => formatarMetrica('tir', c.r.annualIrr) },
         { rotulo: 'Margem líquida', valor: c => (c.ind.margemLiquidaSobreVgv == null ? '—' : formatarMetrica('margem', c.ind.margemLiquidaSobreVgv)) },
         { rotulo: 'Exposição máxima', valor: c => formatarMetrica('exposicao', c.r.maxExposure) },
-        { rotulo: 'Payback', valor: c => (c.ind.paybackSimplesMes == null ? '—' : `Mês ${c.ind.paybackSimplesMes}`) },
+        { rotulo: 'Payback', valor: c => textoDoPayback(c.ind) },
     ];
 
     return (

@@ -8,7 +8,7 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import { formatMoney, formatDateBR, formatPercent, Money } from './ui/Format';
 import { computeImovibMath, ImovibMathResult } from '../hooks/useImovibMath';
-import { calcularIndicadores, IndicadoresDoEstudo } from '../utils/imovibIndicadores';
+import { calcularIndicadores, IndicadoresDoEstudo, textoDoPayback } from '../utils/imovibIndicadores';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext } from '../hooks/useOrgContext';
@@ -448,7 +448,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                         )}
                                         {visible.includes('payback') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800" title="Mês em que o caixa acumulado do acionista volta ao positivo">
-                                                {ind.paybackSimplesMes == null ? '—' : `Mês ${ind.paybackSimplesMes}`}
+                                                {textoDoPayback(ind)}
                                             </td>
                                         )}
                                         {visible.includes('multiple') && (

@@ -131,6 +131,8 @@ export interface ImovibMathResult {
     totalBlockArea: number;
     /** Parcelas de totalBlockArea (todas as tipologias, vendáveis ou não). */
     totalPrivateArea: number;
+    /** Área privativa à venda — sem tipologias não vendáveis nem unidades PERMUTADO do espelho: a do VGV (item 7.1). */
+    areaPrivativaVendavel: number;
     totalCommonArea: number;
     /**
      * VGV bruto dos blocos, antes de sensibilidade, permuta e
@@ -322,6 +324,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     landCost: 0,
     totalBlockArea: 0,
     totalPrivateArea: 0,
+    areaPrivativaVendavel: 0,
     totalCommonArea: 0,
     vgvBase: 0,
     vgvPorBloco: {},
@@ -389,6 +392,7 @@ interface Premissas {
     totalBlockArea: number;
     totalPrivateArea: number;
     totalCommonArea: number;
+    areaPrivativaVendavel: number;
     /** Recebimento de todas as safras, sem índice e já sem a inadimplência. */
     recebimento: SerieDeRecebimento;
     // Fase 5
@@ -474,6 +478,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let permutaDoEspelho = 0;
     /** Unidades à venda (item 5.6): do espelho quando o bloco tem, senão das tipologias vendáveis. */
     let unidadesDoEspelho = 0;
+    let areaPrivativaVendavel = 0;
     let unidadesSemEspelho = 0;
     const blocosSemPreco: string[] = [];
 
@@ -510,10 +515,12 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             permutaDoEspelho += doBloco.filter(i => i.status === 'PERMUTADO').reduce((acc, i) => acc + precoDa(i), 0);
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
             unidadesDoEspelho += doBloco.filter(i => i.status !== 'PERMUTADO').length;
+            areaPrivativaVendavel += doBloco.filter(i => i.status !== 'PERMUTADO').reduce((acc, i) => acc + (i.private_area || 0), 0);
         } else {
             blockVgv = blockVendavelArea * precoM2;
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'preco_m2' };
             unidadesSemEspelho += blockUnidadesVendaveis;
+            areaPrivativaVendavel += blockVendavelArea;
         }
 
         if (blockVendavelArea > 0 && blockVgv <= 0) blocosSemPreco.push(block.name);
@@ -907,6 +914,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         totalBlockArea,
         totalPrivateArea,
         totalCommonArea,
+        areaPrivativaVendavel,
         recebimento,
         parcelasTerreno,
         mesDaPrimeiraParcela,
@@ -1283,6 +1291,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         landCost: P.landCost,
         totalBlockArea: P.totalBlockArea,
         totalPrivateArea: P.totalPrivateArea,
+        areaPrivativaVendavel: P.areaPrivativaVendavel,
         totalCommonArea: P.totalCommonArea,
         vgvBase: P.baseVgvTotal,
         vgvPorBloco: P.vgvPorBloco,

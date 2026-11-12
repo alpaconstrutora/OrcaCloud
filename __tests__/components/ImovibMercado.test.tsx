@@ -64,7 +64,10 @@ describe('Premissas › Mercado', () => {
         expect(await within(secao).findByText('Residencial A')).toBeTruthy();
         // Média ponderada: (100 × 9.000 + 300 × 11.000) / 400 = 10.500; estudo a 10.000 → −4,8%.
         expect(within(secao).getByText('-4,8%')).toBeTruthy();
-        await user.click(within(secao).getByRole('button', { name: 'Usar na curva de vendas' }));
+        const usar = within(secao).getByRole('button', { name: 'Usar a VSO dos comparáveis na curva de vendas' });
+        // A curva do estudo é linear: o botão avisa que a VSO mensal só vale na curva VSO.
+        expect(usar.getAttribute('title')).toMatch(/A curva atual é linear/);
+        await user.click(usar);
         expect(screen.getByText(/Origem: média dos comparáveis/)).toBeTruthy();
         await user.click(screen.getByRole('button', { name: 'Salvar Premissas' }));
         const gravado = svc.updateStudy.mock.calls[0][1];
@@ -91,6 +94,9 @@ describe('Premissas › Mercado', () => {
         await user.type(screen.getByLabelText('Unidades totais'), '50');
         await user.type(screen.getByLabelText('Unidades vendidas'), '60');
         expect(criar.getAttribute('title')).toBe('Vendidas não pode passar do total.');
+        await user.clear(screen.getByLabelText('Unidades vendidas'));
+        await user.type(screen.getByLabelText('Unidades vendidas'), '20.5');
+        expect(criar.getAttribute('title')).toBe('Unidades são números inteiros.');
         await user.clear(screen.getByLabelText('Unidades vendidas'));
         await user.type(screen.getByLabelText('Unidades vendidas'), '20');
         await user.click(criar);
@@ -121,7 +127,7 @@ describe('Premissas › Mercado', () => {
         const novo = screen.getByRole('button', { name: 'Novo comparável' });
         expect(novo.hasAttribute('disabled')).toBe(true);
         expect(novo.getAttribute('title')).toBe('Sem permissão');
-        expect(screen.getByRole('button', { name: 'Usar na curva de vendas' }).getAttribute('title')).toBe('Sem permissão');
+        expect(screen.getByRole('button', { name: 'Usar a VSO dos comparáveis na curva de vendas' }).getAttribute('title')).toBe('Sem permissão');
         expect(svc.updateStudy).not.toHaveBeenCalled();
     });
 });

@@ -16,7 +16,12 @@ interface ImovibComparaveisCardProps {
     study: ImovibStudy;
     /** Grava a VSO da região (e a da curva) no formulário de Premissas — sai com "Salvar Premissas". */
     onUsarVso: (vsoPct: number) => void;
+    /** Tipo atual da curva de vendas: a VSO mensal só vale na curva VSO. */
+    tipoDaCurva: string;
 }
+
+const ROTULO_DA_CURVA: Record<string, string> = { linear: 'linear', lancamento: 'de lançamento', vso: 'VSO', custom: 'personalizada' };
+
 
 const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 const fmtPct = (v: number, casas = 1) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: casas })}%`;
@@ -36,7 +41,7 @@ const COLUNAS: StandardTableColumn[] = [
  * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md): concorrentes com
  * preço/m², vendas e lançamento; o preço do estudo contra a média e a VSO média.
  */
-const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, onUsarVso }) => {
+const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, onUsarVso, tipoDaCurva }) => {
     const { pode, motivo } = useImovibEdicao();
     const { showToast } = useToast();
     const r = useImovibMath(study);
@@ -56,8 +61,13 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
     }, [study.id]);
 
     const resumo = useMemo(() => resumoDosComparaveis(lista, hojeLocal()), [lista]);
-    // Preço médio do estudo: VGV ÷ área privativa.
-    const precoDoEstudo = r.totalPrivateArea > 0 ? r.vgvBase / r.totalPrivateArea : 0;
+    // Preço médio do estudo: VGV ÷ área privativa vendável (a do VGV: sem permutadas nem não vendáveis).
+    const precoDoEstudo = r.areaPrivativaVendavel > 0 ? r.vgvBase / r.areaPrivativaVendavel : 0;
+    const foraDaVso = [
+        resumo.foraDaVso.lancamentoFuturo ? `${resumo.foraDaVso.lancamentoFuturo} com lançamento futuro` : '',
+        resumo.foraDaVso.esgotado ? `${resumo.foraDaVso.esgotado} esgotado(s)` : '',
+    ].filter(Boolean).join(' e ');
+    const avisoDaCurva = tipoDaCurva === 'vso' ? '' : ` A curva atual é ${ROTULO_DA_CURVA[tipoDaCurva] ?? tipoDaCurva}: a VSO mensal só vale quando a curva é VSO (aba Receitas).`;
     const posicao = posicaoDoPreco(precoDoEstudo, resumo);
     const motivoVso = !pode ? motivo : resumo.vsoMediaMensal == null ? 'Sem VSO: cadastre comparáveis com total, vendidas e data de lançamento.' : undefined;
 
@@ -101,20 +111,21 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                 <KpiCard
                     label="Preço do estudo contra a média"
                     value={posicao == null ? '—' : `${posicao >= 0 ? '+' : ''}${fmtPct(posicao)}`}
-                    sub={resumo.precoM2Medio == null ? 'Sem comparável com preço' : `${fmtBRL(precoDoEstudo)}/m² no estudo × ${fmtBRL(resumo.precoM2Medio)}/m² de média`}
+                    sub={resumo.precoM2Medio == null ? 'Sem comparável com preço' : `${fmtBRL(precoDoEstudo)}/m² no estudo × ${fmtBRL(resumo.precoM2Medio)}/m² de média ${resumo.mediaDoPreco === 'ponderada' ? 'ponderada pelas unidades' : 'simples (há comparável sem total)'}`}
                     color={posicao == null ? 'gray' : Math.abs(posicao) > 15 ? 'amber' : 'emerald'}
                 />
                 <div className="flex flex-col gap-2">
                     <KpiCard
                         label="VSO média dos comparáveis"
                         value={resumo.vsoMediaMensal == null ? '—' : `${fmtPct(resumo.vsoMediaMensal, 2)} ao mês`}
-                        sub={`${resumo.estoque.toLocaleString('pt-BR')} unidades em estoque nos comparáveis`}
+                        sub={`Sobre o estoque, como a curva VSO. ${resumo.estoque.toLocaleString('pt-BR')} unidades em estoque${foraDaVso ? `; fora da VSO: ${foraDaVso}` : ''}`}
                         color="indigo"
                     />
                     <button
                         type="button"
                         disabled={!!motivoVso}
-                        title={motivoVso ?? 'Preenche a VSO da região e a VSO mensal da curva de vendas (aba Receitas, curva VSO). Grava com "Salvar Premissas".'}
+                        aria-label="Usar a VSO dos comparáveis na curva de vendas"
+                        title={motivoVso ?? `Preenche a VSO da região e a VSO mensal da curva de vendas. Grava com "Salvar Premissas".${avisoDaCurva}`}
                         onClick={() => resumo.vsoMediaMensal != null && onUsarVso(Number(resumo.vsoMediaMensal.toFixed(2)))}
                         className="self-start h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
@@ -211,6 +222,7 @@ function ComparavelSheet({ comparavel, study, proximaOrdem, onClose, onSalvo }: 
     const motivo = !pode ? motivoRo
         : !form.name.trim() ? 'Dê o nome do empreendimento.'
             : invalido ? 'Números não podem ser negativos.'
+                : (total != null && !Number.isInteger(total)) || (vendidas != null && !Number.isInteger(vendidas)) ? 'Unidades são números inteiros.'
                 : total != null && vendidas != null && vendidas > total ? 'Vendidas não pode passar do total.'
                     : !mudou ? 'Nada foi alterado.' : undefined;
     const mudar = (k: keyof Formulario, v: string) => { setForm(prev => ({ ...prev, [k]: v })); setMudou(true); };
@@ -251,7 +263,7 @@ function ComparavelSheet({ comparavel, study, proximaOrdem, onClose, onSalvo }: 
         <Sheet open={!!comparavel} onClose={onClose} size="lg" dirty={mudou}>
             <SheetHeader onClose={onClose}>
                 <SheetTitle>{novo ? 'Novo comparável' : 'Comparável'}</SheetTitle>
-                <SheetDescription>Sem data de lançamento ou sem total, o comparável entra no preço médio, mas não na VSO.</SheetDescription>
+                <SheetDescription>Sem data de lançamento ou sem total, o comparável entra no preço médio, mas não na VSO. Lançamento depois de hoje e empreendimento esgotado também ficam fora da VSO.</SheetDescription>
             </SheetHeader>
             <SheetPanel className="px-6 py-5 space-y-4">
                 {erro && (

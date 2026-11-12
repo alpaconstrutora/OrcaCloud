@@ -85,7 +85,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             // capex_seeded_at é do CAPEX: gravar o valor de quando a tela abriu poderia
             // devolver null e fazer o template de rubricas voltar.
             // unit_instances (espelho), estrutura e funding_sources vêm montados em memória, não são colunas.
-            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, ...cleanData } = formData as any;
+            // opura_terrain_study_id não é editado aqui e o banco o zera quando o estudo de terreno é apagado (item 7.2).
+            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, opura_terrain_study_id, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, {
                 ...cleanData,
                 ...imovibIdentificacaoParaGravar({
@@ -253,7 +254,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                                         className="h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
                                     />
                                     <p className="text-xs text-slate-600 mt-1">
-                                        Origem: {ORIGEM_DA_VSO[formData.vso_regional_source ?? 'digitada']}. É referência; a curva de vendas do tipo VSO (aba Receitas) usa a VSO mensal, que os botões "Usar na curva de vendas" preenchem junto.
+                                        {formData.vso_regional_percent != null ? `Origem: ${ORIGEM_DA_VSO[formData.vso_regional_source ?? 'digitada']}. ` : ''} É referência; a curva de vendas do tipo VSO (aba Receitas) usa a VSO mensal, que os botões "Usar na curva de vendas" preenchem junto.
                                     </p>
                                 </div>
                             </div>
@@ -263,7 +264,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                         </fieldset>
                     </div>
 
-                    <ImovibComparaveisCard study={study} onUsarVso={usarVso('comparaveis')} />
+                    <ImovibComparaveisCard study={study} onUsarVso={usarVso('comparaveis')} tipoDaCurva={String(formData.sales_curve_type ?? 'linear')} />
 
                     <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm">
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
@@ -271,7 +272,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                         </fieldset>
                     </div>
 
-                    <ImovibMercadoDeOrigemCard study={study} onUsarVso={usarVso('market')} />
+                    <ImovibMercadoDeOrigemCard study={study} onUsarVso={usarVso('market')} tipoDaCurva={String(formData.sales_curve_type ?? 'linear')} />
                 </div>
             )}
         </div>

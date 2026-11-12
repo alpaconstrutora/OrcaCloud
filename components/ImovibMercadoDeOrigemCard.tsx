@@ -15,7 +15,7 @@ const fmtNum = (v: number, casas = 0) => v.toLocaleString('pt-BR', { maximumFrac
  * do Ópura Market de onde a viabilidade nasceu. A absorção é hipótese do Market:
  * só entra na curva por botão.
  */
-const ImovibMercadoDeOrigemCard: React.FC<{ study: ImovibStudy; onUsarVso: (vsoPct: number) => void }> = ({ study, onUsarVso }) => {
+const ImovibMercadoDeOrigemCard: React.FC<{ study: ImovibStudy; onUsarVso: (vsoPct: number) => void; tipoDaCurva: string }> = ({ study, onUsarVso, tipoDaCurva }) => {
     const { pode, motivo } = useImovibEdicao();
     const id = study.opura_terrain_study_id;
     const [estudo, setEstudo] = useState<EstudoDeTerreno>(null);
@@ -57,7 +57,7 @@ const ImovibMercadoDeOrigemCard: React.FC<{ study: ImovibStudy; onUsarVso: (vsoP
             ) : (
                 <>
                     <p className="text-sm text-slate-700">
-                        <span className="font-medium">{estudo.name}</span> · raio de {fmtNum(estudo.analysisRadiusMeters)} m · {estudo.createdAt.slice(0, 10).split('-').reverse().join('/')}
+                        <span className="font-medium">{estudo.name}</span> · raio de {fmtNum(estudo.analysisRadiusMeters)} m · {new Date(estudo.createdAt).toLocaleDateString('pt-BR')}
                     </p>
                     {s ? (
                         <dl className="grid grid-cols-2 md:grid-cols-4 gap-3 text-sm">
@@ -82,7 +82,8 @@ const ImovibMercadoDeOrigemCard: React.FC<{ study: ImovibStudy; onUsarVso: (vsoP
                             <button
                                 type="button"
                                 disabled={!!motivoVso}
-                                title={motivoVso ?? 'Preenche a VSO da região e a VSO mensal da curva de vendas. Grava com "Salvar Premissas".'}
+                                aria-label="Usar a absorção do Market na curva de vendas"
+                                title={motivoVso ?? `Preenche a VSO da região e a VSO mensal da curva de vendas. Grava com "Salvar Premissas".${tipoDaCurva === 'vso' ? '' : ' A curva atual não é VSO: a VSO mensal só vale quando a curva é VSO (aba Receitas).'}`}
                                 onClick={() => absorcao != null && onUsarVso(absorcao)}
                                 className="h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                             >

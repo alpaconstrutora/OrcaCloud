@@ -86,6 +86,20 @@ describe('1.2 — recebimentoPorSafra', () => {
         expect(mes(com.parcelasObra, 9)).toBeCloseTo(0.9 * mes(sem.parcelasObra, 9), 6);
     });
 
+    it('pendência da Fase 1: a devolução é sobre o que o comprador PAGOU, já sem a inadimplência das parcelas', () => {
+        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: false, desagioRevendaPct: 0, inadimplenciaPct: 10 };
+        const com = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, distrato, 24);
+        // Sinal (mês 3) é pago inteiro; das parcelas dos meses 4 a 8, 10% não foram pagas.
+        const pagoDeFato = 0.1 * (100_000 + 0.9 * 5 * 200_000 / 9);
+        expect(mes(com.devolucaoDistrato, 9)).toBeCloseTo(-0.5 * pagoDeFato, 4);
+    });
+
+    it('sem inadimplência informada, a devolução é a de antes', () => {
+        const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: false, desagioRevendaPct: 0 };
+        const com = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, distrato, 24);
+        expect(mes(com.devolucaoDistrato, 9)).toBeCloseTo(-0.5 * 0.1 * (100_000 + 5 * 200_000 / 9), 4);
+    });
+
     it('com revenda, a fração distratada vira venda nova no mês seguinte, sem novo distrato', () => {
         const distrato: PremissasDeDistrato = { taxaPct: 10, defasagemMeses: 6, devolucaoPct: 50, revende: true, desagioRevendaPct: 0 };
         const com = recebimentoPorSafra(venda(3, 1_000_000), PERFIL, 12, distrato, 24);

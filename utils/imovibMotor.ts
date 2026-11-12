@@ -795,6 +795,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         devolucaoPct: val(study.cancellation_refund_percent, devolucaoPadraoDoDistrato(study)),
         revende: study.cancellation_resale ?? D.cancellation_resale,
         desagioRevendaPct: val(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent),
+        // A devolução é sobre o que o comprador pagou: sem a parte inadimplente das parcelas.
+        inadimplenciaPct: val(study.default_rate_percent, D.default_rate_percent),
     }, duracaoBase);
 
     // Distrato só vale para venda feita antes das chaves (utils/imovibRecebimento.ts).

@@ -37,6 +37,12 @@ export interface PremissasDeDistrato {
     revende: boolean;
     /** Desconto da revenda sobre o preço original (10 = 10%). */
     desagioRevendaPct: number;
+    /**
+     * Inadimplência sobre o que o comprador paga direto (parcelas, intermediárias,
+     * pós-chaves), %. A devolução é sobre o que ele PAGOU: sem a parte inadimplente.
+     * Vazio = 0 (o motor a aplica nas séries depois; aqui só entra na base da devolução).
+     */
+    inadimplenciaPct?: number;
 }
 
 /** Um valor por mês (índice 0 = mês 1). Todas as séries têm o mesmo tamanho. */
@@ -82,13 +88,16 @@ export function recebimentoPorSafra(
     const chaves = Math.round(mesDasChaves);
 
     /** Põe `valor` da safra no mês `m`, se o mês vem antes do corte (distrato). */
+    // O que o comprador paga direto e pode deixar de pagar (a mesma regra do motor).
+    const inadimplencia = Math.min(1, Math.max(0, por(distrato.inadimplenciaPct ?? 0)));
+    const PAGO_DIRETO: Linha[] = ['parcelasObra', 'intermediarias', 'posChaves'];
     const lancar = (linha: Linha, m: number, valor: number, corte: number | null, pago: { total: number }) => {
         if (valor === 0 || m < 1) return;
         if (corte != null && m >= corte) return;
         const serie = out[linha];
         while (serie.length < m) serie.push(0);
         serie[m - 1] += valor;
-        pago.total += valor;
+        pago.total += PAGO_DIRETO.includes(linha) ? valor * (1 - inadimplencia) : valor;
     };
 
     /** Calendário de uma safra de valor `V` vendida no mês `s`. */

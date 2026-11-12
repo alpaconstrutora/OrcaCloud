@@ -222,6 +222,26 @@ describe('CentralControle · tela "Bom dia"', () => {
         expect(marcados).toEqual(expect.arrayContaining(['9', '5']));
     });
 
+    it('o caixa só é buscado depois que o bootstrap responde (não disputam o banco)', async () => {
+        let responder!: (v: unknown) => void;
+        bootstrap.mockReturnValue(new Promise(r => { responder = r; }));
+        montar();
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(1));
+        // Bootstrap pendente: nada de caixa ainda.
+        await new Promise(r => setTimeout(r, 50));
+        expect(cashflow).not.toHaveBeenCalled();
+        responder(painel());
+        await waitFor(() => expect(cashflow).toHaveBeenCalledTimes(1));
+        // Atualizar: de novo bootstrap primeiro, caixa depois.
+        let responder2!: (v: unknown) => void;
+        bootstrap.mockReturnValue(new Promise(r => { responder2 = r; }));
+        await userEvent.click(screen.getByRole('button', { name: 'Atualizar' }));
+        await waitFor(() => expect(bootstrap).toHaveBeenCalledTimes(2));
+        expect(cashflow).toHaveBeenCalledTimes(1);
+        responder2(painel());
+        await waitFor(() => expect(cashflow).toHaveBeenCalledTimes(2));
+    });
+
     it('trocar o período do caixa mantém o gráfico anterior esmaecido até o novo chegar', async () => {
         bootstrap.mockResolvedValue(painel());
         montar();

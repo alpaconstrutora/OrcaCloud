@@ -1,7 +1,7 @@
 // components/empreendimento/EmpreendimentoDetail.tsx
 import { moverEntreAbas } from '../ui/abasPeloTeclado';
 import React from 'react';
-import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale } from 'lucide-react';
+import { ArrowLeft, Edit, Building2, MapPin, FileText, Layers, BarChart3, ShoppingBag, KeyRound, Map, ArrowLeftRight, ScrollText, Inbox, AlertCircle, Link2, History, ListChecks, Scale, FolderOpen } from 'lucide-react';
 import { Empreendimento, EmpreendimentoStatus, EmpreendimentoUnitCharacteristic } from '../../types';
 import TowerEditor from './TowerEditor';
 import UnidadeUnicaEditor from './UnidadeUnicaEditor';
@@ -17,6 +17,7 @@ import { empreendimentoProposalService } from '../../services/empreendimentoProp
 import MapaRegulatorioEditor from '../MapaRegulatorioEditor';
 import VinculacoesTab from './VinculacoesTab';
 import HistoricoTab from './HistoricoTab';
+import DocumentosEmpreendimentoTab from './DocumentosEmpreendimentoTab';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { empreendimentoTypeService } from '../../services/empreendimentoTypeService';
 import { empreendimentoUnitCharacteristicService } from '../../services/empreendimentoUnitCharacteristicService';
@@ -71,7 +72,7 @@ const STATUS_TEXT_COLOR: Record<EmpreendimentoStatus, string> = {
   ENCERRADO: 'text-slate-500',
 };
 
-type Tab = 'visao' | 'sync' | 'torres' | 'caracteristicas' | 'regulatorio' | 'comercial' | 'locacoes' | 'vinculos' | 'historico';
+type Tab = 'visao' | 'sync' | 'torres' | 'caracteristicas' | 'regulatorio' | 'comercial' | 'locacoes' | 'documentos' | 'vinculos' | 'historico';
 
 export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organizationId, onBack, onEdit, onGoToStudy, onSynced, onOpenProject, onChangeView }) => {
   const { projects } = useStore(); // já vem só OBRA e sem projeto de sistema (CLAUDE.md regras #2/#3)
@@ -249,6 +250,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
     { id: 'regulatorio', label: 'Mapa Regulatorio', icon: Map },
     { id: 'comercial', label: 'Espelho de Vendas', icon: ShoppingBag },
     { id: 'locacoes', label: 'Espelho de Locações', icon: KeyRound },
+    // Documentos legais (checklist) + arquivos do empreendimento. O arquivo mora
+    // no GED (opura_documents.empreendimento_id); esta aba é uma vista dele.
+    { id: 'documentos', label: 'Documentos', icon: FolderOpen },
     // Ocupações NÃO mora aqui: vive em Comercial › Condomínios, junto da ficha
     // do condomínio e da manutenção predial. O mesmo controle em dois caminhos
     // de navegação foi o que já aconteceu com "Sincronizar do Estudo" (ver o
@@ -509,6 +513,9 @@ export const EmpreendimentoDetail: React.FC<Props> = ({ empreendimento: e, organ
             </section>
           )}
         </div>
+      )}
+      {tab === 'documentos' && (
+        <DocumentosEmpreendimentoTab empreendimento={e} />
       )}
       {tab === 'vinculos' && (
         <VinculacoesTab

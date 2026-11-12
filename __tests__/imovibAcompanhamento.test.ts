@@ -41,3 +41,10 @@ describe('10.4 — compararComRealizado', () => {
         expect(r.map(m => m.vendasReaisAcum)).toEqual([10, 10, null]);
     });
 });
+
+describe('pendências — o mês de hoje está em curso', () => {
+    it('marca o mês corrente como em curso; os outros não', () => {
+        const r = compararComRealizado(fluxo(3), '2026-03', [{ mes: '2026-04', entradas: 10, saidas: 5 }], [], [0, 0, 0], '2026-04');
+        expect(r.map(m => m.emCurso)).toEqual([false, true, false]);
+    });
+});

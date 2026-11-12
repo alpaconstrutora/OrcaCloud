@@ -139,7 +139,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
             loadStudies();
         } catch (error) {
             console.error('Error deleting study:', error);
-            notify('Erro ao excluir estudo.', 'error');
+            notify(error instanceof Error ? error.message : 'Erro ao excluir estudo.', 'error');
         }
     };
 

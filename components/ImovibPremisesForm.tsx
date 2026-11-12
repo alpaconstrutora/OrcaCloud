@@ -91,7 +91,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             // Parecer e mínimos (item 10.3) gravam no cartão do Resumo: regravar o valor de quando
             // a tela abriu apagaria um parecer registrado por outra pessoa nesse meio-tempo.
             const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, opura_terrain_study_id,
-                recommendation, recommendation_notes, recommended_by, recommended_at, hurdle_irr_spread, hurdle_margin_percent, hurdle_max_exposure, ...cleanData } = formData as any;
+                recommendation, recommendation_notes, recommended_by, recommended_at, recommended_by_user_id, recommendation_snapshot, hurdle_irr_spread, hurdle_margin_percent, hurdle_max_exposure, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, {
                 ...cleanData,
                 ...imovibIdentificacaoParaGravar({

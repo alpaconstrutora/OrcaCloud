@@ -23,6 +23,15 @@ const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency'
 const fmt = (v: number | null, unidade: CriterioDoParecer['unidade']) =>
     v == null ? '—' : unidade === 'R$' ? fmtBRL(v) : `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}${unidade}`;
 
+/** Os indicadores que embasaram o parecer — gravados junto com ele. */
+const numerosDoParecer = (r: ImovibMathResult, ind: IndicadoresDoEstudo) => ({
+    vgv: r.vgvTotal,
+    vpl: r.vpl,
+    tirAnual: Number.isFinite(r.annualIrr) ? r.annualIrr : null,
+    margemLiquidaPct: ind.margemLiquidaSobreVgv == null ? null : ind.margemLiquidaSobreVgv * 100,
+    exposicaoMaxima: Math.max(0, -r.maxExposure),
+});
+
 /** Nome de quem registra o parecer: o do cadastro do usuário, senão o e-mail. */
 const useNomeDoUsuario = (): string => {
     const session = useStore(s => s.session);
@@ -89,19 +98,28 @@ const ImovibParecerCard: React.FC<Props> = ({ study, resultado, indicadores, onD
         }
     };
     const mudou = parecer !== (study.recommendation ?? '') || justificativa.trim() !== (study.recommendation_notes ?? '');
-    const motivo = !pode ? motivoRo : !parecer ? 'Escolha o parecer.' : !mudou ? 'Nada foi alterado.' : undefined;
+    // "Não registrado" com parecer gravado = limpar (plano 2026-11-12-imovib-governanca-pendencias, item 5).
+    const limpar = !parecer && !!study.recommendation;
+    const motivo = !pode ? motivoRo : !parecer && !limpar ? 'Escolha o parecer.' : !mudou ? 'Nada foi alterado.' : undefined;
     const registrar = async () => {
-        if (motivo || !parecer) return;
+        if (motivo) return;
         setSalvando(true);
-        const ok = await gravar({
-            recommendation: parecer,
-            recommendation_notes: justificativa.trim() || null,
-            recommended_by: nomeDoUsuario,
-            recommended_at: new Date().toISOString(),
-        });
+        const ok = limpar
+            ? await gravar({ recommendation: null, recommendation_notes: null, recommended_by: null, recommended_at: null, recommendation_snapshot: null })
+            : await gravar({
+                recommendation: parecer as Parecer,
+                recommendation_notes: justificativa.trim() || null,
+                // O banco regrava quem e quando pelo usuário logado; estes valem sem o gatilho.
+                recommended_by: nomeDoUsuario,
+                recommended_at: new Date().toISOString(),
+                recommendation_snapshot: numerosDoParecer(resultado, indicadores),
+            });
         setSalvando(false);
-        if (ok) showToast('Parecer registrado.', 'success');
+        if (ok) showToast(limpar ? 'Parecer limpo.' : 'Parecer registrado.', 'success');
     };
+    const base = study.recommendation ? study.recommendation_snapshot ?? null : null;
+    const hoje = numerosDoParecer(resultado, indicadores);
+    const numerosMudaram = !!base && (Math.abs(base.vpl - hoje.vpl) >= 1 || (base.tirAnual ?? NaN).toFixed(2) !== (hoje.tirAnual ?? NaN).toFixed(2));
 
     const Icone = ({ atende }: { atende: boolean | null }) =>
         atende == null ? <MinusCircle className="w-4 h-4 text-slate-400" aria-label="Sem como avaliar" />
@@ -175,11 +193,13 @@ const ImovibParecerCard: React.FC<Props> = ({ study, resultado, indicadores, onD
                         {study.recommendation
                             ? `Registrado: ${ROTULO_DO_PARECER[study.recommendation]}${study.recommended_by ? `, por ${study.recommended_by}` : ''}${study.recommended_at ? ` em ${new Date(study.recommended_at).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}` : ''}.`
                             : 'Nenhum parecer registrado.'}
+                        {base && ` Dado com VPL ${fmtBRL(base.vpl)} e TIR ${base.tirAnual == null ? 'sem TIR' : `${base.tirAnual.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% a.a.`}.`}
+                        {numerosMudaram && <span className="block text-amber-700">Os números mudaram desde o parecer: hoje VPL {fmtBRL(hoje.vpl)} e TIR {hoje.tirAnual == null ? 'sem TIR' : `${hoje.tirAnual.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% a.a.`}. Revise o parecer.</span>}
                     </span>
                     <button type="button" onClick={() => void registrar()} disabled={salvando || !!motivo} title={motivo}
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed">
                         {salvando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
-                        Registrar parecer
+                        {limpar ? 'Limpar parecer' : 'Registrar parecer'}
                     </button>
                 </div>
             </div>

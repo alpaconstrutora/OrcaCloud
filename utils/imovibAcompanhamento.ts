@@ -19,6 +19,8 @@ export interface MesDoAcompanhamento {
     custoRealizado: number | null;
     vendasPrevistasAcum: number;
     vendasReaisAcum: number | null;
+    /** O mês de hoje: o realizado ainda está pela metade, o desvio não diz nada. */
+    emCurso: boolean;
 }
 
 const anoMes = (s: string) => s.slice(0, 7);
@@ -61,6 +63,7 @@ export function compararComRealizado(
             custoRealizado: r ? r.saidas : null,
             vendasPrevistasAcum: previstas,
             vendasReaisAcum: futuro ? null : reais,
+            emCurso: hoje != null && mes === hoje,
         };
     });
 }

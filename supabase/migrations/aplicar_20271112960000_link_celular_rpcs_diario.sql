@@ -34,15 +34,17 @@ SET lock_timeout = '5s';
 
 -- ── Internos ────────────────────────────────────────────────────────────────
 
--- O projeto é da org? (organization_id, ou settings.organizationId quando a
--- coluna é NULL). NULL nas duas → NULL (quem chama usa IS NOT TRUE).
-CREATE OR REPLACE FUNCTION public._celular_projeto_da_org(p public.projects, p_org UUID)
-RETURNS BOOLEAN
+-- Org de UM projeto já lido (organization_id, ou settings.organizationId quando
+-- a coluna é NULL); NULL nas duas → NULL (quem chama usa IS DISTINCT FROM).
+-- Argumentos escalares, não a linha: nas varreduras de projects (listar,
+-- mídia) a mesma expressão vai escrita no WHERE, sem chamar função por linha.
+CREATE OR REPLACE FUNCTION public._celular_org_do_projeto(p_organization_id UUID, p_settings JSONB)
+RETURNS UUID
 LANGUAGE sql
-STABLE
+IMMUTABLE
 SET search_path = public, pg_temp
 AS $$
-    SELECT coalesce(p.organization_id, nullif(p.settings ->> 'organizationId', '')::uuid) = p_org
+    SELECT coalesce(p_organization_id, nullif(p_settings ->> 'organizationId', '')::uuid)
 $$;
 
 -- Classificação normalizada como getClassification (utils/projectClassification.ts):
@@ -133,16 +135,17 @@ $$;
 
 -- Planejamento aceito pelo link para este diário (D4): da org do link E
 -- (PLANEJAMENTO OU o próprio settings.linkedProjectId do diário — o fallback
--- de resolverPlanejamentoDoDiario).
-CREATE OR REPLACE FUNCTION public._celular_planejamento_aceito(pl public.projects, d public.projects, p_org UUID)
+-- de resolverPlanejamentoDoDiario). Só para uma linha já lida, não em varredura.
+CREATE OR REPLACE FUNCTION public._celular_planejamento_aceito(
+    p_pl_id UUID, p_pl_org_id UUID, p_pl_settings JSONB, p_diario_settings JSONB, p_org UUID)
 RETURNS BOOLEAN
 LANGUAGE sql
-STABLE
+IMMUTABLE
 SET search_path = public, pg_temp
 AS $$
-    SELECT coalesce(public._celular_projeto_da_org(pl, p_org), false)
-       AND (public._celular_classificacao(pl.settings) = 'PLANEJAMENTO'
-            OR pl.id::text = coalesce(d.settings ->> 'linkedProjectId', ''))
+    SELECT coalesce(public._celular_org_do_projeto(p_pl_org_id, p_pl_settings) = p_org, false)
+       AND (public._celular_classificacao(p_pl_settings) = 'PLANEJAMENTO'
+            OR p_pl_id::text = coalesce(p_diario_settings ->> 'linkedProjectId', ''))
 $$;
 
 -- ── Sessão ──────────────────────────────────────────────────────────────────
@@ -171,9 +174,11 @@ $$;
 -- ── Lista de projetos da org (D1) ───────────────────────────────────────────
 -- TODOS os projetos da org do link, enxutos: {id, name, updated_at, created_at,
 -- settings}. settings só com classification, linkedProjectId,
--- linkedProjectName, organizationId e — nos DIARIO/OBRA e sem classificação —
--- diaryEntries reduzidos a {id, date, impediments}. A tela filtra e resume em
--- memória; o resolver de planejamento (JS) precisa do vínculo de todos.
+-- linkedProjectName, organizationId e — nos DIARIO/OBRA — diaryEntries
+-- reduzidos a {id, date, impediments}. Sem classificação não é obra
+-- (TRATAR_SEM_CLASSIFICACAO_COMO_OBRA = false em utils/projectClassification.ts).
+-- A tela filtra e resume em memória; o resolver de planejamento (JS) precisa do
+-- vínculo de todos.
 CREATE OR REPLACE FUNCTION public.celular_diarios_listar(p_token TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
@@ -193,7 +198,7 @@ BEGIN
                'updated_at', p.updated_at,
                'created_at', p.created_at,
                'settings',   public._celular_settings_enxuto(p.settings)
-                             || CASE WHEN public._celular_classificacao(p.settings) IN ('DIARIO', 'OBRA', '')
+                             || CASE WHEN public._celular_classificacao(p.settings) IN ('DIARIO', 'OBRA')
                                      THEN jsonb_build_object('diaryEntries', (
                                               SELECT coalesce(jsonb_agg(jsonb_build_object(
                                                          'id',          e -> 'id',
@@ -205,7 +210,7 @@ BEGIN
            ORDER BY p.updated_at DESC NULLS LAST, p.id), '[]'::jsonb)
       INTO v
       FROM public.projects p
-     WHERE public._celular_projeto_da_org(p, v_org);
+     WHERE coalesce(p.organization_id, nullif(p.settings ->> 'organizationId', '')::uuid) = v_org;
 
     RETURN v;
 END;
@@ -228,7 +233,7 @@ BEGIN
     SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
 
     SELECT p.* INTO v_p FROM public.projects p WHERE p.id = p_project_id;
-    IF v_p.id IS NULL OR public._celular_projeto_da_org(v_p, v_org) IS NOT TRUE THEN
+    IF v_p.id IS NULL OR public._celular_org_do_projeto(v_p.organization_id, v_p.settings) IS DISTINCT FROM v_org THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
 
@@ -258,7 +263,7 @@ BEGIN
     SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
 
     SELECT p.* INTO v_p FROM public.projects p WHERE p.id = p_project_id FOR UPDATE;
-    IF v_p.id IS NULL OR public._celular_projeto_da_org(v_p, v_org) IS NOT TRUE THEN
+    IF v_p.id IS NULL OR public._celular_org_do_projeto(v_p.organization_id, v_p.settings) IS DISTINCT FROM v_org THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
 
@@ -280,7 +285,7 @@ BEGIN
     SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
 
     SELECT p.* INTO v_p FROM public.projects p WHERE p.id = p_project_id FOR UPDATE;
-    IF v_p.id IS NULL OR public._celular_projeto_da_org(v_p, v_org) IS NOT TRUE THEN
+    IF v_p.id IS NULL OR public._celular_org_do_projeto(v_p.organization_id, v_p.settings) IS DISTINCT FROM v_org THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
 
@@ -341,21 +346,22 @@ BEGIN
     SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
 
     SELECT p.* INTO v_d FROM public.projects p WHERE p.id = p_diario_id;
-    IF v_d.id IS NULL OR public._celular_projeto_da_org(v_d, v_org) IS NOT TRUE THEN
+    IF v_d.id IS NULL OR public._celular_org_do_projeto(v_d.organization_id, v_d.settings) IS DISTINCT FROM v_org THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
     SELECT p.* INTO v_pl FROM public.projects p WHERE p.id = p_planejamento_id;
-    IF v_pl.id IS NULL OR public._celular_planejamento_aceito(v_pl, v_d, v_org) IS NOT TRUE THEN
+    IF v_pl.id IS NULL OR NOT public._celular_planejamento_aceito(v_pl.id, v_pl.organization_id, v_pl.settings, v_d.settings, v_org) THEN
         RAISE EXCEPTION 'planejamento não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
 
     IF jsonb_typeof(v_pl.budget) = 'array' AND jsonb_array_length(v_pl.budget) > 0 THEN
         v_budget := v_pl.budget;
-    ELSIF coalesce(v_pl.settings ->> 'linkedProjectId', '') <> '' THEN
+    ELSIF v_pl.settings ->> 'linkedProjectId' ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' THEN
+        -- Pela chave primária; vínculo que não é uuid fica sem orçamento.
         SELECT pai.budget INTO v_budget
           FROM public.projects pai
-         WHERE pai.id::text = v_pl.settings ->> 'linkedProjectId'
-           AND public._celular_projeto_da_org(pai, v_org);
+         WHERE pai.id = (v_pl.settings ->> 'linkedProjectId')::uuid
+           AND coalesce(pai.organization_id, nullif(pai.settings ->> 'organizationId', '')::uuid) = v_org;
     END IF;
 
     RETURN jsonb_build_object(
@@ -372,7 +378,8 @@ $$;
 
 -- ── Planejamento do diário: gravar evolução (D3) ────────────────────────────
 -- Mesma autorização de celular_planejamento_ler. p_evolucao = {itemId: pct}:
--- objeto de até 2000 chaves, cada valor número de 0 a 100; senão 22023. Para
+-- objeto de até 2000 chaves (cada uma não vazia, até 100 caracteres), cada
+-- valor número de 0 a 100; senão 22023. Para
 -- cada chave: manualRealPct no itemSchedules de mesmo id, ou {id,
 -- manualRealPct} acrescentado (o fallback de aplicarEvolucaoNoCronograma). Só
 -- settings.schedule muda. Sem cronograma no planejamento → nada grava e devolve
@@ -400,6 +407,9 @@ BEGIN
     IF (SELECT count(*) FROM jsonb_object_keys(p_evolucao)) > 2000 THEN
         RAISE EXCEPTION 'evolução com mais de 2000 itens' USING ERRCODE = '22023';
     END IF;
+    IF EXISTS (SELECT 1 FROM jsonb_object_keys(p_evolucao) k WHERE k = '' OR length(k) > 100) THEN
+        RAISE EXCEPTION 'evolução inválida: id de item vazio ou com mais de 100 caracteres' USING ERRCODE = '22023';
+    END IF;
     IF EXISTS (SELECT 1 FROM jsonb_each(p_evolucao) k
                 WHERE CASE WHEN jsonb_typeof(k.value) = 'number'
                            THEN k.value::numeric NOT BETWEEN 0 AND 100
@@ -408,11 +418,11 @@ BEGIN
     END IF;
 
     SELECT p.* INTO v_d FROM public.projects p WHERE p.id = p_diario_id;
-    IF v_d.id IS NULL OR public._celular_projeto_da_org(v_d, v_org) IS NOT TRUE THEN
+    IF v_d.id IS NULL OR public._celular_org_do_projeto(v_d.organization_id, v_d.settings) IS DISTINCT FROM v_org THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
     SELECT p.* INTO v_pl FROM public.projects p WHERE p.id = p_planejamento_id FOR UPDATE;
-    IF v_pl.id IS NULL OR public._celular_planejamento_aceito(v_pl, v_d, v_org) IS NOT TRUE THEN
+    IF v_pl.id IS NULL OR NOT public._celular_planejamento_aceito(v_pl.id, v_pl.organization_id, v_pl.settings, v_d.settings, v_org) THEN
         RAISE EXCEPTION 'planejamento não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
 
@@ -466,7 +476,7 @@ BEGIN
     SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
 
     SELECT p.* INTO v_p FROM public.projects p WHERE p.id = p_project_id;
-    IF v_p.id IS NULL OR public._celular_projeto_da_org(v_p, v_org) IS NOT TRUE
+    IF v_p.id IS NULL OR public._celular_org_do_projeto(v_p.organization_id, v_p.settings) IS DISTINCT FROM v_org
        OR public._celular_classificacao(v_p.settings) NOT IN ('DIARIO', 'OBRA') THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
@@ -493,16 +503,27 @@ BEGIN
     SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
     PERFORM public._celular_confere_paths(p_paths);
 
+    -- Pedidos válidos primeiro: sem nenhum, nem varre os projetos.
+    IF NOT EXISTS (SELECT 1 FROM unnest(p_paths) u(path) WHERE public._celular_midia_path_ok(u.path, v_org, NULL)) THEN
+        RETURN '{}'::text[];
+    END IF;
+
+    -- Os citados da org são levantados UMA vez e cruzados com os pedidos.
+    WITH pedidos AS (
+        SELECT DISTINCT ON (u.path) u.path, u.ord
+          FROM unnest(p_paths) WITH ORDINALITY AS u(path, ord)
+         WHERE public._celular_midia_path_ok(u.path, v_org, NULL)
+         ORDER BY u.path, u.ord
+    ), citados AS (
+        SELECT DISTINCT c.ref
+          FROM public.projects p
+         CROSS JOIN LATERAL public._celular_midias_citadas(p.settings) AS c(ref)
+         WHERE coalesce(p.organization_id, nullif(p.settings ->> 'organizationId', '')::uuid) = v_org
+    )
     SELECT coalesce(array_agg(x.path ORDER BY x.ord), '{}'::text[])
       INTO v
-      FROM (SELECT DISTINCT ON (u.path) u.path, u.ord
-              FROM unnest(p_paths) WITH ORDINALITY AS u(path, ord)
-             ORDER BY u.path, u.ord) x
-     WHERE public._celular_midia_path_ok(x.path, v_org, NULL)
-       AND EXISTS (SELECT 1
-                     FROM public.projects p
-                    WHERE public._celular_projeto_da_org(p, v_org)
-                      AND x.path IN (SELECT c FROM public._celular_midias_citadas(p.settings) c));
+      FROM pedidos x
+     WHERE x.path IN (SELECT ct.ref FROM citados ct);
 
     RETURN v;
 END;
@@ -527,7 +548,7 @@ BEGIN
     PERFORM public._celular_confere_paths(p_paths);
 
     SELECT p.* INTO v_p FROM public.projects p WHERE p.id = p_project_id;
-    IF v_p.id IS NULL OR public._celular_projeto_da_org(v_p, v_org) IS NOT TRUE THEN
+    IF v_p.id IS NULL OR public._celular_org_do_projeto(v_p.organization_id, v_p.settings) IS DISTINCT FROM v_org THEN
         RAISE EXCEPTION 'diário não encontrado ou sem permissão' USING ERRCODE = '42501';
     END IF;
 
@@ -545,14 +566,14 @@ $$;
 
 -- ── Privilégios (REGRA #7) ──────────────────────────────────────────────────
 -- Internos: nenhum papel da API executa; só as celular_*, que rodam como dono.
-REVOKE EXECUTE ON FUNCTION public._celular_projeto_da_org(public.projects, UUID)                        FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._celular_org_do_projeto(UUID, JSONB)                                   FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._celular_classificacao(JSONB)                                         FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._celular_settings_enxuto(JSONB)                                       FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._celular_registros(JSONB)                                             FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._celular_midias_citadas(JSONB)                                        FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._celular_midia_path_ok(TEXT, UUID, UUID)                              FROM PUBLIC, anon, authenticated;
 REVOKE EXECUTE ON FUNCTION public._celular_confere_paths(TEXT[])                                        FROM PUBLIC, anon, authenticated;
-REVOKE EXECUTE ON FUNCTION public._celular_planejamento_aceito(public.projects, public.projects, UUID)  FROM PUBLIC, anon, authenticated;
+REVOKE EXECUTE ON FUNCTION public._celular_planejamento_aceito(UUID, UUID, JSONB, JSONB, UUID)         FROM PUBLIC, anon, authenticated;
 
 -- celular_*: o celular chama como anon, só com o token; a autorização é o
 -- resolver + as regras acima, dentro de cada função.

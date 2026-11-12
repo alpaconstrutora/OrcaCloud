@@ -354,7 +354,7 @@ DECLARE
     ctx RECORD;
     org UUID; m UUID; g UUID; o2 UUID; m_em_o2 BOOLEAN;
     tk TEXT; tk_g TEXT;
-    ob UUID; da UUID; dn UUID; pl UUID; orc UUID; do2 UUID; plo2 UUID;
+    ob UUID; da UUID; dn UUID; pl UUID; orc UUID; do2 UUID; plo2 UUID; sc UUID; st_d UUID; st_pl UUID;
     e_ok UUID; e_desl UUID; e_comp UUID; e_fora UUID;
     v TEXT; ref TEXT; j JSONB; antes JSONB; depois JSONB; diario_antes JSONB; budget_antes JSONB; o2_antes JSONB;
     nao_encontrado CONSTANT TEXT := '42501:diário não encontrado ou sem permissão';
@@ -439,6 +439,20 @@ BEGIN
     VALUES ('TVB planejamento de outra org', g, o2, jsonb_build_object('classification', 'PLANEJAMENTO', 'organizationId', o2,
                 'schedule', schedule_pl))
     RETURNING id INTO plo2;
+    -- sc: projeto da org SEM classificação (o front não o trata como obra) com registro.
+    INSERT INTO public.projects (name, user_id, organization_id, settings)
+    VALUES ('TVB sem classificação', g, org, jsonb_build_object('organizationId', org, 'diaryEntries', jsonb_build_array(e0)))
+    RETURNING id INTO sc;
+    -- st_d / st_pl: organization_id = o2 com settings.organizationId velho = org.
+    -- A coluna manda (coalesce): NÃO são da org do link.
+    INSERT INTO public.projects (name, user_id, organization_id, settings)
+    VALUES ('TVB diário com settings velho', g, o2, jsonb_build_object('classification', 'DIARIO', 'organizationId', org,
+                'diaryEntries', jsonb_build_array(e0)))
+    RETURNING id INTO st_d;
+    INSERT INTO public.projects (name, user_id, organization_id, settings)
+    VALUES ('TVB planejamento com settings velho', g, o2, jsonb_build_object('classification', 'PLANEJAMENTO', 'organizationId', org,
+                'schedule', schedule_pl))
+    RETURNING id INTO st_pl;
 
     -- ── celular_diarios_listar (D1) ──────────────────────────────────────────
     v := pg_temp.cel(format(listar, tk));
@@ -451,6 +465,11 @@ BEGIN
                         AND strpos(pg_temp.ids(j), pl::text) > 0 AND strpos(pg_temp.ids(j), ob::text) > 0
                         AND strpos(pg_temp.ids(j), do2::text) = 0 AND strpos(pg_temp.ids(j), plo2::text) = 0,
         'listar: diários (inclusive o de organization_id NULL), obra e planejamento da org sim; de outra org não');
+    PERFORM pg_temp.confere(strpos(pg_temp.ids(j), st_d::text) = 0 AND strpos(pg_temp.ids(j), st_pl::text) = 0,
+        'listar: organization_id de outra org com settings.organizationId = org do link fica de fora (a coluna manda)');
+    PERFORM pg_temp.confere(
+        (SELECT e -> 'settings' FROM jsonb_array_elements(j) e WHERE e ->> 'id' = sc::text) = jsonb_build_object('organizationId', org),
+        'listar: projeto sem classificação vem sem diaryEntries (não é obra para o front)');
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM jsonb_array_elements(j) e
                                          WHERE pg_temp.chaves(e) <> 'created_at,id,name,settings,updated_at'),
         'listar: cada item só {id, name, updated_at, created_at, settings}');
@@ -504,6 +523,10 @@ BEGIN
         'abrir o diário de organization_id NULL da org (veio ' || v || ')');
     v := pg_temp.cel(format(abrir, tk, do2));
     PERFORM pg_temp.confere(v = nao_encontrado, 'abrir diário de outra org → 42501 (m membro de o2: ' || m_em_o2 || '; veio ' || v || ')');
+    v := pg_temp.cel(format(abrir, tk, st_d));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'abrir diário de organization_id = outra org e settings velho = org → 42501 (veio ' || v || ')');
+    v := pg_temp.cel(format(salvar, tk, st_d, e_rasc));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'salvar em diário de settings velho → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format(abrir, tk, gen_random_uuid()));
     PERFORM pg_temp.confere(v = nao_encontrado, 'abrir projeto inexistente → a mesma recusa (veio ' || v || ')');
 
@@ -586,6 +609,10 @@ BEGIN
     PERFORM pg_temp.confere(v = plan_recusa, 'ler: planejamento de outra org → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format(ler, tk, do2, pl));
     PERFORM pg_temp.confere(v = nao_encontrado, 'ler: diário de outra org → 42501 (veio ' || v || ')');
+    v := pg_temp.cel(format(ler, tk, da, st_pl));
+    PERFORM pg_temp.confere(v = plan_recusa, 'ler: planejamento de organization_id = outra org e settings velho = org → 42501 (veio ' || v || ')');
+    v := pg_temp.cel(format(ler, tk, st_d, pl));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'ler: diário de settings velho → 42501 (veio ' || v || ')');
 
     -- ── celular_planejamento_gravar_evolucao (Review Focus 5) ────────────────
     antes        := (SELECT settings FROM public.projects WHERE id = pl);
@@ -604,6 +631,12 @@ BEGIN
     v := pg_temp.cel(format(evoluir, tk, da, pl,
                             (SELECT jsonb_object_agg('k' || n, 1) FROM generate_series(1, 2001) n)));
     PERFORM pg_temp.confere(v LIKE '22023:%', 'evolução com 2001 itens → 22023 (veio ' || v || ')');
+    v := pg_temp.cel(format(evoluir, tk, da, pl, '{"": 10}'));
+    PERFORM pg_temp.confere(v LIKE '22023:%', 'evolução com id vazio → 22023 (veio ' || v || ')');
+    v := pg_temp.cel(format(evoluir, tk, da, pl, jsonb_build_object(repeat('a', 101), 10)));
+    PERFORM pg_temp.confere(v LIKE '22023:%', 'evolução com id de 101 caracteres → 22023 (veio ' || v || ')');
+    v := pg_temp.cel(format(evoluir, tk, da, st_pl, '{"i1": 50}'));
+    PERFORM pg_temp.confere(v = plan_recusa, 'evolução em planejamento de settings velho → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format(evoluir, tk, da, plo2, '{"i1": 50}'));
     PERFORM pg_temp.confere(v = plan_recusa, 'evolução em planejamento de outra org → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format(evoluir, tk, da, orc, '{"i1": 50}'));
@@ -612,7 +645,8 @@ BEGIN
     PERFORM pg_temp.confere(v = nao_encontrado, 'evolução por diário de outra org → 42501 (veio ' || v || ')');
     PERFORM pg_temp.confere((SELECT settings FROM public.projects WHERE id = pl) = antes
                         AND (SELECT settings FROM public.projects WHERE id = orc) -> 'schedule' = schedule_pl
-                        AND (SELECT settings FROM public.projects WHERE id = plo2) -> 'schedule' = schedule_pl,
+                        AND (SELECT settings FROM public.projects WHERE id = plo2) -> 'schedule' = schedule_pl
+                        AND (SELECT settings FROM public.projects WHERE id = st_pl) -> 'schedule' = schedule_pl,
         'recusas de evolução não mexeram em nenhum cronograma');
 
     v := pg_temp.cel(format(evoluir, tk, da, pl, '{"i1": 55, "i3": 70}'));
@@ -736,14 +770,14 @@ BEGIN
                          AND 'search_path=public, pg_temp' = ANY (p.proconfig))
               AND count(*) = 8
            FROM pg_proc p
-          WHERE p.oid IN ('public._celular_projeto_da_org(public.projects, uuid)'::regprocedure,
+          WHERE p.oid IN ('public._celular_org_do_projeto(uuid, jsonb)'::regprocedure,
                           'public._celular_classificacao(jsonb)'::regprocedure,
                           'public._celular_settings_enxuto(jsonb)'::regprocedure,
                           'public._celular_registros(jsonb)'::regprocedure,
                           'public._celular_midias_citadas(jsonb)'::regprocedure,
                           'public._celular_midia_path_ok(text, uuid, uuid)'::regprocedure,
                           'public._celular_confere_paths(text[])'::regprocedure,
-                          'public._celular_planejamento_aceito(public.projects, public.projects, uuid)'::regprocedure)),
+                          'public._celular_planejamento_aceito(uuid, uuid, jsonb, jsonb, uuid)'::regprocedure)),
         'internos _celular_* do Diário (8): search_path fixo, sem EXECUTE para anon nem authenticated');
     -- Gravação só pelo núcleo, com o dono do link como ator.
     PERFORM pg_temp.confere(

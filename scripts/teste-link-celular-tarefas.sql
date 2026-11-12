@@ -682,8 +682,10 @@ BEGIN
     PERFORM pg_temp.confere((j->>'user_id')::uuid = u AND (j->>'org_id')::uuid = o
                         AND (j->>'nome') IS NOT DISTINCT FROM (SELECT name FROM public.profiles WHERE id = u)
                         AND (j->>'org_nome') = (SELECT name FROM public.organizations WHERE id = o)
-                        AND (SELECT string_agg(k, ',' ORDER BY k) FROM jsonb_object_keys(j) k) = 'nome,org_id,org_nome,user_id',
-        'sessao = {user_id, nome, org_id, org_nome} do dono do link (veio ' || v || ')');
+                        -- pode_aprovar_diario: acrescentado pela Parte 2 (aplicar_20271112960000).
+                        AND (SELECT string_agg(k, ',' ORDER BY k) FROM jsonb_object_keys(j) k)
+                            IN ('nome,org_id,org_nome,user_id', 'nome,org_id,org_nome,pode_aprovar_diario,user_id'),
+        'sessao = {user_id, nome, org_id, org_nome[, pode_aprovar_diario]} do dono do link (veio ' || v || ')');
 
     -- ── celular_espacos_listar = task_spaces que a RLS entrega a u, na org do link
     ref := pg_temp.como(u, 'authenticated', format(
@@ -776,8 +778,16 @@ BEGIN
                          AND p.prosecdef AND p.provolatile = 'v'
                          AND 'search_path=public, pg_temp' = ANY (p.proconfig))
               AND count(*) = 7
-           FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND p.proname LIKE 'celular\_%'),
-        'celular_* (7): anon e authenticated executam; SECURITY DEFINER, VOLATILE, search_path = public, pg_temp');
+           FROM pg_proc p
+          -- As 7 da Parte 1 pelo nome e assinatura: a Parte 2 acrescenta outras celular_*.
+          WHERE p.oid IN ('public.celular_sessao(text)'::regprocedure,
+                          'public.celular_tarefas_listar(text, uuid, uuid, boolean)'::regprocedure,
+                          'public.celular_espacos_listar(text)'::regprocedure,
+                          'public.celular_status_listar(text)'::regprocedure,
+                          'public.celular_responsaveis_listar(text)'::regprocedure,
+                          'public.celular_tarefa_criar(text, jsonb)'::regprocedure,
+                          'public.celular_tarefa_atualizar(text, uuid, jsonb)'::regprocedure)),
+        'celular_* da Parte 1 (7): anon e authenticated executam; SECURITY DEFINER, VOLATILE, search_path = public, pg_temp');
     PERFORM pg_temp.confere(NOT EXISTS (
         SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a
          WHERE p.pronamespace = 'public'::regnamespace AND (p.proname LIKE 'celular\_%' OR p.proname LIKE '\_celular\_%')

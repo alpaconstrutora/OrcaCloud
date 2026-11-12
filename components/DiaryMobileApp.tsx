@@ -1034,6 +1034,9 @@ const EntrySheet: React.FC<{
 type NavTab = 'registros' | 'resumo';
 type FilterTab = 'todos' | 'rascunho' | 'impedimentos';
 
+/** Referência estável: no link não há organizações do store a sugerir (evita recalcular o useMemo a cada render). */
+const SEM_ORGANIZACOES: never[] = [];
+
 const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjectId, previa = false }) => {
     const [selectedId, setSelectedId] = useState<string | null>(initialProjectId || null);
     const [project, setProject] = useState<LoadedProject | null>(null);
@@ -1060,6 +1063,9 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     // Efetivo: recursos das organizações + colaboradores ATIVOS do RH da org do topo (REGRA #5).
     // No link a fonte ignora `orgId`: vale a organização do token.
     const organizations = useStore(st => st.organizations);
+    // No link o store pode ser de OUTRA pessoa logada no mesmo navegador: as equipes/cargos dela
+    // não entram como sugestão (D5 — efetivo no link = colaboradores do RH da org do token).
+    const orgsDasSugestoes = fonte.modo === 'link' ? SEM_ORGANIZACOES : organizations;
     const { orgId } = useOrgContext();
     const [colaboradores, setColaboradores] = useState<{ id: string; name: string; role?: string | null; status?: string | null }[]>([]);
     useEffect(() => {
@@ -1070,8 +1076,8 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         return () => { ativo = false; };
     }, [orgId, fonte]);
     const sugestoesEfetivo = useMemo(
-        () => comColaboradoresDoRh(sugestoesDosRecursos(organizations || []), colaboradores),
-        [organizations, colaboradores],
+        () => comColaboradoresDoRh(sugestoesDosRecursos(orgsDasSugestoes || []), colaboradores),
+        [orgsDasSugestoes, colaboradores],
     );
 
     const notify = useCallback((msg: string) => {

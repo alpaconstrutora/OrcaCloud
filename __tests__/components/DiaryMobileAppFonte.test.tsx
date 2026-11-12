@@ -8,7 +8,9 @@
  *  - salvar chama `salvarRegistro` uma vez;
  *  - registro Aprovado sem permissão de aprovar no link: lixeira e Salvar travados com o motivo;
  *  - a foto sobe por `subirFoto` com a org do diário e o id do diário;
- *  - os carregadores passados aos hooks são estáveis (sem recarregar em laço).
+ *  - os carregadores passados aos hooks são estáveis (sem recarregar em laço);
+ *  - sugestões de efetivo no link = só colaboradores do RH (D5): equipes/cargos de
+ *    `organizations` do store (navegador logado como outra pessoa) não entram.
  */
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
@@ -20,6 +22,7 @@ vi.mock('../../hooks/useOrgContext', () => ({
 }))
 
 import DiaryMobileApp from '../../components/DiaryMobileApp'
+import { useStore } from '../../store/useStore'
 import { DiarioFonteContext, type DiarioFonte, type DiarioCarregado } from '../../services/celular/diarioFonte'
 import { MOTIVO_REGISTRO_APROVADO } from '../../utils/diaryAprovacao'
 import type { DiaryEntry } from '../../types'
@@ -66,7 +69,7 @@ async function abrirDiario() {
   return screen.findByText('Concretagem da laje')
 }
 
-beforeEach(() => { window.localStorage.clear() })
+beforeEach(() => { window.localStorage.clear(); useStore.setState({ organizations: [] }) })
 
 describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
   it('abrir o diário chama carregarDiario e mostra os registros', async () => {
@@ -138,6 +141,27 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     fireEvent.click(await screen.findByRole('button', { name: /Diário Torre A/ }))
     expect(await screen.findByText('Não foi possível abrir o diário.')).toBeInTheDocument()
     erro.mockRestore()
+  })
+
+  it('sugestões de efetivo no link: só colaboradores do RH, ignora as organizações do store (D5)', async () => {
+    useStore.setState({
+      organizations: [{
+        id: 'outraOrg', name: 'Org de outra pessoa',
+        resources: {
+          roles: [{ id: 'r1', name: 'Cargo Alheio' }],
+          workers: [{ id: 'w1', name: 'Operário Alheio', roleId: 'r1' }],
+          teams: [{ id: 't1', name: 'Equipe Alheia', memberIds: [] }],
+        },
+      }] as never,
+    })
+    const fonte = criarFonte()
+    fonte.listarColaboradores.mockResolvedValue([{ id: 'c1', name: 'Colaborador do RH', role: 'Pedreiro', status: 'ATIVO' }])
+    const { container } = montar(fonte)
+    await abrirDiario()
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    await waitFor(() => expect(container.querySelector('#diario-mobile-efetivo option[value="Colaborador do RH"]')).not.toBeNull())
+    const nomes = Array.from(container.querySelectorAll('#diario-mobile-efetivo option')).map(o => o.getAttribute('value'))
+    expect(nomes).toEqual(['Colaborador do RH'])
   })
 
   it('carregadores estáveis: re-render não recarrega diário, planejamento nem assinatura', async () => {

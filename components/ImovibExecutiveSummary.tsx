@@ -22,11 +22,15 @@ import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEq
 import { GRUPOS_DO_FLUXO } from '../utils/imovibVisaoDoFluxo';
 import { descreverFonte } from '../utils/imovibFontes';
 import { memorialDePremissas } from '../utils/imovibMemorial';
+import { criteriosDoParecer, ROTULO_DO_PARECER } from '../utils/imovibParecer';
+import ImovibParecerCard from './ImovibParecerCard';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
     onIrPara?: (aba: ImovibAba) => void;
+    /** Recarrega o estudo depois de gravar o parecer ou os mínimos (item 10.3). */
+    onDataChanged?: () => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -52,6 +56,7 @@ type Linha = (string | number | null)[];
 export interface PlanilhaImovib {
     indicadores: Linha[];
     premissas: Linha[];
+    parecer: Linha[];
     fluxo: Linha[];
     aportes: Linha[];
 }
@@ -148,7 +153,17 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ...m.aportes.map(a => [a.mes, a.aporte, a.distribuicao, a.paraTerceiros, a.caixa]),
     ];
 
-    return { indicadores, premissas, fluxo, aportes };
+    // Item 10.3: o parecer registrado e os critérios, com o mínimo e se atende.
+    const parecer: Linha[] = [
+        ['Item', 'Valor', 'Mínimo / limite', 'Atende', 'Unidade'],
+        ['Parecer', study.recommendation ? ROTULO_DO_PARECER[study.recommendation] : 'Não registrado', null, null, null],
+        ['Justificativa', study.recommendation_notes ?? null, null, null, null],
+        ['Registrado por', study.recommended_by ?? null, null, null, null],
+        ['Registrado em', study.recommended_at ? new Date(study.recommended_at).toLocaleString('pt-BR') : null, null, null, null],
+        ...criteriosDoParecer(study, m, ind).map((c): Linha => [c.rotulo, c.valor, c.minimo, c.atende == null ? 'Sem como avaliar' : c.atende ? 'Sim' : 'Não', c.unidade]),
+    ];
+
+    return { indicadores, premissas, parecer, fluxo, aportes };
 }
 
 /** Nome de arquivo sem espaço nem caractere proibido no Windows. */
@@ -191,7 +206,7 @@ function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara
     );
 }
 
-const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara }) => {
+const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara, onDataChanged }) => {
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -208,7 +223,8 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             const planilha = montarPlanilhaImovib(study, cashFlowData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
-            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60]), 'Premissas');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.parecer, [34, 40, 18, 16, 10]), 'Parecer');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60, 30, 12]), 'Premissas');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, ...planilha.fluxo[0].slice(4, -4).map(() => 20), 24, 24, 24, 24]), 'Fluxo de caixa');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.aportes, [10, 18, 20, 34, 26]), 'Aportes');
             XLSX.writeFile(wb, `Imovib_${nomeDeArquivo(study.name)}_Viabilidade.xlsx`);
@@ -300,6 +316,9 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             </div>
 
             <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
+
+            {/* Item 10.3: parecer e critérios no topo do Resumo (entra no PDF, que é a captura desta tela). */}
+            <ImovibParecerCard study={study} resultado={cashFlowData} indicadores={ind} onDataChanged={() => onDataChanged?.()} />
             <ResumoDaDueDiligence studyId={study.id} onIrPara={onIrPara} />
 
             {/* Printable Container — capturado pelo html2canvas no PDF: nada de backdrop-filter aqui.

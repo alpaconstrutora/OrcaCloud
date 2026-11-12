@@ -190,7 +190,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                   <ImovibEdicaoProvider value={edicao}>
                     {activeTab === 'executive_summary' && (
                         <ErrorBoundary>
-                            <ImovibExecutiveSummary study={study} onIrPara={irPara} />
+                            <ImovibExecutiveSummary study={study} onIrPara={irPara} onDataChanged={() => loadStudyDetails(false)} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'premises' && (

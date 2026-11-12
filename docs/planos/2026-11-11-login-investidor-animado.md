@@ -70,3 +70,17 @@ de boas-vindas à esquerda. O caminho de volta faz o movimento inverso.
     `check-ui-standard.sh` limpo nos três arquivos.
 - Em aberto (decisão do usuário): o cartão do Investidor no seletor (`LoginGateway`)
   continua roxo; a tela de login é coral.
+
+## Pedido 2 — 11/11/2026
+
+> use essa cor #E1553C nona tela de login
+
+(Depois de medir no portal por link: selo, avatar e item ativo = `#E1553C`.) O login já usava
+`#E1553C` na borda e nos links, mas o painel e o botão faziam degradê até `#C8452E`/marrom, o
+rastro com 40% de opacidade virava faixa marrom e o botão desabilitado (70%) ficava vermelho-escuro.
+
+6. `components/portal/InvestorLogin.tsx` — painel, rastro, faixa do celular e botão em `P.accent`
+   sólido; botão desabilitado mantém a cor (perde só a sombra; o motivo continua embaixo).
+   **Pronto quando:** estilo computado no navegador = `rgb(225, 85, 60)` sem `background-image`.
+   ✅ 11/11/2026 — medido no vite local (painel, rastro e botão `rgb(225, 85, 60)`, `none`);
+   prints dos dois lados; InvestorLogin + campoAlturaGuard 11/11 testes, `tsc` 0, check-ui limpo.

@@ -19,8 +19,9 @@ import { mensagemDeErroDeLogin, mensagemDeErroDePrimeiroAcesso } from './PortalL
  * Portais", cadastro e "esqueci a senha" voltando para "/" — com as mensagens do
  * Supabase em português (as mesmas do `PortalLogin`).
  *
- * Cor: o coral dos portais externos (§24, `P` do `PortalKit`), o mesmo que o
- * investidor vê lá dentro. Sem `dark:` — as cores são fixas, a tela é escura
+ * Cor: o coral dos portais externos (§24, `P.accent` = #E1553C do `PortalKit`), o
+ * mesmo que o investidor vê lá dentro — SÓLIDO no painel, no rastro e no botão, sem
+ * degradê para tons mais escuros (pedido do usuário, 11/11/2026). Sem `dark:` — as cores são fixas, a tela é escura
  * sempre.
  *
  * Movimento: `motion-reduce:` desliga as transições. O lado escondido fica
@@ -211,8 +212,8 @@ const InvestorLogin: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                         type="submit"
                         disabled={desabilitado}
                         aria-describedby={ativo && motivo ? `${prefixo}-motivo` : undefined}
-                        className="flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] font-semibold text-white shadow-[0_6px_20px_-6px_var(--acento)] transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-50 disabled:shadow-none"
-                        style={{ backgroundImage: `linear-gradient(90deg, ${P.accentHover}, ${P.accent})` }}
+                        className="flex h-10 w-full items-center justify-center gap-2 rounded-full text-[13px] font-semibold text-white shadow-[0_6px_20px_-6px_var(--acento)] transition-all hover:brightness-110 active:scale-[0.99] disabled:cursor-not-allowed disabled:shadow-none disabled:hover:brightness-100"
+                        style={{ backgroundColor: P.accent }}
                     >
                         {ativo && enviando && <Loader2 className="h-4 w-4 animate-spin" />}
                         {rotuloDoBotao(modoDoLado)}
@@ -265,12 +266,13 @@ const InvestorLogin: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     boxShadow: `0 0 28px -4px ${P.accent}, inset 0 0 18px -10px ${P.accent}`,
                 }}
             >
-                {/* Rastro e painel diagonais — só a partir do tablet */}
+                {/* Rastro e painel diagonais — só a partir do tablet. O rastro tem a MESMA cor
+                    e atrasa 120 ms: parado fica escondido sob o painel; em movimento, estica a varredura. */}
                 <div
                     aria-hidden="true"
-                    className="pointer-events-none absolute -top-[15%] left-0 hidden h-[130%] w-[62%] opacity-40 transition-transform motion-reduce:transition-none md:block"
+                    className="pointer-events-none absolute -top-[15%] left-0 hidden h-[130%] w-[62%] transition-transform motion-reduce:transition-none md:block"
                     style={{
-                        backgroundColor: P.accentHover,
+                        backgroundColor: P.accent,
                         transform: transformDoRastro,
                         transitionDuration: `${DURACAO_PAINEL}ms`,
                         transitionTimingFunction: CURVA,
@@ -281,7 +283,7 @@ const InvestorLogin: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                     aria-hidden="true"
                     className="pointer-events-none absolute -top-[15%] left-0 hidden h-[130%] w-[62%] transition-transform motion-reduce:transition-none md:block"
                     style={{
-                        backgroundImage: `linear-gradient(135deg, ${P.accent} 0%, ${P.accentHover} 45%, #3A1A14 100%)`,
+                        backgroundColor: P.accent,
                         transform: transformDoPainel,
                         transitionDuration: `${DURACAO_PAINEL}ms`,
                         transitionTimingFunction: CURVA,
@@ -289,7 +291,7 @@ const InvestorLogin: React.FC<{ onBack?: () => void }> = ({ onBack }) => {
                 />
 
                 {/* Faixa de boas-vindas do celular (sem diagonal) */}
-                <div className="px-6 py-5 md:hidden" style={{ backgroundImage: `linear-gradient(135deg, ${P.accent}, ${P.accentHover})` }}>
+                <div className="px-6 py-5 md:hidden" style={{ backgroundColor: P.accent }}>
                     <p className="text-lg font-bold text-white">{BOAS_VINDAS[cadastro ? 'cadastro' : 'entrar'].titulo}</p>
                     <p className="mt-1 text-sm text-white/85">{BOAS_VINDAS[cadastro ? 'cadastro' : 'entrar'].texto}</p>
                 </div>

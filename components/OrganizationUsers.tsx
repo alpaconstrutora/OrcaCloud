@@ -9,6 +9,10 @@ import { organizationService } from '../services/organizationService';
 import Button from './ui/Button';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparMembros, OPCOES_AGRUPAR_MEMBRO, type CampoAgruparMembro } from '../utils/membrosGrupos';
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import LinkDoCelularBloco, { motivoGerarBloqueadoPara } from './celular/LinkDoCelularBloco';
@@ -508,6 +512,21 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         }
         return filtered;
     }, [members, memberSearch, memberColumns.sortColumn, memberColumns.sortDirection]);
+
+    // "Agrupar" — guia de UI §6.12. Os grupos saem da lista já filtrada e ordenada; as linhas
+    // dentro de cada grupo seguem a coluna ordenada no <thead>.
+    const agrupamento = useAgrupamento<CampoAgruparMembro>('organizationUsersMembersGroupBy');
+    const membrosAgrupados = agrupamento.agrupando;
+    const grupos = React.useMemo(
+        () => (agrupamento.campo === 'none' ? [] : agruparMembros(sortedMembers, agrupamento.campo, customRoles, agrupamento.direcao)),
+        [sortedMembers, agrupamento.campo, agrupamento.direcao, customRoles],
+    );
+    const entradas: EntradaDaTela<OrganizationMember>[] = React.useMemo(
+        () => (membrosAgrupados
+            ? entradasDaPagina(grupos, agrupamento.recolhidos)
+            : sortedMembers.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [membrosAgrupados, grupos, agrupamento.recolhidos, sortedMembers],
+    );
     const confirm = useConfirm();
     const [notification, setNotification] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
     const notify = (message: string, type: 'success' | 'error' = 'success') => {
@@ -1202,6 +1221,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                             />
                         </div>
+                        <AgruparControles
+                            opcoes={OPCOES_AGRUPAR_MEMBRO}
+                            campo={agrupamento.campo}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar os membros"
+                        />
                         <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                             <ColumnConfigButton
                                 columns={MEMBER_COLUMNS}
@@ -1262,7 +1292,14 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                         </td>
                                     </tr>
                                 ) : (
-                                    sortedMembers.map((member) => (
+                                    entradas.map((e) => {
+                                        if (e.tipo === 'grupo') return (
+                                            <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                colSpan={memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').length + 2}
+                                                onAlternar={agrupamento.alternar} semTotal />
+                                        );
+                                        const member = e.item;
+                                        return (
                                         <React.Fragment key={member.id}>
                                             <tr className="hover:bg-blue-50/50 transition-colors">
                                                 {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
@@ -1300,7 +1337,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                                 </td>
                                             </tr>
                                         </React.Fragment>
-                                    ))
+                                        );
+                                    })
                                 )}
                             </tbody>
                         </table>

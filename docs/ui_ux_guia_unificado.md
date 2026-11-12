@@ -1515,6 +1515,14 @@ A tela é uma **árvore** (grupo → centro de custo): agrupar a **achata** nos 
 Centro de custo (grupo), Organização (só em "Todas"), Empreendimento ou Obra; grupo-pai sem filho não aparece
 agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel).
 
+Em 12/11/2026 para Minha Organização › Usuários › **Membros** (`OrganizationUsers.tsx`, `docs/planos/2026-11-12-usuarios-agrupar.md`).
+Opções: Função (na hierarquia Proprietário → Admin → Membro → Visitante, não alfabética), Cargo (o nome que a célula mostra;
+sem cargo vai para "Sem cargo") e Entrou em (mês). Só contagem, sem total (`semTotal`). Nome e e-mail ficam fora: um
+grupo por pessoa não agrupa nada. Função pura em `utils/membrosGrupos.ts`. Com o topo em **"Todas as organizações"** a
+mesma aba mostra outra tabela, "Todos os usuários" (`OrganizationList.tsx`, uma linha por organização × membro): ali agrupa
+por Organização ou Função (a chave da organização é o id — duas com o mesmo nome não se fundem). A coluna Função dessa
+tabela passou a mostrar o rótulo ("Membro"), não o código do banco (`member`), para casar com o grupo.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

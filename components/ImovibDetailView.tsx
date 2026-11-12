@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock, Activity } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -13,6 +13,7 @@ import ImovibCapitalForm from './ImovibCapitalForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibForm from './ImovibForm';
 import ImovibVersoesTab from './ImovibVersoesTab';
+import ImovibAcompanhamentoTab from './ImovibAcompanhamentoTab';
 import ImovibCongelarVersao from './ImovibCongelarVersao';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
@@ -25,7 +26,7 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes' | 'acompanhamento';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
@@ -39,6 +40,8 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
     // Item 10.2 do plano 2026-11-11 (D5: versão não se edita nem se apaga).
     { id: 'versoes', label: 'Versões', icon: <History className="w-4 h-4" /> },
+    // Item 10.4: só para estudo vinculado a empreendimento (o realizado vem dele).
+    { id: 'acompanhamento', label: 'Acompanhamento', icon: <Activity className="w-4 h-4" /> },
 ];
 
 
@@ -184,7 +187,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
             {/* Abas (§19.1): TabsBar padrão — card branco, trilho cinza, quebra de linha
                 em vez de rolagem lateral. O conteúdo rola com a página (antes ficava numa
                 caixa h-[calc(100vh-14rem)] com rolagem própria dentro da página). */}
-            <TabsBar<AbaDoEstudo> tabs={ABAS_DO_ESTUDO} value={activeTab} onChange={irPara} />
+            <TabsBar<AbaDoEstudo> tabs={study.estrutura?.origem === 'empreendimento' ? ABAS_DO_ESTUDO : ABAS_DO_ESTUDO.filter(a => a.id !== 'acompanhamento')} value={activeTab} onChange={irPara} />
 
             <div>
                   <ImovibEdicaoProvider value={edicao}>
@@ -227,6 +230,11 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     {activeTab === 'versoes' && (
                         <ErrorBoundary>
                             <ImovibVersoesTab key={versoesKey} study={study} />
+                        </ErrorBoundary>
+                    )}
+                    {activeTab === 'acompanhamento' && study.estrutura?.origem === 'empreendimento' && (
+                        <ErrorBoundary>
+                            <ImovibAcompanhamentoTab study={study} />
                         </ErrorBoundary>
                     )}
                     {activeTab === 'viability_dynamic' && (

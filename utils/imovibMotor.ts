@@ -2,6 +2,7 @@ import { ImovibStudy, ImovibCapexItem, ImovibCapexBase, ImovibCapexTiming } from
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { curvaDeVendas, TipoCurvaDeVendas, curvaDeDesembolso, TipoCurvaDeDesembolso } from './imovibCurvas';
 import { nomeDoMes } from './imovibCronograma';
+import { impostoPorMes, hipotesesDoEstudo, HipotesesTributarias, RegimeTributarioDoEstudo, ROTULO_DO_REGIME } from './imovibTributos';
 import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
 import { fluxoDaDivida, PremissasDoFinanciamento } from './imovibFinanciamento';
 import { aportesEDistribuicoes, LinhaDeAporte } from './imovibAportes';
@@ -97,7 +98,8 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
  */
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
-        | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100';
+        | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
+        | 'impostos_pelo_regime';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -288,6 +290,8 @@ export const CAMPOS_DO_MOTOR = [
     // Fase 5 (migration aplicar_20271112100000); base_date dá nome aos meses
     'base_date', 'acquisition_month', 'approval_month', 'incorporation_registry_month', 'land_payment_schedule',
     'cost_curve_type', 'cost_curve_custom', 'stock_carrying_cost_unit_month',
+    // Fase 6 (migration aplicar_20271112200000)
+    'tax_regime', 'tax_hypotheses',
 ] as const satisfies readonly (keyof ImovibStudy)[];
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
@@ -393,6 +397,9 @@ interface Premissas {
     horizonteDasReceitas: number;
     handoverMonth: number;
     unidadesVendaveis: number;
+    /** 'manual' = o imposto vem das rubricas 7. ou da Dinâmica; outro = impostoPorMes (item 6.2). */
+    regimeTributario: RegimeTributarioDoEstudo;
+    hipotesesTributarias: HipotesesTributarias;
     /** Unidades que pagam condomínio e IPTU enquanto não vendidas (sem a permuta física). */
     unidadesEmEstoque: number;
     custoDoEstoqueUnidadeMes: number;
@@ -578,6 +585,11 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let rubricaVgvPct = 0;
     let rubricaVgvFixo = 0;
     const rubricaPct = { impostos: 0, comercial: 0, outras: 0 };
+    // Regime tributário (item 6.2): fora do manual, o imposto é calculado pelo
+    // regime e as rubricas da categoria 7 (e o imposto da Dinâmica) ficam fora.
+    const regimeTributario = (study.tax_regime ?? D.tax_regime) as RegimeTributarioDoEstudo;
+    const pePeloRegime = regimeTributario !== 'manual';
+    const impostosForaDoCalculo: string[] = [];
     // Rubricas com momento próprio (item 5.5): valor total aqui, calendário em montarSeries.
     const rubricasComMomento: RubricaComMomento[] = [];
     rubricas.forEach(item => {
@@ -602,8 +614,12 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
                 break;
             case 'vgv':
                 if (pct) {
-                    rubricaVgvPct += v / 100;
                     const cat = item.category || '';
+                    if (pePeloRegime && cat.startsWith('7.')) {
+                        if (v !== 0) impostosForaDoCalculo.push(`${item.name} (${v.toLocaleString('pt-BR')}%)`);
+                        break;
+                    }
+                    rubricaVgvPct += v / 100;
                     const linha = cat.startsWith('7.') ? 'impostos' : cat.startsWith('5.') ? 'comercial' : 'outras';
                     rubricaPct[linha] += v / 100;
                 } else rubricaVgvFixo += v;
@@ -611,10 +627,19 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         }
     });
     // Com rubricas, as deduções sobre a receita vêm delas.
-    const deducaoReceitaPct = capexRubricasAtivas ? rubricaVgvPct : taxRate + brokerageFee;
+    if (pePeloRegime && !capexRubricasAtivas && taxRate !== 0) impostosForaDoCalculo.push(`imposto da Dinâmica (${(taxRate * 100).toLocaleString('pt-BR')}%)`);
+    const impostoManual = pePeloRegime ? 0 : taxRate;
+    const deducaoReceitaPct = capexRubricasAtivas ? rubricaVgvPct : impostoManual + brokerageFee;
     const deducaoPct = capexRubricasAtivas
         ? rubricaPct
-        : { impostos: taxRate, comercial: brokerageFee, outras: 0 };
+        : { impostos: impostoManual, comercial: brokerageFee, outras: 0 };
+    if (impostosForaDoCalculo.length) {
+        avisos.push({
+            codigo: 'impostos_pelo_regime',
+            mensagem: `O imposto vem do regime escolhido (${ROTULO_DO_REGIME[regimeTributario]}): ${impostosForaDoCalculo.join(', ')} fica(m) fora do cálculo.`,
+            aba: 'capex',
+        });
+    }
 
     // Apply Swap Physical (reduces marketed VGV)
     const swapPhysical = val(study.swap_physical_percent, D.swap_physical_percent) / 100;
@@ -885,6 +910,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         handoverMonth,
         unidadesVendaveis: unidadesDoEspelho + unidadesSemEspelho,
         custoDoEstoqueUnidadeMes: val(study.stock_carrying_cost_unit_month, D.stock_carrying_cost_unit_month),
+        regimeTributario,
+        hipotesesTributarias: hipotesesDoEstudo(study),
         // Unidades da permuta física não ficam em estoque (as PERMUTADO do espelho já saíram da contagem).
         unidadesEmEstoque: unidadesDoEspelho + unidadesSemEspelho * (1 - swapPhysical),
     };
@@ -1015,6 +1042,16 @@ function montarSeries(P: Premissas): Series {
         S.custoProprio.push(proprio);
         S.custoObra.push(custoObraDoMes);
         S.linhas.push(linhas);
+    }
+
+    // Imposto pelo regime (item 6.2): sobre a receita bruta do mês; no lucro real,
+    // o crédito e o lucro usam o custo do mês (próprio + obra).
+    if (P.regimeTributario !== 'manual') {
+        const custo = S.custoProprio.map((c, i) => c + S.custoObra[i]);
+        impostoPorMes(P.regimeTributario, S.receitaBruta, custo, P.hipotesesTributarias).forEach((imposto, i) => {
+            S.linhas[i].impostos = -imposto;
+            S.deducaoReceita[i] += imposto;
+        });
     }
     return S;
 }

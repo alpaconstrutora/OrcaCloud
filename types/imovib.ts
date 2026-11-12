@@ -655,6 +655,10 @@ export interface ImovibStudy {
     cost_curve_custom?: number[] | null;
     /** R$ por unidade em estoque por mês, depois do fim da obra. */
     stock_carrying_cost_unit_month?: number | null;
+    /** Regime tributário (migration aplicar_20271112200000, item 6.2). Vazio = 'manual'. */
+    tax_regime?: 'manual' | 'ret' | 'ret_his' | 'presumido' | 'real' | null;
+    /** Alíquotas do estudo (chaves de HIPOTESES_TRIBUTARIAS, em %); ausente = padrão. */
+    tax_hypotheses?: Partial<Record<string, number>> | null;
     created_at: string;
     updated_at: string;
     blocks?: ImovibBlock[];

@@ -34,10 +34,11 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 | 2026-11-11 | A revisão da Fase 1 achou que, com os padrões, mais distrato dava mais lucro (retenção de 25% do pago + revenda pelo preço cheio) e que venda distratada depois das chaves devolvia até o dinheiro do banco. Como corrigir? | **Revenda com deságio + distrato só até as chaves.** Deságio editável, padrão 10% (coluna nova, migration `aplicar_20271111850000`); venda feita nas chaves ou depois não distrata, com aviso `distrato_parcial`. |
 | 2026-11-11 | D3: outras fontes de capital e resultado por sócio entram nesta rodada? (pedido: *"iniciar a Fase 4"*) | **Sim** (itens 4.4 e 9.2, na forma simples). |
 | 2026-11-11 | D2: o campo "Capital Próprio (Equity)" vira número calculado ou continua editável? | **Calculado.** O campo editável sai da aba Capital; a coluna `funding_equity_percent` fica no banco, sem uso. |
+| 2026-11-11 | D4: quem confirma as alíquotas padrão dos regimes antes de publicar a Fase 6? (opções: publicar como hipótese editável com aviso; esperar a contabilidade; o usuário passa as alíquotas; sem padrão) | **Opção 1:** *"Opção 1"* — publicar com os padrões do plano (RET 4%, RET social 1%, presumido 6,73%, real estimado), editáveis por estudo, com o aviso "confirme com a contabilidade" no cartão. Estudo existente continua no regime manual até alguém trocar. |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
-Cada uma traz a recomendação de quem escreveu o plano. D1, D2, D3, D6 e D7 já foram respondidas (tabela acima); D4 e D5 seguem em aberto.
+Cada uma traz a recomendação de quem escreveu o plano. D1, D2, D3, D4, D6 e D7 já foram respondidas (tabela acima); D5 segue em aberto.
 
 - **D1 (item 1.4).** O recebimento por safra muda VPL, TIR e exposição dos estudos que já existem. Hoje são 3 no banco (Davi Bueno, Garden Cambuhy, Bruninho), nenhum editado desde 19/10/2026. Um modelo só para todos, com a tabela antes → depois dos 3 estudos, ou manter o modelo antigo nos estudos existentes? **Recomendação: um modelo só.** Dois modelos divergem para sempre e a listagem passa a comparar estudos calculados de jeitos diferentes.
 - **D2 (item 4.2).** O campo "Capital Próprio (Equity)" é gravado e exportado, mas o motor não o lê. Virar número calculado (capital necessário em R$ e em %), ou continuar editável e passar a travar a soma com a dívida? **Recomendação: calculado.**
@@ -774,13 +775,13 @@ Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura,
 
 Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase4.js`): listagem = Resumo (R$ 3.998.485 e R$ 641.232, os mesmos de antes da fase); aba Capital, aportes por ano e mês, drawer de nova fonte (motivo no botão) e origem da TMA abrem; 0 escritas, 0 erros de console. Adiados da revisão: as fatias de "De onde vem o dinheiro" não incluem o dinheiro dos compradores durante a obra (o plano pede "somam 100%"); fonte por participação que entra depois do pico de exposição não avisa.
 
-**Fase 4B — Complementos do capital:** 2 de 2 (sem migration)
+**Fase 4B — Complementos do capital:** 2 de 2 — no ar (PR #367, 3736f468; sem migration)
 - [x] 4B.1 Vendas durante a obra como fatia do dinheiro — `capital.vendasNaObra`: sinal, parcelas e intermediárias até o mês das chaves × (1 − deduções) + devolução de distrato do período. Medido: Garden 52,9% próprio / 47,1% vendas na obra; Bruninho 71,5% / 28,5%. Nenhum estudo tem unidade PERMUTADO (conferido no banco), por isso a permuta segue em R$ 0.
 - [x] 4B.2 Aviso de fonte depois do pico de exposição — aviso `fontes_de_capital` com o nome da fonte, o mês de entrada e o mês do pico; diz o que a fonte leva (parte do lucro ou juros).
 
 Conferido no navegador em 11/11 (Garden e Bruninho, roteiro `c:/tmp/pwtest/imovib_fase4.js`): cinco fatias, 0 escritas, 0 erros de console.
 
-**Fase 5 — Tempo e custos:** 9 de 9 — em revisão; migrations `aplicar_20271112100000` (marcos, terreno, curva, estoque), `aplicar_20271112110000` (momento das rubricas) e `aplicar_20271112120000` (due diligence) aplicadas em 11/11 com OK do usuário (*"Pode aplicar"*): 7 + 2 colunas, 4 policies só `authenticated`, anon sem SELECT
+**Fase 5 — Tempo e custos:** 9 de 9 — no ar (PR #372, ddb04b98), revisada; migrations `aplicar_20271112100000` (marcos, terreno, curva, estoque), `aplicar_20271112110000` (momento das rubricas) e `aplicar_20271112120000` (due diligence) aplicadas em 11/11 com OK do usuário (*"Pode aplicar"*): 7 + 2 colunas, 4 policies só `authenticated`, anon sem SELECT
 - [x] 5.1 Marcos e datas — `utils/imovibCronograma.ts` (`marcosDoEstudo`, `nomeDoMes`, `dataDoMes`, `mesDaData`); data em 'AAAA-MM' (aritmética de texto, sem `Date`). Com data-base os meses do fluxo viram "jan/27". Sub-aba "2. Cronograma" de Premissas; "Usar as datas do empreendimento" preenche início das vendas e prazo da obra no formulário.
 - [x] 5.2 Terreno parcelado — sub-aba "3. Terreno" (o custo saiu do CAPEX, que mostra só o resumo). Parcela depois do fim estende o fluxo.
 - [x] 5.3 Curva de desembolso — `curvaDeDesembolso` devolve `{ pesos, somaInformada }`; a linear continua na conta antiga (custo ÷ meses) para o padrão dar o mesmo centavo. O teste compara com 3x² − 2x³ direto: `generateSCurveData` arredonda para inteiro e não serve para frações.

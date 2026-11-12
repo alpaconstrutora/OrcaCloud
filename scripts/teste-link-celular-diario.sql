@@ -6,7 +6,9 @@
 --             _diary_delete_core, fn_pode_aprovar_diario_de) e regressão do app
 --             logado: diary_upsert_entry / diary_delete_entry mantêm o que o
 --             membro grava, a recusa ao não membro, o diário de organization_id
---             NULL, a trava de aprovação e o gatilho de settings.diaryEntries.
+--             NULL, a trava de aprovação e o gatilho de settings.diaryEntries;
+--             os dois núcleos chamados direto (5b/5c) decidem pelo p_ator, não
+--             pelas claims da sessão.
 --   Seção B — RPCs do Diário pelo link (celular_*), chamadas como anon só com o
 --             token: lista e abertura presas à org do link, gravação pelo
 --             núcleo com o dono do link como ator, efetivo, planejamento (D4,
@@ -110,6 +112,7 @@ DECLARE
     salvar  CONSTANT TEXT := 'SELECT public.diary_upsert_entry(%L::uuid, %L::jsonb)::text';
     excluir CONSTANT TEXT := 'SELECT public.diary_delete_entry(%L::uuid, %L::text)::text';
     nucleo  CONSTANT TEXT := 'SELECT public._diary_upsert_core(%L::uuid, %L::uuid, %L::jsonb)::text';
+    nucleo_excluir CONSTANT TEXT := 'SELECT public._diary_delete_core(%L::uuid, %L::uuid, %L::text)::text';
     e3 JSONB := '{"id": "tv-r3", "date": "2026-11-10", "status": "Rascunho"}';
     e4_aprovado JSONB := '{"id": "tv-r4", "date": "2026-11-09", "status": "Aprovado"}';
     m UUID; g UUID; x UUID; d1 UUID; d2 UUID;
@@ -240,6 +243,29 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'claims de m, p_ator = admin g aprovando → ok (veio ' || v || ')');
     PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
         'diário ficou com o Rascunho do membro e o aprovado pelo ator admin');
+
+    -- ── 5c. o núcleo de EXCLUSÃO também decide pelo p_ator ───────────────────
+    -- Membro: sem claims, p_ator = não membro é recusado; com as claims de um
+    -- membro (m), p_ator = não membro segue recusado (pega núcleo que usasse
+    -- is_org_member(v_org), que leria a sessão de m e deixaria passar).
+    v := pg_temp.como_postgres(NULL, format(nucleo_excluir, x, d1, 'tv-r3'));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'excluir pelo núcleo sem claims, p_ator = não membro → 42501 (veio ' || v || ')');
+    v := pg_temp.como_postgres(m, format(nucleo_excluir, x, d1, 'tv-r3'));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'excluir pelo núcleo com claims de m, p_ator = não membro → 42501 (veio ' || v || ')');
+    -- Aprovação: claims do admin g, p_ator = m (sem a chave) excluindo o Aprovado
+    -- → a frase da aprovação (pega núcleo que usasse fn_pode_aprovar_diario(v_org)).
+    v := pg_temp.como_postgres(g, format(nucleo_excluir, m, d1, 'tv-r4'));
+    PERFORM pg_temp.confere(v = msg_excluir, 'excluir pelo núcleo com claims do admin g, p_ator = m, registro Aprovado → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
+        'recusas do núcleo de exclusão não mexeram no diário');
+    -- Lados que passam: sem claims, o ator membro exclui o Rascunho; com as
+    -- claims de m, o ator admin g exclui o Aprovado.
+    v := pg_temp.como_postgres(NULL, format(nucleo_excluir, m, d1, 'tv-r3'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = jsonb_build_array(e4_aprovado),
+        'excluir pelo núcleo sem claims, p_ator = membro, Rascunho → ok (veio ' || v || ')');
+    v := pg_temp.como_postgres(m, format(nucleo_excluir, g, d1, 'tv-r4'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = '[]'::jsonb,
+        'excluir pelo núcleo com claims de m, p_ator = admin g, Aprovado → ok (veio ' || v || ')');
 
     -- ── 6. equivalência fn_pode_aprovar_diario_de × fn_pode_aprovar_diario ───
     -- O lado "aprova = true" inclui a fixture g (admin inserido nesta transação).

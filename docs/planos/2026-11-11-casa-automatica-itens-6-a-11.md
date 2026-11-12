@@ -165,9 +165,21 @@ antes do código (falham primeiro).
 | A1 | feito — teste da tela; conferido no app (aviso "Suítes: 4 → 2…" no formulário, some com o programa válido) |
 | A2 | feito — teste da tela; no app NÃO conferido (a planta descartável não tem Empreendimento ligado, o cartão não aparece) |
 | A3 | feito — testes da tela; conferido no app (4 grupos com `aria-expanded`, troca no clique, sem "▸", "Arranjos testados") |
-| B1 | a fazer |
-| B2 | a fazer |
-| B3 | a fazer |
+| B1 | feito — `components/blueprint/DesenhistaSvg.tsx` (+ modo `PRANCHA` do retângulo e texto centralizado/girado); unifilar idêntico (modo padrão) |
+| B2 | feito — `PlantaDaPrevia` recortada na casa (`recorteDaCasa`, 1,5 m de folga; a 1:75 no lote 12×30) e com `clipPath` na moldura; testes |
+| B3 | feito — na aba Resultado; conferido no app (1 pavimento × 6 disciplinas, fotos; sem erro de página/console/HTTP) |
+
+**Achados da etapa B (11/11/2026), corrigidos aqui:**
+- `DesenhistaSvg` preenchia todo retângulo de branco; na planta com recorte a MOLDURA sai por último e cobria o desenho
+  inteiro (a prévia ficou em branco na 1ª conferência). Modo `PRANCHA` = o contrato do PDF/canvas (branco preenche, outra
+  cor só contorna); o unifilar segue no modo de sempre.
+- **Defeito antigo da exportação:** `linhaDoMobiliario` (o tracejado do mobiliário) entrava em laço infinito por
+  arredondamento — num segmento de 23,2 mm de papel a fase chegava a 1,1999999999999993, o passo virava 7e-16 e `t` não
+  avançava. A planta HUMANIZADA a 1:75 desta casa congelava a página (e o PDF da prancha humanizada nessa escala, mesmo
+  código). Corrigido com folga de 1e-9 nas fronteiras; teste `__tests__/blueprintLinhaDoMobiliario.test.ts` (falhava
+  por falta de memória antes da correção).
+- Três execuções da conferência travaram antes do diagnóstico; as plantas de teste que ficaram para trás foram
+  arquivadas com `c:/tmp/pwtest/arquivar-estudo.cjs` (93d903f4, cf95964f, 09409d5c — todas ARQUIVADO).
 | C1 | a fazer |
 | C2 | a fazer |
 | C3 | a fazer |

@@ -18,6 +18,7 @@ import { useConfirm } from '../ui/confirm';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
+import PlantaDaPrevia, { type DisciplinaDaPrevia } from './PlantaDaPrevia';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
 import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, normalizarProgramaCurto, type PadraoDaCasa } from '../../utils/blueprintPrograma';
 import { PREMISSAS_DA_CASA_PADRAO, type PremissasDaCasa } from '../../utils/blueprintPremissasDaCasa';
@@ -206,6 +207,16 @@ export default function TelaCasaAutomatica(props: Props) {
   const [erro, setErro] = useState<string | null>(null);
   const [aberto, setAberto] = useState<GrupoDaPendencia | null>('VERIFICACAO');
   const plano = casa.plano;
+  // B3 (11/11/2026): o pavimento e a disciplina da planta da prévia. O escolhido que a prévia nova não tem cai no pavimento
+  // em que a casa foi gerada (o térreo).
+  const [nivelDaPrevia, setNivelDaPrevia] = useState<string | null>(null);
+  const [disciplinaDaPrevia, setDisciplinaDaPrevia] = useState<DisciplinaDaPrevia>('ARQUITETURA');
+  const niveisDaPrevia = plano?.resultado.levels ?? [];
+  const nivelEfetivo = niveisDaPrevia.some((l) => l.id === nivelDaPrevia)
+    ? nivelDaPrevia
+    : niveisDaPrevia.some((l) => l.id === plano?.levelId)
+      ? (plano?.levelId ?? null)
+      : (niveisDaPrevia[0]?.id ?? null);
   const [aba, setAba] = useState<Aba>(plano ? 'resultado' : 'programa');
   const set = <K extends keyof PremissasDaCasa>(k: K, v: Partial<PremissasDaCasa[K]>) =>
     onPremissas({ ...p, [k]: typeof v === 'object' && v !== null ? { ...(p[k] as object), ...(v as object) } : v } as PremissasDaCasa);
@@ -727,6 +738,13 @@ export default function TelaCasaAutomatica(props: Props) {
                 Ver no relatório
               </button>
             </div>
+          )}
+
+          {nivelEfetivo && (
+            <section className="space-y-2">
+              <h4 className={rotuloCls}>Planta da casa gerada</h4>
+              <PlantaDaPrevia modelo={plano.resultado} levelId={nivelEfetivo} onLevelId={setNivelDaPrevia} disciplina={disciplinaDaPrevia} onDisciplina={setDisciplinaDaPrevia} />
+            </section>
           )}
 
           <section className="space-y-2">

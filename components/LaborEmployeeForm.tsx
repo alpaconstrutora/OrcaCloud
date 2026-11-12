@@ -19,6 +19,9 @@ import CityStateSelect from './CityStateSelect';
 import LaborEmployeeSalaryHistory from './LaborEmployeeSalaryHistory';
 import { supabase } from '../lib/supabase';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import { useStore } from '../store/useStore';
+import { temAcessoTotal } from '../lib/acessoTotal';
+import { motivoVinculoUsuarioBloqueado } from '../lib/vinculoColaboradorUsuario';
 import SaveStatus from './ui/SaveStatus';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 
@@ -354,6 +357,21 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
         return () => { cancelled = true; };
     }, [orgId]);
 
+    // Vincular a um usuário dá a ele as tarefas do colaborador — só owner/admin
+    // da org do colaborador (o banco recusa os demais; aqui a tela diz o motivo).
+    const emailLogado = useStore(s => s.session?.user?.email);
+    const grupoLogado = useStore(s => s.currentProfile.group);
+    const organizacoesStore = useStore(s => s.organizations);
+    const motivoVinculo = (() => {
+        const orgDoColaborador = organizacoesStore.find(o => o.id === (form.org_id || orgId));
+        const eu = (emailLogado || '').toLowerCase();
+        return motivoVinculoUsuarioBloqueado({
+            desenvolvedor: String(grupoLogado) === 'DESENVOLVEDOR' || temAcessoTotal(eu),
+            orgCarregada: !!orgDoColaborador?.members,
+            papel: orgDoColaborador?.members?.find(m => (m.email || '').toLowerCase() === eu)?.role,
+        });
+    })();
+
     // Carrega cargos do catálogo quando empresa_id muda
     useEffect(() => {
         if (!form.empresa_id) { setOrgRoles([]); return; }
@@ -648,7 +666,9 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <select
                                         value={form.user_id || ''}
                                         onChange={e => setField('user_id', e.target.value || null)}
-                                        className={inputCls + ' appearance-none pr-8'}
+                                        disabled={!!motivoVinculo}
+                                        title={motivoVinculo ?? undefined}
+                                        className={inputCls + ' appearance-none pr-8 disabled:cursor-not-allowed disabled:text-slate-900 disabled:opacity-100'}
                                     >
                                         <option value="">Sem acesso ao sistema</option>
                                         {orgMembers.map(m => (
@@ -664,7 +684,7 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
                                     <ChevronDown className="absolute right-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400 pointer-events-none" />
                                 </div>
                                 <p className="text-xs text-slate-400">
-                                    A maior parte da mão de obra não tem login e acessa pelo Portal do Colaborador.
+                                    {motivoVinculo ?? 'A maior parte da mão de obra não tem login e acessa pelo Portal do Colaborador.'}
                                 </p>
                             </InputGroup>
                         </div>

@@ -15,6 +15,9 @@ Pedido posterior (2026-11-11, mesma sessão):
 
 > acessei as tarefas do Iago marques, porem não aparecem as mesmas tarefas para ele
 
+Pedido posterior (2026-11-12): resposta "Sim, fechar as duas (Recomendado)" à pergunta sobre as
+brechas `employees.user_id` gravável por qualquer membro e `task_collaborators` sem WITH CHECK.
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -32,6 +35,8 @@ Pedido posterior (2026-11-11, mesma sessão):
 | 2026-11-11 | Gestor gera link de outro owner/admin? | **Não** — gestor só gera para `member`; admin/owner geram o próprio (revisão final). Revogar e consultar continuam para qualquer membro |
 | 2026-11-11 | Responsável vê a tarefa? | **Sim, vê e pode concluir/editar (app e link)** |
 | 2026-11-11 | Vincular o colaborador do Iago à conta? | **Sim** (gravado pelo controlador: employees `175d203c…` `user_id = f9809eae…`) |
+| 2026-11-12 | Fechar as brechas do vínculo (`employees.user_id`) e de `task_collaborators`? | **Sim, as duas** — só owner/admin vinculam; envolvidos só por quem gere a tarefa |
+| 2026-11-12 | Fechar a frente ou manter para a Parte 2? | **Manter para a Parte 2** |
 
 ### Ajustes ao ler o código para o plano (2026-11-11)
 
@@ -82,6 +87,24 @@ Pedido posterior (2026-11-11, mesma sessão):
   `_celular_tarefa_visivel` / `celular_tarefa_atualizar`. Prova:
   `scripts/teste-tarefas-responsavel.sql` (`TUDO OK`, 2 + 5 = 7). Quem pode gravar
   `employees.user_id` fica para decisão do usuário.
+
+### Ajustes — brechas do vínculo e dos envolvidos (2026-11-12)
+
+- Migration `aplicar_20271112400000_vinculo_colaborador_e_envolvidos_trava.sql`, prova
+  `scripts/teste-vinculo-colaborador-envolvidos.sql` (RED sem ela: "membro comum vinculando o
+  colaborador à própria conta → 42501 (veio ok:1)"; com ela, `TUDO OK`).
+- **Vínculo:** gatilho `trg_employees_vinculo_so_gestor` — via API, só owner/admin da org do
+  colaborador (ou superadmin) grava/troca/limpa `employees.user_id` ou, num UPDATE, troca o
+  e-mail para o de um login que não seja a conta já vinculada (as regras do responsável e do
+  envolvido também casam pelo e-mail). E-mail que não é login segue livre; INSERT com e-mail
+  também (`hire_candidate`, `academy_portal_users_create`; colaborador novo não tem tarefa).
+  Na ficha, "Usuário do sistema" fica desligado com o motivo (`lib/vinculoColaboradorUsuario.ts`).
+- **Envolvidos:** medido antes — a brecha não chegava a acontecer porque TODO acesso pela API a
+  `task_collaborators` dava 42501 *permission denied for table users* (as policies liam
+  `auth.users`), inclusive para o dono: os "Envolvidos" do TaskForm nunca carregavam nem
+  gravavam (o erro é ignorado lá). Agora uma policy por comando: INSERT/UPDATE/DELETE = dono ou
+  membro do espaço (`pode_gerir_envolvidos_da_tarefa`, com WITH CHECK); SELECT = isso OU
+  envolvido (`is_task_collaborator`). Efeito visível: os envolvidos voltam a funcionar.
 
 ## Design
 
@@ -465,7 +488,9 @@ Vitest, Playwright (harness fora do repo).
   `check-rls-postura.sh` 9/9; `anon` executa só `celular_*`; `user_mobile_links` com RLS e 0 policy.
 - [x] Task 7 · Step 3: sonda com a chave anon — tabela, resolver e `mobile_link_generate` → *permission denied*;
   `celular_sessao`/`celular_tarefas_listar` com token falso → 42501 `link inválido ou vencido`.
-- [ ] Task 7 · Step 4: push em `main` + `conferir-producao.sh` · [ ] Step 5: prova real no celular (usuário)
+- [x] Task 7 · Step 4: push em `main` + `conferir-producao.sh` (domínio em `6787b03`, com o responsável)
+- [x] Step 5: prova real no celular — o usuário confirmou em 2026-11-12 que o link do Iago mostra as mesmas tarefas do app
+- [ ] Brechas do vínculo e dos envolvidos (`aplicar_20271112400000`): ensaio `TUDO OK`; aplicar e publicar após aval
 - [ ] Plano de implementação Parte 2 (F3–F5) — depois de F2 no ar
 - [x] F1 (banco no ar) · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
 

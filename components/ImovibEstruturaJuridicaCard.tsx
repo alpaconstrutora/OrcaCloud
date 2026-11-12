@@ -81,7 +81,7 @@ const ImovibEstruturaJuridicaCard: React.FC<Props> = ({ study, formData, setCamp
         if (carregando) situacao = 'Lendo o cadastro da empresa…';
         else if (erro) situacao = erro;
         else if (cadastro && !cadastro.empresa) situacao = 'O empreendimento vinculado não tem empresa: defina a empresa (SPE) no cadastro do empreendimento para ver a incorporação dela aqui.';
-        else if (cadastro && !inc) situacao = `${cadastro.empresa} não tem os dados de incorporação: cadastre no cadastro da empresa, aba Incorporação.`;
+        else if (cadastro && !inc) situacao = `${cadastro.empresa} não tem os dados de incorporação: preencha a aba Incorporação no cadastro da empresa.`;
     }
 
     return (

@@ -13,6 +13,7 @@ const svc = vi.hoisted(() => ({
     updateStudy: vi.fn(),
     salvarFonte: vi.fn(),
     excluirFonte: vi.fn(),
+    listarSocios: vi.fn(),
 }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../lib/supabase', () => ({ supabase: {} }));
@@ -37,6 +38,7 @@ describe('Aba Capital', () => {
     beforeEach(() => {
         for (const f of Object.values(svc)) f.mockReset();
         svc.updateStudy.mockResolvedValue({});
+        svc.listarSocios.mockResolvedValue([]); // cartão de sócios (item 9.2)
     });
 
     it('4.2 e 4B.1 — o capital próprio é calculado: cinco fatias (com as vendas durante a obra) que somam 100%, sem o campo digitado', () => {

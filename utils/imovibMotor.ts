@@ -99,7 +99,7 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
         | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
-        | 'impostos_pelo_regime';
+        | 'impostos_pelo_regime' | 'ret_sem_afetacao';
     mensagem: string;
     aba: ImovibAba;
 }

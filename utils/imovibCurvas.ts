@@ -66,6 +66,38 @@ export function curvaDeVendas(p: ParametrosDaCurvaDeVendas): number[] {
     }
 }
 
+/** O que a curva do planejamento lê do cronograma físico-financeiro (`projects.settings.schedule`). */
+export interface CronogramaDaObra {
+    periods: { id: string; date: string }[];
+    distributions: { periodId: string; value: number }[];
+}
+
+/**
+ * Desembolso mensal de uma ou mais obras em % do total (item 5.4): soma o VALOR
+ * de cada período — `percentage` é o % de cada item, não do total — e agrupa pelo
+ * mês do calendário ('AAAA-MM'), do primeiro ao último mês com valor. Sem valor: null.
+ */
+export function curvaDoCronograma(cronogramas: CronogramaDaObra[]): { percentuais: number[]; primeiroMes: string } | null {
+    const porMes = new Map<string, number>();
+    for (const c of cronogramas) {
+        const mesDoPeriodo = new Map((c.periods ?? []).map(p => [p.id, String(p.date ?? '').slice(0, 7)]));
+        for (const d of c.distributions ?? []) {
+            const mes = mesDoPeriodo.get(d.periodId);
+            const v = Number(d.value) || 0;
+            if (!mes || !/^\d{4}-\d{2}$/.test(mes) || v <= 0) continue;
+            porMes.set(mes, (porMes.get(mes) ?? 0) + v);
+        }
+    }
+    if (porMes.size === 0) return null;
+    const meses = [...porMes.keys()].sort();
+    const indice = (m: string) => Number(m.slice(0, 4)) * 12 + Number(m.slice(5, 7));
+    const primeiro = indice(meses[0]);
+    const valores = new Array<number>(indice(meses[meses.length - 1]) - primeiro + 1).fill(0);
+    porMes.forEach((v, m) => { valores[indice(m) - primeiro] += v; });
+    const total = valores.reduce((a, b) => a + b, 0);
+    return { percentuais: valores.map(v => (v / total) * 100), primeiroMes: meses[0] };
+}
+
 export type TipoCurvaDeDesembolso = 'linear' | 'curva_s' | 'custom';
 
 /** Curva S acumulada: 3x² − 2x³ (a mesma de parametricService.generateSCurveData). */

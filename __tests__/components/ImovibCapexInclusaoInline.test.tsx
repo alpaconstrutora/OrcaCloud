@@ -76,7 +76,7 @@ describe('ImovibCapexForm — inclusão inline de rubrica', () => {
         montar();
         await user.click(await screen.findByRole('button', { name: /Novo/ }));
 
-        const adicionar = screen.getByRole('button', { name: /Adicionar/ });
+        const adicionar = screen.getByRole('button', { name: 'Adicionar' });
         expect(adicionar).toBeDisabled();
         expect(adicionar).toHaveAttribute('title', 'Digite o nome da rubrica');
 

@@ -59,6 +59,14 @@ export function dataDoMes(baseDate: string | null | undefined, mes: number): str
     return a ? `${a.ano}-${String(a.mes).padStart(2, '0')}` : null;
 }
 
+/** Mês do estudo em que cai a data 'AAAA-MM…' (1 = mês da data-base); null sem as duas. */
+export function mesDaData(baseDate: string | null | undefined, data: string | null | undefined): number | null {
+    const b = /^(\d{4})-(\d{2})/.exec(baseDate ?? '');
+    const d = /^(\d{4})-(\d{2})/.exec(data ?? '');
+    if (!b || !d) return null;
+    return (Number(d[1]) * 12 + Number(d[2])) - (Number(b[1]) * 12 + Number(b[2])) + 1;
+}
+
 export function marcosDoEstudo(study: ImovibStudy, r: ImovibMathResult): MarcoDoEstudo[] {
     const D = IMOVIB_DEFAULTS;
     const v = (x: number | null | undefined, padrao: number) => (x == null || Number.isNaN(x) ? padrao : x);

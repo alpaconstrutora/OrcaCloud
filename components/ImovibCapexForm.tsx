@@ -1,6 +1,6 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import React, { useState, useEffect, useMemo } from 'react';
-import { ImovibStudy, ImovibBlock, ImovibCapexItem, ImovibCapexItemInsert } from '../types';
+import { ImovibStudy, ImovibBlock, ImovibCapexItem, ImovibCapexItemInsert, ImovibCapexTiming, ImovibStudyUpdate } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Calculator, ChevronRight, Activity, Plus, LayoutList, Zap } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
@@ -10,6 +10,9 @@ import type { ImovibCapexBase } from '../types';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import ImovibDesembolsoCard from './ImovibDesembolsoCard';
+import ImovibPosObraCard from './ImovibPosObraCard';
+import ImovibCubReferencia, { ReferenciaDeCub } from './ImovibCubReferencia';
 
 /** Área construída do bloco — a MESMA conta do motor (quantidade × pavimentos × (privativa + comum)). */
 const areaDoBloco = (b: ImovibBlock): number =>
@@ -28,11 +31,13 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '1. Terreno', name: 'Topografia e Sondagem', value_type: 'currency', value: 15000 },
 
     // 2. Projetos e Consultorias
-    { category: '2. Projetos e Consultorias', name: 'Projeto Estrutural', value_type: 'currency', value: 0 },
-    { category: '2. Projetos e Consultorias', name: 'Projeto Arquitetônico', value_type: 'currency', value: 0 },
-    { category: '2. Projetos e Consultorias', name: 'Projetos Complementares', value_type: 'currency', value: 0 },
-    { category: '2. Projetos e Consultorias', name: 'Projeto Legal/Aprovação', value_type: 'currency', value: 0 },
-    { category: '2. Projetos e Consultorias', name: 'Pesquisa de Mercado', value_type: 'currency', value: 10000 },
+    // Projetos e Legais saem antes da obra; Stand e Decorado, no lançamento (item 5.5:
+    // só para estudo NOVO — o modelo é aplicado uma vez por estudo).
+    { category: '2. Projetos e Consultorias', name: 'Projeto Estrutural', value_type: 'currency', value: 0, timing: 'pre_obra' },
+    { category: '2. Projetos e Consultorias', name: 'Projeto Arquitetônico', value_type: 'currency', value: 0, timing: 'pre_obra' },
+    { category: '2. Projetos e Consultorias', name: 'Projetos Complementares', value_type: 'currency', value: 0, timing: 'pre_obra' },
+    { category: '2. Projetos e Consultorias', name: 'Projeto Legal/Aprovação', value_type: 'currency', value: 0, timing: 'pre_obra' },
+    { category: '2. Projetos e Consultorias', name: 'Pesquisa de Mercado', value_type: 'currency', value: 10000, timing: 'pre_obra' },
 
     // 3. Construção (Adicional)
     { category: '3. Construção (Adicional)', name: 'Fundações Especiais', value_type: 'currency', value: 0 },
@@ -44,17 +49,17 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '4. Construção Indireta', name: 'Equipamentos (Grua, Elevador)', value_type: 'currency', value: 0 },
 
     // 5. Marketing e Vendas
-    { category: '5. Marketing e Vendas', name: 'Stand de Vendas', value_type: 'currency', value: 0 },
-    { category: '5. Marketing e Vendas', name: 'Apto Decorado', value_type: 'currency', value: 0 },
+    { category: '5. Marketing e Vendas', name: 'Stand de Vendas', value_type: 'currency', value: 0, timing: 'lancamento' },
+    { category: '5. Marketing e Vendas', name: 'Apto Decorado', value_type: 'currency', value: 0, timing: 'lancamento' },
     { category: '5. Marketing e Vendas', name: 'Verba de Lançamento (Mídia)', value_type: 'percent', value: 1.5 },
     { category: '5. Marketing e Vendas', name: 'Comissão de Corretores', value_type: 'percent', value: 5 },
     { category: '5. Marketing e Vendas', name: 'Gestão Comercial / House', value_type: 'percent', value: 1 },
 
     // 6. Despesas Legais e Incorporação
-    { category: '6. Legais e Incorporação', name: 'Registro de Incorporação (RI)', value_type: 'currency', value: 15000 },
-    { category: '6. Legais e Incorporação', name: 'Alvarás e Taxas Municipais', value_type: 'currency', value: 0 },
-    { category: '6. Legais e Incorporação', name: 'EIA/RIMA ou EIV', value_type: 'currency', value: 0 },
-    { category: '6. Legais e Incorporação', name: 'Outorga Onerosa', value_type: 'currency', value: 0 },
+    { category: '6. Legais e Incorporação', name: 'Registro de Incorporação (RI)', value_type: 'currency', value: 15000, timing: 'pre_obra' },
+    { category: '6. Legais e Incorporação', name: 'Alvarás e Taxas Municipais', value_type: 'currency', value: 0, timing: 'pre_obra' },
+    { category: '6. Legais e Incorporação', name: 'EIA/RIMA ou EIV', value_type: 'currency', value: 0, timing: 'pre_obra' },
+    { category: '6. Legais e Incorporação', name: 'Outorga Onerosa', value_type: 'currency', value: 0, timing: 'pre_obra' },
 
     // 7. Impostos Consolidados — RET e regime normal são ALTERNATIVOS: só um
     // com valor. Padrão = regime normal (decisão D3, 2026-10-12); para usar o
@@ -68,13 +73,23 @@ const DEFAULT_CAPEX_TEMPLATE = [
 
     // 9. Contingência
     { category: '9. Contingência', name: 'Fundo de Reserva', value_type: 'percent', value: 2 },
-];
+] as { category: string; name: string; value_type: 'currency' | 'percent'; value: number; timing?: ImovibCapexTiming }[];
 
 // Base da rubrica: sobre o que o % incide e quando a saída acontece no fluxo.
 const BASE_LABEL: Record<ImovibCapexBase, string> = {
-    terreno: 'Terreno (mês 1)',
+    terreno: 'Terreno (1ª parcela)',
     obra: 'Obra (ao longo da obra)',
     vgv: 'VGV (com a receita)',
+};
+
+// Quando a rubrica sai (item 5.5); vazio = pela base.
+const ROTULO_DO_MOMENTO: Record<ImovibCapexTiming, string> = {
+    aquisicao: 'Na aquisição',
+    pre_obra: 'Antes da obra',
+    lancamento: 'No lançamento',
+    obra: 'Na obra (curva)',
+    vendas: 'Com as vendas',
+    pos_obra: 'Depois da obra',
 };
 
 const fmt = (v: number) =>
@@ -92,8 +107,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     const { showToast } = useToast();
     const { pode, motivo } = useImovibEdicao();
     const [initializing, setInitializing] = useState(true);
-    const [landCost, setLandCost] = useState<number>(study.land_cost || 0);
-    const [landCostFocused, setLandCostFocused] = useState(false);
+    const [cub, setCub] = useState<ReferenciaDeCub | null>(null);
     // Custo e preço por torre, em edição local até sair do campo.
     const [blockCosts, setBlockCosts] = useState<Record<string, number>>({});
     const [blockPrices, setBlockPrices] = useState<Record<string, number>>({});
@@ -122,7 +136,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         return groups;
     }, [items]);
 
-    const categories = useMemo(() => Object.keys(groupedItems).sort(), [groupedItems]);
+    // Ordem numérica: "10. Pós-obra" depois de "9. Contingência".
+    const categories = useMemo(() => Object.keys(groupedItems).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true })), [groupedItems]);
 
     // Valor de cada rubrica NO CÁLCULO vem do motor (não recalcular aqui: com
     // inflação a rubrica de base vgv é corrigida mês a mês).
@@ -145,15 +160,16 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     study_id: study.id,
                     category: t.category,
                     name: t.name,
-                    value_type: t.value_type as 'currency' | 'percent',
+                    value_type: t.value_type,
                     value: t.value,
                     base: baseDaRubrica({ category: t.category }),
+                    timing: t.timing ?? null,
                 }));
                 // Quem só lê (sem canEditImovib) não aplica o template: abrir a aba
                 // não pode gravar. Template vazio = o serviço só lê as rubricas.
                 const loaded = await imovibService.seedCapexTemplate(study.id, pode ? template : []);
                 setItems(loaded);
-                const uniqueCats = Array.from(new Set(loaded.map(i => i.category))).sort();
+                const uniqueCats = Array.from(new Set(loaded.map(i => i.category))).sort((a, b) => a.localeCompare(b, 'pt-BR', { numeric: true }));
                 setExpandedCategories(uniqueCats.slice(0, 2));
                 if (!jaAplicado) onDataChanged();
             } catch (e) {
@@ -182,14 +198,22 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         }
     };
 
-    const saveLandCost = async (value: number) => {
+    // Campos do estudo gravados pelos cartões de desembolso e pós-obra (Fase 5).
+    const salvarEstudo = async (campos: ImovibStudyUpdate) => {
         try {
-            await imovibService.updateStudy(study.id, { land_cost: value } as any);
+            await imovibService.updateStudy(study.id, campos);
             onDataChanged();
         } catch (e) {
-            console.error('Failed to save land_cost', e);
-            showToast(`Erro ao salvar o custo do terreno: ${(e as Error).message}`, 'error');
+            console.error('Falha ao salvar o estudo', campos, e);
+            showToast(`Erro ao salvar: ${(e as Error).message}`, 'error');
         }
+    };
+
+    // "Usar CUB + x%" (item 5.7): preenche o campo da torre e foca nele — grava ao sair.
+    const usarCub = (block: ImovibBlock) => {
+        if (!cub?.sugerido) return;
+        setBlockCosts(prev => ({ ...prev, [block.id]: Math.round(cub.sugerido! * 100) / 100 }));
+        setTimeout(() => document.getElementById(`imovib-custo-torre-${block.id}`)?.focus(), 0);
     };
 
     const saveMode = async (newMode: 'simplified' | 'detailed') => {
@@ -385,16 +409,19 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                         <label className="block text-xs font-semibold text-slate-500 mb-3">
                             Por torre: custo de obra e preço de venda (R$/m²)
                         </label>
+                        <ImovibCubReferencia study={study} onReferencia={setCub} />
                         <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 space-y-3">
                             {study.blocks.map(block => {
                                 const area = areaDoBloco(block);
                                 const custo = blockCosts[block.id] ?? block.construction_cost_sqm ?? 0;
+                                const diferenca = cub?.cub && custo > 0 ? (custo / cub.cub.valorM2 - 1) * 100 : null;
                                 return (
                                     <div key={block.id} className="flex flex-wrap items-center gap-x-4 gap-y-2">
                                         <span className="text-sm font-medium text-slate-700 min-w-[120px]">{block.name}</span>
                                         <label className="flex text-xs font-semibold text-slate-500 items-center gap-2">
                                             Custo
                                             <MoneyCentsInput
+                                                id={`imovib-custo-torre-${block.id}`}
                                                 value={custo}
                                                 onChange={(v) => setBlockCosts(prev => ({ ...prev, [block.id]: v === '' ? 0 : Number(v) }))}
                                                 onBlur={() => saveBlockEconomia(block, 'construction_cost_sqm', blockCosts[block.id])}
@@ -419,6 +446,20 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                 ? ' · custo por torre fora do cálculo (CAPEX simplificado)'
                                                 : ` × custo = ${(custo * area).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 })}`}
                                         </span>
+                                        {diferenca != null && (
+                                            <span className={`text-sm ${Math.abs(diferenca) > 30 ? 'text-amber-700' : 'text-slate-600'}`} title="Custo da torre comparado ao CUB do padrão escolhido acima">
+                                                {diferenca >= 0 ? '+' : ''}{diferenca.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% sobre o CUB
+                                            </span>
+                                        )}
+                                        <button
+                                            type="button"
+                                            onClick={() => usarCub(block)}
+                                            disabled={!cub?.sugerido}
+                                            title={!cub?.sugerido ? 'Escolha a UF e o padrão para ter o CUB.' : 'Preenche o custo com o CUB mais o acréscimo; grava ao sair do campo.'}
+                                            className="h-9 px-3 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                                        >
+                                            Usar CUB + {cub?.acrescimoPct ?? 25}%
+                                        </button>
                                     </div>
                                 );
                             })}
@@ -426,24 +467,13 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     </div>
                 )}
 
-                {/* ── CUSTO DE AQUISIÇÃO DO TERRENO ── */}
-                <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-6">
-                    <label className="block text-xs font-semibold text-slate-500 mb-1.5">
-                        Custo de Aquisição do Terreno (R$)
-                    </label>
-                    <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 flex items-center gap-3 max-w-xs">
-                        <span className="text-slate-500 font-medium text-sm">R$</span>
-                        <MoneyCentsInput
-                            value={landCost}
-                            placeholder="0,00"
-                            onChange={(v) => setLandCost(v === '' ? 0 : Number(v))}
-                            onBlur={() => saveLandCost(landCost)}
-                            className="flex-1 h-9 px-3 bg-white border border-amber-300 rounded-[6px] focus:border-amber-500 focus:ring-2 focus:ring-amber-200 outline-none text-sm font-medium text-slate-800"
-                        />
-                    </fieldset>
-                    <p className="text-xs text-amber-600 mt-2">
-                        Valor usado em: Estática → Aquisição do Terreno
-                    </p>
+                {/* ── TERRENO ── editado em Premissas › Terreno (item 5.2); aqui só o resumo. */}
+                <div className="bg-amber-50 border border-amber-200 rounded-[10px] p-4 mb-6 flex flex-wrap items-baseline justify-between gap-2">
+                    <span className="text-sm text-slate-700">
+                        Custo do terreno: <span className="font-medium text-slate-900">{fmt(study.land_cost || 0)}</span>
+                        {(study.land_payment_schedule?.length ?? 0) > 0 ? ` em ${study.land_payment_schedule!.length} parcela(s)` : ' à vista, no mês da aquisição'}
+                    </span>
+                    <span className="text-xs text-slate-600">Editar em Premissas › Terreno</span>
                 </div>
 
                 {/* ── SIMPLIFIED MODE ── */}
@@ -600,6 +630,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                         <th className="px-6 py-2 border-r border-gray-100">Rubrica / Linha de Custo</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Tipo</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Base</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100">Quando sai</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Valor</th>
                                                         <th className="px-6 py-2 border-r border-gray-100 text-right">No cálculo</th>
                                                         <th className="px-6 py-2 w-12"></th>
@@ -636,6 +667,38 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                         <option key={b} value={b}>{BASE_LABEL[b]}</option>
                                                                     ))}
                                                                 </select>
+                                                            </td>
+                                                            <td className="px-6 py-2.5 border-r border-gray-100">
+                                                                {/* Item 5.5: % do VGV é dedução sobre a receita — o momento não se aplica. */}
+                                                                {item.value_type === 'percent' && baseDaRubrica(item) === 'vgv' ? (
+                                                                    <span className="text-sm text-slate-600" title="Rubrica em % do VGV sai junto com a receita de cada mês.">Com a receita</span>
+                                                                ) : (
+                                                                    <div className="flex items-center gap-1.5">
+                                                                        <select
+                                                                            aria-label={`Quando sai: ${item.name}`}
+                                                                            value={item.timing ?? ''}
+                                                                            onChange={(e) => handleUpdateItem(item.id, { timing: (e.target.value || null) as ImovibCapexTiming | null })}
+                                                                            className="text-sm font-normal px-2 py-1 rounded-[6px] border border-gray-100 bg-gray-50 text-gray-900 cursor-pointer"
+                                                                        >
+                                                                            <option value="">Pela base</option>
+                                                                            {(Object.keys(ROTULO_DO_MOMENTO) as ImovibCapexTiming[]).map(t => <option key={t} value={t}>{ROTULO_DO_MOMENTO[t]}</option>)}
+                                                                        </select>
+                                                                        {item.timing === 'pos_obra' && (
+                                                                            <input
+                                                                                type="number" min="1" step="1"
+                                                                                aria-label={`Meses de pós-obra: ${item.name}`}
+                                                                                title="Em quantos meses depois do fim da obra (vazio = 12)"
+                                                                                defaultValue={item.timing_months ?? ''}
+                                                                                placeholder="12"
+                                                                                onBlur={(e) => {
+                                                                                    const n = e.target.value === '' ? null : Math.max(1, Math.round(Number(e.target.value)));
+                                                                                    if (n !== (item.timing_months ?? null)) handleUpdateItem(item.id, { timing_months: n });
+                                                                                }}
+                                                                                className="w-16 h-8 px-2 bg-white border border-slate-200 rounded-[6px] text-sm text-slate-800 text-right"
+                                                                            />
+                                                                        )}
+                                                                    </div>
+                                                                )}
                                                             </td>
                                                             <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <div className="relative flex items-center">
@@ -717,6 +780,9 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                     </>
                 )}
             </div>
+
+            <ImovibDesembolsoCard study={study} resultado={math} onSalvar={salvarEstudo} />
+            {capexMode === 'detailed' && <ImovibPosObraCard study={study} items={items} onItems={(l) => { setItems(l); onDataChanged(); }} onSalvar={salvarEstudo} />}
         </div>
     );
 };

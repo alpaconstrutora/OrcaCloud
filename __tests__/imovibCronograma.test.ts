@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { marcosDoEstudo, nomeDoMes, dataDoMes } from '../utils/imovibCronograma';
+import { marcosDoEstudo, nomeDoMes, dataDoMes, mesDaData } from '../utils/imovibCronograma';
 import { computeImovibMath } from '../utils/imovibMotor';
 import { baseStudy } from './fixtures/imovibEstudos';
 
@@ -18,6 +18,13 @@ describe('5.1 — nomes e datas dos meses', () => {
         expect(nomeDoMes('2027-11-01', 3)).toBe('jan/28');
         expect(dataDoMes('2027-11-01', 14)).toBe('2028-12');
         expect(nomeDoMes('lixo', 3)).toBe('Mês 3');
+    });
+
+    it('data → mês do estudo (para "Usar as datas do empreendimento")', () => {
+        expect(mesDaData('2027-01-15', '2027-03-31')).toBe(3);
+        expect(mesDaData('2027-01-15', '2026-12-01')).toBe(0); // antes da data-base: mês inválido, quem chama avisa
+        expect(mesDaData(null, '2027-03-31')).toBeNull();
+        expect(mesDaData('2027-01-15', null)).toBeNull();
     });
 
     it('com data-base, os meses do fluxo ganham nome de mês', () => {

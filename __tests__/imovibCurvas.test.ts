@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { curvaDeVendas, curvaDeDesembolso } from '../utils/imovibCurvas';
+import { curvaDeVendas, curvaDeDesembolso, curvaDoCronograma } from '../utils/imovibCurvas';
 
 /** Curvas de venda (item 1.1 do plano docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md). */
 
@@ -38,6 +38,31 @@ describe('5.3 — curvaDeDesembolso', () => {
     it('personalizada vazia ou zerada cai na linear', () => {
         expect(curvaDeDesembolso('custom', 4, []).pesos).toEqual([0.25, 0.25, 0.25, 0.25]);
         expect(curvaDeDesembolso('custom', 4, [0, 0]).pesos).toEqual([0.25, 0.25, 0.25, 0.25]);
+    });
+});
+
+describe('5.4 — curva do cronograma físico-financeiro', () => {
+    const cronograma = (periodos: [string, string][], dist: [string, number][]) => ({
+        periods: periodos.map(([id, date]) => ({ id, name: id, date })),
+        distributions: dist.map(([periodId, value], k) => ({ itemId: `i${k}`, periodId, percentage: 50, value })),
+    });
+
+    it('soma o valor de cada período (não os percentuais dos itens), em ordem de data, em % do total', () => {
+        const c = curvaDoCronograma([cronograma([['b', '2027-02-01'], ['a', '2027-01-01'], ['c', '2027-03-01']], [['a', 100], ['a', 300], ['b', 400], ['c', 200]])]);
+        expect(c).toEqual({ percentuais: [40, 40, 20], primeiroMes: '2027-01' });
+    });
+
+    it('várias obras (torres) somam pelo mês do calendário; mês sem desembolso no meio vale 0', () => {
+        const c = curvaDoCronograma([
+            cronograma([['a', '2027-01-10']], [['a', 100]]),
+            cronograma([['x', '2027-01-20'], ['y', '2027-03-05']], [['x', 100], ['y', 200]]),
+        ]);
+        expect(c).toEqual({ percentuais: [50, 0, 50], primeiroMes: '2027-01' });
+    });
+
+    it('sem distribuição com valor: nulo', () => {
+        expect(curvaDoCronograma([cronograma([['a', '2027-01-01']], [])])).toBeNull();
+        expect(curvaDoCronograma([])).toBeNull();
     });
 });
 

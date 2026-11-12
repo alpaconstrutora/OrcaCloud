@@ -468,6 +468,18 @@ export type ImovibCapexBase = 'vgv' | 'obra' | 'terreno';
 
 export type ImovibCapexTiming = 'aquisicao' | 'pre_obra' | 'lancamento' | 'obra' | 'vendas' | 'pos_obra';
 
+/** Item da due diligence do terreno (migration aplicar_20271112120000, item 5.9). */
+export interface ImovibLandChecklistItem {
+    id: string;
+    study_id: string;
+    item_key: string;
+    label: string;
+    status: 'pendente' | 'ok' | 'problema' | 'nao_se_aplica';
+    notes?: string | null;
+    sort_order: number;
+    checked_at?: string | null;
+}
+
 /** Parcela do terreno (item 5.2): mês do estudo e % do custo do terreno. */
 export interface ImovibParcelaDoTerreno { month: number; percent: number; }
 

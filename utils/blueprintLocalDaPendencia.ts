@@ -44,6 +44,39 @@ export function localDoElemento(m: BlueprintModel, ids: readonly ObjectId[], pon
   return { levelId: achados[0].c!.levelId, ids: achados.map((x) => x.id), ponto: ponto ?? achados[0].c!.ponto };
 }
 
+/** Os pontos de um elemento na planta — as pontas, o contorno; a abertura e o que não tem contorno, pelo centro. */
+function pontosDoElemento(m: BlueprintModel, id: ObjectId): Point[] {
+  const parede = m.walls.find((x) => x.id === id);
+  if (parede) return [parede.a, parede.b];
+  const trecho = (m.trechos ?? []).find((x) => x.id === id);
+  if (trecho) return [trecho.a, trecho.b];
+  const peca = (m.structures ?? []).find((x) => x.id === id);
+  if (peca && peca.pontos.length) return peca.pontos;
+  const ambiente = m.spaces.find((x) => x.id === id);
+  if (ambiente && ambiente.ring.length) return ambiente.ring;
+  const c = centroDoElemento(m, id);
+  return c ? [c.ponto] : [];
+}
+
+/** Folga em volta dos elementos ao enquadrar (mm): o bastante para ver o cômodo em volta do encontro. */
+export const FOLGA_DO_ENQUADRAMENTO_MM = 1500;
+
+/**
+ * A CAIXA que o "Ver no editor" enquadra (12/11/2026): os elementos da pendência que estão no desenho e o ponto dela, com
+ * a folga. Antes, o atalho só centralizava no ponto — a casa inteira continuava na tela e o trecho não se via. `null` =
+ * nenhum elemento nem ponto.
+ */
+export function caixaDosElementos(m: BlueprintModel, ids: readonly ObjectId[], ponto: Point | null, folgaMm = FOLGA_DO_ENQUADRAMENTO_MM): { minX: number; minY: number; maxX: number; maxY: number } | null {
+  const pts = [...ids.flatMap((id) => pontosDoElemento(m, id)), ...(ponto ? [ponto] : [])];
+  if (!pts.length) return null;
+  return {
+    minX: Math.min(...pts.map((p) => p.x)) - folgaMm,
+    minY: Math.min(...pts.map((p) => p.y)) - folgaMm,
+    maxX: Math.max(...pts.map((p) => p.x)) + folgaMm,
+    maxY: Math.max(...pts.map((p) => p.y)) + folgaMm,
+  };
+}
+
 /** O ponto do segmento ab mais perto de p. */
 function maisPerto(a: Point, b: Point, p: Point): Point {
   const dx = b.x - a.x;

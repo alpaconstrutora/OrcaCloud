@@ -10,6 +10,12 @@ const numero = (s: string | null | undefined): number | null => {
     const n = parseFloat(String(s ?? '').replace(',', '.'));
     return Number.isFinite(n) ? n : null;
 };
+/** O Mapa Regulatório guarda a taxa ora como fração (0,9), ora em % (90). */
+const taxaDeOcupacao = (s: string | null | undefined): string | null => {
+    const n = numero(s);
+    if (n == null) return s || null;
+    return `${(n <= 1 ? n * 100 : n).toLocaleString('pt-BR', { maximumFractionDigits: 1 })}%`;
+};
 const fmtM2 = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 0 })} m²`;
 
 /**
@@ -47,7 +53,7 @@ const ImovibZoneamentoCard: React.FC<{ study: ImovibStudy }> = ({ study }) => {
         ['Zona', [zona.macroarea, zona.zona].filter(Boolean).join(' · ')],
         ['Coeficiente básico', zona.ca_basico],
         ['Coeficiente máximo', zona.ca_maximo],
-        ['Taxa de ocupação máxima', zona.taxa_ocupacao_maxima ? `${zona.taxa_ocupacao_maxima}%` : null],
+        ['Taxa de ocupação máxima', taxaDeOcupacao(zona.taxa_ocupacao_maxima)],
         ['Gabarito', [zona.gabarito_altura_maxima && `${zona.gabarito_altura_maxima} m`, zona.gabarito_pavimentos && `${zona.gabarito_pavimentos} pavimentos`].filter(Boolean).join(' · ')],
         ['Vagas', [zona.regra_vagas, zona.vagas_por_unidade && `${zona.vagas_por_unidade} por unidade`].filter(Boolean).join(' · ')],
         ['Lei de referência', zona.lei_referencia],

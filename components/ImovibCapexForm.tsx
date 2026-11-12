@@ -782,7 +782,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             </div>
 
             <ImovibDesembolsoCard study={study} resultado={math} onSalvar={salvarEstudo} />
-            {capexMode === 'detailed' && <ImovibPosObraCard study={study} items={items} onItems={(l) => { setItems(l); onDataChanged(); }} onSalvar={salvarEstudo} />}
+            <ImovibPosObraCard study={study} items={items} simplificado={capexMode === 'simplified'} onItems={(l) => { setItems(l); onDataChanged(); }} onSalvar={salvarEstudo} />
         </div>
     );
 };

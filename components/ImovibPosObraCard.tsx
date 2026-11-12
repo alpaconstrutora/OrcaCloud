@@ -10,6 +10,8 @@ import ImovibInputRow from './ImovibInputRow';
 interface ImovibPosObraCardProps {
     study: ImovibStudy;
     items: ImovibCapexItem[];
+    /** CAPEX simplificado: rubricas ficam fora do cálculo (o custo do estoque vale nos dois modos). */
+    simplificado?: boolean;
     onItems: (items: ImovibCapexItem[]) => void;
     onSalvar: (campos: ImovibStudyUpdate) => Promise<void>;
 }
@@ -22,13 +24,15 @@ const POS_OBRA = ['Assistência técnica', 'Manutenção e garantia'];
  * pós-obra por botão (nunca ao abrir) e o custo mensal das unidades em estoque
  * depois da obra.
  */
-const ImovibPosObraCard: React.FC<ImovibPosObraCardProps> = ({ study, items, onItems, onSalvar }) => {
+const ImovibPosObraCard: React.FC<ImovibPosObraCardProps> = ({ study, items, simplificado, onItems, onSalvar }) => {
     const D = IMOVIB_DEFAULTS;
     const { pode, motivo } = useImovibEdicao();
     const { showToast } = useToast();
     const [criando, setCriando] = useState(false);
     const faltam = POS_OBRA.filter(n => !items.some(i => i.category === '10. Pós-obra' && i.name === n));
-    const motivoBotao = !pode ? motivo : faltam.length === 0 ? 'As rubricas de pós-obra já existem em "10. Pós-obra".' : undefined;
+    const motivoBotao = !pode ? motivo
+        : simplificado ? 'No CAPEX simplificado as rubricas ficam fora do cálculo: passe para o Completo.'
+            : faltam.length === 0 ? 'As rubricas de pós-obra já existem em "10. Pós-obra".' : undefined;
 
     const criar = async () => {
         setCriando(true);

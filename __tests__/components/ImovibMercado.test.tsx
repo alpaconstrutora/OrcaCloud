@@ -76,6 +76,11 @@ describe('Premissas › Mercado', () => {
         expect(gravado.sales_vso_percent).toBe(gravado.vso_regional_percent);
     });
 
+    it('posição do preço: o limiar do alerta está dito na tela', async () => {
+        await tela();
+        expect(screen.getByText(/alerta acima de ±15%/)).toBeTruthy();
+    });
+
     it('7.3 — digitar a VSO marca a origem como digitada', async () => {
         const user = await tela({ vso_regional_percent: 3, vso_regional_source: 'comparaveis' });
         expect(screen.getByText(/Origem: média dos comparáveis/)).toBeTruthy();
@@ -111,14 +116,16 @@ describe('Premissas › Mercado', () => {
 
     it('7.2 — com vínculo: nome, preço médio do raio e a absorção do Market', async () => {
         market.getTerrainStudy.mockResolvedValue({
-            id: 't1', name: 'Terreno da Av. Brasil', createdAt: '2026-11-01T10:00:00Z', analysisRadiusMeters: 1000,
+            id: 't1', name: 'Terreno da Av. Brasil', createdAt: '2026-11-01T10:00:00Z', updatedAt: '2026-11-05T15:00:00Z', analysisRadiusMeters: 1000,
             estimatedAbsorptionVelocity: 6.5,
             radiusStats: { pricePerM2Avg: 9_800, totalListings: 42, ticketAvg: 650_000, areaAvg: 66.3 },
         });
         await tela({ opura_terrain_study_id: 't1' });
         expect(await screen.findByText('Terreno da Av. Brasil')).toBeTruthy();
         expect(screen.getByText('42')).toBeTruthy();
-        expect(screen.getByText(/Absorção \(hipótese do Market\): 6,5% ao mês/)).toBeTruthy();
+        // Pendência da Fase 7: dizer QUE absorção é essa — a gravada no Market, com a data.
+        expect(screen.getByText(/Absorção gravada no estudo de mercado em 05\/11\/2026 \(hipótese do Market\): 6,5% ao mês/)).toBeTruthy();
+        expect(screen.getByText(/salve o estudo no Market/i)).toBeTruthy();
         expect(market.getTerrainStudy).toHaveBeenCalledWith('t1');
     });
 

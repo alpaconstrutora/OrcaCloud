@@ -135,6 +135,9 @@ export interface OpcoesDosLotes {
     cancelada?: () => boolean;
 }
 
+/** Sorteios entre uma pausa e outra para a tela respirar (barra de progresso, Cancelar). */
+export const SORTEIOS_POR_LOTE = 100;
+
 /**
  * A mesma simulação, em lotes, devolvendo o controle ao navegador entre eles
  * (pendência da Fase 3: 20.000 sorteios travavam a tela ~10 s). Dá exatamente o
@@ -148,7 +151,7 @@ export async function simularMonteCarloEmLotes(
     opcoes: OpcoesDosLotes = {},
 ): Promise<ResultadoMonteCarlo | null> {
     const sim = criarSimulacao(study, variaveis, iteracoes, semente);
-    const lote = Math.max(1, Math.round(opcoes.lote ?? 100));
+    const lote = Math.max(1, Math.round(opcoes.lote ?? SORTEIOS_POR_LOTE));
     for (let feitos = 0; feitos < sim.total;) {
         feitos = sim.sortear(lote);
         opcoes.aoProgredir?.(feitos, sim.total);

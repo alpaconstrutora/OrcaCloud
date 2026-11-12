@@ -66,7 +66,9 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
     const salvar = async (item: ImovibLandChecklistItem, campos: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>>) => {
         const antes = item;
         // Só o campo que mudou: a observação não mexe em quem conferiu nem quando.
-        const gravar = 'notes' in campos ? { notes: campos.notes?.trim() || null } : { status: campos.status };
+        const gravar: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>> = 'notes' in campos
+            ? { notes: campos.notes?.trim() || null }
+            : { status: campos.status ?? item.status };
         setItens(prev => prev.map(x => (x.id === item.id ? { ...item, ...gravar } : x)));
         try {
             const salvo = await imovibService.salvarItemDaDueDiligence(item.id, gravar);

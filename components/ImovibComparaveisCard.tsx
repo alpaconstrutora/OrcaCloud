@@ -11,6 +11,9 @@ import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
+
+const D = IMOVIB_DEFAULTS;
 
 interface ImovibComparaveisCardProps {
     study: ImovibStudy;
@@ -112,8 +115,8 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
                 <KpiCard
                     label="Preço do estudo contra a média"
                     value={posicao == null ? '—' : `${posicao >= 0 ? '+' : ''}${fmtPct(posicao)}`}
-                    sub={resumo.precoM2Medio == null ? 'Sem comparável com preço' : `${fmtBRL(precoDoEstudo)}/m² no estudo × ${fmtBRL(resumo.precoM2Medio)}/m² de média ${resumo.mediaDoPreco === 'ponderada' ? 'ponderada pelas unidades' : 'simples (há comparável sem total)'}`}
-                    color={posicao == null ? 'gray' : Math.abs(posicao) > 15 ? 'amber' : 'emerald'}
+                    sub={resumo.precoM2Medio == null ? `Sem comparável com preço · alerta acima de ±${D.limiar_preco_contra_media_percent}%` : `${fmtBRL(precoDoEstudo)}/m² no estudo × ${fmtBRL(resumo.precoM2Medio)}/m² de média ${resumo.mediaDoPreco === 'ponderada' ? 'ponderada pelas unidades' : 'simples (há comparável sem total)'} · alerta acima de ±${D.limiar_preco_contra_media_percent}%`}
+                    color={posicao == null ? 'gray' : Math.abs(posicao) > D.limiar_preco_contra_media_percent ? 'amber' : 'emerald'}
                 />
                 <div className="flex flex-col gap-2">
                     <KpiCard

@@ -762,12 +762,21 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
 
 ## Rollback (Parte 2)
 
-Desfaz as duas migrations da Parte 2 (`aplicar_20271112950000_diario_nucleo_com_ator.sql` e
-`aplicar_20271112960000_link_celular_rpcs_diario.sql`) e devolve o Diário logado ao estado
+Desfaz as migrations da Parte 2 (`aplicar_20271112950000_diario_nucleo_com_ator.sql`,
+`aplicar_20271112960000_link_celular_rpcs_diario.sql` e, se aplicada, o limite de uso
+`aplicar_20271112990000_link_celular_limite_de_uso.sql`) e devolve o Diário logado ao estado
 de `aplicar_20271014600000_diario_aprovacao_permissao.sql`. **Rodar ANTES do "Rollback
 (Parte 1)"** — o Rollback (Parte 1) apaga `is_org_member_de`, que os núcleos
 `_diary_upsert_core`/`_diary_delete_core` chamam; plpgsql não rastreia dependência, então o
-`DROP` passaria sem erro e todo salvar do Diário logado quebraria em tempo de execução.
+`DROP` passaria sem erro e todo salvar do Diário logado quebraria em tempo de execução. (E
+`user_mobile_link_uso` tem FK para `user_mobile_links`: o `DROP TABLE user_mobile_links` do
+Rollback (Parte 1) falharia com ela ainda de pé.)
+
+O limite de uso (`…990000`) recria `celular_diario_autoriza`, `celular_diario_midia_permitida`,
+`celular_planejamento_ler` e `celular_planejamento_gravar_evolucao` com a cota / `IS NOT TRUE`.
+No rollback completo não é preciso reaplicar o `…960000` antes: o passo 2 apaga essas quatro
+de qualquer jeito, e só depois delas apaga `_celular_cota` e a tabela — estado final = antes
+da Parte 2. Para desfazer **só** o limite de uso, ver "Rollback só do limite de uso" abaixo.
 
 Ordem (importa: nunca há janela em que uma RPC logada chame um núcleo já apagado):
 
@@ -819,6 +828,10 @@ DROP FUNCTION IF EXISTS public.celular_diario_autoriza(TEXT, UUID);
 DROP FUNCTION IF EXISTS public.celular_diario_midia_permitida(TEXT, TEXT[]);
 DROP FUNCTION IF EXISTS public.celular_diario_midia_orfa(TEXT, UUID, TEXT[]);
 
+-- Limite de uso (…990000): a cota e a contagem, DEPOIS das RPCs que chamam a cota.
+DROP FUNCTION IF EXISTS public._celular_cota(TEXT, TEXT, INTEGER);
+DROP TABLE IF EXISTS public.user_mobile_link_uso;
+
 -- Internos do link (Parte 2)
 DROP FUNCTION IF EXISTS public._celular_org_do_projeto(UUID, JSONB);
 DROP FUNCTION IF EXISTS public._celular_classificacao(JSONB);
@@ -846,6 +859,36 @@ Ensaiado em `BEGIN … ROLLBACK` contra o banco: migrations `…950000` e `…96
 este SQL → conjunto de funções `diary_*`/`_diary_*`/`fn_pode_aprovar_*`/`*celular*` idêntico ao de
 antes, `diary_upsert_entry` INVOKER de novo, `celular_sessao` sem `pode_aprovar_diario` e os
 corpos das quatro funções restauradas iguais aos de antes → `TUDO OK`.
+
+### Rollback só do limite de uso (`…990000`), mantendo a Parte 2
+
+Ordem (importa: `celular_diario_autoriza`/`celular_diario_midia_permitida` chamam
+`_celular_cota`; apagá-la primeiro quebraria todo envio e toda assinatura de foto pelo link):
+
+1. **Reaplicar o `…960000` inteiro** — recria as quatro funções sem a cota e com o `NOT`
+   original, com os mesmos `REVOKE`/`GRANT`; é idempotente (`CREATE OR REPLACE`):
+
+   ```bash
+   npx supabase db query --linked -f supabase/migrations/aplicar_20271112960000_link_celular_rpcs_diario.sql
+   ```
+
+2. **Só então** apagar a cota e a contagem:
+
+```sql
+BEGIN;
+DROP FUNCTION IF EXISTS public._celular_cota(TEXT, TEXT, INTEGER);
+DROP TABLE IF EXISTS public.user_mobile_link_uso;
+COMMIT;
+```
+
+3. Edge e front podem ficar: sem o 54000 o 429 nunca acontece.
+
+Ensaiado em `BEGIN … ROLLBACK` contra o banco (2026-11-12): `…990000` → passo 1 → passo 2 → as
+quatro funções iguais às de produção (corpo sem `\r`, ACL, DEFINER, volatilidade, search_path),
+sem `_celular_cota`, sem tabela e nenhuma função citando a cota → OK. E o "Rollback (Parte 2)"
+completo com o `…990000` aplicado antes (passo 1 + o SQL do passo 2) → nenhuma função da Parte 2
+nem a tabela sobram, nenhuma função cita a cota nem os núcleos, `celular_sessao` sem
+`pode_aprovar_diario` → OK.
 
 ## Rollback (Parte 1)
 

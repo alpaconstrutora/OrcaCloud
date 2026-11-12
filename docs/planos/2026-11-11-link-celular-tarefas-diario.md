@@ -11,6 +11,10 @@ mobile aparece com a janela < 768 px.
 
 Sessão: `dac20e1e-e944-41c5-bafb-71f69696d5e3` · 2026-11-11
 
+Pedido posterior (2026-11-11, mesma sessão):
+
+> acessei as tarefas do Iago marques, porem não aparecem as mesmas tarefas para ele
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -26,6 +30,8 @@ Sessão: `dac20e1e-e944-41c5-bafb-71f69696d5e3` · 2026-11-11
 | 2026-11-11 | Seção 5 (fases, provas, ordem de deploy) | aprovada ("continue") |
 | 2026-11-11 | Design escrito neste arquivo | aprovado ("design certo"), commit `eb6661b5` |
 | 2026-11-11 | Gestor gera link de outro owner/admin? | **Não** — gestor só gera para `member`; admin/owner geram o próprio (revisão final). Revogar e consultar continuam para qualquer membro |
+| 2026-11-11 | Responsável vê a tarefa? | **Sim, vê e pode concluir/editar (app e link)** |
+| 2026-11-11 | Vincular o colaborador do Iago à conta? | **Sim** (gravado pelo controlador: employees `175d203c…` `user_id = f9809eae…`) |
 
 ### Ajustes ao ler o código para o plano (2026-11-11)
 
@@ -60,6 +66,16 @@ Sessão: `dac20e1e-e944-41c5-bafb-71f69696d5e3` · 2026-11-11
 - **Gestor × admin/owner:** `mobile_link_generate` recusa (42501) o gestor gerando para
   quem não é `member`; no Editar membro, "Gerar link" fica desligado com o motivo.
 - **Barra de aba única:** a barra de seções do `/celular` só aparece com 2+ abas.
+
+### Ajustes — responsável vê e edita (2026-11-11)
+
+- **Iago via 2 tarefas no link, não 7:** nenhuma regra de `tasks` olhava o responsável
+  (`assignee_employee_id`) — só dono, membro do espaço e colaborador — e o colaborador
+  dele (`175d203c…`, e-mail `''`) não tinha vínculo com a conta. Migration
+  `aplicar_20271111995000_tarefas_responsavel_ve_e_edita.sql`: `is_employee_do_usuario(_de)`,
+  policies `tasks_select_assignee` / `tasks_update_assignee` (o responsável vê e edita, não
+  passa a tarefa adiante nem apaga) e a mesma perna em `_celular_tarefa_visivel` /
+  `celular_tarefa_atualizar`. Prova: `scripts/teste-tarefas-responsavel.sql` (`TUDO OK`, 2 + 5 = 7).
 
 ## Design
 

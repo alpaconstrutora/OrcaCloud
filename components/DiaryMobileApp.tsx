@@ -5,18 +5,17 @@ import {
     CloudRain, BarChart3, Image as ImageIcon, CalendarDays, Ban,
 } from 'lucide-react';
 import { DiaryEntry, DiaryActivity, LaborEntry, WeatherShift, ProjectSettings } from '../types';
-import { projectService } from '../services/projectService';
-import { uploadDiaryMedia, removeDiaryMedia, diaryEntryMediaRefs } from '../services/diaryMediaService';
-import { salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, DiaryWriteResult } from '../services/diaryEntryService';
+import { diaryEntryMediaRefs } from '../services/diaryMediaService';
+import type { DiaryWriteResult } from '../services/diaryEntryService';
+import { useDiarioFonte } from '../services/celular/diarioFonte';
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls';
 import { onlyDiarios, isObra } from '../utils/projectClassification';
 import { hojeLocal } from '../utils/baixaRecebivel';
 import { sugestoesDosRecursos, comColaboradoresDoRh, nomeEstaNaLista, aplicarNomeNoEfetivo, SugestaoEfetivo } from '../utils/diaryLabor';
-import { laborService } from '../services/laborService';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useStore } from '../store/useStore';
 import { useDiaryAprovacao } from '../hooks/useDiaryAprovacao';
-import { podeEscolherStatus, registroTravado, AprovacaoDiario } from '../utils/diaryAprovacao';
+import { podeEscolherStatus, registroTravado, AprovacaoDiario, MOTIVO_SEM_PERMISSAO_APROVAR } from '../utils/diaryAprovacao';
 import { salvarRascunho, lerRascunho, apagarRascunho, listarRascunhos, rascunhoDifere, quandoFoiGuardado, RascunhoDiario } from '../utils/diaryDraft';
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
 import { vincularAtividade, temAtividadeVinculada, ItemVinculavel } from '../utils/diaryPlanningLink';
@@ -26,9 +25,15 @@ import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
  * Diário de Obras — aplicativo mobile.
  *
  * Mesma fonte de dados da tela desktop (`ProjectDiaryManager`): os registros
- * moram em `projects.settings.diaryEntries` (JSONB). Lê-se o projeto pelo
- * `projectService`; grava-se UM registro por vez (`diaryEntryService`) — salvar
- * o projeto inteiro apagava o registro que outra pessoa lançou no meio tempo.
+ * moram em `projects.settings.diaryEntries` (JSONB). Grava-se UM registro por
+ * vez — salvar o projeto inteiro apagava o registro que outra pessoa lançou no
+ * meio tempo.
+ *
+ * Toda leitura e gravação passa pela `DiarioFonte` (`useDiarioFonte()`): na
+ * sessão logada é a `fonteDiarioLogado` (os serviços de sempre, sem mudar
+ * consulta); no link do celular (`/celular?token=`) é a fonte
+ * do link (só RPCs `celular_*` e a Edge de mídia). A tela nunca fala com o
+ * banco direto.
  *
  * É usado em dois lugares (o mesmo arranjo de `TasksMobileApp`):
  *  - celular de verdade  → `DiaryProjectsList` / `ProjectDiaryManager` devolvem
@@ -148,6 +153,15 @@ function emptyEntry(): DiaryEntry {
 
 function hasImpediment(e: DiaryEntry): boolean {
     return !!e.impediments && e.impediments.trim() !== '';
+}
+
+/**
+ * Assinatura das fotos pela fonte, ESTÁVEL: entra nas dependências do
+ * `useDiaryMediaUrls`, e uma função nova a cada render reassinaria em laço.
+ */
+function useAssinarFotos() {
+    const fonte = useDiarioFonte();
+    return useCallback((paths: readonly string[]) => fonte.assinarFotos(paths), [fonte]);
 }
 
 /** Onde a foto vai parar no bucket: `{org}/{projeto}/…` — a org é o que a policy lê. */
@@ -378,7 +392,8 @@ const ResumoScreen: React.FC<{ entries: DiaryEntry[] }> = ({ entries }) => {
         () => entries.flatMap(e => (e.images || []).map(src => ({ src, date: e.date }))).slice(0, 9),
         [entries],
     );
-    const fotoUrls = useDiaryMediaUrls(useMemo(() => ultimasFotos.map(f => f.src), [ultimasFotos]));
+    const assinarFotos = useAssinarFotos();
+    const fotoUrls = useDiaryMediaUrls(useMemo(() => ultimasFotos.map(f => f.src), [ultimasFotos]), undefined, assinarFotos);
 
     return (
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
@@ -485,12 +500,14 @@ const EntrySheet: React.FC<{
     /** Fotos subindo: quantas já foram de quantas (null = nada subindo). */
     const [enviando, setEnviando] = useState<{ feitas: number; total: number } | null>(null);
     const fotoRef = useRef<HTMLInputElement>(null);
-    const fotoUrls = useDiaryMediaUrls(form.images);
+    const fonte = useDiarioFonte();
+    const assinarFotos = useAssinarFotos();
+    const fotoUrls = useDiaryMediaUrls(form.images, undefined, assinarFotos);
 
     // Cancelar depois de tirar foto: o objeto já subiu — sai do bucket junto.
     const cancelar = () => {
         const originais = new Set(diaryEntryMediaRefs(entry));
-        void removeDiaryMedia((form.images || []).filter(r => !originais.has(r)));
+        void fonte.removerFotos(upload.projectId, (form.images || []).filter(r => !originais.has(r)));
         // Cancelar é descartar de propósito — o rascunho do aparelho vai junto.
         apagarRascunho(upload.projectId, chaveId);
         onClose();
@@ -544,7 +561,7 @@ const EntrySheet: React.FC<{
         // uma falha no meio não perde as que já foram.
         for (let k = 0; k < lista.length; k++) {
             try {
-                const path = await uploadDiaryMedia({ orgId: upload.orgId, projectId: upload.projectId, file: lista[k] });
+                const path = await fonte.subirFoto({ orgId: upload.orgId, projectId: upload.projectId, file: lista[k] });
                 setForm(p => ({ ...p, images: [...(p.images || []), path] }));
             } catch (err) {
                 falhas++;
@@ -1028,19 +1045,30 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
     const [isNew, setIsNew] = useState(false);
     const [toast, setToast] = useState<string | null>(null);
     const [erroSalvar, setErroSalvar] = useState<string | null>(null);
-    const aprovacao = useDiaryAprovacao(project?.organization_id ?? project?.settings?.organizationId ?? null);
+    const fonte = useDiarioFonte();
+    // Regra dos Hooks: o hook roda sempre; no link vale o que `celular_sessao` disse.
+    const aprovacaoDaSessao = useDiaryAprovacao(project?.organization_id ?? project?.settings?.organizationId ?? null);
+    const podeAprovarNoLink = fonte.podeAprovarNoLink;
+    const aprovacao = useMemo<AprovacaoDiario>(() => (
+        podeAprovarNoLink === null
+            ? aprovacaoDaSessao
+            : podeAprovarNoLink
+                ? { pode: true }
+                : { pode: false, motivo: MOTIVO_SEM_PERMISSAO_APROVAR }
+    ), [podeAprovarNoLink, aprovacaoDaSessao]);
 
     // Efetivo: recursos das organizações + colaboradores ATIVOS do RH da org do topo (REGRA #5).
+    // No link a fonte ignora `orgId`: vale a organização do token.
     const organizations = useStore(st => st.organizations);
     const { orgId } = useOrgContext();
     const [colaboradores, setColaboradores] = useState<{ id: string; name: string; role?: string | null; status?: string | null }[]>([]);
     useEffect(() => {
         let ativo = true;
-        laborService.listEmployees(orgId)
+        fonte.listarColaboradores(orgId)
             .then(l => { if (ativo) setColaboradores(l); })
             .catch(err => console.warn('[diário] colaboradores do RH indisponíveis para sugestão:', err));
         return () => { ativo = false; };
-    }, [orgId]);
+    }, [orgId, fonte]);
     const sugestoesEfetivo = useMemo(
         () => comColaboradoresDoRh(sugestoesDosRecursos(organizations || []), colaboradores),
         [organizations, colaboradores],
@@ -1079,18 +1107,26 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         let cancelled = false;
         if (!selectedId) { setProject(null); return; }
         setLoading(true);
-        projectService.loadProject(selectedId)
-            .then(p => { if (!cancelled) setProject((p as LoadedProject) || null); })
+        // Diário não encontrado também rejeita (a fonte lança): cai no mesmo aviso.
+        fonte.carregarDiario(selectedId)
+            .then(p => { if (!cancelled) setProject(p as LoadedProject); })
             .catch(err => {
                 console.error('Erro ao abrir diário:', err);
                 if (!cancelled) notify('Não foi possível abrir o diário.');
             })
             .finally(() => { if (!cancelled) setLoading(false); });
         return () => { cancelled = true; };
-    }, [selectedId, notify]);
+    }, [selectedId, notify, fonte]);
 
     // Cronograma do Planejamento ligado ao diário — mesma peça da tela desktop.
-    const planejamento = useDiaryLinkedPlanning(project?.settings?.linkedProjectId, projects);
+    // Carregador ESTÁVEL (depende só da fonte e do diário): função nova a cada
+    // render recarregaria o planejamento em laço.
+    const diarioId = project?.id ?? null;
+    const carregarPlanejamento = useCallback(
+        (planejamentoId: string) => (diarioId ? fonte.carregarPlanejamento(diarioId, planejamentoId) : Promise.resolve(null)),
+        [fonte, diarioId],
+    );
+    const planejamento = useDiaryLinkedPlanning(project?.settings?.linkedProjectId, projects, carregarPlanejamento);
 
     const entries = useMemo<DiaryEntry[]>(() => {
         const list = (project?.settings?.diaryEntries || []) as DiaryEntry[];
@@ -1122,7 +1158,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             let aviso = msg;
             if (sincronizarCronograma && planejamento.planejamentoId && planejamento.schedule) {
                 try {
-                    const gravado = await sincronizarEvolucaoNoPlanejamento(planejamento.planejamentoId, gravadas);
+                    const gravado = await fonte.gravarEvolucao(project.id, planejamento.planejamentoId, gravadas);
                     if (gravado) planejamento.setSchedule(gravado);
                 } catch (err) {
                     console.error('Erro ao sincronizar diário com o planejamento:', err);
@@ -1133,7 +1169,7 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             // Órfãos contra a versão anterior SEGUNDO O BANCO, DEPOIS do save.
             const ficam = new Set(refsQueFicam);
             const orfaos = diaryEntryMediaRefs(anterior).filter(r => !ficam.has(r));
-            if (orfaos.length > 0) void removeDiaryMedia(orfaos);
+            if (orfaos.length > 0) void fonte.removerFotos(project.id, orfaos);
         } catch (err) {
             console.error('Erro ao salvar registro do diário:', err);
             // A folha continua aberta e o rascunho segue guardado no aparelho.
@@ -1147,13 +1183,13 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
         } finally {
             setSaving(false);
         }
-    }, [project, notify, planejamento]);
+    }, [project, notify, planejamento, fonte]);
 
     const handleSaveEntry = useCallback((entry: DiaryEntry) => {
         const existe = entries.some(e => e.id === entry.id);
         persist(
             async id => {
-                const r = await salvarRegistroDiario(id, entry);
+                const r = await fonte.salvarRegistro(id, entry);
                 // Gravou no banco: o rascunho do aparelho deixa de ser necessário.
                 apagarRascunho(id, isNew ? null : entry.id);
                 apagarRascunho(id, entry.id);
@@ -1163,15 +1199,15 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
             diaryEntryMediaRefs(entry),
             temAtividadeVinculada(entry.activities),
         );
-    }, [entries, persist, isNew]);
+    }, [entries, persist, isNew, fonte]);
 
     const handleDeleteEntry = useCallback((id: string) => {
         persist(async projectId => {
-            const r = await excluirRegistroDiario(projectId, id);
+            const r = await fonte.excluirRegistro(projectId, id);
             apagarRascunho(projectId, id);
             return r;
         }, 'Registro excluído.');
-    }, [persist]);
+    }, [persist, fonte]);
 
     // Rascunhos deste diário guardados no aparelho — relidos sempre que a folha fecha.
     const rascunhos = useMemo(
@@ -1295,6 +1331,8 @@ const DiaryMobileApp: React.FC<DiaryMobileAppProps> = ({ projects, initialProjec
                         <div className="absolute bottom-[calc(72px+env(safe-area-inset-bottom))] right-5 z-10">
                             <button
                                 onClick={() => { setToast(null); setErroSalvar(null); setIsNew(true); setEditing(emptyEntry()); }}
+                                aria-label="Novo registro"
+                                title="Novo registro"
                                 className="w-14 h-14 rounded-full bg-blue-600 text-white shadow-xl shadow-blue-300 flex items-center justify-center active:scale-95 transition-all"
                             >
                                 <Plus className="w-6 h-6" />

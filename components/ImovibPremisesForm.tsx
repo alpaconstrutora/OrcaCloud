@@ -5,6 +5,14 @@ import { FileText, PieChart, Activity, Save, Loader2, CalendarClock, MapPin } fr
 import ImovibCronogramaTab from './ImovibCronogramaTab';
 import ImovibTerrenoTab from './ImovibTerrenoTab';
 import ImovibZoneamentoCard from './ImovibZoneamentoCard';
+import ImovibComparaveisCard from './ImovibComparaveisCard';
+import ImovibMercadoDeOrigemCard from './ImovibMercadoDeOrigemCard';
+
+const ORIGEM_DA_VSO: Record<'digitada' | 'comparaveis' | 'market', string> = {
+    digitada: 'digitada',
+    comparaveis: 'média dos comparáveis',
+    market: 'absorção do Ópura Market',
+};
 import { useToast } from '../hooks/useToast';
 import ImovibVinculoEmpreendimento from './ImovibVinculoEmpreendimento';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
@@ -63,6 +71,13 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
         setFormData(prev => ({ ...prev, [field]: valor }));
         markDirty();
     };
+    // Item 7.1/7.2: a VSO dos comparáveis ou do Market vira a VSO da região e a VSO
+    // mensal da curva de vendas — no formulário, grava com "Salvar Premissas".
+    const usarVso = (fonte: 'comparaveis' | 'market') => (vso: number) => {
+        setCampo('vso_regional_percent', vso);
+        setCampo('vso_regional_source', fonte);
+        setCampo('sales_vso_percent', vso);
+    };
 
     const handleSaveAllForm = async () => {
         try {
@@ -70,7 +85,8 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             // capex_seeded_at é do CAPEX: gravar o valor de quando a tela abriu poderia
             // devolver null e fazer o template de rubricas voltar.
             // unit_instances (espelho), estrutura e funding_sources vêm montados em memória, não são colunas.
-            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, ...cleanData } = formData as any;
+            // opura_terrain_study_id não é editado aqui e o banco o zera quando o estudo de terreno é apagado (item 7.2).
+            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, opura_terrain_study_id, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, {
                 ...cleanData,
                 ...imovibIdentificacaoParaGravar({
@@ -224,14 +240,39 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
 
                             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                                 {renderInput('Score de Localização (1-10)', 'location_score', 'number')}
-                                {renderInput('VSO Histórica Região', 'vso_regional_percent', 'number', '', true)}
+                                {/* Item 7.3: de onde veio a VSO e onde ela é usada. */}
+                                <div>
+                                    <label htmlFor="imovib-vso-regional" className="block text-xs font-semibold text-slate-500 mb-1.5">VSO Histórica Região (%)</label>
+                                    <input
+                                        id="imovib-vso-regional"
+                                        type="number"
+                                        value={(formData.vso_regional_percent as number | undefined) ?? ''}
+                                        onChange={(e) => {
+                                            setCampo('vso_regional_percent', e.target.value === '' ? null : parseFloat(e.target.value));
+                                            setCampo('vso_regional_source', 'digitada');
+                                        }}
+                                        className="h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-slate-700 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all"
+                                    />
+                                    <p className="text-xs text-slate-600 mt-1">
+                                        {formData.vso_regional_percent != null ? `Origem: ${ORIGEM_DA_VSO[formData.vso_regional_source ?? 'digitada']}. ` : ''} É referência; a curva de vendas do tipo VSO (aba Receitas) usa a VSO mensal, que os botões "Usar na curva de vendas" preenchem junto.
+                                    </p>
+                                </div>
                             </div>
 
                             {renderTextarea('Público Alvo / Buyer Persona', 'target_audience', 'Perfil de renda, ocupação familiar...')}
                             {renderTextarea('Demanda e Déficit', 'demand_deficit', 'Déficit habitacional por faixa de renda...')}
-                            {renderTextarea('Análise de Concorrentes', 'competitors_analysis', 'Oferta ativa num raio de influência, tickets médios...')}
                         </fieldset>
                     </div>
+
+                    <ImovibComparaveisCard study={study} onUsarVso={usarVso('comparaveis')} tipoDaCurva={String(formData.sales_curve_type ?? 'linear')} />
+
+                    <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm">
+                        <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
+                            {renderTextarea('Análise de Concorrentes (texto de apoio)', 'competitors_analysis', 'Oferta ativa num raio de influência, tickets médios...')}
+                        </fieldset>
+                    </div>
+
+                    <ImovibMercadoDeOrigemCard study={study} onUsarVso={usarVso('market')} tipoDaCurva={String(formData.sales_curve_type ?? 'linear')} />
                 </div>
             )}
         </div>

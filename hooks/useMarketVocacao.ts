@@ -52,6 +52,10 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
   const [analysisRadius, setAnalysisRadius] = React.useState('1000');
   const [analyzing, setAnalyzing] = React.useState(false);
   const [analysisResult, setAnalysisResult] = React.useState<ResultadoNaTela | null>(null);
+  // Estudo de terreno salvo (ou reaberto) que está na tela — vai para a viabilidade
+  // criada daqui (item 7.2 do plano 2026-11-11). Nova consulta ao raio, novo ponto ou
+  // novo desenho: a tela deixa de ser o estudo salvo.
+  const [estudoSalvoId, setEstudoSalvoId] = React.useState<string | null>(null);
 
   // Folgas do cálculo, editáveis na tela (Fase 5). Padrão = os números que antes
   // eram constantes no código.
@@ -99,6 +103,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
   const marcarPonto = React.useCallback((p: Ponto) => {
     setTerrainPin(p);
     setAnalysisResult(null);
+    setEstudoSalvoId(null);
     setStudyName(`Estudo Terreno - ${carimbo()}`);
   }, []);
 
@@ -108,6 +113,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     setPolygonPoints(null);
     setTerrainPin(null);
     setAnalysisResult(null);
+    setEstudoSalvoId(null);
   };
 
   const cancelarDesenho = () => {
@@ -172,6 +178,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
       return;
     }
     const minha = ++consultaAtual.current;
+    setEstudoSalvoId(null);
     try {
       setAnalyzing(true);
       const stats = await opuraMarketService.getTerrainRadiusStats(terrainPin.lat, terrainPin.lng, parseInt(analysisRadius), tipos);
@@ -207,7 +214,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
       setAnalyzing(true);
       const { data: { user } } = await supabase.auth.getUser();
       const h = analysisResult.hipoteses;
-      await opuraMarketService.createTerrainStudy({
+      const salvo = await opuraMarketService.createTerrainStudy({
         organizationId,
         name: studyName,
         address: endereco,
@@ -226,6 +233,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
         polygonGeom: polygonPoints ? polygonPoints.map(p => [p[1], p[0]] as [number, number]) : null,
         radiusStats: analysisResult.stats ?? null,
       });
+      setEstudoSalvoId(salvo.id);
       showToast('Estudo territorial salvo na organização.');
       loadSavedStudies();
     } catch (err: any) {
@@ -256,6 +264,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
 
   /** Reabre um estudo salvo: ponto, lote, área, raio e as hipóteses gravadas nele. */
   const abrirEstudo = (study: OpuraMarketTerrainStudy) => {
+    setEstudoSalvoId(study.id);
     setTerrainPin({ lat: study.latitude, lng: study.longitude });
     setStudyName(study.name);
     setTerrainArea(study.terrainArea.toString());
@@ -290,7 +299,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
   return {
     terrainPin, isDrawingPolygon, drawingPoints, polygonPoints,
     studyName, setStudyName, terrainArea, setTerrainArea, analysisRadius, setAnalysisRadius,
-    analyzing, setAnalyzing, analysisResult, setAnalysisResult,
+    analyzing, setAnalyzing, analysisResult, setAnalysisResult, estudoSalvoId,
     hipoteses, setHipoteses, errosHipoteses, hipotesesAlteradas,
     tiposComparados, alterarTiposComparados,
     savedStudies, loadingStudies,

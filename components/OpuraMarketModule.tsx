@@ -349,6 +349,8 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
         nomeBairro: selectedNeighborhood?.name ?? null,
         areaTerreno: parseFloat(v.terrainArea),
         resultado: v.analysisResult,
+        // Só se o estudo ainda está na lista da organização atual: apagado ou de outra org, nasce sem o vínculo.
+        estudoDeTerrenoId: v.savedStudies.some(s => s.id === v.estudoSalvoId) ? v.estudoSalvoId : null,
       });
       showToast('Estudo de viabilidade criado no IMOVIB com as premissas territoriais.');
       setActiveView?.('imovib');

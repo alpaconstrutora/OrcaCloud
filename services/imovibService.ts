@@ -11,6 +11,7 @@ import {
     derivarEstruturaDoEmpreendimento, blocoSemLinha, TorreDaEstrutura, UnidadeDaEstrutura,
 } from '../utils/imovibEstrutura';
 import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
+import type { ImovibComparable } from '../utils/imovibMercado';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -27,6 +28,9 @@ const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, privat
 
 // Outras fontes de capital (aplicar_20271111980000) — o motor lê todas as colunas.
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
+
+// Comparáveis de mercado (aplicar_20271112300000).
+const COMPARAVEL_COLS = 'id, study_id, name, developer, address, distance_km, launch_date, total_units, sold_units, typical_area, price_sqm, ticket, source, collected_at, notes, sort_order, created_at';
 
 // Due diligence do terreno (aplicar_20271112120000).
 const CHECKLIST_COLS = 'id, study_id, item_key, label, status, notes, sort_order, checked_at';
@@ -803,6 +807,37 @@ export const imovibService = {
             .order('created_at', { ascending: true });
         if (erroLeitura) throw new Error(`Falha ao ler as rubricas: ${erroLeitura.message}`);
         return (data || []) as ImovibCapexItem[];
+    },
+
+    // ── Comparáveis de mercado (item 7.1 do plano 2026-11-11) ───────────────
+
+    async listarComparaveis(studyId: string): Promise<ImovibComparable[]> {
+        const { data, error } = await supabase
+            .from('imovib_market_comparables')
+            .select(COMPARAVEL_COLS)
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao ler os comparáveis: ${error.message}`);
+        return (data || []) as ImovibComparable[];
+    },
+
+    /** Grava o comparável (cria sem `id`, atualiza com). `.select()` confere que a escrita passou na RLS. */
+    async salvarComparavel(c: Omit<ImovibComparable, 'id' | 'created_at'> & { id?: string }): Promise<ImovibComparable> {
+        const { id, ...campos } = c;
+        const q = id
+            ? supabase.from('imovib_market_comparables').update(campos).eq('id', id).select(COMPARAVEL_COLS)
+            : supabase.from('imovib_market_comparables').insert(campos).select(COMPARAVEL_COLS);
+        const { data, error } = await q;
+        if (error) throw new Error(`Falha ao salvar o comparável: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para salvar comparáveis deste estudo.');
+        return data[0] as ImovibComparable;
+    },
+
+    async excluirComparavel(id: string): Promise<void> {
+        const { data, error } = await supabase.from('imovib_market_comparables').delete().eq('id', id).select('id');
+        if (error) throw new Error(`Falha ao excluir o comparável: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para excluir comparáveis deste estudo.');
     },
 
     // ── Due diligence do terreno (item 5.9 do plano 2026-11-11) ─────────────

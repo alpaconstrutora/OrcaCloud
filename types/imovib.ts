@@ -659,6 +659,10 @@ export interface ImovibStudy {
     tax_regime?: 'manual' | 'ret' | 'ret_his' | 'presumido' | 'real' | null;
     /** Alíquotas do estudo (chaves de HIPOTESES_TRIBUTARIAS, em %); ausente = padrão. */
     tax_hypotheses?: Partial<Record<string, number>> | null;
+    /** Estudo de terreno do Ópura Market de origem (migration aplicar_20271112310000, item 7.2). */
+    opura_terrain_study_id?: string | null;
+    /** De onde veio a VSO da região (item 7.3). Vazio = digitada. */
+    vso_regional_source?: 'digitada' | 'comparaveis' | 'market' | null;
     created_at: string;
     updated_at: string;
     blocks?: ImovibBlock[];

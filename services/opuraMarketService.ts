@@ -611,6 +611,28 @@ export const opuraMarketService = {
   },
 
   // Deletar Estudo de Terreno Privado
+  /**
+   * Um estudo de terreno pelo id — o que a viabilidade mostra do estudo de mercado
+   * de origem (item 7.2 do plano 2026-11-11). Sem acesso ou apagado: null.
+   */
+  async getTerrainStudy(id: string): Promise<Pick<OpuraMarketTerrainStudy, 'id' | 'name' | 'createdAt' | 'radiusStats' | 'estimatedAbsorptionVelocity' | 'analysisRadiusMeters'> | null> {
+    const { data, error } = await supabase
+      .from('opura_market_terrain_studies')
+      .select('id, name, created_at, radius_stats, estimated_absorption_velocity, analysis_radius_meters')
+      .eq('id', id)
+      .maybeSingle();
+    if (error) throw new Error(`Falha ao ler o estudo de mercado: ${error.message}`);
+    if (!data) return null;
+    return {
+      id: data.id,
+      name: data.name,
+      createdAt: data.created_at,
+      radiusStats: data.radius_stats ?? null,
+      estimatedAbsorptionVelocity: data.estimated_absorption_velocity ? Number(data.estimated_absorption_velocity) : null,
+      analysisRadiusMeters: data.analysis_radius_meters,
+    };
+  },
+
   async deleteTerrainStudy(id: string): Promise<void> {
     const { error } = await supabase
       .from('opura_market_terrain_studies')

@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest'
 import {
   groupBySection, sectionOf, dueLabel, shortDate, onDay, weekStartOf, weekDays,
   weekMonthLabel, longDayLabel, chipDayLabel, isNewTask, msUntilNextDay, isOverdue,
+  ordenarTarefas, groupByPriority, lerOrdemTarefas, salvarOrdemTarefas, ORDEM_LABEL,
 } from '../utils/tasksMobileAgenda'
 
 // Prazo gravado como o app grava: meio-dia local.
@@ -58,6 +59,100 @@ describe('agenda mobile — seções', () => {
       { id: 'c', due_date: null, priority: 3 },
     ]
     expect(onDay(tasks, '2026-12-15').map(t => t.id)).toEqual(['a'])
+  })
+})
+
+// Para "Classificar" e a aba "Prioridade".
+const MIX = [
+  { id: 'a', title: 'Bloco',     due_date: due('2026-11-02'), priority: 3, created_at: '2026-10-01T10:00:00Z' },
+  { id: 'b', title: 'armação',   due_date: due('2026-10-30'), priority: 2, created_at: '2026-10-20T10:00:00Z' },
+  { id: 'c', title: 'Concreto',  due_date: null,              priority: 1, created_at: '2026-10-25T10:00:00Z' },
+  { id: 'd', title: 'Álvenaria', due_date: due('2026-10-30'), priority: 1, created_at: '2026-10-10T10:00:00Z' },
+]
+const ids = (xs: { id: string }[]) => xs.map(x => x.id)
+
+describe('agenda mobile — Classificar', () => {
+  it('Prazo: data mais próxima, depois prioridade; sem prazo por último', () => {
+    expect(ids(ordenarTarefas(MIX, 'prazo'))).toEqual(['d', 'b', 'a', 'c'])
+  })
+
+  it('Prioridade: urgente primeiro, desempate pelo prazo (sem prazo por último)', () => {
+    expect(ids(ordenarTarefas(MIX, 'prioridade'))).toEqual(['d', 'c', 'b', 'a'])
+  })
+
+  it('Título: A–Z sem diferença de caixa nem de acento', () => {
+    expect(ids(ordenarTarefas(MIX, 'titulo'))).toEqual(['d', 'b', 'a', 'c'])
+  })
+
+  it('Mais recentes: criada por último primeiro', () => {
+    expect(ids(ordenarTarefas(MIX, 'recentes'))).toEqual(['c', 'b', 'd', 'a'])
+  })
+
+  it('não mexe no array recebido', () => {
+    const copia = [...MIX]
+    ordenarTarefas(MIX, 'titulo')
+    expect(MIX).toEqual(copia)
+  })
+
+  it('a ordem vale dentro de cada seção de prazo', () => {
+    const s = groupBySection(MIX, TODAY, 'titulo')
+    expect(s.map(x => x.key)).toEqual(['proximos', 'sem_prazo'])
+    expect(ids(s[0].items)).toEqual(['d', 'b', 'a'])
+  })
+
+  it('sem ordem, as seções de prazo seguem como antes', () => {
+    expect(ids(groupBySection(MIX, TODAY)[0].items)).toEqual(['d', 'b', 'a'])
+  })
+
+  it('rótulos das opções', () => {
+    expect(ORDEM_LABEL).toEqual({ prazo: 'Prazo', prioridade: 'Prioridade', titulo: 'Título (A–Z)', recentes: 'Mais recentes' })
+  })
+})
+
+describe('agenda mobile — aba Prioridade', () => {
+  it('seções Urgente · Alta · Normal · Baixa, sem as vazias', () => {
+    const s = groupByPriority(MIX, 'prazo')
+    expect(s.map(x => x.key)).toEqual(['urgente', 'alta', 'normal'])
+    expect(s.map(x => x.label)).toEqual(['Urgente', 'Alta', 'Normal'])
+    expect(ids(s[0].items)).toEqual(['d', 'c'])
+  })
+
+  it('dentro da seção vale a ordem escolhida', () => {
+    expect(ids(groupByPriority(MIX, 'recentes')[0].items)).toEqual(['c', 'd'])
+  })
+
+  it('prioridade fora de 1–4 cai em Normal', () => {
+    const s = groupByPriority([{ id: 'x', due_date: null, priority: 9 }], 'prazo')
+    expect(s.map(x => x.key)).toEqual(['normal'])
+  })
+
+  it('lista vazia, nenhuma seção', () => {
+    expect(groupByPriority([], 'prazo')).toEqual([])
+  })
+})
+
+describe('agenda mobile — ordem lembrada no aparelho', () => {
+  const memoria = () => {
+    const m = new Map<string, string>()
+    return { getItem: (k: string) => m.get(k) ?? null, setItem: (k: string, v: string) => { m.set(k, v) } }
+  }
+
+  it('grava e lê a ordem escolhida', () => {
+    const st = memoria()
+    salvarOrdemTarefas('titulo', st)
+    expect(lerOrdemTarefas(st)).toBe('titulo')
+  })
+
+  it('sem nada gravado, valor desconhecido ou armazenamento indisponível → Prazo', () => {
+    expect(lerOrdemTarefas(memoria())).toBe('prazo')
+    const st = memoria(); st.setItem('orcacloud:tarefas-celular:ordem', 'qualquer')
+    expect(lerOrdemTarefas(st)).toBe('prazo')
+    st.setItem('orcacloud:tarefas-celular:ordem', 'toString')
+    expect(lerOrdemTarefas(st)).toBe('prazo')
+    expect(lerOrdemTarefas(null)).toBe('prazo')
+    const quebrado = { getItem: () => { throw new Error('bloqueado') }, setItem: () => { throw new Error('bloqueado') } }
+    expect(lerOrdemTarefas(quebrado)).toBe('prazo')
+    expect(() => salvarOrdemTarefas('titulo', quebrado)).not.toThrow()
   })
 })
 

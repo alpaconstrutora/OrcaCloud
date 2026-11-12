@@ -2,7 +2,7 @@ import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 
 import {
   Plus, LayoutGrid, Inbox, ChevronRight, ChevronDown, ChevronUp, ChevronLeft,
   Loader2, CheckCircle2, Check, X, ArrowLeft, FolderOpen, Folder, User, AlignLeft,
-  Tag, AlertCircle, CalendarDays,
+  Tag, AlertCircle, CalendarDays, ArrowUpDown,
 } from 'lucide-react'
 import Button from './ui/Button'
 import { useOrgWriteTarget } from '../hooks/useOrgContext'
@@ -14,7 +14,8 @@ import { statusesOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
 import {
   startOfDay, addDays, isoDate, dayOf, isOverdue, isNewTask, groupBySection, onDay,
   dueLabel, shortDate, longDayLabel, chipDayLabel, weekStartOf, weekDays, weekMonthLabel,
-  dateFromDay, msUntilNextDay, MONTH_PT,
+  dateFromDay, msUntilNextDay, MONTH_PT, groupByPriority, ordenarTarefas, lerOrdemTarefas,
+  salvarOrdemTarefas, ORDEM_LABEL, PRIORITY_LABEL, type OrdemTarefas,
 } from '../utils/tasksMobileAgenda'
 
 /**
@@ -60,9 +61,6 @@ const PRIORITY_COLOR: Record<number, string> = {
   2: '#f97316',
   3: '#6366f1',
   4: '#94a3b8',
-}
-const PRIORITY_LABEL: Record<number, string> = {
-  1: 'Urgente', 2: 'Alta', 3: 'Normal', 4: 'Baixa',
 }
 
 const DAY_LETTER = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S']
@@ -732,7 +730,36 @@ const AddTaskSheet: React.FC<{
 
 // ── App ───────────────────────────────────────────────────────────────────────
 type NavTab    = 'inbox' | 'espacos'
-type FilterTab = 'todas' | 'atrasadas'
+type FilterTab = 'todas' | 'atrasadas' | 'prioridade'
+
+// ── Classificar ───────────────────────────────────────────────────────────────
+const OrdemSheet: React.FC<{
+  ordem:    OrdemTarefas
+  onChange: (ordem: OrdemTarefas) => void
+  onClose:  () => void
+}> = ({ ordem, onChange, onClose }) => (
+  <BottomSheet title="Classificar" onClose={onClose}>
+    <div role="radiogroup" aria-label="Ordem das tarefas" className="px-3 pb-[calc(1rem+env(safe-area-inset-bottom))]">
+      {(Object.keys(ORDEM_LABEL) as OrdemTarefas[]).map(op => {
+        const sel = op === ordem
+        return (
+          <button
+            key={op}
+            type="button"
+            role="radio"
+            aria-checked={sel}
+            onClick={() => onChange(op)}
+            className={`w-full flex items-center justify-between h-12 px-3 rounded-[10px] text-sm font-medium
+              ${sel ? 'bg-blue-50 text-blue-700' : 'text-slate-800 active:bg-slate-50'}`}
+          >
+            {ORDEM_LABEL[op]}
+            {sel && <Check className="w-4 h-4" aria-hidden="true" />}
+          </button>
+        )
+      })}
+    </div>
+  </BottomSheet>
+)
 
 const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
   const today = useToday()
@@ -749,6 +776,8 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
   const [loadingSpaces,  setLoadingSpaces]  = useState(false)
   const [spacesError,    setSpacesError]    = useState(false)
   const [filterTab,      setFilterTab]      = useState<FilterTab>('todas')
+  const [ordem,          setOrdem]          = useState<OrdemTarefas>(() => lerOrdemTarefas())
+  const [showOrdem,      setShowOrdem]      = useState(false)
   const [nav,            setNav]            = useState<NavTab>('inbox')
   const [selectedSpace,  setSelectedSpace]  = useState<TaskSpaceWithMeta | null>(null)
   const [selectedFolder, setSelectedFolder] = useState<FolderSel | null>(null)
@@ -856,15 +885,26 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
     [tasks, selectedDay, selectedFolder]
   )
   const overdueCount = useMemo(() => dayFiltered.filter(t => isOverdue(t.due_date, today)).length, [dayFiltered, today])
+  // A aba Prioridade mostra todas; o número é o que pede atenção (urgentes + altas).
+  const priorityCount = useMemo(() => dayFiltered.filter(t => t.priority <= 2).length, [dayFiltered])
   const visible = useMemo(
     () => (filterTab === 'atrasadas' && !selectedFolder ? dayFiltered.filter(t => isOverdue(t.due_date, today)) : dayFiltered),
     [dayFiltered, filterTab, selectedFolder, today]
   )
-  // Seções só quando a lista mistura prazos; dia filtrado ou "Atrasadas" já é um recorte só.
+  // Seções de prazo só quando a lista mistura prazos; dia filtrado ou "Atrasadas" já é um
+  // recorte só. A aba Prioridade troca as seções de prazo pelas de prioridade. Dentro de
+  // cada seção (ou do recorte), vale a ordem do "Classificar".
   const sections = useMemo(() => {
-    if (selectedFolder || (!selectedDay && filterTab === 'todas')) return groupBySection(visible, today)
-    return [{ key: 'recorte', label: '', items: groupBySection(visible, today).flatMap(s => s.items) }]
-  }, [visible, today, selectedDay, filterTab, selectedFolder])
+    if (filterTab === 'prioridade' && !selectedFolder) return groupByPriority(visible, ordem)
+    if (selectedFolder || (!selectedDay && filterTab === 'todas')) return groupBySection(visible, today, ordem)
+    return [{ key: 'recorte', label: '', items: ordenarTarefas(visible, ordem) }]
+  }, [visible, today, selectedDay, filterTab, selectedFolder, ordem])
+
+  const escolherOrdem = useCallback((nova: OrdemTarefas) => {
+    setOrdem(nova)
+    salvarOrdemTarefas(nova)
+    setShowOrdem(false)
+  }, [])
 
   const contextOf = useCallback((t: Task) => {
     if (t.project_id && projectNames.has(t.project_id)) return projectNames.get(t.project_id)
@@ -1058,10 +1098,12 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
               })}
             </div>
 
-            <div role="tablist" aria-label="Filtro das tarefas" className="flex">
+            <div className="flex items-center">
+            <div role="tablist" aria-label="Filtro das tarefas" className="flex min-w-0 overflow-x-auto">
               {([
-                { key: 'todas',     label: 'Todas',     count: dayFiltered.length },
-                { key: 'atrasadas', label: 'Atrasadas', count: overdueCount       },
+                { key: 'todas',      label: 'Todas',      count: dayFiltered.length },
+                { key: 'atrasadas',  label: 'Atrasadas',  count: overdueCount       },
+                { key: 'prioridade', label: 'Prioridade', count: priorityCount      },
               ] as const).map(({ key, label, count }) => {
                 const sel = filterTab === key
                 return (
@@ -1072,7 +1114,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
                     aria-selected={sel}
                     aria-controls="lista-tarefas"
                     onClick={() => setFilterTab(key)}
-                    className={`flex items-center gap-1.5 h-11 px-1 mr-5 text-sm font-medium border-b-2 -mb-px transition-colors
+                    className={`flex items-center gap-1.5 h-11 px-1 mr-4 shrink-0 text-sm font-medium border-b-2 -mb-px transition-colors
                       ${sel ? 'border-blue-600 text-blue-700' : 'border-transparent text-slate-600'}`}
                   >
                     {label}
@@ -1082,6 +1124,20 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
                   </button>
                 )
               })}
+            </div>
+              {/* Classificar — só o ícone (três abas com contagem já ocupam a largura do
+                  celular); azul quando a ordem não é a padrão (Prazo). */}
+              <button
+                type="button"
+                onClick={() => setShowOrdem(true)}
+                aria-haspopup="dialog"
+                aria-label={`Classificar — ordem atual: ${ORDEM_LABEL[ordem]}`}
+                title={`Classificar (${ORDEM_LABEL[ordem]})`}
+                className={`ml-auto -mr-2 shrink-0 w-11 h-11 rounded-full flex items-center justify-center active:bg-slate-100
+                  ${ordem === 'prazo' ? 'text-slate-600' : 'text-blue-600'}`}
+              >
+                <ArrowUpDown className="w-5 h-5" aria-hidden="true" />
+              </button>
             </div>
           </>
         )}
@@ -1234,6 +1290,10 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
             </div>
           </div>
         </BottomSheet>
+      )}
+
+      {showOrdem && (
+        <OrdemSheet ordem={ordem} onChange={escolherOrdem} onClose={() => setShowOrdem(false)} />
       )}
 
       {showAddTask && (

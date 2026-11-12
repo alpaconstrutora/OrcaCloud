@@ -73,12 +73,49 @@ export function sectionOf(dueIso: string | null, today: Date): AgendaSectionKey 
   return 'depois'
 }
 
-export interface AgendaItem { due_date: string | null; priority: number }
+export interface AgendaItem {
+  due_date: string | null
+  priority: number
+  title?: string
+  created_at?: string
+}
 
 export interface AgendaSection<T> { key: AgendaSectionKey; label: string; items: T[] }
 
-/** Seções não vazias, na ordem da agenda; dentro de cada uma, prazo mais próximo e depois prioridade. */
-export function groupBySection<T extends AgendaItem>(tasks: T[], today: Date): AgendaSection<T>[] {
+// ── Classificar ───────────────────────────────────────────────────────────────
+export type OrdemTarefas = 'prazo' | 'prioridade' | 'titulo' | 'recentes'
+
+export const ORDEM_LABEL: Record<OrdemTarefas, string> = {
+  prazo:      'Prazo',
+  prioridade: 'Prioridade',
+  titulo:     'Título (A–Z)',
+  recentes:   'Mais recentes',
+}
+
+/** Prazo mais próximo primeiro; sem prazo por último. */
+function porPrazo(a: AgendaItem, b: AgendaItem): number {
+  const da = a.due_date ? dayOf(a.due_date) : null
+  const db = b.due_date ? dayOf(b.due_date) : null
+  if (da === db) return 0
+  if (da === null) return 1
+  if (db === null) return -1
+  return da < db ? -1 : 1
+}
+
+const COMPARA: Record<OrdemTarefas, (a: AgendaItem, b: AgendaItem) => number> = {
+  prazo:      (a, b) => porPrazo(a, b) || a.priority - b.priority,
+  prioridade: (a, b) => a.priority - b.priority || porPrazo(a, b),
+  titulo:     (a, b) => (a.title ?? '').localeCompare(b.title ?? '', 'pt-BR', { sensitivity: 'base' }) || porPrazo(a, b),
+  recentes:   (a, b) => (b.created_at ?? '').localeCompare(a.created_at ?? '') || porPrazo(a, b),
+}
+
+/** Cópia ordenada pelo critério do "Classificar" (o array recebido não muda). */
+export function ordenarTarefas<T extends AgendaItem>(tasks: T[], ordem: OrdemTarefas): T[] {
+  return [...tasks].sort(COMPARA[ordem])
+}
+
+/** Seções não vazias, na ordem da agenda; dentro de cada uma, a ordem escolhida (padrão: prazo e depois prioridade). */
+export function groupBySection<T extends AgendaItem>(tasks: T[], today: Date, ordem: OrdemTarefas = 'prazo'): AgendaSection<T>[] {
   const buckets = new Map<AgendaSectionKey, T[]>()
   for (const t of tasks) {
     const k = sectionOf(t.due_date, today)
@@ -88,16 +125,52 @@ export function groupBySection<T extends AgendaItem>(tasks: T[], today: Date): A
   }
   return SECTION_ORDER
     .filter(k => buckets.has(k))
-    .map(k => ({
-      key: k,
-      label: SECTION_LABEL[k],
-      items: [...buckets.get(k)!].sort((a, b) => {
-        const da = a.due_date ? dayOf(a.due_date) : ''
-        const db = b.due_date ? dayOf(b.due_date) : ''
-        if (da !== db) return da < db ? -1 : 1
-        return a.priority - b.priority
-      }),
-    }))
+    .map(k => ({ key: k, label: SECTION_LABEL[k], items: ordenarTarefas(buckets.get(k)!, ordem) }))
+}
+
+// ── Aba Prioridade ────────────────────────────────────────────────────────────
+export type PrioritySectionKey = 'urgente' | 'alta' | 'normal' | 'baixa'
+
+export const PRIORITY_LABEL: Record<number, string> = { 1: 'Urgente', 2: 'Alta', 3: 'Normal', 4: 'Baixa' }
+
+const PRIORITY_KEY: Record<number, PrioritySectionKey> = { 1: 'urgente', 2: 'alta', 3: 'normal', 4: 'baixa' }
+
+export interface PrioritySection<T> { key: PrioritySectionKey; label: string; items: T[] }
+
+/** Seções Urgente · Alta · Normal · Baixa (sem as vazias); prioridade fora de 1–4 conta como Normal. */
+export function groupByPriority<T extends AgendaItem>(tasks: T[], ordem: OrdemTarefas): PrioritySection<T>[] {
+  const buckets = new Map<number, T[]>()
+  for (const t of tasks) {
+    const p = PRIORITY_KEY[t.priority] ? t.priority : 3
+    buckets.set(p, [...(buckets.get(p) ?? []), t])
+  }
+  return [1, 2, 3, 4]
+    .filter(p => buckets.has(p))
+    .map(p => ({ key: PRIORITY_KEY[p], label: PRIORITY_LABEL[p], items: ordenarTarefas(buckets.get(p)!, ordem) }))
+}
+
+// ── Ordem lembrada no aparelho ────────────────────────────────────────────────
+const ORDEM_KEY = 'orcacloud:tarefas-celular:ordem'
+
+type ArmazenamentoLocal = Pick<Storage, 'getItem' | 'setItem'>
+
+/** localStorage pode não existir ou lançar (aba privada, dados bloqueados). */
+function armazenamentoPadrao(): ArmazenamentoLocal | null {
+  try { return window.localStorage } catch { return null }
+}
+
+/** A ordem escolhida da última vez neste aparelho; qualquer falha volta para "Prazo". */
+export function lerOrdemTarefas(storage: ArmazenamentoLocal | null = armazenamentoPadrao()): OrdemTarefas {
+  try {
+    const v = storage?.getItem(ORDEM_KEY)
+    return v && Object.prototype.hasOwnProperty.call(ORDEM_LABEL, v) ? (v as OrdemTarefas) : 'prazo'
+  } catch {
+    return 'prazo'
+  }
+}
+
+export function salvarOrdemTarefas(ordem: OrdemTarefas, storage: ArmazenamentoLocal | null = armazenamentoPadrao()): void {
+  try { storage?.setItem(ORDEM_KEY, ordem) } catch { /* sem armazenamento, a escolha vale só nesta visita */ }
 }
 
 /** Tarefas com prazo no dia escolhido (o filtro explícito da faixa de dias). */

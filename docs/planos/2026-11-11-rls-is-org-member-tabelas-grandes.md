@@ -7,10 +7,47 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
 ## Estado
 
 - [x] Inventário das 614 policies e medição do custo de RLS por tabela (abaixo).
-- [ ] Ok do usuário para o escopo (Fase 1 e 2; Fase 3 = não trocar).
-- [ ] Fase 1 — teste a seco de equivalência → migration → aplicar → medir.
-- [ ] Fase 2 — idem.
-- [ ] Storage — investigação própria antes de qualquer migration.
+- [x] Escopo decidido pelo usuário (11/11/2026): **todas as 614** (eu recomendei Fases
+      1 e 2; a escolha foi trocar todas). Abordagem para isso ser provável em escala:
+      ver "Troca mecânica" abaixo — substitui a proposta por tabela.
+- [x] Gerador `scripts/rls-trocar-is-org-member.mjs` (retrato em
+      `2026-11-11-rls-is-org-member/policies-antes.json`): 614 policies, **852 chamadas
+      trocadas**; confere por policy que o nº de trocas = nº de chamadas e que não sobra
+      nenhuma. `validar.sql` (EXPLAIN, sem trava): **823 de 823 expressões válidas**.
+- [x] Prova da troca (desfeita): 12 usuários (inclui anon com JWT vazio, papel anon,
+      com o GRANT do lote 2) × 9 valores de X (7 orgs + NULL + uuid inexistente) =
+      **108 pares, 0 diferenças; 0 também com NOT**.
+- [x] Conferência sobre os dados (`comparar-lote-N.sql`, só leitura): para cada
+      expressão e cada usuário, linhas com `(antiga) IS DISTINCT FROM (nova)` na mesma
+      consulta: lote 1 = 336 comparações, lote 2 = 9.132, lote 3 = 408 — **0 linhas
+      diferentes em 9.876**.
+- [x] Storage: `postgres` NÃO é dono de storage.objects (supabase_storage_admin), mas o
+      ALTER POLICY é permitido (testado com a expressão atual, desfeito).
+- [ ] Lote 1 `aplicar_20271112300000` (21 policies, 10 tabelas ≥ 300 linhas) → aplicar → medir.
+- [ ] Lote 2 `aplicar_20271112310000` (564 policies, 332 tabelas; GRANT anon) → aplicar → conferir.
+- [ ] Lote 3 `aplicar_20271112320000` (29 policies do storage) → aplicar → testar upload/
+      download/listagem pelo app.
+
+## Troca mecânica (escolhida em 11/11/2026)
+
+Cada ocorrência `is_org_member(X)` vira
+`COALESCE((X) IN (SELECT public.minhas_orgs_membro()), false)`.
+
+- **Mesmo valor booleano sempre.** `is_org_member` nunca devolve nulo; `X IN (…)`
+  devolve nulo quando X é nulo — o `COALESCE` devolve falso, como a função. Por isso a
+  troca vale dentro de qualquer contexto (OR, AND, NOT, EXISTS, CASE).
+- **A prova é uma só**, não 614: para cada usuário (todo e-mail de
+  organization_members/broker_profiles + JWT vazio) e para cada X possível — toda org
+  que aparece em organizations, organization_members e broker_profiles, mais NULL e
+  um uuid que não existe —, `is_org_member(X) = COALESCE(X IN (SELECT …), false)`.
+  Fora desses valores as duas formas dão falso por construção (nenhuma linha de
+  membro/corretor com aquela org).
+- `minhas_orgs_membro` passa a ser executável também por `anon` (120 policies de
+  papel `{public}`), pelo mesmo motivo de `is_org_member` (aplicar_20271111930000):
+  o anon avalia a policy; para JWT vazio a função devolve conjunto vazio.
+- Aplicação com `SET lock_timeout = '2s'`: cada `ALTER POLICY` trava a tabela por
+  milissegundos; tabela ocupada faz o comando falhar (e a migration ser rodada de
+  novo) em vez de enfileirar as leituras do app atrás dele.
 
 ## O que a medição mostrou
 

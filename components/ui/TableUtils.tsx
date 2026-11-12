@@ -461,6 +461,8 @@ interface SortableHeaderProps {
    *  coluna onde for solto (via `moveColumn` de useTableColumns). Aditivo — quem
    *  não passar não ganha (nem perde) nada. */
   onMoveColumn?: (dragKey: string, dropKey: string, lado?: LadoDeSoltar) => void;
+  /** Dica da coluna (o que o número quer dizer), no `title` do <th>. Aditivo. */
+  title?: string;
 }
 
 /** Metade do cabeçalho em que o mouse está: a esquerda solta antes, a direita depois. */
@@ -483,6 +485,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   children,
   uppercase = true,
   onMoveColumn,
+  title,
 }) => {
   const caseClasses = uppercase
     ? 'text-gray-700 uppercase tracking-wider'
@@ -535,7 +538,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
 
   if (!sortable) {
     return (
-      <th className={`${className} relative text-table-header font-semibold ${caseClasses} ${onMoveColumn ? `cursor-grab ${dragOverClasses} ${draggingClasses}` : ''}`} {...dragProps}>
+      <th title={title} className={`${className} relative text-table-header font-semibold ${caseClasses} ${onMoveColumn ? `cursor-grab ${dragOverClasses} ${draggingClasses}` : ''}`} {...dragProps}>
         {label}
         {children}
       </th>
@@ -546,6 +549,7 @@ export const SortableHeader: React.FC<SortableHeaderProps> = ({
   return (
     <th
       onClick={() => onSort?.(colKey)}
+      title={title}
       aria-sort={ativa ? (sortDirection === 'asc' ? 'ascending' : 'descending') : 'none'}
       className={`${className} relative text-table-header font-semibold ${caseClasses} cursor-pointer hover:text-gray-900 transition-colors select-none group ${dragOverClasses} ${draggingClasses}`}
       {...dragProps}

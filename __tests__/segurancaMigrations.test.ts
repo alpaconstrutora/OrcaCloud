@@ -111,23 +111,51 @@ function policiesPermissivas(sql: string): number {
   }).length;
 }
 
+/**
+ * Cada CREATE FUNCTION do arquivo, com os ATRIBUTOS (o cabeçalho antes do corpo e o
+ * que vem depois dele até o `;`) — o corpo fica de fora, para texto citado lá dentro
+ * não contar. O corpo pode vir entre qualquer `$tag$` ou entre aspas simples
+ * (`AS '...'`), e `SECURITY DEFINER` pode estar antes ou depois dele. Antes a trava
+ * só olhava o cabeçalho e só reconhecia `$$`/`$function$`: com `$fn$`, com
+ * `AS '...'` ou com `$$ LANGUAGE plpgsql SECURITY DEFINER;`, a função passava.
+ */
+function definicoesDeFuncao(corpo: string): { nome: string; atributos: string }[] {
+  const definicoes: { nome: string; atributos: string }[] = [];
+  const inicioRe = /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?["]?(\w+)["]?\s*\(/gi;
+  let m: RegExpExecArray | null;
+  while ((m = inicioRe.exec(corpo))) {
+    const resto = corpo.slice(m.index);
+    const abertura = /\$([A-Za-z0-9_]*)\$|\bAS\s+'/i.exec(resto);
+    let fimDoCorpo = resto.length;
+    let cabecalho = resto;
+    if (abertura) {
+      cabecalho = resto.slice(0, abertura.index);
+      if (abertura[0].startsWith('$')) {
+        const fecha = resto.indexOf(abertura[0], abertura.index + abertura[0].length);
+        fimDoCorpo = fecha < 0 ? resto.length : fecha + abertura[0].length;
+      } else {
+        // Corpo entre aspas simples: '' é uma aspa escapada.
+        let i = abertura.index + abertura[0].length;
+        while (i < resto.length && !(resto[i] === "'" && resto[i + 1] !== "'")) i += resto[i] === "'" ? 2 : 1;
+        fimDoCorpo = Math.min(resto.length, i + 1);
+      }
+    }
+    const pontoEVirgula = resto.indexOf(';', fimDoCorpo);
+    const rodape = abertura ? resto.slice(fimDoCorpo, pontoEVirgula < 0 ? resto.length : pontoEVirgula) : '';
+    definicoes.push({ nome: m[1], atributos: `${abertura ? cabecalho : resto.slice(0, pontoEVirgula < 0 ? resto.length : pontoEVirgula)} ${rodape}` });
+    inicioRe.lastIndex = m.index + (pontoEVirgula < 0 ? resto.length : pontoEVirgula);
+  }
+  return definicoes;
+}
+
 /** P3: CREATE FUNCTION SECURITY DEFINER sem REVOKE de PUBLIC no mesmo arquivo. */
 function secdefSemRevoke(sql: string): number {
   const corpo = semComentarios(sql);
-  const nomes = [...corpo.matchAll(
-    /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?["]?(\w+)["]?\s*\(/gi,
-  )].map((m) => m[1]);
-  if (nomes.length === 0) return 0;
-
-  // Só conta as que declaram SECURITY DEFINER.
-  const definer = nomes.filter((nome) => {
-    const re = new RegExp(
-      `CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+(?:public\\.)?"?${nome}"?\\s*\\([\\s\\S]*?\\$(?:function|)\\$`,
-      'i',
-    );
-    const trecho = re.exec(corpo)?.[0] ?? '';
-    return /SECURITY\s+DEFINER/i.test(trecho);
-  });
+  // Só conta as que declaram SECURITY DEFINER (antes ou depois do corpo).
+  const definer = definicoesDeFuncao(corpo)
+    .filter((d) => /SECURITY\s+DEFINER/i.test(d.atributos))
+    .map((d) => d.nome);
+  if (definer.length === 0) return 0;
 
   const temRevoke = (nome: string) =>
     new RegExp(`REVOKE[\\s\\S]{0,200}?${nome}\\s*\\(`, 'i').test(corpo) ||
@@ -216,5 +244,44 @@ describe('segurança · migrations não podem repetir os padrões da auditoria',
         ? `\n\nPlaceholder de segredo em migration:\n\n${ofensores.join('\n')}\n`
         : '',
     ).toBeLessThanOrEqual(ESPERADOS_HISTORICOS);
+  });
+});
+
+describe('segurança · a trava enxerga toda função SECURITY DEFINER (pendência da Fase 0 do plano Imovib)', () => {
+  const comRevoke = (sql: string) => `${sql}
+REVOKE EXECUTE ON FUNCTION public.fn_x() FROM PUBLIC;`;
+
+  it('corpo delimitado por $$ ou $function$ (já pegava)', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;')).toBe(1);
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $function$ SELECT 1 $function$;')).toBe(1);
+  });
+
+  it('corpo com outro delimitador ($fn$, $body$, $x$)', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $fn$ SELECT 1 $fn$;')).toBe(1);
+    expect(secdefSemRevoke('CREATE OR REPLACE FUNCTION fn_x() RETURNS int SECURITY DEFINER AS $body$ BEGIN RETURN 1; END $body$ LANGUAGE plpgsql;')).toBe(1);
+  });
+
+  it('SECURITY DEFINER escrito DEPOIS do corpo', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql SECURITY DEFINER;')).toBe(1);
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int AS $q$ SELECT 1 $q$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;')).toBe(1);
+  });
+
+  it("corpo entre aspas simples (AS '...')", () => {
+    expect(secdefSemRevoke("CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS 'SELECT 1';")).toBe(1);
+  });
+
+  it('com REVOKE de PUBLIC no arquivo, passa; SECURITY INVOKER e corpo que só CITA "security definer" não contam', () => {
+    expect(secdefSemRevoke(comRevoke('CREATE FUNCTION public.fn_x() RETURNS int AS $fn$ SELECT 1 $fn$ LANGUAGE sql SECURITY DEFINER;'))).toBe(0);
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$;')).toBe(0);
+    expect(secdefSemRevoke("CREATE FUNCTION public.fn_x() RETURNS text LANGUAGE sql AS $$ SELECT 'SECURITY DEFINER' $$;")).toBe(0);
+  });
+
+  it('a função seguinte não empresta o SECURITY DEFINER para a anterior', () => {
+    const sql = [
+      'CREATE FUNCTION public.fn_a() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;',
+      'CREATE FUNCTION public.fn_b() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 2 $$;',
+      'REVOKE EXECUTE ON FUNCTION public.fn_b() FROM PUBLIC;',
+    ].join('\n');
+    expect(secdefSemRevoke(sql)).toBe(0);
   });
 });

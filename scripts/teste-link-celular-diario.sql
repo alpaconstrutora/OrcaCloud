@@ -56,6 +56,25 @@ BEGIN
     RETURN v;
 END $$;
 
+-- Roda p_sql como postgres (sem trocar de papel) com as claims de p_user — ou
+-- SEM claims, se p_user é NULL — e devolve 'ok:<resultado>' ou
+-- '<SQLSTATE>:<mensagem>'. Serve para chamar o núcleo direto com um p_ator
+-- diferente de auth.uid(): prova que ele decide pelo ator, não pela sessão.
+CREATE FUNCTION pg_temp.como_postgres(p_user UUID, p_sql TEXT) RETURNS TEXT LANGUAGE plpgsql AS $$
+DECLARE v TEXT;
+BEGIN
+    PERFORM set_config('request.jwt.claims',
+                       CASE WHEN p_user IS NULL THEN '' ELSE pg_temp.claims(p_user, 'authenticated') END, true);
+    BEGIN
+        EXECUTE p_sql INTO v;
+        v := 'ok:' || coalesce(v, '<null>');
+    EXCEPTION WHEN OTHERS THEN
+        v := SQLSTATE || ':' || SQLERRM;
+    END;
+    PERFORM set_config('request.jwt.claims', '', true);
+    RETURN v;
+END $$;
+
 -- ═════════════════════════════════════════════════════════════════════════════
 -- Seção A — núcleo com ator explícito e regressão do app logado
 -- ═════════════════════════════════════════════════════════════════════════════
@@ -72,6 +91,9 @@ DECLARE
                                  || '(Usuários › Permissões Detalhadas › Operação de Obra).';
     salvar  CONSTANT TEXT := 'SELECT public.diary_upsert_entry(%L::uuid, %L::jsonb)::text';
     excluir CONSTANT TEXT := 'SELECT public.diary_delete_entry(%L::uuid, %L::text)::text';
+    nucleo  CONSTANT TEXT := 'SELECT public._diary_upsert_core(%L::uuid, %L::uuid, %L::jsonb)::text';
+    e3 JSONB := '{"id": "tv-r3", "date": "2026-11-10", "status": "Rascunho"}';
+    e4_aprovado JSONB := '{"id": "tv-r4", "date": "2026-11-09", "status": "Aprovado"}';
     m UUID; g UUID; x UUID; d1 UUID; d2 UUID;
     e1 JSONB := '{"id": "tv-r1", "date": "2026-11-12", "status": "Rascunho", "notes": "primeiro"}';
     e1b JSONB := '{"id": "tv-r1", "date": "2026-11-12", "status": "Rascunho", "notes": "segundo"}';
@@ -183,7 +205,25 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = '[]'::jsonb,
         'admin exclui o aprovado (veio ' || v || ')');
 
+    -- ── 5b. o núcleo decide pelo p_ator, não pela sessão (auth.uid()) ────────
+    -- Chamado direto como postgres: sem claims, o ator membro grava e o não
+    -- membro é recusado (pega núcleo que usasse is_org_member(v_org)).
+    v := pg_temp.como_postgres(NULL, format(nucleo, m, d1, e3));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = jsonb_build_array(e3),
+        'núcleo sem claims, p_ator = membro → grava (veio ' || v || ')');
+    v := pg_temp.como_postgres(NULL, format(nucleo, x, d1, e3));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'núcleo sem claims, p_ator = não membro → 42501 (veio ' || v || ')');
+    -- Sessão e ator trocados na aprovação (pega núcleo que usasse
+    -- fn_pode_aprovar_diario(v_org)): vale quem é o ator.
+    v := pg_temp.como_postgres(g, format(nucleo, m, d1, e4_aprovado));
+    PERFORM pg_temp.confere(v = msg_aprovar, 'claims do admin g, p_ator = m aprovando → 42501 (veio ' || v || ')');
+    v := pg_temp.como_postgres(m, format(nucleo, g, d1, e4_aprovado));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'claims de m, p_ator = admin g aprovando → ok (veio ' || v || ')');
+    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
+        'diário ficou com o Rascunho do membro e o aprovado pelo ator admin');
+
     -- ── 6. equivalência fn_pode_aprovar_diario_de × fn_pode_aprovar_diario ───
+    -- O lado "aprova = true" inclui a fixture g (admin inserido nesta transação).
     FOR l IN SELECT om.user_id, om.organization_id
                FROM public.organization_members om
               WHERE om.user_id IS NOT NULL AND om.organization_id IS NOT NULL

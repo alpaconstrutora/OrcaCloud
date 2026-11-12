@@ -159,6 +159,7 @@ BEGIN
        SET settings   = jsonb_set(coalesce(settings, '{}'::jsonb), '{diaryEntries}', v_lista),
            updated_at = now()
      WHERE id = p_project_id;
+    -- Só rede de segurança (a linha está travada pelo FOR UPDATE); a permissão já foi conferida acima.
     IF NOT FOUND THEN
         RAISE EXCEPTION 'sem permissão para gravar neste diário' USING ERRCODE = '42501';
     END IF;
@@ -221,6 +222,7 @@ BEGIN
            SET settings   = jsonb_set(coalesce(settings, '{}'::jsonb), '{diaryEntries}', v_lista),
                updated_at = now()
          WHERE id = p_project_id;
+        -- Só rede de segurança (a linha está travada pelo FOR UPDATE); a permissão já foi conferida acima.
         IF NOT FOUND THEN
             RAISE EXCEPTION 'sem permissão para gravar neste diário' USING ERRCODE = '42501';
         END IF;

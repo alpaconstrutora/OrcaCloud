@@ -36,7 +36,11 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
     const landCost = math.landCost;
     const constructionCost = math.constCostTotal;
     const rubricas = math.capexRubricasAtivas ? math.capexRubricas.total : 0;
-    const totalCost = landCost + constructionCost + rubricas;
+    // Item 6.2: com regime tributário o imposto não é rubrica — entra em linha própria.
+    const impostoDoRegime = (study.tax_regime ?? 'manual') !== 'manual'
+        ? -math.monthlyFlows.reduce((a, f) => a + f.linhas.impostos, 0)
+        : 0;
+    const totalCost = landCost + constructionCost + rubricas + impostoDoRegime;
     const grossProfit = vgv - totalCost;
     const margin = vgv > 0 ? (grossProfit / vgv) * 100 : 0;
 
@@ -56,6 +60,9 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
     ];
     if (math.capexRubricasAtivas) {
         linhas.push({ rotulo: '(−) Rubricas do CAPEX', valor: -rubricas, detalhe: 'Terreno, obra e deduções sobre o VGV (aba Orçamento)' });
+    }
+    if (impostoDoRegime) {
+        linhas.push({ rotulo: '(−) Impostos do regime tributário', valor: -impostoDoRegime, detalhe: 'Calculados pelo regime escolhido em Orçamento' });
     }
 
     return (

@@ -7,6 +7,7 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { companyService } from '../services/companyService';
 import { RegimeTributarioDoEstudo, ROTULO_DO_REGIME, hipotesesDoEstudo } from '../utils/imovibTributos';
 import { compararRegimes, LinhaDaComparacao } from '../utils/imovibComparacaoDeRegimes';
+import { computeImovibMath } from '../utils/imovibMotor';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ImovibInputRow from './ImovibInputRow';
 
@@ -56,6 +57,7 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
     const regime = (study.tax_regime ?? IMOVIB_DEFAULTS.tax_regime) as RegimeTributarioDoEstudo;
     const h = hipotesesDoEstudo(study);
     const comparacao = useMemo(() => compararRegimes(study), [study]);
+    const foraDoCalculo = useMemo(() => computeImovibMath(study).impostosForaDoCalculo, [study]);
 
     // Sugestão pela empresa do empreendimento vinculado — só lê, não grava.
     const empId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.empreendimento_id : undefined;
@@ -106,6 +108,10 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
                 <Info className="w-4 h-4 mt-0.5 shrink-0" />
                 As alíquotas são hipóteses: confirme com a contabilidade. O lucro real é uma estimativa (crédito de PIS e Cofins sobre o custo; IRPJ e CSLL sobre o lucro de cada ano, sem compensar prejuízo).
             </div>
+
+            {foraDoCalculo.length > 0 && (
+                <p className="text-sm text-slate-700">Fora do cálculo neste regime: {foraDoCalculo.join(', ')}.</p>
+            )}
 
             {sugestao && sugestao.regime !== regime && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-slate-200 px-3 py-2 text-sm text-slate-700">

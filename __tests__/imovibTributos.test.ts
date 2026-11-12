@@ -42,6 +42,25 @@ describe('6.1 — impostoPorMes', () => {
         i.forEach(x => expect(x).toBeGreaterThanOrEqual(0));
     });
 
+    it('lucro real: prejuízo de um ano compensa o lucro dos anos seguintes, sem limite (decisão de 11/11); deduções saem do lucro', () => {
+        // Ano 1: custo 1.000, sem receita (prejuízo 1.000). Ano 2: receita 1.500 com 300 de deduções.
+        const receita = Array.from({ length: 24 }, (_, k) => (k === 23 ? 1_500 : 0));
+        const custo = Array.from({ length: 24 }, (_, k) => (k === 0 ? 1_000 : 0));
+        const deducoes = Array.from({ length: 24 }, (_, k) => (k === 23 ? 300 : 0));
+        const h = { ...H, realPisCofinsPct: 0, realCreditoSobreCustoPct: 0 };
+        const i = impostoPorMes('real', receita, custo, h, deducoes);
+        expect(soma(i.slice(0, 12))).toBe(0);
+        expect(i[23]).toBeCloseTo((1_500 - 300 - 1_000) * 0.34, 9);
+    });
+
+    it('lucro real no estudo: o imposto total nunca passa do lucro do projeto', () => {
+        const r = computeImovibMath(baseStudy({ tax_regime: 'real' }));
+        const imposto = -soma(r.monthlyFlows.map(f => f.linhas.impostos));
+        const lucroAntesDoImposto = soma(r.monthlyFlows.map(f => f.net)) + imposto;
+        expect(imposto).toBeGreaterThan(0);
+        expect(imposto).toBeLessThan(lucroAntesDoImposto);
+    });
+
     it('hipóteses do estudo: o que o estudo informa vale; o resto é o padrão', () => {
         const h = hipotesesDoEstudo({ tax_hypotheses: { retPct: 2 } } as never);
         expect(h.retPct).toBe(2);
@@ -65,14 +84,19 @@ describe('6.2 — regime no motor', () => {
         const a = computeImovibMath(completo());
         expect(impostos(a) / receita(a)).toBeCloseTo(0.1073, 9);
         expect(computeImovibMath(completo({ tax_regime: 'manual' })).vpl).toBe(a.vpl);
-        expect(a.avisos.find(x => x.codigo === 'impostos_pelo_regime')).toBeUndefined();
+        expect(a.impostosForaDoCalculo).toEqual([]);
     });
 
     it('RET escolhido: impostos são 4% da receita, as rubricas 7. ficam fora (com aviso) e a comissão continua', () => {
         const r = computeImovibMath(completo({ tax_regime: 'ret' }));
         expect(impostos(r) / receita(r)).toBeCloseTo(0.04, 9);
         expect(-soma(r.monthlyFlows.map(f => f.linhas.comercial)) / receita(r)).toBeCloseTo(0.05, 9);
-        expect(r.avisos.find(x => x.codigo === 'impostos_pelo_regime')?.aba).toBe('capex');
+        // Sem aviso permanente (os campos ficam desligados pelo regime): o cartão do regime mostra o que ficou fora.
+        expect(r.avisos.find(x => x.codigo === 'impostos_pelo_regime')).toBeUndefined();
+        expect(r.impostosForaDoCalculo).toEqual(['RET (4%)', 'Presumido (6,73%)']);
+        // A rubrica fora do cálculo vale 0 no cálculo, e as rubricas somam o total.
+        expect(r.capexValorPorRubrica['RET']).toBe(0);
+        expect(soma(Object.values(r.capexValorPorRubrica))).toBeCloseTo(r.capexRubricas.total, 4);
         expect(r.vpl).toBeGreaterThan(computeImovibMath(completo()).vpl);
     });
 
@@ -80,6 +104,13 @@ describe('6.2 — regime no motor', () => {
         const r = computeImovibMath(baseStudy({ tax_regime: 'presumido' }));
         expect(impostos(r) / receita(r)).toBeCloseTo(0.0673, 9);
         expect(-soma(r.monthlyFlows.map(f => f.linhas.comercial)) / receita(r)).toBeCloseTo(0.05, 9);
+    });
+
+    it('vendas durante a obra descontam o imposto do regime como descontavam o manual', () => {
+        const manual = computeImovibMath(baseStudy({ tax_rate: 4 }));
+        const ret = computeImovibMath(baseStudy({ tax_regime: 'ret' }));
+        expect(ret.vpl).toBeCloseTo(manual.vpl, 4);
+        expect(ret.capital.vendasNaObra).toBeCloseTo(manual.capital.vendasNaObra, 4);
     });
 
     it('as alíquotas do estudo valem', () => {

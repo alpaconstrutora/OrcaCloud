@@ -35,6 +35,7 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 | 2026-11-11 | D3: outras fontes de capital e resultado por sócio entram nesta rodada? (pedido: *"iniciar a Fase 4"*) | **Sim** (itens 4.4 e 9.2, na forma simples). |
 | 2026-11-11 | D2: o campo "Capital Próprio (Equity)" vira número calculado ou continua editável? | **Calculado.** O campo editável sai da aba Capital; a coluna `funding_equity_percent` fica no banco, sem uso. |
 | 2026-11-11 | D4: quem confirma as alíquotas padrão dos regimes antes de publicar a Fase 6? (opções: publicar como hipótese editável com aviso; esperar a contabilidade; o usuário passa as alíquotas; sem padrão) | **Opção 1:** *"Opção 1"* — publicar com os padrões do plano (RET 4%, RET social 1%, presumido 6,73%, real estimado), editáveis por estudo, com o aviso "confirme com a contabilidade" no cartão. Estudo existente continua no regime manual até alguém trocar. |
+| 2026-11-11 | A revisão da Fase 6 achou que, no lucro real, tributar cada ano sem compensar prejuízo dava imposto maior que o lucro do projeto (o custo vem antes da receita). Compensar com a trava de 30%, sem limite, ou apurar uma vez no fim? | **Compensar sem limite:** *"Compensar sem limite"*. O lucro de cada ano também passa a descontar corretagem, outras deduções e devolução de distrato. |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
@@ -794,9 +795,9 @@ Conferido no navegador em 11/11 (Garden e Bruninho, roteiro `c:/tmp/pwtest/imovi
 
 Conferido no navegador em 11/11 (Garden Cambuhy, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase5.js`): listagem = Resumo (R$ 3.998.485, o mesmo de antes); Premissas (zoneamento, cronograma, terreno, due diligence), CAPEX (desembolso, pós-obra, CUB) e Resumo abrem; 0 escritas, 0 erros de console. O Bruninho e o Davi Bueno não existem mais em `imovib_studies` (a oportunidade "Quintino Bocaiúva" ficou sem estudo) — apagados fora desta frente, entre a conferência da Fase 4 e esta.
 
-**Fase 6 — Tributos:** 4 de 4 — em revisão; migration `aplicar_20271112200000` (`tax_regime`, `tax_hypotheses`) aplicada em 11/11 com OK do usuário (*"Pode aplicar"*)
-- [x] 6.1 Cálculo por regime (D4) — `utils/imovibTributos.ts`; padrões em `HIPOTESES_TRIBUTARIAS`. Lucro real: crédito de PIS/Cofins sobre o custo passa adiante; IRPJ/CSLL no último mês de cada bloco de 12 meses, sem compensar prejuízo.
-- [x] 6.2 Regime no estudo — vazio = manual (regressão verde sem edição); fora do manual, rubricas % da categoria 7 e o imposto da Dinâmica ficam fora, com aviso `impostos_pelo_regime`.
+**Fase 6 — Tributos:** 4 de 4 — revisada; migration `aplicar_20271112200000` (`tax_regime`, `tax_hypotheses`) aplicada em 11/11 com OK do usuário (*"Pode aplicar"*)
+- [x] 6.1 Cálculo por regime (D4) — `utils/imovibTributos.ts`; padrões em `HIPOTESES_TRIBUTARIAS`. Lucro real: crédito de PIS/Cofins sobre o custo passa adiante; IRPJ/CSLL no último mês de cada bloco de 12 meses sobre receita − custo − deduções − PIS/Cofins, com o prejuízo acumulado compensado sem limite (decisão de 11/11).
+- [x] 6.2 Regime no estudo — vazio = manual (regressão verde sem edição); fora do manual, rubricas % da categoria 7 (base VGV) e o imposto da Dinâmica ficam fora e valem 0 "No cálculo". Sem `ImovibAviso`: o aviso não tinha como ser resolvido (os campos ficam desligados pelo regime) e ficava no banner para sempre; o cartão do regime lista o que ficou fora (`impostosForaDoCalculo`). Estática ganha a linha "Impostos do regime tributário"; "Vendas durante a obra" desconta o imposto do regime.
 - [x] 6.3 Tela: regime e comparação — `components/ImovibRegimeTributarioCard.tsx` na aba Orçamento; comparação em `utils/imovibComparacaoDeRegimes.ts` (arquivo próprio: o motor importa os tributos). Garden: sugestão "Lucro presumido" pela empresa da SPE; manual (rubricas) = 6,73%, VPL R$ 3.998.485; RET levaria a R$ 4.273.354.
 - [x] 6.4 Rubricas de obra no modelo — "INSS da obra (aferição)" e "ISS da construção (construtora terceira)" em "4. Construção Indireta", valor 0, só estudo novo.
 

@@ -74,6 +74,25 @@ describe('Regime tributário', () => {
         const valor = within(linhaDaRubrica).getByDisplayValue('4') as HTMLInputElement;
         expect(valor.disabled).toBe(true);
         expect(valor.title).toMatch(/regime tributário/);
+        expect(within(secao).getByText('Fora do cálculo neste regime: RET (Regime Especial) (4%).')).toBeTruthy();
+        // A rubrica fora do cálculo vale 0 "No cálculo".
+        expect(within(linhaDaRubrica).getByText('R$ 0', { normalizer: t => t.replace(/\s/g, ' ').trim() })).toBeTruthy();
+    });
+
+    it('6.4 — estudo novo nasce com INSS e ISS da obra no modelo de rubricas', async () => {
+        render(
+            <ToastProvider>
+                <ConfirmProvider>
+                    <ImovibEdicaoProvider value={{ pode: true, motivo: '' }}>
+                        <ImovibCapexForm study={{ ...estudo(), capex_seeded_at: null } as never} onDataChanged={vi.fn()} />
+                    </ImovibEdicaoProvider>
+                </ConfirmProvider>
+            </ToastProvider>,
+        );
+        await screen.findByRole('region', { name: 'Regime tributário' });
+        const modelo = svc.seedCapexTemplate.mock.calls[0][1] as { name: string; category: string; value: number }[];
+        expect(modelo.find(r => r.name === 'INSS da obra (aferição)')).toMatchObject({ category: '4. Construção Indireta', value: 0 });
+        expect(modelo.find(r => r.name === 'ISS da construção (construtora terceira)')).toMatchObject({ category: '4. Construção Indireta', value: 0, value_type: 'percent' });
     });
 
     it('estudo vinculado: sugere RET pela empresa com patrimônio de afetação; "Usar a sugestão" grava', async () => {

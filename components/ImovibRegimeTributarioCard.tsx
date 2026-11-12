@@ -1,8 +1,9 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Landmark, Info } from 'lucide-react';
 import { ImovibStudy, ImovibStudyUpdate } from '../types';
 import { HIPOTESES_TRIBUTARIAS, IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
+import { useToast } from '../hooks/useToast';
 import { empreendimentoService } from '../services/empreendimentoService';
 import { companyService } from '../services/companyService';
 import { RegimeTributarioDoEstudo, ROTULO_DO_REGIME, hipotesesDoEstudo } from '../utils/imovibTributos';
@@ -86,15 +87,30 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
         return () => { vivo = false; };
     }, [empId, afetacaoInformada]);
 
+    // Alíquotas já mandadas e ainda não recarregadas: duas edições seguidas antes da
+    // recarga não podem montar o jsonb a partir do estudo velho (a 2ª apagava a 1ª —
+    // pendência da Fase 6 do plano 2026-11-11). A recarga do estudo volta a mandar.
+    const { showToast } = useToast();
+    const hipoteses = useRef<Partial<Record<ChaveDaHipotese, number>>>({ ...(study.tax_hypotheses ?? {}) });
+    useEffect(() => { hipoteses.current = { ...(study.tax_hypotheses ?? {}) }; }, [study.tax_hypotheses]);
     const salvarHipotese = (k: ChaveDaHipotese, v: number | null) => {
-        const atual = { ...(study.tax_hypotheses ?? {}) };
+        // Negativa não vira 0 calada: não grava e diz por quê.
+        if (v != null && v < 0) {
+            showToast(`${ROTULO_DA_HIPOTESE[k][0]}: a alíquota não pode ser negativa. Não foi gravada.`, 'error');
+            return;
+        }
+        const atual = { ...hipoteses.current };
         if (v == null) delete atual[k];
-        else atual[k] = Math.max(0, v);
+        else atual[k] = v;
+        hipoteses.current = atual;
         void onSalvar({ tax_hypotheses: Object.keys(atual).length ? atual : null });
     };
-    // Só as alíquotas do regime escolhido (no manual, nenhuma).
-    const visiveis: ChaveDaHipotese[] = regime === 'ret' ? ['retPct'] : regime === 'ret_his' ? ['retHisPct'] : regime === 'presumido' ? ['presumidoPct']
+    // As alíquotas do regime escolhido (no manual, nenhuma); "Ajustar as alíquotas dos
+    // outros regimes" mostra as demais, que entram na tabela de comparação, sem trocar o regime.
+    const [todasAsAliquotas, setTodasAsAliquotas] = useState(false);
+    const doRegime: ChaveDaHipotese[] = regime === 'ret' ? ['retPct'] : regime === 'ret_his' ? ['retHisPct'] : regime === 'presumido' ? ['presumidoPct']
         : regime === 'real' ? ['realPisCofinsPct', 'realCreditoSobreCustoPct', 'realIrCsPct'] : [];
+    const visiveis: ChaveDaHipotese[] = todasAsAliquotas ? (Object.keys(ROTULO_DA_HIPOTESE) as ChaveDaHipotese[]) : doRegime;
 
     return (
         <section className="bg-white rounded-[10px] p-6 border border-gray-200 space-y-4" aria-labelledby="imovib-regime-titulo">
@@ -144,6 +160,14 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
                         {(Object.keys(ROTULO_DO_REGIME) as RegimeTributarioDoEstudo[]).map(r => <option key={r} value={r}>{ROTULO_DO_REGIME[r]}</option>)}
                     </select>
                 </div>
+                <button
+                    type="button"
+                    aria-expanded={todasAsAliquotas}
+                    onClick={() => setTodasAsAliquotas(v => !v)}
+                    className="h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50"
+                >
+                    {todasAsAliquotas ? 'Mostrar só as do regime escolhido' : 'Ajustar as alíquotas dos outros regimes'}
+                </button>
                 {visiveis.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                         {visiveis.map(k => (

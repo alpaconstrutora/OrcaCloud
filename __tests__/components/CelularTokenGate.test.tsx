@@ -54,9 +54,10 @@ vi.mock('../../components/celular/DiarioDoLink', async () => {
 })
 
 import CelularTokenGate, { TEXTO_LINK_INVALIDO } from '../../components/celular/CelularTokenGate'
+import type { SessaoCelular } from '../../services/celular/celularLinkService'
 
 const TOKEN = 'abcDEF_123-xyzxyzxyzxyzxyzxyzxyzxyzxyzxyz'
-const SESSAO = { user_id: 'u1', nome: 'Ana Souza', org_id: 'o1', org_nome: 'Alpa' }
+const SESSAO: SessaoCelular = { user_id: 'u1', nome: 'Ana Souza', org_id: 'o1', org_nome: 'Alpa', pode_aprovar_diario: false }
 const RECUSA = { code: '42501', message: 'link inválido ou vencido' }
 const ok = (data: unknown) => Promise.resolve({ data, error: null })
 const falha = (error: unknown) => Promise.resolve({ data: null, error })
@@ -159,7 +160,7 @@ describe('CelularTokenGate', () => {
     expect(screen.getByRole('tab', { name: 'Tarefas' })).toHaveAttribute('aria-selected', 'true')
   })
 
-  it('sessão sem pode_aprovar_diario: a fonte do Diário diz que não aprova', async () => {
+  it('sessão com pode_aprovar_diario=false: a fonte do Diário diz que não aprova', async () => {
     responder({ celular_sessao: () => ok(SESSAO) })
     render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')

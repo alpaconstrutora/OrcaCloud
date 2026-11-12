@@ -90,7 +90,9 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     fireEvent.click(screen.getByRole('button', { name: /Salvar registro/ }))
     await waitFor(() => expect(fonte.salvarRegistro).toHaveBeenCalledTimes(1))
     expect(fonte.salvarRegistro).toHaveBeenCalledWith('d1', expect.objectContaining({ description: 'Alvenaria do 2º pavimento' }))
-    expect(await screen.findByText('Alvenaria do 2º pavimento')).toBeInTheDocument()
+    // A lista só se atualiza depois do resto do `persist`; na CI, com a suíte
+    // inteira em paralelo, 1 s (padrão do findBy) não bastou uma vez.
+    expect(await screen.findByText('Alvenaria do 2º pavimento', {}, { timeout: 5000 })).toBeInTheDocument()
   })
 
   it('registro Aprovado sem permissão no link: lixeira e Salvar desabilitados com o motivo', async () => {

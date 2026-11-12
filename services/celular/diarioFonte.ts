@@ -156,10 +156,22 @@ function emLotes<T>(lista: T[], tamanho: number): T[][] {
 }
 
 /**
+ * Limite de uso do link (banco: `_celular_cota`, ERRCODE 54000; Edge: 429).
+ * NÃO é recusa do link: o token segue válido, é só esperar. A mensagem do erro
+ * é a do banco ("limite de uso do link atingido — tente de novo em alguns minutos").
+ */
+export function ehLimiteDeUsoDoLink(erro: unknown): boolean {
+  if (!erro || typeof erro !== 'object') return false
+  const { status, code } = erro as { status?: unknown; code?: unknown }
+  return status === 429 || code === '54000'
+}
+
+/**
  * Erro HTTP da Edge (supabase-js: `FunctionsHttpError`, com a Response em
  * `context`) → erro com a mensagem do corpo `{ error }`. 403 é o 42501 do banco
  * repassado pela Edge: ganha `code: '42501'`, e assim `ehRecusaDoLink` reconhece
- * a recusa do token pelo mesmo critério das RPCs.
+ * a recusa do token pelo mesmo critério das RPCs. 429 é o 54000 (limite de uso):
+ * ganha `code: '54000'` — nunca vira recusa do link.
  */
 async function erroDaEdge(error: unknown): Promise<unknown> {
   const ctx = (error as { context?: unknown } | null)?.context as
@@ -171,7 +183,8 @@ async function erroDaEdge(error: unknown): Promise<unknown> {
     if (corpo && typeof corpo.error === 'string' && corpo.error.trim() !== '') mensagem = corpo.error
   } catch { /* corpo não é JSON: fica a mensagem genérica */ }
   const falha = new Error(mensagem ?? `Falha ao tratar a foto pelo link do celular (HTTP ${ctx.status}).`)
-  return Object.assign(falha, { status: ctx.status, ...(ctx.status === 403 ? { code: '42501' } : {}) })
+  const code = ctx.status === 403 ? '42501' : ctx.status === 429 ? '54000' : undefined
+  return Object.assign(falha, { status: ctx.status, ...(code ? { code } : {}) })
 }
 
 export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink): DiarioFonteDoLink {

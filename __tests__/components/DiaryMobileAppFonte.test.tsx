@@ -8,6 +8,8 @@
  *  - salvar chama `salvarRegistro` uma vez;
  *  - registro Aprovado sem permissão de aprovar no link: lixeira e Salvar travados com o motivo;
  *  - a foto sobe por `subirFoto` com a org do diário e o id do diário;
+ *  - limite de uso do link (429) na foto: a tela mostra a mensagem da Edge e
+ *    não tenta as fotos seguintes;
  *  - os carregadores passados aos hooks são estáveis (sem recarregar em laço);
  *  - sugestões de efetivo no link = só colaboradores do RH (D5): equipes/cargos de
  *    `organizations` do store (navegador logado como outra pessoa) não entram.
@@ -120,6 +122,39 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     expect(fonte.subirFoto).toHaveBeenCalledWith({ orgId: 'org1', projectId: 'd1', file: arquivo })
     // A foto nova é assinada pela fonte (via useDiaryMediaUrls), nunca pelo storage direto.
     await waitFor(() => expect(fonte.assinarFotos).toHaveBeenCalledWith(['org1/d1/nova.jpg']))
+  })
+
+  it('limite de uso do link na foto: mostra a mensagem da Edge e para de tentar as seguintes', async () => {
+    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos'
+    const fonte = criarFonte()
+    fonte.subirFoto
+      .mockResolvedValueOnce('org1/d1/primeira.jpg')
+      .mockRejectedValueOnce(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = montar(fonte)
+    await abrirDiario()
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const fotos = ['a', 'b', 'c'].map(n => new File(['x'], `${n}.jpg`, { type: 'image/jpeg' }))
+    fireEvent.change(input, { target: { files: fotos } })
+    expect(await screen.findByText(`2 de 3 fotos não subiram (${LIMITE}). A outra já está no registro.`)).toBeInTheDocument()
+    expect(fonte.subirFoto).toHaveBeenCalledTimes(2)
+    erro.mockRestore()
+  })
+
+  it('limite de uso do link na única foto: a mensagem da Edge, sem o texto genérico', async () => {
+    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos'
+    const fonte = criarFonte()
+    fonte.subirFoto.mockRejectedValueOnce(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = montar(fonte)
+    await abrirDiario()
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] } })
+    expect(await screen.findByText(LIMITE)).toBeInTheDocument()
+    expect(screen.queryByText('A foto não subiu. Tente novamente.')).toBeNull()
+    erro.mockRestore()
   })
 
   it('cancelar depois da foto remove pela fonte, com o id do diário', async () => {

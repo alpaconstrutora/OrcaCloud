@@ -47,7 +47,7 @@ import React from 'react'
 import { renderToString } from 'react-dom/server'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
-  DiarioFonteContext, fonteDiarioDoLink, fonteDiarioLogado, useDiarioFonte, type DiarioFonte,
+  DiarioFonteContext, fonteDiarioDoLink, fonteDiarioLogado, useDiarioFonte, ehLimiteDeUsoDoLink, type DiarioFonte,
 } from '../services/celular/diarioFonte'
 import { MENSAGEM_LINK_RECUSADO } from '../services/celular/tarefasFonte'
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls'
@@ -316,6 +316,31 @@ describe('fonteDiarioDoLink · recusa do token', () => {
     await f.removerFotos(PROJ, ['o/p/a.jpg'])
     expect(aoRecusar).toHaveBeenCalledTimes(2)
     warn.mockRestore()
+  })
+
+  it('Edge: 429 (limite de uso do link) → erro com a mensagem da Edge e code 54000; NÃO é recusa do link', async () => {
+    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos'
+    const aoRecusar = vi.fn()
+    const f = fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false })
+    mocks.invoke.mockResolvedValueOnce(erroDaEdge(429, { error: LIMITE }))
+    const falha = await f.subirFoto({ orgId: 'o', projectId: PROJ, file: new File(['x'], 'a.jpg', { type: 'image/jpeg' }) })
+      .catch((e: unknown) => e)
+    expect(falha).toBeInstanceOf(Error)
+    expect(falha).toMatchObject({ message: LIMITE, status: 429, code: '54000' })
+    expect(ehLimiteDeUsoDoLink(falha)).toBe(true)
+    expect(mocks.uploadToSignedUrl).not.toHaveBeenCalled()
+
+    mocks.invoke.mockResolvedValueOnce(erroDaEdge(429, { error: LIMITE }))
+    await expect(f.assinarFotos(['o/p/a.jpg'])).rejects.toMatchObject({ message: LIMITE, code: '54000' })
+    expect(aoRecusar).not.toHaveBeenCalled()
+  })
+
+  it('ehLimiteDeUsoDoLink: só o 429/54000', () => {
+    expect(ehLimiteDeUsoDoLink({ status: 429 })).toBe(true)
+    expect(ehLimiteDeUsoDoLink({ code: '54000' })).toBe(true)
+    expect(ehLimiteDeUsoDoLink({ status: 403, code: '42501' })).toBe(false)
+    expect(ehLimiteDeUsoDoLink(new Error('qualquer'))).toBe(false)
+    expect(ehLimiteDeUsoDoLink(null)).toBe(false)
   })
 })
 

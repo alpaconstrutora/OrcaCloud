@@ -207,13 +207,13 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                     renderCell={(k, m) => {
                         const t = (s: string) => <span className="text-sm text-gray-700">{s}</span>;
                         switch (k) {
-                            case 'mes': return t(nomeDoMes(study.base_date, m.idx + 1));
+                            case 'mes': return t(`${nomeDoMes(previsto.base_date ?? study.base_date, m.idx + 1)}${m.emCurso ? ' (em curso)' : ''}`);
                             case 'receitaPrevista': return t(brl(m.receitaPrevista));
                             case 'receitaRealizada': return t(semObra ? '—' : brl(m.receitaRealizada));
-                            case 'desvioReceita': return t(semObra ? '—' : desvio(m.receitaPrevista, m.receitaRealizada));
+                            case 'desvioReceita': return t(semObra || m.emCurso ? '—' : desvio(m.receitaPrevista, m.receitaRealizada));
                             case 'custoPrevisto': return t(brl(m.custoPrevisto));
                             case 'custoRealizado': return t(semObra ? '—' : brl(m.custoRealizado));
-                            case 'desvioCusto': return t(semObra ? '—' : desvio(m.custoPrevisto, m.custoRealizado));
+                            case 'desvioCusto': return t(semObra || m.emCurso ? '—' : desvio(m.custoPrevisto, m.custoRealizado));
                             case 'vendasPrevistasAcum': return t(brl(m.vendasPrevistasAcum));
                             case 'vendasReaisAcum': return t(brl(m.vendasReaisAcum));
                             default: return null;

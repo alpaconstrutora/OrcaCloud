@@ -67,6 +67,8 @@ describe('10.3 — cartão do parecer', () => {
             recommendation_notes: 'Margem apertada; renegociar o terreno',
             recommended_by: 'Ana Souza',
             recommended_at: expect.any(String),
+            // Os números que embasaram o parecer (o banco grava quem e quando pelo usuário logado).
+            recommendation_snapshot: expect.objectContaining({ vpl: expect.any(Number), vgv: expect.any(Number) }),
         }));
         expect(onDataChanged).toHaveBeenCalled();
     });
@@ -86,6 +88,22 @@ describe('10.3 — cartão do parecer', () => {
         const b = within(cartao()).getByRole('button', { name: 'Registrar parecer' }) as HTMLButtonElement;
         expect(b.disabled).toBe(true);
         expect(b.getAttribute('title')).toBe('Sem permissão');
+    });
+
+    it('voltar a "Não registrado" limpa o parecer registrado', async () => {
+        const { user } = tela({ recommendation: 'reprovar', recommendation_notes: 'VPL negativo', recommended_by: 'Bruno', recommended_at: '2026-11-10T15:00:00Z' });
+        await user.selectOptions(within(cartao()).getByLabelText('Parecer'), '');
+        await user.click(within(cartao()).getByRole('button', { name: 'Limpar parecer' }));
+        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', {
+            recommendation: null, recommendation_notes: null, recommended_by: null, recommended_at: null, recommendation_snapshot: null,
+        });
+    });
+
+    it('mostra os números que embasaram o parecer e avisa quando os de hoje mudaram', () => {
+        tela({ recommendation: 'aprovar', recommended_by: 'Bruno', recommended_at: '2026-11-10T15:00:00Z',
+            recommendation_snapshot: { vgv: 1, vpl: 123_456, tirAnual: 18.5, margemLiquidaPct: 20, exposicaoMaxima: 10 } });
+        expect(within(cartao()).getByText(/Dado com VPL R\$\s123\.456 e TIR 18,5% a\.a\./)).toBeTruthy();
+        expect(within(cartao()).getByText(/os números mudaram desde o parecer/i)).toBeTruthy();
     });
 
     it('o parecer sai no Excel (aba Parecer)', () => {

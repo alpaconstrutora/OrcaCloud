@@ -420,8 +420,12 @@ export const imovibService = {
             .eq('id', id);
 
         if (error) {
+            // Estudo com versão congelada não se apaga (FK RESTRICT; plano 2026-11-12-imovib-governanca-pendencias, item 3).
+            if (error.code === '23503' && /imovib_study_versions/.test(error.message)) {
+                throw new Error('Este estudo tem versões congeladas e não pode ser apagado.');
+            }
             console.error(`Error deleting IMOVIB study ${id}:`, error);
-            throw new Error(`Failed to delete IMOVIB study: ${error.message}`);
+            throw new Error(`Falha ao excluir o estudo: ${error.message}`);
         }
     },
 

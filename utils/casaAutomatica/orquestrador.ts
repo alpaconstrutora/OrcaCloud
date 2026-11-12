@@ -101,6 +101,8 @@ import type { DecisaoDaPressao } from './forroEPressao';
 import { PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM, pluvialRenteAoEsgoto, motivoParaNaoGerar, GRAVE, problemasGraves, escolherSemente, norteNoQuadro, comandosNoMundo, comandosLocaisNoMundo, gruposDoTuboDeQueda, coletoresForaDoShaft, paredesSobORebaixo, LUZ_ALEM_DO_REBAIXO_MM, LUZ_FORA_DO_PILAR_MM, foraDoPoligono, FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM } from './escolhaEShaft';
 import type { ContextoDaCasa, SemContexto } from './contexto';
 import { portaDaFrente as portaDaFrenteDaEtapa, lancarEscadaDeAcesso as lancarEscadaDeAcessoDaEtapa, garagemNoQuadro as garagemNoQuadroDaEtapa, lancarRampaDaGaragem as lancarRampaDaGaragemDaEtapa, lancarMuroDaCasa as lancarMuroDaCasaDaEtapa } from './etapaAcessoEMuro';
+import { fechar as fecharDaEtapa, gerarTodas as gerarTodasDaEtapa } from './etapaArquitetura';
+import { etapaEstrutural as etapaEstruturalDaEtapa, etapaDoTelhado as etapaDoTelhadoDaEtapa } from './etapaEstruturaETelhado';
 
 /** F22: por que a TÉRREA não comporta o programa (`null` = comporta): medida mínima de ambiente violada, ou a TO. */
 export function terreaNaoComporta(p: PlanoDaCasa): string | null {
@@ -254,11 +256,26 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     get aplicar() {
       return aplicar;
     },
+    get comandos() {
+      return comandos;
+    },
+    get criados() {
+      return criados;
+    },
+    get decisoes() {
+      return decisoes;
+    },
     get entrada() {
       return entrada;
     },
+    get entradaDoGerador() {
+      return entradaDoGerador;
+    },
     get etapa() {
       return etapa;
+    },
+    get etapas() {
+      return etapas;
     },
     get garagemNoQuadro() {
       return garagemNoQuadro;
@@ -272,17 +289,44 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     get implantacao() {
       return implantacao;
     },
+    get loteDasRegras() {
+      return loteDasRegras;
+    },
     get m() {
       return m;
     },
     set m(v) {
       m = v;
     },
+    get pedidos() {
+      return pedidos;
+    },
+    get peDireitoMm() {
+      return peDireitoMm;
+    },
     get pendencias() {
       return pendencias;
     },
     get portaDaFrente() {
       return portaDaFrente;
+    },
+    get programa() {
+      return programa;
+    },
+    get q() {
+      return q;
+    },
+    get resumoDoMuro() {
+      return resumoDoMuro;
+    },
+    set resumoDoMuro(v) {
+      resumoDoMuro = v;
+    },
+    get telhado() {
+      return telhado;
+    },
+    set telhado(v) {
+      telhado = v;
     },
     get temTerreno() {
       return temTerreno;
@@ -292,6 +336,9 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     },
     set terraplenagemDaCasa(v) {
       terraplenagemDaCasa = v;
+    },
+    get zonaDasRegras() {
+      return zonaDasRegras;
     },
   };
 
@@ -519,158 +566,21 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     contextoDeRegras: { lote: loteDasRegras, zona: zonaDasRegras },
   };
 
-  const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
-    // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
-    // ventilação mecânica — fica para conferir no código de obras, não "sem solução".
-    for (const pd of pendencias) {
-      const nome = /^Arquitetura: (.+) exige ventilação e ficou sem lado externo\.$/.exec(pd.texto)?.[1];
-      if (!nome) continue;
-      const sp = m.spaces.find((x) => x.name === nome);
-      if (sp && (m.terminais ?? []).some((t) => t.tipoHidraulico === 'EXAUSTOR_AR' && t.levelId === sp.levelId && pointInPolygon(sp.ring, t.at))) {
-        pd.grupo = 'CONFERIR';
-        pd.texto = `Arquitetura: ${nome} sem lado externo — ventilação por exaustor com duto até a fachada (confira no código de obras).`;
-      }
-    }
-    const conferencia = conferirPrograma(m, programa);
-    for (const it of conferencia.itens) {
-      if (it.item.uso === 'CIRCULACAO' || it.faltam <= 0) continue;
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: falta ${it.faltam} × ${it.item.nome} no desenho` });
-    }
-    for (const rel of conferencia.relacoes) {
-      if (rel.estado === 'VIOLADA' && rel.relacao.tipo !== 'DESEJAVEL') pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: ${rel.a.nome} × ${rel.b.nome} — ${rel.relacao.tipo === 'OBRIGATORIA' ? 'deviam ter porta direta' : 'não podiam ser vizinhos'} (${rel.valor})`, ...comLocal(localDoElemento(m, [rel.spaceA, rel.spaceB].filter((x): x is string => !!x))) });
-    }
-    const atendidos = conferencia.itens.filter((it) => it.item.uso !== 'CIRCULACAO').reduce((s, it) => s + it.casados.length, 0);
-    const regras = avaliarRegras(m, REGRAS_SEMENTE, {
-      lote: loteDasRegras,
-      zona: zonaDasRegras,
-      taxaOcupacaoPct: loteDasRegras && loteDasRegras.areaM2 > 0 ? Math.round((f.projecaoM2 / loteDasRegras.areaM2) * 1000) / 10 : null,
-      coeficiente: loteDasRegras && loteDasRegras.areaM2 > 0 ? Math.round((f.areaConstruidaM2 / loteDasRegras.areaM2) * 100) / 100 : null,
-      alturaM: f.alturaM,
-    });
-    const violadas = regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO');
-    for (const v of violadas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Legislação: ${v.regra.nome} — ${v.alvoRotulo}${v.valores ? ` (${v.valores})` : ''}`, ...comLocal(localDoElemento(m, [v.selecionarId ?? v.alvoId].filter((x): x is string => !!x))) });
-    etapa('CONFERENCIA', ROTULO_DA_ETAPA_DA_CASA.CONFERENCIA, 'CALCULOU', 0, `${atendidos} de ${pedidos} ambientes do programa; ${violadas.length} regra(s) violada(s)`);
-    return {
-      levelId: entrada.levelId,
-      comandos,
-      criados,
-      etapas,
-      pendencias,
-      resultado: m,
-      programa,
-      implantacao,
-      semente: f.semente,
-      escolha: f.escolha,
-      decisoes,
-      sobrado: f.sobrado,
-      resumo: { areaConstruidaM2: f.areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, ...f.disciplinas, terraplenagem: terraplenagemDaCasa, muro: resumoDoMuro },
-    };
-  };
+  const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => fecharDaEtapa(ctx, f);
 
-  const gerarTodas = (p: Programa) => {
-    const resultados: ResultadoDoGerador[] = [];
-    const falhas: string[] = [];
-    for (const s of hip.sementes.length ? hip.sementes : [1]) {
-      try {
-        resultados.push(gerar({ ...entradaDoGerador, programa: p }, s, hipGerador));
-      } catch (e) {
-        falhas.push(`semente ${s}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-    return { resultados, falhas };
-  };
+  const gerarTodas = (p: Programa) => gerarTodasDaEtapa(ctx, p);
 
   // ── ESTRUTURA (F4) — o molde das etapas estruturais (a térrea e o sobrado) ─────
   // Os lançamentos automáticos da gaveta Estrutural, em cadeia: cada um lê o modelo com o anterior aplicado
   // (vigas apoiam nos pilares, fundações descem dos pilares). Falha ou recusa = motivo na etapa e segue.
   const estrutura = { ...ESTRUTURA_ZERADA };
   const L = entrada.levelId;
-  const etapaEstrutural = <P extends { comandos: Command[]; motivo: string | null; avisos?: string[] }>(
-    id: Exclude<EtapaDaCasaId, 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA'>,
-    planejar: (modelo: BlueprintModel) => P,
-    contar: (plano: P) => { nota: string; foraDoPlano?: string[] },
-  ) => {
-    if (!hip.estrutura.lancar) {
-      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
-      return;
-    }
-    try {
-      const plano = planejar(m);
-      if (!plano.comandos.length) {
-        // Sem nada a lançar: o motivo (recusa) ou, não havendo, o aviso diz por quê (paredes oblíquas, nos eixos).
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], plano.motivo ? 'NAO_RODOU' : 'NADA_A_FAZER', 0, plano.motivo ?? (plano.avisos?.length ? plano.avisos.join('; ') : null));
-        if (plano.motivo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${plano.motivo}` });
-        return;
-      }
-      const n = aplicar(plano.comandos);
-      const { nota, foraDoPlano = [] } = contar(plano);
-      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota);
-      for (const a of plano.avisos ?? []) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${a}` });
-      // "Fora do plano" é o planejador PULANDO um ponto (pilar quase duplicado, viga já existente…): o lugar ficou
-      // atendido por outra peça ou pede conferência — não é falta de solução.
-      // F23: o nó a menos de uma seção de outro pilar é atendido por ele (que apoia as paredes do nó) — para conferir.
-      for (const f of foraDoPlano)
-        pendencias.push(/a menos de uma seção de outro pilar/.test(f) ? { grupo: 'CONFERIR', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f} — o pilar vizinho atende os dois encontros` } : { grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
-    } catch (e) {
-      const motivo = e instanceof Error ? e.message : String(e);
-      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
-    }
-  };
+  const etapaEstrutural = <P extends { comandos: Command[]; motivo: string | null; avisos?: string[] }>(id: Exclude<EtapaDaCasaId, 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA'>, planejar: (modelo: BlueprintModel) => P, contar: (plano: P) => { nota: string; foraDoPlano?: string[] }) => etapaEstruturalDaEtapa<P>(ctx, id, planejar, contar);
   // ── TELHADO (F5) ──────────────────────────────────────────────────────────
   // Duas águas (ou uma) por extrusão sobre o retângulo da arquitetura, no quadro da frente. A parede termina
   // no pé-direito; com laje lançada, o telhado começa em cima dela. No sobrado, sobre o pavimento de cima.
   let telhado: ResumoDoTelhado | null = null;
-  const etapaDoTelhado = (levelId: ObjectId, ret: Retangulo, anexos: readonly Retangulo[], comLaje: boolean) => {
-    if (!hip.telhado.lancar) {
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
-      return;
-    }
-    const espessuraExterna = hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm;
-    const topo = peDireitoMm + (comLaje ? hip.estrutura.lajes.espessuraMm : 0);
-    const t = comandosDoTelhado(levelId, ret, q, topo, espessuraExterna / 2, hip.telhado);
-    if (!t.ok) {
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, t.motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${t.motivo}` });
-      return;
-    }
-    // F24: o anexo da casa em L ganha UMA água caindo para fora do principal (atrás → fundos, à frente → frente, ao
-    // lado → para aquele lado). O que não encosta em nenhum lado do principal fica para cobrir à mão.
-    const dosAnexos: Command[] = [];
-    let anexosSemCobertura = 0;
-    for (const a of anexos) {
-      const caimento = a.y0 >= ret.y1 - 1 ? 'FUNDOS' : a.y1 <= ret.y0 + 1 ? 'FRENTE' : a.x0 >= ret.x1 - 1 ? 'DIREITA' : a.x1 <= ret.x0 + 1 ? 'ESQUERDA' : null;
-      const ta = caimento ? comandosDoTelhado(levelId, a, q, topo, espessuraExterna / 2, { ...hip.telhado, tipo: 'UMA_AGUA', caimentoUmaAgua: caimento }) : null;
-      if (ta?.ok) dosAnexos.push(...ta.comandos);
-      else anexosSemCobertura++;
-    }
-    try {
-      const antes = new Set((m.roofs ?? []).map((r) => r.id));
-      const n = aplicar([...t.comandos, ...dosAnexos]);
-      // F19 da casa automática: a COMPOSIÇÃO do teto nas águas (de cima para baixo) — sem ela a carga térmica não avaliava
-      // o teto ("cobertura sem camadas declaradas") em todo cômodo. O ático como câmara de ar, a laje e o forro de gesso;
-      // a telha fica fora (sem condutividade na biblioteca, anularia a conta). Presumida: dita.
-      const camadas: CamadaParede[] = [
-        { espessuraMm: 300, itemCode: '', descricao: 'Ático (câmara de ar)', funcao: 'CAMARA_AR' },
-        ...(comLaje ? [{ espessuraMm: hip.estrutura.lajes.espessuraMm, itemCode: 'INT-CONCRETO', descricao: 'Laje de concreto', funcao: 'ESTRUTURAL' as const }] : []),
-        ...(hip.forro.lancar ? [{ espessuraMm: 13, itemCode: 'INT-GESSO', descricao: 'Forro de gesso', funcao: 'ACABAMENTO' as const }] : []),
-      ];
-      const novas = (m.roofs ?? []).filter((r) => !antes.has(r.id));
-      if (novas.length) {
-        aplicar(novas.map((r) => ({ type: 'SetAguaProps', aguaId: r.id, camadas }) as Command));
-        pendencias.push({ grupo: 'CONFERIR', texto: `Telhado: composição do teto presumida para a carga térmica (ático + ${comLaje ? `laje de ${hip.estrutura.lajes.espessuraMm} mm` : 'sem laje'}${hip.forro.lancar ? ' + forro de gesso' : ''}) — declare as camadas reais nas águas.` });
-      }
-      telhado = t.resumo;
-      const tr = t.resumo;
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'LANCOU', n, `${tr.aguas === 2 ? 'duas águas' : 'uma água'} a ${String(hip.telhado.inclinacaoPct).replace('.', ',')} %, cumeeira ${tr.direcao} (${String(tr.cumeeiraM).replace('.', ',')} m), beiral de ${String(hip.telhado.beiralMm / 1000).replace('.', ',')} m — ${String(tr.projecaoM2).replace('.', ',')} m² de projeção`);
-      if (dosAnexos.length) pendencias.push({ grupo: 'CONFERIR', texto: `Telhado: ${dosAnexos.length} anexo(s) em uma água caindo para fora do principal — confira o encontro das águas (rufo/calha).` });
-      if (anexosSemCobertura) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Telhado: ${anexosSemCobertura} anexo(s) da planta ficaram sem cobertura — cubra à mão (Telhado › Extrusão).` });
-    } catch (e) {
-      const motivo = e instanceof Error ? e.message : String(e);
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${motivo}` });
-    }
-  };
+  const etapaDoTelhado = (levelId: ObjectId, ret: Retangulo, anexos: readonly Retangulo[], comLaje: boolean) => etapaDoTelhadoDaEtapa(ctx, levelId, ret, anexos, comLaje);
 
   // ── INSTALAÇÕES (F6–F9) — da térrea e do sobrado: `niveis` = [térreo] ou [térreo, superior] ─────────
   // Água, esgoto, pluvial, eletrodutos e climatização já leem o modelo inteiro (colunas, tubo de queda, prumadas);

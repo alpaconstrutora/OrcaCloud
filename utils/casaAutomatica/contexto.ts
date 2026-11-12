@@ -75,20 +75,34 @@ import type { DecisaoDaPressao } from './forroEPressao';
 import type { PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM, pluvialRenteAoEsgoto, motivoParaNaoGerar, GRAVE, problemasGraves, escolherSemente, norteNoQuadro, comandosNoMundo, comandosLocaisNoMundo, gruposDoTuboDeQueda, coletoresForaDoShaft, paredesSobORebaixo, LUZ_ALEM_DO_REBAIXO_MM, LUZ_FORA_DO_PILAR_MM, foraDoPoligono, FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM } from './escolhaEShaft';
 import type { ResumoDasDisciplinas } from './orquestrador';
 import type { Opening } from '../blueprintKernel';
+import type { QuadroDaFrente } from './quadroEImplantacao';
 
 export interface ContextoDaCasa {
   readonly aplicar: (lote: Command[]) => number;
+  readonly comandos: Command[];
+  readonly criados: string[];
+  readonly decisoes: string[];
   readonly entrada: EntradaDaCasa;
+  readonly entradaDoGerador: EntradaDoGerador;
   readonly etapa: (id: EtapaDaCasaId, rotulo: string, situacao: SituacaoDaEtapa, n: number, nota?: string | null) => void;
+  readonly etapas: EtapaDaCasa[];
   readonly garagemNoQuadro: () => { x0: number; x1: number; } | null;
   readonly hip: HipotesesDaCasa;
   readonly hipGerador: Partial<HipotesesDoGerador>;
   readonly implantacao: ImplantacaoDaCasa;
+  readonly loteDasRegras: { areaM2: number; perimetroM: number; testadaM: number | null; } | null | undefined;
   m: BlueprintModel;
+  readonly pedidos: number;
+  readonly peDireitoMm: number;
   readonly pendencias: PendenciaDoPpci[];
   readonly portaDaFrente: () => { o: Opening; meioDaPorta: { x: number; y: number; }; local: Point; };
+  readonly programa: Programa;
+  readonly q: QuadroDaFrente;
+  resumoDoMuro: { frenteM: number; divisasM: number; portoesDePedestre: number; portoesDeGaragem: number; calcadasM2: number; impermeavelM2: number; jardimM2: number; } | null;
+  telhado: ResumoDoTelhado | null;
   readonly temTerreno: boolean;
   terraplenagemDaCasa: ResumoDaTerraplenagem | null;
+  readonly zonaDasRegras: { taxaOcupacaoMax?: number | null; coeficienteMax?: number | null; gabaritoAlturaMaxM?: number | null; gabaritoPavimentos?: number | null; taxaPermeabilidadeMin?: number | null; testadaMinimaMm?: number | null; areaMinimaDoLoteM2?: number | null; insolacaoMinimaH?: number | null; vagasPorUnidade?: number | null; } | null | undefined;
 }
 
 /** A função de etapa sem o contexto — o que o orquestrador chama. */

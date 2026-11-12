@@ -14,7 +14,6 @@ import type { ContextoDaCasa } from './contexto';
 
 export function portaDaFrente(ctx: ContextoDaCasa) {
   const { entrada, hipGerador, implantacao } = ctx;
-
   const qd = implantacao.quadro;
   const rlE = implantacao.retanguloLocal;
   const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
@@ -36,7 +35,6 @@ export function portaDaFrente(ctx: ContextoDaCasa) {
 
 export function lancarEscadaDeAcesso(ctx: ContextoDaCasa) {
   const { aplicar, entrada, hip, hipGerador, implantacao, pendencias, portaDaFrente } = ctx;
-
   const tr = ctx.terraplenagemDaCasa;
   if (!tr || tr.entrada.tipo === 'NENHUMA') return;
   const e = tr.entrada;
@@ -84,7 +82,6 @@ export function lancarEscadaDeAcesso(ctx: ContextoDaCasa) {
 
 export function garagemNoQuadro(ctx: ContextoDaCasa) {
   const { entrada, implantacao } = ctx;
-
   const qd = implantacao.quadro;
   const et = ctx.m.labels.find((l) => l.levelId === entrada.levelId && l.uso === 'GARAGEM');
   const sp = et ? ctx.m.spaces.find((x) => x.levelId === entrada.levelId && pointInPolygon(x.ring, et.at)) : undefined;
@@ -95,7 +92,6 @@ export function garagemNoQuadro(ctx: ContextoDaCasa) {
 
 export function lancarRampaDaGaragem(ctx: ContextoDaCasa) {
   const { aplicar, entrada, garagemNoQuadro, hip, hipGerador, implantacao, pendencias } = ctx;
-
   const tr = ctx.terraplenagemDaCasa;
   const leitor = entrada.leitorDoTerreno;
   if (!tr || !leitor) return;
@@ -144,7 +140,6 @@ export function lancarRampaDaGaragem(ctx: ContextoDaCasa) {
 
 export function lancarMuroDaCasa(ctx: ContextoDaCasa): PlanoDoMuroDaCasa['resumo'] | null {
   const { aplicar, entrada, etapa, garagemNoQuadro, hip, hipGerador, implantacao, pendencias, portaDaFrente, temTerreno } = ctx;
-
   if (!hip.muro.lancar) {
     etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
     return null;

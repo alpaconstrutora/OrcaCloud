@@ -31,6 +31,9 @@ export const COLUNAS_DA_LISTAGEM = [METADADOS_DA_LISTAGEM, ...CAMPOS_DO_MOTOR].j
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
 
 // Outras fontes de capital (aplicar_20271111980000) — o motor lê todas as colunas.
+/** Erro de permissão do banco (RLS/privilégio): a tela diz em português, não o texto do Postgres. */
+const semPermissao = (e: { code?: string; message?: string }) => e.code === '42501' || /row-level security|permission denied/i.test(e.message ?? '');
+
 const VERSAO_COLS = 'id, study_id, label, notes, results, created_at, created_by';
 const SOCIO_COLS = 'id, study_id, name, share_percent, capital_percent, notes, company_partner_id, sort_order, created_at';
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
@@ -715,7 +718,7 @@ export const imovibService = {
         const { error } = await supabase
             .from('imovib_scenarios')
             .upsert(linhas, { onConflict: 'study_id,name', ignoreDuplicates: true });
-        if (error) throw new Error(`Falha ao criar os cenários padrão: ${error.message}`);
+        if (error) throw new Error(semPermissao(error) ? 'Sem permissão para criar cenários deste estudo.' : `Falha ao criar os cenários padrão: ${error.message}`);
     },
 
     /** Grava o cenário (cria sem `id`, atualiza com). `.select()` confere que a escrita passou na RLS. */
@@ -725,14 +728,16 @@ export const imovibService = {
             ? supabase.from('imovib_scenarios').update(campos).eq('id', id).select('id, study_id, name, kind, choques, sort_order, created_at')
             : supabase.from('imovib_scenarios').insert(campos).select('id, study_id, name, kind, choques, sort_order, created_at');
         const { data, error } = await q;
-        if (error) throw new Error(error.code === '23505' ? `Já existe um cenário com o nome "${c.name}".` : `Falha ao salvar o cenário: ${error.message}`);
+        if (error) throw new Error(error.code === '23505' ? `Já existe um cenário com o nome "${c.name}".` : semPermissao(error) ? 'Sem permissão para salvar cenários deste estudo.' : `Falha ao salvar o cenário: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para salvar cenários deste estudo.');
         return data[0] as ImovibScenario;
     },
 
     async excluirCenario(id: string): Promise<void> {
-        const { error } = await supabase.from('imovib_scenarios').delete().eq('id', id);
-        if (error) throw new Error(`Falha ao excluir o cenário: ${error.message}`);
+        // `.select()` confere que a RLS deixou apagar (0 linhas = sem permissão).
+        const { data, error } = await supabase.from('imovib_scenarios').delete().eq('id', id).select('id');
+        if (error) throw new Error(semPermissao(error) ? 'Sem permissão para excluir cenários deste estudo.' : `Falha ao excluir o cenário: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para excluir cenários deste estudo.');
     },
 
     async listarRiscos(studyId: string): Promise<ImovibRisk[]> {
@@ -753,14 +758,15 @@ export const imovibService = {
             ? supabase.from('imovib_risks').update(campos).eq('id', id).select(cols)
             : supabase.from('imovib_risks').insert(campos).select(cols);
         const { data, error } = await q;
-        if (error) throw new Error(`Falha ao salvar o risco: ${error.message}`);
+        if (error) throw new Error(semPermissao(error) ? 'Sem permissão para salvar riscos deste estudo.' : `Falha ao salvar o risco: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para salvar riscos deste estudo.');
         return data[0] as ImovibRisk;
     },
 
     async excluirRisco(id: string): Promise<void> {
-        const { error } = await supabase.from('imovib_risks').delete().eq('id', id);
-        if (error) throw new Error(`Falha ao excluir o risco: ${error.message}`);
+        const { data, error } = await supabase.from('imovib_risks').delete().eq('id', id).select('id');
+        if (error) throw new Error(semPermissao(error) ? 'Sem permissão para excluir riscos deste estudo.' : `Falha ao excluir o risco: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para excluir riscos deste estudo.');
     },
 
     // ── Outras fontes de capital (item 4.4 do plano 2026-11-11) ──────────────

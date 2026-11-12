@@ -696,6 +696,7 @@ import {
   svgDoPerfil,
 } from '../../utils/blueprintTopografiaExport';
 import { novoIdDeDrenagem, passoDoPlatoDaCasa, useBlueprintTerraplenagem, type PlatoDaCasaLancado } from '../../hooks/useBlueprintTerraplenagem';
+import { centroDoElemento } from '../../utils/blueprintLocalDaPendencia';
 import { useBlueprintProjetoExecutivo } from '../../hooks/useBlueprintProjetoExecutivo';
 import {
   EXECUTIVO_PADRAO,
@@ -12654,6 +12655,16 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             onGerar={gerarCasa}
             prova={provaDaCasa}
             desatualizada={previaDaCasaVelha}
+            // C3 (11/11/2026): com a casa lançada os ids da prévia estão no desenho — "Ver no editor" fecha a tela, abre o
+            // pavimento, seleciona os elementos e leva a vista até o ponto (o CENTRALIZAR da revisão guiada).
+            noDesenho={(ids) => ids.some((id) => centroDoElemento(editor.model, id) !== null)}
+            onVerNoEditor={(l) => {
+              setTelaAberta(null);
+              setNivelAtivoId(l.levelId);
+              selecionar(l.ids.filter((id) => centroDoElemento(editor.model, id) !== null));
+              const em = l.ponto ?? centroDoElemento(editor.model, l.ids[0])?.ponto;
+              if (em) setNavegacao((n) => ({ seq: (n?.seq ?? 0) + 1, acao: 'CENTRALIZAR', em, escalaMinima: 0.03 }));
+            }}
             lancado={lancadoCasa}
             onLancar={async () => {
               const plano = casa.plano;

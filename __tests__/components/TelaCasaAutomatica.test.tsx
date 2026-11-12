@@ -306,6 +306,48 @@ describe('TelaCasaAutomatica (F10)', () => {
     cleanup();
   });
 
+  it('C2 (11/11/2026): pendência com local leva à planta da prévia, no pavimento dela, com a marca; sem local, continua texto', () => {
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    m = applyCommand(m, { type: 'AddLevel', name: 'Superior', elevationMm: 2900, defaultHeightMm: 2800 }).model;
+    const [t, s] = m.levels.map((l) => l.id);
+    const w = (L: string, ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: L, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    m = applyBatch(m, [w(t, 0, 0, 8000, 0), w(t, 8000, 0, 8000, 5000), w(s, 0, 0, 8000, 0), w(s, 8000, 0, 8000, 5000)]).model;
+    const comLocal = { grupo: 'CONFLITO' as const, texto: 'Redes: 1 encontro(s) de água fria × eletroduto', locais: [{ levelId: s, ids: [m.walls[2].id], ponto: { x: 4000, y: 0 } }] };
+    tela({ casa: casa({ plano: { ...plano, levelId: t, resultado: m, pendencias: [...plano.pendencias, comLocal] } }) });
+    aba('Relatório');
+    fireEvent.click(screen.getByRole('button', { name: /Conflito que a proposta criou/ }));
+    // A de verificação (sem local) é texto; a do conflito é botão.
+    expect(screen.queryByRole('button', { name: /3 trecho\(s\) passando por porta/ })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /encontro\(s\) de água fria × eletroduto/ }));
+    const planta = within(screen.getByTestId('previa-da-casa')).getByTestId('planta-da-previa');
+    expect(within(planta).getByRole('img').getAttribute('aria-label')).toBe('Planta da prévia — Superior · Arquitetura');
+    expect(within(planta).getAllByTestId('marca-da-previa')).toHaveLength(1);
+    expect(screen.getByTestId('marcado-na-planta').textContent).toContain('encontro(s) de água fria × eletroduto');
+    fireEvent.click(within(screen.getByTestId('marcado-na-planta')).getByRole('button', { name: 'Limpar marcas' }));
+    expect(within(planta).queryAllByTestId('marca-da-previa')).toHaveLength(0);
+    cleanup();
+  });
+
+  it('C3 (11/11/2026): "Ver no editor" só com os elementos no desenho (casa lançada) — e leva o local', () => {
+    const local = { levelId: 'lvl_0001', ids: ['wal_0001'], ponto: { x: 1000, y: 0 } };
+    const pend = { ...plano, pendencias: [...plano.pendencias, { grupo: 'CONFLITO' as const, texto: 'Redes: 1 trecho(s) atravessando pilar', locais: [local] }] };
+    // Antes de lançar: os ids não estão no desenho — só "ver na planta".
+    tela({ casa: casa({ plano: pend }), noDesenho: () => false, onVerNoEditor: vi.fn() });
+    aba('Relatório');
+    fireEvent.click(screen.getByRole('button', { name: /Conflito que a proposta criou/ }));
+    expect(screen.getByRole('button', { name: /atravessando pilar/ })).toBeTruthy();
+    expect(screen.queryByRole('button', { name: /Ver no editor/ })).toBeNull();
+    cleanup();
+    // Lançada: o atalho aparece e entrega o local.
+    const onVerNoEditor = vi.fn();
+    tela({ casa: casa({ plano: pend }), noDesenho: (ids) => ids.includes('wal_0001'), onVerNoEditor });
+    aba('Relatório');
+    fireEvent.click(screen.getByRole('button', { name: /Conflito que a proposta criou/ }));
+    fireEvent.click(screen.getByRole('button', { name: /Ver no editor/ }));
+    expect(onVerNoEditor).toHaveBeenCalledWith(local);
+    cleanup();
+  });
+
   it('o número é livre enquanto se digita: o "5" de "5500" não vira 2000; sai do campo, volta para a faixa', () => {
     const p = tela();
     aba('Hipóteses');

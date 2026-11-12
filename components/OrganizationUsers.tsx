@@ -108,6 +108,14 @@ function renderMemberCell(
 
 interface OrganizationUsersProps {
     organizationId?: string;
+    /** Nome da organização da lista — vai no título quando o topo não diz qual é (vindo de "Todos os usuários"). */
+    orgName?: string;
+    /** Seta "Voltar" ao lado do título (§23.1). Só existe quando se chegou por outra tela ("Todos os usuários"). */
+    onBack?: () => void;
+    /** Abre a edição deste membro ao montar (botão "Editar" de "Todos os usuários"). */
+    abrirMembroId?: string | null;
+    /** Avisa que a edição foi aberta, para quem mandou limpar o pedido — senão voltaria a abrir ao reentrar na aba. */
+    onAbriuMembro?: () => void;
     members: OrganizationMember[];
     onUpdateMembers: (updatedMembers: OrganizationMember[]) => void;
     customRoles: OrganizationCustomRole[];
@@ -462,6 +470,10 @@ const PERMISSION_GROUPS: { group: string; modules: typeof DETAILED_PERMISSIONS }
 
 const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     organizationId,
+    orgName,
+    onBack,
+    abrirMembroId,
+    onAbriuMembro,
     members = [],
     onUpdateMembers,
     customRoles = [],
@@ -739,6 +751,17 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         }
         setEditingMember(member);
     };
+
+    // "Editar" em "Todos os usuários" cai aqui já com a pessoa escolhida: abre a edição dela uma vez só.
+    const membroAbertoPorPedido = React.useRef<string | null>(null);
+    React.useEffect(() => {
+        if (!abrirMembroId || membroAbertoPorPedido.current === abrirMembroId) return;
+        const alvo = members.find(m => m.id === abrirMembroId);
+        if (!alvo) return;
+        membroAbertoPorPedido.current = abrirMembroId;
+        handleOpenEditMember(alvo);
+        onAbriuMembro?.();
+    }, [abrirMembroId, members]);
 
     const handleEscolherAssinatura = (file: File | null) => {
         setEditAssinaturaFile(file);
@@ -1143,8 +1166,24 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     return (
         <div className="space-y-6">
             <div>
-                <h1 className="text-3xl font-black text-gray-900 tracking-tight">{SUBTAB_HEADERS[activeSubTab].title}</h1>
-                <p className="text-gray-400 text-sm mt-1.5 font-medium">{SUBTAB_HEADERS[activeSubTab].subtitle}</p>
+                {/* Seta de voltar ao lado do título (§23.1) — só quando se chegou por "Todos os usuários". */}
+                <div className="flex items-center gap-3">
+                    {onBack && (
+                        <button
+                            type="button"
+                            onClick={onBack}
+                            title="Voltar para Todos os usuários"
+                            aria-label="Voltar para Todos os usuários"
+                            className="flex items-center justify-center h-9 w-9 -ml-2 rounded-[6px] text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition-all shrink-0"
+                        >
+                            <ArrowLeft className="w-5 h-5" />
+                        </button>
+                    )}
+                    <h1 className="text-3xl font-black text-gray-900 tracking-tight">
+                        {SUBTAB_HEADERS[activeSubTab].title}{orgName ? ` · ${orgName}` : ''}
+                    </h1>
+                </div>
+                <p className={`text-gray-400 text-sm mt-1.5 font-medium ${onBack ? 'ml-12' : ''}`}>{SUBTAB_HEADERS[activeSubTab].subtitle}</p>
             </div>
 
             {/* §19.1 — toolbar de abas: card branco próprio + trilho bg-gray-50 */}

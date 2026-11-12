@@ -90,7 +90,7 @@ brechas `employees.user_id` gravável por qualquer membro e `task_collaborators`
 
 ### Ajustes — brechas do vínculo e dos envolvidos (2026-11-12)
 
-- Migration `aplicar_20271112400000_vinculo_colaborador_e_envolvidos_trava.sql`, prova
+- Migration `aplicar_20271112800000_vinculo_colaborador_e_envolvidos_trava.sql`, prova
   `scripts/teste-vinculo-colaborador-envolvidos.sql` (RED sem ela: "membro comum vinculando o
   colaborador à própria conta → 42501 (veio ok:1)"; com ela, `TUDO OK`).
 - **Vínculo:** gatilho `trg_employees_vinculo_so_gestor` — via API, só owner/admin da org do
@@ -490,7 +490,7 @@ Vitest, Playwright (harness fora do repo).
   `celular_sessao`/`celular_tarefas_listar` com token falso → 42501 `link inválido ou vencido`.
 - [x] Task 7 · Step 4: push em `main` + `conferir-producao.sh` (domínio em `6787b03`, com o responsável)
 - [x] Step 5: prova real no celular — o usuário confirmou em 2026-11-12 que o link do Iago mostra as mesmas tarefas do app
-- [ ] Brechas do vínculo e dos envolvidos (`aplicar_20271112400000`): ensaio `TUDO OK`; aplicar e publicar após aval
+- [ ] Brechas do vínculo e dos envolvidos (`aplicar_20271112800000`): ensaio `TUDO OK`; aplicar e publicar após aval
 - [ ] Plano de implementação Parte 2 (F3–F5) — depois de F2 no ar
 - [x] F1 (banco no ar) · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
 

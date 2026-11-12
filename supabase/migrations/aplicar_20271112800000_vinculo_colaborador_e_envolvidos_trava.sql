@@ -1,4 +1,4 @@
--- aplicar_20271112400000_vinculo_colaborador_e_envolvidos_trava.sql
+-- aplicar_20271112800000_vinculo_colaborador_e_envolvidos_trava.sql
 --
 -- Fecha duas brechas de RLS que já existiam e que a regra do responsável
 -- (aplicar_20271111995000) tornou relevantes:

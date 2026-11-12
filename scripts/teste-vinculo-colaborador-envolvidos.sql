@@ -2,7 +2,7 @@
 -- Prova: (1) só owner/admin vincula colaborador a uma conta (employees.user_id,
 -- ou e-mail igual ao de um login); (2) task_collaborators volta a funcionar pela
 -- API e só quem gere a tarefa (dono / membro do espaço) mexe nos envolvidos.
--- Migration: supabase/migrations/aplicar_20271112400000_vinculo_colaborador_e_envolvidos_trava.sql
+-- Migration: supabase/migrations/aplicar_20271112800000_vinculo_colaborador_e_envolvidos_trava.sql
 -- Plano: docs/planos/2026-11-11-link-celular-tarefas-diario.md (Ajustes — brechas).
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';

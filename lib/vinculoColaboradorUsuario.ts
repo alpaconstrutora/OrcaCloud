@@ -5,7 +5,7 @@
  * responsável — vincular é dar acesso. Por isso só owner/admin da org do
  * colaborador (decisão do usuário, 2026-11-12). Quem garante é o banco: o
  * gatilho trg_employees_vinculo_so_gestor
- * (aplicar_20271112400000_vinculo_colaborador_e_envolvidos_trava.sql), que
+ * (aplicar_20271112800000_vinculo_colaborador_e_envolvidos_trava.sql), que
  * também barra trocar o e-mail do colaborador para o de um login. Aqui é só
  * a tela dizer o motivo antes de o usuário tentar.
  */

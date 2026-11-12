@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { motivoVinculoUsuarioBloqueado, MOTIVO_VINCULO_SO_GESTOR } from '../lib/vinculoColaboradorUsuario';
 
 // Espelha o gatilho trg_employees_vinculo_so_gestor
-// (aplicar_20271112400000_vinculo_colaborador_e_envolvidos_trava.sql).
+// (aplicar_20271112800000_vinculo_colaborador_e_envolvidos_trava.sql).
 describe('motivoVinculoUsuarioBloqueado', () => {
     it('owner e admin vinculam', () => {
         expect(motivoVinculoUsuarioBloqueado({ desenvolvedor: false, orgCarregada: true, papel: 'owner' })).toBeNull();

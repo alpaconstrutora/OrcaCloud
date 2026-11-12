@@ -99,7 +99,7 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
         | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
-        | 'impostos_pelo_regime' | 'ret_sem_afetacao';
+        | 'impostos_pelo_regime' | 'ret_sem_afetacao' | 'premissa_ajustada' | 'distrato_sem_revenda' | 'custo_de_obra_negativo';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -751,6 +751,54 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             aba: 'receitas',
         });
     }
+    // Premissas fora da faixa: o cálculo segue como dá, e o aviso diz o que ajustou
+    // (regra 5 do plano; antes os ajustes eram silenciosos — pendência da Fase 1).
+    const ajustes: string[] = [];
+    const pctTxt = (x: number) => `${Number(x.toFixed(2)).toLocaleString('pt-BR')}%`;
+    const foraDaFaixa = (x: number | null | undefined, rotulo: string) => {
+        if (x == null || Number.isNaN(x)) return;
+        if (x > 100) ajustes.push(`${rotulo} de ${pctTxt(x)} vale como 100%`);
+        else if (x < 0) ajustes.push(`${rotulo} de ${pctTxt(x)} vale como 0%`);
+    };
+    const tipoDaCurva = study.sales_curve_type ?? D.sales_curve_type;
+    if (tipoDaCurva === 'lancamento') {
+        foraDaFaixa(study.sales_launch_percent, 'Vendido no lançamento');
+        const mesesDoLancamento = Math.round(val(study.sales_launch_months, D.sales_launch_months));
+        if (mesesDoLancamento > salesDur) ajustes.push(`os meses do lançamento (${mesesDoLancamento}) passam do prazo de vendas (${salesDur}): vende igual em todos os meses`);
+    }
+    if (tipoDaCurva === 'vso') foraDaFaixa(study.sales_vso_percent, 'VSO');
+    if (tipoDaCurva === 'custom') {
+        const pesos = study.sales_curve_custom ?? [];
+        if (pesos.length > salesDur) ajustes.push(`${pesos.length - salesDur} pesos da curva personalizada ficam além do prazo de vendas e fora do cálculo`);
+        if (pesos.some(x => Number(x) < 0)) ajustes.push('pesos negativos da curva personalizada valem 0');
+    }
+    foraDaFaixa(study.swap_physical_percent, 'Permuta física');
+    foraDaFaixa(study.swap_financial_percent, 'Permuta financeira');
+    if ((study.cancellation_lag_months ?? 0) < 0) ajustes.push(`os meses até o distrato (${study.cancellation_lag_months}) valem 0`);
+    if ((study.financing_release_lag_months ?? 0) < 0) ajustes.push(`a defasagem da liberação (${study.financing_release_lag_months}) vale 0`);
+    if (ajustes.length) {
+        avisos.push({
+            codigo: 'premissa_ajustada',
+            mensagem: `O cálculo ajustou premissas fora da faixa: ${ajustes.join('; ')}. Corrija os campos para o número ser o que você quer.`,
+            aba: 'receitas',
+        });
+    }
+    const taxaDeDistrato = val(study.cancellation_rate_percent, D.cancellation_rate_percent);
+    if (taxaDeDistrato > 0 && !(study.cancellation_resale ?? D.cancellation_resale)) {
+        avisos.push({
+            codigo: 'distrato_sem_revenda',
+            mensagem: `Sem revenda, a unidade distratada (${pctTxt(taxaDeDistrato)} das vendas antes das chaves) sai do estoque e não é vendida de novo: o VGV dela fica fora da receita.`,
+            aba: 'receitas',
+        });
+    }
+    if (constCostTotal < 0) {
+        avisos.push({
+            codigo: 'custo_de_obra_negativo',
+            mensagem: `O custo de obra está negativo (${fmtBRL(constCostTotal)}): confira o custo/m² das torres. O financiamento não libera nada sobre custo negativo.`,
+            aba: 'capex',
+        });
+    }
+
     const vendasPorMes: number[] = [];
     for (let m = 1; m < salesStart; m++) vendasPorMes.push(0);
     curva.forEach(f => vendasPorMes.push(f * vgvVendavel));

@@ -12,6 +12,7 @@ import {
 } from '../utils/imovibEstrutura';
 import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 import type { ImovibComparable } from '../utils/imovibMercado';
+import { areaEquivalenteDasVersoes, type AreaEquivalenteDaPlanta, type VersaoComQuadro } from '../utils/imovibAreaEquivalente';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -838,6 +839,41 @@ export const imovibService = {
         const { data, error } = await supabase.from('imovib_market_comparables').delete().eq('id', id).select('id');
         if (error) throw new Error(`Falha ao excluir o comparável: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para excluir comparáveis deste estudo.');
+    },
+
+    // ── Área equivalente NBR 12721 (item 8.2 do plano 2026-11-11) ───────────
+
+    /**
+     * A área equivalente do quadro congelado nas versões publicadas da Planta do
+     * empreendimento (`blueprint_snapshot_nbr12721`), na versão que o memorial
+     * citaria. Só o Quadro I e o status saem da saída gravada. null = não medido.
+     */
+    async areaEquivalenteDaPlanta(blueprintStudyId: string): Promise<AreaEquivalenteDaPlanta | null> {
+        const { data, error } = await supabase
+            .from('blueprint_snapshot_nbr12721')
+            .select('snapshot_id, status:saida->>status, quadroI:saida->quadroI')
+            .eq('study_id', blueprintStudyId);
+        if (error) throw new Error(`Falha ao ler o quadro NBR 12721: ${error.message}`);
+        const quadros = (data ?? []) as unknown as { snapshot_id: string; status: string | null; quadroI: VersaoComQuadro['quadroI'] | null }[];
+        if (!quadros.length) return null;
+        const ids = quadros.map(q => q.snapshot_id);
+        const [snaps, aprov] = await Promise.all([
+            supabase.from('blueprint_snapshots').select('id, revision').in('id', ids),
+            supabase.from('blueprint_snapshot_nbr12721_aprovacoes').select('snapshot_id, tipo').in('snapshot_id', ids),
+        ]);
+        if (snaps.error) throw new Error(`Falha ao ler as versões da Planta: ${snaps.error.message}`);
+        if (aprov.error) throw new Error(`Falha ao ler as aprovações do quadro: ${aprov.error.message}`);
+        const revisao = new Map(((snaps.data ?? []) as { id: string; revision: number }[]).map(v => [v.id, v.revision]));
+        const aprovacoes = (aprov.data ?? []) as { snapshot_id: string; tipo: 'TECNICA' | 'JURIDICA' }[];
+        return areaEquivalenteDasVersoes(quadros
+            .filter(q => revisao.has(q.snapshot_id))
+            .map(q => ({
+                snapshotId: q.snapshot_id,
+                revisao: revisao.get(q.snapshot_id)!,
+                aprovacoes: aprovacoes.filter(a => a.snapshot_id === q.snapshot_id),
+                status: q.status === 'success' ? 'success' : 'failed',
+                quadroI: q.quadroI ?? [],
+            })));
     },
 
     // ── Due diligence do terreno (item 5.9 do plano 2026-11-11) ─────────────

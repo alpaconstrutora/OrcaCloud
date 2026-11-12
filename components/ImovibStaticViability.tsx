@@ -1,9 +1,10 @@
 import React from 'react';
 import { ImovibStudy } from '../types';
-import { Calculator, TrendingUp, DollarSign, Activity } from 'lucide-react';
+import { Calculator, TrendingUp, DollarSign, Activity, Percent, Home, Tag, Building2, HardHat } from 'lucide-react';
 import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { KpiCard } from './ui/KpiCard';
+import ImovibAreaEquivalenteCard from './ImovibAreaEquivalenteCard';
 
 interface ImovibStaticViabilityProps {
     study: ImovibStudy;
@@ -16,6 +17,8 @@ const formatCurrency = (value: number) =>
 
 const formatArea = (value: number) =>
     new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(value) + ' m²';
+
+const formatM2 = (value: number | null) => (value == null ? '—' : formatCurrency(value) + '/m²');
 
 const pctDoVgv = (valor: number, vgv: number) =>
     vgv > 0 ? `${((valor / vgv) * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%` : '—';
@@ -30,6 +33,7 @@ const pctDoVgv = (valor: number, vgv: number) =>
  */
 const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, onIrPara }) => {
     const math = useImovibMath(study);
+    const produto = math.produto;
 
     // O mesmo VGV do Resumo, do Espelho e da listagem.
     const vgv = math.vgvTotal;
@@ -152,6 +156,51 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
                     <div className="text-xl font-semibold text-green-900 mt-1">{formatArea(math.totalBlockArea)}</div>
                 </div>
             </div>
+
+            {/* Indicadores de produto (item 8.1) — calculados pelo motor */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                <KpiCard
+                    label="Eficiência"
+                    value={produto.eficiencia == null ? '—' : `${(produto.eficiencia * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
+                    sub={produto.eficiencia == null ? 'Sem área construída' : 'Privativa ÷ construída'}
+                    title="Área privativa das tipologias vendáveis (com as permutadas) ÷ área construída"
+                    icon={<Percent className="w-4 h-4" />}
+                    color="indigo"
+                />
+                <KpiCard
+                    label="Unidades à venda"
+                    value={produto.unidadesVendaveis.toLocaleString('pt-BR')}
+                    sub="Sem permutadas"
+                    title="Unidades das tipologias vendáveis, sem as permutadas do espelho"
+                    icon={<Home className="w-4 h-4" />}
+                    color="blue"
+                />
+                <KpiCard
+                    label="Tíquete médio"
+                    value={produto.ticketMedio == null ? '—' : formatCurrency(produto.ticketMedio)}
+                    sub={produto.ticketMedio == null ? 'Sem unidades à venda' : 'VGV ÷ unidades à venda'}
+                    icon={<Tag className="w-4 h-4" />}
+                    color="emerald"
+                />
+                <KpiCard
+                    label="VGV por m² privativo"
+                    value={formatM2(produto.vgvPorM2Privativo)}
+                    sub={produto.vgvPorM2Privativo == null ? 'Sem área à venda' : 'Sobre a área à venda'}
+                    title="VGV ÷ área privativa à venda (sem permutadas nem não vendáveis)"
+                    icon={<Building2 className="w-4 h-4" />}
+                    color="teal"
+                />
+                <KpiCard
+                    label="Obra por m² privativo"
+                    value={formatM2(produto.custoObraPorM2Privativo)}
+                    sub={produto.custoObraPorM2Privativo == null ? 'Sem área privativa' : 'Custo de obra ÷ privativa'}
+                    title="Custo de obra ÷ área privativa das tipologias vendáveis (com as permutadas)"
+                    icon={<HardHat className="w-4 h-4" />}
+                    color="orange"
+                />
+            </div>
+
+            <ImovibAreaEquivalenteCard study={study} custoObra={constructionCost} />
         </div>
     );
 };

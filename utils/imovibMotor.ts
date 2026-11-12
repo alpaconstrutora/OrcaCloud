@@ -104,6 +104,18 @@ export interface ImovibAviso {
     aba: ImovibAba;
 }
 
+export interface IndicadoresDeProduto {
+    /** Área privativa das tipologias vendáveis ÷ área construída (0 a 1). */
+    eficiencia: number | null;
+    unidadesVendaveis: number;
+    /** VGV ÷ unidades à venda. */
+    ticketMedio: number | null;
+    /** VGV ÷ área privativa à venda. */
+    vgvPorM2Privativo: number | null;
+    /** Custo de obra ÷ área privativa das tipologias vendáveis. */
+    custoObraPorM2Privativo: number | null;
+}
+
 export interface ImovibMathResult {
     monthlyFlows: MonthlyFlow[];
     maxExposure: number;
@@ -134,6 +146,13 @@ export interface ImovibMathResult {
     /** Área privativa à venda — sem tipologias não vendáveis nem unidades PERMUTADO do espelho: a do VGV (item 7.1). */
     areaPrivativaVendavel: number;
     totalCommonArea: number;
+    /**
+     * Indicadores de produto (item 8.1). Razão sem base (sem área, sem unidade)
+     * fica null, nunca 0. A eficiência e o custo por m² usam a área privativa das
+     * tipologias vendáveis, com as permutadas (são construídas e vendáveis; a
+     * permuta é negócio, não produto); VGV por m² e tíquete, a área e as unidades à venda.
+     */
+    produto: IndicadoresDeProduto;
     /**
      * VGV bruto dos blocos, antes de sensibilidade, permuta e
      * contingências — o número que Estática, Espelho e listagem exibem como "VGV".
@@ -325,6 +344,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     totalBlockArea: 0,
     totalPrivateArea: 0,
     areaPrivativaVendavel: 0,
+    produto: { eficiencia: null, unidadesVendaveis: 0, ticketMedio: null, vgvPorM2Privativo: null, custoObraPorM2Privativo: null },
     totalCommonArea: 0,
     vgvBase: 0,
     vgvPorBloco: {},
@@ -393,6 +413,8 @@ interface Premissas {
     totalPrivateArea: number;
     totalCommonArea: number;
     areaPrivativaVendavel: number;
+    /** Área privativa das tipologias vendáveis, com as permutadas (item 8.1). */
+    areaPrivativaDasTipologiasVendaveis: number;
     /** Recebimento de todas as safras, sem índice e já sem a inadimplência. */
     recebimento: SerieDeRecebimento;
     // Fase 5
@@ -479,6 +501,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     /** Unidades à venda (item 5.6): do espelho quando o bloco tem, senão das tipologias vendáveis. */
     let unidadesDoEspelho = 0;
     let areaPrivativaVendavel = 0;
+    let areaPrivativaDasTipologiasVendaveis = 0;
     let unidadesSemEspelho = 0;
     const blocosSemPreco: string[] = [];
 
@@ -529,6 +552,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         totalBlockArea += blockPrivateArea + blockCommonArea;
         totalPrivateArea += blockPrivateArea;
         totalCommonArea += blockCommonArea;
+        areaPrivativaDasTipologiasVendaveis += blockVendavelArea;
     });
 
     // A estrutura vem do empreendimento vinculado (Planta Inteligente) ou, sem
@@ -915,6 +939,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         totalPrivateArea,
         totalCommonArea,
         areaPrivativaVendavel,
+        areaPrivativaDasTipologiasVendaveis,
         recebimento,
         parcelasTerreno,
         mesDaPrimeiraParcela,
@@ -1235,6 +1260,9 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
 
 // ── 4. Resultado ────────────────────────────────────────────────────────────
 
+/** a ÷ b, ou null quando não há base. */
+const razao = (a: number, b: number): number | null => (b > 0 ? a / b : null);
+
 function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): ImovibMathResult {
     // Valor de cada rubrica no cálculo — mesma regra de montarPremissas, item a item.
     const capexValorPorRubrica: Record<string, number> = {};
@@ -1293,6 +1321,13 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         totalPrivateArea: P.totalPrivateArea,
         areaPrivativaVendavel: P.areaPrivativaVendavel,
         totalCommonArea: P.totalCommonArea,
+        produto: {
+            eficiencia: razao(P.areaPrivativaDasTipologiasVendaveis, P.totalBlockArea),
+            unidadesVendaveis: P.unidadesVendaveis,
+            ticketMedio: razao(P.baseVgvTotal, P.unidadesVendaveis),
+            vgvPorM2Privativo: razao(P.baseVgvTotal, P.areaPrivativaVendavel),
+            custoObraPorM2Privativo: razao(P.constCostTotal, P.areaPrivativaDasTipologiasVendaveis),
+        },
         vgvBase: P.baseVgvTotal,
         vgvPorBloco: P.vgvPorBloco,
         debtPayoffAtEnd: F.debtPayoffAtEnd,

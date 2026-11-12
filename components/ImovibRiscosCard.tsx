@@ -122,12 +122,17 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
                         width: 100,
                         render: r => (
                             <div className="flex items-center justify-end gap-1" onClick={e => e.stopPropagation()}>
-                                <ActionIconButton kind="edit" title="Editar o risco" onClick={() => setEditando(r)} />
+                                <ActionIconButton kind="edit" title={pode ? 'Editar o risco' : 'Ver o risco'} onClick={() => setEditando(r)} />
                                 {pode && <InlineDisclosureMenu showDelete onDelete={() => void excluir(r)} />}
                             </div>
                         ),
                     }}
-                    empty={{
+                    // Com erro de leitura, a lista vazia não quer dizer "nenhum risco": o erro já está acima.
+                    empty={erro ? {
+                        icon: <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
+                        title: 'Riscos não carregados',
+                        subtitle: 'Veja o erro acima e recarregue a aba.',
+                    } : {
                         icon: <ShieldAlert className="w-12 h-12 text-gray-300 mx-auto mb-4" />,
                         title: 'Nenhum risco cadastrado',
                         subtitle: 'Ex.: passivo ambiental aguardando laudo, aprovação da prefeitura, concorrência lançando no bairro.',

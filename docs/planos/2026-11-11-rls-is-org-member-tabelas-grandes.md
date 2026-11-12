@@ -58,7 +58,8 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
 - [x] Renomeadas para 20271112700000/710000/720000 (12/11/2026): os prefixos 300000/310000/
       320000 foram ocupados no main pela frente do Imovib enquanto esta estava aberta. Os
       arquivos foram APLICADOS com os nomes antigos; o conteúdo é o mesmo.
-- [ ] Teste do usuário pelo app: listar, baixar e enviar um anexo.
+- [x] Teste do usuário pelo app (12/11/2026): anexos do Diário de Obra e do Financeiro — ver,
+      enviar e remover — funcionaram. Velocidade percebida: "melhorou bastante".
 
 ## Troca mecânica (escolhida em 11/11/2026)
 

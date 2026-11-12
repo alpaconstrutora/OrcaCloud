@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import {
     Building2, Mail, Plus, Search,
     Trash2, Edit2, LayoutDashboard, Table2,
-    Activity, Users, UserPlus,
+    Activity, UserPlus,
     TrendingUp, HandCoins, Filter, Truck, Send, MoveHorizontal, Library, Loader2
 } from 'lucide-react';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
@@ -257,6 +257,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     const [searchTerm, setSearchTerm] = usePersistedState('organizationListFilters:search', '');
     const [viewMode, setViewMode] = usePersistedState<'grid' | 'list'>('organizationListFilters:viewMode', 'list');
     const [managingOrgId, setManagingOrgId] = useState<string | null>(null);
+    // Quem foi clicado em "Todos os usuários" › Editar: a aba Usuários da organização abre a edição dessa pessoa.
+    const [managingMemberId, setManagingMemberId] = useState<string | null>(null);
     const tableColumns = useTableColumns(ORG_LIST_COLUMNS, 'organizationListColumns');
     const advancedFilters = useAdvancedFilters(ADVANCED_FILTER_FIELDS, 'organizationListFilters:advanced');
     const { activeOrganizationId, setActiveOrganizationId, companies } = useStore();
@@ -345,6 +347,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
     React.useEffect(() => {
         if (!ORG_SCOPED_TABS.includes(activeTab) && !activeOrganizationId) {
             setManagingOrgId(null);
+            setManagingMemberId(null);
         }
     }, [activeTab, activeOrganizationId]);
 
@@ -636,6 +639,11 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                     currentOrg ? (
                         <OrganizationUsers
                             organizationId={currentOrg.id}
+                            // Chegou por "Todos os usuários" (nenhuma org no topo): o título diz de qual é a lista e há como voltar.
+                            orgName={managingOrg && !activeOrganizationId ? managingOrg.name : undefined}
+                            onBack={managingOrg && !activeOrganizationId ? () => { setManagingOrgId(null); setManagingMemberId(null); } : undefined}
+                            abrirMembroId={managingMemberId}
+                            onAbriuMembro={() => setManagingMemberId(null)}
                             members={currentOrg.members || []}
                             onUpdateMembers={(members) => (onSave ?? onEdit)({ ...currentOrg, members })}
                             customRoles={currentOrg.customRoles || []}
@@ -761,12 +769,14 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                         <button
                                                             onClick={() => {
                                                                 setManagingOrgId(org.id);
+                                                                setManagingMemberId(member.id);
                                                                 onTabChange('users');
                                                             }}
+                                                            title={`Editar ${member.name} em ${org.name}`}
                                                             className="flex items-center gap-1.5 text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
                                                         >
-                                                            <Users className="w-3.5 h-3.5" />
-                                                            Gerenciar
+                                                            <Edit2 className="w-3.5 h-3.5" />
+                                                            Editar
                                                         </button>
                                                     </div>
                                                 </td>

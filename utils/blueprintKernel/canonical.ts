@@ -248,7 +248,7 @@ function projetar(model: BlueprintModel): {
   const nivel = (levelId: string) => levelIndex.get(levelId) ?? 0;
   const levels = ordemDosNiveis.map((l) => ({
     ...l,
-    geom: { ...l.geom, tipoDe: l.item.tipoDeId !== undefined ? nivel(l.item.tipoDeId) : undefined },
+    geom: { ...l.geom, tipoDe: l.item.tipoDeId !== undefined ? nivel(l.item.tipoDeId) : undefined, copiaInstalacoes: l.item.copiaInstalacoes ? (true as const) : undefined },
   }));
 
   // ETAPAS DE OBRA (0.57.0): por ordem e nome; as peças referenciam por ÍNDICE nesta lista.
@@ -1530,7 +1530,7 @@ export interface CanonicalPayload {
     rotacaoNorteDeg?: number;
     projetada?: { lesteM: number; norteM: number; crs: string };
   };
-  levels: { name: string; elevationMm: number; defaultHeightMm: number; /** Índice do pavimento TIPO (0.36.0); ausente = pavimento próprio. */ tipoDe?: number }[];
+  levels: { name: string; elevationMm: number; defaultHeightMm: number; /** Índice do pavimento TIPO (0.36.0); ausente = pavimento próprio. */ tipoDe?: number; /** 0.106.0: o tipo copia as instalações; ausente = não. */ copiaInstalacoes?: true }[];
   /** ETAPAS DE OBRA (0.57.0). Ausente quando não há nenhuma. */
   etapas?: { nome: string; ordem: number }[];
   walls: {
@@ -2121,6 +2121,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
   // O vínculo do pavimento tipo, DEPOIS de todos existirem (é índice na lista).
   payload.levels.forEach((l, i) => {
     if (l.tipoDe !== undefined && levelIds[l.tipoDe] && l.tipoDe !== i) model.levels[i].tipoDeId = levelIds[l.tipoDe];
+    if (l.copiaInstalacoes) model.levels[i].copiaInstalacoes = true;
   });
 
   const wallIds = payload.walls.map((w, i) => {

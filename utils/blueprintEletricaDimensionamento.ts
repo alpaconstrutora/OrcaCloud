@@ -37,6 +37,7 @@
 import type { BlueprintModel, Circuito, LigacaoDoCircuito, Quadro, Terminal, TipoDeCondutor, Trecho } from './blueprintKernel';
 import { cadeiaDeQuadros, repartirCondutores, secoesDosCondutores } from './blueprintKernel';
 import { comprimentoDoTrecho } from './blueprintRede';
+import { unidadeNoPavimento } from './blueprintUnidadesDoPredio';
 import { desequilibrioDasFases, somarPorFase, type CargaPorFase } from './blueprintFasesEletricas';
 
 // ─── Tabela 36 — capacidade de condução de corrente (A) ────────────────────
@@ -1197,7 +1198,8 @@ export function preDimensionarQuadroCompleto(
     cadeia: [],
     quedaAcumuladaPct: null,
     limiteQuedaEfetivoPct: limiteQuedaTotalEfetivoPct(hip),
-    unidade: quadro.unidadeId ? (model.unidades ?? []).find((u) => u.id === quadro.unidadeId)?.numero ?? null : null,
+    // 0.106.0: o número da unidade NO ANDAR do quadro (a cópia do 5º é a "501", não a "101" da origem).
+    unidade: quadro.unidadeId ? (unidadeNoPavimento(model, quadro.unidadeId, quadro.levelId)?.numero ?? null) : null,
     unidadesAtendidas,
     fatorDeDiversidade: fator,
     sDemandadaUnidadesVA,

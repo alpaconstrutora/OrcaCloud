@@ -80,6 +80,21 @@ export function numeroNoAndar(numeroDaOrigem: string, ordinalDaOrigem: number, o
   return `${prefixoDoAndar(ordinalDaCopia)}${posicao}`;
 }
 
+/**
+ * A UNIDADE NO PAVIMENTO (0.106.0, prédio automático PA1): o quadro (ou ponto) de uma unidade num andar COPIADO guarda o
+ * `unidadeId` da origem (a unidade do tipo — as dos andares copiados são derivadas, não existem no kernel). Aqui sai a
+ * chave e o número DO ANDAR: "101" no tipo, "501" na cópia do 5º — leve (sem medir área), para a demanda e a entrada de
+ * energia contarem 16 unidades onde há 16, e não as 2 da origem. Fora de cópia, a própria unidade.
+ */
+export function unidadeNoPavimento(model: BlueprintModel, unidadeId: ObjectId, levelId: ObjectId | null): { chave: string; numero: string } | null {
+  const u = (model.unidades ?? []).find((x) => x.id === unidadeId);
+  if (!u) return null;
+  const nivel = levelId ? model.levels.find((l) => l.id === levelId) : undefined;
+  if (!nivel || nivel.tipoDeId === undefined || !pavimentosDaUnidade(model, u).has(nivel.tipoDeId)) return { chave: u.uid, numero: u.numero };
+  const numero = numeroNoAndar(u.numero, ordinalDoPavimento(model.levels, nivel.tipoDeId), ordinalDoPavimento(model.levels, nivel.id)) ?? `${nivel.name} · ${u.numero}`;
+  return { chave: `${u.uid}:${nivel.uid}`, numero };
+}
+
 /** Os pavimentos em que a unidade tem ambiente (desenhado ou declarado). */
 function pavimentosDaUnidade(model: BlueprintModel, u: Unidade): Set<ObjectId> {
   const etiquetas = new Set(u.etiquetaUids);

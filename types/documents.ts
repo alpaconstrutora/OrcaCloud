@@ -39,6 +39,8 @@ export interface OpuraDocument {
   supplier_id?: string;
   client_id?: string;
   investor_id?: string;
+  /** Empreendimento dono do documento (aba Documentos do empreendimento, 12/11/2026). */
+  empreendimento_id?: string | null;
   active_version_id?: string;
   folder_id?: string;
   is_integrated?: boolean;

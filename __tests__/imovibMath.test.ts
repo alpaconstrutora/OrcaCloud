@@ -388,3 +388,71 @@ describe('1.4 (revisão) — distrato custa dinheiro com os padrões', () => {
         expect(computeImovibMath(baseStudy({ cancellation_rate_percent: 10 })).avisos.map(a => a.codigo)).not.toContain('distrato_parcial');
     });
 });
+
+describe('8.1 — indicadores de produto', () => {
+    const inst = (id: string, price: number, status = 'DISPONÍVEL') =>
+        ({ id, study_id: 'estudo-teste', block_id: 'b1', name: id, floor: 1, private_area: 70, position_type: 'LATERAL', sun_orientation: 'NORTE', price, status, created_at: '', updated_at: '' });
+
+    it('estudo-base (40 × 70 m² privativos + 20 m² comuns): eficiência 77,78% e 40 unidades', () => {
+        const p = computeImovibMath(baseStudy()).produto;
+        expect(p.eficiencia).toBeCloseTo(70 / 90, 6);
+        expect((p.eficiencia as number) * 100).toBeCloseTo(77.78, 2);
+        expect(p.unidadesVendaveis).toBe(40);
+        expect(p.ticketMedio).toBeCloseTo(70 * 10_000);
+        expect(p.vgvPorM2Privativo).toBeCloseTo(10_000);
+        expect(p.custoObraPorM2Privativo).toBeCloseTo((40 * 90 * 4_500) / (40 * 70));
+    });
+
+    it('tipologia não vendável fica fora da área vendável e dentro da construída', () => {
+        const s = baseStudy();
+        s.blocks[0].units.push({ id: 'u2', quantity: 1, private_area: 300, common_area: 0, is_vendavel: false });
+        const r = computeImovibMath(s);
+        expect(r.areaPrivativaVendavel).toBeCloseTo(40 * 70);
+        expect(r.totalBlockArea).toBeCloseTo(40 * 90 + 300);
+        expect(r.produto.eficiencia).toBeCloseTo((40 * 70) / (40 * 90 + 300), 6);
+        expect(r.produto.unidadesVendaveis).toBe(40);
+    });
+
+    it('permutada do espelho sai das unidades e do tíquete, não da eficiência', () => {
+        const r = computeImovibMath(baseStudy({
+            unit_instances: [inst('a', 800_000), inst('b', 700_000), inst('c', 900_000, 'PERMUTADO')],
+        }));
+        expect(r.produto.unidadesVendaveis).toBe(2);
+        expect(r.produto.ticketMedio).toBeCloseTo(750_000);
+        expect(r.produto.vgvPorM2Privativo).toBeCloseTo(1_500_000 / 140);
+        expect(r.produto.eficiencia).toBeCloseTo(70 / 90, 6);
+    });
+
+    it('sem área comum cadastrada: eficiência vazia (privativa ÷ construída daria ~100%)', () => {
+        const s = baseStudy();
+        s.blocks[0].units[0].common_area = 0;
+        expect(computeImovibMath(s).produto.eficiencia).toBeNull();
+    });
+
+    it('CAPEX simplificado com área: a eficiência usa a mesma área construída do custo', () => {
+        const r = computeImovibMath(baseStudy({ capex_mode: 'simplified', capex_simplified_area_sqm: 5_000, capex_simplified_cost_sqm: 4_000 }));
+        expect(r.produto.eficiencia).toBeCloseTo(2_800 / 5_000, 6);
+        expect(r.produto.custoObraPorM2Privativo).toBeCloseTo((5_000 * 4_000) / 2_800);
+    });
+
+    it('sensibilidade: tíquete e VGV por m² acompanham o VGV, como o custo acompanha o custo', () => {
+        const p = computeImovibMath(baseStudy(), { vgvDelta: 10 }).produto;
+        expect(p.ticketMedio).toBeCloseTo(70 * 10_000 * 1.1);
+        expect(p.vgvPorM2Privativo).toBeCloseTo(11_000);
+    });
+
+    it('custo de obra zero: custo por m² vazio, não R$ 0', () => {
+        const s = baseStudy();
+        s.blocks[0].construction_cost_sqm = 0;
+        expect(computeImovibMath(s).produto.custoObraPorM2Privativo).toBeNull();
+    });
+
+    it('sem área nem unidades: indicadores vazios, nunca 0 nem infinito', () => {
+        const p = computeImovibMath(baseStudy({ blocks: [] })).produto;
+        expect(p.unidadesVendaveis).toBe(0);
+        expect(p.eficiencia).toBeNull();
+        expect(p.ticketMedio).toBeNull();
+        expect(p.vgvPorM2Privativo).toBeNull();
+        expect(p.custoObraPorM2Privativo).toBeNull();
+    });
+});

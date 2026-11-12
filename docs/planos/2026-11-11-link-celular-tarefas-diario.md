@@ -74,8 +74,14 @@ Pedido posterior (2026-11-11, mesma sessão):
   dele (`175d203c…`, e-mail `''`) não tinha vínculo com a conta. Migration
   `aplicar_20271111995000_tarefas_responsavel_ve_e_edita.sql`: `is_employee_do_usuario(_de)`,
   policies `tasks_select_assignee` / `tasks_update_assignee` (o responsável vê e edita, não
-  passa a tarefa adiante nem apaga) e a mesma perna em `_celular_tarefa_visivel` /
-  `celular_tarefa_atualizar`. Prova: `scripts/teste-tarefas-responsavel.sql` (`TUDO OK`, 2 + 5 = 7).
+  passa a tarefa adiante nem apaga; só em org de que é membro — `is_org_member(org_id)`, porque
+  `employees.user_id` é gravável por qualquer membro da org do colaborador), gatilho
+  `trg_tasks_responsavel_so_conteudo` (BEFORE UPDATE: quem não é dono nem membro do espaço, via
+  API, só muda título, descrição, datas, prioridade e status — sem ele o responsável tomava a
+  posse com `SET user_id`, porque os WITH CHECK de UPDATE se somam por OR) e a mesma perna em
+  `_celular_tarefa_visivel` / `celular_tarefa_atualizar`. Prova:
+  `scripts/teste-tarefas-responsavel.sql` (`TUDO OK`, 2 + 5 = 7). Quem pode gravar
+  `employees.user_id` fica para decisão do usuário.
 
 ## Design
 

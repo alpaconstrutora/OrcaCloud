@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { resolve } from 'path';
 
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
@@ -111,5 +111,36 @@ describe('10.6 — o portal calcula o mesmo número do app', () => {
         const portal = calcularIndicadores(r, 12);
         expect(portal.paybackSimplesMes).toBe(app.paybackSimplesMes);
         expect(portal.multiploDoCapital).toBe(app.multiploDoCapital);
+    });
+});
+
+describe('0.6 (pendência) — contrato com a função publicada, e não só com o raw escrito à mão', () => {
+    // A definição que vale é a da migration mais recente que recria a função.
+    const pasta = resolve(__dirname, '../supabase/migrations');
+    const ultima = readdirSync(pasta)
+        .filter(f => f.endsWith('.sql') && /CREATE\s+OR\s+REPLACE\s+FUNCTION\s+public\.fn_investor_portal_get_study/i.test(readFileSync(`${pasta}/${f}`, 'utf-8')))
+        .sort((a, b) => (a.match(/\d{14}/)?.[0] ?? '').localeCompare(b.match(/\d{14}/)?.[0] ?? ''))
+        .pop()!;
+    const sql = readFileSync(`${pasta}/${ultima}`, 'utf-8');
+    const chave = (k: string) => new RegExp(`'${k}'\\s*,`).test(sql);
+
+    it('monta as chaves que montarEstudoDoPortal consome', () => {
+        for (const k of ['study', 'unit_instances', 'blocks', 'capex_items', 'funding_sources', 'estrutura_do_empreendimento', 'torres', 'unidades']) {
+            expect(chave(k), k).toBe(true);
+        }
+    });
+
+    it('torres e unidades trazem os campos que a estrutura do motor usa', () => {
+        for (const k of ['imovib_block_id', 'construction_cost_sqm', 'sales_price_sqm', 'sort_order', 'tower_id', 'typology', 'private_area', 'common_area', 'price', 'is_vendavel']) {
+            expect(chave(k), k).toBe(true);
+        }
+    });
+
+    it('tira do link toda coluna interna de governança (parecer, notas, mínimos)', () => {
+        const fora = /row_to_json\(s\)::jsonb\s*-\s*ARRAY\[([^\]]*)\]/i.exec(sql)?.[1] ?? '';
+        for (const k of ['premise_notes', 'recommendation', 'recommendation_notes', 'recommended_by', 'recommended_at', 'recommended_by_user_id',
+            'recommendation_snapshot', 'hurdle_irr_spread', 'hurdle_margin_percent', 'hurdle_max_exposure']) {
+            expect(fora, k).toContain(`'${k}'`);
+        }
     });
 });

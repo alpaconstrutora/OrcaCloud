@@ -196,4 +196,19 @@ mobiliário que não coube, composição do teto, pressão, entrada de energia, 
 "enquadrar-nos-ids" como ação nova; centrar no ponto com os elementos selecionados cobre o pedido sem duplicar a
 navegação.
 | D1 | feito — `__tests__/casaAutomaticaMarco.test.ts` + `__tests__/fixtures/casaAutomaticaMarco.json`, gravado de `main` 6f5a4279 (etapa C já dentro); local: gravar 125 s, comparar 123 s (8/8); CI do PR = a prova no Node 20 |
-| D2 | a fazer |
+| D2 | **passo 1 de 2** — o motor em `utils/casaAutomatica/` (hipoteses 559 · quadroEImplantacao 467 · forroEPressao 202 · escolhaEShaft 216 · pedido 58 · orquestrador 2.409 linhas), só movendo declarações; marco idêntico, 211 testes da casa verdes. Falta o passo 2: a função `planejarComPavimentos` (~2.200 linhas, no orquestrador) por etapa |
+
+**Achado do D2 (11/11/2026), para decidir o passo 2:** dentro de `planejarComPavimentos` o modelo `m` só é trocado pelo
+`aplicar` e nenhum bloco interno o sombreia — mas ele aparece 274 vezes, e os blocos (instalações ~830 linhas, sobrado ~660,
+terraplenagem/acesso/muro ~260) usam de 13 a 39 nomes do escopo da função, incluindo `let`s que mudam no meio (`m`,
+`telhado`, `resumoDoMuro`, `imp`). Extrair por etapa pede um `ContextoDaCasa` tipado (~40 campos, os `let` por getter/setter)
+e a troca `m` → `ctx.m` pelo analisador do TypeScript (troca de texto pegaria o "m" de metro dentro dos textos das
+pendências). Viável, com o marco como rede; mais trabalho e risco do que o plano previa.
+
+**Decisão do usuário (12/11/2026), pergunta de múltipla escolha:** **"Parar no passo 1 (Recomendado)"** — o passo 2 fica para
+uma fase própria, quando o motor voltar a ser mexido. Técnica anotada: extrair os blocos um por vez (terraplenagem/acesso/
+muro → arquitetura → estrutura/telhado → instalações → sobrado), cada um como função de primeiro nível que recebe um
+`ContextoDaCasa` (consts por desestruturação; `let`s por getter/setter), a troca `m` → `ctx.m` feita pela AST do TypeScript
+(nunca regex: pegaria o "m" de metro nos textos), e o marco das 8 casas verde a cada extração.
+
+**Fase "itens 6 a 11": A, B, C e D1 no ar; D2 com 1 de 2 passos (o passo 2 adiado por decisão do usuário).**

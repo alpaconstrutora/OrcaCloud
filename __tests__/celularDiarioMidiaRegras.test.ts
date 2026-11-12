@@ -1,0 +1,102 @@
+/**
+ * Regras puras da Edge `celular-diario-midia` (Diário pelo link do celular).
+ * A Edge só roteia: validar o pedido e montar o path ficam em `regras.ts`, sem
+ * Deno nem import por URL, para o Vitest conseguir importar.
+ */
+import { describe, it, expect } from 'vitest';
+import {
+    validarPedido,
+    montarPath,
+    EXTENSOES_PERMITIDAS,
+    MAX_PATHS,
+} from '../supabase/functions/celular-diario-midia/regras';
+
+const PROJETO = '3f2b8c1e-5a4d-4e6f-9b7a-1c2d3e4f5a6b';
+
+describe('validarPedido — pedido inválido', () => {
+    it('recusa corpo que não é objeto', () => {
+        for (const corpo of [null, undefined, 'x', 7, [], true]) {
+            expect(validarPedido(corpo).ok).toBe(false);
+        }
+    });
+
+    it('recusa ação desconhecida ou ausente', () => {
+        expect(validarPedido({ acao: 'apagar', token: 't' }).ok).toBe(false);
+        expect(validarPedido({ token: 't' }).ok).toBe(false);
+    });
+
+    it('recusa token vazio, só espaços ou que não é string', () => {
+        expect(validarPedido({ acao: 'assinar', token: '', paths: ['a'] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', token: '   ', paths: ['a'] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', token: 42, paths: ['a'] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', paths: ['a'] }).ok).toBe(false);
+    });
+
+    it('subir: recusa project_id que não é uuid', () => {
+        expect(validarPedido({ acao: 'subir', token: 't', project_id: 'abc', ext: 'jpg' }).ok).toBe(false);
+        expect(validarPedido({ acao: 'subir', token: 't', ext: 'jpg' }).ok).toBe(false);
+    });
+
+    it('subir: recusa extensão fora da lista, com caixa alta ou com espaço', () => {
+        for (const ext of ['html', 'svg', 'exe', 'JPG ', 'JPG', ' jpg', '', 'jpg/../x', 7]) {
+            expect(validarPedido({ acao: 'subir', token: 't', project_id: PROJETO, ext }).ok).toBe(false);
+        }
+    });
+
+    it('assinar/remover: recusa paths vazio, que não é array ou com item vazio/não string', () => {
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: [] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: 'a' }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', token: 't' }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: ['a', ''] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: ['a', 3] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'remover', token: 't', project_id: PROJETO, paths: [] }).ok).toBe(false);
+    });
+
+    it('assinar/remover: aceita 100 paths e recusa 101', () => {
+        const cem = Array.from({ length: MAX_PATHS }, (_, i) => `o/p/${i}.jpg`);
+        expect(MAX_PATHS).toBe(100);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: cem }).ok).toBe(true);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: [...cem, 'o/p/x.jpg'] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'remover', token: 't', project_id: PROJETO, paths: [...cem, 'o/p/x.jpg'] }).ok).toBe(false);
+    });
+
+    it('remover: recusa project_id que não é uuid', () => {
+        expect(validarPedido({ acao: 'remover', token: 't', project_id: 'x', paths: ['a'] }).ok).toBe(false);
+    });
+});
+
+describe('validarPedido — pedido válido', () => {
+    it('subir', () => {
+        const r = validarPedido({ acao: 'subir', token: 't', project_id: PROJETO, ext: 'jpg' });
+        expect(r).toEqual({ ok: true, pedido: { acao: 'subir', token: 't', project_id: PROJETO, ext: 'jpg' } });
+    });
+
+    it('subir aceita toda extensão da lista', () => {
+        for (const ext of EXTENSOES_PERMITIDAS) {
+            expect(validarPedido({ acao: 'subir', token: 't', project_id: PROJETO, ext }).ok).toBe(true);
+        }
+        expect(EXTENSOES_PERMITIDAS).not.toContain('html');
+        expect(EXTENSOES_PERMITIDAS).not.toContain('svg');
+    });
+
+    it('assinar não exige project_id', () => {
+        const r = validarPedido({ acao: 'assinar', token: 't', paths: ['o/p/a.jpg'] });
+        expect(r).toEqual({ ok: true, pedido: { acao: 'assinar', token: 't', paths: ['o/p/a.jpg'] } });
+    });
+
+    it('remover', () => {
+        const r = validarPedido({ acao: 'remover', token: 't', project_id: PROJETO, paths: ['o/p/a.jpg'] });
+        expect(r).toEqual({ ok: true, pedido: { acao: 'remover', token: 't', project_id: PROJETO, paths: ['o/p/a.jpg'] } });
+    });
+
+    it('não repassa campos que o pedido não declara', () => {
+        const r = validarPedido({ acao: 'assinar', token: 't', paths: ['a'], org: 'outra', extra: 1 });
+        expect(r.ok && Object.keys(r.pedido).sort()).toEqual(['acao', 'paths', 'token']);
+    });
+});
+
+describe('montarPath', () => {
+    it('junta org/projeto/uuid.ext', () => {
+        expect(montarPath('o', 'p', 'u', 'jpg')).toBe('o/p/u.jpg');
+    });
+});

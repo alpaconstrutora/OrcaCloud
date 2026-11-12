@@ -459,3 +459,9 @@ verify_jwt = false
 # `asaas-access-token` comparado com ASAAS_SAQUE_TOKEN (falha fechado).
 [functions.asaas-saque-validacao]
 verify_jwt = false
+
+# Mídia do Diário pelo link do celular (/celular?token=). Sem login: o token do
+# link, validado no banco (celular_diario_*), é o único portão — por isso o
+# gateway não verifica JWT aqui.
+[functions.celular-diario-midia]
+verify_jwt = false

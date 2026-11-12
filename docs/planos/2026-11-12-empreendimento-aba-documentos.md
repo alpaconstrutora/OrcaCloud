@@ -31,7 +31,7 @@ O molde é o checklist do CNO: `opura_cno_documents` e `cnoService.uploadAndAtta
 
 ## Plano (um item por arquivo)
 
-### 1. `supabase/migrations/aplicar_20271112990000_empreendimento_documentos.sql`
+### 1. `supabase/migrations/aplicar_20271112995000_empreendimento_documentos.sql`
 
 O que muda:
 - `opura_documents.empreendimento_id` (FK `ON DELETE SET NULL`) e um índice parcial.
@@ -47,6 +47,8 @@ Como sei que terminou: aplicada com `db query --linked -f` e conferida em 12/11:
 | col_ged | colunas_tabela | rls | policies | policies_anon | índices |
 |---|---|---|---|---|---|
 | 1 | 21 | true | 1 | 0 | 4 |
+
+> ⚠️ A migration nasceu como `aplicar_20271112990000` e foi **aplicada no banco com esse número**. No rebase antes do push, o prefixo já tinha sido ocupado por `aplicar_20271112990000_link_celular_limite_de_uso.sql`, de outra frente. Por isso foi renumerada para `20271112995000`. O conteúdo é o mesmo e é idempotente: reexecutar não muda nada.
 
 ### 2. `types/empreendimentoDocumentos.ts` (novo)
 

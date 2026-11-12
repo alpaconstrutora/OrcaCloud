@@ -114,7 +114,7 @@ describe('tipo → categoria do GED', () => {
 
   it('os tipos da lista batem com o CHECK da migration', async () => {
     const { readFileSync } = await import('node:fs');
-    const sql = readFileSync('supabase/migrations/aplicar_20271112990000_empreendimento_documentos.sql', 'utf8');
+    const sql = readFileSync('supabase/migrations/aplicar_20271112995000_empreendimento_documentos.sql', 'utf8');
     for (const t of [...TIPOS_DOCUMENTO_LEGAL.map(x => x.tipo), 'OUTRO']) expect(sql).toContain(`'${t}'`);
   });
 });

@@ -1,6 +1,6 @@
 // types/empreendimentoDocumentos.ts
 // Checklist de documentos legais do empreendimento (aba Documentos).
-// Tabela: empreendimento_documentos_legais (aplicar_20271112990000).
+// Tabela: empreendimento_documentos_legais (aplicar_20271112995000).
 // Plano: docs/planos/2026-11-12-empreendimento-aba-documentos.md
 //
 // O ARQUIVO mora no GED (opura_documents, via document_id). Esta tabela guarda

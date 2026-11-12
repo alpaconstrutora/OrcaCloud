@@ -33,7 +33,19 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       suppliers 11–13 → 1,0–1,1 · notifications 150 → 38 ms. Em notifications o resto é a
       outra perna do OR, `lower(recipient_email) = lower(auth.jwt()->>'email')`, que lê o
       JWT por linha — fora da troca mecânica (candidata: `(SELECT lower(auth.jwt()->>'email'))`).
-- [ ] Lote 2 `aplicar_20271112310000` (564 policies, 332 tabelas; GRANT anon) → aplicar → conferir.
+- [x] Lote 2 `aplicar_20271112310000` (564 policies, 332 tabelas; GRANT anon) aplicado pelo
+      usuário (12/11/2026). Conferido: schema public com 587 policies em
+      `minhas_orgs_membro` (21 + 564 + as 2 do extrato), 344 tabelas, **0 com
+      `is_org_member`**; ACL de `minhas_orgs_membro` com anon. Leitura (só `count(*)`) de
+      todas as 344 tabelas: authenticated (desenvolvedor@) 344 de 344 sem erro; anon (JWT
+      vazio) 172 sem erro, nas outras falta SELECT na própria tabela (igual a antes), nenhum
+      erro de função. Custo de RLS: as tabelas de 40–170 linhas caíram de 2–5 ms para
+      ~1 ms; reconciliation_audit_log 35 → 1,1 ms. Exceção esperada:
+      reconciliation_suggestions / reconciliation_matches 6–7 → ~10 ms — a policy é
+      `EXISTS (bank_transactions bt WHERE bt.id = … AND <org>)` e agora o planejador faz
+      UMA varredura do extrato (hashed SubPlan, ~10 ms, fixo) em vez de 1 chamada por linha
+      (linear: empata em ~250 linhas). Leitura por id continua por índice (1 linha do
+      extrato). Não muda nada.
 - [ ] Lote 3 `aplicar_20271112320000` (29 policies do storage) → aplicar → testar upload/
       download/listagem pelo app.
 

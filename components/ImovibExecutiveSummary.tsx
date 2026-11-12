@@ -1,5 +1,7 @@
-import React, { useMemo, useRef, useState } from 'react';
-import { ImovibStudy } from '../types';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { ImovibStudy, ImovibLandChecklistItem } from '../types';
+import { imovibService } from '../services/imovibService';
+import { resumoDaDueDiligence } from './ImovibDueDiligenceCard';
 import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
@@ -7,7 +9,7 @@ import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import ImovibPontosDeEquilibrioCard from './ImovibPontosDeEquilibrioCard';
 import { calcularIndicadores } from '../utils/imovibIndicadores';
-import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Banknote } from 'lucide-react';
+import { Activity, Building2, Wallet, PieChart, Coins, Download, FileText, LineChart as LineChartIcon, Loader2, Banknote, ClipboardCheck } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
@@ -198,6 +200,36 @@ const abaDoExcel = (linhas: Linha[], larguras: number[]) => {
     return ws;
 };
 
+/**
+ * "Due diligence: x de 14 ok, y com problema" (item 5.9 do plano 2026-11-11). Só
+ * lê; item com problema aparece em destaque. Sem checklist, diz onde criar.
+ */
+function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara?: (aba: ImovibAba) => void }) {
+    const [itens, setItens] = useState<ImovibLandChecklistItem[] | null>(null);
+    useEffect(() => {
+        let vivo = true;
+        imovibService.listarDueDiligence(studyId).then(l => { if (vivo) setItens(l); }).catch(() => { if (vivo) setItens(null); });
+        return () => { vivo = false; };
+    }, [studyId]);
+    if (!itens) return null;
+    const r = resumoDaDueDiligence(itens);
+    const comProblema = itens.filter(i => i.status === 'problema');
+    return (
+        <button
+            type="button"
+            onClick={() => onIrPara?.('premises')}
+            className={`w-full text-left flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 rounded-[10px] border text-sm ${comProblema.length ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-white border-gray-100 text-slate-700'} hover:border-slate-300`}
+            title="Abrir Premissas › Terreno"
+        >
+            <ClipboardCheck className="w-4 h-4 shrink-0" />
+            {r.total === 0
+                ? <span>Due diligence do terreno ainda não começou (Premissas › Terreno).</span>
+                : <span>Due diligence: {r.ok} de {r.total} ok{r.problema ? `, ${r.problema} com problema` : ''}.</span>}
+            {comProblema.length > 0 && <span className="font-medium">{comProblema.map(i => i.label).join(' · ')}</span>}
+        </button>
+    );
+}
+
 const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara }) => {
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
@@ -307,6 +339,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             </div>
 
             <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
+            <ResumoDaDueDiligence studyId={study.id} onIrPara={onIrPara} />
 
             {/* Printable Container — capturado pelo html2canvas no PDF: nada de backdrop-filter aqui.
                 Na tela é só uma coluna (sem fundo nem padding): ocupa a largura toda e os KPIs alinham com

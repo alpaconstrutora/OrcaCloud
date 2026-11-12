@@ -4,6 +4,7 @@ import {
     ImovibBlock, ImovibBlockInsert, ImovibBlockUpdate,
     ImovibUnit, ImovibUnitInsert, ImovibUnitUpdate,
     ImovibCapexItem, ImovibCapexItemInsert, ImovibUnitInstance, ImovibScenario, ImovibRisk, ImovibFundingSource,
+    ImovibLandChecklistItem,
 } from '../types';
 import { fetchAllPages } from '../lib/supabasePaginate';
 import {
@@ -13,7 +14,8 @@ import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
-const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, created_at, updated_at';
+// timing e timing_months: aplicar_20271112110000 (item 5.5).
+const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, timing, timing_months, created_at, updated_at';
 
 // Listagem com métricas: metadados da tabela + tudo o que o motor lê
 // (CAMPOS_DO_MOTOR). Campo novo do motor entra lá, não aqui.
@@ -25,6 +27,9 @@ const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, privat
 
 // Outras fontes de capital (aplicar_20271111980000) — o motor lê todas as colunas.
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
+
+// Due diligence do terreno (aplicar_20271112120000).
+const CHECKLIST_COLS = 'id, study_id, item_key, label, status, notes, sort_order, checked_at';
 
 // ── Estrutura lida do Empreendimento (plano 2026-10-19-imovib-premissas-planta-inteligente.md)
 
@@ -774,6 +779,67 @@ export const imovibService = {
         const { data, error } = await supabase.from('imovib_funding_sources').delete().eq('id', id).select('id');
         if (error) throw new Error(`Falha ao excluir a fonte de capital: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para excluir fontes de capital deste estudo.');
+    },
+
+    /**
+     * "10. Pós-obra" (item 5.6 do plano 2026-11-11): cria as rubricas que ainda não
+     * existem — a UNIQUE (study_id, category, name) faz o segundo clique não
+     * duplicar — e devolve todas as rubricas do estudo.
+     */
+    async adicionarRubricasPosObra(studyId: string): Promise<ImovibCapexItem[]> {
+        const linhas: ImovibCapexItemInsert[] = [
+            { study_id: studyId, category: '10. Pós-obra', name: 'Assistência técnica', value_type: 'percent', value: 0, base: 'obra', timing: 'pos_obra' },
+            { study_id: studyId, category: '10. Pós-obra', name: 'Manutenção e garantia', value_type: 'currency', value: 0, base: 'obra', timing: 'pos_obra' },
+        ];
+        const { error } = await supabase
+            .from('imovib_capex_items')
+            .upsert(linhas, { onConflict: 'study_id,category,name', ignoreDuplicates: true });
+        if (error) throw new Error(`Falha ao criar as rubricas de pós-obra: ${error.message}`);
+        const { data, error: erroLeitura } = await supabase
+            .from('imovib_capex_items')
+            .select(CAPEX_COLS)
+            .eq('study_id', studyId)
+            .order('category', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (erroLeitura) throw new Error(`Falha ao ler as rubricas: ${erroLeitura.message}`);
+        return (data || []) as ImovibCapexItem[];
+    },
+
+    // ── Due diligence do terreno (item 5.9 do plano 2026-11-11) ─────────────
+
+    async listarDueDiligence(studyId: string): Promise<ImovibLandChecklistItem[]> {
+        const { data, error } = await supabase
+            .from('imovib_land_checklist')
+            .select(CHECKLIST_COLS)
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true });
+        if (error) throw new Error(`Falha ao ler a due diligence: ${error.message}`);
+        return (data || []) as ImovibLandChecklistItem[];
+    },
+
+    /**
+     * Cria os itens que ainda não existem. A trava UNIQUE (study_id, item_key) faz o
+     * segundo clique não duplicar; devolve a lista do banco.
+     */
+    async criarDueDiligence(studyId: string, itens: readonly { key: string; label: string }[]): Promise<ImovibLandChecklistItem[]> {
+        const linhas = itens.map((it, i) => ({ study_id: studyId, item_key: it.key, label: it.label, sort_order: i }));
+        const { error } = await supabase
+            .from('imovib_land_checklist')
+            .upsert(linhas, { onConflict: 'study_id,item_key', ignoreDuplicates: true });
+        if (error) throw new Error(`Falha ao criar a due diligence: ${error.message}`);
+        return this.listarDueDiligence(studyId);
+    },
+
+    /** `.select()` confere que a escrita passou na RLS. */
+    async salvarItemDaDueDiligence(id: string, campos: Pick<ImovibLandChecklistItem, 'status' | 'notes'>): Promise<ImovibLandChecklistItem> {
+        const { data, error } = await supabase
+            .from('imovib_land_checklist')
+            .update({ ...campos, checked_at: new Date().toISOString() })
+            .eq('id', id)
+            .select(CHECKLIST_COLS);
+        if (error) throw new Error(`Falha ao salvar o item da due diligence: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para editar a due diligence deste estudo.');
+        return data[0] as ImovibLandChecklistItem;
     },
 
 };

@@ -82,8 +82,11 @@ export function fluxoDaDivida(
     repassePorMes: number[],
     vendasAcumuladasPct: number[],
     p: PremissasDoFinanciamento,
+    /** Índice do mês em que o saldo que sobrou é quitado (padrão: o último). O pós-obra estende o fluxo além das receitas, mas a dívida acaba com elas. */
+    mesDaQuitacao?: number,
 ): FluxoDaDivida {
     const n = custoDeObraPorMes.length;
+    const quitacao = Math.min(n - 1, mesDaQuitacao ?? n - 1);
     const defasagem = Math.max(0, Math.round(p.defasagemDaLiberacao));
 
     // Quando cada custo poderia ser liberado, só pela defasagem. Custo cuja
@@ -137,7 +140,7 @@ export function fluxoDaDivida(
             saldo -= amortizado;
             pago += amortizado;
         }
-        if (i === n - 1 && saldo > 0.005) {
+        if (i === quitacao && saldo > 0.005) {
             quitacaoNoFim = saldo;
             saldo = 0;
         }

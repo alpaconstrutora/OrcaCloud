@@ -453,11 +453,35 @@ export interface ImovibCapexItem {
      * `baseDaRubrica` (hooks/useImovibMath.ts) deduz pela categoria.
      */
     base?: ImovibCapexBase;
+    /**
+     * Quando a rubrica sai (migration aplicar_20271112110000, item 5.5). Vazio =
+     * pela base, como antes. Rubrica em % do VGV ignora: é dedução da receita.
+     */
+    timing?: ImovibCapexTiming | null;
+    /** `pos_obra`: em quantos meses depois do fim da obra (vazio = 12). */
+    timing_months?: number | null;
     created_at: string;
     updated_at: string;
 }
 
 export type ImovibCapexBase = 'vgv' | 'obra' | 'terreno';
+
+export type ImovibCapexTiming = 'aquisicao' | 'pre_obra' | 'lancamento' | 'obra' | 'vendas' | 'pos_obra';
+
+/** Item da due diligence do terreno (migration aplicar_20271112120000, item 5.9). */
+export interface ImovibLandChecklistItem {
+    id: string;
+    study_id: string;
+    item_key: string;
+    label: string;
+    status: 'pendente' | 'ok' | 'problema' | 'nao_se_aplica';
+    notes?: string | null;
+    sort_order: number;
+    checked_at?: string | null;
+}
+
+/** Parcela do terreno (item 5.2): mês do estudo e % do custo do terreno. */
+export interface ImovibParcelaDoTerreno { month: number; percent: number; }
 
 /** Cenário salvo do estudo (migration aplicar_20271111900000). `choques`: {variavel: delta}, ver utils/imovibVariacoes.ts. */
 export interface ImovibScenario {
@@ -620,6 +644,17 @@ export interface ImovibStudy {
     min_cash_balance?: number | null;
     /** De onde vem a TMA (texto livre). */
     discount_rate_basis?: string | null;
+    // Marcos, terreno parcelado, curva de desembolso e estoque (migration
+    // aplicar_20271112100000, itens 5.1–5.3 e 5.6). Vazio = padrão de IMOVIB_DEFAULTS.
+    acquisition_month?: number | null;
+    approval_month?: number | null;
+    incorporation_registry_month?: number | null;
+    land_payment_schedule?: ImovibParcelaDoTerreno[] | null;
+    cost_curve_type?: 'linear' | 'curva_s' | 'custom' | null;
+    /** Pesos mensais da curva personalizada, em % (somam 100). */
+    cost_curve_custom?: number[] | null;
+    /** R$ por unidade em estoque por mês, depois do fim da obra. */
+    stock_carrying_cost_unit_month?: number | null;
     created_at: string;
     updated_at: string;
     blocks?: ImovibBlock[];

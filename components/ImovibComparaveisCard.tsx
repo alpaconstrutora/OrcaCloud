@@ -61,8 +61,9 @@ const ImovibComparaveisCard: React.FC<ImovibComparaveisCardProps> = ({ study, on
     }, [study.id]);
 
     const resumo = useMemo(() => resumoDosComparaveis(lista, hojeLocal()), [lista]);
-    // Preço médio do estudo: VGV ÷ área privativa vendável (a do VGV: sem permutadas nem não vendáveis).
-    const precoDoEstudo = r.areaPrivativaVendavel > 0 ? r.vgvBase / r.areaPrivativaVendavel : 0;
+    // Preço médio do estudo: o VGV por m² privativo do motor (sem permutadas, não vendáveis
+    // nem unidades do espelho com preço e sem área) — o mesmo da Estática.
+    const precoDoEstudo = r.produto.vgvPorM2Privativo ?? 0;
     const foraDaVso = [
         resumo.foraDaVso.lancamentoFuturo ? `${resumo.foraDaVso.lancamentoFuturo} com lançamento futuro` : '',
         resumo.foraDaVso.esgotado ? `${resumo.foraDaVso.esgotado} esgotado(s)` : '',

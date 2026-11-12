@@ -116,8 +116,10 @@ export interface IndicadoresDeProduto {
     unidadesVendaveis: number;
     /** VGV ÷ unidades à venda. */
     ticketMedio: number | null;
-    /** VGV ÷ área privativa à venda. */
+    /** VGV ÷ área privativa à venda, sem as unidades do espelho com preço e sem área. */
     vgvPorM2Privativo: number | null;
+    /** Unidades do espelho com preço e sem área privativa: fora do VGV por m² (inflariam a razão). */
+    unidadesSemArea: number;
     /** Custo de obra ÷ área privativa das tipologias vendáveis. */
     custoObraPorM2Privativo: number | null;
 }
@@ -350,7 +352,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     totalBlockArea: 0,
     totalPrivateArea: 0,
     areaPrivativaVendavel: 0,
-    produto: { eficiencia: null, custoSemAreaComum: false, unidadesVendaveis: 0, ticketMedio: null, vgvPorM2Privativo: null, custoObraPorM2Privativo: null },
+    produto: { eficiencia: null, custoSemAreaComum: false, unidadesVendaveis: 0, ticketMedio: null, vgvPorM2Privativo: null, unidadesSemArea: 0, custoObraPorM2Privativo: null },
     totalCommonArea: 0,
     vgvBase: 0,
     vgvPorBloco: {},
@@ -423,6 +425,9 @@ interface Premissas {
     areaPrivativaDasTipologiasVendaveis: number;
     /** Área construída sobre a qual o custo de obra é calculado: a do CAPEX simplificado quando digitada. */
     areaConstruidaDoCusto: number;
+    /** VGV (sem sensibilidade) e número das unidades do espelho com preço e sem área privativa. */
+    vgvSemArea: number;
+    unidadesSemArea: number;
     /** Recebimento de todas as safras, sem índice e já sem a inadimplência. */
     recebimento: SerieDeRecebimento;
     // Fase 5
@@ -510,6 +515,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let unidadesDoEspelho = 0;
     let areaPrivativaVendavel = 0;
     let areaPrivativaDasTipologiasVendaveis = 0;
+    let vgvSemArea = 0;
+    let unidadesSemArea = 0;
     let unidadesSemEspelho = 0;
     const blocosSemPreco: string[] = [];
 
@@ -547,6 +554,11 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
             unidadesDoEspelho += doBloco.filter(i => i.status !== 'PERMUTADO').length;
             areaPrivativaVendavel += doBloco.filter(i => i.status !== 'PERMUTADO').reduce((acc, i) => acc + (i.private_area || 0), 0);
+            for (const i of doBloco) {
+                if (i.status === 'PERMUTADO' || (i.private_area || 0) > 0 || precoDa(i) <= 0) continue;
+                vgvSemArea += precoDa(i);
+                unidadesSemArea++;
+            }
         } else {
             blockVgv = blockVendavelArea * precoM2;
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'preco_m2' };
@@ -951,6 +963,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         areaPrivativaVendavel,
         areaPrivativaDasTipologiasVendaveis,
         areaConstruidaDoCusto,
+        vgvSemArea,
+        unidadesSemArea,
         recebimento,
         parcelasTerreno,
         mesDaPrimeiraParcela,
@@ -1284,7 +1298,8 @@ function indicadoresDeProduto(P: Premissas): IndicadoresDeProduto {
         unidadesVendaveis: P.unidadesVendaveis,
         // VGV com a sensibilidade, como o custo de obra (o Portal do Investidor roda os dois).
         ticketMedio: razao(P.vgvTotal, P.unidadesVendaveis),
-        vgvPorM2Privativo: razao(P.vgvTotal, P.areaPrivativaVendavel),
+        vgvPorM2Privativo: razao(P.baseVgvTotal > 0 ? P.vgvTotal * (1 - P.vgvSemArea / P.baseVgvTotal) : 0, P.areaPrivativaVendavel),
+        unidadesSemArea: P.unidadesSemArea,
         custoObraPorM2Privativo: P.constCostTotal > 0 ? razao(P.constCostTotal, P.areaPrivativaDasTipologiasVendaveis) : null,
     };
 }

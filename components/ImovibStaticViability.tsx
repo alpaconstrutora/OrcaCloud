@@ -185,7 +185,7 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
                 <KpiCard
                     label="VGV por m² privativo"
                     value={formatM2(produto.vgvPorM2Privativo)}
-                    sub={produto.vgvPorM2Privativo == null ? 'Sem área à venda' : 'Sobre a área à venda'}
+                    sub={produto.vgvPorM2Privativo == null ? 'Sem área à venda' : produto.unidadesSemArea ? `${produto.unidadesSemArea} unid. sem área fora da conta` : 'Sobre a área à venda'}
                     title="VGV ÷ área privativa à venda (sem permutadas nem não vendáveis)"
                     icon={<Building2 className="w-4 h-4" />}
                     color="teal"

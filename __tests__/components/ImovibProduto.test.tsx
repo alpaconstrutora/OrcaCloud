@@ -81,6 +81,14 @@ describe('8.2 — área equivalente NBR 12721', () => {
         expect(await screen.findByText(/sem área comum/i, { selector: 'p' })).toBeTruthy();
     });
 
+    it('Planta de outra organização: diz que não há acesso, não que falta publicar', async () => {
+        svc.areaEquivalenteDaPlanta.mockResolvedValue('sem_acesso');
+        tela({ estrutura: estrutura('planta-1') });
+        expect(await screen.findByText(/não é membro da organização da Planta/i)).toBeTruthy();
+        expect(screen.queryByText(/nenhuma versão publicada/i)).toBeNull();
+        expect(screen.getByText('Não medido')).toBeTruthy();
+    });
+
     it('quadro com pendência bloqueante: mostra o total e avisa', async () => {
         svc.areaEquivalenteDaPlanta.mockResolvedValue({ snapshotId: 's1', revisao: 2, total: 3_240, situacao: 'Sem aprovação', status: 'failed' });
         tela({ estrutura: estrutura('planta-1') });

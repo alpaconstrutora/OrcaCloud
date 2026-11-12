@@ -674,7 +674,7 @@ export interface ImovibStudy {
     recommendation_notes?: string | null;
     recommended_by?: string | null;
     recommended_at?: string | null;
-    /** Quem registrou (gravado pelo banco, do usuário logado — migration aplicar_20271112950000). */
+    /** Quem registrou (gravado pelo banco, do usuário logado — migration aplicar_20271112980000). */
     recommended_by_user_id?: string | null;
     /** Os indicadores que embasaram o parecer: VGV, VPL, TIR, margem, exposição. */
     recommendation_snapshot?: { vgv: number; vpl: number; tirAnual: number | null; margemLiquidaPct: number | null; exposicaoMaxima: number } | null;

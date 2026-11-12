@@ -47,8 +47,9 @@ as duas colunas novas (`recommendation_snapshot`, `recommended_by_user_id`) entr
 
 ## Estado
 
-5 de 5. Migration `aplicar_20271112950000_imovib_governanca_pendencias.sql` aplicada em 12/11 com OK do
-usuário (*"Pode aplicar"*). Provado no banco como `authenticated`, dentro de um bloco desfeito (nada
+5 de 5. Migration `aplicar_20271112980000_imovib_governanca_pendencias.sql` aplicada em 12/11 com OK do
+usuário (*"Pode aplicar"*) — nasceu com o prefixo 20271112950000 e foi renomeada porque a migration do Diário
+entrou no `main` com o mesmo prefixo (só o nome do arquivo mudou). Provado no banco como `authenticated`, dentro de um bloco desfeito (nada
 gravado): versão com data de 2020 e outro autor saiu com a data de hoje e o usuário logado; apagar o
 Garden com versão → bloqueado (23503); parecer enviado como "Fulano Forjado" saiu com o nome do membro
 no cadastro e o id do usuário. A checagem da RLS das tabelas filhas compara o **e-mail** do token

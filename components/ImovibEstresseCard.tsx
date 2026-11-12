@@ -46,12 +46,23 @@ const ImovibEstresseCard: React.FC<ImovibEstresseCardProps> = ({ study }) => {
         { rotulo: 'Índice da obra sobe 50%', choques: { indice_obra: Math.round(indiceObra * 0.5 * 10000) / 10000 } },
     ];
     const lucro = (r: typeof base) => r.monthlyFlows.reduce((a, f) => a + f.net, 0);
-    const LINHAS: { rotulo: string; base: string; cenario: string; pior: boolean }[] = [
-        { rotulo: 'VPL', base: formatarMetrica('vpl', base.vpl), cenario: formatarMetrica('vpl', cenario.vpl), pior: cenario.vpl < base.vpl },
-        { rotulo: 'TIR', base: formatarMetrica('tir', base.annualIrr), cenario: formatarMetrica('tir', cenario.annualIrr), pior: !(cenario.annualIrr >= base.annualIrr) },
-        { rotulo: 'Lucro líquido', base: formatarMetrica('vpl', lucro(base)), cenario: formatarMetrica('vpl', lucro(cenario)), pior: lucro(cenario) < lucro(base) },
-        { rotulo: 'Exposição máxima', base: formatarMetrica('exposicao', base.maxExposure), cenario: formatarMetrica('exposicao', cenario.maxExposure), pior: cenario.maxExposure < base.maxExposure },
-        { rotulo: 'Prazo', base: `${base.duration} meses`, cenario: `${cenario.duration} meses`, pior: cenario.duration > base.duration },
+    // Sentido do efeito, olhando o texto da tela: o que aparece igual é "igual" (sem cor),
+    // mesmo com diferença de centavos. maior = true quando subir é melhor.
+    type Efeito = 'pior' | 'melhor' | 'igual';
+    const efeito = (txtBase: string, txtCenario: string, vBase: number, vCenario: number, maior: boolean): Efeito => {
+        if (txtBase === txtCenario) return 'igual';
+        if (!Number.isFinite(vCenario)) return Number.isFinite(vBase) ? 'pior' : 'igual';
+        if (!Number.isFinite(vBase)) return 'melhor';
+        return (vCenario > vBase) === maior ? 'melhor' : 'pior';
+    };
+    const linha = (rotulo: string, b: string, c: string, vb: number, vc: number, maior: boolean) =>
+        ({ rotulo, base: b, cenario: c, efeito: efeito(b, c, vb, vc, maior) });
+    const LINHAS: { rotulo: string; base: string; cenario: string; efeito: Efeito }[] = [
+        linha('VPL', formatarMetrica('vpl', base.vpl), formatarMetrica('vpl', cenario.vpl), base.vpl, cenario.vpl, true),
+        linha('TIR', formatarMetrica('tir', base.annualIrr), formatarMetrica('tir', cenario.annualIrr), base.annualIrr, cenario.annualIrr, true),
+        linha('Lucro líquido', formatarMetrica('vpl', lucro(base)), formatarMetrica('vpl', lucro(cenario)), lucro(base), lucro(cenario), true),
+        linha('Exposição máxima', formatarMetrica('exposicao', base.maxExposure), formatarMetrica('exposicao', cenario.maxExposure), base.maxExposure, cenario.maxExposure, true),
+        linha('Prazo', `${base.duration} meses`, `${cenario.duration} meses`, base.duration, cenario.duration, false),
     ];
     const mexeu = Object.values(choques).some(v => v);
 
@@ -92,8 +103,10 @@ const ImovibEstresseCard: React.FC<ImovibEstresseCardProps> = ({ study }) => {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 <div className="space-y-3">
                     {VARIAVEIS_DO_ESTUDO.map(v => {
-                        const f = FAIXA[v];
                         const valor = choques[v] ?? 0;
+                        // Um atalho pode passar da faixa (o dobro de um prazo longo): a faixa
+                        // cresce até o valor, e o controle mostra o choque que está valendo.
+                        const f = { ...FAIXA[v], min: Math.min(FAIXA[v].min, valor), max: Math.max(FAIXA[v].max, valor) };
                         return (
                             <div key={v}>
                                 <div className="flex justify-between mb-1">
@@ -106,7 +119,7 @@ const ImovibEstresseCard: React.FC<ImovibEstresseCardProps> = ({ study }) => {
                                     min={f.min}
                                     max={f.max}
                                     step={f.passo}
-                                    value={Math.min(f.max, Math.max(f.min, valor))}
+                                    value={valor}
                                     onChange={(e) => setChoques(prev => ({ ...prev, [v]: Number(e.target.value) }))}
                                     className="w-full accent-indigo-600"
                                 />
@@ -127,7 +140,7 @@ const ImovibEstresseCard: React.FC<ImovibEstresseCardProps> = ({ study }) => {
                             <tr key={l.rotulo}>
                                 <td className="px-3 py-2 text-gray-700">{l.rotulo}</td>
                                 <td className="px-3 py-2 text-right text-gray-800">{l.base}</td>
-                                <td className={`px-3 py-2 text-right font-medium ${!mexeu ? 'text-gray-800' : l.pior ? 'text-red-700' : 'text-emerald-700'}`}>{l.cenario}</td>
+                                <td className={`px-3 py-2 text-right font-medium ${!mexeu || l.efeito === 'igual' ? 'text-gray-800' : l.efeito === 'pior' ? 'text-red-700' : 'text-emerald-700'}`}>{l.cenario}</td>
                             </tr>
                         ))}
                     </tbody>

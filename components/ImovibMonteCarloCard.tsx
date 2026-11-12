@@ -142,9 +142,13 @@ const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cena
                         <KpiCard label="TIR (P10 · P50 · P90)" value={resultado.tir ? formatarMetrica('tir', resultado.tir.p50) : '—'} sub={resultado.tir ? `${formatarMetrica('tir', resultado.tir.p10)} · ${formatarMetrica('tir', resultado.tir.p90)}` : 'Nenhum sorteio com TIR'} color="blue" />
                     </div>
                     <ChartCard title="Distribuição do VPL" subtitle="Quantos sorteios caíram em cada faixa de VPL.">
-                        <div className="h-56">
+                        <div
+                            className="h-56"
+                            role="img"
+                            aria-label={`Distribuição do VPL em ${resultado.iteracoes.toLocaleString('pt-BR')} sorteios: P10 ${formatarMetrica('vpl', resultado.vpl.p10)}, P50 ${formatarMetrica('vpl', resultado.vpl.p50)}, P90 ${formatarMetrica('vpl', resultado.vpl.p90)}; ${pct(resultado.probVplNegativo)} com VPL negativo`}
+                        >
                             <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                <BarChart data={resultado.histogramaVpl.map(h => ({ faixa: (h.de + h.ate) / 2, n: h.n, de: h.de, ate: h.ate }))} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                                <BarChart accessibilityLayer={false} data={resultado.histogramaVpl.map(h => ({ faixa: (h.de + h.ate) / 2, n: h.n, de: h.de, ate: h.ate }))} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
                                     <CartesianGrid vertical={false} stroke={GRID} />
                                     <XAxis dataKey="faixa" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} />
                                     <YAxis tick={TICK} axisLine={false} tickLine={false} allowDecimals={false} width={40} />
@@ -157,7 +161,7 @@ const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cena
                                         }}
                                         formatter={(v: unknown) => [String(v), 'Sorteios']}
                                     />
-                                    <Bar dataKey="n" fill={SERIE_PRINCIPAL} radius={[3, 3, 0, 0]} />
+                                    <Bar dataKey="n" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} maxBarSize={24} />
                                 </BarChart>
                             </ResponsiveContainer>
                         </div>

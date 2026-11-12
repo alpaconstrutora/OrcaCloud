@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp } from 'lucide-react';
+import { ArrowLeft, Building2, Calculator, Loader2, AlertCircle, LineChart, Landmark, Pencil, FileBarChart, TrendingUp, History, Lock } from 'lucide-react';
 import ImovibPremisesForm from './ImovibPremisesForm';
 import ImovibStaticViability from './ImovibStaticViability';
 import ImovibDynamicForm from './ImovibDynamicForm';
@@ -12,6 +12,8 @@ import ImovibReceitasForm from './ImovibReceitasForm';
 import ImovibCapitalForm from './ImovibCapitalForm';
 import ImovibSensitivityForm from './ImovibSensitivityForm';
 import ImovibForm from './ImovibForm';
+import ImovibVersoesTab from './ImovibVersoesTab';
+import ImovibCongelarVersao from './ImovibCongelarVersao';
 import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
 import { useImovibPodeEditar, ImovibEdicaoProvider } from '../hooks/useImovibEdicao';
@@ -23,7 +25,7 @@ interface ImovibDetailViewProps {
     onBack: () => void;
 }
 
-type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic';
+type AbaDoEstudo = 'executive_summary' | 'premises' | 'capex' | 'receitas' | 'capital' | 'risk_scenarios' | 'viability_static' | 'viability_dynamic' | 'versoes';
 
 const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'executive_summary', label: 'Resumo Executivo', icon: <FileBarChart className="w-4 h-4" /> },
@@ -35,6 +37,8 @@ const ABAS_DO_ESTUDO: TabsBarItem<AbaDoEstudo>[] = [
     { id: 'risk_scenarios', label: 'Sensibilidade e Risco', icon: <AlertCircle className="w-4 h-4" /> },
     { id: 'viability_static', label: 'Estática', icon: <Calculator className="w-4 h-4" /> },
     { id: 'viability_dynamic', label: 'Dinâmica', icon: <LineChart className="w-4 h-4" /> },
+    // Item 10.2 do plano 2026-11-11 (D5: versão não se edita nem se apaga).
+    { id: 'versoes', label: 'Versões', icon: <History className="w-4 h-4" /> },
 ];
 
 
@@ -49,6 +53,9 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     const edicao = useImovibPodeEditar(study?.organization_id);
     // Editar nome/versão/classificação (item 5.1) — o mesmo drawer da criação.
     const [editando, setEditando] = useState(false);
+    // Congelar versão (item 10.2): a aba Versões remonta depois para listar a nova.
+    const [congelando, setCongelando] = useState(false);
+    const [versoesKey, setVersoesKey] = useState(0);
     // Premissas › Identificação/Mercado guardam o formulário em estado local
     // (item 5.4, §25). O filho avisa aqui quando há edição pendente; toda saída
     // que desmontaria ou recarregaria aquele formulário passa por `podeSair`.
@@ -72,6 +79,10 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     };
     const abrirEdicao = async () => {
         if (await podeSair()) setEditando(true);
+    };
+    // Edição não salva em Premissas não entra na versão: pergunta antes, como as outras saídas.
+    const abrirCongelar = async () => {
+        if (await podeSair()) setCongelando(true);
     };
 
     useEffect(() => {
@@ -151,6 +162,16 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                         <Pencil className="w-[15px] h-[15px]" />
                         Editar
                     </button>
+                    <button
+                        type="button"
+                        onClick={abrirCongelar}
+                        disabled={!edicao.pode}
+                        title={!edicao.pode ? edicao.motivo : 'Guardar o estudo como está, com os indicadores de agora (não se edita nem se apaga depois)'}
+                        className={`${botaoSecundario} text-slate-700 bg-white border-gray-200 hover:bg-gray-50`}
+                    >
+                        <Lock className="w-[15px] h-[15px]" />
+                        Congelar versão
+                    </button>
                 </div>
             </div>
 
@@ -203,6 +224,11 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     {activeTab === 'viability_static' && (
                         <ImovibStaticViability study={study} onIrPara={irPara} />
                     )}
+                    {activeTab === 'versoes' && (
+                        <ErrorBoundary>
+                            <ImovibVersoesTab key={versoesKey} study={study} />
+                        </ErrorBoundary>
+                    )}
                     {activeTab === 'viability_dynamic' && (
                         <ErrorBoundary>
                             <ImovibDynamicForm study={study} onDataChanged={() => loadStudyDetails(false)} />
@@ -211,6 +237,15 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                     )}
                   </ImovibEdicaoProvider>
             </div>
+
+            <ImovibEdicaoProvider value={edicao}>
+                <ImovibCongelarVersao
+                    open={congelando}
+                    study={study}
+                    onClose={() => setCongelando(false)}
+                    onCongelada={() => { setCongelando(false); setVersoesKey(k => k + 1); }}
+                />
+            </ImovibEdicaoProvider>
 
             {/* Salvo → recarrega o detalhe (cabeçalho e abas leem o estudo novo). */}
             <ImovibForm

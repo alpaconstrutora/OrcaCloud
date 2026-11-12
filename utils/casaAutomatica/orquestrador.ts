@@ -99,6 +99,8 @@ import type { ImplantacaoDaCasa } from './quadroEImplantacao';
 import { hipotesesDoForroDaCasa, forroDaEletrica, forroDaAguaDaCasa, rebaixoDoForroMm, decidirPressao } from './forroEPressao';
 import type { DecisaoDaPressao } from './forroEPressao';
 import { PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM, pluvialRenteAoEsgoto, motivoParaNaoGerar, GRAVE, problemasGraves, escolherSemente, norteNoQuadro, comandosNoMundo, comandosLocaisNoMundo, gruposDoTuboDeQueda, coletoresForaDoShaft, paredesSobORebaixo, LUZ_ALEM_DO_REBAIXO_MM, LUZ_FORA_DO_PILAR_MM, foraDoPoligono, FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM } from './escolhaEShaft';
+import type { ContextoDaCasa, SemContexto } from './contexto';
+import { portaDaFrente as portaDaFrenteDaEtapa, lancarEscadaDeAcesso as lancarEscadaDeAcessoDaEtapa, garagemNoQuadro as garagemNoQuadroDaEtapa, lancarRampaDaGaragem as lancarRampaDaGaragemDaEtapa, lancarMuroDaCasa as lancarMuroDaCasaDaEtapa } from './etapaAcessoEMuro';
 
 /** F22: por que a TÉRREA não comporta o programa (`null` = comporta): medida mínima de ambiente violada, ou a TO. */
 export function terreaNaoComporta(p: PlanoDaCasa): string | null {
@@ -245,6 +247,52 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     comandos.push(...lote);
     criados.push(...r.diff.created);
     return lote.length;
+  };
+  // P2 (12/11/2026): o CONTEXTO que as etapas extraídas (`utils/casaAutomatica/etapa*.ts`) recebem no lugar do fechamento —
+  // lido na hora (getter), e os `let` regraváveis (setter).
+  const ctx: ContextoDaCasa = {
+    get aplicar() {
+      return aplicar;
+    },
+    get entrada() {
+      return entrada;
+    },
+    get etapa() {
+      return etapa;
+    },
+    get garagemNoQuadro() {
+      return garagemNoQuadro;
+    },
+    get hip() {
+      return hip;
+    },
+    get hipGerador() {
+      return hipGerador;
+    },
+    get implantacao() {
+      return implantacao;
+    },
+    get m() {
+      return m;
+    },
+    set m(v) {
+      m = v;
+    },
+    get pendencias() {
+      return pendencias;
+    },
+    get portaDaFrente() {
+      return portaDaFrente;
+    },
+    get temTerreno() {
+      return temTerreno;
+    },
+    get terraplenagemDaCasa() {
+      return terraplenagemDaCasa;
+    },
+    set terraplenagemDaCasa(v) {
+      terraplenagemDaCasa = v;
+    },
   };
 
   const doCurto = programaDaCasa(entrada.curto, hip.programa);
@@ -414,210 +462,21 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
   // porta de entrada — `Escada.desdeCotaMm` (kernel 0.103.0). Sai da face da fachada diante da porta, rumo à rua, com os
   // pontos do lado baixo para o alto; só quando cabe no recuo de frente (senão a pendência diz, e ela fica à mão).
   // A porta de entrada: a mais larga na parede da fachada da frente do térreo (no quadro da frente, `local`).
-  const portaDaFrente = () => {
-    const qd = implantacao.quadro;
-    const rlE = implantacao.retanguloLocal;
-    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    return (
-      m.openings
-        .filter((o) => o.kind === 'door')
-        .map((o) => ({ o, w: m.walls.find((x) => x.id === o.wallId) }))
-        .filter((x): x is { o: (typeof m.openings)[number]; w: (typeof m.walls)[number] } => !!x.w && x.w.levelId === entrada.levelId)
-        .map(({ o, w }) => {
-          const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
-          const t = o.offsetMm + o.widthMm / 2;
-          const meioDaPorta = { x: w.a.x + ((w.b.x - w.a.x) / L) * t, y: w.a.y + ((w.b.y - w.a.y) / L) * t };
-          return { o, meioDaPorta, local: paraLocal(qd, meioDaPorta) };
-        })
-        .filter((x) => Math.abs(x.local.y - rlE.y0) <= meia + 1)
-        .sort((p, q2) => q2.o.widthMm - p.o.widthMm)[0] ?? null
-    );
-  };
-  const lancarEscadaDeAcesso = () => {
-    const tr = terraplenagemDaCasa;
-    if (!tr || tr.entrada.tipo === 'NENHUMA') return;
-    const e = tr.entrada;
-    const sentido = e.desnivelMm > 0 ? 'sobe' : 'desce';
-    const desc =
-      e.tipo === 'RAMPA'
-        ? `rampa de ${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m a ${hip.terraplenagem.rampaMaximaPct.toLocaleString('pt-BR')} %`
-        : `escada de ${e.degraus} degrau(s) de ${e.espelhoMm} mm (${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m)`;
-    const desnivel = `${(Math.abs(e.desnivelMm) / 1000).toLocaleString('pt-BR')} m`;
-    if (!e.cabe || e.cotaDaCalcadaMm == null) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, que não cabe no recuo de frente; desenhe o acesso à mão.` });
-      return;
-    }
-    const qd = implantacao.quadro;
-    const rlE = implantacao.retanguloLocal;
-    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    const porta = portaDaFrente();
-    if (!porta) {
-      pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}; a porta de entrada não está na fachada da frente: desenhe o acesso à mão.` });
-      return;
-    }
-    const naFace = paraMundo(qd, { x: porta.local.x, y: rlE.y0 - meia });
-    const naRua = paraMundo(qd, { x: porta.local.x, y: rlE.y0 - meia - e.comprimentoMm });
-    const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) });
-    // Do baixo para o alto: a calçada abaixo do piso → começa na rua; acima → começa na porta.
-    const pontos = e.desnivelMm > 0 ? [inteiro(naRua), inteiro(naFace)] : [inteiro(naFace), inteiro(naRua)];
-    try {
-      aplicar([
-        {
-          type: 'AddEscada',
-          levelId: entrada.levelId,
-          pontos,
-          tipo: e.tipo === 'RAMPA' ? 'RAMPA' : 'ESCADA',
-          larguraMm: Math.max(1200, porta.o.widthMm + 300),
-          alvoEspelhoMm: e.tipo === 'ESCADA' ? Math.min(hip.terraplenagem.espelhoMaximoMm, Math.max(1, e.espelhoMm)) : 175,
-          rotulo: 'Acesso',
-          desdeCotaMm: e.cotaDaCalcadaMm,
-        },
-      ]);
-      pendencias.push({ grupo: 'CONFERIR', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, lançada diante da porta de entrada.`, ...comLocal(localDoElemento(m, [porta.o.id])) });
-    } catch (x) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a escada de acesso não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.`, ...comLocal(localDoElemento(m, [porta.o.id])) });
-    }
-  };
+  const portaDaFrente = () => portaDaFrenteDaEtapa(ctx);
+  const lancarEscadaDeAcesso = () => lancarEscadaDeAcessoDaEtapa(ctx);
 
   // A garagem coberta no quadro da frente: o ambiente de uso GARAGEM no térreo (caixa do anel).
-  const garagemNoQuadro = () => {
-    const qd = implantacao.quadro;
-    const et = m.labels.find((l) => l.levelId === entrada.levelId && l.uso === 'GARAGEM');
-    const sp = et ? m.spaces.find((x) => x.levelId === entrada.levelId && pointInPolygon(x.ring, et.at)) : undefined;
-    if (!sp) return null;
-    const pts = sp.ring.map((p) => paraLocal(qd, p));
-    return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)) };
-  };
+  const garagemNoQuadro = () => garagemNoQuadroDaEtapa(ctx);
   // F26 (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): a RAMPA DE VEÍCULOS (escada de acesso
   // tipo RAMPA, `veicular`, kernel 0.104.0) da calçada diante da garagem até a fachada — a implantação já recuou a casa
   // para ela caber; aqui, no lugar real da garagem, ela é lançada ou a pendência diz por que não.
-  const lancarRampaDaGaragem = () => {
-    const tr = terraplenagemDaCasa;
-    const leitor = entrada.leitorDoTerreno;
-    if (!tr || !leitor) return;
-    const g = garagemNoQuadro();
-    if (!g) return;
-    const qd = implantacao.quadro;
-    const rlG = implantacao.retanguloLocal;
-    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    const yF = Math.min(...(entrada.ctx.terreno?.anel ?? []).map((p) => paraLocal(qd, p).y));
-    const xm = (g.x0 + g.x1) / 2;
-    const rua = leitor.cotaEmM(paraMundo(qd, { x: xm, y: yF }));
-    if (rua == null || !Number.isFinite(rua)) return;
-    const calcadaMm = Math.round((rua - leitor.cotaZeroM) * 1000);
-    const delta = tr.elevacaoDoTerreoMm - calcadaMm;
-    if (Math.abs(delta) <= hip.terraplenagem.desnivelSemDegrauMm) return;
-    const pct = hip.terraplenagem.rampaDeVeiculosMaxPct;
-    const comprimento = Math.ceil(Math.abs(delta) / (pct / 100));
-    const face = rlG.y0 - meia;
-    const disponivel = face - (yF + hip.muro.espessuraMm);
-    const sentido = delta > 0 ? 'sobe' : 'desce';
-    if (comprimento > disponivel) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: a rampa de veículos ${sentido} ${f2(Math.abs(delta) / 1000)} m da rua ao piso — a ${f2(pct)} %, ${f2(comprimento / 1000)} m, e só há ${f2(Math.max(0, disponivel) / 1000)} m entre o muro e a fachada; desenhe a garagem na cota da rua ou a rampa mais inclinada, à mão.` });
-      return;
-    }
-    const naFace = paraMundo(qd, { x: xm, y: face });
-    const naRua = paraMundo(qd, { x: xm, y: face - comprimento });
-    const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) });
-    try {
-      aplicar([
-        {
-          type: 'AddEscada',
-          levelId: entrada.levelId,
-          pontos: delta > 0 ? [inteiro(naRua), inteiro(naFace)] : [inteiro(naFace), inteiro(naRua)],
-          tipo: 'RAMPA',
-          veicular: true,
-          larguraMm: Math.max(2500, Math.round(g.x1 - g.x0)),
-          rotulo: 'Rampa da garagem',
-          desdeCotaMm: calcadaMm,
-        },
-      ]);
-      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: rampa de veículos ${sentido === 'sobe' ? 'subindo' : 'descendo'} ${f2(Math.abs(delta) / 1000)} m em ${f2(comprimento / 1000)} m (${f2(pct)} %), da rua à garagem — confira a inclinação no código de obras.` });
-    } catch (x) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: a rampa de veículos não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.` });
-    }
-  };
+  const lancarRampaDaGaragem = () => lancarRampaDaGaragemDaEtapa(ctx);
 
   // F26 (decisões do usuário: "muro + portão + calçada", "família nova no kernel"): o muro do lote (kernel 0.104.0), o
   // portão de pedestre diante da porta, o de garagem diante da garagem e as calçadas — depois da casa inteira, que é
   // de onde saem a porta, a garagem e a escada de acesso.
   let resumoDoMuro: PlanoDoMuroDaCasa['resumo'] | null = null;
-  const lancarMuroDaCasa = (): PlanoDoMuroDaCasa['resumo'] | null => {
-    if (!hip.muro.lancar) {
-      etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
-      return null;
-    }
-    try {
-      const qd = implantacao.quadro;
-      const rlM = implantacao.retanguloLocal;
-      const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-      const local = (p: Point) => paraLocal(qd, p);
-      const porta = portaDaFrente();
-      const acesso = (m.stairs ?? []).find((x) => x.levelId === entrada.levelId && x.desdeCotaMm != null && !x.veicular);
-      // A garagem coberta: o ambiente de uso GARAGEM no térreo — a largura dela e até a fachada.
-      const garagemLocal = garagemNoQuadro();
-      const leitor = entrada.leitorDoTerreno;
-      const plano = planejarMuroDaCasa(
-        {
-          levelId: entrada.levelId,
-          anelDoLote: entrada.ctx.terreno?.anel ?? [],
-          limites: entrada.ctx.limites,
-          quadro: qd,
-          portaX: porta ? porta.local.x : null,
-          faceDaFachadaY: rlM.y0 - meia,
-          inicioDaEscadaY: acesso ? Math.min(...acesso.pontos.map((p) => local(p).y)) : null,
-          casaNoMundo: implantacao.anelNoMundo,
-          meiaParedeMm: meia,
-          // A escada de acesso no chão: a faixa dela no quadro (o percurso ± meia largura).
-          obstaculos: (m.stairs ?? [])
-            .filter((x) => x.levelId === entrada.levelId && x.desdeCotaMm != null)
-            .map((x) => {
-              const pts = x.pontos.map(local);
-              const xs = pts.map((p) => p.x);
-              const ys = pts.map((p) => p.y);
-              const dx = Math.max(...xs) - Math.min(...xs);
-              const dy = Math.max(...ys) - Math.min(...ys);
-              const w = x.larguraMm / 2;
-              return dy >= dx ? { x0: Math.min(...xs) - w, x1: Math.max(...xs) + w, y0: Math.min(...ys), y1: Math.max(...ys) } : { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys) - w, y1: Math.max(...ys) + w };
-            }),
-          garagem: garagemLocal ? { x0: garagemLocal.x0, x1: garagemLocal.x1, yFim: rlM.y0 - meia } : null,
-          vagasDescobertas: !garagemLocal && implantacao.vagasDescobertas ? implantacao.vagasDescobertas.caixa : null,
-          cotaDoTerreno:
-            temTerreno && leitor
-              ? (p: Point) => {
-                  const c = leitor.cotaEmM(p);
-                  return c == null || !Number.isFinite(c) ? null : (c - leitor.cotaZeroM) * 1000;
-                }
-              : null,
-        },
-        hip.muro,
-      );
-      for (const pd of plano.pendencias) pendencias.push(pd);
-      const n = aplicar(plano.comandos);
-      const r = plano.resumo;
-      etapa(
-        'MURO',
-        ROTULO_DA_ETAPA_DA_CASA.MURO,
-        'LANCOU',
-        n,
-        `frente ${f2(r.frenteM)} m e divisas ${f2(r.divisasM)} m; ${r.portoesDePedestre} portão(ões) de pedestre e ${r.portoesDeGaragem} de garagem; calçadas ${f2(r.calcadasM2)} m²`,
-      );
-      // A permeabilidade com as calçadas desenhadas: a projeção + o impermeável delas contra o mínimo da zona.
-      const lote = entrada.ctx.terreno?.areaMm2 ? entrada.ctx.terreno.areaMm2 / 1e6 : null;
-      const minimo = entrada.ctx.zona.taxaPermeabilidadeMinPct;
-      if (lote && minimo != null) {
-        const permeavel = ((lote - implantacao.medidas.projecaoM2 - r.impermeavelM2) / lote) * 100;
-        if (permeavel < minimo)
-          pendencias.push({ grupo: 'VERIFICACAO', texto: `Muro: com as calçadas, a permeabilidade cai a ${f2(permeavel)} % (a zona pede ${f2(minimo)} %) — troque o piso do acesso por drenante ou encurte as calçadas.` });
-      }
-      return r;
-    } catch (x) {
-      const motivo = x instanceof Error ? x.message : String(x);
-      etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_RODOU', 0, motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Muro: ${motivo}` });
-      return null;
-    }
-  };
+  const lancarMuroDaCasa = (): PlanoDoMuroDaCasa['resumo'] | null => lancarMuroDaCasaDaEtapa(ctx);
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
   const q = implantacao.quadro;

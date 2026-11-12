@@ -5,6 +5,7 @@ import { FileText, PieChart, Activity, Save, Loader2, CalendarClock, MapPin } fr
 import ImovibCronogramaTab from './ImovibCronogramaTab';
 import ImovibTerrenoTab from './ImovibTerrenoTab';
 import ImovibZoneamentoCard from './ImovibZoneamentoCard';
+import ImovibEstruturaJuridicaCard from './ImovibEstruturaJuridicaCard';
 import ImovibComparaveisCard from './ImovibComparaveisCard';
 import ImovibMercadoDeOrigemCard from './ImovibMercadoDeOrigemCard';
 
@@ -215,6 +216,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                             <ImovibVinculoEmpreendimento study={study} onDataChanged={onDataChanged} />
                         </div>
                     </div>
+                    <ImovibEstruturaJuridicaCard study={study} formData={formData} setCampo={setCampo} />
                     <ImovibZoneamentoCard study={study} />
                 </div>
             )}

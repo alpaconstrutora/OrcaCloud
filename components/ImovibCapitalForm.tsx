@@ -16,6 +16,7 @@ import { Legend } from './analysis/chartKit';
 import ImovibInputRow from './ImovibInputRow';
 import ImovibFontesCard from './ImovibFontesCard';
 import ImovibAportesCard from './ImovibAportesCard';
+import ImovibSociosCard from './ImovibSociosCard';
 
 interface ImovibCapitalFormProps {
     study: ImovibStudy;
@@ -198,6 +199,7 @@ const ImovibCapitalForm: React.FC<ImovibCapitalFormProps> = ({ study, onDataChan
 
             <ImovibFontesCard study={study} onDataChanged={onDataChanged} />
             <ImovibAportesCard study={study} resultado={r} onSalvar={salvar} />
+            <ImovibSociosCard study={study} resultado={r} />
         </div>
     );
 };

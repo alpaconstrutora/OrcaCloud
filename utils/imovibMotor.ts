@@ -99,7 +99,7 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
         | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
-        | 'impostos_pelo_regime';
+        | 'impostos_pelo_regime' | 'ret_sem_afetacao';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -326,7 +326,13 @@ export const CAMPOS_DO_MOTOR = [
     'cost_curve_type', 'cost_curve_custom', 'stock_carrying_cost_unit_month',
     // Fase 6 (migration aplicar_20271112200000)
     'tax_regime', 'tax_hypotheses',
+    // Fase 9
+    'patrimonio_afetacao',
 ] as const satisfies readonly (keyof ImovibStudy)[];
+
+/** Devolução padrão no distrato: com patrimônio de afetação a retenção pode ir a 50% (item 9.1). */
+export const devolucaoPadraoDoDistrato = (study: Pick<ImovibStudy, 'patrimonio_afetacao'>): number =>
+    study.patrimonio_afetacao ? IMOVIB_DEFAULTS.cancellation_refund_percent_afetacao : IMOVIB_DEFAULTS.cancellation_refund_percent;
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
 const val = (x: number | null | undefined, padrao: number): number =>
@@ -651,6 +657,13 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     // regime e as rubricas da categoria 7 (e o imposto da Dinâmica) ficam fora.
     const regimeTributario = (study.tax_regime ?? D.tax_regime) as RegimeTributarioDoEstudo;
     const pePeloRegime = regimeTributario !== 'manual';
+    if ((regimeTributario === 'ret' || regimeTributario === 'ret_his') && !study.patrimonio_afetacao) {
+        avisos.push({
+            codigo: 'ret_sem_afetacao',
+            mensagem: `O RET só vale para incorporação submetida ao patrimônio de afetação, e ${study.patrimonio_afetacao == null ? 'o patrimônio de afetação do estudo não foi informado' : 'o estudo está sem patrimônio de afetação'}. Marque-o em Premissas › Identificação ou troque o regime tributário.`,
+            aba: 'premises',
+        });
+    }
     const impostosForaDoCalculo: string[] = [];
     const rubricasForaPeloRegime = new Set<string>();
     // Rubricas com momento próprio (item 5.5): valor total aqui, calendário em montarSeries.
@@ -779,7 +792,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     }, handoverMonth, {
         taxaPct: val(study.cancellation_rate_percent, D.cancellation_rate_percent),
         defasagemMeses: val(study.cancellation_lag_months, D.cancellation_lag_months),
-        devolucaoPct: val(study.cancellation_refund_percent, D.cancellation_refund_percent),
+        devolucaoPct: val(study.cancellation_refund_percent, devolucaoPadraoDoDistrato(study)),
         revende: study.cancellation_resale ?? D.cancellation_resale,
         desagioRevendaPct: val(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent),
     }, duracaoBase);

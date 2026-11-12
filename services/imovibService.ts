@@ -14,6 +14,7 @@ import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 import type { ImovibComparable } from '../utils/imovibMercado';
 import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuadroI, type VersaoDoQuadro } from '../utils/imovibAreaEquivalente';
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
+import type { ImovibPartner } from '../utils/imovibSocios';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -29,6 +30,7 @@ export const COLUNAS_DA_LISTAGEM = [METADADOS_DA_LISTAGEM, ...CAMPOS_DO_MOTOR].j
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
 
 // Outras fontes de capital (aplicar_20271111980000) — o motor lê todas as colunas.
+const SOCIO_COLS = 'id, study_id, name, share_percent, capital_percent, notes, company_partner_id, sort_order, created_at';
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
 
 // Comparáveis de mercado (aplicar_20271112300000).
@@ -840,6 +842,54 @@ export const imovibService = {
         const { data, error } = await supabase.from('imovib_market_comparables').delete().eq('id', id).select('id');
         if (error) throw new Error(`Falha ao excluir o comparável: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para excluir comparáveis deste estudo.');
+    },
+
+    // ── Sócios do estudo (item 9.2 do plano 2026-11-11) ─────────────────────
+
+    async listarSocios(studyId: string): Promise<ImovibPartner[]> {
+        const { data, error } = await supabase
+            .from('imovib_partners')
+            .select(SOCIO_COLS)
+            .eq('study_id', studyId)
+            .order('sort_order', { ascending: true })
+            .order('created_at', { ascending: true });
+        if (error) throw new Error(`Falha ao ler os sócios: ${error.message}`);
+        return (data || []) as ImovibPartner[];
+    },
+
+    /** Grava o sócio (cria sem `id`, atualiza com). `.select()` confere que a escrita passou na RLS. */
+    async salvarSocio(s: Omit<ImovibPartner, 'id' | 'created_at'> & { id?: string }): Promise<ImovibPartner> {
+        const { id, ...campos } = s;
+        const q = id
+            ? supabase.from('imovib_partners').update(campos).eq('id', id).select(SOCIO_COLS)
+            : supabase.from('imovib_partners').insert(campos).select(SOCIO_COLS);
+        const { data, error } = await q;
+        if (error) throw new Error(`Falha ao salvar o sócio: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para salvar sócios deste estudo.');
+        return data[0] as ImovibPartner;
+    },
+
+    async excluirSocio(id: string): Promise<void> {
+        const { data, error } = await supabase.from('imovib_partners').delete().eq('id', id).select('id');
+        if (error) throw new Error(`Falha ao excluir o sócio: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para excluir sócios deste estudo.');
+    },
+
+    /**
+     * Copia os sócios da empresa (participação no resultado e nos aportes = a do
+     * quadro societário). A trava UNIQUE (study_id, company_partner_id) faz o segundo
+     * clique não duplicar; devolve a lista do banco.
+     */
+    async importarSociosDaEmpresa(studyId: string, socios: { id: string; nome: string; participacao_pct: number }[], ordemInicial = 0): Promise<ImovibPartner[]> {
+        const linhas = socios.map((p, i) => ({
+            study_id: studyId, name: p.nome, share_percent: Number(p.participacao_pct) || 0, capital_percent: Number(p.participacao_pct) || 0,
+            company_partner_id: p.id, sort_order: ordemInicial + i,
+        }));
+        const { error } = await supabase
+            .from('imovib_partners')
+            .upsert(linhas, { onConflict: 'study_id,company_partner_id', ignoreDuplicates: true });
+        if (error) throw new Error(`Falha ao importar os sócios: ${error.message}`);
+        return this.listarSocios(studyId);
     },
 
     // ── Área equivalente NBR 12721 (item 8.2 do plano 2026-11-11) ───────────

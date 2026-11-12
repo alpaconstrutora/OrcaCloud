@@ -46,8 +46,16 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       UMA varredura do extrato (hashed SubPlan, ~10 ms, fixo) em vez de 1 chamada por linha
       (linear: empata em ~250 linhas). Leitura por id continua por índice (1 linha do
       extrato). Não muda nada.
-- [ ] Lote 3 `aplicar_20271112320000` (29 policies do storage) → aplicar → testar upload/
-      download/listagem pelo app.
+- [x] Lote 3 `aplicar_20271112320000` (29 policies do storage) aplicado pelo usuário
+      (12/11/2026). Conferido: **0 policies com `is_org_member` no banco inteiro**; 587 em
+      public + 29 em storage com `minhas_orgs_membro`. storage.objects visível ao
+      desenvolvedor@: 2.054, igual a antes. Custo do `count(*)` no storage: ~94 ms (antes
+      80–170, variável) — o que resta NÃO é is_org_member: planejamento de 38 ms (29
+      policies → ~400 subplans), `storage.foldername()` repetido por linha e
+      `purchase_order_is_buyer/supplier` por linha nos buckets de pedido. O app não varre o
+      storage inteiro (lista por bucket + prefixo, pelo índice); não mexer sem medir o
+      caminho real.
+- [ ] Teste do usuário pelo app: listar, baixar e enviar um anexo.
 
 ## Troca mecânica (escolhida em 11/11/2026)
 

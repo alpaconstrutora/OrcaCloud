@@ -1,13 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
-import { FileText, PieChart, Activity, Save, Loader2, CalendarClock, MapPin } from 'lucide-react';
+import { FileText, PieChart, Activity, Save, Loader2, CalendarClock, MapPin, BookOpen } from 'lucide-react';
 import ImovibCronogramaTab from './ImovibCronogramaTab';
 import ImovibTerrenoTab from './ImovibTerrenoTab';
 import ImovibZoneamentoCard from './ImovibZoneamentoCard';
 import ImovibEstruturaJuridicaCard from './ImovibEstruturaJuridicaCard';
 import ImovibComparaveisCard from './ImovibComparaveisCard';
 import ImovibMercadoDeOrigemCard from './ImovibMercadoDeOrigemCard';
+import ImovibMemorialTab from './ImovibMemorialTab';
 
 const ORIGEM_DA_VSO: Record<'digitada' | 'comparaveis' | 'market', string> = {
     digitada: 'digitada',
@@ -34,8 +35,8 @@ interface ImovibPremisesFormProps {
 // As duas sub-abas editam o mesmo formulário local, gravado por "Salvar Premissas".
 // Blocos e Tipologia, Torres & Unidades e Mapa Regulatório saíram daqui em 2026-10-19:
 // eles moram na Planta Inteligente (docs/planos/2026-10-19-imovib-premissas-planta-inteligente.md).
-// Cronograma e Terreno entraram na Fase 5 do plano 2026-11-11 (itens 5.1, 5.2 e 5.9).
-type SubAba = 'identificacao' | 'mercado' | 'cronograma' | 'terreno';
+// Cronograma e Terreno entraram na Fase 5 do plano 2026-11-11 (itens 5.1, 5.2 e 5.9); Memorial, no item 10.1.
+type SubAba = 'identificacao' | 'mercado' | 'cronograma' | 'terreno' | 'memorial';
 
 // Item 5.2: CNPJ, incorporadora e gestor são editados nas colunas canônicas
 // (`cnpj`/`developer`/`manager`, as mesmas da criação e da listagem). O valor
@@ -155,6 +156,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                     { id: 'mercado', label: '1. Mercado', icon: <PieChart className="w-4 h-4" /> },
                     { id: 'cronograma', label: '2. Cronograma', icon: <CalendarClock className="w-4 h-4" /> },
                     { id: 'terreno', label: '3. Terreno', icon: <MapPin className="w-4 h-4" /> },
+                    { id: 'memorial', label: '4. Memorial', icon: <BookOpen className="w-4 h-4" /> },
                 ].map((tab) => (
                     <button
                         key={tab.id}
@@ -172,7 +174,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
                 <button
                     onClick={handleSaveAllForm}
                     disabled={isSaving || !pode || !dirty}
-                    title={!pode ? motivo : isSaving ? 'Salvando...' : !dirty ? 'Nada foi alterado em Identificação, Mercado, Cronograma ou Terreno.' : undefined}
+                    title={!pode ? motivo : isSaving ? 'Salvando...' : !dirty ? 'Nada foi alterado em Identificação, Mercado, Cronograma, Terreno ou Memorial.' : undefined}
                     className="flex items-center gap-1.5 h-9 px-3.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                 >
                     {isSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
@@ -223,6 +225,7 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
 
             {activeTab === 'cronograma' && <ImovibCronogramaTab study={study} formData={formData} setCampo={setCampo} />}
             {activeTab === 'terreno' && <ImovibTerrenoTab study={study} formData={formData} setCampo={setCampo} />}
+            {activeTab === 'memorial' && <ImovibMemorialTab study={study} formData={formData} setCampo={setCampo} />}
 
             {/* TAB: MERCADO */}
             {activeTab === 'mercado' && (

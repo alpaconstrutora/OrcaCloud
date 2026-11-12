@@ -4,7 +4,6 @@ import { imovibService } from '../services/imovibService';
 import { resumoDaDueDiligence } from './ImovibDueDiligenceCard';
 import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
-import { devolucaoPadraoDoDistrato } from '../utils/imovibMotor';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
@@ -21,9 +20,8 @@ import * as XLSX from 'xlsx';
 import { useToast } from '../hooks/useToast';
 import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEquilibrio } from '../utils/imovibEquilibrio';
 import { GRUPOS_DO_FLUXO } from '../utils/imovibVisaoDoFluxo';
-import { ROTULO_DOS_JUROS_NA_OBRA, ROTULO_DA_AMORTIZACAO } from '../utils/imovibFinanciamento';
 import { descreverFonte } from '../utils/imovibFontes';
-import { ROTULO_DO_REGIME, RegimeTributarioDoEstudo, hipotesesDoEstudo } from '../utils/imovibTributos';
+import { memorialDePremissas } from '../utils/imovibMemorial';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -123,62 +121,14 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Duração', m.duration, 'meses', null],
     ];
 
-    const naoEntra = rubricas ? 'Não entra no cálculo: vem das rubricas do CAPEX (modo Completo)' : null;
-    // Item 6.3: regime tributário e as alíquotas que valem nele.
-    const regime = (study.tax_regime ?? D.tax_regime) as RegimeTributarioDoEstudo;
-    const h = hipotesesDoEstudo(study);
-    const pctBR = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
-    const aliquotasDoRegime = regime === 'ret' ? `${pctBR(h.retPct)} da receita`
-        : regime === 'ret_his' ? `${pctBR(h.retHisPct)} da receita`
-            : regime === 'presumido' ? `${pctBR(h.presumidoPct)} da receita`
-                : `PIS/Cofins ${pctBR(h.realPisCofinsPct)} da receita, crédito de ${pctBR(h.realCreditoSobreCustoPct)} do custo, IRPJ/CSLL ${pctBR(h.realIrCsPct)} do lucro do ano (estimativa)`;
-    const inflacao = premissa(study.inflation_rate, D.inflation_rate);
-    const ROTULO_CURVA: Record<string, string> = { linear: 'Linear', lancamento: 'Lançamento forte', vso: 'VSO (sobre o estoque)', custom: 'Personalizada' };
-    const tipoCurva = study.sales_curve_type ?? D.sales_curve_type;
-    const revende = study.cancellation_resale ?? D.cancellation_resale;
+    // Item 10.1: a aba sai do memorial de premissas — toda premissa que o motor lê,
+    // com a fonte e a data anotadas; as outras fontes de capital vêm no fim.
     const premissas: Linha[] = [
-        ['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação'],
-        ['Cronograma', 'Início das vendas', premissa(study.sales_start_month, D.sales_start_month), 'mês', null],
-        ['Cronograma', 'Duração das vendas', premissa(study.sales_duration_months, D.sales_duration_months), 'meses', null],
-        ['Cronograma', 'Início da obra', premissa(study.construction_start_month, D.construction_start_month), 'mês', null],
-        ['Cronograma', 'Duração da obra', premissa(study.construction_duration_months, D.construction_duration_months), 'meses', null],
-        ['Taxas', 'Inflação geral', inflacao, '% a.m.', null],
-        ['Taxas', 'TMA', tma, '% a.a.', origemDaTma],
-        ['Taxas', 'Regime tributário', ROTULO_DO_REGIME[regime], null, regime === 'manual' ? null : aliquotasDoRegime],
-        ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', regime !== 'manual' ? 'Não entra no cálculo: o imposto vem do regime tributário' : naoEntra],
-        ['Taxas', 'Corretagem', premissa(study.brokerage_fee, D.brokerage_fee), '%', naoEntra],
-        ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', 'Sobre parcelas de obra, intermediárias e pós-chaves'],
-        ['Curva de vendas', 'Tipo da curva', ROTULO_CURVA[tipoCurva] ?? tipoCurva, null, null],
-        ['Curva de vendas', 'Vendido no lançamento', premissa(study.sales_launch_percent, D.sales_launch_percent), '%', tipoCurva === 'lancamento' ? null : 'Só na curva de lançamento'],
-        ['Curva de vendas', 'Meses do lançamento', premissa(study.sales_launch_months, D.sales_launch_months), 'meses', tipoCurva === 'lancamento' ? null : 'Só na curva de lançamento'],
-        ['Curva de vendas', 'VSO mensal', premissa(study.sales_vso_percent, D.sales_vso_percent), '% do estoque', tipoCurva === 'vso' ? null : 'Só na curva VSO'],
-        ['Perfil de recebimento', 'Sinal / ato', premissa(study.revenue_downpayment_percent, D.revenue_downpayment_percent), '%', null],
-        ['Perfil de recebimento', 'Mensais / obra', premissa(study.revenue_construction_percent, D.revenue_construction_percent), '%', null],
-        ['Perfil de recebimento', 'Intermediárias', premissa(study.revenue_intermediate_percent, D.revenue_intermediate_percent), '%', null],
-        ['Perfil de recebimento', 'Intervalo das intermediárias', premissa(study.revenue_intermediate_interval_months, D.revenue_intermediate_interval_months), 'meses', null],
-        ['Perfil de recebimento', 'Repasse bancário / chaves', premissa(study.revenue_handover_percent, D.revenue_handover_percent), '%', null],
-        ['Perfil de recebimento', 'Atraso do repasse', premissa(study.handover_delay_months, D.handover_delay_months), 'meses', null],
-        ['Perfil de recebimento', 'Pós-chaves', premissa(study.revenue_post_handover_percent, D.revenue_post_handover_percent), '%', null],
-        ['Perfil de recebimento', 'Prazo do pós-chaves', premissa(study.post_handover_months, D.post_handover_months), 'meses', null],
-        ['Perfil de recebimento', 'Juro do pós-chaves', premissa(study.post_handover_rate_monthly, D.post_handover_rate_monthly), '% a.m.', 'Price'],
-        ['Distrato', 'Distrato', premissa(study.cancellation_rate_percent, D.cancellation_rate_percent), '% de cada safra', 'Só vendas antes das chaves; acontece no máximo nas chaves'],
-        ['Distrato', 'Meses até o distrato', premissa(study.cancellation_lag_months, D.cancellation_lag_months), 'meses', null],
-        ['Distrato', 'Devolução ao comprador', premissa(study.cancellation_refund_percent, devolucaoPadraoDoDistrato(study)), '% do pago', study.cancellation_refund_percent == null && study.patrimonio_afetacao ? 'Padrão com patrimônio de afetação' : null],
-        ['Distrato', 'Revender a unidade distratada', revende ? 'Sim' : 'Não', null, null],
-        ['Distrato', 'Deságio da revenda', premissa(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent), '%', revende ? null : 'Sem revenda'],
-        ['Índices', 'Índice da obra', premissa(study.cost_index_rate_monthly, inflacao), '% a.m.', study.cost_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_obra ?? null)],
-        ['Índices', 'Índice das vendas', premissa(study.sales_index_rate_monthly, inflacao), '% a.m.', study.sales_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_vendas ?? null)],
-        // Mesma regra do motor (actualFinPct): campo novo preenchido vale; vazio → "% Financiado" legado.
-        ['Financiamento', 'Financiamento à produção / dívida', study.funding_debt_percent != null ? study.funding_debt_percent : premissa(study.financing_percent, D.financing_percent), '%', study.funding_debt_percent == null && (study.financing_percent ?? 0) > 0 ? 'valor legado (% Financiado)' : null],
-        ['Financiamento', 'Taxa do financiamento', premissa(study.financing_rate_annual, D.financing_rate_annual), '% a.a.', null],
-        ['Financiamento', 'Defasagem da liberação', premissa(study.financing_release_lag_months, D.financing_release_lag_months), 'meses', null],
-        ['Financiamento', 'Vendas mínimas para liberar', premissa(study.financing_min_sales_percent, D.financing_min_sales_percent), '% do VGV vendável', null],
-        ['Financiamento', 'Juros do financiamento na obra', ROTULO_DOS_JUROS_NA_OBRA[study.financing_interest_mode ?? D.financing_interest_mode], null, null],
-        ['Financiamento', 'Amortização do financiamento', ROTULO_DA_AMORTIZACAO[study.financing_amortization ?? D.financing_amortization], null, null],
-        ['Financiamento', 'Caixa mínimo', premissa(study.min_cash_balance, D.min_cash_balance), 'R$', 'Aportes e distribuições'],
-        ['Financiamento', 'Permuta financeira', premissa(study.swap_financial_percent, D.swap_financial_percent), '%', null],
-        ['Financiamento', 'Permuta física', premissa(study.swap_physical_percent, D.swap_physical_percent), '%', null],
-        ...(study.funding_sources ?? []).map((f): Linha => ['Outras fontes', f.name, Number(f.amount) || 0, 'R$', descreverFonte(f)]),
+        ['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação', 'Fonte', 'Data'],
+        ...memorialDePremissas(study, { rubricasAtivas: rubricas }).map((l): Linha => [
+            l.grupo, l.premissa, l.valor, l.unidade || null, l.observacao, l.fonte, l.data,
+        ]),
+        ...(study.funding_sources ?? []).map((f): Linha => ['Outras fontes', f.name, Number(f.amount) || 0, 'R$', descreverFonte(f), null, null]),
     ];
 
     const linhasDoFluxo = GRUPOS_DO_FLUXO.flatMap(g => g.linhas);

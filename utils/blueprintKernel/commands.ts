@@ -14,6 +14,7 @@ import { aguasDaExtrusao, MENSAGEM_DO_ERRO_DE_PERFIL, type ErroDoPerfil, type Po
 import { faixaDaEstruturaNaParede } from './sobreposicao';
 import {
   type BlueprintModel,
+  type Circuito,
   type CamadaParede,
   type DisciplinaDeRede,
   type TipoDePontoEletrico,
@@ -1503,6 +1504,12 @@ export type Command =
        * tinha de arquitetura/estrutura — ele passa a ser a cópia do tipo.
        */
       tipoDeId?: ObjectId | null;
+      /**
+       * 0.106.0 (prédio automático, PA1): só no pavimento TIPO — `true` faz as cópias re-derivarem também as instalações
+       * (pontos, trechos, quadros, componentes e os circuitos desses quadros); `false` desliga (o que já foi copiado fica,
+       * agora editável). Ligar com instalação própria nas cópias é recusado, com a lista do que seria substituído.
+       */
+      copiaInstalacoes?: boolean;
     }
   /**
    * Remove um pavimento E tudo que vive nele (paredes, aberturas, limites,
@@ -1651,6 +1658,7 @@ function aplicarSemHash(
   // recusas por pavimento vinculado, que leem `levelId`.
   const command = resolverLevelUid(next, comandoCru);
   recusarEdicaoEmPavimentoVinculado(model, command);
+  recusarInstalacaoEmCopia(model, command);
   recusarEdicaoEmInstanciaDeGrupo(model, command);
   /**
    * Cópias de instância de grupo que existem agora — a sincronização apaga as que deixarem de ser esperadas.
@@ -5522,8 +5530,31 @@ function aplicarSemHash(
           const tipo = findLevel(next, command.tipoDeId);
           if (tipo.tipoDeId !== undefined) throw new KernelError('BAD_LEVEL_LINK', `"${tipo.name}" já é cópia de outro pavimento — vincule ao tipo dele`);
           if (next.levels.some((l) => l.tipoDeId === level.id)) throw new KernelError('BAD_LEVEL_LINK', `"${level.name}" é tipo de outros pavimentos — desvincule-os antes`);
+          // 0.106.0: o tipo que copia instalações substituiria as deste pavimento — recusa em vez de apagar em silêncio.
+          if (tipo.copiaInstalacoes) {
+            const proprias = instalacoesDoPavimento(next, level.id);
+            if (proprias) throw new KernelError('LEVEL_LINKED', `"${tipo.name}" copia as instalações e "${level.name}" tem instalação própria (${proprias}) — ela seria substituída pela do tipo. Apague-a antes de vincular.`);
+          }
           level.tipoDeId = command.tipoDeId;
+          // Cópia não é tipo: a marca de copiar instalações não vale nela.
+          delete level.copiaInstalacoes;
         }
+      }
+      if (command.copiaInstalacoes !== undefined) {
+        if (command.copiaInstalacoes) {
+          if (level.tipoDeId !== undefined) throw new KernelError('BAD_LEVEL_LINK', `"${level.name}" é cópia de outro pavimento — marque o TIPO para copiar as instalações`);
+          const presas = next.levels
+            .filter((l) => l.tipoDeId === level.id)
+            .map((l) => ({ l, proprias: instalacoesDoPavimento(next, l.id) }))
+            .filter((x) => x.proprias);
+          if (presas.length) {
+            throw new KernelError(
+              'LEVEL_LINKED',
+              `As cópias de "${level.name}" já têm instalação própria, que seria substituída pela do tipo: ${presas.map((x) => `${x.l.name} (${x.proprias})`).join('; ')}. Apague-a ou desvincule esses pavimentos antes.`,
+            );
+          }
+          level.copiaInstalacoes = true;
+        } else delete level.copiaInstalacoes;
       }
       break;
     }
@@ -6025,8 +6056,10 @@ function aplicarSemHash(
   // GRUPOS (E2.3): origem sem peça viva perde a peça; as instâncias se re-derivam da origem.
   diff.updated.push(...limparOrigensOrfasDosGrupos(next));
   sincronizarGrupos(next, diff, copiasAntes);
-  // PAVIMENTO TIPO (E2.1): as cópias vivas se re-derivam do tipo (inclusive as cópias de grupo).
-  sincronizarPavimentosVinculados(next, diff);
+  // PAVIMENTO TIPO (E2.1): as cópias vivas se re-derivam do tipo (inclusive as cópias de grupo). As INSTALAÇÕES (0.106.0)
+  // só quando o comando mexeu nas do tipo ou em pavimento — a cópia delas é a parte cara (medido: 78 ms por comando com
+  // 301 pontos × 10 andares), e um comando que não as toca não as muda.
+  sincronizarPavimentosVinculados(next, diff, { instalacoes: tocouInstalacaoDeTipo(model, next, diff, command) });
   // Restrição sem alvo ou referência viva some com o comando que os apagou.
   diff.deleted.push(...limparRestricoesOrfas(next));
   // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
@@ -6636,6 +6669,86 @@ function alvosDoComando(command: Command): { levelIds: string[]; wallIds: string
   return a;
 }
 
+/** O que o pavimento tem de instalação, em texto ("4 ponto(s), 2 trecho(s)"); `''` = nada. */
+function instalacoesDoPavimento(model: BlueprintModel, levelId: ObjectId): string {
+  const quadros = (model.quadros ?? []).filter((q) => q.levelId === levelId);
+  const ids = new Set(quadros.map((q) => q.id));
+  const partes: [number, string][] = [
+    [(model.terminais ?? []).filter((t) => t.levelId === levelId).length, 'ponto(s)'],
+    [(model.trechos ?? []).filter((t) => t.levelId === levelId).length, 'trecho(s)'],
+    [quadros.length, 'quadro(s)'],
+    [(model.circuitos ?? []).filter((c) => ids.has(c.quadroId)).length, 'circuito(s)'],
+    [(model.componentes ?? []).filter((c) => c.levelId === levelId).length, 'componente(s)'],
+  ];
+  return partes.filter(([n]) => n > 0).map(([n, t]) => `${n} ${t}`).join(', ');
+}
+
+/**
+ * O comando mexeu em instalação de um pavimento tipo que copia instalações (ou em pavimento)? Pelo diff ANTES da
+ * sincronização: criado/alterado olha o modelo novo; apagado, o anterior. Circuito conta pelo quadro.
+ */
+function tocouInstalacaoDeTipo(model: BlueprintModel, next: BlueprintModel, diff: Diff, command: Command): boolean {
+  const tipos = new Set(next.levels.filter((l) => l.copiaInstalacoes).map((l) => l.id));
+  if (tipos.size === 0) return false;
+  if (COMANDOS_DE_PAVIMENTO.has(command.type)) return true;
+  const ids = new Set([...diff.created, ...diff.updated, ...diff.deleted]);
+  if (ids.size === 0) return false;
+  for (const m of [next, model]) {
+    const quadrosDoTipo = new Set((m.quadros ?? []).filter((q) => tipos.has(q.levelId)).map((q) => q.id));
+    for (const x of [...(m.terminais ?? []), ...(m.trechos ?? []), ...(m.quadros ?? []), ...(m.componentes ?? [])]) if (ids.has(x.id) && tipos.has(x.levelId)) return true;
+    for (const c of m.circuitos ?? []) if (ids.has(c.id) && quadrosDoTipo.has(c.quadroId)) return true;
+  }
+  return false;
+}
+
+/** Os comandos que mexem em pavimento (criar, remover, vincular) — eles cuidam das instalações do pavimento por si. */
+const COMANDOS_DE_PAVIMENTO = new Set(['AddLevel', 'SetLevelProps', 'RemoveLevel', 'DuplicateLevel']);
+/** Os comandos que CRIAM instalação num pavimento (pelo `levelId`). */
+const COMANDOS_QUE_CRIAM_INSTALACAO = new Set(['AddTerminal', 'AddTrecho', 'AddQuadro', 'AddComponente']);
+
+/**
+ * 0.106.0 (prédio automático, PA1): com o tipo copiando as instalações, as das cópias são re-derivadas a cada comando —
+ * editar uma delas seria desfeito na hora (e criar uma, apagado). Recusa com `LEVEL_LINKED`, como na arquitetura. A
+ * varredura é pelos CAMPOS do comando (qualquer id de instalação de uma cópia; o `levelId` de uma cópia nos comandos que
+ * criam instalação), não pelo diff: operação global sobre o tipo (renumerar, relançar) mexe nas cópias pela sincronização,
+ * e isso é o esperado.
+ */
+function recusarInstalacaoEmCopia(model: BlueprintModel, command: Command): void {
+  const tiposQueCopiam = new Set(model.levels.filter((l) => l.copiaInstalacoes).map((l) => l.id));
+  if (tiposQueCopiam.size === 0 || COMANDOS_DE_PAVIMENTO.has(command.type)) return;
+  const copias = new Map(model.levels.filter((l) => l.tipoDeId !== undefined && tiposQueCopiam.has(l.tipoDeId)).map((l) => [l.id, l]));
+  if (copias.size === 0) return;
+  const dono = new Map<string, Level>();
+  for (const x of [...(model.terminais ?? []), ...(model.trechos ?? []), ...(model.quadros ?? []), ...(model.componentes ?? [])]) {
+    const l = copias.get(x.levelId);
+    if (l) dono.set(x.id, l);
+  }
+  for (const c of model.circuitos ?? []) {
+    const l = dono.get(c.quadroId);
+    if (l) dono.set(c.id, l);
+  }
+  let alvo: Level | null = null;
+  const varrer = (v: unknown, chave: string | null, nivel: number): void => {
+    if (alvo || nivel > 3) return;
+    if (typeof v === 'string') {
+      if (dono.has(v)) alvo = dono.get(v)!;
+      else if (chave === 'levelId' && COMANDOS_QUE_CRIAM_INSTALACAO.has(command.type) && copias.has(v)) alvo = copias.get(v)!;
+      return;
+    }
+    if (Array.isArray(v)) for (const x of v) varrer(x, chave, nivel + 1);
+    else if (v && typeof v === 'object') for (const [k, x] of Object.entries(v)) varrer(x, k, nivel + 1);
+  };
+  varrer(command, null, 0);
+  if (alvo) {
+    const a = alvo as Level;
+    const tipo = model.levels.find((l) => l.id === a.tipoDeId);
+    throw new KernelError(
+      'LEVEL_LINKED',
+      `"${a.name}" é cópia do pavimento tipo "${tipo?.name ?? a.tipoDeId}", que copia as instalações: edite o tipo (a edição propaga) ou desligue a cópia das instalações`,
+    );
+  }
+}
+
 function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Command): void {
   const vinculados = new Map(model.levels.filter((l) => l.tipoDeId !== undefined).map((l) => [l.id, l]));
   if (vinculados.size === 0) return;
@@ -6860,6 +6973,113 @@ function apagarCopiasNaoEsperadas(next: BlueprintModel, diff: Diff, conhecidas: 
 }
 
 
+/** Cópia profunda de um objeto de dados puro (sem `undefined`, sem função) — o que o kernel guarda. */
+const copiaProfunda = <T,>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+type SincronizarLista = <T extends { id: ObjectId; uid: ElementUid; levelId: ObjectId }>(lista: T[], prefixo: string, copiar: (src: T) => Omit<T, 'id' | 'uid' | 'levelId'>) => T[];
+
+/**
+ * 0.106.0 (prédio automático, PA1 — plano docs/planos/2026-11-12-predio-automatico.md): as INSTALAÇÕES do tipo na cópia.
+ * Pontos, trechos, quadros e componentes pela mesma reconciliação por uid das outras famílias; os CIRCUITOS (que não têm
+ * pavimento) pelo quadro: o circuito de um quadro do tipo vira o circuito da cópia desse quadro. Depois, os ids que uma
+ * peça guarda de OUTRA (circuito do ponto, quadro pai, DR, condensadora, bomba, central, alvo) são trocados pelos da cópia
+ * quando apontam para dentro do tipo; o que aponta para FORA (o QGBT do térreo, a unidade) fica como está.
+ */
+function sincronizarInstalacoesDaCopia(
+  next: BlueprintModel,
+  tipo: Level,
+  nivel: Level,
+  paredes: Map<ObjectId, ObjectId>,
+  sincronizarLista: SincronizarLista,
+  tocar: (lista: ObjectId[], id: ObjectId) => void,
+  diff: Diff,
+): void {
+  const semIds = <T extends { id: ObjectId; uid: ElementUid; levelId: ObjectId }>(x: T) => {
+    const { id: _i, uid: _u, levelId: _l, ...resto } = x;
+    return copiaProfunda(resto) as Omit<T, 'id' | 'uid' | 'levelId'>;
+  };
+  const quadrosDaCopiaAntes = new Set((next.quadros ?? []).filter((q) => q.levelId === nivel.id).map((q) => q.id));
+  next.quadros = sincronizarLista(next.quadros ?? [], 'qdr', semIds);
+  next.terminais = sincronizarLista(next.terminais ?? [], 'trm', semIds);
+  next.trechos = sincronizarLista(next.trechos ?? [], 'trc', semIds);
+  next.componentes = sincronizarLista(next.componentes ?? [], 'cmp', semIds);
+
+  // id no tipo → id na cópia (as famílias com pavimento, pelo uid derivado; paredes pelo de/para da sincronização).
+  const mapa = new Map<ObjectId, ObjectId>(paredes);
+  const anotar = (lista: readonly { id: ObjectId; uid: ElementUid; levelId: ObjectId }[]) => {
+    const daCopia = new Map(lista.filter((x) => x.levelId === nivel.id).map((x) => [x.uid, x.id]));
+    for (const x of lista) {
+      if (x.levelId !== tipo.id) continue;
+      const c = daCopia.get(uidDaCopia(nivel.uid, x.uid));
+      if (c) mapa.set(x.id, c);
+    }
+  };
+  for (const lista of [next.quadros, next.terminais, next.trechos, next.componentes, next.structures, next.labels ?? []]) anotar(lista);
+  const paredesDaCopia = new Set(paredes.values());
+  const aberturasDaCopia = new Map(next.openings.filter((o) => paredesDaCopia.has(o.wallId)).map((o) => [o.uid, o.id]));
+  for (const o of next.openings) {
+    if (!paredes.has(o.wallId)) continue;
+    const c = aberturasDaCopia.get(uidDaCopia(nivel.uid, o.uid));
+    if (c) mapa.set(o.id, c);
+  }
+
+  // ── circuitos: o do quadro do tipo vira o da cópia do quadro ──
+  const quadrosDoTipo = new Set(next.quadros.filter((q) => q.levelId === tipo.id).map((q) => q.id));
+  const quadrosDaCopia = new Set(next.quadros.filter((q) => q.levelId === nivel.id).map((q) => q.id));
+  const circuitosDaCopia = new Map(next.circuitos.filter((c) => quadrosDaCopia.has(c.quadroId)).map((c) => [c.uid, c]));
+  const esperados = new Set<ElementUid>();
+  const novos: Circuito[] = [];
+  for (const c of next.circuitos) {
+    if (!quadrosDoTipo.has(c.quadroId)) continue;
+    const uid = uidDaCopia(nivel.uid, c.uid);
+    esperados.add(uid);
+    const { id: _i, uid: _u, ...resto } = c;
+    const campos = { ...copiaProfunda(resto), quadroId: mapa.get(c.quadroId)! };
+    const existente = circuitosDaCopia.get(uid);
+    if (existente) {
+      for (const k of Object.keys(existente)) if (!['id', 'uid'].includes(k) && !(k in campos)) delete (existente as unknown as Record<string, unknown>)[k];
+      Object.assign(existente, campos);
+      mapa.set(c.id, existente.id);
+      tocar(diff.updated, existente.id);
+    } else {
+      const id = nextId(next, 'cir');
+      novos.push({ id, uid, ...campos });
+      mapa.set(c.id, id);
+      tocar(diff.created, id);
+    }
+  }
+  if (novos.length) next.circuitos = [...next.circuitos, ...novos];
+  // Órfãos: o circuito de um quadro da cópia que não veio do tipo, e o de um quadro da cópia que sumiu.
+  const sairam = next.circuitos.filter((c) => (quadrosDaCopia.has(c.quadroId) && !esperados.has(c.uid)) || (quadrosDaCopiaAntes.has(c.quadroId) && !quadrosDaCopia.has(c.quadroId)));
+  if (sairam.length) {
+    const fora = new Set(sairam.map((c) => c.id));
+    next.circuitos = next.circuitos.filter((c) => !fora.has(c.id));
+    for (const id of fora) tocar(diff.deleted, id);
+  }
+
+  // ── as referências entre peças, trocadas pelas da cópia ──
+  const ref = (id: ObjectId | null | undefined) => (id != null && mapa.has(id) ? mapa.get(id)! : id);
+  const idsDaCopia = new Set(mapa.values());
+  for (const t of next.terminais) {
+    if (t.levelId !== nivel.id || !idsDaCopia.has(t.id)) continue;
+    for (const k of ['circuitoId', 'quadroId', 'alvoId', 'centralAlarmeId', 'bombaPrincipalId', 'condensadoraId'] as const) if (t[k] != null) t[k] = ref(t[k]);
+  }
+  for (const t of next.trechos) {
+    if (t.levelId !== nivel.id || !idsDaCopia.has(t.id)) continue;
+    if (t.circuitoIds) t.circuitoIds = t.circuitoIds.map((id) => ref(id)!);
+  }
+  for (const q of next.quadros) {
+    if (q.levelId !== nivel.id || !idsDaCopia.has(q.id)) continue;
+    if (q.quadroPaiId != null) q.quadroPaiId = ref(q.quadroPaiId);
+    if (q.drs) for (const d of q.drs) d.circuitoIds = d.circuitoIds.map((id) => ref(id)!);
+  }
+  const uidsDoTipo = new Set(next.componentes.filter((c) => c.levelId === tipo.id).map((c) => c.uid));
+  for (const c of next.componentes) {
+    if (c.levelId !== nivel.id || !idsDaCopia.has(c.id) || !c.paiUid || !uidsDoTipo.has(c.paiUid)) continue;
+    c.paiUid = uidDaCopia(nivel.uid, c.paiUid);
+  }
+}
+
 /**
  * Re-deriva paredes, aberturas, estrutura, telhado e etiquetas de cada
  * pavimento vinculado a partir do tipo. Reconciliação por uid determinístico:
@@ -6867,7 +7087,8 @@ function apagarCopiasNaoEsperadas(next: BlueprintModel, diff: Diff, conhecidas: 
  * pulam), a nova nasce, a órfã some. Idempotente: rodar duas vezes não muda
  * nada, e o payload canônico é o mesmo em qualquer ordem de comandos.
  */
-export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff): void {
+export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff, opcoes: { instalacoes?: boolean } = {}): void {
+  const comInstalacoes = opcoes.instalacoes ?? true;
   const vinculados = next.levels.filter((l) => l.tipoDeId !== undefined);
   if (vinculados.length === 0) return;
   const tocar = tocadorDoDiff();
@@ -6987,5 +7208,7 @@ export function sincronizarPavimentosVinculados(next: BlueprintModel, diff: Diff
       const { id: _i, uid: _u, levelId: _l, ...resto } = l;
       return { ...resto, at: { ...l.at } };
     });
+    // ── INSTALAÇÕES (0.106.0, prédio automático PA1): só com o tipo marcado (`copiaInstalacoes`) ──
+    if (tipo.copiaInstalacoes && comInstalacoes) sincronizarInstalacoesDaCopia(next, tipo, nivel, dePara, sincronizarLista, tocar, diff);
   }
 }

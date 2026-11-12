@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.105.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.106.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -1941,7 +1941,7 @@ function projetar(model) {
   const nivel = (levelId) => levelIndex.get(levelId) ?? 0;
   const levels = ordemDosNiveis.map((l) => ({
     ...l,
-    geom: { ...l.geom, tipoDe: l.item.tipoDeId !== void 0 ? nivel(l.item.tipoDeId) : void 0 }
+    geom: { ...l.geom, tipoDe: l.item.tipoDeId !== void 0 ? nivel(l.item.tipoDeId) : void 0, copiaInstalacoes: l.item.copiaInstalacoes ? true : void 0 }
   }));
   const etapas = ordenar(
     model.etapas ?? [],
@@ -2892,6 +2892,7 @@ function modelFromCanonicalPayload(payload) {
   const refDeDemolicao = (idx) => idx !== void 0 && etapaIds[idx] ? { demolidaEmEtapaId: etapaIds[idx] } : {};
   payload.levels.forEach((l, i) => {
     if (l.tipoDe !== void 0 && levelIds[l.tipoDe] && l.tipoDe !== i) model.levels[i].tipoDeId = levelIds[l.tipoDe];
+    if (l.copiaInstalacoes) model.levels[i].copiaInstalacoes = true;
   });
   const wallIds = payload.walls.map((w, i) => {
     const id = nextId(model, "wal");
@@ -5352,6 +5353,39 @@ var ROTULO_DO_PONTO_ELETRICO = {
   MEDIDOR: "Medidor de energia"
 };
 
+// utils/blueprintZonaUrbanistica.ts
+function ordinalDoPavimento(levels, levelId) {
+  if (!levelId) return 0;
+  const acima = [...levels].filter((l) => l.elevationMm >= 0).sort((a, b) => a.elevationMm - b.elevationMm);
+  const i = acima.findIndex((l) => l.id === levelId);
+  return i < 0 ? 0 : i + 1;
+}
+
+// utils/blueprintUnidadesDoPredio.ts
+var prefixoDoAndar = (ordinal) => ordinal - 1 <= 0 ? "T" : String(ordinal - 1);
+function numeroNoAndar(numeroDaOrigem, ordinalDaOrigem, ordinalDaCopia) {
+  const p = prefixoDoAndar(ordinalDaOrigem);
+  if (!numeroDaOrigem.startsWith(p)) return null;
+  const posicao = numeroDaOrigem.slice(p.length);
+  if (!/^\d{2,}$/.test(posicao)) return null;
+  return `${prefixoDoAndar(ordinalDaCopia)}${posicao}`;
+}
+function unidadeNoPavimento(model, unidadeId, levelId) {
+  const u = (model.unidades ?? []).find((x) => x.id === unidadeId);
+  if (!u) return null;
+  const nivel = levelId ? model.levels.find((l) => l.id === levelId) : void 0;
+  if (!nivel || nivel.tipoDeId === void 0 || !pavimentosDaUnidade(model, u).has(nivel.tipoDeId)) return { chave: u.uid, numero: u.numero };
+  const numero = numeroNoAndar(u.numero, ordinalDoPavimento(model.levels, nivel.tipoDeId), ordinalDoPavimento(model.levels, nivel.id)) ?? `${nivel.name} \xB7 ${u.numero}`;
+  return { chave: `${u.uid}:${nivel.uid}`, numero };
+}
+function pavimentosDaUnidade(model, u) {
+  const etiquetas = new Set(u.etiquetaUids);
+  const niveis = /* @__PURE__ */ new Set();
+  for (const l of model.labels ?? []) if (etiquetas.has(l.uid)) niveis.add(l.levelId);
+  for (const a of model.ambientesDeclarados ?? []) if (a.unidadeUid === u.uid) niveis.add(a.levelId);
+  return niveis;
+}
+
 // utils/blueprintFasesEletricas.ts
 var SEGUINTE = { R: "S", S: "T", T: "R" };
 function fasesOcupadas(ligacao, fase) {
@@ -5930,7 +5964,8 @@ function preDimensionarQuadroCompleto(model, quadroId, hip = HIPOTESES_PADRAO, v
     cadeia: [],
     quedaAcumuladaPct: null,
     limiteQuedaEfetivoPct: limiteQuedaTotalEfetivoPct(hip),
-    unidade: quadro.unidadeId ? (model.unidades ?? []).find((u) => u.id === quadro.unidadeId)?.numero ?? null : null,
+    // 0.106.0: o número da unidade NO ANDAR do quadro (a cópia do 5º é a "501", não a "101" da origem).
+    unidade: quadro.unidadeId ? unidadeNoPavimento(model, quadro.unidadeId, quadro.levelId)?.numero ?? null : null,
     unidadesAtendidas,
     fatorDeDiversidade: fator,
     sDemandadaUnidadesVA,

@@ -60,16 +60,25 @@ export interface Level {
    * no IFC da revisão seguinte. Editar essas peças aqui é recusado
    * (`LEVEL_LINKED`): edita-se o tipo, e a edição propaga.
    *
-   * As INSTALAÇÕES não são copiadas no pavimento VINCULADO: colunas, quadros e
-   * circuitos são por pavimento de qualquer forma, e o lançamento automático já
-   * os faz por andar. (A cópia SOLTA — `DuplicateLevel` — leva quadros, pontos e
-   * trechos desde a E1.3 do roadmap elétrico, sem os circuitos.)
+   * As INSTALAÇÕES só são copiadas quando o TIPO tem `copiaInstalacoes` (0.106.0,
+   * prédio automático): pontos, trechos, quadros, componentes e os circuitos
+   * desses quadros. Sem a marca, como sempre: instalação por pavimento. (A cópia
+   * SOLTA — `DuplicateLevel` — leva quadros, pontos e trechos desde a E1.3 do
+   * roadmap elétrico, sem os circuitos.)
    * Cota, pé-direito e nome continuam próprios do pavimento vinculado.
    *
    * Sem corrente: o tipo não pode ser ele mesmo vinculado (invariante), e
    * remover o tipo DESVINCULA os dependentes — as cópias ficam, agora soltas.
    */
   tipoDeId?: ObjectId;
+  /**
+   * INSTALAÇÕES NA CÓPIA VIVA (0.106.0, PA1 do prédio automático — plano docs/planos/2026-11-12-predio-automatico.md).
+   * Marcado no pavimento TIPO: as cópias passam a re-derivar também pontos, trechos, quadros, componentes e os circuitos
+   * desses quadros (ids internos remapeados; o que aponta para FORA do tipo — o QGBT do térreo, a unidade — fica). É
+   * OPT-IN porque a sincronização apaga nas cópias o que não tem o uid esperado: ligar com instalação já desenhada nas
+   * cópias é recusado, com a lista. Ausente = como sempre (instalação por pavimento). Fica fora do hash quando ausente.
+   */
+  copiaInstalacoes?: true;
 }
 
 /**

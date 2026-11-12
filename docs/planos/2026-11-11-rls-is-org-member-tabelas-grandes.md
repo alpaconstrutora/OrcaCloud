@@ -23,7 +23,7 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       diferentes em 9.876**.
 - [x] Storage: `postgres` NÃO é dono de storage.objects (supabase_storage_admin), mas o
       ALTER POLICY é permitido (testado com a expressão atual, desfeito).
-- [x] Lote 1 `aplicar_20271112300000` (21 policies, 10 tabelas ≥ 300 linhas) aplicado pelo
+- [x] Lote 1 `aplicar_20271112700000` (21 policies, 10 tabelas ≥ 300 linhas) aplicado pelo
       usuário (12/11/2026). Conferido: 21 de 21 com `minhas_orgs_membro`, 0 com
       `is_org_member`. Medido (mesmo script, como authenticated, JWT real, desenvolvedor@),
       custo de RLS por `count(*)`, mesmas linhas visíveis:
@@ -33,7 +33,7 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       suppliers 11–13 → 1,0–1,1 · notifications 150 → 38 ms. Em notifications o resto é a
       outra perna do OR, `lower(recipient_email) = lower(auth.jwt()->>'email')`, que lê o
       JWT por linha — fora da troca mecânica (candidata: `(SELECT lower(auth.jwt()->>'email'))`).
-- [x] Lote 2 `aplicar_20271112310000` (564 policies, 332 tabelas; GRANT anon) aplicado pelo
+- [x] Lote 2 `aplicar_20271112710000` (564 policies, 332 tabelas; GRANT anon) aplicado pelo
       usuário (12/11/2026). Conferido: schema public com 587 policies em
       `minhas_orgs_membro` (21 + 564 + as 2 do extrato), 344 tabelas, **0 com
       `is_org_member`**; ACL de `minhas_orgs_membro` com anon. Leitura (só `count(*)`) de
@@ -46,7 +46,7 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       UMA varredura do extrato (hashed SubPlan, ~10 ms, fixo) em vez de 1 chamada por linha
       (linear: empata em ~250 linhas). Leitura por id continua por índice (1 linha do
       extrato). Não muda nada.
-- [x] Lote 3 `aplicar_20271112320000` (29 policies do storage) aplicado pelo usuário
+- [x] Lote 3 `aplicar_20271112720000` (29 policies do storage) aplicado pelo usuário
       (12/11/2026). Conferido: **0 policies com `is_org_member` no banco inteiro**; 587 em
       public + 29 em storage com `minhas_orgs_membro`. storage.objects visível ao
       desenvolvedor@: 2.054, igual a antes. Custo do `count(*)` no storage: ~94 ms (antes
@@ -55,6 +55,9 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       `purchase_order_is_buyer/supplier` por linha nos buckets de pedido. O app não varre o
       storage inteiro (lista por bucket + prefixo, pelo índice); não mexer sem medir o
       caminho real.
+- [x] Renomeadas para 20271112700000/710000/720000 (12/11/2026): os prefixos 300000/310000/
+      320000 foram ocupados no main pela frente do Imovib enquanto esta estava aberta. Os
+      arquivos foram APLICADOS com os nomes antigos; o conteúdo é o mesmo.
 - [ ] Teste do usuário pelo app: listar, baixar e enviar um anexo.
 
 ## Troca mecânica (escolhida em 11/11/2026)

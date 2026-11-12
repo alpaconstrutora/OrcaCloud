@@ -389,8 +389,12 @@ interface Premissas {
     /** Fração do custo de obra em cada mês da obra; null = linear (conta de antes). */
     curvaObra: number[] | null;
     rubricasComMomento: RubricaComMomento[];
+    /** Último mês com receita: a dívida e as fontes são quitadas aqui, mesmo com pós-obra depois. */
+    horizonteDasReceitas: number;
     handoverMonth: number;
     unidadesVendaveis: number;
+    /** Unidades que pagam condomínio e IPTU enquanto não vendidas (sem a permuta física). */
+    unidadesEmEstoque: number;
     custoDoEstoqueUnidadeMes: number;
 }
 
@@ -453,7 +457,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let espelhoTemPermutada = false;
     let permutaDoEspelho = 0;
     /** Unidades à venda (item 5.6): do espelho quando o bloco tem, senão das tipologias vendáveis. */
-    let unidadesVendaveis = 0;
+    let unidadesDoEspelho = 0;
+    let unidadesSemEspelho = 0;
     const blocosSemPreco: string[] = [];
 
     study.blocks?.forEach(block => {
@@ -488,11 +493,11 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             // Fora do VGV, mas é capital do terrenista: entra na fatia da permuta (item 4.2).
             permutaDoEspelho += doBloco.filter(i => i.status === 'PERMUTADO').reduce((acc, i) => acc + precoDa(i), 0);
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
-            unidadesVendaveis += doBloco.filter(i => i.status !== 'PERMUTADO').length;
+            unidadesDoEspelho += doBloco.filter(i => i.status !== 'PERMUTADO').length;
         } else {
             blockVgv = blockVendavelArea * precoM2;
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'preco_m2' };
-            unidadesVendaveis += blockUnidadesVendaveis;
+            unidadesSemEspelho += blockUnidadesVendaveis;
         }
 
         if (blockVendavelArea > 0 && blockVgv <= 0) blocosSemPreco.push(block.name);
@@ -584,7 +589,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             const valor = base === 'terreno' ? (pct ? landCost * v / 100 : v)
                 : base === 'obra' ? (pct ? constCostTotal * v / 100 : v * costDeltaMultiplier)
                     : v;
-            rubricasComMomento.push({ id: item.id, base, valor, timing: item.timing, meses: item.timing_months ?? null });
+            // Valor 0 (o botão de pós-obra cria assim) não entra no calendário nem estende o fluxo.
+            if (valor !== 0) rubricasComMomento.push({ id: item.id, base, valor, timing: item.timing, meses: item.timing_months ?? null });
             return;
         }
         switch (base) {
@@ -733,7 +739,8 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
 
     // Terreno parcelado (item 5.2): vazio = 100% no mês da aquisição.
     const acquisitionMonth = Math.max(1, Math.round(val(study.acquisition_month, D.acquisition_month)));
-    const parcelasInformadas = (study.land_payment_schedule ?? []).filter(p => p && Number(p.percent) !== 0);
+    // Lista informada vale como veio (inclusive 0%); só a lista vazia cai no à vista.
+    const parcelasInformadas = (study.land_payment_schedule ?? []).filter(p => p != null);
     const parcelasTerreno = parcelasInformadas.length
         ? parcelasInformadas.map(p => ({ mes: Math.max(1, Math.round(Number(p.month) || 1)), fracao: (Number(p.percent) || 0) / 100 }))
         : [{ mes: acquisitionMonth, fracao: 1 }];
@@ -757,7 +764,9 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         if (c.somaInformada != null) {
             avisos.push({
                 codigo: 'curva_de_desembolso_nao_soma_100',
-                mensagem: `A curva de desembolso personalizada soma ${Number(c.somaInformada.toFixed(2)).toLocaleString('pt-BR')}%: o custo de obra foi distribuído na proporção dos pesos.`,
+                mensagem: c.somaInformada === 0
+                    ? 'A curva de desembolso personalizada está vazia: o custo de obra foi distribuído em partes iguais.'
+                    : `A curva de desembolso personalizada soma ${Number(c.somaInformada.toFixed(2)).toLocaleString('pt-BR')}%: o custo de obra foi distribuído na proporção dos pesos.`,
                 aba: 'capex',
             });
         }
@@ -787,7 +796,9 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     };
     rubricasComMomento.forEach(t => { t.pesos = calendario(t); });
 
-    // O fluxo vai até a última saída: parcela do terreno ou rubrica de pós-obra.
+    // Dívida e fontes acabam com as receitas; o fluxo vai até a última saída
+    // (parcela do terreno ou rubrica de pós-obra).
+    const horizonteDasReceitas = Math.max(duracaoBase, recebimento.sinal.length);
     const duration = Math.max(
         duracaoBase,
         recebimento.sinal.length,
@@ -870,9 +881,12 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         mesDaPrimeiraParcela,
         curvaObra,
         rubricasComMomento,
+        horizonteDasReceitas,
         handoverMonth,
-        unidadesVendaveis,
+        unidadesVendaveis: unidadesDoEspelho + unidadesSemEspelho,
         custoDoEstoqueUnidadeMes: val(study.stock_carrying_cost_unit_month, D.stock_carrying_cost_unit_month),
+        // Unidades da permuta física não ficam em estoque (as PERMUTADO do espelho já saíram da contagem).
+        unidadesEmEstoque: unidadesDoEspelho + unidadesSemEspelho * (1 - swapPhysical),
     };
 }
 
@@ -989,7 +1003,7 @@ function montarSeries(P: Premissas): Series {
         // Condomínio e IPTU das unidades em estoque, depois da obra (item 5.6).
         vendidoAcumulado += P.vendasPorMes[i] ?? 0;
         if (P.custoDoEstoqueUnidadeMes > 0 && m > P.handoverMonth && P.vgvVendavel > 0) {
-            const emEstoque = Math.max(0, 1 - vendidoAcumulado / P.vgvVendavel) * P.unidadesVendaveis;
+            const emEstoque = Math.max(0, 1 - vendidoAcumulado / P.vgvVendavel) * P.unidadesEmEstoque;
             const carregamento = emEstoque * P.custoDoEstoqueUnidadeMes * multObra;
             linhas.carregamentoDoEstoque = -carregamento;
             proprio += carregamento;
@@ -1043,9 +1057,10 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         vendido += P.vendasPorMes[i] ?? 0;
         vendasAcumuladasPct.push(P.vgvVendavel > 0 ? (vendido / P.vgvVendavel) * 100 : 0);
     }
-    const D = fluxoDaDivida(S.custoObra, netRevDoMes, S.linhas.map(l => l.receitaRepasse), vendasAcumuladasPct, P.financiamento);
+    const mesDaQuitacao = Math.min(n, P.horizonteDasReceitas) - 1;
+    const D = fluxoDaDivida(S.custoObra, netRevDoMes, S.linhas.map(l => l.receitaRepasse), vendasAcumuladasPct, P.financiamento, mesDaQuitacao);
     const fontes = P.study.funding_sources ?? [];
-    const T = fontes.length ? fluxoDasFontes(fontes, n) : null;
+    const T = fontes.length ? fluxoDasFontes(fontes, mesDaQuitacao + 1, n) : null;
 
     // 1ª passada: o caixa antes da participação das fontes.
     const antes: { netFlow: number; debtPayment: number }[] = [];
@@ -1064,7 +1079,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         // investidor. O motor antigo terminava o fluxo com a dívida em
         // aberto e a descartava — com 100% de dívida, subir o custo de obra
         // não mudava o VPL.
-        if (i === n - 1 && D.quitacaoNoFim > 0) {
+        if (i === mesDaQuitacao && D.quitacaoNoFim > 0) {
             debtPayment += D.quitacaoNoFim;
             netFlow -= D.quitacaoNoFim;
         }
@@ -1124,7 +1139,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
     if (D.quitacaoNoFim > 0) {
         P.avisos.push({
             codigo: 'divida_quitada_no_fim',
-            mensagem: `As receitas não amortizaram todo o financiamento: ${fmtBRL(D.quitacaoNoFim)} de saldo devedor são quitados com capital próprio no mês ${n}.`,
+            mensagem: `As receitas não amortizaram todo o financiamento: ${fmtBRL(D.quitacaoNoFim)} de saldo devedor são quitados com capital próprio no mês ${mesDaQuitacao + 1}.`,
             aba: 'capital',
         });
     }

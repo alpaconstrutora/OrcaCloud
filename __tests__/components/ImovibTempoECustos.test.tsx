@@ -131,6 +131,18 @@ describe('CAPEX: momento das rubricas e pós-obra (5.5 e 5.6)', () => {
         expect(screen.getByText('Com a receita')).toBeTruthy();
     });
 
+    it('curva personalizada: pesos digitados em sequência não se perdem antes de o estudo recarregar', async () => {
+        const user = userEvent.setup();
+        svc.seedCapexTemplate.mockResolvedValue(rubricas);
+        envolver(<ImovibCapexForm study={estudo({ cost_curve_type: 'custom', construction_duration_months: 4 }) as never} onDataChanged={vi.fn()} />);
+        await user.type(await screen.findByLabelText('Mês 6'), '40');
+        await user.tab();
+        await user.type(screen.getByLabelText('Mês 7'), '60');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenLastCalledWith('estudo-teste', { cost_curve_custom: [40, 60, 0, 0] });
+        expect((screen.getByLabelText('Mês 6') as HTMLInputElement).value).toBe('40');
+    });
+
     it('"Adicionar rubricas de pós-obra" cria a categoria 10 e depois fica desligado com o motivo', async () => {
         const user = userEvent.setup();
         svc.seedCapexTemplate.mockResolvedValue(rubricas);

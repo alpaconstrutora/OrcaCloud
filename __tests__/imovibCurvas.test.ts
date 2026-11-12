@@ -30,9 +30,14 @@ describe('5.3 — curvaDeDesembolso', () => {
         const torta = curvaDeDesembolso('custom', 4, [10, 10, 10, 20]);
         expect(soma(torta.pesos)).toBeCloseTo(1, 12);
         expect(torta.somaInformada).toBe(50);
-        // Mais meses na curva que na obra: o excesso fica fora; menos: faltam zeros.
-        expect(curvaDeDesembolso('custom', 2, [50, 50, 100]).pesos).toEqual([0.5, 0.5]);
-        expect(curvaDeDesembolso('custom', 3, [100]).pesos).toEqual([1, 0, 0]);
+        // Prazo da obra diferente do tamanho da curva (choque de prazo, importação do
+        // planejamento): a forma acumulada é reamostrada no prazo novo.
+        const longa = curvaDeDesembolso('custom', 2, [25, 25, 50]);
+        expect(longa.pesos[0]).toBeCloseTo(0.375, 12);
+        expect(longa.pesos[1]).toBeCloseTo(0.625, 12);
+        expect(longa.reamostrada).toBe(3);
+        curvaDeDesembolso('custom', 3, [100]).pesos.forEach(w => expect(w).toBeCloseTo(1 / 3, 12));
+        expect(ok.reamostrada).toBeNull();
     });
 
     it('personalizada vazia ou zerada cai na linear', () => {
@@ -41,27 +46,46 @@ describe('5.3 — curvaDeDesembolso', () => {
     });
 });
 
-describe('5.4 — curva do cronograma físico-financeiro', () => {
-    const cronograma = (periodos: [string, string][], dist: [string, number][]) => ({
-        periods: periodos.map(([id, date]) => ({ id, name: id, date })),
-        distributions: dist.map(([periodId, value], k) => ({ itemId: `i${k}`, periodId, percentage: 50, value })),
+describe('5.4 — curva do cronograma físico-financeiro (a mesma conta do previsto da FinancialSchedule)', () => {
+    const item = (id: string, quantity: number, price: number) => ({ id, quantity, sinapiItem: { price } });
+
+    it('formato novo: o total de cada item (quantidade × preço) se espalha pelos dias da tarefa', () => {
+        const c = curvaDoCronograma([{
+            budget: [item('a', 10, 100), item('b', 1, 3_000)],
+            // 'a' (1.000) em 31 dias de janeiro; 'b' (3.000) de 15/01 a 14/03 = 59 dias.
+            schedule: { periods: [], distributions: [], itemSchedules: [{ id: 'a', startDate: '2027-01-01', endDate: '2027-01-31' }, { id: 'b', startDate: '2027-01-15', endDate: '2027-03-14' }] },
+        }]);
+        expect(c!.primeiroMes).toBe('2027-01');
+        const total = 4_000;
+        const jan = 1_000 + 3_000 * 17 / 59, fev = 3_000 * 28 / 59, mar = 3_000 * 14 / 59;
+        [jan, fev, mar].forEach((v, i) => expect(c!.percentuais[i]).toBeCloseTo(v / total * 100, 9));
     });
 
-    it('soma o valor de cada período (não os percentuais dos itens), em ordem de data, em % do total', () => {
-        const c = curvaDoCronograma([cronograma([['b', '2027-02-01'], ['a', '2027-01-01'], ['c', '2027-03-01']], [['a', 100], ['a', 300], ['b', 400], ['c', 200]])]);
-        expect(c).toEqual({ percentuais: [40, 40, 20], primeiroMes: '2027-01' });
+    it('formato antigo: percentual de cada item no período × total do item (o "value" gravado é 0)', () => {
+        const c = curvaDoCronograma([{
+            budget: [item('a', 1, 1_000), item('b', 1, 3_000)],
+            schedule: {
+                periods: [{ id: 'p2', date: '2027-02-01' }, { id: 'p1', date: '2027-01-01' }],
+                distributions: [
+                    { itemId: 'a', periodId: 'p1', percentage: 100, value: 0 },
+                    { itemId: 'b', periodId: 'p1', percentage: 50, value: 0 },
+                    { itemId: 'b', periodId: 'p2', percentage: 50, value: 0 },
+                ],
+            },
+        }]);
+        expect(c).toEqual({ percentuais: [62.5, 37.5], primeiroMes: '2027-01' });
     });
 
-    it('várias obras (torres) somam pelo mês do calendário; mês sem desembolso no meio vale 0', () => {
+    it('várias obras somam pelo mês do calendário; mês vazio no meio vale 0; tarefa inativa fica fora', () => {
         const c = curvaDoCronograma([
-            cronograma([['a', '2027-01-10']], [['a', 100]]),
-            cronograma([['x', '2027-01-20'], ['y', '2027-03-05']], [['x', 100], ['y', 200]]),
+            { budget: [item('a', 1, 100)], schedule: { periods: [], distributions: [], itemSchedules: [{ id: 'a', startDate: '2027-01-10', endDate: '2027-01-10' }] } },
+            { budget: [item('x', 1, 100), item('z', 1, 999)], schedule: { periods: [], distributions: [], itemSchedules: [{ id: 'x', startDate: '2027-03-05', endDate: '2027-03-05' }, { id: 'z', startDate: '2027-02-01', endDate: '2027-02-02', inactive: true }] } },
         ]);
         expect(c).toEqual({ percentuais: [50, 0, 50], primeiroMes: '2027-01' });
     });
 
-    it('sem distribuição com valor: nulo', () => {
-        expect(curvaDoCronograma([cronograma([['a', '2027-01-01']], [])])).toBeNull();
+    it('sem item com valor e data: nulo', () => {
+        expect(curvaDoCronograma([{ budget: [item('a', 0, 100)], schedule: { periods: [], distributions: [], itemSchedules: [{ id: 'a', startDate: '2027-01-01', endDate: '2027-01-02' }] } }])).toBeNull();
         expect(curvaDoCronograma([])).toBeNull();
     });
 });

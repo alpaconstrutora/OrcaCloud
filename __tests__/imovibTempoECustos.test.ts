@@ -40,6 +40,12 @@ describe('5.2 — terreno parcelado', () => {
         expect(r.avisos.find(a => a.codigo === 'terreno_nao_soma_100')?.aba).toBe('premises');
     });
 
+    it('parcelas todas em 0%: calcula como veio (terreno não sai) e avisa — nunca volta à vista em silêncio', () => {
+        const r = computeImovibMath(baseStudy({ land_payment_schedule: [{ month: 3, percent: 0 }] }));
+        expect(soma(linha(r, 'terreno'))).toBe(0);
+        expect(r.avisos.find(a => a.codigo === 'terreno_nao_soma_100')).toBeTruthy();
+    });
+
     it('parcela depois do fim do fluxo estende o estudo', () => {
         const base = computeImovibMath(baseStudy());
         const r = computeImovibMath(baseStudy({ land_payment_schedule: [{ month: 1, percent: 50 }, { month: base.duration + 6, percent: 50 }] }));
@@ -57,6 +63,13 @@ describe('5.3 — curva de desembolso no motor', () => {
         expect(Math.abs(obra[5])).toBeLessThan(Math.abs(obra[17]));
         r.monthlyFlows.forEach((f, i) => expect(f.linhas.liberacaoDivida).toBeCloseTo(-(f.linhas.obra + f.linhas.rubricasObra) * 0.6, 6));
         expect(r.avisos).toEqual([]);
+    });
+
+    it('personalizada acompanha o prazo: igual à linear com +6 meses de obra (choque do tornado)', () => {
+        const igualLinear = { cost_curve_type: 'custom', cost_curve_custom: Array.from({ length: 24 }, () => 100 / 24) };
+        const lin = computeImovibMath(baseStudy({ construction_duration_months: 30 }));
+        const cus = computeImovibMath(baseStudy({ ...igualLinear, construction_duration_months: 30 }));
+        expect(cus.vpl).toBeCloseTo(lin.vpl, 2);
     });
 
     it('personalizada que não soma 100 avisa e distribui na proporção', () => {
@@ -116,6 +129,39 @@ describe('5.5 — momento de cada rubrica', () => {
     });
 });
 
+describe('5.5 — pós-obra não mexe na dívida nem nas fontes (revisão da Fase 5)', () => {
+    // A base de comparação tem a mesma rubrica sem momento: qualquer rubrica liga o modo de rubricas (impostos e corretagem vêm delas).
+    const posObra = (valor: number, timing: string | null = 'pos_obra') => ({ ...rubrica('10. Pós-obra', 'Manutenção e garantia', 'currency', valor, 'obra'), timing });
+    const mutuo = { id: 'f1', study_id: 'estudo-teste', name: 'Mútuo', kind: 'mutuo', amount: 1_000_000, entry_month: 3, remuneration: 'juros', rate_annual: 12, profit_share_percent: null, amortization: 'BULLET', term_months: 36, grace_months: 0, sort_order: 0 };
+
+    it('rubrica de pós-obra com valor 0 (o botão cria assim) não muda duração, VPL nem TIR', () => {
+        for (const over of [
+            { funding_debt_percent: 80, financing_amortization: 'repasse' },
+            { funding_debt_percent: 80, financing_interest_mode: 'paga_mensal' },
+            { funding_sources: [mutuo] },
+        ]) {
+            const sem = computeImovibMath(baseStudy({ ...over, capex_items: [posObra(0, null)] }));
+            const com = computeImovibMath(baseStudy({ ...over, capex_items: [posObra(0)] }));
+            expect(com.duration).toBe(sem.duration);
+            expect(com.vpl).toBe(sem.vpl);
+        }
+    });
+
+    it('com valor, o pós-obra estende o fluxo, mas a dívida e o mútuo são quitados no fim das receitas', () => {
+        const over = { funding_debt_percent: 80, financing_amortization: 'repasse', funding_sources: [mutuo] };
+        const sem = computeImovibMath(baseStudy({ ...over, capex_items: [posObra(0, null)] }));
+        const com = computeImovibMath(baseStudy({ ...over, capex_items: [posObra(120_000)] }));
+        expect(com.duration).toBeGreaterThan(sem.duration);
+        const ultimo = sem.duration - 1;
+        expect(com.monthlyFlows[ultimo].linhas.pagamentoDaDivida).toBeCloseTo(sem.monthlyFlows[ultimo].linhas.pagamentoDaDivida, 6);
+        expect(com.monthlyFlows[ultimo].linhas.remuneracaoDeTerceiros).toBeCloseTo(sem.monthlyFlows[ultimo].linhas.remuneracaoDeTerceiros, 6);
+        com.monthlyFlows.slice(sem.duration).forEach(f => {
+            expect(Math.abs(f.linhas.pagamentoDaDivida)).toBe(0);
+            expect(Math.abs(f.linhas.remuneracaoDeTerceiros)).toBe(0);
+        });
+    });
+});
+
 describe('5.6 — custo do estoque depois da obra', () => {
     it('R$ 800 por unidade/mês: só depois do fim da obra e zera quando o estoque acaba', () => {
         // Vendas terminam 12 meses depois da obra (mês 41).
@@ -128,6 +174,11 @@ describe('5.6 — custo do estoque depois da obra', () => {
         expect(c[29]).toBeCloseTo(-800 * 40 * (11 / 41), 4);
         expect(c[40]).toBeCloseTo(0, 6);
         expect(soma(c)).toBeLessThan(0);
+    });
+
+    it('a permuta física sai das unidades em estoque (as do espelho PERMUTADO já saem)', () => {
+        const c = linha(computeImovibMath(baseStudy({ sales_duration_months: 41, stock_carrying_cost_unit_month: 800, swap_physical_percent: 20 })), 'carregamentoDoEstoque');
+        expect(c[29]).toBeCloseTo(-800 * 40 * 0.8 * (11 / 41), 4);
     });
 
     it('sem custo informado, a linha fica zerada', () => {

@@ -93,7 +93,7 @@ const ImovibTerrenoTab: React.FC<ImovibTerrenoTabProps> = ({ study, formData, se
                                         <span className="text-sm text-slate-700 pb-2">
                                             {fmtBRL(custo * (Number(p.percent) || 0) / 100)} em {nomeDoMes(estudo.base_date, p.month || 1)}
                                         </span>
-                                        <button type="button" onClick={() => mudarParcelas(parcelas.filter((_, k) => k !== i))} title="Remover a parcela" aria-label={`Remover a parcela ${i + 1}`}
+                                        <button type="button" onClick={() => mudarParcelas(parcelas.filter((_, k) => k !== i))} title={!pode ? motivo : 'Remover a parcela'} aria-label={`Remover a parcela ${i + 1}`}
                                             className="h-9 w-9 flex items-center justify-center rounded-[6px] text-slate-500 hover:bg-rose-50 hover:text-rose-600">
                                             <Trash2 className="w-4 h-4" />
                                         </button>

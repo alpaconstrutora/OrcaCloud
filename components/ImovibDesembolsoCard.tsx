@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { TrendingUp, Download, Loader2, AlertTriangle } from 'lucide-react';
 import { ResponsiveContainer, ComposedChart, Bar, Line, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { ImovibStudy, ImovibStudyUpdate } from '../types';
@@ -36,8 +36,15 @@ const ImovibDesembolsoCard: React.FC<ImovibDesembolsoCardProps> = ({ study, resu
     const tipo = (study.cost_curve_type ?? D.cost_curve_type) as TipoCurvaDeDesembolso;
     const meses = Math.max(1, Math.round(study.construction_duration_months ?? D.construction_duration_months));
     const inicio = Math.round(study.construction_start_month ?? D.construction_start_month);
-    const pesos = study.cost_curve_custom ?? [];
-    const soma = pesos.slice(0, meses).reduce((a, b) => a + (Number(b) || 0), 0);
+    // Rascunho local dos pesos: cada campo grava o vetor inteiro, e o estudo só
+    // chega recarregado depois — sem o rascunho, o 2º campo regravava o 1º com o valor velho.
+    const [pesos, setPesos] = useState<number[]>(study.cost_curve_custom ?? []);
+    const pesosRef = useRef(pesos);
+    pesosRef.current = pesos;
+    const doBanco = JSON.stringify(study.cost_curve_custom ?? []);
+    useEffect(() => { setPesos(JSON.parse(doBanco)); }, [doBanco]);
+    const pontos = pesos.length > 0 ? pesos.length : meses;
+    const soma = pesos.reduce((a, b) => a + (Number(b) || 0), 0);
     const aviso = resultado.avisos.find(a => a.codigo === 'curva_de_desembolso_nao_soma_100');
 
     // Planejamento das obras do empreendimento: lido ao abrir (só leitura), para o botão dizer se dá.
@@ -68,11 +75,12 @@ const ImovibDesembolsoCard: React.FC<ImovibDesembolsoCardProps> = ({ study, resu
             : `Curva importada com ${n} meses; a obra do estudo tem ${meses}. Ajuste o prazo na aba Dinâmica ou os pesos abaixo.`);
     };
 
+    // Só os meses da obra (rubricas de obra com outro momento saem fora deles): o acumulado fecha em 100%.
     const dados = useMemo(() => {
-        const total = resultado.monthlyFlows.reduce((a, f) => a - f.linhas.obra - f.linhas.rubricasObra, 0);
+        const daObra = resultado.monthlyFlows.filter(f => f.month >= inicio && f.month < inicio + meses);
+        const total = daObra.reduce((a, f) => a - f.linhas.obra - f.linhas.rubricasObra, 0);
         let acc = 0;
-        return resultado.monthlyFlows
-            .filter(f => f.month >= inicio && f.month < inicio + meses)
+        return daObra
             .map(f => {
                 const v = -(f.linhas.obra + f.linhas.rubricasObra);
                 acc += v;
@@ -81,9 +89,13 @@ const ImovibDesembolsoCard: React.FC<ImovibDesembolsoCardProps> = ({ study, resu
     }, [resultado, inicio, meses]);
 
     const salvarPeso = (k: number, texto: string) => {
-        const novo = Array.from({ length: Math.max(meses, pesos.length) }, (_, i) => Number(pesos[i]) || 0);
+        const atual = pesosRef.current;
+        const novo = Array.from({ length: Math.max(pontos, atual.length) }, (_, i) => Number(atual[i]) || 0);
         novo[k] = texto === '' ? 0 : Math.max(0, Number(texto) || 0);
-        if (novo[k] !== (Number(pesos[k]) || 0)) void onSalvar({ cost_curve_custom: novo });
+        if (novo[k] === (Number(atual[k]) || 0)) return;
+        pesosRef.current = novo;
+        setPesos(novo);
+        void onSalvar({ cost_curve_custom: novo });
     };
 
     return (
@@ -129,10 +141,13 @@ const ImovibDesembolsoCard: React.FC<ImovibDesembolsoCardProps> = ({ study, resu
 
                 {tipo === 'custom' && (
                     <div className="space-y-2">
+                        {pontos !== meses && (
+                            <p className="text-sm text-slate-600">A curva tem {pontos} meses e a obra, {meses}: o cálculo redistribui a mesma forma no prazo da obra.</p>
+                        )}
                         <div className="grid grid-cols-4 sm:grid-cols-6 lg:grid-cols-12 gap-2">
-                            {Array.from({ length: meses }, (_, k) => (
+                            {Array.from({ length: pontos }, (_, k) => (
                                 <div key={k}>
-                                    <label htmlFor={`imovib-peso-${k}`} className="block text-xs font-semibold text-slate-500 mb-1">Mês {inicio + k}</label>
+                                    <label htmlFor={`imovib-peso-${k}`} className="block text-xs font-semibold text-slate-500 mb-1">{pontos === meses ? `Mês ${inicio + k}` : `${k + 1}º mês da curva`}</label>
                                     <input
                                         id={`imovib-peso-${k}`}
                                         type="number" min="0" step="any"
@@ -145,13 +160,13 @@ const ImovibDesembolsoCard: React.FC<ImovibDesembolsoCardProps> = ({ study, resu
                             ))}
                         </div>
                         <p className={`text-sm ${Math.abs(soma - 100) > 0.01 ? 'text-amber-700' : 'text-slate-600'}`}>
-                            Soma: {soma.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% {pesos.length > meses ? `(${pesos.length - meses} mês(es) além da obra ficam fora)` : ''}
+                            Soma: {soma.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%
                         </p>
                     </div>
                 )}
             </fieldset>
 
-            <ChartCard title="Desembolso mês a mês" subtitle={`Total da obra: ${fmtBRL(dados.reduce((a, d) => a + d.desembolso, 0))}. A linha é o acumulado.`}>
+            <ChartCard title="Desembolso mês a mês" subtitle={`Desembolso nos meses da obra: ${fmtBRL(dados.reduce((a, d) => a + d.desembolso, 0))}. A linha é o acumulado.`}>
                 <Legend items={[{ label: 'Desembolso do mês', color: SERIE_PRINCIPAL }, { label: 'Acumulado (%)', color: SERIE_CONTEXTO }]} />
                 <div className="h-56">
                     <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>

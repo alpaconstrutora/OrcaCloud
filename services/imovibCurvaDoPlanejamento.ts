@@ -1,7 +1,9 @@
 import { supabase } from '../lib/supabase';
 import { empreendimentoService } from './empreendimentoService';
 import { empreendimentoLinksService } from './empreendimentoLinksService';
-import { curvaDoCronograma, CronogramaDaObra } from '../utils/imovibCurvas';
+import { resolveProjectBudgetById } from './budgetResolver';
+import { curvaDoCronograma, CronogramaDaObra, ItemDoOrcamentoDaObra } from '../utils/imovibCurvas';
+import { isSystemProject } from '../utils/systemProjects';
 import type { Empreendimento } from '../types/empreendimento';
 
 /**
@@ -11,8 +13,10 @@ import type { Empreendimento } from '../types/empreendimento';
  * planejamento depois não muda o estudo). Arquivo próprio porque
  * empreendimentoService já importa o imovibService.
  *
- * Lê `settings.schedule` dos projetos de PLANEJAMENTO das obras; sem nenhum com
- * desembolso, das próprias obras (nunca os dois: contaria em dobro).
+ * Lê o cronograma (`settings.schedule`) e o orçamento (resolveProjectBudget — num
+ * PLANEJAMENTO, o snapshot que o cronograma referencia) dos projetos de
+ * PLANEJAMENTO das obras; sem nenhum com previsto, das próprias obras (nunca os
+ * dois: contaria em dobro). Projeto de sistema nunca conta (CLAUDE.md, regra #2).
  */
 export async function curvaDoPlanejamentoDaObra(
     empreendimentoId: string,
@@ -22,18 +26,28 @@ export async function curvaDoPlanejamentoDaObra(
     if (!emp) return { motivo: 'Empreendimento não encontrado.' };
     const snap = await empreendimentoLinksService.getSnapshot(emp as Empreendimento, organizationId);
     const ids = (lista: { id: string; missing?: boolean }[]) => lista.filter(l => !l.missing).map(l => l.id);
-    const planejamentos = ids(snap.planejamentos);
-    const obras = ids(snap.obras);
-    if (!planejamentos.length && !obras.length) return { motivo: 'O empreendimento não tem obra vinculada.' };
+    const candidatos = [...ids(snap.planejamentos), ...ids(snap.obras)];
+    if (!candidatos.length) return { motivo: 'O empreendimento não tem obra vinculada.' };
 
-    const { data, error } = await supabase.from('projects').select('id, settings').in('id', [...planejamentos, ...obras]);
+    const { data, error } = await supabase.from('projects').select('id, name, settings').in('id', candidatos);
     if (error) throw new Error(`Falha ao ler o planejamento das obras: ${error.message}`);
-    const cronogramaDe = (id: string) => (data ?? []).find(p => p.id === id)?.settings?.schedule as CronogramaDaObra | undefined;
-    const comDesembolso = (lista: string[]) => lista.map(cronogramaDe).filter((s): s is CronogramaDaObra => !!s?.distributions?.some(d => Number(d.value) > 0));
+    const linhas = (data ?? []).filter(p => !isSystemProject({ name: p.name, settings: p.settings }));
 
-    const dosPlanejamentos = comDesembolso(planejamentos);
-    const usados = dosPlanejamentos.length ? dosPlanejamentos : comDesembolso(obras);
+    const comPrevisto = async (lista: string[]) => {
+        const obras: { schedule: CronogramaDaObra; budget: ItemDoOrcamentoDaObra[] }[] = [];
+        for (const id of lista) {
+            const schedule = linhas.find(p => p.id === id)?.settings?.schedule as CronogramaDaObra | undefined;
+            if (!schedule) continue;
+            const { budget } = await resolveProjectBudgetById(id);
+            const obra = { schedule, budget: (budget ?? []) as unknown as ItemDoOrcamentoDaObra[] };
+            if (curvaDoCronograma([obra])) obras.push(obra);
+        }
+        return obras;
+    };
+
+    const dosPlanejamentos = await comPrevisto(ids(snap.planejamentos));
+    const usados = dosPlanejamentos.length ? dosPlanejamentos : await comPrevisto(ids(snap.obras));
     const curva = curvaDoCronograma(usados);
-    if (!curva) return { motivo: 'As obras do empreendimento não têm cronograma físico-financeiro com valores.' };
+    if (!curva) return { motivo: 'As obras do empreendimento não têm cronograma com tarefas datadas e orçamento com valor.' };
     return { ...curva, projetos: usados.length };
 }

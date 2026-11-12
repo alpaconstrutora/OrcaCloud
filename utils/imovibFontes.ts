@@ -54,11 +54,16 @@ export const descreverFonte = (f: ImovibFundingSource): string =>
 const DATA_DA_ENTRADA = '2001-01-15';
 const MESES = (n: number) => `${n} ${n === 1 ? 'mês' : 'meses'}`;
 
-export function fluxoDasFontes(fontes: ImovibFundingSource[], duracao: number): FluxoDasFontes {
+/**
+ * `duracao` é o horizonte das fontes (o fim das receitas): vencimento depois dele
+ * é quitado nele. `tamanho` é o tamanho das séries (o fluxo inteiro, que o
+ * pós-obra pode estender); padrão = `duracao`.
+ */
+export function fluxoDasFontes(fontes: ImovibFundingSource[], duracao: number, tamanho: number = duracao): FluxoDasFontes {
     const n = Math.max(0, duracao);
-    const aporte = new Array<number>(n).fill(0);
-    const aporteParticipacao = new Array<number>(n).fill(0);
-    const remuneracao = new Array<number>(n).fill(0);
+    const aporte = new Array<number>(Math.max(n, tamanho)).fill(0);
+    const aporteParticipacao = new Array<number>(Math.max(n, tamanho)).fill(0);
+    const remuneracao = new Array<number>(Math.max(n, tamanho)).fill(0);
     const avisos: string[] = [];
     let participacao = 0;
 

@@ -32,13 +32,13 @@ const ImovibCronogramaTab: React.FC<ImovibCronogramaTabProps> = ({ study, formDa
 
     // Datas do empreendimento vinculado — só leitura; o botão preenche o formulário.
     const empId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.empreendimento_id : undefined;
-    const [datasDoEmp, setDatasDoEmp] = useState<{ lancamento?: string | null; entrega?: string | null } | null>(null);
+    const [datasDoEmp, setDatasDoEmp] = useState<{ lancamento?: string | null; entrega?: string | null; erro?: string } | null>(null);
     useEffect(() => {
         if (!empId) { setDatasDoEmp(null); return; }
         let vivo = true;
         empreendimentoService.getById(empId)
             .then(e => { if (vivo) setDatasDoEmp({ lancamento: e?.launch_date ?? null, entrega: e?.expected_delivery_date ?? null }); })
-            .catch(() => { if (vivo) setDatasDoEmp(null); });
+            .catch(e => { if (vivo) setDatasDoEmp({ erro: (e as Error).message }); });
         return () => { vivo = false; };
     }, [empId]);
 
@@ -48,6 +48,8 @@ const ImovibCronogramaTab: React.FC<ImovibCronogramaTabProps> = ({ study, formDa
     const mesEntrega = mesDaData(estudo.base_date, datasDoEmp?.entrega);
     const motivoDatas = !pode ? motivo
         : !empId ? 'Vincule um empreendimento em Identificação para usar as datas dele.'
+            : datasDoEmp?.erro ? `Não foi possível ler o empreendimento: ${datasDoEmp.erro}`
+            : !datasDoEmp ? 'Lendo as datas do empreendimento…'
             : !estudo.base_date ? 'Preencha a data-base em Identificação: sem ela não dá para converter datas em meses.'
                 : !datasDoEmp?.lancamento && !datasDoEmp?.entrega ? 'O empreendimento não tem data de lançamento nem de entrega.'
                     : (mesLancamento != null && mesLancamento < 1) || (mesEntrega != null && mesEntrega < 1) ? 'As datas do empreendimento são anteriores à data-base do estudo.'

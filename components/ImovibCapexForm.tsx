@@ -455,7 +455,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                             type="button"
                                             onClick={() => usarCub(block)}
                                             disabled={!cub?.sugerido}
-                                            title={!cub?.sugerido ? 'Escolha a UF e o padrão para ter o CUB.' : 'Preenche o custo com o CUB mais o acréscimo; grava ao sair do campo.'}
+                                            title={!pode ? motivo : !cub?.sugerido ? 'Sem CUB: escolha a UF e o padrão, ou aguarde a tabela carregar.' : 'Preenche o custo com o CUB mais o acréscimo; grava ao sair do campo.'}
                                             className="h-9 px-3 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
                                         >
                                             Usar CUB + {cub?.acrescimoPct ?? 25}%
@@ -558,8 +558,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                 <span className="text-lg font-semibold text-slate-900">{fmt(math.capexRubricas.total)}</span>
                             </div>
                             <div className="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm text-slate-600">
-                                <div>Sobre o terreno (mês 1): <span className="font-medium text-slate-800">{fmt(math.capexRubricas.terreno)}</span></div>
-                                <div>Sobre a obra (ao longo da obra): <span className="font-medium text-slate-800">{fmt(math.capexRubricas.obra)}</span></div>
+                                <div>Sobre o terreno: <span className="font-medium text-slate-800">{fmt(math.capexRubricas.terreno)}</span></div>
+                                <div>Sobre a obra: <span className="font-medium text-slate-800">{fmt(math.capexRubricas.obra)}</span></div>
                                 <div>Sobre o VGV (junto com a receita): <span className="font-medium text-slate-800">{fmt(math.capexRubricas.vgv)}</span></div>
                             </div>
                             <p className="mt-2 text-xs text-slate-500">

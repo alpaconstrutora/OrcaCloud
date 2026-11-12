@@ -758,7 +758,7 @@ Ordem (importa: nunca há janela em que uma RPC logada chame um núcleo já apag
    duas últimas, com os `REVOKE`/`GRANT` do arquivo) e é idempotente (`CREATE OR REPLACE`):
 
    ```bash
-   cd C:\Drentes\link-celular
+   cd C:\D\frentes\link-celular
    npx supabase db query --linked -f supabase/migrations/aplicar_20271014600000_diario_aprovacao_permissao.sql
    ```
 

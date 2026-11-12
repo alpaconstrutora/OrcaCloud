@@ -134,7 +134,7 @@ Medido no banco: o celular do Iago estava certo (6 abertas: 4 como responsável 
 logado como **desenvolvedor@** (superadmin), que só via tarefas de espaço: as 2 do Altair e as 2 do Iago **sem espaço**
 ficavam de fora — a regra "superadmin tem acesso a tudo" (`aplicar_20271024950000`) só o pôs como owner de todo espaço.
 Decisão do usuário (2026-11-12): **"Ver e editar todas"** — apagar não muda.
-Migration `aplicar_20271112995000_tarefas_superadmin_ve_e_edita.sql` (policies `tasks_select_superadmin` /
+Migration `aplicar_20271112997000_tarefas_superadmin_ve_e_edita.sql` (policies `tasks_select_superadmin` /
 `tasks_update_superadmin` com `(SELECT public.is_superadmin())`; superadmin fora da trava do responsável; gere envolvidos
 de qualquer tarefa). Prova `scripts/teste-tarefas-superadmin.sql`. Rollback: `DROP POLICY tasks_select_superadmin` e
 `tasks_update_superadmin` + recriar `_tasks_responsavel_so_conteudo` do arquivo `aplicar_20271111995000` e

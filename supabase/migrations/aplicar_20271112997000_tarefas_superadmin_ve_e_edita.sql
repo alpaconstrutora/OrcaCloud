@@ -1,4 +1,4 @@
--- aplicar_20271112995000_tarefas_superadmin_ve_e_edita.sql
+-- aplicar_20271112997000_tarefas_superadmin_ve_e_edita.sql
 --
 -- Superadmin (public.superadmins: desenvolvedor@ e altair.rosa@) vê e edita QUALQUER
 -- tarefa, inclusive as de fora de espaço ("agenda pessoal") de outra pessoa.

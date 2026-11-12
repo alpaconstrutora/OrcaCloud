@@ -55,12 +55,16 @@ const percentis = (xs: number[]): Percentis => {
 
 const FAIXAS_DO_HISTOGRAMA = 20;
 
-export function simularMonteCarlo(
+/**
+ * O núcleo da simulação: sorteia `quantos` cenários de cada vez, na mesma ordem
+ * (mesma semente = mesmo resultado, de uma vez ou em lotes), e monta o resultado.
+ */
+function criarSimulacao(
     study: ImovibStudy,
     variaveis: Partial<Record<VariavelDoEstudo, DistribuicaoTriangular>>,
     iteracoes: number,
     semente: number,
-): ResultadoMonteCarlo {
+) {
     const n = Math.max(1, Math.round(iteracoes));
     const aleatorio = prng(semente);
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
@@ -70,36 +74,86 @@ export function simularMonteCarlo(
     const tirs: number[] = [];
     let abaixoDaTma = 0;
 
-    for (let k = 0; k < n; k++) {
-        const choques: Choques = {};
-        for (const v of ordem) choques[v] = sortearTriangular(variaveis[v]!, aleatorio());
-        const x = aplicarChoques(study, choques);
-        const r = computeImovibMath(x.study, x.options);
-        vpls.push(r.vpl);
-        if (Number.isFinite(r.annualIrr)) {
-            tirs.push(r.annualIrr);
-            if (r.annualIrr < tma) abaixoDaTma++;
-        } else if (r.vpl < 0) abaixoDaTma++;
-    }
-
-    const menor = Math.min(...vpls);
-    const maior = Math.max(...vpls);
-    const largura = (maior - menor) / FAIXAS_DO_HISTOGRAMA;
-    const histogramaVpl = largura > 0
-        ? Array.from({ length: FAIXAS_DO_HISTOGRAMA }, (_, i) => ({ de: menor + i * largura, ate: menor + (i + 1) * largura, n: 0 }))
-        : [{ de: menor, ate: maior, n: 0 }];
-    for (const v of vpls) {
-        const i = largura > 0 ? Math.min(FAIXAS_DO_HISTOGRAMA - 1, Math.floor((v - menor) / largura)) : 0;
-        histogramaVpl[i].n++;
-    }
-
-    return {
-        iteracoes: n,
-        semTir: n - tirs.length,
-        tir: tirs.length ? percentis(tirs) : null,
-        vpl: percentis(vpls),
-        probVplNegativo: vpls.filter(v => v < 0).length / n,
-        probTirAbaixoDaTma: tirs.length || abaixoDaTma ? abaixoDaTma / n : null,
-        histogramaVpl,
+    const sortear = (quantos: number) => {
+        const ate = Math.min(n, vpls.length + quantos);
+        while (vpls.length < ate) {
+            const choques: Choques = {};
+            for (const v of ordem) choques[v] = sortearTriangular(variaveis[v]!, aleatorio());
+            const x = aplicarChoques(study, choques);
+            const r = computeImovibMath(x.study, x.options);
+            vpls.push(r.vpl);
+            if (Number.isFinite(r.annualIrr)) {
+                tirs.push(r.annualIrr);
+                if (r.annualIrr < tma) abaixoDaTma++;
+            } else if (r.vpl < 0) abaixoDaTma++;
+        }
+        return vpls.length;
     };
+
+    const resultado = (): ResultadoMonteCarlo => {
+        const menor = Math.min(...vpls);
+        const maior = Math.max(...vpls);
+        const largura = (maior - menor) / FAIXAS_DO_HISTOGRAMA;
+        const histogramaVpl = largura > 0
+            ? Array.from({ length: FAIXAS_DO_HISTOGRAMA }, (_, i) => ({ de: menor + i * largura, ate: menor + (i + 1) * largura, n: 0 }))
+            : [{ de: menor, ate: maior, n: 0 }];
+        for (const v of vpls) {
+            const i = largura > 0 ? Math.min(FAIXAS_DO_HISTOGRAMA - 1, Math.floor((v - menor) / largura)) : 0;
+            histogramaVpl[i].n++;
+        }
+        return {
+            iteracoes: n,
+            semTir: n - tirs.length,
+            tir: tirs.length ? percentis(tirs) : null,
+            vpl: percentis(vpls),
+            probVplNegativo: vpls.filter(v => v < 0).length / n,
+            probTirAbaixoDaTma: tirs.length || abaixoDaTma ? abaixoDaTma / n : null,
+            histogramaVpl,
+        };
+    };
+
+    return { total: n, sortear, resultado };
+}
+
+export function simularMonteCarlo(
+    study: ImovibStudy,
+    variaveis: Partial<Record<VariavelDoEstudo, DistribuicaoTriangular>>,
+    iteracoes: number,
+    semente: number,
+): ResultadoMonteCarlo {
+    const sim = criarSimulacao(study, variaveis, iteracoes, semente);
+    sim.sortear(sim.total);
+    return sim.resultado();
+}
+
+export interface OpcoesDosLotes {
+    /** Sorteios por lote (padrão 100): entre um lote e outro a tela volta a responder. */
+    lote?: number;
+    /** Chamado depois de cada lote, com quantos sorteios já foram feitos. */
+    aoProgredir?: (feitos: number, total: number) => void;
+    /** Consultado depois de cada lote: true para parar (devolve null). */
+    cancelada?: () => boolean;
+}
+
+/**
+ * A mesma simulação, em lotes, devolvendo o controle ao navegador entre eles
+ * (pendência da Fase 3: 20.000 sorteios travavam a tela ~10 s). Dá exatamente o
+ * resultado de `simularMonteCarlo` com a mesma semente.
+ */
+export async function simularMonteCarloEmLotes(
+    study: ImovibStudy,
+    variaveis: Partial<Record<VariavelDoEstudo, DistribuicaoTriangular>>,
+    iteracoes: number,
+    semente: number,
+    opcoes: OpcoesDosLotes = {},
+): Promise<ResultadoMonteCarlo | null> {
+    const sim = criarSimulacao(study, variaveis, iteracoes, semente);
+    const lote = Math.max(1, Math.round(opcoes.lote ?? 100));
+    for (let feitos = 0; feitos < sim.total;) {
+        feitos = sim.sortear(lote);
+        opcoes.aoProgredir?.(feitos, sim.total);
+        if (opcoes.cancelada?.()) return null;
+        if (feitos < sim.total) await new Promise(resolve => setTimeout(resolve, 0));
+    }
+    return sim.resultado();
 }

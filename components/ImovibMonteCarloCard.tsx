@@ -1,8 +1,8 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Dices, Loader2 } from 'lucide-react';
 import { ResponsiveContainer, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip } from 'recharts';
 import { ImovibStudy, ImovibScenario } from '../types';
-import { simularMonteCarlo, ResultadoMonteCarlo } from '../utils/imovibMonteCarlo';
+import { simularMonteCarloEmLotes, ResultadoMonteCarlo } from '../utils/imovibMonteCarlo';
 import { faixasDoMonteCarlo } from '../utils/imovibCenarios';
 import { ROTULO_DA_VARIAVEL, UNIDADE_DA_VARIAVEL, VariavelDoEstudo } from '../utils/imovibVariacoes';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
@@ -21,13 +21,18 @@ const fmtNum = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits:
 
 /**
  * Simulação de Monte Carlo (item 3.4 do plano
- * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md). Roda só ao clicar:
- * 2.000 sorteios levam cerca de um segundo. Nada é gravado.
+ * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md). Roda só ao clicar, em
+ * lotes: a tela segue respondendo, mostra o progresso e pode cancelar (antes 20.000
+ * sorteios travavam a tela ~10 s). Nada é gravado.
  */
 const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cenarios, choques }) => {
     const [iteracoes, setIteracoes] = useState(String(IMOVIB_DEFAULTS.monte_carlo_iteracoes));
     const [semente, setSemente] = useState('1');
     const [simulando, setSimulando] = useState(false);
+    const [feitos, setFeitos] = useState(0);
+    const cancelar = useRef(false);
+    // Desmontou no meio: para de sortear.
+    useEffect(() => () => { cancelar.current = true; }, []);
     const [resultado, setResultado] = useState<ResultadoMonteCarlo | null>(null);
     const faixas = useMemo(() => faixasDoMonteCarlo(cenarios, choques), [cenarios, choques]);
     // Resultado de premissas antigas não fica na tela ao lado das faixas novas.
@@ -37,20 +42,25 @@ const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cena
     const n = parseInt(iteracoes, 10);
     const s = parseInt(semente, 10);
     const motivo = !(n >= 100 && n <= 20000) ? 'Escolha de 100 a 20.000 sorteios.'
-        : !Number.isFinite(s) ? 'A semente precisa ser um número inteiro.'
+        : !(Number.isFinite(s) && s >= 1) ? 'A semente vai de 1 em diante (0 repetiria a semente 1).'
             : Object.keys(faixas).length === 0 ? 'Nenhuma premissa varia: ajuste os choques ou os cenários.' : undefined;
 
-    const simular = () => {
+    const simular = async () => {
         if (motivo) return;
+        cancelar.current = false;
+        setFeitos(0);
+        setResultado(null);
         setSimulando(true);
-        // Deixa a tela mostrar "Simulando…" antes do cálculo, que é síncrono.
-        setTimeout(() => {
-            try {
-                setResultado(simularMonteCarlo(study, faixas, n, s));
-            } finally {
-                setSimulando(false);
-            }
-        }, 30);
+        try {
+            const r = await simularMonteCarloEmLotes(study, faixas, n, s, {
+                lote: 100,
+                aoProgredir: f => setFeitos(f),
+                cancelada: () => cancelar.current,
+            });
+            if (r) setResultado(r);
+        } finally {
+            setSimulando(false);
+        }
     };
 
     return (
@@ -76,18 +86,44 @@ const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cena
                         <input type="number" step="1" value={semente} onChange={e => setSemente(e.target.value)}
                             className="h-9 w-20 px-2 bg-white border border-gray-200 rounded-[6px] text-sm text-right outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20" />
                     </label>
-                    <button
-                        type="button"
-                        disabled={!!motivo || simulando}
-                        title={motivo}
-                        onClick={simular}
-                        className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        {simulando && <Loader2 className="w-[15px] h-[15px] animate-spin" />}
-                        {simulando ? 'Simulando…' : 'Simular'}
-                    </button>
+                    {simulando ? (
+                        <button
+                            type="button"
+                            onClick={() => { cancelar.current = true; }}
+                            className="flex items-center gap-1.5 h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50"
+                        >
+                            <Loader2 className="w-[15px] h-[15px] animate-spin" />
+                            Cancelar
+                        </button>
+                    ) : (
+                        <button
+                            type="button"
+                            disabled={!!motivo}
+                            title={motivo}
+                            onClick={() => void simular()}
+                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Simular
+                        </button>
+                    )}
                 </div>
             </div>
+
+            {simulando && (
+                <div className="space-y-1">
+                    <div
+                        role="progressbar"
+                        aria-label="Sorteios feitos"
+                        aria-valuemin={0}
+                        aria-valuemax={n}
+                        aria-valuenow={feitos}
+                        className="h-1.5 w-full rounded-full bg-slate-100 overflow-hidden"
+                    >
+                        <div className="h-full bg-blue-600 transition-[width]" style={{ width: `${n > 0 ? (feitos / n) * 100 : 0}%` }} />
+                    </div>
+                    <p className="text-xs text-slate-600">{feitos.toLocaleString('pt-BR')} de {n.toLocaleString('pt-BR')} sorteios</p>
+                </div>
+            )}
 
             <div className="flex flex-wrap gap-2">
                 {(Object.entries(faixas) as [VariavelDoEstudo, { min: number; max: number }][]).map(([v, f]) => (

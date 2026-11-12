@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeImovibMath } from '../utils/imovibMotor';
-import { simularMonteCarlo, sortearTriangular } from '../utils/imovibMonteCarlo';
+import { simularMonteCarlo, simularMonteCarloEmLotes, sortearTriangular } from '../utils/imovibMonteCarlo';
 import { aplicarCenario, faixasDoMonteCarlo } from '../utils/imovibCenarios';
 import { CHOQUES_PADRAO } from '../utils/imovibSensibilidade';
 import { IMOVIB_CENARIOS_PADRAO } from '../constants/imovibDefaults';
@@ -103,5 +103,29 @@ describe('3.4 — Monte Carlo', () => {
         const t0 = performance.now();
         simularMonteCarlo(baseStudy(), FAIXAS, 2000, 9);
         expect(performance.now() - t0).toBeLessThan(2000);
+    });
+});
+
+describe('pendência da Fase 3 — simulação em lotes, sem travar a tela', () => {
+    const faixas = { preco: { min: -10, moda: 0, max: 10 }, custo_obra: { min: -10, moda: 0, max: 10 } };
+
+    it('dá exatamente o resultado da simulação de uma vez (mesma semente, mesma ordem de sorteio)', async () => {
+        const s = baseStudy();
+        const deUmaVez = simularMonteCarlo(s, faixas, 250, 7);
+        const emLotes = await simularMonteCarloEmLotes(s, faixas, 250, 7, { lote: 40 });
+        expect(emLotes).toEqual(deUmaVez);
+    });
+
+    it('avisa o progresso a cada lote e devolve o controle entre eles', async () => {
+        const progresso: number[] = [];
+        await simularMonteCarloEmLotes(baseStudy(), faixas, 100, 1, { lote: 30, aoProgredir: feitos => progresso.push(feitos) });
+        expect(progresso).toEqual([30, 60, 90, 100]);
+    });
+
+    it('cancelada no meio, devolve null e para de sortear', async () => {
+        let lotes = 0;
+        const r = await simularMonteCarloEmLotes(baseStudy(), faixas, 1000, 1, { lote: 50, aoProgredir: () => { lotes++; }, cancelada: () => lotes >= 2 });
+        expect(r).toBeNull();
+        expect(lotes).toBe(2);
     });
 });

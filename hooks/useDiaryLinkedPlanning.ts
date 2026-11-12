@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { BudgetEntry } from '../types';
 import type { ProjectSchedule } from '../types/project';
-import { projectService } from '../services/projectService';
+import { carregarPlanejamentoPorProjeto, type CarregarPlanejamento } from '../services/diaryEntryService';
 import {
     resolverPlanejamentoDoDiario,
     itensCronogramaVinculaveis,
@@ -19,37 +19,6 @@ export interface DiaryLinkedPlanning {
     /** Depois de sincronizar: a tela passa a partir do cronograma gravado. */
     setSchedule: (s: ProjectSchedule) => void;
 }
-
-export interface PlanejamentoCarregado {
-    schedule: ProjectSchedule | null;
-    budget: BudgetEntry[];
-}
-
-/** Cronograma e orçamento de um planejamento; `null` = projeto não encontrado (a tela fica como está). */
-export type CarregarPlanejamento = (planejamentoId: string) => Promise<PlanejamentoCarregado | null>;
-
-/**
- * Carregador padrão (sessão logada): lê o planejamento pelo `projectService`. O
- * orçamento vem do próprio planejamento; se ele não tiver, do projeto para o
- * qual o planejamento aponta (`settings.linkedProjectId`).
- */
-export const carregarPlanejamentoPorProjeto: CarregarPlanejamento = async planejamentoId => {
-    const p = await projectService.loadProject(planejamentoId);
-    if (!p) return null;
-    const schedule: ProjectSchedule | null = p.settings?.schedule || null;
-    if (p.budget && p.budget.length > 0) return { schedule, budget: p.budget };
-    if (p.settings?.linkedProjectId) {
-        // Falha no orçamento do pai não esconde o cronograma (era assim antes do carregador).
-        try {
-            const pai = await projectService.loadProject(p.settings.linkedProjectId);
-            return { schedule, budget: pai?.budget || [] };
-        } catch (error) {
-            console.error('Erro ao carregar o planejamento vinculado ao diário:', error);
-            return { schedule, budget: [] };
-        }
-    }
-    return { schedule, budget: [] };
-};
 
 /**
  * Cronograma e orçamento ligados a um diário — usado pela tela desktop e pelo

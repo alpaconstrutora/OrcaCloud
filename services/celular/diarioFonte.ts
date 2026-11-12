@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase'
 import type { BudgetEntry, DiaryEntry } from '../../types'
 import type { ProjectSchedule } from '../../types/project'
 import {
-  salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, type DiaryWriteResult,
+  salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, carregarPlanejamentoPorProjeto, toResult,
+  type DiaryWriteResult,
 } from '../diaryEntryService'
 import {
   uploadDiaryMedia, removeDiaryMedia, signDiaryMediaUrls, isDiaryStoragePath, diaryMediaExtension, DIARY_MEDIA_BUCKET,
@@ -12,7 +13,6 @@ import { projectService } from '../projectService'
 import { laborService } from '../laborService'
 import { comprimirFoto } from '../../utils/comprimirFoto'
 import { aplicarEvolucaoNoCronograma } from '../../utils/diaryPlanningLink'
-import { carregarPlanejamentoPorProjeto } from '../../hooks/useDiaryLinkedPlanning'
 import { ehRecusaDoLink } from './tarefasFonte'
 
 /**
@@ -73,6 +73,12 @@ export interface DiarioFonte {
   gravarEvolucao(diarioId: string, planejamentoId: string, entries: DiaryEntry[]): Promise<ProjectSchedule | null>
   /** Devolve o PATH no bucket (o que se grava no registro). */
   subirFoto(args: { orgId: string; projectId: string; file: File }): Promise<string>
+  /**
+   * Assina PATHS do bucket do Diário (`isDiaryStoragePath`) → `{ path: url }`.
+   * Só trata path: refs que não são path (`data:`, `http(s):`, `blob:`) já são
+   * resolvidas por `useDiaryMediaUrls` antes de chegar aqui, e o que não for
+   * path fica de fora do resultado.
+   */
   assinarFotos(paths: readonly string[]): Promise<Record<string, string>>
   /** Best-effort: falha só vira `console.warn`. */
   removerFotos(projectId: string, paths: readonly string[]): Promise<void>
@@ -133,11 +139,6 @@ export interface OpcoesFonteDiarioDoLink {
   aoRecusar?: () => void
   /** Se o dono do link aprova registro (`celular_sessao`). */
   podeAprovar: boolean
-}
-
-function comoResultado(data: unknown): DiaryWriteResult {
-  const d = (data || {}) as { entries?: DiaryEntry[] | null; anterior?: DiaryEntry | null }
-  return { entries: d.entries || [], anterior: d.anterior || null }
 }
 
 /** Só path de bucket, sem repetir e dentro do teto da Edge (um path inválido derrubaria o lote inteiro). */
@@ -225,10 +226,10 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
     carregarDiario: projectId => chamar<DiarioCarregado>('celular_diario_abrir', { p_project_id: projectId }),
 
     salvarRegistro: async (projectId, entry) =>
-      comoResultado(await chamar('celular_diario_salvar', { p_project_id: projectId, p_entry: entry })),
+      toResult(await chamar('celular_diario_salvar', { p_project_id: projectId, p_entry: entry })),
 
     excluirRegistro: async (projectId, entryId) =>
-      comoResultado(await chamar('celular_diario_excluir', { p_project_id: projectId, p_entry_id: entryId })),
+      toResult(await chamar('celular_diario_excluir', { p_project_id: projectId, p_entry_id: entryId })),
 
     // `orgId` não entra: o efetivo é o da organização do token.
     listarColaboradores: async () => (await chamar<ColaboradorRh[] | null>('celular_efetivo_listar')) ?? [],

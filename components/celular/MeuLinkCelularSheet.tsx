@@ -8,7 +8,7 @@ import { useStore } from '../../store/useStore'
 
 /**
  * "Meu link do celular" — painel lateral aberto pelo menu da conta (Layout).
- * Gerencia o link da PRÓPRIA pessoa logada para Minhas Tarefas no celular.
+ * Gerencia o link da PRÓPRIA pessoa logada para Minhas Tarefas e o Diário de Obras no celular.
  *
  * Organização (REGRA #5): o seletor do topo manda (`useOrgContext().orgId`). Só em "Todas"
  * pergunta, e como o link é por organização o modo é `'single'` (sem a opção "Todas").
@@ -64,7 +64,7 @@ const MeuLinkCelularSheet: React.FC<Props> = ({ open, onClose, userId, nomePesso
         <SheetHeader onClose={onClose}>
           <SheetTitle>Meu link do celular</SheetTitle>
           <SheetDescription>
-            {nomeDaOrg ? `Acesse Minhas Tarefas no celular — ${nomeDaOrg}.` : 'Acesse Minhas Tarefas no celular sem digitar senha.'}
+            {nomeDaOrg ? `Acesse Minhas Tarefas e o Diário de Obras no celular — ${nomeDaOrg}.` : 'Acesse Minhas Tarefas e o Diário de Obras no celular sem digitar senha.'}
           </SheetDescription>
         </SheetHeader>
         <SheetPanel className="px-6 py-6">

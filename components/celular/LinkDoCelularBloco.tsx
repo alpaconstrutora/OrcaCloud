@@ -231,7 +231,7 @@ const LinkDoCelularBloco: React.FC<Props> = ({ userId, orgId, nomePessoa, motivo
           <p className="text-xs text-slate-500">Ainda não foi usado.</p>
         )}
         <p className="text-xs text-slate-500">
-          Com o link, {nomePessoa} abre Minhas Tarefas no celular sem digitar senha. Quem tiver o link acessa as tarefas — envie só para a própria pessoa.
+          Com o link, {nomePessoa} abre Minhas Tarefas e o Diário de Obras no celular sem digitar senha. Quem tiver o link acessa as tarefas e o diário — envie só para a própria pessoa.
         </p>
       </div>
 

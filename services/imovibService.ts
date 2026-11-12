@@ -42,7 +42,7 @@ const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration,
 const COMPARAVEL_COLS = 'id, study_id, name, developer, address, distance_km, launch_date, total_units, sold_units, typical_area, price_sqm, ticket, source, collected_at, notes, sort_order, created_at';
 
 // Due diligence do terreno (aplicar_20271112120000).
-const CHECKLIST_COLS = 'id, study_id, item_key, label, status, notes, sort_order, checked_at';
+const CHECKLIST_COLS = 'id, study_id, item_key, label, status, notes, sort_order, checked_at, checked_by';
 
 // ── Estrutura lida do Empreendimento (plano 2026-10-19-imovib-premissas-planta-inteligente.md)
 
@@ -1023,10 +1023,23 @@ export const imovibService = {
     },
 
     /** `.select()` confere que a escrita passou na RLS. */
-    async salvarItemDaDueDiligence(id: string, campos: Pick<ImovibLandChecklistItem, 'status' | 'notes'>): Promise<ImovibLandChecklistItem> {
+    /**
+     * Grava a situação OU a observação de um item. Quem conferiu e quando (`checked_by`,
+     * `checked_at`) mudam só com a situação — antes, mudar a observação trocava a data
+     * da conferência e ninguém era registrado (pendência da Fase 5 do plano 2026-11-11).
+     * Voltar a "pendente" limpa os dois.
+     */
+    async salvarItemDaDueDiligence(id: string, campos: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>>): Promise<ImovibLandChecklistItem> {
+        const update: Record<string, unknown> = { ...campos };
+        if (campos.status !== undefined) {
+            const conferido = campos.status !== 'pendente';
+            const { data: sessao } = await supabase.auth.getSession();
+            update.checked_at = conferido ? new Date().toISOString() : null;
+            update.checked_by = conferido ? sessao.session?.user.id ?? null : null;
+        }
         const { data, error } = await supabase
             .from('imovib_land_checklist')
-            .update({ ...campos, checked_at: new Date().toISOString() })
+            .update(update)
             .eq('id', id)
             .select(CHECKLIST_COLS);
         if (error) throw new Error(`Falha ao salvar o item da due diligence: ${error.message}`);

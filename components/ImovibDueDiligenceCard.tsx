@@ -60,15 +60,20 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
         }
     };
 
+    // Erro ao gravar: a observação (campo não controlado) remonta com o valor gravado —
+    // sem isso, o texto digitado ficava no campo como se tivesse gravado (pendência da Fase 5).
+    const [revisao, setRevisao] = useState(0);
     const salvar = async (item: ImovibLandChecklistItem, campos: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>>) => {
         const antes = item;
-        const proximo = { ...item, ...campos };
-        setItens(prev => prev.map(x => (x.id === item.id ? proximo : x)));
+        // Só o campo que mudou: a observação não mexe em quem conferiu nem quando.
+        const gravar = 'notes' in campos ? { notes: campos.notes?.trim() || null } : { status: campos.status };
+        setItens(prev => prev.map(x => (x.id === item.id ? { ...item, ...gravar } : x)));
         try {
-            const salvo = await imovibService.salvarItemDaDueDiligence(item.id, { status: proximo.status, notes: proximo.notes?.trim() || null });
+            const salvo = await imovibService.salvarItemDaDueDiligence(item.id, gravar);
             setItens(prev => prev.map(x => (x.id === salvo.id ? salvo : x)));
         } catch (e) {
             setItens(prev => prev.map(x => (x.id === antes.id ? antes : x)));
+            setRevisao(r => r + 1);
             showToast((e as Error).message, 'error');
         }
     };
@@ -135,6 +140,7 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
                             );
                             case 'notes': return (
                                 <input
+                                    key={`${i.id}-${revisao}`}
                                     aria-label={`Observação de ${i.label}`}
                                     defaultValue={i.notes ?? ''}
                                     onBlur={e => { if ((e.target.value.trim() || null) !== (i.notes ?? null)) void salvar(i, { notes: e.target.value }); }}

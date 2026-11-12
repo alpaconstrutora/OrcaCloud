@@ -97,7 +97,7 @@ describe('Premissas › Terreno (5.2 e 5.9)', () => {
         await user.selectOptions(screen.getByLabelText('Situação de Matrícula atualizada'), 'ok');
         await user.selectOptions(screen.getByLabelText('Situação de Contaminação'), 'problema');
         await waitFor(() => expect(screen.getByText(/1 de 14 ok, 1 com problema/)).toBeTruthy());
-        expect(svc.salvarItemDaDueDiligence).toHaveBeenCalledWith('dd7', { status: 'problema', notes: null });
+        expect(svc.salvarItemDaDueDiligence).toHaveBeenCalledWith('dd7', { status: 'problema' });
         expect(screen.queryByRole('button', { name: 'Criar checklist' })).toBeNull();
     });
 
@@ -171,5 +171,37 @@ describe('Premissas abre na sub-aba pedida (aviso → sub-aba)', () => {
             </ImovibEdicaoProvider></ConfirmProvider></ToastProvider>,
         );
         expect(screen.getByText(/Pagamento à vista/)).toBeTruthy();
+    });
+});
+
+/** Pendências da Fase 5 do plano 2026-11-11: valor digitado ficava no campo depois de erro ao gravar. */
+describe('erro ao gravar volta o campo ao que está gravado', () => {
+    it('observação da due diligence: grava só a observação; com erro, o campo volta', async () => {
+        const user = userEvent.setup();
+        svc.listarDueDiligence.mockResolvedValue(itensDD().map(i => (i.id === 'dd0' ? { ...i, notes: 'velha' } : i)));
+        svc.salvarItemDaDueDiligence.mockRejectedValue(new Error('Sem permissão para editar a due diligence deste estudo.'));
+        premissas();
+        await user.click(screen.getByRole('button', { name: /3\. Terreno/ }));
+        const campo = await screen.findByLabelText('Observação de Matrícula atualizada') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, 'nova');
+        await user.tab();
+        expect(svc.salvarItemDaDueDiligence).toHaveBeenCalledWith('dd0', { notes: 'nova' });
+        await waitFor(() => expect((screen.getByLabelText('Observação de Matrícula atualizada') as HTMLInputElement).value).toBe('velha'));
+    });
+
+    it('meses de pós-obra da rubrica: com erro, o campo volta', async () => {
+        const user = userEvent.setup();
+        svc.seedCapexTemplate.mockResolvedValue([
+            { id: 'p1', study_id: 'estudo-teste', category: '10. Pós-obra', name: 'Assistência técnica', value_type: 'currency', value: 1000, base: 'obra', timing: 'pos_obra', timing_months: 12 },
+        ]);
+        svc.updateCapexItem.mockRejectedValue(new Error('falhou'));
+        envolver(<ImovibCapexForm study={estudo() as never} onDataChanged={vi.fn()} />);
+        const campo = await screen.findByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, '24');
+        await user.tab();
+        expect(svc.updateCapexItem).toHaveBeenCalledWith('p1', { timing_months: 24 });
+        await waitFor(() => expect((screen.getByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement).value).toBe('12'));
     });
 });

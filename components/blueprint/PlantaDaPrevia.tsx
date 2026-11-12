@@ -15,7 +15,8 @@ import { temClimatizacaoNoPavimento } from '../../utils/blueprintPranchaClimatiz
 import { nomesDasColunas } from '../../utils/blueprintEsquemaVertical';
 import type { BlueprintModel, ObjectId, Point } from '../../utils/blueprintKernel';
 
-export type DisciplinaDaPrevia = 'ARQUITETURA' | 'HUMANIZADA' | 'AGUA' | 'ESGOTO' | 'ELETRICA' | 'CLIMATIZACAO';
+import type { DisciplinaDaPrevia } from '../../utils/blueprintLocalDaPendencia';
+export type { DisciplinaDaPrevia };
 
 export const ROTULO_DA_DISCIPLINA_DA_PREVIA: Record<DisciplinaDaPrevia, string> = {
   ARQUITETURA: 'Arquitetura',

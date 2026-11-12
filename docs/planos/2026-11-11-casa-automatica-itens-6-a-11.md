@@ -180,8 +180,20 @@ antes do código (falham primeiro).
   por falta de memória antes da correção).
 - Três execuções da conferência travaram antes do diagnóstico; as plantas de teste que ficaram para trás foram
   arquivadas com `c:/tmp/pwtest/arquivar-estudo.cjs` (93d903f4, cf95964f, 09409d5c — todas ARQUIVADO).
-| C1 | a fazer |
-| C2 | a fazer |
-| C3 | a fazer |
+| C1 | feito — `LocalDaPendencia` em `blueprintGeradorPpci.ts` (opcional; PPCI sem mudança), `utils/blueprintLocalDaPendencia.ts`; teste do utilitário e do motor (casa 12×30) |
+| C2 | feito — "ver na planta" no Relatório → Resultado, pavimento/disciplina do local, marcas e "Limpar marcas"; teste da tela; conferido no app |
+| C3 | feito — "Ver no editor →" só com os ids no desenho; teste da tela; conferido no app (tela fecha, tubulação selecionada) |
+
+**Inventário do C1 (11/11/2026): dos 67 `pendencias.push` diretos do motor, 6 ganharam local** (os que nascem de um
+elemento): verificação de rede (marca: `alvoId`, `at`, `levelId`), trechos em porta/janela, encontros rede × rede e trechos
+atravessando pilar (os conflitos — ponto no cruzamento ou no trecho mais perto do outro lado), legislação (`selecionarId`/
+`alvoId` da regra), "Circuitos: ponto fora do plano" (`terminalId`) e "Shaft: banheiro sem lugar" (o ambiente). Os outros
+61 ficam texto: motivos gerais de etapa (`plano.motivo`, exceção), premissas, contagens sem elemento (programa que falta,
+mobiliário que não coube, composição do teto, pressão, entrada de energia, forro, escada/núcleo descritos por nome).
+
+**Decisão do C3:** em vez de uma ação nova no canvas, o "Ver no editor" reaproveita o `CENTRALIZAR` com `escalaMinima`
+(o mesmo da revisão guiada de pontas): seleciona os ids e leva a vista ao ponto da pendência. O plano previa
+"enquadrar-nos-ids" como ação nova; centrar no ponto com os elementos selecionados cobre o pedido sem duplicar a
+navegação.
 | D1 | a fazer |
 | D2 | a fazer |

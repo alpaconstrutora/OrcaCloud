@@ -11,15 +11,16 @@
  * alternativa e Lançar na barra das abas (`docs/planos/2026-10-22-casa-automatica-abas.md`).
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { AlertCircle, Building2, Check, ChevronDown, ChevronRight, CircleDot, ClipboardList, Droplets, HelpCircle, Home, Info, Layers, ListChecks, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
+import { AlertCircle, Building2, Check, ChevronDown, ChevronRight, CircleDot, ClipboardList, Droplets, HelpCircle, Home, Info, Layers, ListChecks, MapPin, Mountain, Play, Ruler, Square, Wand2 } from 'lucide-react';
 
 import Button from '../ui/Button';
 import { useConfirm } from '../ui/confirm';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import { TabelaFurosPrevistos } from './TabelaFurosPrevistos';
-import PlantaDaPrevia, { type DisciplinaDaPrevia } from './PlantaDaPrevia';
-import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
+import PlantaDaPrevia, { type DisciplinaDaPrevia, type MarcaNaPrevia } from './PlantaDaPrevia';
+import { disciplinaDoLocal } from '../../utils/blueprintLocalDaPendencia';
+import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type LocalDaPendencia, type PendenciaDoPpci, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
 import { PADROES_DA_CASA, ROTULO_DO_PADRAO_DA_CASA, normalizarProgramaCurto, type PadraoDaCasa } from '../../utils/blueprintPrograma';
 import { PREMISSAS_DA_CASA_PADRAO, type PremissasDaCasa } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
@@ -70,6 +71,13 @@ interface Props {
    * novo: gravariam a casa das premissas antigas.
    */
   desatualizada?: boolean;
+  /**
+   * C3 (11/11/2026): os ids estão no desenho aberto? (a casa foi lançada — o lote recria os ids da prévia). Com eles, a
+   * pendência ganha "Ver no editor", que entrega o local a `onVerNoEditor` (fecha a tela, abre o pavimento, seleciona e
+   * leva a vista até o ponto). Ausentes = só "ver na planta".
+   */
+  noDesenho?: (ids: string[]) => boolean;
+  onVerNoEditor?: (local: LocalDaPendencia) => void;
   /** A trava antes de gravar: o lote recria os mesmos ids no desenho atual? */
   prova: { ok: true } | { ok: false; motivo: string } | null;
   onLancar: () => Promise<void>;
@@ -211,6 +219,22 @@ export default function TelaCasaAutomatica(props: Props) {
   // em que a casa foi gerada (o térreo).
   const [nivelDaPrevia, setNivelDaPrevia] = useState<string | null>(null);
   const [disciplinaDaPrevia, setDisciplinaDaPrevia] = useState<DisciplinaDaPrevia>('ARQUITETURA');
+  // C2 (11/11/2026): a pendência escolhida no Relatório, marcada na planta — só vale para a prévia em que foi escolhida.
+  const [marcado, setMarcado] = useState<{ plano: unknown; texto: string; marcas: MarcaNaPrevia[] } | null>(null);
+  const marcadoAgora = marcado && marcado.plano === plano ? marcado : null;
+  const plantaRef = useRef<HTMLDivElement | null>(null);
+  const verNaPlanta = (x: PendenciaDoPpci) => {
+    if (!plano || !x.locais?.length) return;
+    const l = x.locais[0];
+    setNivelDaPrevia(l.levelId);
+    setDisciplinaDaPrevia(disciplinaDoLocal(plano.resultado, l));
+    setMarcado({ plano, texto: x.texto, marcas: x.locais.flatMap((y) => (y.ponto ? [{ levelId: y.levelId, ponto: y.ponto }] : [])) });
+    setAba('resultado');
+  };
+  // Ao marcar, a planta vem para a vista (ela fica abaixo do resumo).
+  useEffect(() => {
+    if (marcadoAgora) plantaRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
+  }, [marcadoAgora]);
   const niveisDaPrevia = plano?.resultado.levels ?? [];
   const nivelEfetivo = niveisDaPrevia.some((l) => l.id === nivelDaPrevia)
     ? nivelDaPrevia
@@ -741,9 +765,18 @@ export default function TelaCasaAutomatica(props: Props) {
           )}
 
           {nivelEfetivo && (
-            <section className="space-y-2">
+            <section className="space-y-2" ref={plantaRef}>
               <h4 className={rotuloCls}>Planta da casa gerada</h4>
-              <PlantaDaPrevia modelo={plano.resultado} levelId={nivelEfetivo} onLevelId={setNivelDaPrevia} disciplina={disciplinaDaPrevia} onDisciplina={setDisciplinaDaPrevia} />
+              {marcadoAgora && (
+                <p className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-gray-700" data-testid="marcado-na-planta">
+                  <MapPin className="h-4 w-4 shrink-0 text-red-600" aria-hidden />
+                  <span className="min-w-0">Marcado na planta: {marcadoAgora.texto}</span>
+                  <button type="button" className="font-medium text-blue-600 hover:text-blue-800" onClick={() => setMarcado(null)}>
+                    Limpar marcas
+                  </button>
+                </p>
+              )}
+              <PlantaDaPrevia modelo={plano.resultado} levelId={nivelEfetivo} onLevelId={setNivelDaPrevia} disciplina={disciplinaDaPrevia} onDisciplina={setDisciplinaDaPrevia} marcas={marcadoAgora?.marcas} />
             </section>
           )}
 
@@ -791,7 +824,29 @@ export default function TelaCasaAutomatica(props: Props) {
                     <ul id={`pendencias-${grupo}`} className="mt-1 space-y-1 pl-5">
                       {lista.map((x, i) => (
                         <li key={i} className={`break-words text-sm ${grupo === 'VERIFICACAO' || grupo === 'SEM_SOLUCAO' || grupo === 'CONFLITO' ? 'text-red-700' : 'text-slate-600'}`}>
-                          {x.texto}
+                          {x.locais?.length ? (
+                            <>
+                              {/* C2: com local, a pendência leva à planta da prévia (o pavimento, a disciplina e a marca). */}
+                              <button type="button" onClick={() => verNaPlanta(x)} className="text-left hover:underline">
+                                {x.texto}
+                                <span className="ml-2 inline-flex items-center gap-1 whitespace-nowrap font-medium text-blue-600">
+                                  <MapPin className="h-3.5 w-3.5" aria-hidden />
+                                  ver na planta{x.locais.length > 1 ? ` (${x.locais.length})` : ''}
+                                </span>
+                              </button>
+                              {/* C3: com a casa lançada, também no editor — o primeiro local cujos elementos estão no desenho. */}
+                              {(() => {
+                                const noEditor = props.onVerNoEditor && props.noDesenho ? x.locais.find((l) => props.noDesenho!(l.ids)) : undefined;
+                                return noEditor ? (
+                                  <button type="button" onClick={() => props.onVerNoEditor!(noEditor)} className="ml-3 whitespace-nowrap font-medium text-blue-600 hover:text-blue-800">
+                                    Ver no editor →
+                                  </button>
+                                ) : null;
+                              })()}
+                            </>
+                          ) : (
+                            x.texto
+                          )}
                         </li>
                       ))}
                     </ul>

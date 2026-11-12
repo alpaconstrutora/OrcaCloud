@@ -29,7 +29,7 @@
  * sem solução, conflito que a proposta criou, e cada verificação que ainda
  * FALTA no fim. Nada disso é escondido: "zero FALTA ou a lista exata".
  */
-import type { BlueprintModel, Command, ObjectId } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Point } from './blueprintKernel';
 import { applyBatch, conflitosArquitetonicos, pointInPolygon } from './blueprintKernel';
 import { classificarEdificacao, exigenciasDaEdificacao, pavimentoDeDescarga, type HipotesesIncendio, type MedidaDeSeguranca } from './blueprintIncendioClassificacao';
 import { percursoDeFuga } from './blueprintRotaDeFuga';
@@ -71,9 +71,21 @@ export interface EtapaDoPpci {
 
 export type GrupoDaPendencia = 'PREMISSA' | 'CONFERIR' | 'NAO_DECIDIDO' | 'SEM_SOLUCAO' | 'CONFLITO' | 'VERIFICACAO';
 
+/** Etapa C da casa automática (11/11/2026): onde a pendência acontece — o pavimento, os elementos e o ponto (mm). */
+export interface LocalDaPendencia {
+  levelId: ObjectId;
+  ids: ObjectId[];
+  ponto: Point | null;
+}
+
 export interface PendenciaDoPpci {
   grupo: GrupoDaPendencia;
   texto: string;
+  /**
+   * Etapa C da casa automática (11/11/2026): os locais de origem, quando a pendência nasce de elementos (conflito, marca da
+   * verificação de rede, regra). Opcional — o PPCI não preenche e segue igual; ausente = pendência só de texto.
+   */
+  locais?: LocalDaPendencia[];
 }
 
 export interface PlanoDoPpci {

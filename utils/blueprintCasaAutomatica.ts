@@ -112,7 +112,8 @@ import { HIPOTESES_CLIMATIZACAO_PADRAO, type HipotesesClimatizacao } from './blu
 import type { ModeloDoCatalogo } from './blueprintSelecaoClimatizacao';
 import { COTA_USUAL_DO_PONTO_ELETRICO, ROTULO_DO_PONTO_ELETRICO } from './blueprintRede';
 import { entradaDoQuadro, padraoDeEntrada } from './blueprintEntradaDeEnergia';
-import type { PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
+import type { LocalDaPendencia, PendenciaDoPpci, SituacaoDaEtapa } from './blueprintGeradorPpci';
+import { localDoConflito, localDoElemento } from './blueprintLocalDaPendencia';
 import { HIPOTESES_DE_GUARDA_CORPO_PADRAO } from './blueprintGuardaCorpo';
 import {
   comandoDaEscada,
@@ -204,6 +205,11 @@ export const HIPOTESES_DA_IMPLANTACAO_PADRAO: HipotesesDaImplantacao = {
   forma: 'AUTOMATICA',
   recuoMinimoDeFrenteMm: 0,
 };
+
+// ─── Etapa C (11/11/2026): o local de uma pendência, só quando há ─────────────
+/** `{ locais: [l] }` com local; `{}` sem — a pendência sem origem continua só texto. */
+const comLocal = (l: LocalDaPendencia | null): Pick<PendenciaDoPpci, 'locais'> => (l ? { locais: [l] } : {});
+const comLocais = (ls: LocalDaPendencia[] | undefined): Pick<PendenciaDoPpci, 'locais'> => (ls?.length ? { locais: ls } : {});
 
 // ─── O quadro da frente ─────────────────────────────────────────────────────
 
@@ -2066,7 +2072,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
       alturaM: f.alturaM,
     });
     const violadas = regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO');
-    for (const v of violadas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Legislação: ${v.regra.nome} — ${v.alvoRotulo}${v.valores ? ` (${v.valores})` : ''}` });
+    for (const v of violadas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Legislação: ${v.regra.nome} — ${v.alvoRotulo}${v.valores ? ` (${v.valores})` : ''}`, ...comLocal(localDoElemento(m, [v.selecionarId ?? v.alvoId].filter((x): x is string => !!x))) });
     etapa('CONFERENCIA', ROTULO_DA_ETAPA_DA_CASA.CONFERENCIA, 'CALCULOU', 0, `${atendidos} de ${pedidos} ambientes do programa; ${violadas.length} regra(s) violada(s)`);
     return {
       levelId: entrada.levelId,
@@ -2322,7 +2328,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         if (sh?.estender) aplicar([{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: S0 } as Command]);
         if (sh && !sh.novo) continue;
         if (!sh) {
-          pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Shaft: ${ban.name} não tem lugar junto das peças para o shaft (parede com parede embaixo, ou cômodo de baixo que aceite a caixa) — o tubo de queda desce longe delas; ponha o shaft à mão.` });
+          pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Shaft: ${ban.name} não tem lugar junto das peças para o shaft (parede com parede embaixo, ou cômodo de baixo que aceite a caixa) — o tubo de queda desce longe delas; ponha o shaft à mão.`, ...comLocal(localDoElemento(m, [ban.id])) });
           continue;
         }
         aplicar([{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]);
@@ -2517,18 +2523,19 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     // trecho sem destino), mas o traçado pelas paredes cruza os pilares dos encontros — compatibilização à parte.
     const verificarRedes = (rotulos: Record<string, string>, alvo: { erros: number; avisos: number; porTipo: Record<string, number> }) => {
       const marcas = niveis.flatMap((L) => marcasDeVerificacao(m, L, [], hidro.pluvial)).filter((x) => x.disciplina && x.disciplina in rotulos);
-      const grupos = new Map<string, { severidade: 'ERRO' | 'AVISO'; disciplina: string; tipo: string; n: number; texto: string }>();
+      const grupos = new Map<string, { severidade: 'ERRO' | 'AVISO'; disciplina: string; tipo: string; n: number; texto: string; locais: LocalDaPendencia[] }>();
       for (const x of marcas) {
         const k = `${x.severidade}|${x.disciplina}|${x.tipo}`;
-        const g = grupos.get(k) ?? { severidade: x.severidade, disciplina: x.disciplina!, tipo: x.tipo, n: 0, texto: x.texto };
+        const g = grupos.get(k) ?? { severidade: x.severidade, disciplina: x.disciplina!, tipo: x.tipo, n: 0, texto: x.texto, locais: [] };
         g.n++;
+        g.locais.push({ levelId: x.levelId, ids: [x.alvoId], ponto: { x: x.at.x, y: x.at.y } });
         grupos.set(k, g);
       }
       for (const g of grupos.values()) {
         alvo[g.severidade === 'ERRO' ? 'erros' : 'avisos'] += g.n;
         alvo.porTipo[g.tipo] = (alvo.porTipo[g.tipo] ?? 0) + g.n;
         const oque = MARCA_DA_REDE[g.tipo] ? `${g.n} ${MARCA_DA_REDE[g.tipo]}` : `${g.n} × ${g.texto}`;
-        pendencias.push({ grupo: g.severidade === 'ERRO' ? 'VERIFICACAO' : 'CONFERIR', texto: `Rede de ${rotulos[g.disciplina]}: ${oque}` });
+        pendencias.push({ grupo: g.severidade === 'ERRO' ? 'VERIFICACAO' : 'CONFERIR', texto: `Rede de ${rotulos[g.disciplina]}: ${oque}`, locais: g.locais });
       }
     };
     if (hip.hidraulica.lancar && (hidraulica.agua.tubos + hidraulica.esgoto.tubos + hidraulica.pluvial.tubos) > 0) verificarRedes(ROTULO_DA_DISCIPLINA_DA_REDE, hidraulica.verificacao);
@@ -2797,7 +2804,7 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
         const porPavimento: string[] = [];
         for (const L of niveis) {
           const plano = planejarCircuitos(m, L, quadroId, hipCircuitos, hipEletricas);
-          for (const f of plano.foraDoPlano) pendencias.push({ grupo: 'CONFERIR', texto: `Circuitos: ponto ${f.terminalId} fora do plano — ${f.motivo}` });
+          for (const f of plano.foraDoPlano) pendencias.push({ grupo: 'CONFERIR', texto: `Circuitos: ponto ${f.terminalId} fora do plano — ${f.motivo}`, ...comLocal(localDoElemento(m, [f.terminalId])) });
           circuitos += plano.circuitos.length;
           n += aplicar(plano.comandos);
           motivo ??= plano.comandos.length ? null : plano.motivo;
@@ -2975,19 +2982,29 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
     const redesEmAberturas: Record<string, number> = {};
     {
       const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
+      // Etapa C (11/11/2026): cada contagem leva os locais dos conflitos — o Relatório leva à planta da prévia e ao editor.
+      const locaisDasAberturas: Record<string, LocalDaPendencia[]> = {};
+      const juntar = (alvo: Record<string, LocalDaPendencia[]>, k: string, l: LocalDaPendencia | null) => {
+        if (l) (alvo[k] ??= []).push(l);
+      };
       for (const c of conflitosDoModelo(m)) {
         if (c.classe !== 'ABERTURA' || c.comprimentoDentroMm <= 0) continue;
         const d = porId.get(c.trechoId)?.disciplina;
-        if (d) redesEmAberturas[d] = (redesEmAberturas[d] ?? 0) + 1;
+        if (d) {
+          redesEmAberturas[d] = (redesEmAberturas[d] ?? 0) + 1;
+          juntar(locaisDasAberturas, d, localDoConflito(m, c));
+        }
       }
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
-      for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela` });
+      for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela`, ...comLocais(locaisDasAberturas[d]) });
       // F27 da casa automática (18/10/2026): os ENCONTROS de uma rede com outra, e o tubo que atravessa pilar, também
       // ficam à vista — por par de redes. Até aqui só a sonda os contava: a tela não dizia, e o Automático, que pesa as
       // pendências, escolhia o sobrado com o esgoto suspenso cruzando os eletrodutos do forro do térreo contra uma térrea
       // sem encontro nenhum.
       const est = new Map((m.structures ?? []).map((x) => [x.id, x]));
       const pares: Record<string, number> = {};
+      const locaisDosPares: Record<string, LocalDaPendencia[]> = {};
+      const locaisDosPilares: Record<string, LocalDaPendencia[]> = {};
       let emPilar = 0;
       for (const c of conflitosDoModelo(m)) {
         const t = porId.get(c.trechoId);
@@ -2997,10 +3014,14 @@ function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa,
           if (!o) continue;
           const chave = [nome[t.disciplina] ?? t.disciplina.toLowerCase(), nome[o.disciplina] ?? o.disciplina.toLowerCase()].sort().join(' × ');
           pares[chave] = (pares[chave] ?? 0) + 1;
-        } else if (c.classe === 'ESTRUTURA' && est.get(c.outroId)?.kind === 'PILAR' && c.comprimentoDentroMm > 0) emPilar++;
+          juntar(locaisDosPares, chave, localDoConflito(m, c));
+        } else if (c.classe === 'ESTRUTURA' && est.get(c.outroId)?.kind === 'PILAR' && c.comprimentoDentroMm > 0) {
+          emPilar++;
+          juntar(locaisDosPilares, 'pilar', localDoConflito(m, c));
+        }
       }
-      for (const [par, n] of Object.entries(pares)) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${n} encontro(s) de ${par}` });
-      if (emPilar) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${emPilar} trecho(s) atravessando pilar` });
+      for (const [par, n] of Object.entries(pares)) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${n} encontro(s) de ${par}`, ...comLocais(locaisDosPares[par]) });
+      if (emPilar) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${emPilar} trecho(s) atravessando pilar`, ...comLocais(locaisDosPilares.pilar) });
     }
     return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas, forro, furos };
   };

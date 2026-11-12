@@ -467,6 +467,253 @@ Vitest, Playwright (harness fora do repo).
 - [ ] **Step 4: ⚠️ com aval do usuário** — `git push origin HEAD:main`; `bash scripts/conferir-producao.sh "Meu link do celular"` → SHA e texto no bundle.
 - [ ] **Step 5: Prova real** — o usuário gera o próprio link, abre no celular, conclui e desfaz uma tarefa; registrar o resultado em **Estado**.
 
+## Plano de implementação — Parte 2 (F3–F5: Diário de Obras pelo link)
+
+> **Para quem executa:** REQUIRED SUB-SKILL: superpowers:subagent-driven-development
+> (recomendado) ou superpowers:executing-plans. Passos com `- [ ]`.
+
+**Goal:** no `/celular?token=…`, uma segunda aba **Diário** com o mesmo `DiaryMobileApp` do app
+logado: escolher diário, criar/editar/excluir registro com foto, efetivo do RH, vínculo com o
+cronograma — tudo como a pessoa dona do link, na org do link.
+
+**Architecture:** o corpo de `diary_upsert_entry`/`diary_delete_entry` vira núcleo
+`SECURITY DEFINER` com o ator explícito (`_diary_*_core(p_ator, …)`); as RPCs atuais passam a
+chamá-lo com `auth.uid()` e as `celular_diario_*` com o dono do link. Fotos por uma Edge
+(`celular-diario-midia`) que autoriza por RPC e assina com service role; o celular sobe direto
+ao storage por URL assinada. No front, `DiaryMobileApp` lê e grava por uma `DiarioFonte`
+(contexto), no molde de `TarefasFonte`.
+
+**Tech Stack:** Postgres/Supabase (plpgsql), Edge Function Deno (`@supabase/supabase-js`),
+React 19 + Vite, Vitest.
+
+**Spec:** a seção **Design** acima (§2 núcleo, §3 RPCs, §4 mídia, §5 telas). Mapa do código
+do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
+
+### Decisões da Parte 2 (onde o Design deixava escolha)
+
+| # | Decisão | Por quê |
+|---|---|---|
+| D1 | A lista de diários do link vem de `celular_diarios_listar`: **todos** os projetos da org do link em formato enxuto (`settings` só com `classification`, `linkedProjectId`, `linkedProjectName`, `organizationId` e, nos DIARIO/OBRA, `diaryEntries` reduzidos a `{id, date, impediments}`) | `DiaryMobileApp` filtra e resume a lista em memória e `resolverPlanejamentoDoDiario` (JS) precisa de `{id, classification, linkedProjectId}` de todos — o vínculo continua **uma peça só** (memória do Diário) |
+| D2 | `celular_diario_registros` do Design vira `celular_diario_abrir` (devolve o diário com `diaryEntries` completos) | é o `loadProject` da tela; nome diz o que faz |
+| D3 | Cronograma pelo link: o celular calcula com `aplicarEvolucaoNoCronograma` (JS, igual ao logado) e manda **só** `{itemId: pct}`; `celular_planejamento_gravar_evolucao` grava só `manualRealPct` desses itens | servidor não reimplementa a regra; o link nunca regrava `settings`/`budget` inteiros (o `saveProject` logado regrava) |
+| D4 | Planejamento aceito pelo link: da org do link **e** (`PLANEJAMENTO` **ou** o próprio `linkedProjectId` do diário — o fallback do resolver) | o membro logado já grava qualquer projeto da org; o link fica mais estreito que isso |
+| D5 | Efetivo no link = colaboradores do RH (`celular_efetivo_listar`); as sugestões de equipes/cargos de `organizations.resources` (store logado) não entram | YAGNI; o campo continua aceitando texto livre |
+| D6 | Aprovação no link: `celular_sessao` ganha `pode_aprovar_diario` (`fn_pode_aprovar_diario_de`); a tela usa `{pode}` dele no lugar de `useDiaryAprovacao` | sem store no link; o banco segue decidindo |
+| D7 | `assinar` só assina path com prefixo `{org do link}/` **e** citado em registro de diário da org; os outros são omitidos (sem 403) | um registro do link pode citar path forjado de outra org — sem o prefixo, a Edge vazaria foto alheia |
+| D8 | Regras puras da Edge (validar pedido, extensões) em `supabase/functions/celular-diario-midia/regras.ts`, sem import Deno, testadas no Vitest | mesmo arranjo de outras Edges do projeto |
+
+### Global Constraints (Parte 2)
+
+- Valem todas as da Parte 1 (frente, prefixo maior que o maior do dia **na hora** — último visto `20271112900000`, `db query -f`, nunca `db push`, aval do usuário para aplicar e publicar, REVOKE/GRANT, `search_path`, recusa `'link inválido ou vencido'` 42501, REGRA #1/#5, português).
+- Corpo do núcleo copiado do **arquivo** `aplicar_20271014600000_diario_aprovacao_permissao.sql` — nunca do banco nem da `…500000` (a checagem de aprovação some em silêncio).
+- Escrita em `settings.diaryEntries` só com a marca `set_config('orcacloud.diario_escrita','on',true)` … `'off'` (gatilho `trg_projects_diary_entries_guard`).
+- Mensagens e ERRCODEs do núcleo idênticos aos de hoje (`'registro do diário sem id'`/`'sem data'` 22023; `'diário não encontrado ou sem permissão'` 42501; as duas de aprovação; `'sem permissão para gravar neste diário'` 42501). Projeto fora da org do link → `'diário não encontrado ou sem permissão'` 42501.
+- Bucket `diario-midia`, path `{org}/{projeto}/{uuid}.{ext}`; extensões aceitas no link: `jpg, jpeg, png, webp, gif, heic, heif`. URL assinada de leitura: 3600 s.
+- Edge `celular-diario-midia`: `[functions.celular-diario-midia] verify_jwt = false` em `supabase/config.toml`; env `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`; RPCs chamadas com a chave **anon** (sem repassar o `Authorization` do pedido); service role só para o storage. Deploy: **o usuário** roda `cd C:\D\frentes\link-celular; npx supabase functions deploy celular-diario-midia` no PowerShell (o auto mode barra).
+- Ordem de publicação: migrations → Edge → front.
+
+### Review Focus (Parte 2)
+
+1. Registro do link citando foto de **outra org** (`images: ['<outraOrg>/<proj>/x.jpg']`) → `assinar` não assina. Teste SQL de `celular_diario_midia_permitida` (Task 2).
+2. App logado depois da troca para o núcleo: membro grava; não membro 42501; diário com `organization_id` NULL e `settings.organizationId` grava; aprovação igual a antes. Regressão SQL (Task 1).
+3. Registro **Aprovado** editado ou excluído pelo link de quem não aprova → 42501 com a mesma mensagem do app. Teste SQL (Task 2) e botão travado com o motivo (Task 5).
+4. Navegador com sessão logada de outra pessoa abrindo o link → a fonte do link nunca usa `supabase.from`, `storage…upload/createSignedUrls/remove` nem `projectService`. Teste Vitest (Task 4).
+5. Evolução forjada (pct 150, `"abc"`, chave não-objeto, planejamento de outra org ou que não é `PLANEJAMENTO` nem o vínculo do diário) → 22023/42501; e a gravação muda **só** `manualRealPct` dos itens enviados. Teste SQL (Task 2).
+
+### Arquivos (Parte 2)
+
+| Arquivo | Responsabilidade |
+|---|---|
+| `supabase/migrations/aplicar_<p3>_diario_nucleo_com_ator.sql` | `fn_pode_aprovar_diario_de`, núcleos `_diary_*_core`, RPCs atuais como chamadores |
+| `supabase/migrations/aplicar_<p4>_link_celular_rpcs_diario.sql` | `celular_sessao` (+aprovação) e as `celular_diario*`, efetivo, planejamento, mídia |
+| `scripts/teste-link-celular-diario.sql` | prova `BEGIN … ROLLBACK` (seção A: núcleo/regressão; B: link) |
+| `supabase/functions/celular-diario-midia/{index.ts,regras.ts}` + `supabase/config.toml` | Edge `subir` / `assinar` / `remover` |
+| `services/celular/diarioFonte.ts` | `DiarioFonte`, `fonteDiarioLogado`, `fonteDiarioDoLink`, contexto |
+| `hooks/useDiaryMediaUrls.ts`, `hooks/useDiaryLinkedPlanning.ts` | parâmetro opcional de assinatura / carga (padrão = hoje) |
+| `components/DiaryMobileApp.tsx` | lê e grava pela fonte |
+| `components/celular/DiarioDoLink.tsx`, `components/celular/CelularTokenGate.tsx`, `services/celular/celularLinkService.ts` | aba Diário no link |
+| `__tests__/diarioFonte.test.ts`, `__tests__/celularDiarioMidiaRegras.test.ts`, `__tests__/components/DiaryMobileAppFonte.test.tsx`, `__tests__/components/CelularTokenGate.test.tsx` | unitários |
+
+---
+
+### Task 8: Banco — núcleo do Diário com ator explícito
+
+**Files:**
+- Create: `supabase/migrations/aplicar_<p3>_diario_nucleo_com_ator.sql`
+- Create: `scripts/teste-link-celular-diario.sql` (seção A)
+
+**Interfaces:**
+- Consumes: `is_org_member_de(p_user, p_org)` (Parte 1).
+- Produces (SQL):
+  - `fn_pode_aprovar_diario_de(p_user UUID, p_org UUID) RETURNS BOOLEAN` STABLE DEFINER — corpo do arquivo 600000 com `auth.uid()` → `p_user` e `auth.jwt()->>'email'` → e-mail de `auth.users` de `p_user`; `REVOKE … FROM PUBLIC, anon, authenticated`. `fn_pode_aprovar_diario(p_org)` passa a `RETURN fn_pode_aprovar_diario_de(auth.uid(), p_org)` (mesmos privilégios de hoje).
+  - `_diary_upsert_core(p_ator UUID, p_project_id UUID, p_entry JSONB) RETURNS JSONB` e `_diary_delete_core(p_ator UUID, p_project_id UUID, p_entry_id TEXT) RETURNS JSONB` — VOLATILE DEFINER; corpos do arquivo 600000 com: depois do `SELECT … FOR UPDATE`, `IF v_org IS NULL OR NOT is_org_member_de(p_ator, v_org) THEN RAISE 'diário não encontrado ou sem permissão' 42501`; aprovação por `fn_pode_aprovar_diario_de(p_ator, v_org)`; `REVOKE … FROM PUBLIC, anon, authenticated`.
+  - `diary_upsert_entry(p_project_id, p_entry)` / `diary_delete_entry(p_project_id, p_entry_id)`: mesma assinatura e privilégios; `auth.uid() IS NULL` → 42501 `'sem permissão para gravar neste diário'`; senão `RETURN _diary_*_core(auth.uid(), …)`.
+
+- [ ] **Step 1: Seção A da prova** (molde `scripts/teste-vinculo-colaborador-envolvidos.sql`: `pg_temp.confere`, `pg_temp.como(user, sql)` com claims sub+email+role). Fixtures na transação: diário `DIARIO` na org 926cf626 (`organization_id` preenchido) e um com `organization_id NULL` + `settings.organizationId`; membro comum `m` sem `canApproveDiary`, admin `g` (fixture), não membro `x`. Asserções:
+  - `m` salva registro Rascunho → `entries` com ele, `anterior` NULL; salva de novo → `anterior` = o primeiro.
+  - `m` no diário de `organization_id NULL` → grava.
+  - `x` → 42501 `'diário não encontrado ou sem permissão'`.
+  - `m` muda para `Aprovado` → 42501 com a mensagem de aprovação; `g` aprova → ok; `m` edita / exclui o aprovado → 42501 (mensagens de "alterá-lo"/"excluí-lo").
+  - `UPDATE projects SET settings = settings - 'diaryEntries'` como postgres sem marca → `diaryEntries` intacto (gatilho segue valendo).
+  - Equivalência: para cada membro com `user_id` (limite 500), `fn_pode_aprovar_diario_de(user, org)` = `fn_pode_aprovar_diario(org)` com as claims dele.
+  - Forma: núcleos e `_de` DEFINER, `search_path=public, pg_temp`, sem EXECUTE para PUBLIC/anon/authenticated; `diary_*_entry` com EXECUTE só `authenticated`.
+- [ ] **Step 2: RED** — `npx supabase db query --linked -f scripts/teste-link-celular-diario.sql` → FAIL `function public.fn_pode_aprovar_diario_de(…) does not exist`.
+- [ ] **Step 3: Migration** com as interfaces acima.
+- [ ] **Step 4: Ensaio** (migration no lugar de `-- MIGRATION`) → `TUDO OK`; confirmar que nada ficou no banco.
+- [ ] **Step 5:** `npx vitest run __tests__/segurancaMigrations.test.ts __tests__/migrationsPrefixo.test.ts` → PASS.
+- [ ] **Step 6: Commit** — `feat(diario): núcleo de gravação com ator explícito (app logado chama com auth.uid())`.
+
+### Task 9: Banco — RPCs do Diário pelo link
+
+**Files:**
+- Create: `supabase/migrations/aplicar_<p4>_link_celular_rpcs_diario.sql` (`<p4>` > `<p3>`)
+- Modify: `scripts/teste-link-celular-diario.sql` (seção B; o ensaio inlineia as duas)
+
+**Interfaces:**
+- Consumes: Task 8; `_mobile_link_resolver`.
+- Produces (todas `(p_token TEXT, …)`, VOLATILE DEFINER, `GRANT TO anon, authenticated`; "projeto da org" = `coalesce(organization_id, nullif(settings->>'organizationId','')::uuid) = org do link`):
+  - `celular_sessao` — corpo do arquivo `aplicar_20271111960000…` + `pode_aprovar_diario: fn_pode_aprovar_diario_de(user, org)`.
+  - `celular_diarios_listar(p_token) RETURNS JSONB` — D1; ordem `updated_at DESC`.
+  - `celular_diario_abrir(p_token, p_project_id UUID) RETURNS JSONB` → `{id, name, organization_id, settings: {classification, linkedProjectId, linkedProjectName, organizationId, diaryEntries}}`; fora da org → 42501.
+  - `celular_diario_salvar(p_token, p_project_id UUID, p_entry JSONB)` / `celular_diario_excluir(p_token, p_project_id UUID, p_entry_id TEXT) RETURNS JSONB` — projeto da org, senão 42501; depois `_diary_*_core(dono do link, …)`.
+  - `celular_efetivo_listar(p_token) RETURNS JSONB` → `[{id, name, role, status}]`, `status='ATIVO'`, `org_id` = org do link **ou** `id IN employee_org_shares(target_org_id = org)`, por `name`.
+  - `celular_planejamento_ler(p_token, p_diario_id UUID, p_planejamento_id UUID) RETURNS JSONB` → `{schedule, budget}`; diário e planejamento da org; planejamento conforme D4, senão 42501; `budget` = do planejamento ou, vazio, do projeto `settings.linkedProjectId` dele (mesma org); cada item reduzido a `{id, quantity, sinapiItem: {description}}`.
+  - `celular_planejamento_gravar_evolucao(p_token, p_diario_id UUID, p_planejamento_id UUID, p_evolucao JSONB) RETURNS JSONB` (o `schedule` gravado) — mesma autorização de `ler`; `p_evolucao` objeto de até 2000 chaves, valor número 0–100, senão 22023; para cada chave: `manualRealPct` no `itemSchedules` de mesmo `id` ou `{id, manualRealPct}` acrescentado (o fallback do JS); só `settings.schedule` muda.
+  - `celular_diario_autoriza(p_token, p_project_id UUID) RETURNS UUID` — a org, se o projeto é da org e `DIARIO`/`OBRA`; senão 42501.
+  - `celular_diario_midia_permitida(p_token, p_paths TEXT[]) RETURNS TEXT[]` — D7; mais de 100 paths → 22023.
+  - `celular_diario_midia_orfa(p_token, p_project_id UUID, p_paths TEXT[]) RETURNS TEXT[]` — paths com prefixo `{org}/{projeto}/` que nenhum registro do projeto cita (`images`, `videos`, `documents[].url`); projeto fora da org → 42501.
+
+- [ ] **Step 1: Seção B**, com token de `m` gerado por `mobile_link_generate` (claims de `m`) e chamadas como `anon`:
+  - `celular_sessao` → `pode_aprovar_diario` false para `m`, true para o link de `g`.
+  - `celular_diarios_listar` → contém os diários da org e nenhum projeto de outra org; `diaryEntries` só com `id, date, impediments`.
+  - `abrir`/`salvar`/`excluir` em diário de outra org → 42501; `salvar` grava (o registro aparece em `settings.diaryEntries`, lido como postgres) e `excluir` o tira; Aprovado pelo link de `m` → 42501 de aprovação.
+  - Review Focus 5: `gravar_evolucao` com `{"i": 150}`, `{"i": "abc"}`, `'[1]'` → 22023; planejamento de outra org → 42501; válido → só `manualRealPct` dos itens enviados mudou (comparar `settings` antes/depois sem `schedule.itemSchedules[*].manualRealPct`) e `diaryEntries` intacto.
+  - Review Focus 1: registro salvo pelo link citando `'<outraOrg>/<p>/x.jpg'` e `'<org>/<p>/y.jpg'` → `midia_permitida` devolve só o segundo; path não citado não sai.
+  - `midia_orfa`: devolve o path do projeto não citado; não devolve o citado nem o de outro projeto.
+  - Forma: todas as `celular_*` novas com EXECUTE para anon/authenticated e sem PUBLIC.
+- [ ] **Step 2: RED** → FAIL `function public.celular_diarios_listar(…) does not exist`.
+- [ ] **Step 3: Migration.**
+- [ ] **Step 4: Ensaio** com as duas → `TUDO OK`.
+- [ ] **Step 5:** segurança + prefixo (Vitest) → PASS.
+- [ ] **Step 6: Commit** — `feat(banco): RPCs do Diário pelo link do celular`.
+
+### Task 10: Edge `celular-diario-midia`
+
+**Files:**
+- Create: `supabase/functions/celular-diario-midia/regras.ts`, `supabase/functions/celular-diario-midia/index.ts`
+- Modify: `supabase/config.toml` (bloco `[functions.celular-diario-midia]`, `verify_jwt = false`)
+- Test: `__tests__/celularDiarioMidiaRegras.test.ts`
+
+**Interfaces:**
+- Consumes: `celular_diario_autoriza`, `celular_diario_midia_permitida`, `celular_diario_midia_orfa` (Task 9).
+- Produces: `POST` JSON (CORS `*`, `OPTIONS` → `ok`):
+  - `{acao:'subir', token, project_id, ext}` → `{path, token: <token de upload assinado>}` (`createSignedUploadUrl(path)`; path montado no servidor com `crypto.randomUUID()`).
+  - `{acao:'assinar', token, paths}` → `{urls: {[path]: url}}` (só os permitidos; `createSignedUrls(…, 3600)`).
+  - `{acao:'remover', token, project_id, paths}` → `{removidos: string[]}`.
+  - Erros: pedido inválido → 400 `{error}`; RPC 42501 → 403 `{error: <mensagem do banco>}`; outro → 500.
+  - `regras.ts`: `export type PedidoMidia = …` e `export function validarPedido(body: unknown): { ok: true; pedido: PedidoMidia } | { ok: false; erro: string }` (ação conhecida; token string não vazia; `project_id` uuid em `subir`/`remover`; `ext` minúscula na lista das Global Constraints; `paths` array de 1–100 strings não vazias); `export function montarPath(org: string, projeto: string, uuid: string, ext: string): string`.
+
+- [ ] **Step 1: Testes** de `validarPedido`/`montarPath`: ação desconhecida, token vazio, `ext` `'html'`/`'JPG '`, `paths` vazio e com 101 → erro; `{acao:'subir', token:'t', project_id:<uuid>, ext:'jpg'}` → ok; `montarPath('o','p','u','jpg')` → `'o/p/u.jpg'`.
+- [ ] **Step 2:** `npx vitest run __tests__/celularDiarioMidiaRegras.test.ts` → FAIL.
+- [ ] **Step 3: Implementar** `regras.ts` e `index.ts` (molde `client-portal-diary-download/index.ts`) e o bloco do `config.toml`.
+- [ ] **Step 4:** teste → PASS; `npx tsc --noEmit -p .` sem erro novo.
+- [ ] **Step 5: Commit** — `feat(diario): Edge de mídia do link do celular (subir, assinar, remover)`.
+
+### Task 11: `DiarioFonte` e os dois hooks
+
+**Files:**
+- Create: `services/celular/diarioFonte.ts`
+- Modify: `hooks/useDiaryMediaUrls.ts`, `hooks/useDiaryLinkedPlanning.ts`
+- Test: `__tests__/diarioFonte.test.ts`
+
+**Interfaces:**
+- Consumes: Tasks 9–10; `salvarRegistroDiario`, `excluirRegistroDiario`, `sincronizarEvolucaoNoPlanejamento`, `DiaryWriteResult` (`services/diaryEntryService.ts`); `uploadDiaryMedia`, `removeDiaryMedia`, `signDiaryMediaUrls`, `isDiaryStoragePath` (`services/diaryMediaService.ts`); `comprimirFoto`; `aplicarEvolucaoNoCronograma`; `ehRecusaDoLink`/`MENSAGEM_LINK_RECUSADO` (de `tarefasFonte.ts` — reaproveitar, não duplicar).
+- Produces:
+  ```ts
+  export interface DiarioCarregado { id: string; name: string; organization_id?: string | null; settings: Record<string, any> }
+  export interface ColaboradorRh { id: string; name: string; role: string | null; status: string }
+  export interface DiarioFonte {
+    modo: 'logado' | 'link'
+    /** null no logado (vale useDiaryAprovacao); no link, o que celular_sessao disse. */
+    podeAprovarNoLink: boolean | null
+    carregarDiario(projectId: string): Promise<DiarioCarregado>
+    salvarRegistro(projectId: string, entry: DiaryEntry): Promise<DiaryWriteResult>
+    excluirRegistro(projectId: string, entryId: string): Promise<DiaryWriteResult>
+    listarColaboradores(orgId: string | null): Promise<ColaboradorRh[]>
+    carregarPlanejamento(diarioId: string, planejamentoId: string): Promise<{ schedule: ProjectSchedule | null; budget: BudgetEntry[] }>
+    gravarEvolucao(diarioId: string, planejamentoId: string, entries: DiaryEntry[]): Promise<ProjectSchedule | null>
+    subirFoto(args: { orgId: string; projectId: string; file: File }): Promise<string>
+    assinarFotos(paths: readonly string[]): Promise<Record<string, string>>
+    removerFotos(projectId: string, paths: readonly string[]): Promise<void>
+  }
+  export interface DiarioFonteDoLink extends DiarioFonte { listarProjetos(): Promise<ProjetoDoLink[]> }  // ProjetoDoLink = item de celular_diarios_listar
+  export const fonteDiarioLogado: DiarioFonte          // os serviços de hoje, sem mudar consultas
+  export function fonteDiarioDoLink(token: string, opts: { aoRecusar?: () => void; podeAprovar: boolean }): DiarioFonteDoLink
+  export const DiarioFonteContext: React.Context<DiarioFonte>   // padrão: fonteDiarioLogado
+  export function useDiarioFonte(): DiarioFonte
+  ```
+  No link: `subirFoto` = `comprimirFoto` → Edge `subir` (ext por `diaryMediaExtension`) → `storage.from('diario-midia').uploadToSignedUrl(path, token, arquivo, {contentType})` → `path`; `assinarFotos` filtra `isDiaryStoragePath` e chama a Edge `assinar` (sem path → `{}` sem chamada); `removerFotos` = Edge `remover` (falha só `console.warn`, como hoje); `gravarEvolucao` = `carregarPlanejamento` → `aplicarEvolucaoNoCronograma` → sem mudança `null`, senão `celular_planejamento_gravar_evolucao` com `{itemId: manualRealPct}` dos itens mudados.
+  `useDiaryMediaUrls(refs, portalToken?, assinar?)`: com `assinar`, usa-o no lugar de `signDiaryMediaUrls`. `useDiaryLinkedPlanning(linkedProjectId, projects, carregar?)`: com `carregar(planejamentoId)`, usa-o no lugar das duas `loadProject` (o fallback do orçamento do pai fica no carregador padrão).
+
+- [ ] **Step 1: Testes** (molde `__tests__/tarefasFonte.test.ts`, `vi.mock('../lib/supabase')` com `rpc`, `from`, `functions.invoke`, `storage.from` espiões):
+  - `salvarRegistro('p', e)` no link → `rpc('celular_diario_salvar', {p_token:'tk', p_project_id:'p', p_entry:e})`.
+  - `gravarEvolucao` sem mudança → nenhuma chamada de gravação, `null`; com mudança → `p_evolucao` só com os itens mudados.
+  - `subirFoto` → `functions.invoke('celular-diario-midia', {body:{acao:'subir', token:'tk', project_id:'p', ext:'jpg'}})` e `uploadToSignedUrl` com o path devolvido.
+  - `assinarFotos(['data:x', 'o/p/a.jpg'])` → só `'o/p/a.jpg'` vai à Edge.
+  - Review Focus 4: em toda chamada do link, `from`, `storage…upload`, `createSignedUrls` e `remove` não são chamados.
+  - 42501 `'link inválido ou vencido'` → `aoRecusar` e `throw`; outro 42501 (aprovação) → só `throw`.
+  - Hooks: `useDiaryMediaUrls(['o/p/a.jpg'], undefined, assinar)` usa `assinar`; sem ele, `signDiaryMediaUrls` como hoje.
+- [ ] **Step 2:** `npx vitest run __tests__/diarioFonte.test.ts` → FAIL.
+- [ ] **Step 3: Implementar.**
+- [ ] **Step 4:** → PASS; `npx vitest run __tests__/diaryMediaService.test.ts __tests__/diaryPlanningLink.test.ts` → PASS (o logado não mudou).
+- [ ] **Step 5: Commit** — `feat(diario): fonte de dados trocável (logado × link do celular)`.
+
+### Task 12: `DiaryMobileApp` passa a usar a fonte
+
+**Files:**
+- Modify: `components/DiaryMobileApp.tsx` (`loadProject` ~l.1078, `listEmployees` ~l.1037, `useDiaryLinkedPlanning` l.1093, `persist` l.1107–1150, `useDiaryAprovacao` l.1031, `useDiaryMediaUrls` l.381 e l.488, upload em `addFotos` l.536, `removeDiaryMedia` em `cancelar` l.491 e `persist`)
+- Test: `__tests__/components/DiaryMobileAppFonte.test.tsx`
+
+**Interfaces:**
+- Consumes: `useDiarioFonte()` (Task 11).
+- Produces: mesmo `Props`. `aprovacao` = `fonte.podeAprovarNoLink === null ? useDiaryAprovacao(org) : (podeAprovarNoLink ? {pode:true} : {pode:false, motivo: MOTIVO_SEM_PERMISSAO_APROVAR})` (o hook continua sendo chamado sempre — regra dos Hooks). O carregador de `useDiaryLinkedPlanning` e o `assinar` de `useDiaryMediaUrls` vêm da fonte em `useCallback` estável (R8 da Parte 1: função nova a cada render recarrega em laço).
+
+- [ ] **Step 1: Teste de componente** (molde `__tests__/components/TasksMobileAppPrioridadeClassificar.test.tsx`; `vi.mock('../../lib/supabase', () => ({ supabase: {} }))` — qualquer acesso direto quebra): com fonte falsa `modo:'link'`, `podeAprovarNoLink:false` e um diário com um registro Aprovado:
+  - abrir o diário → `carregarDiario('d1')`; os registros aparecem;
+  - criar registro (data + descrição) e salvar → `salvarRegistro('d1', …)` uma vez;
+  - registro Aprovado: lixeira e Salvar desabilitados com o motivo `MOTIVO_REGISTRO_APROVADO` no `title`;
+  - foto: `subirFoto` chamado com `{orgId, projectId:'d1'}`.
+- [ ] **Step 2:** → FAIL (a tela ainda chama `projectService`).
+- [ ] **Step 3: Trocar** cada acesso pela fonte; o arquivo não importa mais `projectService`, `laborService`, `diaryEntryService` (exceto tipos), `uploadDiaryMedia` nem `removeDiaryMedia`.
+- [ ] **Step 4:** teste → PASS; `grep -nE "projectService|laborService|uploadDiaryMedia|removeDiaryMedia|supabase\." components/DiaryMobileApp.tsx` → nada; `bash scripts/check-ui-standard.sh components/DiaryMobileApp.tsx` → exit 0; `orgContextGuard` → PASS; `tsc` sem erro novo.
+- [ ] **Step 5: Commit** — `refactor(diario): DiaryMobileApp lê e grava pela DiarioFonte`.
+
+### Task 13: Aba Diário no link
+
+**Files:**
+- Create: `components/celular/DiarioDoLink.tsx`
+- Modify: `components/celular/CelularTokenGate.tsx` (`ABAS` l.32–35), `services/celular/celularLinkService.ts` (`SessaoCelular` + `pode_aprovar_diario: boolean`)
+- Test: `__tests__/components/CelularTokenGate.test.tsx`
+
+**Interfaces:**
+- Consumes: `fonteDiarioDoLink` (Task 11), `DiaryMobileApp` (Task 12).
+- Produces: `DiarioDoLink: React.FC<{ fonte: DiarioFonteDoLink }>` — carrega `fonte.listarProjetos()` (carregando / erro com Tentar de novo / ok) e renderiza `<DiarioFonteContext.Provider value={fonte}><DiaryMobileApp projects={projetos} /></…>`. No gate: abas **Tarefas | Diário** (a barra volta a aparecer — 2 abas); `fonteDiario` em `useMemo([token, sessao.pode_aprovar_diario])` com o mesmo `aoRecusar` das Tarefas.
+
+- [ ] **Step 1: Testes** (no arquivo existente): com sessão ok, a barra mostra "Tarefas" e "Diário"; tocar "Diário" monta `DiarioDoLink` (mock) com fonte `modo:'link'`; recusa do token numa RPC do Diário desmonta a tela e mostra o texto de recusa (mesmo caminho das Tarefas). Ajustar o teste antigo "com uma aba só não há barra" para o novo estado.
+- [ ] **Step 2:** → FAIL.
+- [ ] **Step 3: Implementar.**
+- [ ] **Step 4:** → PASS; `check-ui-standard` nos dois `.tsx` → exit 0.
+- [ ] **Step 5: Commit** — `feat(celular): aba Diário de Obras no link do celular`.
+
+### Task 14: Publicar a Parte 2
+
+- [ ] **Step 1:** suíte Vitest (ver `index_publicacao_build.md`) e `npm run verificar:build` → verdes; ler a saída antes de seguir.
+- [ ] **Step 2: ⚠️ com aval do usuário** — prefixos conferidos na hora; aplicar `<p3>` e `<p4>` com `db query -f`; `scripts/teste-link-celular-diario.sql`, `teste-link-celular-tarefas.sql` e `teste-tarefas-responsavel.sql` no banco real → `TUDO OK`; `check-rls-postura.sh` → verde.
+- [ ] **Step 3: ⚠️ o usuário publica a Edge** — `cd C:\D\frentes\link-celular; npx supabase functions deploy celular-diario-midia` no PowerShell.
+- [ ] **Step 4: Sonda de fora** (`curl` em `functions/v1/celular-diario-midia`): sem token → 400; token falso → 403; token válido + `assinar` de path de outra org → `{urls:{}}`; `subir` válido → `{path, token}` com path `{org}/{projeto}/…`.
+- [ ] **Step 5: ⚠️ com aval do usuário** — `git push origin HEAD:main`; `bash scripts/conferir-producao.sh` → domínio = `origin/main`.
+- [ ] **Step 6: Prova real** — pelo link no celular: registro com foto e atividade vinculada; conferir no desktop (registro e foto no diário, evolução no cronograma). Registrar em **Estado**.
+
 ## Estado
 
 - [x] Design aprovado em 5 seções (2026-11-11) — `eb6661b5`
@@ -491,7 +738,8 @@ Vitest, Playwright (harness fora do repo).
 - [x] Task 7 · Step 4: push em `main` + `conferir-producao.sh` (domínio em `6787b03`, com o responsável)
 - [x] Step 5: prova real no celular — o usuário confirmou em 2026-11-12 que o link do Iago mostra as mesmas tarefas do app
 - [ ] Brechas do vínculo e dos envolvidos (`aplicar_20271112800000`): ensaio `TUDO OK`; aplicar e publicar após aval
-- [ ] Plano de implementação Parte 2 (F3–F5) — depois de F2 no ar
+- [x] Plano de implementação Parte 2 (F3–F5) — escrito em 2026-11-12 (Tasks 8–14, decisões D1–D8)
+- [ ] Task 8 · [ ] Task 9 · [ ] Task 10 · [ ] Task 11 · [ ] Task 12 · [ ] Task 13 · [ ] Task 14
 - [x] F1 (banco no ar) · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
 
 ## Rollback (Parte 1)

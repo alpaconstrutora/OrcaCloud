@@ -330,9 +330,11 @@ BEGIN
             AND policyname IN ('tasks_select_assignee', 'tasks_update_assignee')) = 2
         AND (SELECT string_agg(cmd, ',' ORDER BY cmd) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks') = 'DELETE,INSERT,SELECT,SELECT,SELECT,UPDATE,UPDATE',
         'tasks: + tasks_select_assignee e tasks_update_assignee; INSERT e DELETE sem mudança');
+    -- is_org_member(org_id), ou a forma por conjunto que o #370
+    -- (aplicar_20271111940000…) pôs no lugar: org_id IN (SELECT minhas_orgs_membro()).
     PERFORM pg_temp.confere(
-        (SELECT bool_and(pg_get_expr(p.polqual, p.polrelid) LIKE '%is_org_member(org_id)%'
-                         AND (p.polcmd = 'r' OR pg_get_expr(p.polwithcheck, p.polrelid) LIKE '%is_org_member(org_id)%'))
+        (SELECT bool_and(pg_get_expr(p.polqual, p.polrelid) ~ 'is_org_member\(org_id\)|org_id IN \( SELECT minhas_orgs_membro\(\)'
+                         AND (p.polcmd = 'r' OR pg_get_expr(p.polwithcheck, p.polrelid) ~ 'is_org_member\(org_id\)|org_id IN \( SELECT minhas_orgs_membro\(\)'))
               AND count(*) = 2
            FROM pg_policy p WHERE p.polrelid = 'public.tasks'::regclass
             AND p.polname IN ('tasks_select_assignee', 'tasks_update_assignee')),

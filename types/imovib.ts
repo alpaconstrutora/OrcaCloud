@@ -663,6 +663,10 @@ export interface ImovibStudy {
     opura_terrain_study_id?: string | null;
     /** De onde veio a VSO da região (item 7.3). Vazio = digitada. */
     vso_regional_source?: 'digitada' | 'comparaveis' | 'market' | null;
+    /** Veículo da incorporação (migration aplicar_20271112400000, item 9.1). Vazio = não informado. */
+    legal_vehicle?: 'propria' | 'spe' | 'scp' | null;
+    /** Patrimônio de afetação. Vazio = não informado (o motor trata como sem afetação). */
+    patrimonio_afetacao?: boolean | null;
     created_at: string;
     updated_at: string;
     blocks?: ImovibBlock[];

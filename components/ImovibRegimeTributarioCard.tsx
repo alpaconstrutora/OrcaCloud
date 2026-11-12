@@ -106,7 +106,7 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
 
             <div className="flex items-start gap-2 rounded-[10px] bg-sky-50 border border-sky-200 px-3 py-2 text-sm text-sky-900">
                 <Info className="w-4 h-4 mt-0.5 shrink-0" />
-                As alíquotas são hipóteses: confirme com a contabilidade. O lucro real é uma estimativa (crédito de PIS e Cofins sobre o custo; IRPJ e CSLL sobre o lucro de cada ano, sem compensar prejuízo).
+                As alíquotas são hipóteses: confirme com a contabilidade. O lucro real é uma estimativa (crédito de PIS e Cofins sobre o custo; IRPJ e CSLL sobre o lucro de cada ano, compensando o prejuízo acumulado).
             </div>
 
             {foraDoCalculo.length > 0 && (

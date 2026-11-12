@@ -4,13 +4,14 @@ import { ImovibStudy, ImovibStudyUpdate } from '../types';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import ImovibInputRow from './ImovibInputRow';
+import { devolucaoPadraoDoDistrato } from '../utils/imovibMotor';
 
 interface ImovibDistratoCardProps {
     study: ImovibStudy;
     salvar: (campos: ImovibStudyUpdate) => Promise<void>;
 }
 
-const TITULO_DEVOLUCAO = 'A Lei 13.786/2018 permite reter até 25% do que o comprador pagou, ou até 50% com patrimônio de afetação. O padrão de 75% de devolução é hipótese: ajuste ao contrato.';
+const TITULO_DEVOLUCAO = 'A Lei 13.786/2018 permite reter até 25% do que o comprador pagou, ou até 50% com patrimônio de afetação. O padrão é devolver 75%, ou 50% com patrimônio de afetação marcado em Premissas › Identificação; é hipótese: ajuste ao contrato.';
 
 /**
  * Distrato e inadimplência (item 1.6 do plano
@@ -54,7 +55,7 @@ const ImovibDistratoCard: React.FC<ImovibDistratoCardProps> = ({ study, salvar }
                     label="Devolução ao comprador"
                     desc="Do que ele já pagou"
                     title={TITULO_DEVOLUCAO}
-                    value={study.cancellation_refund_percent ?? D.cancellation_refund_percent} padrao={D.cancellation_refund_percent}
+                    value={study.cancellation_refund_percent ?? devolucaoPadraoDoDistrato(study)} padrao={devolucaoPadraoDoDistrato(study)}
                     onCommit={(v) => salvar({ cancellation_refund_percent: v })}
                 />
                 <label className="flex items-center justify-between gap-4 p-4 bg-slate-50 rounded-[10px] border border-slate-100 cursor-pointer">

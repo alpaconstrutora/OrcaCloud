@@ -4,6 +4,7 @@ import { imovibService } from '../services/imovibService';
 import { resumoDaDueDiligence } from './ImovibDueDiligenceCard';
 import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
+import { devolucaoPadraoDoDistrato } from '../utils/imovibMotor';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
@@ -162,7 +163,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Perfil de recebimento', 'Juro do pós-chaves', premissa(study.post_handover_rate_monthly, D.post_handover_rate_monthly), '% a.m.', 'Price'],
         ['Distrato', 'Distrato', premissa(study.cancellation_rate_percent, D.cancellation_rate_percent), '% de cada safra', 'Só vendas antes das chaves; acontece no máximo nas chaves'],
         ['Distrato', 'Meses até o distrato', premissa(study.cancellation_lag_months, D.cancellation_lag_months), 'meses', null],
-        ['Distrato', 'Devolução ao comprador', premissa(study.cancellation_refund_percent, D.cancellation_refund_percent), '% do pago', null],
+        ['Distrato', 'Devolução ao comprador', premissa(study.cancellation_refund_percent, devolucaoPadraoDoDistrato(study)), '% do pago', study.cancellation_refund_percent == null && study.patrimonio_afetacao ? 'Padrão com patrimônio de afetação' : null],
         ['Distrato', 'Revender a unidade distratada', revende ? 'Sim' : 'Não', null, null],
         ['Distrato', 'Deságio da revenda', premissa(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent), '%', revende ? null : 'Sem revenda'],
         ['Índices', 'Índice da obra', premissa(study.cost_index_rate_monthly, inflacao), '% a.m.', study.cost_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_obra ?? null)],

@@ -62,6 +62,7 @@ export const IMOVIB_DEFAULTS = {
     handover_delay_months: 0,
     cancellation_lag_months: 12, // meses entre a venda e o distrato
     cancellation_refund_percent: 75, // % do pago devolvido (Lei 13.786/2018: retenção até 25%, ou 50% com afetação)
+    cancellation_refund_percent_afetacao: 50, // o mesmo, com patrimônio de afetação (item 9.1)
     cancellation_resale: true,
     cancellation_resale_discount_percent: 10, // deságio da revenda da unidade distratada (decisão de 11/11)
     // Índices das vendas e da obra: vazio = inflation_rate (não têm padrão próprio).

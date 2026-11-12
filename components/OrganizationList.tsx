@@ -8,6 +8,10 @@ import {
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
 import Button from './ui/Button';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparUsuariosConsolidados, OPCOES_AGRUPAR_USUARIO_CONSOLIDADO, ROTULO_FUNCAO, type CampoAgruparUsuarioConsolidado } from '../utils/membrosGrupos';
 
 // Coluna 'actions' fica fora do array de propósito — sempre visível, não
 // aparece no ColumnConfigButton (mesmo padrão de ClientList/InvestorList/SupplierList).
@@ -142,7 +146,8 @@ function renderAllUsersCell(key: string, item: { org: Organization; member: Orga
         case 'organization':
             return <span className="text-sm font-normal text-blue-600 truncate">{org.name}</span>;
         case 'role':
-            return <span className="text-sm font-normal text-gray-600">{member.role}</span>;
+            // Mesmo rótulo da aba Membros (e dos grupos do "Agrupar"), não o código do banco.
+            return <span className="text-sm font-normal text-gray-600">{ROTULO_FUNCAO[member.role] ?? member.role}</span>;
         default:
             return null;
     }
@@ -400,6 +405,19 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
         return flat;
     }, [organizations, allUsersSearch, allUsersColumns.sortColumn, allUsersColumns.sortDirection]);
 
+    // "Agrupar" — guia de UI §6.12. Os grupos saem da lista já filtrada e ordenada.
+    const allUsersAgrupamento = useAgrupamento<CampoAgruparUsuarioConsolidado>('organizationListAllUsersGroupBy');
+    const allUsersGrupos = React.useMemo(
+        () => (allUsersAgrupamento.campo === 'none' ? [] : agruparUsuariosConsolidados(allUsersFlat, allUsersAgrupamento.campo, allUsersAgrupamento.direcao)),
+        [allUsersFlat, allUsersAgrupamento.campo, allUsersAgrupamento.direcao],
+    );
+    const allUsersEntradas: EntradaDaTela<(typeof allUsersFlat)[number]>[] = React.useMemo(
+        () => (allUsersAgrupamento.agrupando
+            ? entradasDaPagina(allUsersGrupos, allUsersAgrupamento.recolhidos)
+            : allUsersFlat.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
+        [allUsersAgrupamento.agrupando, allUsersGrupos, allUsersAgrupamento.recolhidos, allUsersFlat],
+    );
+
     return (
         <div className="space-y-8">
             {/* Organizations Tab Content */}
@@ -645,6 +663,17 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                             className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                         />
                                     </div>
+                                    <AgruparControles
+                                        opcoes={OPCOES_AGRUPAR_USUARIO_CONSOLIDADO}
+                                        campo={allUsersAgrupamento.campo}
+                                        onCampo={allUsersAgrupamento.setCampo}
+                                        direcao={allUsersAgrupamento.direcao}
+                                        onDirecao={allUsersAgrupamento.setDirecao}
+                                        chavesDosGrupos={allUsersGrupos.map(g => g.key)}
+                                        algumRecolhido={allUsersAgrupamento.recolhidos.size > 0}
+                                        onAlternarTodos={allUsersAgrupamento.alternarTodos}
+                                        title="Agrupar os usuários"
+                                    />
                                     <div className="flex items-center h-9 bg-white px-1 rounded-[10px] border border-gray-100 gap-1 shrink-0">
                                         <ColumnConfigButton
                                             columns={ALL_USERS_FALLBACK_COLUMNS}
@@ -704,7 +733,14 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     Nenhum usuário encontrado.
                                                 </td>
                                             </tr>
-                                        ) : allUsersFlat.map(({ org, member }) => (
+                                        ) : allUsersEntradas.map(e => {
+                                            if (e.tipo === 'grupo') return (
+                                                <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                    colSpan={allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').length + 2}
+                                                    onAlternar={allUsersAgrupamento.alternar} semTotal />
+                                            );
+                                            const { org, member } = e.item;
+                                            return (
                                             <tr key={`${org.id}-${member.email}`} className="hover:bg-blue-50/50 transition-colors">
                                                 {allUsersColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                     <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
@@ -735,7 +771,8 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                                                     </div>
                                                 </td>
                                             </tr>
-                                        ))}
+                                            );
+                                        })}
                                     </tbody>
                                 </table>
                             </div>

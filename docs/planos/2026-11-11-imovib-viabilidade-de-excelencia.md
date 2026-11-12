@@ -801,10 +801,12 @@ Conferido no navegador em 11/11 (Garden Cambuhy, usuário de leitura, escritas i
 - [x] 6.3 Tela: regime e comparação — `components/ImovibRegimeTributarioCard.tsx` na aba Orçamento; comparação em `utils/imovibComparacaoDeRegimes.ts` (arquivo próprio: o motor importa os tributos). Garden: sugestão "Lucro presumido" pela empresa da SPE; manual (rubricas) = 6,73%, VPL R$ 3.998.485; RET levaria a R$ 4.273.354.
 - [x] 6.4 Rubricas de obra no modelo — "INSS da obra (aferição)" e "ISS da construção (construtora terceira)" em "4. Construção Indireta", valor 0, só estudo novo.
 
-**Fase 7 — Mercado:** 0 de 3 — migrations `aplicar_20271112300000` (comparáveis) e `aplicar_20271112310000` (vínculo com o Market e origem da VSO — `vso_regional_source` não estava no plano: sem ela a origem da 7.3 teria de ser adivinhada) aplicadas em 12/11 com OK do usuário (*"Pode aplicar"*). Conferido antes do 7.2: o `useMarketVocacao` não guardava o id do estudo de terreno nem ao salvar nem ao reabrir — passa a guardar (zerado a cada nova análise)
-- [ ] 7.1 Comparáveis
-- [ ] 7.2 Ligação com o Ópura Market
-- [ ] 7.3 Campos de mercado com uso
+**Fase 7 — Mercado:** 3 de 3 — em revisão; migrations `aplicar_20271112300000` (comparáveis) e `aplicar_20271112310000` (vínculo com o Market e origem da VSO — `vso_regional_source` não estava no plano: sem ela a origem da 7.3 teria de ser adivinhada) aplicadas em 12/11 com OK do usuário (*"Pode aplicar"*). Conferido antes do 7.2: o `useMarketVocacao` não guardava o id do estudo de terreno nem ao salvar nem ao reabrir — passa a guardar (zerado a cada nova análise)
+- [x] 7.1 Comparáveis — `utils/imovibMercado.ts`; cartão em Premissas › Mercado (tabela + drawer). Preço médio ponderado pelas unidades (média simples se algum comparável com preço não tem total). "Usar na curva de vendas" preenche a VSO da região E a VSO mensal da curva (`sales_vso_percent`) — o motor não lê `vso_regional_percent`; sem isso o botão não mudaria a curva.
+- [x] 7.2 Ligação com o Ópura Market — o hook do Market passa a guardar o id do estudo salvo/reaberto; `criarViabilidadeImovib` grava `opura_terrain_study_id`. Cartão "Estudo de mercado de origem" (raio, preço/m², anúncios, tíquete, área, absorção como hipótese, que só entra na curva por botão).
+- [x] 7.3 Campos de mercado com uso — a VSO da região diz a origem (digitada, média dos comparáveis, absorção do Market) e onde é usada; "Análise de Concorrentes" abaixo dos comparáveis.
+
+Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_fase7.js`): Mercado abre com comparáveis e origem vazios (com o motivo), VSO "digitada"; 0 escritas, 0 erros de console.
 
 **Fase 8 — Produto:** 0 de 2
 - [ ] 8.1 Indicadores de produto

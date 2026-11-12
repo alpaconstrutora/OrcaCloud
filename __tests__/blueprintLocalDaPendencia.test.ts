@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, point, type BlueprintModel, type Command, type Conflito } from '../utils/blueprintKernel';
-import { centroDoElemento, disciplinaDoLocal, localDoConflito, localDoElemento } from '../utils/blueprintLocalDaPendencia';
+import { caixaDosElementos, centroDoElemento, disciplinaDoLocal, localDoConflito, localDoElemento } from '../utils/blueprintLocalDaPendencia';
 
 /** Uma sala 6 × 4 com porta, um pilar, um ponto elétrico e dois trechos que se cruzam em (3000, 2000). */
 function modelo(): BlueprintModel {
@@ -64,5 +64,17 @@ describe('disciplinaDoLocal', () => {
     expect(disciplinaDoLocal(m, { levelId: t, ids: [m.trechos![1].id], ponto: null })).toBe('ELETRICA');
     expect(disciplinaDoLocal(m, { levelId: t, ids: [m.terminais![0].id], ponto: null })).toBe('ELETRICA');
     expect(disciplinaDoLocal(m, { levelId: t, ids: [m.walls[0].id], ponto: null })).toBe('ARQUITETURA');
+  });
+});
+
+describe('caixaDosElementos (12/11/2026: o "Ver no editor" enquadra os elementos da pendência)', () => {
+  it('a caixa dos elementos e do ponto, com a folga; ids que não existem ficam de fora; nada → null', () => {
+    const m = modelo();
+    const [agua, ele] = m.trechos!;
+    // Os dois trechos: x de 1000 a 5000 (água) e y de 500 a 3500 (eletroduto); folga de 1,5 m.
+    expect(caixaDosElementos(m, [agua.id, ele.id, 'nao_existe'], null)).toEqual({ minX: -500, minY: -1000, maxX: 6500, maxY: 5000 });
+    // Um ponto elétrico só, com o ponto da pendência ao lado.
+    expect(caixaDosElementos(m, [m.terminais![0].id], { x: 900, y: 300 }, 1000)).toEqual({ minX: -500, minY: -700, maxX: 1900, maxY: 1300 });
+    expect(caixaDosElementos(m, ['x'], null)).toBeNull();
   });
 });

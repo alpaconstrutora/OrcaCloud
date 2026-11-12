@@ -696,7 +696,7 @@ import {
   svgDoPerfil,
 } from '../../utils/blueprintTopografiaExport';
 import { novoIdDeDrenagem, passoDoPlatoDaCasa, useBlueprintTerraplenagem, type PlatoDaCasaLancado } from '../../hooks/useBlueprintTerraplenagem';
-import { centroDoElemento } from '../../utils/blueprintLocalDaPendencia';
+import { caixaDosElementos, centroDoElemento } from '../../utils/blueprintLocalDaPendencia';
 import { useBlueprintProjetoExecutivo } from '../../hooks/useBlueprintProjetoExecutivo';
 import {
   EXECUTIVO_PADRAO,
@@ -12656,14 +12656,15 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             prova={provaDaCasa}
             desatualizada={previaDaCasaVelha}
             // C3 (11/11/2026): com a casa lançada os ids da prévia estão no desenho — "Ver no editor" fecha a tela, abre o
-            // pavimento, seleciona os elementos e leva a vista até o ponto (o CENTRALIZAR da revisão guiada).
+            // pavimento, seleciona os elementos e ENQUADRA a caixa deles com 1,5 m de folga (12/11/2026: o CENTRALIZAR da
+            // revisão guiada deixava a casa inteira na tela e o trecho não se via).
             noDesenho={(ids) => ids.some((id) => centroDoElemento(editor.model, id) !== null)}
             onVerNoEditor={(l) => {
               setTelaAberta(null);
               setNivelAtivoId(l.levelId);
               selecionar(l.ids.filter((id) => centroDoElemento(editor.model, id) !== null));
-              const em = l.ponto ?? centroDoElemento(editor.model, l.ids[0])?.ponto;
-              if (em) setNavegacao((n) => ({ seq: (n?.seq ?? 0) + 1, acao: 'CENTRALIZAR', em, escalaMinima: 0.03 }));
+              const caixa = caixaDosElementos(editor.model, l.ids, l.ponto);
+              if (caixa) setNavegacao((n) => ({ seq: (n?.seq ?? 0) + 1, acao: 'ENQUADRAR', caixa }));
             }}
             lancado={lancadoCasa}
             onLancar={async () => {

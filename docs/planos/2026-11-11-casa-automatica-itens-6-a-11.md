@@ -212,3 +212,18 @@ muro → arquitetura → estrutura/telhado → instalações → sobrado), cada 
 (nunca regex: pegaria o "m" de metro nos textos), e o marco das 8 casas verde a cada extração.
 
 **Fase "itens 6 a 11": A, B, C e D1 no ar; D2 com 1 de 2 passos (o passo 2 adiado por decisão do usuário).**
+
+## Depois da fase (12/11/2026)
+
+Pedido: *"Qual a próxima etapa sugerida ?"* → sugestão: o "Ver no editor" aproximar de verdade + conferir o PDF da
+humanizada a 1:75 → *"Sim"*.
+
+- **"Ver no editor" enquadra os elementos.** A decisão do C3 (centralizar no ponto) deixava a casa inteira na tela.
+  Agora `caixaDosElementos` (em `utils/blueprintLocalDaPendencia.ts`: os elementos da pendência + o ponto, folga de 1,5 m)
+  vai ao `ENQUADRAR` do canvas, que ganhou `caixa` opcional (sem ela, o pavimento inteiro, como sempre). Pronto: teste da
+  caixa; conferência no app — a pendência "2 travessia(s) de viga" abre o editor no banheiro, com as duas travessias e a
+  tubulação selecionada (foto comparada com o Enquadrar do pavimento inteiro).
+- **PDF da prancha humanizada a 1:75 conferido.** Sonda (fora do commit) com a casa 12×30 e `montarPdf` humanizada: 1:200
+  em A3, 1:75 em A1 e 1:50 em A0 saem em ~25–35 ms. Com o `blueprintExport.ts` de antes da correção (#371) a mesma sonda
+  trava a 1:75 e o processo morre — o PDF estava quebrado nessa escala, e a correção já publicada o resolveu.
+

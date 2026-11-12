@@ -1234,6 +1234,11 @@ interface Props {
     em?: { x: number; y: number };
     /** Escala mínima ao centralizar: aproxima quando a vista está longe demais. */
     escalaMinima?: number;
+    /**
+     * Para `ENQUADRAR` (12/11/2026): enquadra SÓ este retângulo (mm do modelo) em vez do pavimento inteiro — o "Ver no
+     * editor" da casa automática leva a vista aos elementos de uma pendência. Ausente = o pavimento, como sempre.
+     */
+    caixa?: { minX: number; minY: number; maxX: number; maxY: number };
   } | null;
   /**
    * O retângulo VISÍVEL, em milímetro do modelo, a cada mudança de vista.
@@ -3802,6 +3807,22 @@ export default function BlueprintCanvas({
       return;
     }
 
+    /** A vista que cabe o retângulo, com a margem; um ponto só (uma tomada) ganha 2 m de largura para não ir ao zoom máximo. */
+    const enquadrarRetangulo = (minX: number, minY: number, maxX: number, maxY: number) => {
+      const larguraMm = Math.max(2000, maxX - minX);
+      const alturaMm = Math.max(2000, maxY - minY);
+      const util = (v: number) => Math.max(1, v - 2 * MARGEM_INICIAL_PX);
+      const escala = limitar(Math.min(util(tamanho.w) / larguraMm, util(tamanho.h) / alturaMm));
+      const cx = (minX + maxX) / 2;
+      const cy = (minY + maxY) / 2;
+      setVista({ escala, dx: tamanho.w / 2 - cx * escala, dy: tamanho.h / 2 + cy * escala });
+    };
+    if (navegacao.caixa) {
+      const c = navegacao.caixa;
+      enquadrarRetangulo(c.minX, c.minY, c.maxX, c.maxY);
+      return;
+    }
+
     const pontos: Point[] = [];
     // VISTA DEPENDENTE: o enquadramento é o do recorte.
     if (recorteDaVista) pontos.push({ x: recorteDaVista.minX, y: recorteDaVista.minY } as Point, { x: recorteDaVista.maxX, y: recorteDaVista.maxY } as Point);
@@ -3828,19 +3849,7 @@ export default function BlueprintCanvas({
     if (pontos.length === 0) return;
     const xs = pontos.map((p) => p.x);
     const ys = pontos.map((p) => p.y);
-    const minX = Math.min(...xs);
-    const maxX = Math.max(...xs);
-    const minY = Math.min(...ys);
-    const maxY = Math.max(...ys);
-    // Um ponto só (uma tomada) não tem largura: dá-se 2 m de folga para ele
-    // aparecer em escala de trabalho, e não no zoom máximo.
-    const larguraMm = Math.max(2000, maxX - minX);
-    const alturaMm = Math.max(2000, maxY - minY);
-    const util = (v: number) => Math.max(1, v - 2 * MARGEM_INICIAL_PX);
-    const escala = limitar(Math.min(util(tamanho.w) / larguraMm, util(tamanho.h) / alturaMm));
-    const cx = (minX + maxX) / 2;
-    const cy = (minY + maxY) / 2;
-    setVista({ escala, dx: tamanho.w / 2 - cx * escala, dy: tamanho.h / 2 + cy * escala });
+    enquadrarRetangulo(Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navegacao, tamanho]);
 

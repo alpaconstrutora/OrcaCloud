@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resultadoPorSocio } from '../utils/imovibSocios';
+import { resultadoPorSocio, planoDeImportacao, type ImovibPartner } from '../utils/imovibSocios';
 import type { LinhaDeAporte } from '../utils/imovibAportes';
 import { computeImovibMath } from '../hooks/useImovibMath';
 import { baseStudy } from './fixtures/imovibEstudos';
@@ -84,5 +84,33 @@ describe('9.2 — resultado por sócio', () => {
         expect(r.socios[0].aportes).toBe(0);
         expect(r.socios[0].lucro).toBeCloseTo(200, 6);
         expect(Number.isNaN(r.socios[0].tirAnual)).toBe(true);
+    });
+});
+
+describe('9.2 — importar os sócios da empresa sem duplicar', () => {
+    const doEstudo = (id: string, name: string, company_partner_id: string | null = null): ImovibPartner =>
+        ({ id, study_id: 'estudo-teste', name, share_percent: 50, capital_percent: 40, company_partner_id, sort_order: 0 });
+    const daEmpresa = (id: string, nome: string, participacao_pct = 60) => ({ id, nome, participacao_pct });
+
+    it('sócio digitado à mão com o mesmo nome (sem diferenciar maiúscula, acento e espaço) é ligado, não duplicado', () => {
+        const p = planoDeImportacao([doEstudo('a', '  joão  da SILVA ')], [daEmpresa('p1', 'João da Silva'), daEmpresa('p2', 'Maria')]);
+        expect(p.vincular).toEqual([{ id: 'a', company_partner_id: 'p1' }]);
+        expect(p.criar.map(c => c.id)).toEqual(['p2']);
+    });
+
+    it('sócio já importado não volta; um digitado à mão só liga a um sócio da empresa', () => {
+        const p = planoDeImportacao(
+            [doEstudo('a', 'Ana', 'p1'), doEstudo('b', 'Bruno')],
+            [daEmpresa('p1', 'Ana'), daEmpresa('p2', 'Bruno'), daEmpresa('p3', 'bruno')],
+        );
+        expect(p.vincular).toEqual([{ id: 'b', company_partner_id: 'p2' }]);
+        expect(p.criar.map(c => c.id)).toEqual(['p3']);
+        expect(p.jaImportados).toBe(1);
+    });
+
+    it('sócio do estudo já ligado a outro sócio da empresa não é religado pelo nome', () => {
+        const p = planoDeImportacao([doEstudo('a', 'Ana', 'p9')], [daEmpresa('p1', 'Ana')]);
+        expect(p.vincular).toEqual([]);
+        expect(p.criar.map(c => c.id)).toEqual(['p1']);
     });
 });

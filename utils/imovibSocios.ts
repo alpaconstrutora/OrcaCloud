@@ -108,3 +108,38 @@ export function resultadoPorSocio(linhas: readonly LinhaDeAporte[], socios: read
         avisos,
     };
 }
+
+/** Sócio do quadro societário da empresa, como a importação o recebe. */
+export interface SocioDaEmpresa { id: string; nome: string; participacao_pct: number }
+
+const nomeComparavel = (n: string) =>
+    n.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/\s+/g, ' ').trim();
+
+/**
+ * O que "Importar os sócios da empresa" faz com cada sócio dela: já importado
+ * (`company_partner_id` igual) fica como está; o que tem o mesmo nome de um sócio
+ * digitado à mão (sem diferenciar maiúscula, acento e espaço) é LIGADO a ele — os
+ * percentuais digitados ficam; o resto é criado. Cada sócio digitado liga a um só.
+ */
+export function planoDeImportacao(atuais: readonly ImovibPartner[], daEmpresa: readonly SocioDaEmpresa[]): {
+    vincular: { id: string; company_partner_id: string }[];
+    criar: SocioDaEmpresa[];
+    jaImportados: number;
+} {
+    const importados = new Set(atuais.map(s => s.company_partner_id).filter(Boolean));
+    const livres = atuais.filter(s => !s.company_partner_id);
+    const vincular: { id: string; company_partner_id: string }[] = [];
+    const criar: SocioDaEmpresa[] = [];
+    let jaImportados = 0;
+    for (const p of daEmpresa) {
+        if (importados.has(p.id)) { jaImportados++; continue; }
+        const i = livres.findIndex(s => nomeComparavel(s.name) === nomeComparavel(p.nome));
+        if (i >= 0) {
+            vincular.push({ id: livres[i].id, company_partner_id: p.id });
+            livres.splice(i, 1);
+        } else {
+            criar.push(p);
+        }
+    }
+    return { vincular, criar, jaImportados };
+}

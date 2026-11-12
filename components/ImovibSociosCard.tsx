@@ -7,7 +7,7 @@ import { empreendimentoService } from '../services/empreendimentoService';
 import { companyService } from '../services/companyService';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useToast } from '../hooks/useToast';
-import { resultadoPorSocio, type ImovibPartner } from '../utils/imovibSocios';
+import { resultadoPorSocio, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
@@ -18,8 +18,6 @@ interface ImovibSociosCardProps {
     /** Resultado do motor: os aportes e distribuições que os sócios repartem. */
     resultado: ImovibMathResult;
 }
-
-type SocioDaEmpresa = { id: string; nome: string; participacao_pct: number };
 
 const fmtBRL = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 const fmtPct = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
@@ -99,10 +97,13 @@ const ImovibSociosCard: React.FC<ImovibSociosCardProps> = ({ study, resultado })
         if (motivoImportar || !daEmpresa) return;
         setImportando(true);
         try {
-            const antes = lista.length;
-            const nova = await imovibService.importarSociosDaEmpresa(study.id, daEmpresa.socios, lista.length);
-            setLista(nova);
-            if (nova.length === antes) showToast('Os sócios atuais da empresa já estão na lista.', 'success');
+            const r = await imovibService.importarSociosDaEmpresa(study.id, daEmpresa.socios, lista);
+            setLista(r.lista);
+            const partes = [
+                r.vinculados ? `${r.vinculados} sócio${r.vinculados > 1 ? 's' : ''} já digitado${r.vinculados > 1 ? 's' : ''} ligado${r.vinculados > 1 ? 's' : ''} ao da empresa (percentuais mantidos)` : '',
+                r.criados ? `${r.criados} importado${r.criados > 1 ? 's' : ''}` : '',
+            ].filter(Boolean);
+            showToast(partes.length ? `${partes.join('; ')}.` : 'Os sócios atuais da empresa já estão na lista.', 'success');
         } catch (e) {
             showToast((e as Error).message, 'error');
         } finally {

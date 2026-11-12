@@ -15,6 +15,11 @@ export interface DadosViabilidadeMercado {
   areaTerreno: number;
   /** Precisa de `stats.pricePerM2Avg` medido: é o preço de venda do bloco. */
   resultado: ResultadoNaTela;
+  /**
+   * Estudo de terreno salvo no Market de onde a viabilidade nasce (item 7.2 do plano
+   * 2026-11-11). Sem ele (análise não salva) a viabilidade nasce sem o vínculo.
+   */
+  estudoDeTerrenoId?: string | null;
 }
 
 const subClassificacao = (padrao: string): string =>
@@ -47,6 +52,7 @@ export async function criarViabilidadeImovib(d: DadosViabilidadeMercado): Promis
     ca_max: h.coeficienteAproveitamento,
     occupancy_rate: h.taxaOcupacao,
     land_cost: 0,
+    opura_terrain_study_id: d.estudoDeTerrenoId ?? null,
   });
 
   const bloco = await imovibService.createBlock({

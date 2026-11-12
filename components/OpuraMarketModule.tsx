@@ -349,6 +349,7 @@ const OpuraMarketModule: React.FC<OpuraMarketModuleProps> = ({ organizationId, o
         nomeBairro: selectedNeighborhood?.name ?? null,
         areaTerreno: parseFloat(v.terrainArea),
         resultado: v.analysisResult,
+        estudoDeTerrenoId: v.estudoSalvoId,
       });
       showToast('Estudo de viabilidade criado no IMOVIB com as premissas territoriais.');
       setActiveView?.('imovib');

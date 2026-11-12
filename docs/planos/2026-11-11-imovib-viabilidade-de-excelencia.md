@@ -795,13 +795,13 @@ Conferido no navegador em 11/11 (Garden e Bruninho, roteiro `c:/tmp/pwtest/imovi
 
 Conferido no navegador em 11/11 (Garden Cambuhy, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase5.js`): listagem = Resumo (R$ 3.998.485, o mesmo de antes); Premissas (zoneamento, cronograma, terreno, due diligence), CAPEX (desembolso, pós-obra, CUB) e Resumo abrem; 0 escritas, 0 erros de console. O Bruninho e o Davi Bueno não existem mais em `imovib_studies` (a oportunidade "Quintino Bocaiúva" ficou sem estudo) — apagados fora desta frente, entre a conferência da Fase 4 e esta.
 
-**Fase 6 — Tributos:** 4 de 4 — revisada; migration `aplicar_20271112200000` (`tax_regime`, `tax_hypotheses`) aplicada em 11/11 com OK do usuário (*"Pode aplicar"*)
+**Fase 6 — Tributos:** 4 de 4 — no ar (PR #375, 17316efe), revisada; migration `aplicar_20271112200000` (`tax_regime`, `tax_hypotheses`) aplicada em 11/11 com OK do usuário (*"Pode aplicar"*)
 - [x] 6.1 Cálculo por regime (D4) — `utils/imovibTributos.ts`; padrões em `HIPOTESES_TRIBUTARIAS`. Lucro real: crédito de PIS/Cofins sobre o custo passa adiante; IRPJ/CSLL no último mês de cada bloco de 12 meses sobre receita − custo − deduções − PIS/Cofins, com o prejuízo acumulado compensado sem limite (decisão de 11/11).
 - [x] 6.2 Regime no estudo — vazio = manual (regressão verde sem edição); fora do manual, rubricas % da categoria 7 (base VGV) e o imposto da Dinâmica ficam fora e valem 0 "No cálculo". Sem `ImovibAviso`: o aviso não tinha como ser resolvido (os campos ficam desligados pelo regime) e ficava no banner para sempre; o cartão do regime lista o que ficou fora (`impostosForaDoCalculo`). Estática ganha a linha "Impostos do regime tributário"; "Vendas durante a obra" desconta o imposto do regime.
 - [x] 6.3 Tela: regime e comparação — `components/ImovibRegimeTributarioCard.tsx` na aba Orçamento; comparação em `utils/imovibComparacaoDeRegimes.ts` (arquivo próprio: o motor importa os tributos). Garden: sugestão "Lucro presumido" pela empresa da SPE; manual (rubricas) = 6,73%, VPL R$ 3.998.485; RET levaria a R$ 4.273.354.
 - [x] 6.4 Rubricas de obra no modelo — "INSS da obra (aferição)" e "ISS da construção (construtora terceira)" em "4. Construção Indireta", valor 0, só estudo novo.
 
-**Fase 7 — Mercado:** 0 de 3
+**Fase 7 — Mercado:** 0 de 3 — migrations `aplicar_20271112300000` (comparáveis) e `aplicar_20271112310000` (vínculo com o Market e origem da VSO — `vso_regional_source` não estava no plano: sem ela a origem da 7.3 teria de ser adivinhada) aplicadas em 12/11 com OK do usuário (*"Pode aplicar"*). Conferido antes do 7.2: o `useMarketVocacao` não guardava o id do estudo de terreno nem ao salvar nem ao reabrir — passa a guardar (zerado a cada nova análise)
 - [ ] 7.1 Comparáveis
 - [ ] 7.2 Ligação com o Ópura Market
 - [ ] 7.3 Campos de mercado com uso

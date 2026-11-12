@@ -9,6 +9,7 @@ import {
     montarPath,
     EXTENSOES_PERMITIDAS,
     MAX_PATHS,
+    MAX_TAMANHO_PATH,
 } from '../supabase/functions/celular-diario-midia/regras';
 
 const PROJETO = '3f2b8c1e-5a4d-4e6f-9b7a-1c2d3e4f5a6b';
@@ -69,6 +70,30 @@ describe('validarPedido — pedido válido', () => {
     it('subir', () => {
         const r = validarPedido({ acao: 'subir', token: 't', project_id: PROJETO, ext: 'jpg' });
         expect(r).toEqual({ ok: true, pedido: { acao: 'subir', token: 't', project_id: PROJETO, ext: 'jpg' } });
+    });
+
+    it('a lista de extensões é exatamente a do link: só imagem', () => {
+        expect([...EXTENSOES_PERMITIDAS]).toEqual(['jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif']);
+        for (const ext of ['pdf', 'mp4', 'mov', 'webm', 'doc', 'docx', 'xls', 'xlsx', 'bin']) {
+            expect(validarPedido({ acao: 'subir', token: 't', project_id: PROJETO, ext }).ok).toBe(false);
+        }
+    });
+
+    it('subir e remover guardam o project_id em minúscula (o banco compara com uuid::text)', () => {
+        const maiusculo = PROJETO.toUpperCase();
+        const s = validarPedido({ acao: 'subir', token: 't', project_id: maiusculo, ext: 'png' });
+        expect(s.ok && s.pedido.acao === 'subir' && s.pedido.project_id).toBe(PROJETO);
+        const r = validarPedido({ acao: 'remover', token: 't', project_id: maiusculo, paths: ['a'] });
+        expect(r.ok && r.pedido.acao === 'remover' && r.pedido.project_id).toBe(PROJETO);
+    });
+
+    it('recusa path maior que o teto de tamanho', () => {
+        expect(MAX_TAMANHO_PATH).toBe(300);
+        const noLimite = 'a'.repeat(MAX_TAMANHO_PATH);
+        const acima = 'a'.repeat(MAX_TAMANHO_PATH + 1);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: [noLimite] }).ok).toBe(true);
+        expect(validarPedido({ acao: 'assinar', token: 't', paths: [acima] }).ok).toBe(false);
+        expect(validarPedido({ acao: 'remover', token: 't', project_id: PROJETO, paths: ['a', acima] }).ok).toBe(false);
     });
 
     it('subir aceita toda extensão da lista', () => {

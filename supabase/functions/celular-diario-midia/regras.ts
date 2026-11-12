@@ -5,14 +5,13 @@
 // forma do pedido e se monta o path.
 
 export const MAX_PATHS = 100;
+// Teto por path: {org}/{projeto}/{uuid}.{ext} tem ~85 caracteres; 300 sobra.
+export const MAX_TAMANHO_PATH = 300;
 
-// Mesmas extensões que `diaryMediaExtension` (services/diaryMediaService.ts)
-// produz a partir do MIME, em minúscula. Nada executável nem renderizável
-// como página (html, svg, js...).
+// Extensões aceitas no link do celular (Global Constraint do plano): só imagem,
+// em minúscula. Nada executável nem renderizável como página (html, svg...).
 export const EXTENSOES_PERMITIDAS: readonly string[] = [
     'jpg', 'jpeg', 'png', 'webp', 'gif', 'heic', 'heif',
-    'mp4', 'mov', 'webm',
-    'pdf', 'doc', 'docx', 'xls', 'xlsx',
 ];
 
 export type PedidoMidia =
@@ -32,7 +31,7 @@ function pathsValidos(v: unknown): v is string[] {
     return Array.isArray(v)
         && v.length >= 1
         && v.length <= MAX_PATHS
-        && v.every(p => typeof p === 'string' && p.trim() !== '');
+        && v.every(p => typeof p === 'string' && p.trim() !== '' && p.length <= MAX_TAMANHO_PATH);
 }
 
 export function validarPedido(body: unknown): ResultadoValidacao {
@@ -51,14 +50,15 @@ export function validarPedido(body: unknown): ResultadoValidacao {
     const token = b.token;
 
     if (acao === 'assinar') {
-        if (!pathsValidos(b.paths)) return recusa(`paths deve ter de 1 a ${MAX_PATHS} caminhos`);
+        if (!pathsValidos(b.paths)) return recusa(`paths deve ter de 1 a ${MAX_PATHS} caminhos de até ${MAX_TAMANHO_PATH} caracteres`);
         return { ok: true, pedido: { acao, token, paths: b.paths } };
     }
 
     if (typeof b.project_id !== 'string' || !UUID.test(b.project_id)) {
         return recusa('project_id deve ser um uuid');
     }
-    const project_id = b.project_id;
+    // O banco compara o prefixo com `uuid::text` (minúscula): maiúscula quebraria o path.
+    const project_id = b.project_id.toLowerCase();
 
     if (acao === 'subir') {
         if (typeof b.ext !== 'string' || !EXTENSOES_PERMITIDAS.includes(b.ext)) {
@@ -67,7 +67,7 @@ export function validarPedido(body: unknown): ResultadoValidacao {
         return { ok: true, pedido: { acao, token, project_id, ext: b.ext } };
     }
 
-    if (!pathsValidos(b.paths)) return recusa(`paths deve ter de 1 a ${MAX_PATHS} caminhos`);
+    if (!pathsValidos(b.paths)) return recusa(`paths deve ter de 1 a ${MAX_PATHS} caminhos de até ${MAX_TAMANHO_PATH} caracteres`);
     return { ok: true, pedido: { acao, token, project_id, paths: b.paths } };
 }
 

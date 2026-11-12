@@ -73,7 +73,13 @@ serve(async (req: Request) => {
             });
             if (error) return erroDaRpc(error);
 
-            const path = montarPath(String(org), pedido.project_id, crypto.randomUUID(), pedido.ext);
+            // Sem organização devolvida não há path válido: nunca montar "null/...".
+            if (typeof org !== 'string' || org.trim() === '') {
+                console.error('[celular-diario-midia] celular_diario_autoriza não devolveu a organização');
+                return json({ error: 'Erro ao processar o pedido' }, 500);
+            }
+
+            const path = montarPath(org, pedido.project_id, crypto.randomUUID(), pedido.ext);
             const { data, error: erroUpload } = await admin.storage.from(BUCKET).createSignedUploadUrl(path);
             if (erroUpload || !data?.token) {
                 console.error('[celular-diario-midia] erro ao criar upload assinado:', erroUpload);

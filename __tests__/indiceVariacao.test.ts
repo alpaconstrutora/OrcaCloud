@@ -50,3 +50,22 @@ describe('pendência da Fase 1 — série do índice sem misturar organização 
         expect(taxaMensalMedia(serieDoIndice(valores), 12)).toBeCloseTo((Math.pow(1.12, 1 / 12) - 1) * 100, 6);
     });
 });
+
+describe('revisão — série curta da organização não anula a global', () => {
+    const v = (reference_month: string, value: number, organization_id: string | null) => ({ reference_month, value, organization_id });
+    const global = Array.from({ length: 13 }, (_, i) => v(`${2025 + Math.floor((i + 0) / 12)}-${String((i % 12) + 1).padStart(2, '0')}-01`, 100 + i, null));
+
+    it('organização com 1 mês: usa a global', () => {
+        expect(serieDoIndice([...global, v('2026-01-01', 500, 'org')], 12).every(x => x.organization_id == null)).toBe(true);
+    });
+
+    it('organização com poucos meses (não cobre a janela): usa a global', () => {
+        const org = [v('2025-11-01', 500, 'org'), v('2025-12-01', 505, 'org'), v('2026-01-01', 510, 'org')];
+        expect(serieDoIndice([...global, ...org], 12).every(x => x.organization_id == null)).toBe(true);
+    });
+
+    it('organização que cobre a janela: usa só a dela', () => {
+        const org = Array.from({ length: 13 }, (_, i) => v(`${2025 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}-01`, 500 + i, 'org'));
+        expect(serieDoIndice([...global, ...org], 12).every(x => x.organization_id === 'org')).toBe(true);
+    });
+});

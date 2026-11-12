@@ -40,11 +40,20 @@ export function taxaMensalMedia(valores: PontoDoIndice[], meses: number): number
 }
 
 /**
- * A série de um índice: a da organização inteira, se ela cadastrou alguma; senão a
- * global inteira. Nunca as duas misturadas mês a mês — números-índice podem estar
- * em bases diferentes, e um mês de cada daria variação falsa (pendência da Fase 1).
+ * A série de um índice: a da organização inteira OU a global inteira — nunca as duas
+ * misturadas mês a mês (números-índice podem estar em bases diferentes, e um mês de
+ * cada daria variação falsa; pendência da Fase 1). A da organização vale quando cobre
+ * a janela (`janelaMeses` entre o primeiro e o último ponto, ou tanto quanto a
+ * global); uma série curta dela — um mês só, por exemplo — não anula a global.
  */
-export function serieDoIndice<T extends PontoDoIndice & { organization_id?: string | null }>(valores: T[]): T[] {
+export function serieDoIndice<T extends PontoDoIndice & { organization_id?: string | null }>(valores: T[], janelaMeses = 12): T[] {
+    const alcance = (xs: T[]) => {
+        const meses = xs.map(v => v.reference_month).filter(Boolean).sort();
+        return meses.length < 2 ? 0 : mesesEntre(meses[0], meses[meses.length - 1]);
+    };
     const daOrganizacao = valores.filter(v => v.organization_id != null);
-    return daOrganizacao.length > 0 ? daOrganizacao : valores.filter(v => v.organization_id == null);
+    const global = valores.filter(v => v.organization_id == null);
+    const alcanceDaOrganizacao = alcance(daOrganizacao);
+    if (daOrganizacao.length >= 2 && (alcanceDaOrganizacao >= janelaMeses || alcanceDaOrganizacao >= alcance(global))) return daOrganizacao;
+    return global.length > 0 ? global : daOrganizacao;
 }

@@ -27,7 +27,7 @@ import { estudoComPrazoDoPortal } from '../../utils/imovibVariacoes';
 import { calcularIndicadores, textoDoPayback } from '../../utils/imovibIndicadores';
 import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
 import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
-import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, NOTA_VGV_LIQUIDO_ACIMA } from '../../constants/imovibClassificacao';
+import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../../constants/imovibClassificacao';
 import { ImovibStudy } from '../../types';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
@@ -711,7 +711,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                     <span className="text-lg font-black text-blue-900 font-mono">
                                                         {studyMath ? fmtBRL(studyMath.netVgvTotal) : op.vgv ? fmtBRL(op.vgv) : '—'}
                                                     </span>
-                                                    {studyMath && vgvLiquidoPassaDoBruto(studyMath) && <span className="block text-xs text-gray-500 mt-1">{NOTA_VGV_LIQUIDO_ACIMA}</span>}
+                                                    {studyMath && vgvLiquidoPassaDoBruto(studyMath) && <span className="block text-xs text-gray-500 mt-1">{notaDoVgvLiquido(study ?? {})}</span>}
                                                 </div>
                                                 <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
                                                     <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Custo Estimado</span>

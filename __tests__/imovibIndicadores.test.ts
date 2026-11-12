@@ -97,3 +97,11 @@ describe('pendência da Fase 2 — payback de fluxo que nunca fica negativo', ()
         expect(textoDoPayback(nunca)).toBe('—');
     });
 });
+
+describe('revisão — estudo vazio não é "Sem exposição"', () => {
+    it('fluxo todo zero: semExposicao falso e payback "—"', () => {
+        const ind = calcularIndicadores(resultado([0, 0, 0]), 12);
+        expect(ind.semExposicao).toBe(false);
+        expect(textoDoPayback(ind)).toBe('—');
+    });
+});

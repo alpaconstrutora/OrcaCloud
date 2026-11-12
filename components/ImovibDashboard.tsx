@@ -13,7 +13,7 @@ import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { useConfirm } from './ui/confirm';
 import { useOrgContext } from '../hooks/useOrgContext';
 import { useImovibPermissaoPorOrg } from '../hooks/useImovibEdicao';
-import { imovibIncorporadora, TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, NOTA_VGV_LIQUIDO_ACIMA } from '../constants/imovibClassificacao';
+import { imovibIncorporadora, TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../constants/imovibClassificacao';
 
 interface ImovibDashboardProps {
     /** Ignorado: a organização vem do topo (useOrgContext, REGRA #5). */
@@ -190,7 +190,8 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                 case 'irr': return num(ra.m.annualIrr, rb.m.annualIrr);
                 case 'margin': return num(ra.margin, rb.margin);
                 case 'exposure': return num(ra.m.maxExposure, rb.m.maxExposure);
-                case 'payback': return num(ra.ind.paybackSimplesMes ?? NaN, rb.ind.paybackSimplesMes ?? NaN);
+                // "Sem exposição" (caixa nunca negativo) ordena antes do Mês 1; "—" (nunca recupera) por último.
+                case 'payback': return num(ra.ind.semExposicao ? 0 : ra.ind.paybackSimplesMes ?? NaN, rb.ind.semExposicao ? 0 : rb.ind.paybackSimplesMes ?? NaN);
                 case 'multiple': return num(ra.ind.multiploDoCapital ?? NaN, rb.ind.multiploDoCapital ?? NaN);
                 case 'created_at': return txt(a.created_at).localeCompare(txt(b.created_at)) * dir;
                 case 'updated_at': return txt(a.updated_at).localeCompare(txt(b.updated_at)) * dir;
@@ -418,7 +419,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                         {visible.includes('netVgv') && (
                                             <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-right text-sm font-medium text-gray-800" title={TITULO_VGV_LIQUIDO}>
                                                 {formatMoney(m.netVgvTotal)}
-                                                {vgvLiquidoPassaDoBruto(m) && <span className="block text-xs font-normal text-slate-500">{NOTA_VGV_LIQUIDO_ACIMA}</span>}
+                                                {vgvLiquidoPassaDoBruto(m) && <span className="block text-xs font-normal text-slate-500">{notaDoVgvLiquido(study)}</span>}
                                             </td>
                                         )}
                                         {visible.includes('cost') && (

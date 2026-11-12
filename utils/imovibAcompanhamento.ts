@@ -77,7 +77,7 @@ export function compararComRealizado(
             vendasPrevistasAcum: previstas,
             vendasReaisAcum: futuro ? null : reais,
             emCurso: hoje != null && mes === hoje,
-            ...(i === 0 && antes ? { antesDaDataBase: antes } : {}),
+            ...(i === 0 && antes && !futuro ? { antesDaDataBase: antes } : {}),
         };
     });
 }

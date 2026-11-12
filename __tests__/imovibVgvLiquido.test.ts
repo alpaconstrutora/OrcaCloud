@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { vgvLiquidoPassaDoBruto } from '../constants/imovibClassificacao';
+import { vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../constants/imovibClassificacao';
 import { computeImovibMath } from '../hooks/useImovibMath';
 import { baseStudy } from './fixtures/imovibEstudos';
 
@@ -16,5 +16,12 @@ describe('VGV líquido acima do bruto', () => {
 
     it('no estudo comum, não', () => {
         expect(vgvLiquidoPassaDoBruto(computeImovibMath(baseStudy()))).toBe(false);
+    });
+});
+
+describe('revisão — a nota diz o motivo certo', () => {
+    it('com juros do pós-chaves: "inclui juros do pós-chaves"; sem juros: "acima do VGV bruto"', () => {
+        expect(notaDoVgvLiquido({ post_handover_rate_monthly: 1.5 } as never)).toBe('inclui juros do pós-chaves');
+        expect(notaDoVgvLiquido({ post_handover_rate_monthly: 0 } as never)).toBe('acima do VGV bruto');
     });
 });

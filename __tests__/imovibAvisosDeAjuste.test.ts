@@ -32,10 +32,35 @@ describe('ajustes que o cálculo faz passam a avisar', () => {
         expect(aviso({ sales_curve_type: 'custom', sales_curve_custom: [5, -1, 5] }, 'premissa_ajustada')?.mensagem).toMatch(/pesos negativos .*valem 0/);
     });
 
-    it('permuta acima de 100% e defasagens negativas', () => {
-        expect(aviso({ swap_financial_percent: 120 }, 'premissa_ajustada')?.mensagem).toMatch(/Permuta financeira de 120%/);
+    it('defasagens negativas; a da liberação aponta para a aba Capital', () => {
         expect(aviso({ cancellation_lag_months: -3 }, 'premissa_ajustada')?.mensagem).toMatch(/meses até o distrato \(-3\) valem 0/i);
-        expect(aviso({ financing_release_lag_months: -2 }, 'premissa_ajustada')?.mensagem).toMatch(/defasagem da liberação \(-2\) vale 0/i);
+        const capital = aviso({ financing_release_lag_months: -2 }, 'premissa_ajustada_capital');
+        expect(capital?.mensagem).toMatch(/defasagem da liberação \(-2\) vale 0/i);
+        expect(capital?.aba).toBe('capital');
+        expect(aviso({ financing_release_lag_months: -2 }, 'premissa_ajustada')).toBeUndefined();
+    });
+
+    it('revisão: permuta acima de 100% NÃO diz "vale como 100%" (o motor usa o valor; receita_liquida_negativa avisa)', () => {
+        const r = computeImovibMath(baseStudy({ swap_financial_percent: 120 }));
+        expect(r.avisos.find(a => a.codigo === 'premissa_ajustada')).toBeUndefined();
+        expect(r.avisos.some(a => a.codigo === 'receita_liquida_negativa')).toBe(true);
+    });
+
+    it('revisão: lançamento com meses iguais ao prazo ou zerados avisa; meses além do prazo não fala do %', () => {
+        expect(aviso({ sales_curve_type: 'lancamento', sales_launch_percent: 30, sales_launch_months: 24 }, 'premissa_ajustada')?.mensagem).toMatch(/vende igual em todos os meses/);
+        expect(aviso({ sales_curve_type: 'lancamento', sales_launch_percent: 30, sales_launch_months: 0 }, 'premissa_ajustada')?.mensagem).toMatch(/vende igual em todos os meses/);
+        expect(aviso({ sales_curve_type: 'lancamento', sales_launch_percent: 130, sales_launch_months: 99 }, 'premissa_ajustada')?.mensagem).not.toMatch(/130%/);
+    });
+
+    it('revisão: zeros no fim da curva personalizada não são "pesos fora do cálculo"', () => {
+        const pesos = [...Array.from({ length: 24 }, () => 1), 0, 0, 0];
+        expect(aviso({ sales_curve_type: 'custom', sales_curve_custom: pesos }, 'premissa_ajustada')).toBeUndefined();
+    });
+
+    it('revisão: distrato e deságio da revenda fora de 0–100% avisam; devolução acima de 100% também', () => {
+        expect(aviso({ cancellation_rate_percent: 150 }, 'premissa_ajustada')?.mensagem).toMatch(/Distrato de 150% vale como 100%/);
+        expect(aviso({ cancellation_resale_discount_percent: -5 }, 'premissa_ajustada')?.mensagem).toMatch(/Deságio da revenda de -5% vale como 0%/);
+        expect(aviso({ cancellation_refund_percent: 120 }, 'premissa_ajustada')?.mensagem).toMatch(/Devolução ao comprador de 120%/);
     });
 
     it('estudo sem nada fora da faixa não avisa', () => {
@@ -50,6 +75,10 @@ describe('distrato sem revenda (pendência da Fase 1)', () => {
         expect(a?.aba).toBe('receitas');
         expect(aviso({ cancellation_rate_percent: 10, cancellation_resale: true }, 'distrato_sem_revenda')).toBeUndefined();
         expect(aviso({ cancellation_rate_percent: 0, cancellation_resale: false }, 'distrato_sem_revenda')).toBeUndefined();
+    });
+
+    it('revisão: sem venda antes das chaves (ninguém distrata), não avisa', () => {
+        expect(aviso({ cancellation_rate_percent: 10, cancellation_resale: false, sales_start_month: 30 }, 'distrato_sem_revenda')).toBeUndefined();
     });
 });
 

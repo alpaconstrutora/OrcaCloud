@@ -65,3 +65,11 @@ describe('pendência da Fase 10 — realizado anterior à data-base', () => {
         expect(r[0].antesDaDataBase).toBeUndefined();
     });
 });
+
+describe('revisão — realizado antes da data-base quando o mês 1 ainda é futuro', () => {
+    it('não marca a linha 0 (que não mostra realizado)', () => {
+        const r = compararComRealizado(fluxo(2), '2027-01', [{ mes: '2026-06', entradas: 0, saidas: 50 }], [], [0, 0], '2026-11');
+        expect(r[0].receitaRealizada).toBeNull();
+        expect(r[0].antesDaDataBase).toBeUndefined();
+    });
+});

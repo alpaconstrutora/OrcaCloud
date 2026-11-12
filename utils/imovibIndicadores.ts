@@ -70,13 +70,15 @@ export function calcularIndicadores(r: ImovibMathResult, tmaAnualPct: number): I
     // Caixa acumulado nunca negativo: o payback seria "Mês 1" sem nunca ter havido o que
     // recuperar (pendência da Fase 2). Fica vazio, e a tela diz "Sem exposição".
     let acumulado = 0;
-    const semExposicao = net.length > 0 && net.every(v => (acumulado += v) >= 0);
+    // Fluxo todo zero (estudo vazio) não é "sem exposição": não há o que dizer.
+    const temCaixa = net.some(v => v !== 0);
+    const semExposicao = temCaixa && net.every(v => (acumulado += v) >= 0);
     return {
         lucroLiquido: lucro,
         margemLiquidaSobreVgv: porVgv(lucro),
         margemSobreCusto: custo > 0 ? lucro / custo : null,
-        paybackSimplesMes: semExposicao ? null : payback(net),
-        paybackDescontadoMes: semExposicao ? null : payback(net.map((v, i) => v / Math.pow(1 + tmaMensal, i))),
+        paybackSimplesMes: semExposicao || !temCaixa ? null : payback(net),
+        paybackDescontadoMes: semExposicao || !temCaixa ? null : payback(net.map((v, i) => v / Math.pow(1 + tmaMensal, i))),
         multiploDoCapital: saidas > 0 ? entradas / saidas : null,
         retornoSobreCapital: r.maxExposure < 0 ? lucro / -r.maxExposure : null,
         tirModificadaAnual,

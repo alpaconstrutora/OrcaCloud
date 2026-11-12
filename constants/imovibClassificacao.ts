@@ -63,4 +63,6 @@ export const TITULO_VGV_LIQUIDO = 'Receita dos compradores sem índice: VGV vend
  * o portal marcam isso no próprio valor, e não só na dica (pendência da Fase 1).
  */
 export const vgvLiquidoPassaDoBruto = (r: { netVgvTotal: number; vgvTotal: number }): boolean => r.netVgvTotal > r.vgvTotal + 0.5;
-export const NOTA_VGV_LIQUIDO_ACIMA = 'inclui juros do pós-chaves';
+/** A nota diz o motivo que dá para afirmar: os juros do pós-chaves, quando há; senão só que passou. */
+export const notaDoVgvLiquido = (study: { post_handover_rate_monthly?: number | null }): string =>
+    (study.post_handover_rate_monthly ?? 0) > 0 ? 'inclui juros do pós-chaves' : 'acima do VGV bruto';

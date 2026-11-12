@@ -99,7 +99,7 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
         | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
-        | 'impostos_pelo_regime' | 'ret_sem_afetacao' | 'premissa_ajustada' | 'distrato_sem_revenda' | 'custo_de_obra_negativo';
+        | 'impostos_pelo_regime' | 'ret_sem_afetacao' | 'premissa_ajustada' | 'premissa_ajustada_capital' | 'distrato_sem_revenda' | 'custo_de_obra_negativo';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -753,7 +753,10 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     }
     // Premissas fora da faixa: o cálculo segue como dá, e o aviso diz o que ajustou
     // (regra 5 do plano; antes os ajustes eram silenciosos — pendência da Fase 1).
+    // Só entra aqui o que o cálculo de fato LIMITA: permuta acima de 100% é usada como
+    // está (a receita fica negativa) e quem avisa é `receita_liquida_negativa`.
     const ajustes: string[] = [];
+    const ajustesDoCapital: string[] = [];
     const pctTxt = (x: number) => `${Number(x.toFixed(2)).toLocaleString('pt-BR')}%`;
     const foraDaFaixa = (x: number | null | undefined, rotulo: string) => {
         if (x == null || Number.isNaN(x)) return;
@@ -762,20 +765,29 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     };
     const tipoDaCurva = study.sales_curve_type ?? D.sales_curve_type;
     if (tipoDaCurva === 'lancamento') {
-        foraDaFaixa(study.sales_launch_percent, 'Vendido no lançamento');
         const mesesDoLancamento = Math.round(val(study.sales_launch_months, D.sales_launch_months));
-        if (mesesDoLancamento > salesDur) ajustes.push(`os meses do lançamento (${mesesDoLancamento}) passam do prazo de vendas (${salesDur}): vende igual em todos os meses`);
+        // curvaDeVendas: 0 mês ou o prazo inteiro de lançamento = linear (o % não é usado).
+        if (mesesDoLancamento >= salesDur || mesesDoLancamento <= 0) {
+            ajustes.push(`os meses do lançamento (${mesesDoLancamento}) ${mesesDoLancamento <= 0 ? 'estão zerados' : `cobrem o prazo de vendas (${salesDur})`}: vende igual em todos os meses, sem o % do lançamento`);
+        } else {
+            foraDaFaixa(study.sales_launch_percent, 'Vendido no lançamento');
+        }
     }
     if (tipoDaCurva === 'vso') foraDaFaixa(study.sales_vso_percent, 'VSO');
     if (tipoDaCurva === 'custom') {
         const pesos = study.sales_curve_custom ?? [];
-        if (pesos.length > salesDur) ajustes.push(`${pesos.length - salesDur} pesos da curva personalizada ficam além do prazo de vendas e fora do cálculo`);
-        if (pesos.some(x => Number(x) < 0)) ajustes.push('pesos negativos da curva personalizada valem 0');
+        // Peso positivo além do prazo é o que se perde (zeros no fim não mudam nada).
+        const alemDoPrazo = pesos.slice(salesDur).filter(x => Number(x) > 0).length;
+        if (alemDoPrazo > 0) ajustes.push(`${alemDoPrazo} pesos da curva personalizada ficam além do prazo de vendas e fora do cálculo`);
+        if (pesos.slice(0, salesDur).some(x => Number(x) < 0)) ajustes.push('pesos negativos da curva personalizada valem 0');
     }
-    foraDaFaixa(study.swap_physical_percent, 'Permuta física');
-    foraDaFaixa(study.swap_financial_percent, 'Permuta financeira');
+    // imovibRecebimento limita distrato e deságio a 0–100%; a devolução não tem limite.
+    foraDaFaixa(study.cancellation_rate_percent, 'Distrato');
+    foraDaFaixa(study.cancellation_resale_discount_percent, 'Deságio da revenda');
+    const devolucaoInformada = study.cancellation_refund_percent;
+    if (devolucaoInformada != null && devolucaoInformada > 100) ajustes.push(`Devolução ao comprador de ${pctTxt(devolucaoInformada)} devolve mais do que ele pagou (usada como está)`);
     if ((study.cancellation_lag_months ?? 0) < 0) ajustes.push(`os meses até o distrato (${study.cancellation_lag_months}) valem 0`);
-    if ((study.financing_release_lag_months ?? 0) < 0) ajustes.push(`a defasagem da liberação (${study.financing_release_lag_months}) vale 0`);
+    if ((study.financing_release_lag_months ?? 0) < 0) ajustesDoCapital.push(`a defasagem da liberação (${study.financing_release_lag_months}) vale 0`);
     if (ajustes.length) {
         avisos.push({
             codigo: 'premissa_ajustada',
@@ -783,12 +795,11 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             aba: 'receitas',
         });
     }
-    const taxaDeDistrato = val(study.cancellation_rate_percent, D.cancellation_rate_percent);
-    if (taxaDeDistrato > 0 && !(study.cancellation_resale ?? D.cancellation_resale)) {
+    if (ajustesDoCapital.length) {
         avisos.push({
-            codigo: 'distrato_sem_revenda',
-            mensagem: `Sem revenda, a unidade distratada (${pctTxt(taxaDeDistrato)} das vendas antes das chaves) sai do estoque e não é vendida de novo: o VGV dela fica fora da receita.`,
-            aba: 'receitas',
+            codigo: 'premissa_ajustada_capital',
+            mensagem: `O cálculo ajustou premissas do financiamento fora da faixa: ${ajustesDoCapital.join('; ')}. Corrija o campo na aba Capital.`,
+            aba: 'capital',
         });
     }
     if (constCostTotal < 0) {
@@ -851,6 +862,15 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     const taxaDistrato = val(study.cancellation_rate_percent, D.cancellation_rate_percent);
     const vendidoTotal = vendasPorMes.reduce((a, b) => a + b, 0);
     const vendidoNasChavesOuDepois = vendasPorMes.slice(handoverMonth - 1).reduce((a, b) => a + b, 0);
+    // Sem revenda, a unidade distratada não volta a ser vendida — só importa se alguém
+    // distrata (venda antes das chaves).
+    if (taxaDistrato > 0 && vendidoTotal - vendidoNasChavesOuDepois > 0 && !(study.cancellation_resale ?? D.cancellation_resale)) {
+        avisos.push({
+            codigo: 'distrato_sem_revenda',
+            mensagem: `Sem revenda, a unidade distratada (${pctBR(taxaDistrato / 100)}% das vendas antes das chaves) sai do estoque e não é vendida de novo: o VGV dela fica fora da receita.`,
+            aba: 'receitas',
+        });
+    }
     if (taxaDistrato > 0 && vendidoTotal > 0 && vendidoNasChavesOuDepois > 0) {
         avisos.push({
             codigo: 'distrato_parcial',

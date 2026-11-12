@@ -87,10 +87,11 @@ export function recebimentoPorSafra(
     const desagio = Math.min(1, Math.max(0, por(distrato.desagioRevendaPct)));
     const chaves = Math.round(mesDasChaves);
 
-    /** Põe `valor` da safra no mês `m`, se o mês vem antes do corte (distrato). */
-    // O que o comprador paga direto e pode deixar de pagar (a mesma regra do motor).
+    // O que o comprador paga direto e pode deixar de pagar (as mesmas linhas em que o
+    // motor aplica a inadimplência; aqui limitada a 0–100%, só para a base da devolução).
     const inadimplencia = Math.min(1, Math.max(0, por(distrato.inadimplenciaPct ?? 0)));
     const PAGO_DIRETO: Linha[] = ['parcelasObra', 'intermediarias', 'posChaves'];
+    /** Põe `valor` da safra no mês `m`, se o mês vem antes do corte (distrato). */
     const lancar = (linha: Linha, m: number, valor: number, corte: number | null, pago: { total: number }) => {
         if (valor === 0 || m < 1) return;
         if (corte != null && m >= corte) return;

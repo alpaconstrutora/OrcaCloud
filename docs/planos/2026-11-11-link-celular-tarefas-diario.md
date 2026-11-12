@@ -118,9 +118,10 @@ Decisões (2026-11-12): seções = **pílula no topo** (Tarefas | Diário no cab
 com a barra da tela); nome vazio no cabeçalho → só a org (ou e-mail), sem "·" sobrando. Limite de uso por link:
 **120 envios de foto/hora** e **600 pedidos de assinatura/hora**, contados no banco (`user_mobile_link_uso`, RLS sem
 policy) dentro de `celular_diario_autoriza` / `celular_diario_midia_permitida`; estouro → ERRCODE `54000` → Edge 429 →
-"Limite de uso do link atingido — tente de novo em alguns minutos." Mais os testes extras e a organização de código
+"Limite de uso do link atingido — tente de novo na próxima hora." Mais os testes extras e a organização de código
 apontados nas revisões da Parte 2 (carregador do planejamento no serviço, `toResult` sem duplicata, `removerFotos` em
 paralelo com uma recusa só, `pode_aprovar_diario` obrigatório, `IS NOT TRUE` nas checagens de planejamento).
+Cabeçalho sem nome: cai só na organização — `celular_sessao` não devolve e-mail, então não há e-mail para o fallback.
 
 ## Design
 

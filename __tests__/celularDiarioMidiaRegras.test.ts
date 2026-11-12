@@ -128,7 +128,7 @@ describe('montarPath', () => {
 });
 
 describe('respostaDoErroDaRpc — erro da RPC vira resposta HTTP', () => {
-    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos';
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.';
 
     it('54000 (limite de uso do link) → 429 com a mensagem do banco, sem log', () => {
         expect(respostaDoErroDaRpc({ code: '54000', message: LIMITE }))
@@ -137,7 +137,7 @@ describe('respostaDoErroDaRpc — erro da RPC vira resposta HTTP', () => {
 
     it('54000 sem mensagem → 429 com texto padrão', () => {
         expect(respostaDoErroDaRpc({ code: '54000' }).status).toBe(429);
-        expect(respostaDoErroDaRpc({ code: '54000', message: '' }).corpo.error).toBe('Limite de uso do link atingido');
+        expect(respostaDoErroDaRpc({ code: '54000', message: '' }).corpo.error).toBe('Limite de uso do link atingido — tente de novo na próxima hora.');
     });
 
     it('42501 → 403 e 22023 → 400, com a mensagem do banco', () => {

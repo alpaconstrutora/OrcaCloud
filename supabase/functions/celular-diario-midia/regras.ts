@@ -87,7 +87,7 @@ export function respostaDoErroDaRpc(erro: { code?: string; message?: string }): 
         ({ status, corpo: { error: erro.message || padrao }, logar: false });
     if (erro.code === '42501') return previsto(403, 'Acesso negado');
     if (erro.code === '22023') return previsto(400, 'Pedido inválido');
-    if (erro.code === '54000') return previsto(429, 'Limite de uso do link atingido');
+    if (erro.code === '54000') return previsto(429, 'Limite de uso do link atingido — tente de novo na próxima hora.');
     return { status: 500, corpo: { error: 'Erro ao processar o pedido' }, logar: true };
 }
 

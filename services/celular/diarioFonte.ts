@@ -159,7 +159,7 @@ function emLotes<T>(lista: T[], tamanho: number): T[][] {
 /**
  * Limite de uso do link (banco: `_celular_cota`, ERRCODE 54000; Edge: 429).
  * NÃO é recusa do link: o token segue válido, é só esperar. A mensagem do erro
- * é a do banco ("limite de uso do link atingido — tente de novo em alguns minutos").
+ * é a do banco ("Limite de uso do link atingido — tente de novo na próxima hora.").
  */
 export function ehLimiteDeUsoDoLink(erro: unknown): boolean {
   if (!erro || typeof erro !== 'object') return false

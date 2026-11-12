@@ -835,8 +835,8 @@ DECLARE
     org UUID; m UUID; g UUID;
     tk TEXT; tk_g TEXT; link_m UUID; link_g UUID; dc UUID;
     v TEXT; i INT; p_a TEXT;
-    hora     CONSTANT TIMESTAMPTZ := date_trunc('hour', now());
-    limite   CONSTANT TEXT := '54000:limite de uso do link atingido — tente de novo em alguns minutos';
+    hora     CONSTANT TIMESTAMPTZ := date_trunc('hour', now(), 'UTC');
+    limite   CONSTANT TEXT := '54000:Limite de uso do link atingido — tente de novo na próxima hora.';
     recusa   CONSTANT TEXT := '42501:link inválido ou vencido';
     autoriza CONSTANT TEXT := 'SELECT public.celular_diario_autoriza(%L, %L::uuid)::text';
     permite  CONSTANT TEXT := 'SELECT public.celular_diario_midia_permitida(%L, %L::text[])::text';

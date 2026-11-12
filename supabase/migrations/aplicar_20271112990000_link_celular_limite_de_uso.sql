@@ -16,8 +16,8 @@
 -- POR LINK e por hora cheia, contado no banco — a Edge não guarda estado:
 --   * subir   (celular_diario_autoriza)        → 120 por hora;
 --   * assinar (celular_diario_midia_permitida) → 600 por hora.
--- Estouro → ERRCODE 54000 'limite de uso do link atingido — tente de novo em
--- alguns minutos'; a Edge devolve 429 com essa mensagem e a tela a mostra.
+-- Estouro → ERRCODE 54000 'Limite de uso do link atingido — tente de novo na
+-- próxima hora.'; a Edge devolve 429 com essa mensagem e a tela a mostra.
 -- A contagem entra na transação da chamada: chamada que termina em erro (projeto
 -- de outra org, pedido inválido, o próprio estouro) desfaz o incremento — só
 -- conta o que de fato passou. Gerar um link novo NÃO zera a conta (é a mesma
@@ -41,7 +41,7 @@
 SET lock_timeout = '5s';
 
 -- ── Contagem de uso por link ────────────────────────────────────────────────
--- Uma linha por (link, ação, hora cheia). Linhas com mais de 2 dias somem na
+-- Uma linha por (link, ação, hora cheia em UTC). Linhas com mais de 2 dias somem na
 -- chamada seguinte do mesmo link (_celular_cota).
 CREATE TABLE IF NOT EXISTS public.user_mobile_link_uso (
     link_id UUID NOT NULL REFERENCES public.user_mobile_links(id) ON DELETE CASCADE,
@@ -55,9 +55,11 @@ COMMENT ON TABLE public.user_mobile_link_uso IS
     'Link do celular: uso por link, ação (subir/assinar) e hora cheia — o limite de uso da mídia do Diário. '
     'RLS sem policy: escrita só por _celular_cota (SECURITY DEFINER).';
 
-ALTER TABLE public.user_mobile_link_uso ENABLE ROW LEVEL SECURITY;
--- Sem policy de propósito; e sem privilégio de tabela para os papéis da API.
+-- Privilégio de tabela tirado já na criação: sem janela com os default privileges.
 REVOKE ALL ON TABLE public.user_mobile_link_uso FROM PUBLIC, anon, authenticated;
+
+ALTER TABLE public.user_mobile_link_uso ENABLE ROW LEVEL SECURITY;
+-- Sem policy de propósito.
 
 -- ── Cota (interno) ──────────────────────────────────────────────────────────
 -- Conta mais um uso de p_acao para o link do token, na hora cheia corrente, e
@@ -73,7 +75,7 @@ SET search_path = public, pg_temp
 AS $$
 DECLARE
     v_link   UUID;
-    v_janela TIMESTAMPTZ := date_trunc('hour', now());
+    v_janela TIMESTAMPTZ := date_trunc('hour', now(), 'UTC');
     v_n      INT;
 BEGIN
     SELECT l.id INTO v_link FROM public.user_mobile_links l WHERE l.token_hash = public._mobile_link_hash(p_token);
@@ -87,7 +89,7 @@ BEGIN
     RETURNING u.n INTO v_n;
 
     IF v_n > p_limite THEN
-        RAISE EXCEPTION 'limite de uso do link atingido — tente de novo em alguns minutos' USING ERRCODE = '54000';
+        RAISE EXCEPTION 'Limite de uso do link atingido — tente de novo na próxima hora.' USING ERRCODE = '54000';
     END IF;
 
     -- Faxina barata: só as linhas velhas deste link (pela chave primária).
@@ -95,6 +97,10 @@ BEGIN
      WHERE u.link_id = v_link AND u.janela < v_janela - interval '2 days';
 END;
 $$;
+
+-- Interno: nenhum papel da API executa; só as celular_*, que rodam como dono.
+-- Logo após o CREATE: sem janela com o EXECUTE padrão.
+REVOKE EXECUTE ON FUNCTION public._celular_cota(TEXT, TEXT, INT) FROM PUBLIC, anon, authenticated;
 
 -- ── Planejamento do diário: ler (960000 + IS NOT TRUE) ──────────────────────
 CREATE OR REPLACE FUNCTION public.celular_planejamento_ler(p_token TEXT, p_diario_id UUID, p_planejamento_id UUID)
@@ -286,10 +292,7 @@ BEGIN
 END;
 $$;
 
--- ── Privilégios (REGRA #7) ──────────────────────────────────────────────────
--- Interno: nenhum papel da API executa; só as celular_*, que rodam como dono.
-REVOKE EXECUTE ON FUNCTION public._celular_cota(TEXT, TEXT, INT)                                    FROM PUBLIC, anon, authenticated;
-
+-- ── Privilégios das quatro recriadas (REGRA #7) ─────────────────────────────
 -- As quatro recriadas: os mesmos REVOKE/GRANT de aplicar_20271112960000.
 REVOKE EXECUTE ON FUNCTION public.celular_planejamento_ler(TEXT, UUID, UUID)                        FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.celular_planejamento_ler(TEXT, UUID, UUID)                        TO anon, authenticated;

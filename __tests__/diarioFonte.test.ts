@@ -354,7 +354,7 @@ describe('fonteDiarioDoLink · recusa do token', () => {
   })
 
   it('Edge: 429 (limite de uso do link) → erro com a mensagem da Edge e code 54000; NÃO é recusa do link', async () => {
-    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos'
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
     const aoRecusar = vi.fn()
     const f = fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false })
     mocks.invoke.mockResolvedValueOnce(erroDaEdge(429, { error: LIMITE }))

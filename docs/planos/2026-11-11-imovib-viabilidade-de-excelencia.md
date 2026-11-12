@@ -820,13 +820,13 @@ Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_f
 
 Pendências da revisão da Fase 8, feitas a pedido do usuário (*"corrigir: 1. … 2. … 3. …"*, 12/11): Planta de outra organização (ou apagada) diz "não é membro da organização da Planta" em vez de "nenhuma versão publicada" — o serviço lê primeiro `blueprint_studies` (mesma policy das tabelas do quadro); a versão é escolhida por ids, revisões e aprovações e só o Quadro I dela é baixado, com teste do serviço sobre um banco simulado (status nulo = sem pendência); unidade do espelho com preço e sem área sai do VGV por m² (contada no subtítulo) — vale também para o preço do estudo nos comparáveis, que passa a ler `produto.vgvPorM2Privativo`.
 
-**Fase 9 — Jurídico e societário:** 2 de 2; migration `aplicar_20271112400000` (`legal_vehicle`, `patrimonio_afetacao`, tabela `imovib_partners`) aplicada em 12/11 com OK do usuário (*"Pode aplicar"*): 2 colunas, 4 policies só `authenticated`, anon sem SELECT
+**Fase 9 — Jurídico e societário:** 2 de 2 — no ar (PR #386, c4b51482; importação de sócios sem duplicar no PR #389, a22ebc75); migration `aplicar_20271112400000` (`legal_vehicle`, `patrimonio_afetacao`, tabela `imovib_partners`) aplicada em 12/11 com OK do usuário (*"Pode aplicar"*): 2 colunas, 4 policies só `authenticated`, anon sem SELECT
 - [x] 9.1 Estrutura jurídica — cartão em Premissas › Identificação, no formulário ("Salvar Premissas" grava). Vinculado: o cadastro de incorporação da empresa (tipo, registro, cartório, matrículas, alvará, habite-se) só leitura; "Usar o cadastro da empresa" preenche: SPE → `spe` sem afetação; patrimônio de afetação → `propria` com afetação; SCP → `scp` sem afetação. Motor: aviso `ret_sem_afetacao` (RET e RET de interesse social; nenhum estudo do banco usa RET); com afetação e devolução vazia, o distrato devolve 50% (`devolucaoPadraoDoDistrato`, também na aba Receitas e no Excel). Sem afetação nenhum número muda (regressão verde sem edição). Revisão: "Usar o cadastro da empresa" mexe só no campo que o tipo diz (SPE/SCP → veículo; patrimônio de afetação → afetação) — a 1ª versão desmarcava a afetação de toda SPE; a sugestão de regime usa a afetação do estudo antes do tipo da empresa; o aviso distingue "não informado" de "sem afetação".
 - [x] 9.2 Sócios e resultado por sócio (D3) — `utils/imovibSocios.ts` sobre `resultado.aportes`: a parte do incorporador (distribuição − fontes por participação) devolve primeiro o capital de cada sócio, na proporção do que falta a cada um, e reparte o lucro pela participação no resultado (a regra das fontes). Cartão "Sócios" na aba Capital (tabela + drawer); "Importar os sócios da empresa" copia os sócios atuais (sem data de saída passada) de `company_partners` com as duas participações = a do quadro societário; `company_partner_id` + UNIQUE impedem duplicar (não estava no plano). Os sócios não entram na listagem nem no portal. Revisão: com aportes somando menos de 100%, o capital sem dono voltava como lucro dos sócios (um sócio 50/50 sozinho via lucro de 875 em vez de 500) — agora o capital devolvido é o do incorporador inteiro e cada sócio recebe a parte que aportou; importação sem sócio novo avisa; sócio com entrada futura fica fora; erro ao ler a empresa aparece no botão. Depois, a pedido do usuário (*"um sócio digitado à mão e depois importado da empresa com o mesmo nome aparece duas vezes. Corrigir"*, 12/11): a importação liga o sócio digitado com o mesmo nome (sem diferenciar maiúscula, acento e espaço) ao da empresa, mantendo os percentuais digitados (`planoDeImportacao`), e diz quantos ligou e quantos criou.
 
 Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_fase9.js`): listagem = Resumo (R$ 3.998.485); Estrutura jurídica com a empresa da SPE e "não tem os dados de incorporação"; Sócios vazio, importar desligado com "não tem sócios atuais no quadro societário"; 0 escritas, 0 erros de console.
 
-**Fase 10 — Governança:** 6 de 6; migration `aplicar_20271112500000` (colunas de governança, `imovib_study_versions` só SELECT/INSERT, função do portal sem as colunas internas) aplicada em 12/11 com OK do usuário (*"Pode aplicar"*). Conferido no banco: como `authenticated`, UPDATE e DELETE em versões dão `42501 permission denied`; o portal recusa token inválido e não tem EXECUTE para PUBLIC. A função do portal foi reescrita (não estava no plano): `row_to_json(s)` mandaria o parecer interno a quem abre o link do investidor
+**Fase 10 — Governança:** 6 de 6 — no ar (PR #392, 67e18f12; pendências no PR #394, 0f36fb4c — plano `docs/planos/2026-11-12-imovib-governanca-pendencias.md`); migration `aplicar_20271112500000` (colunas de governança, `imovib_study_versions` só SELECT/INSERT, função do portal sem as colunas internas) aplicada em 12/11 com OK do usuário (*"Pode aplicar"*). Conferido no banco: como `authenticated`, UPDATE e DELETE em versões dão `42501 permission denied`; o portal recusa token inválido e não tem EXECUTE para PUBLIC. A função do portal foi reescrita (não estava no plano): `row_to_json(s)` mandaria o parecer interno a quem abre o link do investidor
 - [x] 10.1 Memorial de premissas — `utils/imovibMemorial.ts` (uma linha por campo de `CAMPOS_DO_MOTOR`; o teste derruba premissa nova sem descrição), sub-aba "4. Memorial" (fonte e data editáveis, grava com "Salvar Premissas"); a aba "Premissas" do Excel sai do memorial (colunas Fonte e Data; grupos novos Terreno, Custos e Jurídico).
 - [x] 10.2 Versões congeladas (D5) — `utils/imovibVersoes.ts`; "Congelar versão" no cabeçalho grava o estudo carregado + cenários e os indicadores (NaN vira null); aba Versões compara duas versões ou uma versão com o estudo atual. Recalcular o snapshot reproduz os resultados gravados (teste pela ida e volta do JSON).
 - [x] 10.3 Parecer e critérios — `utils/imovibParecer.ts`, cartão no topo do Resumo (mínimos editáveis, padrões em `IMOVIB_DEFAULTS`: margem 15%, folga da TIR 0 p.p.; exposição sem padrão = sem critério); aba "Parecer" no Excel; o cabeçalho do "Resumo em PDF" traz o parecer registrado (o cartão tem campos e fica fora da captura).
@@ -835,6 +835,64 @@ Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_f
 - [x] 10.6 Conferência final do Portal do Investidor — o simulador somava os meses de atraso no campo e, com a duração vazia, não mudava nada; `estudoComPrazoDoPortal` usa `aplicarVariacao`. Payback e múltiplo no quadro do portal. Teste: sem atraso, VGV líquido, TIR e prazo do portal = Resumo.
 
 Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_fase10.js`): parecer com os 4 critérios e o terreno máximo; Memorial 55 premissas; Versões vazia com o motivo; Acompanhamento pede a data-base (e, com ela injetada, compara); 0 escritas, 0 erros de console. O VPL do Garden passou de R$ 3.998.485 para R$ 4.021.204 porque o estudo foi editado em 12/11 (14:30 UTC) e está com patrimônio de afetação marcado: devolução padrão no distrato de 50% (Fase 9).
+
+## Pendências depois do plano
+
+> Atualizado em 2026-11-12, com o `main` em 91f89d66. **O plano está concluído: Fases 0 a 10 no ar.** O que
+> segue são achados menores das revisões de cada fase, deixados para depois (nenhum muda número de estudo
+> existente sem aviso), e limites de dado que impediram conferir com dado real. Cada item diz de qual fase veio.
+> Conferido no código do `main` quando a linha diz "conferido".
+
+### Já resolvidos depois de registrados
+
+- Fase 4: fatias do capital sem o dinheiro dos compradores na obra; fonte por participação depois do pico sem aviso — **Fase 4B** (#367).
+- Fase 7: trava no banco de vendidas ≤ total; aviso no Market ao criar viabilidade sem salvar o estudo — **#379**.
+- Fase 8: Planta de outra organização dizia "nenhuma versão publicada"; Quadro I de todas as versões; unidade sem área inflava o VGV/m² — **#383**.
+- Fase 9: sócio digitado e importado com o mesmo nome duplicava — **#389**.
+- Fase 10: data e autor da versão vindos da tela; autor do parecer em texto livre; apagar estudo apagava as versões; mês corrente com desvio cheio; parecer sem limpar e sem os números do momento — **#394**.
+- Fase 1: rótulo "Receitas e Capital" no Resumo — some com a divisão das abas (conferido: só sobra em comentários).
+- Fase 5: Excel sem as premissas da Fase 5 — a aba "Premissas" sai do memorial desde o 10.1.
+
+### Abertos — cálculo e premissas
+
+- [ ] Fase 1 · VGV líquido pode passar do VGV bruto (juros do pós-chaves entram nele); o rótulo na listagem e no portal não diz isso.
+- [ ] Fase 1 · Devolução do distrato calculada sobre o pago bruto, antes da inadimplência.
+- [ ] Fase 1 · Ajustes silenciosos: lançamento acima de 100%, permutas que somam mais de 100%, defasagem negativa, pesos da curva além do prazo — o motor corrige sem `ImovibAviso`.
+- [ ] Fase 1 · Distrato sem revenda tira a unidade do estoque sem aviso.
+- [ ] Fase 1 · Série de índice mensal mistura a série da organização com a global; escolher o índice sem clicar em "usar a média" não muda o cálculo.
+- [ ] Fase 2 · Payback "Mês 1" em fluxo que nunca fica negativo.
+- [ ] Fase 2 · Busca com TIR-alvo devolve "sem raiz" quando o fluxo com terreno 0 não tem TIR (sem uso em tela hoje).
+- [ ] Fase 4 · Custo × fração ≤ 0 não vira liberação negativa do financiamento (só com dado inválido; comentado no código).
+- [ ] Fase 6 · Lucro real compensa o prejuízo acumulado **sem** a trava de 30% (decisão do usuário de 11/11 — registrado aqui só para quem ler o texto do cartão).
+- [ ] Fase 10 · Estudo com fluxo só negativo (sem receita) tem TIR inexistente e o critério sai "sem como avaliar", embora reprove.
+- [ ] Fase 10 · Realizado anterior à data-base é descartado no Acompanhamento (a venda anterior entra no mês 1).
+
+### Abertos — tela e usabilidade
+
+- [ ] Fase 1 · Apagar um campo de premissa grava 0 em vez de voltar ao padrão (alguns campos); apagar campo já vazio regrava null (sem efeito).
+- [ ] Fase 1/2 · Gráfico da curva de vendas: com VSO 0% diz "informe o preço"; sem vendas sempre culpa a VSO (permuta 100% é outra causa); usa `sales_start_month` cru.
+- [ ] Fase 2 · Pontos de equilíbrio levam ~325 ms ao abrir o Resumo em estudo de 108 meses (vendas mínimas repete o preço mínimo; TIR calculada à toa nas buscas).
+- [ ] Fase 2 · Margem-alvo vazia mostra "Não existe" em vez de pedir a margem; o Excel usa sempre 15% (conferido: `margem_alvo_terreno_percent` fixo em `montarPlanilhaImovib`).
+- [ ] Fase 2 · Dica do VGV líquido fica na célula, não no cabeçalho da listagem.
+- [ ] Fase 3 · Simulação de Monte Carlo síncrona (teto de 20.000 sorteios ≈ 10 s com a tela travada); semente 0 vira 1; estresse com limites e cor de linha iguais; riscos com erro e vazio juntos; exclusões sem `.select()`; erro de RLS em inglês; gráficos fora do §28 (role=img, cores fora do chartKit); "Editar o risco" no só leitura; renomear "Pessimista" reabre "criar padrão".
+- [ ] Fase 5 · "No cálculo" da rubrica muda com o momento por causa do índice (VPL igual); avisos de Premissas abrem em Identificação, não na sub-aba; `pre_obra` depois do início da obra sem aviso; due diligence sem `checked_by` e com `checked_at` mudando pela observação; valor antigo no campo depois de erro (observação da DD, meses de pós-obra); snapshot inteiro do empreendimento ao abrir o CAPEX vinculado.
+- [ ] Fase 6 · `salvarHipotese` corta negativo para 0 e monta o jsonb a partir do estudo da tela (duas edições seguidas antes da recarga perdem a primeira) (conferido); alíquota de regime não escolhido só é editável trocando o regime.
+- [ ] Fase 7 · Limiar de 15% do KPI "preço contra a média" fixo no código; estudo de mercado reaberto com hipóteses mudadas mostra a absorção gravada.
+
+### Abertos — testes e guardas
+
+- [ ] Fase 0 · Guarda `secdefSemRevoke` (`__tests__/segurancaMigrations.test.ts`) só reconhece funções delimitadas por `$$` ou `$function$`; com outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde (conferido no `main`). Achado fora do escopo do plano.
+- [ ] Fase 0 · Guarda do 0.4 (campos do motor) escapa por desestruturação e por `study?.x`; `Premissas.study` não é lido por nenhuma etapa (campo morto).
+- [ ] Fase 0 · Teste das linhas do fluxo não cobre quitação no fim nem CAPEX simplificado; teste do portal usa resposta escrita à mão.
+- [ ] Fase 2 · Testes não exercitam a TMA nos indicadores; a checagem "é número" do Excel não pega NaN.
+
+### Limites de dado (o código está no ar, mas não foi conferido com dado real)
+
+- Nenhum empreendimento tem quadro NBR 12721 gravado: a área equivalente (8.2) só foi conferida com banco simulado.
+- O Garden Cambuhy não tem data-base: o Acompanhamento (10.4) foi conferido com a data injetada só no navegador.
+- Nenhuma negociação de venda da organização do Garden está "com contrato": as vendas reais deram R$ 0; há 4 unidades vendidas sem negociação.
+- Nenhuma versão congelada existe ainda: congelar e comparar (10.2) e a trava de apagar estudo foram provados em transação desfeita.
+- Relatório completo (10.5) sai sem gráficos (decisão registrada: os gráficos ficam no "Resumo em PDF").
 
 ## Verificação
 

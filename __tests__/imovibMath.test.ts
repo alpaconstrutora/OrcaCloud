@@ -447,6 +447,17 @@ describe('8.1 — indicadores de produto', () => {
         expect(computeImovibMath(s).produto.custoObraPorM2Privativo).toBeNull();
     });
 
+    it('unidade do espelho com preço e sem área fica fora do VGV por m² (não infla) e é contada', () => {
+        const r = computeImovibMath(baseStudy({
+            unit_instances: [inst('a', 700_000), inst('b', 700_000), { ...inst('c', 900_000), private_area: 0 }],
+        }));
+        expect(r.vgvBase).toBeCloseTo(2_300_000);
+        expect(r.produto.vgvPorM2Privativo).toBeCloseTo(1_400_000 / 140);
+        expect(r.produto.unidadesSemArea).toBe(1);
+        expect(r.produto.ticketMedio).toBeCloseTo(2_300_000 / 3);
+        expect(computeImovibMath(baseStudy()).produto.unidadesSemArea).toBe(0);
+    });
+
     it('sem área nem unidades: indicadores vazios, nunca 0 nem infinito', () => {
         const p = computeImovibMath(baseStudy({ blocks: [] })).produto;
         expect(p.unidadesVendaveis).toBe(0);

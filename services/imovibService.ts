@@ -12,7 +12,8 @@ import {
 } from '../utils/imovibEstrutura';
 import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 import type { ImovibComparable } from '../utils/imovibMercado';
-import { areaEquivalenteDasVersoes, type AreaEquivalenteDaPlanta, type VersaoComQuadro } from '../utils/imovibAreaEquivalente';
+import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuadroI, type VersaoDoQuadro } from '../utils/imovibAreaEquivalente';
+import { versaoDoMemorial } from '../utils/nbr12721/documento';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -846,15 +847,21 @@ export const imovibService = {
     /**
      * A área equivalente do quadro congelado nas versões publicadas da Planta do
      * empreendimento (`blueprint_snapshot_nbr12721`), na versão que o memorial
-     * citaria. Só o Quadro I e o status saem da saída gravada. null = não medido.
+     * citaria. Escolhe a versão pelos ids, revisões e aprovações e só então baixa o
+     * Quadro I dela. null = não medido; 'sem_acesso' = quem lê não enxerga o estudo
+     * da Planta (é de outra organização, ou foi apagado) — as policies das quatro
+     * tabelas são as mesmas (membro da organização da linha).
      */
-    async areaEquivalenteDaPlanta(blueprintStudyId: string): Promise<AreaEquivalenteDaPlanta | null> {
+    async areaEquivalenteDaPlanta(blueprintStudyId: string): Promise<AreaEquivalenteDaPlanta | 'sem_acesso' | null> {
+        const planta = await supabase.from('blueprint_studies').select('id').eq('id', blueprintStudyId).maybeSingle();
+        if (planta.error) throw new Error(`Falha ao ler a Planta: ${planta.error.message}`);
+        if (!planta.data) return 'sem_acesso';
         const { data, error } = await supabase
             .from('blueprint_snapshot_nbr12721')
-            .select('snapshot_id, status:saida->>status, quadroI:saida->quadroI')
+            .select('snapshot_id, status:saida->>status')
             .eq('study_id', blueprintStudyId);
         if (error) throw new Error(`Falha ao ler o quadro NBR 12721: ${error.message}`);
-        const quadros = (data ?? []) as unknown as { snapshot_id: string; status: string | null; quadroI: VersaoComQuadro['quadroI'] | null }[];
+        const quadros = (data ?? []) as unknown as { snapshot_id: string; status: string | null }[];
         if (!quadros.length) return null;
         const ids = quadros.map(q => q.snapshot_id);
         const [snaps, aprov] = await Promise.all([
@@ -865,15 +872,24 @@ export const imovibService = {
         if (aprov.error) throw new Error(`Falha ao ler as aprovações do quadro: ${aprov.error.message}`);
         const revisao = new Map(((snaps.data ?? []) as { id: string; revision: number }[]).map(v => [v.id, v.revision]));
         const aprovacoes = (aprov.data ?? []) as { snapshot_id: string; tipo: 'TECNICA' | 'JURIDICA' }[];
-        return areaEquivalenteDasVersoes(quadros
+        const versoes: VersaoDoQuadro[] = quadros
             .filter(q => revisao.has(q.snapshot_id))
             .map(q => ({
                 snapshotId: q.snapshot_id,
                 revisao: revisao.get(q.snapshot_id)!,
                 aprovacoes: aprovacoes.filter(a => a.snapshot_id === q.snapshot_id),
-                status: q.status === 'success' ? 'success' : 'failed',
-                quadroI: q.quadroI ?? [],
-            })));
+                status: q.status === 'failed' ? 'failed' : 'success',
+            }));
+        const escolhida = versaoDoMemorial(versoes);
+        if (!escolhida) return null;
+        const quadro = await supabase
+            .from('blueprint_snapshot_nbr12721')
+            .select('quadroI:saida->quadroI')
+            .eq('snapshot_id', escolhida.snapshotId)
+            .maybeSingle();
+        if (quadro.error) throw new Error(`Falha ao ler o quadro NBR 12721: ${quadro.error.message}`);
+        const v = versoes.find(x => x.snapshotId === escolhida.snapshotId)!;
+        return areaEquivalenteDaVersao(v, (quadro.data as { quadroI?: LinhaDoQuadroI[] | null } | null)?.quadroI ?? null);
     },
 
     // ── Due diligence do terreno (item 5.9 do plano 2026-11-11) ─────────────

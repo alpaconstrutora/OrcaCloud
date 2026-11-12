@@ -24,17 +24,19 @@ const formatM2 = (v: number) =>
 const ImovibAreaEquivalenteCard: React.FC<Props> = ({ study, custoObra, custoSemAreaComum }) => {
     const plantaId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.blueprint_study_id ?? null : null;
     const [area, setArea] = useState<AreaEquivalenteDaPlanta | null>(null);
+    const [semAcesso, setSemAcesso] = useState(false);
     const [carregando, setCarregando] = useState(!!plantaId);
     const [erro, setErro] = useState<string | null>(null);
 
     useEffect(() => {
+        setSemAcesso(false);
         if (!plantaId) { setArea(null); setCarregando(false); return; }
         let vivo = true;
         setArea(null);
         setCarregando(true);
         setErro(null);
         imovibService.areaEquivalenteDaPlanta(plantaId)
-            .then(r => { if (vivo) setArea(r); })
+            .then(r => { if (vivo) { setSemAcesso(r === 'sem_acesso'); setArea(r === 'sem_acesso' ? null : r); } })
             .catch(e => { if (vivo) { setArea(null); setErro(e instanceof Error ? e.message : 'Falha ao ler o quadro NBR 12721.'); } })
             .finally(() => { if (vivo) setCarregando(false); });
         return () => { vivo = false; };
@@ -53,6 +55,8 @@ const ImovibAreaEquivalenteCard: React.FC<Props> = ({ study, custoObra, custoSem
         explicacao = 'Lendo o quadro da Planta…';
     } else if (erro) {
         explicacao = erro;
+    } else if (semAcesso) {
+        explicacao = 'Você não é membro da organização da Planta deste empreendimento (ou ela foi apagada); o quadro NBR 12721 não pode ser lido.';
     } else if (!area) {
         explicacao = <>Nenhuma versão publicada com os quadros NBR 12721. Publique a versão em "Áreas NBR 12721" na {linkDaPlanta}.</>;
     } else {

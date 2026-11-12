@@ -4,18 +4,19 @@
 // docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md). O estudo NÃO
 // recalcula a norma: lê o Quadro I congelado numa versão publicada da Planta
 // Inteligente do empreendimento, escolhida pela mesma regra do memorial de
-// incorporação (`versaoDoMemorial`).
+// incorporação (`versaoDoMemorial`, em imovibService.areaEquivalenteDaPlanta).
 
-import { situacaoDasAprovacoes, versaoDoMemorial, type AprovacaoDoDocumento } from './nbr12721/documento';
+import { situacaoDasAprovacoes, type AprovacaoDoDocumento } from './nbr12721/documento';
 
-export interface VersaoComQuadro {
+export interface VersaoDoQuadro {
     snapshotId: string;
     revisao: number;
     aprovacoes: Pick<AprovacaoDoDocumento, 'tipo'>[];
     /** 'failed' = o quadro tem pendência bloqueante. */
     status: 'success' | 'failed';
-    quadroI: { qi_18_floor_equivalent_total_raw: number }[];
 }
+
+export type LinhaDoQuadroI = { qi_18_floor_equivalent_total_raw: number };
 
 export interface AreaEquivalenteDaPlanta {
     snapshotId: string;
@@ -26,12 +27,9 @@ export interface AreaEquivalenteDaPlanta {
     status: 'success' | 'failed';
 }
 
-/** null = não medido (sem versão com quadro, ou quadro sem área) — a tela nunca mostra zero. */
-export function areaEquivalenteDasVersoes(versoes: readonly VersaoComQuadro[]): AreaEquivalenteDaPlanta | null {
-    const escolhida = versaoDoMemorial(versoes);
-    if (!escolhida) return null;
-    const v = versoes.find(x => x.snapshotId === escolhida.snapshotId)!;
-    const total = v.quadroI.reduce((acc, l) => acc + (Number(l.qi_18_floor_equivalent_total_raw) || 0), 0);
+/** null = não medido (Quadro I vazio ou sem área) — a tela nunca mostra zero. */
+export function areaEquivalenteDaVersao(v: VersaoDoQuadro, quadroI: readonly LinhaDoQuadroI[] | null): AreaEquivalenteDaPlanta | null {
+    const total = (quadroI ?? []).reduce((acc, l) => acc + (Number(l.qi_18_floor_equivalent_total_raw) || 0), 0);
     if (total <= 0) return null;
     return { snapshotId: v.snapshotId, revisao: v.revisao, total, situacao: situacaoDasAprovacoes(v.aprovacoes), status: v.status };
 }

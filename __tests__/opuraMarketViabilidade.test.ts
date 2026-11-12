@@ -9,6 +9,7 @@ vi.mock('../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 import { criarViabilidadeImovib } from '../services/opuraMarketViabilidadeService';
+import { estudoDeOrigem } from '../hooks/useMarketVocacao';
 
 const resultado = {
     stats: { pricePerM2Avg: 9_000 },
@@ -37,5 +38,14 @@ describe('7.2 — criarViabilidadeImovib grava o estudo de mercado de origem', (
         await criarViabilidadeImovib(dados());
         expect(svc.createStudy.mock.calls[0][0].opura_terrain_study_id ?? null).toBeNull();
         expect(svc.createBlock).toHaveBeenCalled();
+    });
+});
+
+describe('7.2 — qual estudo de terreno vai como origem', () => {
+    const lista = [{ id: 't1' }, { id: 't2' }] as never;
+    it('só o estudo salvo/reaberto que ainda está na lista da organização atual', () => {
+        expect(estudoDeOrigem('t1', lista)).toBe('t1');
+        expect(estudoDeOrigem('apagado', lista)).toBeNull(); // apagado ou de outra organização
+        expect(estudoDeOrigem(null, lista)).toBeNull(); // análise não salva
     });
 });

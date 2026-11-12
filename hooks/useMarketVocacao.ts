@@ -26,6 +26,14 @@ import {
  * Resultado exibido no painel de estudo. `stats` é null só para estudo salvo
  * antes de 07/10/2026, quando as estatísticas do raio não eram guardadas.
  */
+/**
+ * O estudo de terreno que vai como origem da viabilidade (item 7.2 do plano
+ * 2026-11-11): o salvo/reaberto, se ainda está na lista da organização atual —
+ * apagado ou de outra organização, nenhum.
+ */
+export const estudoDeOrigem = (estudoSalvoId: string | null, salvos: Pick<OpuraMarketTerrainStudy, 'id'>[]): string | null =>
+  estudoSalvoId && salvos.some(s => s.id === estudoSalvoId) ? estudoSalvoId : null;
+
 export type ResultadoNaTela = Omit<ResultadoVocacao, 'stats'> & { stats: OpuraMarketRadiusStats | null };
 
 export type Ponto = { lat: number; lng: number };
@@ -300,6 +308,7 @@ export function useMarketVocacao(organizationId: string, regrasDaPraca: OpuraMar
     terrainPin, isDrawingPolygon, drawingPoints, polygonPoints,
     studyName, setStudyName, terrainArea, setTerrainArea, analysisRadius, setAnalysisRadius,
     analyzing, setAnalyzing, analysisResult, setAnalysisResult, estudoSalvoId,
+    estudoDeOrigemId: estudoDeOrigem(estudoSalvoId, savedStudies),
     hipoteses, setHipoteses, errosHipoteses, hipotesesAlteradas,
     tiposComparados, alterarTiposComparados,
     savedStudies, loadingStudies,

@@ -829,7 +829,7 @@ export const imovibService = {
             ? supabase.from('imovib_market_comparables').update(campos).eq('id', id).select(COMPARAVEL_COLS)
             : supabase.from('imovib_market_comparables').insert(campos).select(COMPARAVEL_COLS);
         const { data, error } = await q;
-        if (error) throw new Error(`Falha ao salvar o comparável: ${error.message}`);
+        if (error) throw new Error(error.message.includes('vendidas_total_check') ? 'Vendidas não pode passar do total.' : `Falha ao salvar o comparável: ${error.message}`);
         if (!data?.length) throw new Error('Sem permissão para salvar comparáveis deste estudo.');
         return data[0] as ImovibComparable;
     },

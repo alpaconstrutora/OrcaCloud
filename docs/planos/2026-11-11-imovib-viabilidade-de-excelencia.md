@@ -809,6 +809,8 @@ Conferido no navegador em 11/11 (Garden Cambuhy, usuário de leitura, escritas i
 
 Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_fase7.js`): Mercado abre com comparáveis e origem vazios (com o motivo), VSO "digitada"; 0 escritas, 0 erros de console.
 
+Pendências da revisão da Fase 7, feitas a pedido do usuário (*"Na sequência corrigir os dois itens que ficaram para depois"*, 12/11): trava no banco de vendidas ≤ total (migration `aplicar_20271112320000`, aplicada com OK; nenhuma linha violava); o painel do Market avisa, ao lado de "Criar viabilidade", quando o estudo não está salvo e a viabilidade vai nascer sem o estudo de mercado de origem (`estudoDeOrigem` em `hooks/useMarketVocacao.ts`).
+
 **Fase 8 — Produto:** 0 de 2
 - [ ] 8.1 Indicadores de produto
 - [ ] 8.2 Área equivalente NBR 12721

@@ -11,8 +11,17 @@ import { isDiaryStoragePath, signDiaryMediaUrls } from '../services/diaryMediaSe
  *
  * `portalToken` = link público do Portal do Cliente (sem sessão): a assinatura
  * passa pela edge function `client-portal-diary-download`.
+ *
+ * `assinar` = quem assina os paths, no lugar de `signDiaryMediaUrls` — o link do
+ * celular passa o `assinarFotos` da fonte (Edge `celular-diario-midia`). Tem de
+ * ser ESTÁVEL (`useCallback`/método de fonte memoizada): entra nas dependências,
+ * e uma função nova a cada render reassinaria a cada render.
  */
-export function useDiaryMediaUrls(refs: readonly string[] | undefined, portalToken?: string): Record<string, string> {
+export function useDiaryMediaUrls(
+    refs: readonly string[] | undefined,
+    portalToken?: string,
+    assinar?: (paths: readonly string[]) => Promise<Record<string, string>>,
+): Record<string, string> {
     // A chave é o conteúdo, não a identidade do array: cada render cria um
     // array novo e re-assinar a cada render seria uma chamada por frame.
     const chave = useMemo(() => (refs ?? []).filter(Boolean).join('\n'), [refs]);
@@ -31,14 +40,14 @@ export function useDiaryMediaUrls(refs: readonly string[] | undefined, portalTok
         const paths = (chave ? chave.split('\n') : []).filter(isDiaryStoragePath);
         if (paths.length === 0) { setAssinadas({}); return; }
         let cancelado = false;
-        signDiaryMediaUrls(paths, { portalToken })
+        (assinar ? assinar(paths) : signDiaryMediaUrls(paths, { portalToken }))
             .then(map => { if (!cancelado) setAssinadas(map); })
             .catch(err => {
                 console.error('[useDiaryMediaUrls] falha ao assinar mídia do diário:', err);
                 if (!cancelado) setAssinadas({});
             });
         return () => { cancelado = true; };
-    }, [chave, portalToken]);
+    }, [chave, portalToken, assinar]);
 
     return useMemo(() => ({ ...imediato, ...assinadas }), [imediato, assinadas]);
 }

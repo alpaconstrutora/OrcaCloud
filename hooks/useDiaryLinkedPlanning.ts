@@ -20,14 +20,43 @@ export interface DiaryLinkedPlanning {
     setSchedule: (s: ProjectSchedule) => void;
 }
 
+export interface PlanejamentoCarregado {
+    schedule: ProjectSchedule | null;
+    budget: BudgetEntry[];
+}
+
+/** Cronograma e orçamento de um planejamento; `null` = projeto não encontrado (a tela fica como está). */
+export type CarregarPlanejamento = (planejamentoId: string) => Promise<PlanejamentoCarregado | null>;
+
+/**
+ * Carregador padrão (sessão logada): lê o planejamento pelo `projectService`. O
+ * orçamento vem do próprio planejamento; se ele não tiver, do projeto para o
+ * qual o planejamento aponta (`settings.linkedProjectId`).
+ */
+export const carregarPlanejamentoPorProjeto: CarregarPlanejamento = async planejamentoId => {
+    const p = await projectService.loadProject(planejamentoId);
+    if (!p) return null;
+    const schedule: ProjectSchedule | null = p.settings?.schedule || null;
+    if (p.budget && p.budget.length > 0) return { schedule, budget: p.budget };
+    if (p.settings?.linkedProjectId) {
+        const pai = await projectService.loadProject(p.settings.linkedProjectId);
+        return { schedule, budget: pai?.budget || [] };
+    }
+    return { schedule, budget: [] };
+};
+
 /**
  * Cronograma e orçamento ligados a um diário — usado pela tela desktop e pelo
- * app mobile. O orçamento vem do próprio planejamento; se ele não tiver, do
- * projeto para o qual o planejamento aponta.
+ * app mobile.
+ *
+ * `carregar` substitui o carregador padrão (o link do celular lê pela RPC
+ * `celular_planejamento_ler`). Tem de ser ESTÁVEL (`useCallback`): entra nas
+ * dependências do efeito, e uma função nova a cada render recarregaria em laço.
  */
 export function useDiaryLinkedPlanning(
     linkedProjectId: string | null | undefined,
     projects: ProjetoParaVinculo[],
+    carregar: CarregarPlanejamento = carregarPlanejamentoPorProjeto,
 ): DiaryLinkedPlanning {
     const planejamentoId = useMemo(
         () => resolverPlanejamentoDoDiario(linkedProjectId, projects),
@@ -47,17 +76,10 @@ export function useDiaryLinkedPlanning(
         (async () => {
             setLoading(true);
             try {
-                const p = await projectService.loadProject(planejamentoId);
-                if (cancelled || !p) return;
-                setSchedule(p.settings?.schedule || null);
-                if (p.budget && p.budget.length > 0) {
-                    setBudget(p.budget);
-                } else if (p.settings?.linkedProjectId) {
-                    const pai = await projectService.loadProject(p.settings.linkedProjectId);
-                    if (!cancelled) setBudget(pai?.budget || []);
-                } else {
-                    setBudget([]);
-                }
+                const r = await carregar(planejamentoId);
+                if (cancelled || !r) return;
+                setSchedule(r.schedule);
+                setBudget(r.budget);
             } catch (error) {
                 console.error('Erro ao carregar o planejamento vinculado ao diário:', error);
             } finally {
@@ -65,7 +87,7 @@ export function useDiaryLinkedPlanning(
             }
         })();
         return () => { cancelled = true; };
-    }, [planejamentoId]);
+    }, [planejamentoId, carregar]);
 
     const itens = useMemo(() => itensCronogramaVinculaveis(schedule, budget), [schedule, budget]);
 

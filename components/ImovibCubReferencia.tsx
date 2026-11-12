@@ -41,7 +41,8 @@ const ImovibCubReferencia: React.FC<{ study: ImovibStudy; onReferencia: (r: Refe
     useEffect(() => {
         if (!empId) return;
         let vivo = true;
-        empreendimentoService.getById(empId)
+        // Só a UF do terreno (pendência da Fase 5: antes lia a linha inteira ao abrir o CAPEX).
+        empreendimentoService.camposDoEmpreendimento(empId, ['terreno_state'])
             .then(e => { if (vivo && e?.terreno_state) { setUfDoEmp(e.terreno_state); setUf(u => u || e.terreno_state!); } })
             .catch(() => undefined);
         return () => { vivo = false; };

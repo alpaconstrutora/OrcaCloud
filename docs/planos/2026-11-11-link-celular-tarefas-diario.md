@@ -498,7 +498,7 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
 | D3 | Cronograma pelo link: o celular calcula com `aplicarEvolucaoNoCronograma` (JS, igual ao logado) e manda **só** `{itemId: pct}`; `celular_planejamento_gravar_evolucao` grava só `manualRealPct` desses itens | servidor não reimplementa a regra; o link nunca regrava `settings`/`budget` inteiros (o `saveProject` logado regrava) |
 | D4 | Planejamento aceito pelo link: da org do link **e** (`PLANEJAMENTO` **ou** o próprio `linkedProjectId` do diário — o fallback do resolver) | o membro logado já grava qualquer projeto da org; o link fica mais estreito que isso |
 | D5 | Efetivo no link = colaboradores do RH (`celular_efetivo_listar`); as sugestões de equipes/cargos de `organizations.resources` (store logado) não entram | YAGNI; o campo continua aceitando texto livre |
-| D6 | Aprovação no link: `celular_sessao` ganha `pode_aprovar_diario` (`fn_pode_aprovar_diario_de`); a tela usa `{pode}` dele no lugar de `useDiaryAprovacao` | sem store no link; o banco segue decidindo |
+| D6 | Aprovação no link: `celular_sessao` ganha `pode_aprovar_diario` (`fn_pode_aprovar_diario_de`); a tela usa `{pode}` dele no lugar de `useDiaryAprovacao` | sem store no link; o banco segue decidindo. `pode_aprovar_diario` é lido **uma vez, quando o link abre**; se a permissão for revogada com o link aberto, o botão continua aparecendo, mas o banco recusa com a mensagem certa (aceito) |
 | D7 | `assinar` só assina path com prefixo `{org do link}/` **e** citado em registro de diário da org; os outros são omitidos (sem 403) | um registro do link pode citar path forjado de outra org — sem o prefixo, a Edge vazaria foto alheia |
 | D8 | Regras puras da Edge (validar pedido, extensões) em `supabase/functions/celular-diario-midia/regras.ts`, sem import Deno, testadas no Vitest | mesmo arranjo de outras Edges do projeto |
 
@@ -509,7 +509,7 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
 - Escrita em `settings.diaryEntries` só com a marca `set_config('orcacloud.diario_escrita','on',true)` … `'off'` (gatilho `trg_projects_diary_entries_guard`).
 - Mensagens e ERRCODEs do núcleo idênticos aos de hoje (`'registro do diário sem id'`/`'sem data'` 22023; `'diário não encontrado ou sem permissão'` 42501; as duas de aprovação; `'sem permissão para gravar neste diário'` 42501). Projeto fora da org do link → `'diário não encontrado ou sem permissão'` 42501.
 - Bucket `diario-midia`, path `{org}/{projeto}/{uuid}.{ext}`; extensões aceitas no link: `jpg, jpeg, png, webp, gif, heic, heif`. URL assinada de leitura: 3600 s.
-- Edge `celular-diario-midia`: `[functions.celular-diario-midia] verify_jwt = false` em `supabase/config.toml`; env `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`; RPCs chamadas com a chave **anon** (sem repassar o `Authorization` do pedido); service role só para o storage. Deploy: **o usuário** roda `cd C:\D\frentes\link-celular; npx supabase functions deploy celular-diario-midia` no PowerShell (o auto mode barra).
+- Edge `celular-diario-midia`: `[functions.celular-diario-midia] verify_jwt = false` em `supabase/config.toml`; env `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY`; RPCs chamadas com a chave **anon** (sem repassar o `Authorization` do pedido); service role só para o storage. Deploy: **o usuário** roda `cd C:\D\frentes\link-celular; npx supabase functions deploy celular-diario-midia --no-verify-jwt` no PowerShell (o auto mode barra).
 - Ordem de publicação: migrations → Edge → front.
 
 ### Review Focus (Parte 2)
@@ -709,7 +709,7 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
 
 - [ ] **Step 1:** suíte Vitest (ver `index_publicacao_build.md`) e `npm run verificar:build` → verdes; ler a saída antes de seguir.
 - [ ] **Step 2: ⚠️ com aval do usuário** — prefixos conferidos na hora; aplicar `<p3>` e `<p4>` com `db query -f`; `scripts/teste-link-celular-diario.sql`, `teste-link-celular-tarefas.sql` e `teste-tarefas-responsavel.sql` no banco real → `TUDO OK`; `check-rls-postura.sh` → verde.
-- [ ] **Step 3: ⚠️ o usuário publica a Edge** — `cd C:\D\frentes\link-celular; npx supabase functions deploy celular-diario-midia` no PowerShell.
+- [ ] **Step 3: ⚠️ o usuário publica a Edge** — `cd C:\D\frentes\link-celular; npx supabase functions deploy celular-diario-midia --no-verify-jwt` no PowerShell.
 - [ ] **Step 4: Sonda de fora** (`curl` em `functions/v1/celular-diario-midia`): sem token → 400; token falso → 403; token válido + `assinar` de path de outra org → `{urls:{}}`; `subir` válido → `{path, token}` com path `{org}/{projeto}/…`.
 - [ ] **Step 5: ⚠️ com aval do usuário** — `git push origin HEAD:main`; `bash scripts/conferir-producao.sh` → domínio = `origin/main`.
 - [ ] **Step 6: Prova real** — pelo link no celular: registro com foto e atividade vinculada; conferir no desktop (registro e foto no diário, evolução no cronograma). Registrar em **Estado**.
@@ -742,7 +742,96 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
 - [ ] Task 8 · [ ] Task 9 · [ ] Task 10 · [ ] Task 11 · [ ] Task 12 · [ ] Task 13 · [ ] Task 14
 - [x] F1 (banco no ar) · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
 
+## Rollback (Parte 2)
+
+Desfaz as duas migrations da Parte 2 (`aplicar_20271112950000_diario_nucleo_com_ator.sql` e
+`aplicar_20271112960000_link_celular_rpcs_diario.sql`) e devolve o Diário logado ao estado
+de `aplicar_20271014600000_diario_aprovacao_permissao.sql`. **Rodar ANTES do "Rollback
+(Parte 1)"** — o Rollback (Parte 1) apaga `is_org_member_de`, que os núcleos
+`_diary_upsert_core`/`_diary_delete_core` chamam; plpgsql não rastreia dependência, então o
+`DROP` passaria sem erro e todo salvar do Diário logado quebraria em tempo de execução.
+
+Ordem (importa: nunca há janela em que uma RPC logada chame um núcleo já apagado):
+
+1. **Recriar as três RPCs logadas** — reaplicar o arquivo antigo inteiro; só tem as três
+   funções (`fn_pode_aprovar_diario`, `diary_upsert_entry`, `diary_delete_entry`, INVOKER nas
+   duas últimas, com os `REVOKE`/`GRANT` do arquivo) e é idempotente (`CREATE OR REPLACE`):
+
+   ```bash
+   cd C:\Drentes\link-celular
+   npx supabase db query --linked -f supabase/migrations/aplicar_20271014600000_diario_aprovacao_permissao.sql
+   ```
+
+2. **Apagar o que a Parte 2 criou** (e devolver o `celular_sessao` da Parte 1, cujo corpo é o
+   de `aplicar_20271111960000_link_celular_rpcs_tarefas.sql`, bloco `celular_sessao`):
+
+```sql
+BEGIN;
+
+-- celular_sessao como era (sem pode_aprovar_diario) ANTES de apagar o gêmeo que ela chama.
+CREATE OR REPLACE FUNCTION public.celular_sessao(p_token TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+VOLATILE SECURITY DEFINER
+SET search_path = public, pg_temp
+AS $$
+DECLARE
+    v_user UUID;
+    v_org  UUID;
+BEGIN
+    SELECT r.user_id, r.org_id INTO v_user, v_org FROM public._mobile_link_resolver(p_token) r;
+
+    RETURN jsonb_build_object(
+        'user_id',  v_user,
+        'nome',     (SELECT p.name FROM public.profiles p WHERE p.id = v_user),
+        'org_id',   v_org,
+        'org_nome', (SELECT o.name FROM public.organizations o WHERE o.id = v_org));
+END;
+$$;
+
+-- RPCs do link (Parte 2)
+DROP FUNCTION IF EXISTS public.celular_diarios_listar(TEXT);
+DROP FUNCTION IF EXISTS public.celular_diario_abrir(TEXT, UUID);
+DROP FUNCTION IF EXISTS public.celular_diario_salvar(TEXT, UUID, JSONB);
+DROP FUNCTION IF EXISTS public.celular_diario_excluir(TEXT, UUID, TEXT);
+DROP FUNCTION IF EXISTS public.celular_efetivo_listar(TEXT);
+DROP FUNCTION IF EXISTS public.celular_planejamento_ler(TEXT, UUID, UUID);
+DROP FUNCTION IF EXISTS public.celular_planejamento_gravar_evolucao(TEXT, UUID, UUID, JSONB);
+DROP FUNCTION IF EXISTS public.celular_diario_autoriza(TEXT, UUID);
+DROP FUNCTION IF EXISTS public.celular_diario_midia_permitida(TEXT, TEXT[]);
+DROP FUNCTION IF EXISTS public.celular_diario_midia_orfa(TEXT, UUID, TEXT[]);
+
+-- Internos do link (Parte 2)
+DROP FUNCTION IF EXISTS public._celular_org_do_projeto(UUID, JSONB);
+DROP FUNCTION IF EXISTS public._celular_classificacao(JSONB);
+DROP FUNCTION IF EXISTS public._celular_settings_enxuto(JSONB);
+DROP FUNCTION IF EXISTS public._celular_registros(JSONB);
+DROP FUNCTION IF EXISTS public._celular_midias_citadas(JSONB);
+DROP FUNCTION IF EXISTS public._celular_midia_path_ok(TEXT, UUID, UUID);
+DROP FUNCTION IF EXISTS public._celular_confere_paths(TEXT[]);
+DROP FUNCTION IF EXISTS public._celular_planejamento_aceito(UUID, UUID, JSONB, JSONB, UUID);
+
+-- Núcleos e gêmeo (as RPCs logadas do passo 1 já não os chamam)
+DROP FUNCTION IF EXISTS public._diary_upsert_core(UUID, UUID, JSONB);
+DROP FUNCTION IF EXISTS public._diary_delete_core(UUID, UUID, TEXT);
+DROP FUNCTION IF EXISTS public.fn_pode_aprovar_diario_de(UUID, UUID);
+
+COMMIT;
+```
+
+3. **Edge** (o usuário roda, o auto mode barra): `npx supabase functions delete celular-diario-midia`
+   (e tirar o bloco `[functions.celular-diario-midia]` de `supabase/config.toml` ao reverter o front).
+4. **Front:** `git revert` dos commits da Parte 2 (a aba Diário some do `/celular`; `DiaryMobileApp`
+   volta a ler/gravar direto).
+
+Ensaiado em `BEGIN … ROLLBACK` contra o banco: migrations `…950000` e `…960000` → passo 1 →
+este SQL → conjunto de funções `diary_*`/`_diary_*`/`fn_pode_aprovar_*`/`*celular*` idêntico ao de
+antes, `diary_upsert_entry` INVOKER de novo, `celular_sessao` sem `pode_aprovar_diario` e os
+corpos das quatro funções restauradas iguais aos de antes → `TUDO OK`.
+
 ## Rollback (Parte 1)
+
+**Rodar só DEPOIS do "Rollback (Parte 2)"** (senão `is_org_member_de` some e o Diário logado quebra ao salvar).
 
 Desfaz as duas migrations (`aplicar_20271111950000…` e `aplicar_20271111960000…`). Os
 corpos de `is_task_space_member` e `is_task_collaborator` abaixo são os ORIGINAIS, lidos com

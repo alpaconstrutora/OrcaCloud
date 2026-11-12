@@ -24,6 +24,8 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
     // No modo Completo com rubricas, imposto e corretagem vêm do CAPEX
     // (categorias 5 e 7) — estes campos não entram no cálculo.
     const { capexRubricasAtivas } = useImovibMath(study);
+    // Item 6.3: fora do regime manual o imposto vem do regime, não deste campo.
+    const impostoPeloRegime = (study.tax_regime ?? 'manual') !== 'manual';
     const motivoDeducoesForaDoCalculo = 'No modo Completo do Orçamento (CAPEX), imposto e corretagem vêm das rubricas das categorias 5 e 7. Este campo não entra no cálculo.';
     const initial = (v: number | null | undefined, padrao: number) => String(v ?? padrao);
 
@@ -254,8 +256,8 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                                 value={taxRate}
                                 onChange={(e) => setTaxRate(e.target.value)}
                                 onBlur={handleSave}
-                                disabled={capexRubricasAtivas}
-                                title={capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
+                                disabled={capexRubricasAtivas || impostoPeloRegime}
+                                title={impostoPeloRegime ? 'O imposto vem do regime tributário escolhido em Orçamento (CAPEX): este campo não entra no cálculo.' : capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
                                 className="disabled:opacity-50 disabled:cursor-not-allowed w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors text-red-700"
                             />
                         </div>

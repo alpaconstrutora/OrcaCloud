@@ -22,6 +22,7 @@ import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEq
 import { GRUPOS_DO_FLUXO } from '../utils/imovibVisaoDoFluxo';
 import { ROTULO_DOS_JUROS_NA_OBRA, ROTULO_DA_AMORTIZACAO } from '../utils/imovibFinanciamento';
 import { descreverFonte } from '../utils/imovibFontes';
+import { ROTULO_DO_REGIME, RegimeTributarioDoEstudo, hipotesesDoEstudo } from '../utils/imovibTributos';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
@@ -122,6 +123,14 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
     ];
 
     const naoEntra = rubricas ? 'Não entra no cálculo: vem das rubricas do CAPEX (modo Completo)' : null;
+    // Item 6.3: regime tributário e as alíquotas que valem nele.
+    const regime = (study.tax_regime ?? D.tax_regime) as RegimeTributarioDoEstudo;
+    const h = hipotesesDoEstudo(study);
+    const pctBR = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
+    const aliquotasDoRegime = regime === 'ret' ? `${pctBR(h.retPct)} da receita`
+        : regime === 'ret_his' ? `${pctBR(h.retHisPct)} da receita`
+            : regime === 'presumido' ? `${pctBR(h.presumidoPct)} da receita`
+                : `PIS/Cofins ${pctBR(h.realPisCofinsPct)} da receita, crédito de ${pctBR(h.realCreditoSobreCustoPct)} do custo, IRPJ/CSLL ${pctBR(h.realIrCsPct)} do lucro do ano (estimativa)`;
     const inflacao = premissa(study.inflation_rate, D.inflation_rate);
     const ROTULO_CURVA: Record<string, string> = { linear: 'Linear', lancamento: 'Lançamento forte', vso: 'VSO (sobre o estoque)', custom: 'Personalizada' };
     const tipoCurva = study.sales_curve_type ?? D.sales_curve_type;
@@ -134,7 +143,8 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Cronograma', 'Duração da obra', premissa(study.construction_duration_months, D.construction_duration_months), 'meses', null],
         ['Taxas', 'Inflação geral', inflacao, '% a.m.', null],
         ['Taxas', 'TMA', tma, '% a.a.', origemDaTma],
-        ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', naoEntra],
+        ['Taxas', 'Regime tributário', ROTULO_DO_REGIME[regime], null, regime === 'manual' ? null : aliquotasDoRegime],
+        ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', regime !== 'manual' ? 'Não entra no cálculo: o imposto vem do regime tributário' : naoEntra],
         ['Taxas', 'Corretagem', premissa(study.brokerage_fee, D.brokerage_fee), '%', naoEntra],
         ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', 'Sobre parcelas de obra, intermediárias e pós-chaves'],
         ['Curva de vendas', 'Tipo da curva', ROTULO_CURVA[tipoCurva] ?? tipoCurva, null, null],

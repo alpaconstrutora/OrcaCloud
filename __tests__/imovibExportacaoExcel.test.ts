@@ -74,7 +74,7 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         const grupos = new Set(premissas.slice(1).map(l => l[0]));
         expect([...grupos]).toEqual(['Cronograma', 'Taxas', 'Curva de vendas', 'Perfil de recebimento', 'Distrato', 'Índices', 'Financiamento']);
         // Número em toda premissa, exceto as que são escolha (tipo da curva, revenda, regras do financiamento).
-        const ESCOLHAS = ['Tipo da curva', 'Revender a unidade distratada', 'Juros do financiamento na obra', 'Amortização do financiamento'];
+        const ESCOLHAS = ['Tipo da curva', 'Revender a unidade distratada', 'Juros do financiamento na obra', 'Amortização do financiamento', 'Regime tributário'];
         for (const l of premissas.slice(1)) {
             if (ESCOLHAS.includes(String(l[1]))) expect(typeof l[2]).toBe('string');
             else expect(typeof l[2], String(l[1])).toBe('number');
@@ -116,6 +116,16 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         expect(l[0]).toBe('Outras fontes');
         expect(l[2]).toBe(1_000_000);
         expect(l[4]).toMatch(/mês 3.*12% a\.a\..*24 meses/);
+    });
+
+    it('6.3 — regime tributário nas Premissas; fora do manual, o imposto da Dinâmica diz que não entra', () => {
+        const s = estudo({ tax_regime: 'ret', tax_hypotheses: { retPct: 2 } });
+        const { premissas } = montarPlanilhaImovib(s, computeImovibMath(s));
+        const l = linha(premissas, 'Regime tributário', 1);
+        expect(l[2]).toBe('RET (patrimônio de afetação)');
+        expect(l[4]).toMatch(/2% da receita/);
+        expect(linha(premissas, 'Impostos sobre a receita', 1)[4]).toMatch(/regime/);
+        expect(linha(montarPlanilhaImovib(estudo(), computeImovibMath(estudo())).premissas, 'Regime tributário', 1)[2]).toBe('Manual (rubricas de imposto ou Dinâmica)');
     });
 
     it('4.5 — a origem da TMA sai na linha da TMA', () => {

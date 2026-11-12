@@ -66,11 +66,14 @@ DECLARE
     org    CONSTANT UUID := '926cf626-ba49-4ee4-9f35-472822fb90e6';
     e_iago CONSTANT UUID := '175d203c-666c-45b6-9799-7dcebf086798';
     iago_email TEXT;
-    o2 UUID; x UUID; y UUID; y_email TEXT; org_vinc UUID;
-    e_outro UUID; e_email UUID; e_vinc_outro UUID; e_vazio UUID; e_branco UUID; e_colab UUID;
-    t_a UUID; t_b UUID; t_y UUID; t_vazio UUID; t_colab UUID;
+    o2 UUID; x UUID; y UUID; y_email TEXT; z UUID; org_vinc UUID; org_z UUID; outra_org UUID;
+    u_vazio UUID; u_branco UUID;
+    e_outro UUID; e_email UUID; e_vinc_outro UUID; e_vazio UUID; e_branco UUID; e_colab UUID; e_z UUID;
+    t_a UUID; t_b UUID; t_y UUID; t_vazio UUID; t_colab UUID; t_z UUID;
+    s_iago UUID; p_tr UUID; src_a TEXT;
     st_done UUID; tk TEXT; v TEXT; ref TEXT; tr RECORD;
     sql_conta CONSTANT TEXT := 'SELECT count(*)::text FROM public.tasks t WHERE t.id = %L';
+    recusa_resp CONSTANT TEXT := '42501:o responsável só altera título, descrição, datas, prioridade e status da tarefa';
 BEGIN
     SELECT au.email INTO iago_email FROM auth.users au WHERE au.id = iago;
     PERFORM pg_temp.confere(iago_email IS NOT NULL, 'fixture: conta do Iago');
@@ -93,12 +96,32 @@ BEGIN
      ORDER BY om.user_id LIMIT 1;
     PERFORM pg_temp.confere(x IS NOT NULL, 'fixture: terceiro membro x da org');
 
-    -- y: outra conta com e-mail, para a perna do e-mail.
+    -- y: quarto membro da org, com e-mail, para a perna do e-mail.
     SELECT au.id, au.email INTO y, y_email
-      FROM auth.users au
-     WHERE au.id NOT IN (iago, o2, x) AND nullif(btrim(au.email), '') IS NOT NULL
+      FROM public.organization_members om JOIN auth.users au ON au.id = om.user_id
+     WHERE om.organization_id = org AND au.id NOT IN (iago, o2, x) AND nullif(btrim(au.email), '') IS NOT NULL
+       AND public.is_org_member_de(au.id, org)
      ORDER BY au.id LIMIT 1;
-    PERFORM pg_temp.confere(y IS NOT NULL, 'fixture: conta y com e-mail');
+    PERFORM pg_temp.confere(y IS NOT NULL, 'fixture: membro y da org com e-mail');
+
+    -- z: conta com e-mail que NÃO é membro da org (Importante 2).
+    SELECT au.id INTO z
+      FROM auth.users au
+     WHERE nullif(btrim(au.email), '') IS NOT NULL AND NOT public.is_org_member_de(au.id, org)
+     ORDER BY au.id LIMIT 1;
+    PERFORM pg_temp.confere(z IS NOT NULL, 'fixture: conta z fora da org');
+
+    -- Contas sem e-mail útil ('' e '   '), para o assert do e-mail vazio ser
+    -- falsificável (Menor 3): sem o nullif(btrim(...)), '' casaria com ''.
+    INSERT INTO auth.users (id, email) VALUES (gen_random_uuid(), '')    RETURNING id INTO u_vazio;
+    INSERT INTO auth.users (id, email) VALUES (gen_random_uuid(), '   ') RETURNING id INTO u_branco;
+
+    -- Espaço do Iago na org (o gatilho seed_space_owner_member o põe como membro)
+    -- e uma obra da org — destinos das tentativas de tomar a tarefa (Crítico 1).
+    INSERT INTO public.task_spaces (org_id, owner_user_id, name) VALUES (org, iago, 'TR espaço do Iago') RETURNING id INTO s_iago;
+    PERFORM pg_temp.confere(public.is_task_space_member_de(iago, s_iago), 'fixture: Iago membro do próprio espaço');
+    INSERT INTO public.projects (name, organization_id, user_id) VALUES ('TR obra', org, o2) RETURNING id INTO p_tr;
+    SELECT o.id INTO outra_org FROM public.organizations o WHERE o.id <> org ORDER BY o.id LIMIT 1;
 
     -- Colaboradores de teste (org do link, ATIVO):
     --   e_outro      — para quem o Iago tentaria passar a tarefa;
@@ -117,6 +140,11 @@ BEGIN
     INSERT INTO public.employees (org_id, name, email, status) VALUES (org, 'TR e-mail vazio', '', 'ATIVO') RETURNING id INTO e_vazio;
     INSERT INTO public.employees (org_id, name, email, status) VALUES (org, 'TR e-mail em branco', '   ', 'ATIVO') RETURNING id INTO e_branco;
     INSERT INTO public.employees (org_id, name, email, status) VALUES (org, 'TR colaborador Iago', iago_email, 'ATIVO') RETURNING id INTO e_colab;
+    --   e_z — vinculado (user_id) à conta z, que não é membro da org da tarefa.
+    SELECT o.id INTO org_z FROM public.organizations o
+     WHERE NOT EXISTS (SELECT 1 FROM public.employees e WHERE e.org_id = o.id AND e.user_id = z)
+     ORDER BY o.id LIMIT 1;
+    INSERT INTO public.employees (org_id, name, user_id, status) VALUES (org_z, 'TR vinculado a z', z, 'ATIVO') RETURNING id INTO e_z;
 
     -- Tarefas abertas de o2, fora de espaço, na org do link.
     INSERT INTO public.tasks (org_id, user_id, title, status, priority, assignee_employee_id)
@@ -130,6 +158,8 @@ BEGIN
     INSERT INTO public.tasks (org_id, user_id, title, status, priority)
     VALUES (org, o2, 'TR Iago só colaborador', 'open', 3) RETURNING id INTO t_colab;
     INSERT INTO public.task_collaborators (task_id, employee_id) VALUES (t_colab, e_colab);
+    INSERT INTO public.tasks (org_id, user_id, title, status, priority, assignee_employee_id)
+    VALUES (org, o2, 'TR z responsável fora da org', 'open', 3, e_z) RETURNING id INTO t_z;
 
     -- ── RLS: o responsável vê (o RED) ────────────────────────────────────────
     v := pg_temp.como(iago, 'authenticated', format(sql_conta, t_a));
@@ -143,17 +173,44 @@ BEGIN
     PERFORM pg_temp.confere(tr.status = 'done' AND tr.completed_at IS NOT NULL,
         'concluída pelo responsável: status done, completed_at preenchido pelo gatilho');
 
-    -- ── RLS: o responsável não passa a tarefa adiante (WITH CHECK) ───────────
+    -- ── RLS + gatilho: o responsável não passa a tarefa adiante nem a toma ───
+    SELECT t.source_module INTO src_a FROM public.tasks t WHERE t.id = t_a;
+    -- (Crítico 1: as WITH CHECK de UPDATE se combinam com OR — sem o gatilho,
+    -- SET user_id = ele passaria no CHECK de tasks_update.)
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET assignee_employee_id = %L WHERE id = %L RETURNING id::text', e_outro, t_a));
-    PERFORM pg_temp.confere(v LIKE '42501:new row violates row-level security policy%',
-        'Iago trocando o responsável → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando o responsável → 42501 (veio ' || v || ')');
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET assignee_employee_id = NULL WHERE id = %L RETURNING id::text', t_a));
-    PERFORM pg_temp.confere(v LIKE '42501:new row violates row-level security policy%',
-        'Iago tirando o responsável → 42501 (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT assignee_employee_id FROM public.tasks WHERE id = t_a) = e_iago,
-        'recusas não trocaram o responsável');
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago tirando o responsável → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET user_id = %L WHERE id = %L RETURNING id::text', iago, t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago tomando a posse (SET user_id = ele) → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET space_id = %L WHERE id = %L RETURNING id::text', s_iago, t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago levando a tarefa para um espaço dele → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET org_id = %L WHERE id = %L RETURNING id::text', outra_org, t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago levando a tarefa para outra org → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET project_id = %L WHERE id = %L RETURNING id::text', p_tr, t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando a obra → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET source_module = ''TR'' WHERE id = %L RETURNING id::text', t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando source_module → 42501 (veio ' || v || ')');
+    SELECT * INTO tr FROM public.tasks WHERE id = t_a;
+    PERFORM pg_temp.confere(tr.assignee_employee_id = e_iago AND tr.user_id = o2 AND tr.space_id IS NULL
+                        AND tr.org_id = org AND tr.project_id IS NULL AND tr.source_module IS NOT DISTINCT FROM src_a,
+        'recusas não mexeram em responsável, dono, espaço, org, obra nem origem');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'WITH u AS (UPDATE public.tasks SET title = ''TR editada pelo responsável'', description = ''d'', priority = 1, '
+        || 'due_date = now(), start_date = now(), alert_at = now() + interval ''1 day'', snoozed_until = NULL, status = ''open'' '
+        || 'WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_a));
+    PERFORM pg_temp.confere(v = 'ok:1', 'Iago edita título, descrição, datas, prioridade e status → 1 linha (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'WITH u AS (UPDATE public.tasks SET status = ''done'' WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_a));
+    PERFORM pg_temp.confere(v = 'ok:1' AND (SELECT completed_at IS NOT NULL FROM public.tasks WHERE id = t_a),
+        'Iago conclui de novo, com o gatilho novo no caminho (veio ' || v || ')');
 
     -- ── RLS: o responsável não apaga ─────────────────────────────────────────
     v := pg_temp.como(iago, 'authenticated', format(
@@ -165,7 +222,19 @@ BEGIN
     v := pg_temp.como(o2, 'authenticated', format(
         'WITH u AS (UPDATE public.tasks SET assignee_employee_id = %L WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', e_outro, t_vazio));
     PERFORM pg_temp.confere(v = 'ok:1', 'dono troca o responsável (tasks_update) (veio ' || v || ')');
-    UPDATE public.tasks SET assignee_employee_id = e_vazio WHERE id = t_vazio;
+    v := pg_temp.como(o2, 'authenticated', format(
+        'WITH u AS (UPDATE public.tasks SET space_id = %L, project_id = %L WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u',
+        s_iago, p_tr, t_vazio));
+    PERFORM pg_temp.confere(v = 'ok:1', 'dono muda espaço e obra (o gatilho não o atinge) (veio ' || v || ')');
+    UPDATE public.tasks SET assignee_employee_id = e_vazio, space_id = NULL, project_id = NULL WHERE id = t_vazio;
+
+    -- ── responsável vinculado que NÃO é membro da org da tarefa (Importante 2)
+    PERFORM pg_temp.confere(public.is_employee_do_usuario_de(z, e_z) IS TRUE, 'fixture: e_z é de z');
+    v := pg_temp.como(z, 'authenticated', format(sql_conta, t_z));
+    PERFORM pg_temp.confere(v = 'ok:0', 'responsável vinculado que não é membro da org da tarefa não vê (veio ' || v || ')');
+    v := pg_temp.como(z, 'authenticated', format(
+        'WITH u AS (UPDATE public.tasks SET status = ''done'' WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_z));
+    PERFORM pg_temp.confere(v = 'ok:0', 'responsável que não é membro da org não edita (veio ' || v || ')');
 
     -- ── RLS: terceiro membro não vê nem edita ────────────────────────────────
     v := pg_temp.como(x, 'authenticated', format(
@@ -190,6 +259,11 @@ BEGIN
     PERFORM pg_temp.confere(public.is_employee_do_usuario_de(y, e_vinc_outro) IS FALSE
                         AND public.is_employee_do_usuario_de(x, e_vinc_outro) IS TRUE,
         'colaborador com user_id: vale o vínculo, não o e-mail');
+    PERFORM pg_temp.confere((SELECT count(*) FROM auth.users au WHERE au.id IN (u_vazio, u_branco)) = 2
+                        AND public.is_employee_do_usuario_de(u_vazio, e_vazio) IS FALSE
+                        AND public.is_employee_do_usuario_de(u_branco, e_branco) IS FALSE
+                        AND public.is_employee_do_usuario_de(u_branco, e_vazio) IS FALSE,
+        'contas com e-mail '''' / ''   '' não casam com colaborador de e-mail vazio / em branco');
     PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM auth.users au
                                          WHERE public.is_employee_do_usuario_de(au.id, e_vazio)
                                             OR public.is_employee_do_usuario_de(au.id, e_branco)),
@@ -239,6 +313,31 @@ BEGIN
             AND policyname IN ('tasks_select_assignee', 'tasks_update_assignee')) = 2
         AND (SELECT string_agg(cmd, ',' ORDER BY cmd) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks') = 'DELETE,INSERT,SELECT,SELECT,SELECT,UPDATE,UPDATE',
         'tasks: + tasks_select_assignee e tasks_update_assignee; INSERT e DELETE sem mudança');
+    PERFORM pg_temp.confere(
+        (SELECT bool_and(pg_get_expr(p.polqual, p.polrelid) LIKE '%is_org_member(org_id)%'
+                         AND (p.polcmd = 'r' OR pg_get_expr(p.polwithcheck, p.polrelid) LIKE '%is_org_member(org_id)%'))
+              AND count(*) = 2
+           FROM pg_policy p WHERE p.polrelid = 'public.tasks'::regclass
+            AND p.polname IN ('tasks_select_assignee', 'tasks_update_assignee')),
+        'policies do responsável exigem is_org_member(org_id) (USING e CHECK)');
+    PERFORM pg_temp.confere(EXISTS (
+        SELECT 1 FROM pg_trigger t
+         WHERE t.tgrelid = 'public.tasks'::regclass
+           AND t.tgname = 'trg_tasks_responsavel_so_conteudo'
+           AND t.tgfoid = 'public._tasks_responsavel_so_conteudo()'::regprocedure
+           AND (t.tgtype & 1) = 1      -- FOR EACH ROW
+           AND (t.tgtype & 2) = 2      -- BEFORE
+           AND (t.tgtype & 16) = 16    -- UPDATE
+           AND (t.tgtype & (4 | 8 | 32)) = 0),
+        'gatilho BEFORE UPDATE FOR EACH ROW em tasks');
+    PERFORM pg_temp.confere(
+        NOT has_function_privilege('anon', 'public._tasks_responsavel_so_conteudo()', 'EXECUTE')
+        AND NOT has_function_privilege('authenticated', 'public._tasks_responsavel_so_conteudo()', 'EXECUTE')
+        AND NOT EXISTS (SELECT 1 FROM pg_proc p, aclexplode(p.proacl) a
+                         WHERE p.oid = 'public._tasks_responsavel_so_conteudo()'::regprocedure AND a.grantee = 0)
+        AND (SELECT NOT p.prosecdef AND 'search_path=public, pg_temp' = ANY (p.proconfig)
+               FROM pg_proc p WHERE p.oid = 'public._tasks_responsavel_so_conteudo()'::regprocedure),
+        'função do gatilho: SECURITY INVOKER, search_path fixo, sem EXECUTE para PUBLIC/anon/authenticated');
 
     -- ── link do celular ──────────────────────────────────────────────────────
     PERFORM pg_temp.confere(public._celular_tarefa_visivel(iago, org, (SELECT t FROM public.tasks t WHERE t.id = t_b)) IS TRUE,
@@ -307,7 +406,8 @@ SELECT format('TUDO OK — Iago na org 926cf626: %s abertas pela regra antiga + 
                         WHERE e.id = t.assignee_employee_id
                           AND (e.user_id = i.id
                                OR (e.user_id IS NULL AND nullif(btrim(e.email), '') IS NOT NULL
-                                   AND lower(btrim(e.email)) = lower(i.email)))) AS responsavel
+                                   AND lower(btrim(e.email)) = lower(i.email))))
+               AND public.is_org_member_de(i.id, t.org_id) AS responsavel
           FROM public.tasks t
           CROSS JOIN (SELECT au.id, au.email FROM auth.users au
                        WHERE au.id = 'f9809eae-4935-40b3-bfaa-3879c456c563') i

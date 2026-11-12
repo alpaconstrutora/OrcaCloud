@@ -23,9 +23,23 @@
 --     conta não é atropelado pelo e-mail) e e-mail não vazio ('' não casa com
 --     ninguém). É o mesmo critério de is_task_collaborator_de, com o vazio fora.
 --   • policy: assignee_employee_id IS NOT NULL AND is_employee_do_usuario(...)
---     — tarefa sem responsável não é liberada por esta policy.
---   • tasks_update_assignee WITH CHECK = mesma expressão: o responsável edita,
---     mas não passa a tarefa para outra pessoa (nem a deixa sem responsável).
+--     AND is_org_member(org_id) — tarefa sem responsável não é liberada; e o
+--     responsável só vê/edita tarefa de org de que é MEMBRO. employees.user_id
+--     é gravável por qualquer membro da org do colaborador (employees_org_access
+--     não olha papel) e o colaborador pode ser compartilhado com outra org: sem
+--     o is_org_member, vincular um colaborador a si abriria tarefas de outra org
+--     (e o ex-membro vinculado continuaria vendo). Revisão 1, Importante 2.
+--   • As WITH CHECK das policies UPDATE permissivas se combinam com OR: com só a
+--     policy, o responsável faria SET user_id = ele (a linha nova passa no CHECK
+--     de tasks_update) e viraria dono; idem space_id para um espaço dele e org_id
+--     para outra org. Por isso o gatilho trg_tasks_responsavel_so_conteudo: para
+--     quem NÃO é dono nem membro do espaço da linha ANTIGA, chamando como anon ou
+--     authenticated, recusa (42501) mudar user_id, org_id, space_id, folder_id,
+--     assignee_employee_id, parent_task_id, project_id, source_module e
+--     source_ref. O responsável edita só título, descrição, datas, prioridade e
+--     status — a lista branca do link. Revisão 1, Crítico 1.
+--   • tasks_update_assignee WITH CHECK = mesma expressão (o gatilho já recusa
+--     antes trocar ou tirar o responsável; o CHECK fica como segunda trava).
 --     Dono e membro do espaço continuam podendo, por tasks_update.
 --   • INSERT e DELETE não mudam: o responsável não apaga a tarefa.
 -- REGRA #7, pergunta 2:
@@ -34,13 +48,20 @@
 --     colaborador é VOCÊ?"; anon recebe FALSE. EXECUTE para anon, authenticated
 --     e service_role porque as policies de tasks são TO public e avaliadas como
 --     o papel de quem consulta (mesmo critério de is_task_space_member).
+--   • _tasks_responsavel_so_conteudo(): função de gatilho, SECURITY INVOKER
+--     (precisa de current_user = papel de quem chama); ninguém da API executa
+--     diretamente. Não atinge as celular_* (rodam como dono, current_user ≠
+--     anon/authenticated), que já têm lista branca própria.
 --
 -- Link do celular: _celular_tarefa_visivel e celular_tarefa_atualizar copiados
 -- do ARQUIVO aplicar_20271111960000_link_celular_rpcs_tarefas.sql, com a perna
 -- nova. Em celular_tarefa_atualizar entra também o equivalente do WITH CHECK
 -- acima: quem só edita por ser o responsável não troca o responsável (42501).
+-- O is_org_member não entra no link: _celular_tarefa_visivel exige
+-- t.org_id = org do link, e o _mobile_link_resolver reconfere is_org_member_de
+-- a cada chamada.
 --
--- Idempotente (CREATE OR REPLACE, DROP POLICY IF EXISTS). Aplicar com
+-- Idempotente (CREATE OR REPLACE, DROP POLICY/TRIGGER IF EXISTS). Aplicar com
 -- `npx supabase db query --linked -f` — nunca `db push`.
 
 -- ── 1. "Este colaborador é este usuário?" ───────────────────────────────────
@@ -77,13 +98,51 @@ $$;
 DROP POLICY IF EXISTS tasks_select_assignee ON public.tasks;
 CREATE POLICY tasks_select_assignee ON public.tasks
     FOR SELECT
-    USING (assignee_employee_id IS NOT NULL AND public.is_employee_do_usuario(assignee_employee_id));
+    USING (assignee_employee_id IS NOT NULL AND public.is_employee_do_usuario(assignee_employee_id)
+           AND public.is_org_member(org_id));
 
 DROP POLICY IF EXISTS tasks_update_assignee ON public.tasks;
 CREATE POLICY tasks_update_assignee ON public.tasks
     FOR UPDATE
-    USING      (assignee_employee_id IS NOT NULL AND public.is_employee_do_usuario(assignee_employee_id))
-    WITH CHECK (assignee_employee_id IS NOT NULL AND public.is_employee_do_usuario(assignee_employee_id));
+    USING      (assignee_employee_id IS NOT NULL AND public.is_employee_do_usuario(assignee_employee_id)
+                AND public.is_org_member(org_id))
+    WITH CHECK (assignee_employee_id IS NOT NULL AND public.is_employee_do_usuario(assignee_employee_id)
+                AND public.is_org_member(org_id));
+
+-- O responsável (quem edita sem ser dono nem membro do espaço) só mexe no
+-- conteúdo. Só para chamadas da API (anon/authenticated): as celular_* rodam
+-- como dono e têm lista branca própria; service_role e postgres não passam.
+-- Dono e membro do espaço: pela linha ANTIGA, como tasks_update.
+CREATE OR REPLACE FUNCTION public._tasks_responsavel_so_conteudo()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    IF current_user IN ('authenticated', 'anon')
+       AND NOT coalesce(OLD.user_id = auth.uid()
+                        OR (OLD.space_id IS NOT NULL AND public.is_task_space_member(OLD.space_id)), false)
+       AND (   NEW.user_id              IS DISTINCT FROM OLD.user_id
+            OR NEW.org_id               IS DISTINCT FROM OLD.org_id
+            OR NEW.space_id             IS DISTINCT FROM OLD.space_id
+            OR NEW.folder_id            IS DISTINCT FROM OLD.folder_id
+            OR NEW.assignee_employee_id IS DISTINCT FROM OLD.assignee_employee_id
+            OR NEW.parent_task_id       IS DISTINCT FROM OLD.parent_task_id
+            OR NEW.project_id           IS DISTINCT FROM OLD.project_id
+            OR NEW.source_module        IS DISTINCT FROM OLD.source_module
+            OR NEW.source_ref           IS DISTINCT FROM OLD.source_ref) THEN
+        RAISE EXCEPTION 'o responsável só altera título, descrição, datas, prioridade e status da tarefa'
+            USING ERRCODE = '42501';
+    END IF;
+    RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS trg_tasks_responsavel_so_conteudo ON public.tasks;
+CREATE TRIGGER trg_tasks_responsavel_so_conteudo
+    BEFORE UPDATE ON public.tasks
+    FOR EACH ROW EXECUTE FUNCTION public._tasks_responsavel_so_conteudo();
 
 -- ── 3. Link do celular ──────────────────────────────────────────────────────
 -- tasks_select ∪ tasks_select_collaborator ∪ tasks_select_assignee para p_user,
@@ -213,6 +272,8 @@ $$;
 -- Interno: nenhum papel da API executa; só is_employee_do_usuario e as
 -- celular_*, que rodam como dono.
 REVOKE EXECUTE ON FUNCTION public.is_employee_do_usuario_de(UUID, UUID)             FROM PUBLIC, anon, authenticated;
+-- Função de gatilho: dispara sozinha; ninguém da API chama.
+REVOKE EXECUTE ON FUNCTION public._tasks_responsavel_so_conteudo()                  FROM PUBLIC, anon, authenticated;
 
 -- Usada pelas policies de tasks (TO public, avaliadas como o papel de quem
 -- consulta): anon, authenticated e service_role executam; sai o PUBLIC.

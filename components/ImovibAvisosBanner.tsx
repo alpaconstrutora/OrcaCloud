@@ -1,6 +1,6 @@
 import React from 'react';
 import { AlertTriangle } from 'lucide-react';
-import type { ImovibAba, ImovibAviso } from '../hooks/useImovibMath';
+import type { ImovibAba, ImovibAviso, ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 
 /**
  * Avisos do motor de viabilidade (`computeImovibMath().avisos`) acima dos KPIs.
@@ -18,10 +18,18 @@ const ROTULO_ABA: Record<ImovibAba, string> = {
     viability_dynamic: 'Dinâmica',
 };
 
+const ROTULO_SUB_ABA: Record<ImovibSubAbaDePremissas, string> = {
+    identificacao: 'Identificação',
+    mercado: 'Mercado',
+    cronograma: 'Cronograma',
+    terreno: 'Terreno',
+    memorial: 'Memorial',
+};
+
 interface ImovibAvisosBannerProps {
     avisos: ImovibAviso[];
     /** Quando presente, cada aviso ganha um botão que abre a aba que corrige. */
-    onIrPara?: (aba: ImovibAba) => void;
+    onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void;
 }
 
 const ImovibAvisosBanner: React.FC<ImovibAvisosBannerProps> = ({ avisos, onIrPara }) => {
@@ -43,10 +51,10 @@ const ImovibAvisosBanner: React.FC<ImovibAvisosBannerProps> = ({ avisos, onIrPar
                                 {onIrPara && (
                                     <button
                                         type="button"
-                                        onClick={() => onIrPara(a.aba)}
+                                        onClick={() => onIrPara(a.aba, a.subAba)}
                                         className="px-3 py-1.5 bg-amber-100 hover:bg-amber-200 text-amber-800 rounded text-button font-bold transition-colors whitespace-nowrap"
                                     >
-                                        Corrigir em {ROTULO_ABA[a.aba]}
+                                        Corrigir em {ROTULO_ABA[a.aba]}{a.subAba ? ` › ${ROTULO_SUB_ABA[a.subAba]}` : ''}
                                     </button>
                                 )}
                             </li>

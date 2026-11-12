@@ -9,7 +9,7 @@ export {
     computeImovibMath, calcularTirMensal, baseDaRubrica,
 } from '../utils/imovibMotor';
 export type {
-    MonthlyFlow, LinhasDoMes, ImovibMathOptions, ImovibAba, ImovibAviso, ImovibMathResult,
+    MonthlyFlow, LinhasDoMes, ImovibMathOptions, ImovibAba, ImovibSubAbaDePremissas, ImovibAviso, ImovibMathResult,
 } from '../utils/imovibMotor';
 
 export const useImovibMath = (study: ImovibStudy | null | undefined, options?: ImovibMathOptions): ImovibMathResult => {

@@ -19,6 +19,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
 import { useImovibPodeEditar, ImovibEdicaoProvider } from '../hooks/useImovibEdicao';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import type { ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import { TabsBar, TabsBarItem } from './ui/TabsBar';
 
 interface ImovibDetailViewProps {
@@ -73,7 +74,11 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
         setPremissasKey(k => k + 1);
         return true;
     };
-    const irPara = async (aba: AbaDoEstudo) => {
+    // Sub-aba de Premissas pedida por um aviso; `n` muda a cada pedido para reabrir
+    // a mesma sub-aba depois de o usuário ter trocado (pendência da Fase 5).
+    const [premissasSubAba, setPremissasSubAba] = useState<{ sub: ImovibSubAbaDePremissas; n: number } | null>(null);
+    const irPara = async (aba: AbaDoEstudo, subAba?: ImovibSubAbaDePremissas) => {
+        if (aba === 'premises' && subAba) setPremissasSubAba(p => ({ sub: subAba, n: (p?.n ?? 0) + 1 }));
         if (aba === activeTab) return;
         if (await podeSair()) setActiveTab(aba);
     };
@@ -201,6 +206,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             key={premissasKey}
                             study={study}
                             onDataChanged={loadStudyDetails}
+                            subAba={premissasSubAba}
                             onDirtyChange={(d) => (d ? premissas.markDirty() : premissas.markSaved())}
                         />
                     )}

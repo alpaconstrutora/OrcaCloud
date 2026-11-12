@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ImovibStudy, ImovibLandChecklistItem } from '../types';
 import { imovibService } from '../services/imovibService';
 import { resumoDaDueDiligence } from './ImovibDueDiligenceCard';
-import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba, ImovibSubAbaDePremissas, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
@@ -28,7 +28,7 @@ import ImovibParecerCard from './ImovibParecerCard';
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
-    onIrPara?: (aba: ImovibAba) => void;
+    onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void;
     /** Recarrega o estudo depois de gravar o parecer ou os mínimos (item 10.3). */
     onDataChanged?: () => void;
 }
@@ -184,7 +184,7 @@ const abaDoExcel = (linhas: Linha[], larguras: number[]) => {
  * "Due diligence: x de 14 ok, y com problema" (item 5.9 do plano 2026-11-11). Só
  * lê; item com problema aparece em destaque. Sem checklist, diz onde criar.
  */
-function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara?: (aba: ImovibAba) => void }) {
+function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void }) {
     const [itens, setItens] = useState<ImovibLandChecklistItem[] | null>(null);
     useEffect(() => {
         let vivo = true;
@@ -197,7 +197,7 @@ function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara
     return (
         <button
             type="button"
-            onClick={() => onIrPara?.('premises')}
+            onClick={() => onIrPara?.('premises', 'terreno')}
             className={`w-full text-left flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 rounded-[10px] border text-sm ${comProblema.length ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-white border-gray-100 text-slate-700'} hover:border-slate-300`}
             title="Abrir Premissas › Terreno"
         >

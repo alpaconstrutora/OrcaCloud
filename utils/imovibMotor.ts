@@ -97,6 +97,8 @@ export interface ImovibMathOptions {
 
 /** Aba do detalhe do estudo onde a premissa de um aviso é corrigida. */
 export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viability_dynamic';
+/** Sub-aba de Premissas (ImovibPremisesForm). */
+export type ImovibSubAbaDePremissas = 'identificacao' | 'mercado' | 'cronograma' | 'terreno' | 'memorial';
 
 /**
  * Premissa que o motor não consegue usar como está. O motor calcula assim mesmo
@@ -105,9 +107,11 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
         | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
-        | 'impostos_pelo_regime' | 'ret_sem_afetacao';
+        | 'impostos_pelo_regime' | 'ret_sem_afetacao' | 'pre_obra_sem_meses';
     mensagem: string;
     aba: ImovibAba;
+    /** Em Premissas, a sub-aba que corrige (pendência da Fase 5: antes abria sempre em Identificação). */
+    subAba?: ImovibSubAbaDePremissas;
 }
 
 export interface IndicadoresDeProduto {
@@ -383,6 +387,8 @@ const EMPTY_RESULT: ImovibMathResult = {
 /** Rubrica que sai no seu próprio momento (item 5.5), não pela base. */
 interface RubricaComMomento {
     id: string;
+    /** Nome da rubrica, para os avisos. */
+    nome: string;
     base: ImovibCapexBase;
     /** Valor total, antes do índice. */
     valor: number;
@@ -597,6 +603,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
                 ? `O empreendimento "${estrutura.empreendimento_nome}" ainda não tem unidades com área: publique o estudo na Planta Inteligente e envie ao empreendimento. VGV e custo de obra ficam zerados.`
                 : 'Nenhuma tipologia com área: vincule um empreendimento em Premissas › Identificação — blocos e tipologias vêm da Planta Inteligente. VGV e custo de obra ficam zerados.',
             aba: 'premises',
+            subAba: 'identificacao',
         });
     } else if (baseVgvTotal <= 0) {
         avisos.push({
@@ -616,6 +623,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'estrutura_do_estudo',
             mensagem: 'Blocos e tipologias deste estudo são a estrutura antiga, só leitura. Vincule um empreendimento em Premissas › Identificação para editá-los na Planta Inteligente.',
             aba: 'premises',
+            subAba: 'identificacao',
         });
     }
     if (estrutura?.origem === 'empreendimento' && estrutura.blocos_fora_do_calculo.length > 0) {
@@ -623,6 +631,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'blocos_fora_do_calculo',
             mensagem: `Bloco(s) antigo(s) do estudo sem torre no empreendimento, fora do cálculo: ${estrutura.blocos_fora_do_calculo.join(', ')}.`,
             aba: 'premises',
+            subAba: 'identificacao',
         });
     }
 
@@ -668,6 +677,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'ret_sem_afetacao',
             mensagem: `O RET só vale para incorporação submetida ao patrimônio de afetação, e ${study.patrimonio_afetacao == null ? 'o patrimônio de afetação do estudo não foi informado' : 'o estudo está sem patrimônio de afetação'}. Marque-o em Premissas › Identificação ou troque o regime tributário.`,
             aba: 'premises',
+            subAba: 'identificacao',
         });
     }
     const impostosForaDoCalculo: string[] = [];
@@ -684,7 +694,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
                 : base === 'obra' ? (pct ? constCostTotal * v / 100 : v * costDeltaMultiplier)
                     : v;
             // Valor 0 (o botão de pós-obra cria assim) não entra no calendário nem estende o fluxo.
-            if (valor !== 0) rubricasComMomento.push({ id: item.id, base, valor, timing: item.timing, meses: item.timing_months ?? null });
+            if (valor !== 0) rubricasComMomento.push({ id: item.id, nome: item.name, base, valor, timing: item.timing, meses: item.timing_months ?? null });
             return;
         }
         switch (base) {
@@ -829,6 +839,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'lancamento_antes_do_registro',
             mensagem: `O lançamento (mês ${salesStart}) vem antes do registro da incorporação (mês ${registro}): pela Lei 4.591/64, art. 32, só se negociam unidades depois do registro.`,
             aba: 'premises',
+            subAba: 'cronograma',
         });
     }
     const aprovacao = study.approval_month;
@@ -837,6 +848,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'obra_antes_da_aprovacao',
             mensagem: `A obra começa (mês ${constStart}) antes da aprovação do projeto (mês ${aprovacao}).`,
             aba: 'premises',
+            subAba: 'cronograma',
         });
     }
 
@@ -853,6 +865,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             codigo: 'terreno_nao_soma_100',
             mensagem: `As parcelas do terreno somam ${Number(somaDoTerreno.toFixed(2)).toLocaleString('pt-BR')}% do custo: o cálculo usa os valores como estão (${fmtBRL(landCost * somaDoTerreno / 100)}).`,
             aba: 'premises',
+            subAba: 'terreno',
         });
     }
     const mesDaPrimeiraParcela = Math.min(...parcelasTerreno.map(p => p.mes));
@@ -898,6 +911,17 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         }
     };
     rubricasComMomento.forEach(t => { t.pesos = calendario(t); });
+    // Pré-obra sem mês antes da obra: cai no mês da aquisição, já dentro da obra
+    // (pendência da Fase 5 do plano 2026-11-11 — antes, sem aviso).
+    const preObraSemMeses = acquisitionMonth >= constStart ? rubricasComMomento.filter(t => t.timing === 'pre_obra') : [];
+    if (preObraSemMeses.length) {
+        avisos.push({
+            codigo: 'pre_obra_sem_meses',
+            mensagem: `Não há mês entre a aquisição (mês ${acquisitionMonth}) e o início da obra (mês ${constStart}): ${preObraSemMeses.map(t => t.nome).join(', ')} (pré-obra) sai no mês ${acquisitionMonth}. Ajuste o cronograma ou o momento da rubrica no Orçamento.`,
+            aba: 'premises',
+            subAba: 'cronograma',
+        });
+    }
 
     // Dívida e fontes acabam com as receitas; o fluxo vai até a última saída
     // (parcela do terreno ou rubrica de pós-obra).

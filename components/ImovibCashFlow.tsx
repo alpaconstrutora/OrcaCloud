@@ -2,7 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Activity, TrendingUp, AlertCircle, BarChart3, LineChart, ChevronDown, ChevronRight } from 'lucide-react';
 import { XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ComposedChart, Bar, Line, Legend } from 'recharts';
 import { ImovibStudy } from '../types';
-import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba, ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import { montarVisaoDoFluxo, VisaoDoFluxo, BaseDoFluxo, PeriodoDoFluxo, GRUPOS_DO_FLUXO, GrupoDoFluxo } from '../utils/imovibVisaoDoFluxo';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
@@ -12,7 +12,7 @@ import { CABECALHO_TABELA } from './ui/cabecalhoDeTabela';
 interface ImovibCashFlowProps {
     study: ImovibStudy;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
-    onIrPara?: (aba: ImovibAba) => void;
+    onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void;
 }
 
 // §6.6/§6.11 — cabeçalho e células da tabela.

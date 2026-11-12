@@ -160,3 +160,16 @@ describe('CAPEX: momento das rubricas e pós-obra (5.5 e 5.6)', () => {
         expect(botao.getAttribute('title')).toMatch(/já existem/);
     });
 });
+
+describe('Premissas abre na sub-aba pedida (aviso → sub-aba)', () => {
+    it('subAba="cronograma" abre o Cronograma e troca quando o pedido muda', () => {
+        const { rerender } = envolver(<ImovibPremisesForm study={estudo() as never} onDataChanged={vi.fn()} subAba={{ sub: 'cronograma', n: 1 }} />);
+        expect(screen.getByRole('list', { name: 'Linha do tempo dos marcos' })).toBeTruthy();
+        rerender(
+            <ToastProvider><ConfirmProvider><ImovibEdicaoProvider value={{ pode: true, motivo: '' }}>
+                <ImovibPremisesForm study={estudo() as never} onDataChanged={vi.fn()} subAba={{ sub: 'terreno', n: 2 }} />
+            </ImovibEdicaoProvider></ConfirmProvider></ToastProvider>,
+        );
+        expect(screen.getByText(/Pagamento à vista/)).toBeTruthy();
+    });
+});

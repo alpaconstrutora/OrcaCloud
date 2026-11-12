@@ -1,7 +1,7 @@
 import React from 'react';
 import { ImovibStudy } from '../types';
 import { Calculator, TrendingUp, DollarSign, Activity, Percent, Home, Tag, Building2, HardHat } from 'lucide-react';
-import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba, ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { KpiCard } from './ui/KpiCard';
 import ImovibAreaEquivalenteCard from './ImovibAreaEquivalenteCard';
@@ -9,7 +9,7 @@ import ImovibAreaEquivalenteCard from './ImovibAreaEquivalenteCard';
 interface ImovibStaticViabilityProps {
     study: ImovibStudy;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
-    onIrPara?: (aba: ImovibAba) => void;
+    onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void;
 }
 
 const formatCurrency = (value: number) =>

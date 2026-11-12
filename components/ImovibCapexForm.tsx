@@ -647,7 +647,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                         <th className="px-6 py-2 border-r border-gray-100">Base</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Quando sai</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Valor</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">No cálculo</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right" title="Valor que entra no cálculo. Rubrica com momento próprio sai com o índice dos meses em que é paga (obra pelo índice da obra; lançamento e vendas pelo das vendas; aquisição sem índice) — por isso o número muda quando o momento muda.">No cálculo</th>
                                                         <th className="px-6 py-2 w-12"></th>
                                                     </tr>
                                                 </thead>
@@ -747,7 +747,11 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                            <td
+                                                                className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap"
+                                                                // Pendência da Fase 5: o número muda com o momento (índice) e a tela não dizia por quê.
+                                                                title={item.timing && !(baseDaRubrica(item) === 'vgv' && item.value_type === 'percent') ? `Com o índice dos meses em que sai (${ROTULO_DO_MOMENTO[item.timing]}).` : undefined}
+                                                            >
                                                                 {fmt(valorNoCalculo[item.id] || 0)}
                                                             </td>
                                                             <td className="px-6 py-2.5 text-right">

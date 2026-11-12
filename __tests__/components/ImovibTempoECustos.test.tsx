@@ -205,3 +205,17 @@ describe('erro ao gravar volta o campo ao que está gravado', () => {
         await waitFor(() => expect((screen.getByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement).value).toBe('12'));
     });
 });
+
+describe('Orçamento › "No cálculo" (pendência da Fase 5)', () => {
+    it('o cabeçalho e a célula de rubrica com momento dizem que o valor leva o índice dos meses em que sai', async () => {
+        svc.seedCapexTemplate.mockResolvedValue([
+            { id: 'r1', study_id: 'estudo-teste', category: '2. Projetos e Consultorias', name: 'Projeto', value_type: 'currency', value: 100000, base: 'obra', timing: 'pre_obra' },
+        ]);
+        envolver(<ImovibCapexForm study={estudo() as never} onDataChanged={vi.fn()} />);
+        await screen.findByLabelText('Quando sai: Projeto');
+        expect(screen.getByRole('columnheader', { name: 'No cálculo' }).getAttribute('title')).toMatch(/índice/);
+        const linha = screen.getByLabelText('Quando sai: Projeto').closest('tr')!;
+        const celula = within(linha).getAllByRole('cell').at(-2)!;
+        expect(celula.getAttribute('title')).toMatch(/índice dos meses em que sai/);
+    });
+});

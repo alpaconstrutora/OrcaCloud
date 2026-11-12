@@ -106,6 +106,22 @@ brechas `employees.user_id` gravável por qualquer membro e `task_collaborators`
   membro do espaço (`pode_gerir_envolvidos_da_tarefa`, com WITH CHECK); SELECT = isso OU
   envolvido (`is_task_collaborator`). Efeito visível: os envolvidos voltam a funcionar.
 
+### Ajustes — depois da Parte 2 no ar (2026-11-12)
+
+Pedido literal (com print do celular):
+
+> implementar Melhorias menores que ficaram para depois:
+> 1. falta limite de uso na Edge, faltam alguns testes extras e há uma organização interna de código a fazer.
+> 2. Veja print: Os botoes do hearder ( tarefas e diario) ficaram iguais ao outros dois botões logo acima ( entrada e espacos). achei que por ficarem sem diferenciacao ficou confuso. avalie se os dois botões no header ( tarefas e diario)  precisa de mais destaque
+
+Decisões (2026-11-12): seções = **pílula no topo** (Tarefas | Diário no cabeçalho, ativa azul cheio; o rodapé fica só
+com a barra da tela); nome vazio no cabeçalho → só a org (ou e-mail), sem "·" sobrando. Limite de uso por link:
+**120 envios de foto/hora** e **600 pedidos de assinatura/hora**, contados no banco (`user_mobile_link_uso`, RLS sem
+policy) dentro de `celular_diario_autoriza` / `celular_diario_midia_permitida`; estouro → ERRCODE `54000` → Edge 429 →
+"Limite de uso do link atingido — tente de novo em alguns minutos." Mais os testes extras e a organização de código
+apontados nas revisões da Parte 2 (carregador do planejamento no serviço, `toResult` sem duplicata, `removerFotos` em
+paralelo com uma recusa só, `pode_aprovar_diario` obrigatório, `IS NOT TRUE` nas checagens de planejamento).
+
 ## Design
 
 ### Contexto medido (origin/main e banco, 2026-11-11)

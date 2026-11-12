@@ -14,7 +14,7 @@ import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 import type { ImovibComparable } from '../utils/imovibMercado';
 import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuadroI, type VersaoDoQuadro } from '../utils/imovibAreaEquivalente';
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
-import type { ImovibPartner } from '../utils/imovibSocios';
+import { planoDeImportacao, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -877,11 +877,19 @@ export const imovibService = {
 
     /**
      * Copia os sócios da empresa (participação no resultado e nos aportes = a do
-     * quadro societário). A trava UNIQUE (study_id, company_partner_id) faz o segundo
-     * clique não duplicar; devolve a lista do banco.
+     * quadro societário). Sócio digitado à mão com o mesmo nome é ligado, não
+     * duplicado (`planoDeImportacao`). A trava UNIQUE (study_id, company_partner_id)
+     * faz o segundo clique não duplicar; devolve a lista do banco e o que fez.
      */
-    async importarSociosDaEmpresa(studyId: string, socios: { id: string; nome: string; participacao_pct: number }[], ordemInicial = 0): Promise<ImovibPartner[]> {
-        const linhas = socios.map((p, i) => ({
+    async importarSociosDaEmpresa(studyId: string, socios: SocioDaEmpresa[], atuais: ImovibPartner[]): Promise<{ lista: ImovibPartner[]; vinculados: number; criados: number }> {
+        const plano = planoDeImportacao(atuais, socios);
+        for (const v of plano.vincular) {
+            const { data, error } = await supabase.from('imovib_partners').update({ company_partner_id: v.company_partner_id }).eq('id', v.id).select('id');
+            if (error) throw new Error(`Falha ao ligar o sócio ao da empresa: ${error.message}`);
+            if (!data?.length) throw new Error('Sem permissão para alterar sócios deste estudo.');
+        }
+        const ordemInicial = atuais.reduce((m, s) => Math.max(m, (s.sort_order ?? 0) + 1), 0);
+        const linhas = plano.criar.map((p, i) => ({
             study_id: studyId, name: p.nome, share_percent: Number(p.participacao_pct) || 0, capital_percent: Number(p.participacao_pct) || 0,
             company_partner_id: p.id, sort_order: ordemInicial + i,
         }));
@@ -889,7 +897,7 @@ export const imovibService = {
             .from('imovib_partners')
             .upsert(linhas, { onConflict: 'study_id,company_partner_id', ignoreDuplicates: true });
         if (error) throw new Error(`Falha ao importar os sócios: ${error.message}`);
-        return this.listarSocios(studyId);
+        return { lista: await this.listarSocios(studyId), vinculados: plano.vincular.length, criados: linhas.length };
     },
 
     // ── Área equivalente NBR 12721 (item 8.2 do plano 2026-11-11) ───────────

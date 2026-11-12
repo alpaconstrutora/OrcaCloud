@@ -1370,14 +1370,14 @@ const LaborEmployeeForm: React.FC<LaborEmployeeFormProps> = ({ employee, orgId, 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
             <div className="bg-white rounded-3xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
-                {/* Header */}
-                <div className="px-6 py-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-indigo-600 to-indigo-700">
+                {/* Header — título de modal §21, fundo branco como ClientImportModal */}
+                <div className="flex items-center justify-between px-6 py-4 border-b border-gray-100">
                     <div>
-                        <h2 className="text-lg font-black text-white">Novo Colaborador</h2>
-                        <p className="text-indigo-200 text-xs mt-0.5">Preencha os dados para cadastrar</p>
+                        <h2 className="font-black text-slate-800 text-lg">Novo colaborador</h2>
+                        <p className="text-xs font-semibold text-slate-500 mt-0.5">Preencha os dados para cadastrar</p>
                     </div>
-                    <button onClick={handleBack} className="p-2 bg-white/10 hover:bg-white/20 rounded-xl text-white transition-colors">
-                        <X className="w-5 h-5" />
+                    <button onClick={handleBack} title="Fechar" aria-label="Fechar" className="p-2 -m-1 hover:bg-gray-100 rounded-[6px] transition-all shrink-0">
+                        <X className="w-5 h-5 text-gray-400" />
                     </button>
                 </div>
 

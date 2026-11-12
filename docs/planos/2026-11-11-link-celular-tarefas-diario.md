@@ -737,10 +737,12 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
   `celular_sessao`/`celular_tarefas_listar` com token falso → 42501 `link inválido ou vencido`.
 - [x] Task 7 · Step 4: push em `main` + `conferir-producao.sh` (domínio em `6787b03`, com o responsável)
 - [x] Step 5: prova real no celular — o usuário confirmou em 2026-11-12 que o link do Iago mostra as mesmas tarefas do app
-- [ ] Brechas do vínculo e dos envolvidos (`aplicar_20271112800000`): ensaio `TUDO OK`; aplicar e publicar após aval
+- [x] Brechas do vínculo e dos envolvidos (`aplicar_20271112800000`): APLICADA e publicada (`61b32d8f`)
 - [x] Plano de implementação Parte 2 (F3–F5) — escrito em 2026-11-12 (Tasks 8–14, decisões D1–D8)
-- [ ] Task 8 · [ ] Task 9 · [ ] Task 10 · [ ] Task 11 · [ ] Task 12 · [ ] Task 13 · [ ] Task 14
-- [x] F1 (banco no ar) · [ ] F2 · [ ] F3 · [ ] F4 · [ ] F5
+- [x] Tasks 8–13 (cada uma revisada; revisão geral "pronto com correções" → leva única de correções: Rollback (Parte 2), sugestões de efetivo no link, título "Abrindo…", `--no-verify-jwt`)
+- [x] Task 14 (2026-11-12): suíte 13.489 (1 falha pré-existente, CRLF); `aplicar_20271112950000` e `…960000` APLICADAS; provas diario/tarefas/responsavel/vinculo no banco real `TUDO OK`; `check-rls-postura` 9/9; Edge `celular-diario-midia` publicada (`--no-verify-jwt`); sonda de fora 400/403/400; push `67e18f12..47cb60a1` + texto do link `2822b0da` + folga de teste `11bf400e`; CI verde; domínio = `origin/main`
+- [ ] Prova real da Parte 2 no celular (usuário): registro com foto e atividade vinculada pelo link; conferir no desktop e no cronograma
+- [x] F1 · [x] F2 · [x] F3 · [x] F4 · [x] F5 (no ar; falta só a prova real da Parte 2)
 
 ## Rollback (Parte 2)
 

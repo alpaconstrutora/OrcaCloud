@@ -8,8 +8,10 @@ custo que sobrou em `notifications` → "prepare a correção".
 
 - [x] Prova sem ALTER (como dono, só leitura): 16 identidades × USING antigo vs novo =
       **0 linhas diferentes**; filtro com JWT real 37,4 → 5,4 ms (4.604 linhas).
-- [ ] Usuário aplica `aplicar_20271112900000_rls_notifications_email_uma_vez.sql`.
-- [ ] Conferir a policy no banco e medir o custo de RLS de notifications.
+- [x] Aplicada pelo usuário (12/11/2026). Conferido: `notifications_rw` com
+      `(SELECT lower((auth.jwt() ->> 'email')))`, mesmo papel/comando, WITH CHECK igual.
+      Custo de RLS (`count(*)`, authenticated, JWT real): **38 → 5,5 ms**, 4.604 linhas
+      visíveis, iguais a antes.
 
 ## Por quê
 

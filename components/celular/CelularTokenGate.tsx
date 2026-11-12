@@ -1,9 +1,11 @@
 import React from 'react'
-import { AlertCircle, CheckSquare, Loader2, LinkIcon, type LucideIcon } from 'lucide-react'
+import { AlertCircle, BookOpen, CheckSquare, Loader2, LinkIcon, type LucideIcon } from 'lucide-react'
 import Button from '../ui/Button'
 import TasksMobileApp from '../TasksMobileApp'
+import DiarioDoLink from './DiarioDoLink'
 import { celularSessao, type SessaoCelular } from '../../services/celular/celularLinkService'
 import { fonteDoLink, TarefasFonteContext } from '../../services/celular/tarefasFonte'
+import { fonteDiarioDoLink } from '../../services/celular/diarioFonte'
 
 /**
  * Entrada do link do celular (`/celular?token=`): abre Minhas Tarefas SEM login.
@@ -28,11 +30,12 @@ type Estado =
 
 export const TEXTO_LINK_INVALIDO = 'Link inválido ou vencido — peça um novo ao administrador'
 
-/** Seções da barra de baixo. A barra só aparece com 2 ou mais — a Fase 5 acrescenta o Diário aqui. */
-const ABAS: { id: string; rotulo: string; Icone: LucideIcon }[] = [
+/** Seções da barra de baixo. */
+type AbaId = 'tarefas' | 'diario'
+const ABAS: { id: AbaId; rotulo: string; Icone: LucideIcon }[] = [
   { id: 'tarefas', rotulo: 'Tarefas', Icone: CheckSquare },
+  { id: 'diario', rotulo: 'Diário', Icone: BookOpen },
 ]
-const ABA_ATUAL = 'tarefas'
 
 // ── Telas de estado (mesmo desenho do EmptyState/ErrorState de Minhas Tarefas) ──
 const TelaDeEstado: React.FC<{
@@ -55,14 +58,23 @@ const TelaDeEstado: React.FC<{
 const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   const [estado, setEstado] = React.useState<Estado>({ tipo: token ? 'carregando' : 'invalido' })
   const [tentativa, setTentativa] = React.useState(0)
+  const [aba, setAba] = React.useState<AbaId>('tarefas')
 
-  // ⚠️ A fonte PRECISA ser estável: `TasksMobileApp` a tem nas dependências do efeito que
-  // carrega as listas. `fonteDoLink(token)` solto no JSX criaria um objeto novo a cada
-  // render do gate e a tela recarregaria em laço. Por isso só `token` nas dependências:
-  // `aoRecusar` usa o `setEstado` do React, que é estável por contrato.
-  const fonte = React.useMemo(
-    () => fonteDoLink(token, { aoRecusar: () => setEstado({ tipo: 'invalido' }) }),
-    [token],
+  // `aoRecusar` usa o `setEstado` do React, que é estável por contrato: a mesma função
+  // serve às duas fontes (Tarefas e Diário) — a recusa do token em QUALQUER RPC delas leva
+  // o gate a `invalido`, desmontando a tela.
+  const aoRecusar = React.useCallback(() => setEstado({ tipo: 'invalido' }), [])
+
+  // ⚠️ As fontes PRECISAM ser estáveis: `TasksMobileApp` e `DiaryMobileApp` as têm nas
+  // dependências dos efeitos que carregam os dados. `fonteDoLink(token)` solto no JSX
+  // criaria um objeto novo a cada render do gate e a tela recarregaria em laço. Por isso
+  // só `token` (e, no Diário, o `pode_aprovar_diario` da sessão — um booleano) nas deps.
+  const fonte = React.useMemo(() => fonteDoLink(token, { aoRecusar }), [token, aoRecusar])
+
+  const podeAprovarDiario = estado.tipo === 'ok' ? estado.sessao.pode_aprovar_diario === true : false
+  const fonteDiario = React.useMemo(
+    () => fonteDiarioDoLink(token, { aoRecusar, podeAprovar: podeAprovarDiario }),
+    [token, aoRecusar, podeAprovarDiario],
   )
 
   React.useEffect(() => {
@@ -140,28 +152,31 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
 
       {/* TasksMobileApp foi feito para viver dentro do <main> do Layout e anula o gutter dele
           com margem negativa (-m-4 md:-m-6): este recipiente devolve o mesmo gutter. */}
+      {/* Só a aba ativa fica montada: trocar de aba pode remontar a outra (é aceito). */}
       <div className="relative flex-1 min-h-0 p-4 md:p-6">
-        <TarefasFonteContext.Provider value={fonte}>
-          <TasksMobileApp orgId={sessao.org_id} />
-        </TarefasFonteContext.Provider>
+        {aba === 'tarefas' ? (
+          <TarefasFonteContext.Provider value={fonte}>
+            <TasksMobileApp orgId={sessao.org_id} />
+          </TarefasFonteContext.Provider>
+        ) : (
+          <DiarioDoLink fonte={fonteDiario} />
+        )}
       </div>
 
-      {/* Barra de uma aba só não leva a lugar nenhum: some até haver uma segunda seção. */}
-      {ABAS.length >= 2 && (
-        <nav aria-label="Seções" className="bg-white border-t border-slate-200 flex-shrink-0 pb-[env(safe-area-inset-bottom)] flex">
-          {ABAS.map(({ id, rotulo, Icone }) => (
-            <button
-              key={id}
-              type="button"
-              aria-current={id === ABA_ATUAL ? 'page' : undefined}
-              className={`flex-1 h-12 flex flex-col items-center justify-center gap-0.5 ${id === ABA_ATUAL ? 'text-blue-600' : 'text-slate-500'}`}
-            >
-              <Icone className="w-5 h-5" aria-hidden="true" />
-              <span className="text-[11px] font-medium">{rotulo}</span>
-            </button>
-          ))}
-        </nav>
-      )}
+      <nav aria-label="Seções" className="bg-white border-t border-slate-200 flex-shrink-0 pb-[env(safe-area-inset-bottom)] flex">
+        {ABAS.map(({ id, rotulo, Icone }) => (
+          <button
+            key={id}
+            type="button"
+            onClick={() => setAba(id)}
+            aria-current={id === aba ? 'page' : undefined}
+            className={`flex-1 h-12 flex flex-col items-center justify-center gap-0.5 ${id === aba ? 'text-blue-600' : 'text-slate-500'}`}
+          >
+            <Icone className="w-5 h-5" aria-hidden="true" />
+            <span className="text-[11px] font-medium">{rotulo}</span>
+          </button>
+        ))}
+      </nav>
     </div>
   )
 }

@@ -7,15 +7,18 @@
  *    (ou ao voltar a aba para a frente) desmonta Minhas Tarefas e mostra a recusa;
  *    outro 42501 (recusa de UMA ação) e falha de rede não derrubam a tela;
  *  - a fonte é estável entre renders (R8: ela está nas deps de efeito de TasksMobileApp);
- *  - com uma aba só ("Tarefas") não há barra de seções.
+ *  - a barra de seções tem "Tarefas" e "Diário"; tocar "Diário" monta DiarioDoLink com a
+ *    fonte do link (estável entre renders), e a recusa do token numa RPC do Diário leva
+ *    ao mesmo texto de recusa das Tarefas.
  */
 import React from 'react'
-import { render, screen, waitFor, act } from '@testing-library/react'
+import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const sondas = vi.hoisted(() => ({
   rpc: vi.fn(),
   fontes: [] as unknown[],
+  fontesDiario: [] as unknown[],
   listar: vi.fn(),
 }))
 
@@ -33,6 +36,17 @@ vi.mock('../../components/TasksMobileApp', async () => {
       fonte.listarTarefas(orgId, null, 300).catch(() => { /* a tela real mostra o erro */ })
     }, [fonte, orgId])
     return R.createElement('div', { 'data-testid': 'tela-de-tarefas' }, `tarefas de ${orgId}`)
+  }
+  return { default: Sonda }
+})
+
+// O Diário de verdade é enorme; aqui basta quem recebe a fonte do link e a usa ao montar.
+vi.mock('../../components/celular/DiarioDoLink', async () => {
+  const R = await import('react')
+  const Sonda: React.FC<{ fonte: { modo: string; podeAprovarNoLink: boolean | null; listarProjetos: () => Promise<unknown> } }> = ({ fonte }) => {
+    sondas.fontesDiario.push(fonte)
+    R.useEffect(() => { fonte.listarProjetos().catch(() => { /* a tela real mostra o erro */ }) }, [fonte])
+    return R.createElement('div', { 'data-testid': 'tela-do-diario' }, `diário ${fonte.modo} aprova=${String(fonte.podeAprovarNoLink)}`)
   }
   return { default: Sonda }
 })
@@ -60,6 +74,7 @@ beforeEach(() => {
   sondas.rpc.mockReset()
   sondas.listar.mockReset()
   sondas.fontes.length = 0
+  sondas.fontesDiario.length = 0
 })
 
 describe('CelularTokenGate', () => {
@@ -78,13 +93,59 @@ describe('CelularTokenGate', () => {
     expect(screen.queryByTestId('tela-de-tarefas')).toBeNull()
   })
 
-  it('sessão válida: abre Minhas Tarefas com nome e organização; sem barra de seções com uma aba só', async () => {
+  it('sessão válida: abre Minhas Tarefas com nome e organização; a barra tem Tarefas e Diário', async () => {
     responder({ celular_sessao: () => ok(SESSAO) })
     render(<CelularTokenGate token={TOKEN} />)
     expect(await screen.findByTestId('tela-de-tarefas')).toHaveTextContent('tarefas de o1')
     expect(screen.getByText('Ana Souza')).toBeInTheDocument()
-    expect(screen.queryByRole('navigation', { name: 'Seções' })).toBeNull()
-    expect(screen.queryByRole('button', { name: 'Tarefas' })).toBeNull()
+    const barra = screen.getByRole('navigation', { name: 'Seções' })
+    expect(within(barra).getByRole('button', { name: 'Tarefas' })).toHaveAttribute('aria-current', 'page')
+    expect(within(barra).getByRole('button', { name: 'Diário' })).not.toHaveAttribute('aria-current')
+    expect(screen.queryByTestId('tela-do-diario')).toBeNull()
+  })
+
+  it('tocar "Diário" monta o Diário com a fonte do link; voltar a "Tarefas" traz as tarefas', async () => {
+    responder({ celular_sessao: () => ok({ ...SESSAO, pode_aprovar_diario: true }) })
+    render(<CelularTokenGate token={TOKEN} />)
+    await screen.findByTestId('tela-de-tarefas')
+    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('diário link aprova=true')
+    expect(screen.queryByTestId('tela-de-tarefas')).toBeNull()
+    expect(screen.getByRole('button', { name: 'Diário' })).toHaveAttribute('aria-current', 'page')
+    fireEvent.click(screen.getByRole('button', { name: 'Tarefas' }))
+    expect(await screen.findByTestId('tela-de-tarefas')).toBeInTheDocument()
+    expect(screen.queryByTestId('tela-do-diario')).toBeNull()
+  })
+
+  it('sessão sem pode_aprovar_diario: a fonte do Diário diz que não aprova', async () => {
+    responder({ celular_sessao: () => ok(SESSAO) })
+    render(<CelularTokenGate token={TOKEN} />)
+    await screen.findByTestId('tela-de-tarefas')
+    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('aprova=false')
+  })
+
+  it('a fonte do Diário é a mesma entre renders (não recarrega em laço)', async () => {
+    responder({ celular_sessao: () => ok(SESSAO), celular_diarios_listar: () => ok([]) })
+    const { rerender } = render(<CelularTokenGate token={TOKEN} />)
+    await screen.findByTestId('tela-de-tarefas')
+    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    await screen.findByTestId('tela-do-diario')
+    rerender(<CelularTokenGate token={TOKEN} />)
+    rerender(<CelularTokenGate token={TOKEN} />)
+    expect(sondas.fontesDiario.length).toBeGreaterThanOrEqual(3)
+    expect(new Set(sondas.fontesDiario).size).toBe(1)
+    expect(sondas.rpc.mock.calls.filter(([nome]) => nome === 'celular_diarios_listar')).toHaveLength(1)
+  })
+
+  it('link revogado com o Diário aberto: a recusa numa RPC do Diário desmonta a tela e mostra a recusa', async () => {
+    responder({ celular_sessao: () => ok(SESSAO), celular_diarios_listar: () => falha(RECUSA) })
+    render(<CelularTokenGate token={TOKEN} />)
+    await screen.findByTestId('tela-de-tarefas')
+    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_LINK_INVALIDO))
+    expect(screen.queryByTestId('tela-do-diario')).toBeNull()
+    expect(screen.queryByText('Ana Souza')).toBeNull()
   })
 
   it('a fonte é a mesma entre renders (não recarrega em laço)', async () => {

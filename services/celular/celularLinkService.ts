@@ -30,7 +30,14 @@ export function urlDoLinkCelular(token: string, origin?: string): string {
   return `${origin ?? window.location.origin}/celular?token=${token}`
 }
 
-export interface SessaoCelular { user_id: string; nome: string; org_id: string; org_nome: string }
+export interface SessaoCelular {
+  user_id: string
+  nome: string
+  org_id: string
+  org_nome: string
+  /** Se o dono do link aprova registro do Diário (calculado no banco; ausente = não aprova). */
+  pode_aprovar_diario?: boolean
+}
 
 /** Recusa do banco para token inválido, vencido, revogado ou de ex-membro. */
 const RECUSA_DO_LINK = '42501'

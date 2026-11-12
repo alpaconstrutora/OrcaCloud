@@ -21,6 +21,8 @@ export interface MesDoAcompanhamento {
     vendasReaisAcum: number | null;
     /** O mês de hoje: o realizado ainda está pela metade, o desvio não diz nada. */
     emCurso: boolean;
+    /** Só no mês 1: o realizado lançado ANTES da data-base, que entra nele (e a tela diz). */
+    antesDaDataBase?: { entradas: number; saidas: number };
 }
 
 const anoMes = (s: string) => s.slice(0, 7);
@@ -43,6 +45,17 @@ export function compararComRealizado(
         porMes.set(k, m);
     }
     const vendasOrdenadas = [...vendas].sort((a, b) => anoMes(a.mes).localeCompare(anoMes(b.mes)));
+    // Realizado antes da data-base entra no mês 1, como a venda anterior (antes sumia).
+    const primeiroMes = dataDoMes(baseDate, 1) ?? '';
+    let antes: { entradas: number; saidas: number } | undefined;
+    for (const [k, v] of porMes) {
+        if (k >= primeiroMes) continue;
+        antes = { entradas: (antes?.entradas ?? 0) + v.entradas, saidas: (antes?.saidas ?? 0) + v.saidas };
+    }
+    if (antes) {
+        const m1 = porMes.get(primeiroMes) ?? { entradas: 0, saidas: 0 };
+        porMes.set(primeiroMes, { entradas: m1.entradas + antes.entradas, saidas: m1.saidas + antes.saidas });
+    }
     let previstas = 0;
     let reais = 0;
     let proximaVenda = 0;
@@ -64,6 +77,7 @@ export function compararComRealizado(
             vendasPrevistasAcum: previstas,
             vendasReaisAcum: futuro ? null : reais,
             emCurso: hoje != null && mes === hoje,
+            ...(i === 0 && antes ? { antesDaDataBase: antes } : {}),
         };
     });
 }

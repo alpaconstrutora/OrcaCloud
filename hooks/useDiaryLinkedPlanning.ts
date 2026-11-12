@@ -39,8 +39,14 @@ export const carregarPlanejamentoPorProjeto: CarregarPlanejamento = async planej
     const schedule: ProjectSchedule | null = p.settings?.schedule || null;
     if (p.budget && p.budget.length > 0) return { schedule, budget: p.budget };
     if (p.settings?.linkedProjectId) {
-        const pai = await projectService.loadProject(p.settings.linkedProjectId);
-        return { schedule, budget: pai?.budget || [] };
+        // Falha no orçamento do pai não esconde o cronograma (era assim antes do carregador).
+        try {
+            const pai = await projectService.loadProject(p.settings.linkedProjectId);
+            return { schedule, budget: pai?.budget || [] };
+        } catch (error) {
+            console.error('Erro ao carregar o planejamento vinculado ao diário:', error);
+            return { schedule, budget: [] };
+        }
     }
     return { schedule, budget: [] };
 };

@@ -444,4 +444,24 @@ describe('hooks com carregador/assinador da fonte', () => {
     expect(result.current.schedule).toBe(sched)
     expect(mocks.loadProject.mock.calls).toEqual([['pl1'], ['orc1']])
   })
+
+  it('carregador padrão: falha no orçamento do pai não esconde o cronograma (orçamento vazio)', async () => {
+    const sched = cronograma([{ id: 'i1' }])
+    mocks.loadProject
+      .mockResolvedValueOnce({ id: 'pl1', settings: { schedule: sched, linkedProjectId: 'orc1' }, budget: [] })
+      .mockRejectedValueOnce(new Error('rede caiu'))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const r = await fonteDiarioLogado.carregarPlanejamento('d1', 'pl1')
+    expect(r).toEqual({ schedule: sched, budget: [] })
+    expect(erro).toHaveBeenCalled()
+
+    mocks.loadProject
+      .mockResolvedValueOnce({ id: 'pl1', settings: { schedule: sched, linkedProjectId: 'orc1' }, budget: [] })
+      .mockRejectedValueOnce(new Error('rede caiu'))
+    const projects = [{ id: 'pl1', settings: { classification: 'PLANEJAMENTO' } }]
+    const { result } = renderHook(() => useDiaryLinkedPlanning('pl1', projects))
+    await waitFor(() => expect(result.current.schedule).toBe(sched))
+    expect(result.current.budget).toEqual([])
+    erro.mockRestore()
+  })
 })

@@ -117,6 +117,10 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                 {taxa == null && (
                     <span className="text-xs text-slate-500">Sem taxa própria: segue a inflação geral ({fmt(inflacaoGeral)}% a.m.).</span>
                 )}
+                {/* Trocar o índice não troca a taxa já digitada: a tela diz quando elas não batem (pendência da Fase 1). */}
+                {taxa != null && media != null && nome && Math.abs(taxa - Math.round(media * 10000) / 10000) > 0.00005 && (
+                    <span className="text-xs text-amber-700">A taxa no cálculo ({fmt(taxa)}% a.m.) não é a média do {nome} ({fmt(media)}% a.m.).</span>
+                )}
             </div>
         </div>
     );

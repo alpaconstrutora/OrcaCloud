@@ -70,6 +70,19 @@ describe('ImovibIndiceDeCorrecao', () => {
         expect(p.salvar).not.toHaveBeenCalledWith({ cost_index_rate_monthly: 0.5 });
     });
 
+    it('pendência da Fase 1: taxa preenchida diferente da média do índice escolhido → a tela avisa', async () => {
+        list.mockResolvedValue(serie(0.5));
+        render(<ImovibIndiceDeCorrecao {...props({ taxa: 0.7, nome: 'INCC-M' })} />);
+        expect(await screen.findByText(/A taxa no cálculo \(0,7% a\.m\.\) não é a média do INCC-M \(0,5% a\.m\.\)/)).toBeTruthy();
+    });
+
+    it('taxa igual à média: sem aviso', async () => {
+        list.mockResolvedValue(serie(0.5));
+        render(<ImovibIndiceDeCorrecao {...props({ taxa: 0.5, nome: 'INCC-M' })} />);
+        await waitFor(() => expect(screen.getByRole('button', { name: /0,5% a\.m\./ })).toBeEnabled());
+        expect(screen.queryByText(/não é a média/)).toBeNull();
+    });
+
     it('sem série: diz que a taxa segue a inflação geral e o botão explica por quê está desligado', async () => {
         list.mockResolvedValue([]);
         render(<ImovibIndiceDeCorrecao {...props({ nome: 'INCC' })} />);

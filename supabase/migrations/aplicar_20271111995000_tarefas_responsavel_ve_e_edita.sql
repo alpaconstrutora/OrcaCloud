@@ -34,7 +34,7 @@
 --     de tasks_update) e viraria dono; idem space_id para um espaço dele e org_id
 --     para outra org. Por isso o gatilho trg_tasks_responsavel_so_conteudo: para
 --     quem NÃO é dono nem membro do espaço da linha ANTIGA, chamando como anon ou
---     authenticated, recusa (42501) mudar user_id, org_id, space_id, folder_id,
+--     authenticated, recusa (42501) mudar id, created_at, user_id, org_id, space_id, folder_id,
 --     assignee_employee_id, parent_task_id, project_id, source_module e
 --     source_ref. O responsável edita só título, descrição, datas, prioridade e
 --     status — a lista branca do link. Revisão 1, Crítico 1.
@@ -123,7 +123,9 @@ BEGIN
     IF current_user IN ('authenticated', 'anon')
        AND NOT coalesce(OLD.user_id = auth.uid()
                         OR (OLD.space_id IS NOT NULL AND public.is_task_space_member(OLD.space_id)), false)
-       AND (   NEW.user_id              IS DISTINCT FROM OLD.user_id
+       AND (   NEW.id                   IS DISTINCT FROM OLD.id
+            OR NEW.created_at           IS DISTINCT FROM OLD.created_at
+            OR NEW.user_id              IS DISTINCT FROM OLD.user_id
             OR NEW.org_id               IS DISTINCT FROM OLD.org_id
             OR NEW.space_id             IS DISTINCT FROM OLD.space_id
             OR NEW.folder_id            IS DISTINCT FROM OLD.folder_id

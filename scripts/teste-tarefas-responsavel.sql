@@ -198,6 +198,13 @@ BEGIN
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET source_module = ''TR'' WHERE id = %L RETURNING id::text', t_a));
     PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando source_module → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET id = gen_random_uuid() WHERE id = %L RETURNING id::text', t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando o id → 42501 (veio ' || v || ')');
+    v := pg_temp.como(iago, 'authenticated', format(
+        'UPDATE public.tasks SET created_at = created_at - interval ''1 day'' WHERE id = %L RETURNING id::text', t_a));
+    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando created_at → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.tasks WHERE id = t_a), 'recusa do id: a tarefa segue com o id de antes');
     SELECT * INTO tr FROM public.tasks WHERE id = t_a;
     PERFORM pg_temp.confere(tr.assignee_employee_id = e_iago AND tr.user_id = o2 AND tr.space_id IS NULL
                         AND tr.org_id = org AND tr.project_id IS NULL AND tr.source_module IS NOT DISTINCT FROM src_a,
@@ -227,6 +234,16 @@ BEGIN
         s_iago, p_tr, t_vazio));
     PERFORM pg_temp.confere(v = 'ok:1', 'dono muda espaço e obra (o gatilho não o atinge) (veio ' || v || ')');
     UPDATE public.tasks SET assignee_employee_id = e_vazio, space_id = NULL, project_id = NULL WHERE id = t_vazio;
+    -- id e created_at: o dono continua podendo (t_vazio não tem colaborador nem
+    -- subtarefa, então trocar o id não esbarra em FK); o id volta depois.
+    v := pg_temp.como(o2, 'authenticated', format(
+        'WITH u AS (UPDATE public.tasks SET created_at = created_at - interval ''1 day'' WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_vazio));
+    PERFORM pg_temp.confere(v = 'ok:1', 'dono muda created_at (veio ' || v || ')');
+    v := pg_temp.como(o2, 'authenticated', format(
+        'UPDATE public.tasks SET id = gen_random_uuid() WHERE id = %L RETURNING id::text', t_vazio));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND v <> 'ok:<null>' AND v <> 'ok:' || t_vazio, 'dono muda o id (veio ' || v || ')');
+    UPDATE public.tasks SET id = t_vazio WHERE id = substr(v, 4)::uuid;
+    PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.tasks WHERE id = t_vazio), 'fixture: id de t_vazio restaurado');
 
     -- ── responsável vinculado que NÃO é membro da org da tarefa (Importante 2)
     PERFORM pg_temp.confere(public.is_employee_do_usuario_de(z, e_z) IS TRUE, 'fixture: e_z é de z');

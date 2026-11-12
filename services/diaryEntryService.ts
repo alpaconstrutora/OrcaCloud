@@ -1,5 +1,5 @@
 import { supabase } from '../lib/supabase';
-import type { DiaryEntry } from '../types';
+import type { BudgetEntry, DiaryEntry } from '../types';
 import type { ProjectSchedule } from '../types/project';
 import { projectService } from './projectService';
 import { aplicarEvolucaoNoCronograma } from '../utils/diaryPlanningLink';
@@ -24,7 +24,8 @@ export interface DiaryWriteResult {
     anterior: DiaryEntry | null;
 }
 
-function toResult(data: unknown): DiaryWriteResult {
+/** Resposta das RPCs de gravação (`diary_*_entry`, `celular_diario_*`) → `DiaryWriteResult`. */
+export function toResult(data: unknown): DiaryWriteResult {
     const d = (data || {}) as { entries?: DiaryEntry[] | null; anterior?: DiaryEntry | null };
     return { entries: d.entries || [], anterior: d.anterior || null };
 }
@@ -75,3 +76,34 @@ export async function sincronizarEvolucaoNoPlanejamento(planejamentoId: string, 
     });
     return schedule;
 }
+
+export interface PlanejamentoCarregado {
+    schedule: ProjectSchedule | null;
+    budget: BudgetEntry[];
+}
+
+/** Cronograma e orçamento de um planejamento; `null` = projeto não encontrado (a tela fica como está). */
+export type CarregarPlanejamento = (planejamentoId: string) => Promise<PlanejamentoCarregado | null>;
+
+/**
+ * Carregador padrão (sessão logada): lê o planejamento pelo `projectService`. O
+ * orçamento vem do próprio planejamento; se ele não tiver, do projeto para o
+ * qual o planejamento aponta (`settings.linkedProjectId`).
+ */
+export const carregarPlanejamentoPorProjeto: CarregarPlanejamento = async planejamentoId => {
+    const p = await projectService.loadProject(planejamentoId);
+    if (!p) return null;
+    const schedule: ProjectSchedule | null = p.settings?.schedule || null;
+    if (p.budget && p.budget.length > 0) return { schedule, budget: p.budget };
+    if (p.settings?.linkedProjectId) {
+        // Falha no orçamento do pai não esconde o cronograma (era assim antes do carregador).
+        try {
+            const pai = await projectService.loadProject(p.settings.linkedProjectId);
+            return { schedule, budget: pai?.budget || [] };
+        } catch (error) {
+            console.error('Erro ao carregar o planejamento vinculado ao diário:', error);
+            return { schedule, budget: [] };
+        }
+    }
+    return { schedule, budget: [] };
+};

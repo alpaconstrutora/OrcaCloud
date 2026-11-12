@@ -35,8 +35,8 @@ export interface SessaoCelular {
   nome: string
   org_id: string
   org_nome: string
-  /** Se o dono do link aprova registro do Diário (calculado no banco; ausente = não aprova). */
-  pode_aprovar_diario?: boolean
+  /** Se o dono do link aprova registro do Diário (`fn_pode_aprovar_diario_de`, calculado no banco). */
+  pode_aprovar_diario: boolean
 }
 
 /** Recusa do banco para token inválido, vencido, revogado ou de ex-membro. */

@@ -2,7 +2,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 // @ts-ignore
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2"
-import { validarPedido, montarPath } from "./regras.ts"
+import { validarPedido, montarPath, respostaDoErroDaRpc } from "./regras.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -27,6 +27,8 @@ const TTL_SEGUNDOS = 60 * 60;
 // que o token pode é o banco: `celular_diario_autoriza` (projeto da org do link),
 // `celular_diario_midia_permitida` (path citado em registro da org) e
 // `celular_diario_midia_orfa` (path do projeto que nenhum registro cita mais).
+// O limite de uso por link (subir 120/h, assinar 600/h) também é do banco
+// (`_celular_cota`, 54000), e aqui vira 429.
 // As RPCs são chamadas com a chave anon e SEM repassar o Authorization do
 // pedido — um navegador logado como outra pessoa não pode mudar de quem é o
 // link. A service_role entra só no fim, para assinar/remover no storage.
@@ -56,13 +58,12 @@ serve(async (req: Request) => {
         auth: { persistSession: false, autoRefreshToken: false },
     });
 
-    // Erro de RPC → resposta. 42501 (token recusado / fora da org) é 403 com a
-    // mensagem do banco; 22023 é pedido inválido; o resto é 500 sem detalhe.
+    // Erro de RPC → resposta (42501 → 403, 22023 → 400, 54000 → 429, resto → 500):
+    // a regra mora em `respostaDoErroDaRpc` (regras.ts), testada no Vitest.
     const erroDaRpc = (erro: { code?: string; message?: string }) => {
-        if (erro.code === '42501') return json({ error: erro.message || 'Acesso negado' }, 403);
-        if (erro.code === '22023') return json({ error: erro.message || 'Pedido inválido' }, 400);
-        console.error('[celular-diario-midia] erro na RPC:', erro);
-        return json({ error: 'Erro ao processar o pedido' }, 500);
+        const r = respostaDoErroDaRpc(erro);
+        if (r.logar) console.error('[celular-diario-midia] erro na RPC:', erro);
+        return json(r.corpo, r.status);
     };
 
     try {

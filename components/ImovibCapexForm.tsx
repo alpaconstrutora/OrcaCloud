@@ -11,6 +11,7 @@ import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import ImovibDesembolsoCard from './ImovibDesembolsoCard';
+import ImovibRegimeTributarioCard from './ImovibRegimeTributarioCard';
 import ImovibPosObraCard from './ImovibPosObraCard';
 import ImovibCubReferencia, { ReferenciaDeCub } from './ImovibCubReferencia';
 
@@ -47,6 +48,9 @@ const DEFAULT_CAPEX_TEMPLATE = [
     { category: '4. Construção Indireta', name: 'Instalação de Canteiro', value_type: 'currency', value: 0 },
     { category: '4. Construção Indireta', name: 'Administração Local', value_type: 'percent', value: 4 },
     { category: '4. Construção Indireta', name: 'Equipamentos (Grua, Elevador)', value_type: 'currency', value: 0 },
+    // Item 6.4: tributos da obra (fora do regime da incorporação), só para estudo novo.
+    { category: '4. Construção Indireta', name: 'INSS da obra (aferição)', value_type: 'currency', value: 0 },
+    { category: '4. Construção Indireta', name: 'ISS da construção (construtora terceira)', value_type: 'percent', value: 0 },
 
     // 5. Marketing e Vendas
     { category: '5. Marketing e Vendas', name: 'Stand de Vendas', value_type: 'currency', value: 0, timing: 'lancamento' },
@@ -147,6 +151,11 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
     // RET e regime normal são alternativos — os dois com valor = imposto em dobro.
     const impostosComValor = items.filter(i => i.category.startsWith('7.') && i.value_type === 'percent' && (i.value || 0) > 0);
+    // Item 6.3: fora do manual, as rubricas de imposto não entram no cálculo.
+    const regimeCalculado = (study.tax_regime ?? 'manual') !== 'manual';
+    const motivoImpostoPeloRegime = 'O imposto vem do regime tributário escolhido abaixo: esta rubrica está fora do cálculo.';
+    // A mesma regra do motor: só a rubrica 7. em % do VGV sai do cálculo.
+    const foraPeloRegime = (i: ImovibCapexItem) => regimeCalculado && i.category.startsWith('7.') && i.value_type === 'percent' && baseDaRubrica(i) === 'vgv';
 
     useEffect(() => {
         const fetchOrSeed = async () => {
@@ -564,12 +573,14 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                             </div>
                             <p className="mt-2 text-xs text-slate-500">
                                 {math.capexRubricasAtivas
-                                    ? 'No modo Completo, imposto e corretagem vêm destas rubricas (categorias 5 e 7); os campos da aba Dinâmica não entram no cálculo.'
+                                    ? (regimeCalculado
+                                        ? 'No modo Completo, a corretagem vem destas rubricas (categoria 5) e o imposto, do regime tributário escolhido abaixo; os campos da aba Dinâmica não entram no cálculo.'
+                                        : 'No modo Completo, imposto e corretagem vêm destas rubricas (categorias 5 e 7); os campos da aba Dinâmica não entram no cálculo.')
                                     : 'Sem rubricas cadastradas: valem imposto e corretagem da aba Dinâmica.'}
                             </p>
                         </div>
 
-                        {impostosComValor.length > 1 && (
+                        {impostosComValor.length > 1 && !regimeCalculado && (
                             <div className="mb-6 p-4 bg-amber-50 border border-amber-200 rounded-[10px] text-sm text-amber-800" role="alert">
                                 <span className="font-semibold">Impostos em dobro:</span>{' '}
                                 {impostosComValor.map(i => `${i.name} (${i.value}%)`).join(' e ')} estão com valor ao mesmo tempo.
@@ -708,6 +719,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                     <input
                                                                         type="number"
                                                                         defaultValue={item.value}
+                                                                        disabled={foraPeloRegime(item)}
+                                                                        title={foraPeloRegime(item) ? motivoImpostoPeloRegime : undefined}
                                                                         step={item.value_type === 'percent' ? '0.01' : '1'}
                                                                         onBlur={(e) => {
                                                                             const val = parseFloat(e.target.value) || 0;
@@ -715,7 +728,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                                 handleUpdateItem(item.id, { value: val });
                                                                             }
                                                                         }}
-                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-[6px] h-8 px-3 text-sm font-normal text-slate-800 transition-all ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
+                                                                        className={`w-full bg-slate-50 border border-slate-200 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 outline-none rounded-[6px] h-8 px-3 text-sm font-normal text-slate-800 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${item.value_type === 'currency' ? 'pl-9' : 'pr-8 text-right'}`}
                                                                     />
                                                                     {item.value_type === 'percent' && (
                                                                         <span className="absolute right-3 text-slate-400 font-normal text-sm">%</span>
@@ -781,6 +794,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                 )}
             </div>
 
+            <ImovibRegimeTributarioCard study={study} onSalvar={salvarEstudo} />
             <ImovibDesembolsoCard study={study} resultado={math} onSalvar={salvarEstudo} />
             <ImovibPosObraCard study={study} items={items} simplificado={capexMode === 'simplified'} onItems={(l) => { setItems(l); onDataChanged(); }} onSalvar={salvarEstudo} />
         </div>

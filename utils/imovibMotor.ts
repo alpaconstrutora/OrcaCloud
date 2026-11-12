@@ -2,6 +2,7 @@ import { ImovibStudy, ImovibCapexItem, ImovibCapexBase, ImovibCapexTiming } from
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { curvaDeVendas, TipoCurvaDeVendas, curvaDeDesembolso, TipoCurvaDeDesembolso } from './imovibCurvas';
 import { nomeDoMes } from './imovibCronograma';
+import { impostoPorMes, hipotesesDoEstudo, HipotesesTributarias, RegimeTributarioDoEstudo } from './imovibTributos';
 import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
 import { fluxoDaDivida, PremissasDoFinanciamento } from './imovibFinanciamento';
 import { aportesEDistribuicoes, LinhaDeAporte } from './imovibAportes';
@@ -47,7 +48,7 @@ export interface LinhasDoMes {
     receitaRepasse: number;
     receitaPosChaves: number;
     devolucaoDistrato: number;
-    /** Deduções sobre a receita: categoria 7 das rubricas, ou o imposto da Dinâmica. */
+    /** Imposto sobre a receita: categoria 7 das rubricas, o imposto da Dinâmica, ou o regime tributário (item 6.2). */
     impostos: number;
     /** Categoria 5 das rubricas, ou a corretagem da Dinâmica. */
     comercial: number;
@@ -97,7 +98,8 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
  */
 export interface ImovibAviso {
     codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
-        | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100';
+        | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100'
+        | 'impostos_pelo_regime';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -167,6 +169,11 @@ export interface ImovibMathResult {
      * vgv é corrigida mês a mês). A soma é `capexRubricas.total`.
      */
     capexValorPorRubrica: Record<string, number>;
+    /**
+     * Com regime tributário (item 6.2): as rubricas de imposto (e o imposto da
+     * Dinâmica) que ficaram fora do cálculo, "Nome (x%)" — o cartão do regime mostra.
+     */
+    impostosForaDoCalculo: string[];
     avisos: ImovibAviso[];
 }
 
@@ -288,6 +295,8 @@ export const CAMPOS_DO_MOTOR = [
     // Fase 5 (migration aplicar_20271112100000); base_date dá nome aos meses
     'base_date', 'acquisition_month', 'approval_month', 'incorporation_registry_month', 'land_payment_schedule',
     'cost_curve_type', 'cost_curve_custom', 'stock_carrying_cost_unit_month',
+    // Fase 6 (migration aplicar_20271112200000)
+    'tax_regime', 'tax_hypotheses',
 ] as const satisfies readonly (keyof ImovibStudy)[];
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
@@ -322,6 +331,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     capexRubricasAtivas: false,
     capexRubricas: { terreno: 0, obra: 0, vgv: 0, total: 0 },
     capexValorPorRubrica: {},
+    impostosForaDoCalculo: [],
     avisos: [],
 };
 
@@ -393,6 +403,12 @@ interface Premissas {
     horizonteDasReceitas: number;
     handoverMonth: number;
     unidadesVendaveis: number;
+    /** 'manual' = o imposto vem das rubricas 7. ou da Dinâmica; outro = impostoPorMes (item 6.2). */
+    regimeTributario: RegimeTributarioDoEstudo;
+    hipotesesTributarias: HipotesesTributarias;
+    impostosForaDoCalculo: string[];
+    /** Ids das rubricas de imposto fora do cálculo pelo regime (valem 0). */
+    rubricasForaPeloRegime: Set<string>;
     /** Unidades que pagam condomínio e IPTU enquanto não vendidas (sem a permuta física). */
     unidadesEmEstoque: number;
     custoDoEstoqueUnidadeMes: number;
@@ -578,6 +594,12 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let rubricaVgvPct = 0;
     let rubricaVgvFixo = 0;
     const rubricaPct = { impostos: 0, comercial: 0, outras: 0 };
+    // Regime tributário (item 6.2): fora do manual, o imposto é calculado pelo
+    // regime e as rubricas da categoria 7 (e o imposto da Dinâmica) ficam fora.
+    const regimeTributario = (study.tax_regime ?? D.tax_regime) as RegimeTributarioDoEstudo;
+    const pePeloRegime = regimeTributario !== 'manual';
+    const impostosForaDoCalculo: string[] = [];
+    const rubricasForaPeloRegime = new Set<string>();
     // Rubricas com momento próprio (item 5.5): valor total aqui, calendário em montarSeries.
     const rubricasComMomento: RubricaComMomento[] = [];
     rubricas.forEach(item => {
@@ -602,8 +624,13 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
                 break;
             case 'vgv':
                 if (pct) {
-                    rubricaVgvPct += v / 100;
                     const cat = item.category || '';
+                    if (pePeloRegime && cat.startsWith('7.')) {
+                        rubricasForaPeloRegime.add(item.id);
+                        if (v !== 0) impostosForaDoCalculo.push(`${item.name} (${v.toLocaleString('pt-BR')}%)`);
+                        break;
+                    }
+                    rubricaVgvPct += v / 100;
                     const linha = cat.startsWith('7.') ? 'impostos' : cat.startsWith('5.') ? 'comercial' : 'outras';
                     rubricaPct[linha] += v / 100;
                 } else rubricaVgvFixo += v;
@@ -611,10 +638,14 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         }
     });
     // Com rubricas, as deduções sobre a receita vêm delas.
-    const deducaoReceitaPct = capexRubricasAtivas ? rubricaVgvPct : taxRate + brokerageFee;
+    if (pePeloRegime && !capexRubricasAtivas && taxRate !== 0) impostosForaDoCalculo.push(`imposto da Dinâmica (${(taxRate * 100).toLocaleString('pt-BR')}%)`);
+    const impostoManual = pePeloRegime ? 0 : taxRate;
+    const deducaoReceitaPct = capexRubricasAtivas ? rubricaVgvPct : impostoManual + brokerageFee;
     const deducaoPct = capexRubricasAtivas
         ? rubricaPct
-        : { impostos: taxRate, comercial: brokerageFee, outras: 0 };
+        : { impostos: impostoManual, comercial: brokerageFee, outras: 0 };
+    // Sem ImovibAviso: os campos ficam desligados pelo regime e o aviso não teria como
+    // ser resolvido (revisão da Fase 6). O cartão do regime mostra `impostosForaDoCalculo`.
 
     // Apply Swap Physical (reduces marketed VGV)
     const swapPhysical = val(study.swap_physical_percent, D.swap_physical_percent) / 100;
@@ -885,6 +916,10 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         handoverMonth,
         unidadesVendaveis: unidadesDoEspelho + unidadesSemEspelho,
         custoDoEstoqueUnidadeMes: val(study.stock_carrying_cost_unit_month, D.stock_carrying_cost_unit_month),
+        regimeTributario,
+        hipotesesTributarias: hipotesesDoEstudo(study),
+        impostosForaDoCalculo,
+        rubricasForaPeloRegime,
         // Unidades da permuta física não ficam em estoque (as PERMUTADO do espelho já saíram da contagem).
         unidadesEmEstoque: unidadesDoEspelho + unidadesSemEspelho * (1 - swapPhysical),
     };
@@ -1015,6 +1050,17 @@ function montarSeries(P: Premissas): Series {
         S.custoProprio.push(proprio);
         S.custoObra.push(custoObraDoMes);
         S.linhas.push(linhas);
+    }
+
+    // Imposto pelo regime (item 6.2): sobre a receita bruta do mês; no lucro real,
+    // o crédito e o lucro usam o custo do mês (próprio + obra).
+    if (P.regimeTributario !== 'manual') {
+        const custo = S.custoProprio.map((c, i) => c + S.custoObra[i]);
+        const deducoes = S.linhas.map(l => -(l.comercial + l.outrasDeducoes + l.devolucaoDistrato));
+        impostoPorMes(P.regimeTributario, S.receitaBruta, custo, P.hipotesesTributarias, deducoes).forEach((imposto, i) => {
+            S.linhas[i].impostos = -imposto;
+            S.deducaoReceita[i] += imposto;
+        });
     }
     return S;
 }
@@ -1195,7 +1241,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
             case 'vgv': valor = pct ? S.totalGrossRev * v / 100 : v * fatorVendas; break;
         }
         // Com momento próprio (item 5.5): o que saiu de fato, com o índice do mês.
-        capexValorPorRubrica[item.id] = S.valorComMomento[item.id] ?? valor;
+        capexValorPorRubrica[item.id] = P.rubricasForaPeloRegime.has(item.id) ? 0 : S.valorComMomento[item.id] ?? valor;
     });
     // Totais por base, somando as rubricas com momento.
     const comMomento = { terreno: 0, obra: 0, vgv: 0 };
@@ -1244,8 +1290,10 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         capital: {
             proprio: Math.max(0, -F.maxExposure),
             divida: F.dividaLiberada,
-            vendasNaObra: S.linhas.slice(0, P.constStart + P.constDur - 1).reduce((acc, l) =>
-                acc + (l.receitaSinal + l.receitaParcelasObra + l.receitaIntermediarias) * (1 - P.deducaoReceitaPct) + l.devolucaoDistrato, 0),
+            // Deduções do mês (inclusive o imposto do regime, item 6.2) na proporção da receita.
+            vendasNaObra: S.linhas.slice(0, P.constStart + P.constDur - 1).reduce((acc, l, i) =>
+                acc + (l.receitaSinal + l.receitaParcelasObra + l.receitaIntermediarias)
+                    * (S.receitaBruta[i] > 0 ? 1 - S.deducaoReceita[i] / S.receitaBruta[i] : 1 - P.deducaoReceitaPct) + l.devolucaoDistrato, 0),
             permuta: Math.max(0, P.vgvTotal - P.vgvVendavel) + P.permutaDoEspelho,
             terceiros: F.aporteDeTerceiros,
         },
@@ -1258,6 +1306,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
             total: (P.rubricaTerreno + comMomento.terreno) + (P.rubricaObra + comMomento.obra) + (S.rubricaVgvTotal + comMomento.vgv),
         },
         capexValorPorRubrica,
+        impostosForaDoCalculo: P.impostosForaDoCalculo,
         avisos: P.avisos,
     };
 }

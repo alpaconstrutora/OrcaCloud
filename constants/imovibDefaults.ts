@@ -80,7 +80,8 @@ export const IMOVIB_DEFAULTS = {
     cost_curve_type: 'linear', // ou 'curva_s' (3x² − 2x³) ou 'custom'
     pos_obra_meses: 12, // rubrica 'pos_obra' sem timing_months
     stock_carrying_cost_unit_month: 0, // R$ por unidade em estoque por mês, depois da obra
-    // Fase 6 — Tributos
+    // Fase 6 — Tributos (as alíquotas de cada regime em HIPOTESES_TRIBUTARIAS, abaixo)
+    tax_regime: 'manual', // vazio = manual: rubricas da categoria 7 ou o imposto da Dinâmica
     // Fase 10 — Critérios do parecer
 } as const;
 
@@ -111,3 +112,17 @@ export const IMOVIB_CENARIOS_PADRAO = [
     { name: 'Pessimista', kind: 'pessimista', choques: { preco: -10, custo_obra: 10, velocidade_vendas: 12, prazo_obra: 6 } },
     { name: 'Otimista', kind: 'otimista', choques: { preco: 5, custo_obra: -5, velocidade_vendas: -6 } },
 ] as const;
+
+/**
+ * Fase 6 — alíquotas padrão de cada regime tributário (decisão D4 de 11/11/2026:
+ * hipóteses editáveis por estudo, gravadas em `tax_hypotheses`, com o aviso de
+ * confirmar com a contabilidade). Todas em % (4 = 4%).
+ */
+export const HIPOTESES_TRIBUTARIAS = {
+    retPct: 4, // RET da incorporação, % da receita
+    retHisPct: 1, // RET de interesse social, % da receita
+    presumidoPct: 6.73, // IRPJ + CSLL + PIS + Cofins no lucro presumido, % da receita
+    realPisCofinsPct: 9.25, // lucro real: PIS + Cofins não cumulativos, % da receita
+    realCreditoSobreCustoPct: 9.25, // lucro real: crédito de PIS/Cofins, % do custo
+    realIrCsPct: 34, // lucro real: IRPJ + CSLL, % do lucro de cada ano
+} as const;

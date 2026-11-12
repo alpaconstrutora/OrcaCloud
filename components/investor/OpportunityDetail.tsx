@@ -23,6 +23,9 @@ import CommitteeGatePanel from './CommitteeGatePanel';
 import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
 import { useImovibMath } from '../../hooks/useImovibMath';
+import { estudoComPrazoDoPortal } from '../../utils/imovibVariacoes';
+import { calcularIndicadores } from '../../utils/imovibIndicadores';
+import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
 import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
 import { TITULO_VGV_LIQUIDO } from '../../constants/imovibClassificacao';
 import { ImovibStudy } from '../../types';
@@ -84,21 +87,14 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
     const [sliderVgvPct, setSliderVgvPct] = React.useState(0);
     const [sliderDurationDelta, setSliderDurationDelta] = React.useState(0);
 
-    const modifiedStudy = React.useMemo(() => {
-        if (!study) return null;
-        const copy = { ...study };
-        
-        if (copy.construction_duration_months != null) {
-            copy.construction_duration_months = Math.max(1, copy.construction_duration_months + sliderDurationDelta);
-        }
-        if (copy.sales_duration_months != null) {
-            copy.sales_duration_months = Math.max(1, copy.sales_duration_months + sliderDurationDelta);
-        }
-        
-        return copy;
-    }, [study, sliderDurationDelta]);
+    // Item 10.6: o prazo varia pela mesma regra do app (vale com a duração vazia).
+    const modifiedStudy = React.useMemo(() => (study ? estudoComPrazoDoPortal(study, sliderDurationDelta) : null), [study, sliderDurationDelta]);
 
     const studyMath = useImovibMath(modifiedStudy, { vgvDelta: sliderVgvPct, costDelta: sliderCostPct });
+    const indicadores = React.useMemo(
+        () => (study ? calcularIndicadores(studyMath, study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate) : null),
+        [studyMath, study],
+    );
 
     const [competitors, setCompetitors] = React.useState<OpportunityCompetitor[]>([]);
 
@@ -709,7 +705,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                             )}
 
                                             {/* KPIs Financeiros Detalhados */}
-                                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+                                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
                                                 <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title={studyMath ? TITULO_VGV_LIQUIDO : undefined}>
                                                     <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">VGV Líquido</span>
                                                     <span className="text-lg font-black text-blue-900 font-mono">
@@ -734,6 +730,19 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                         {studyMath && studyMath.constCostTotal > 0 
                                                             ? fmtPct(((studyMath.netVgvTotal - (studyMath.constCostTotal + studyMath.landCost)) / (studyMath.constCostTotal + studyMath.landCost)) * 100)
                                                             : op.roi_pct ? fmtPct(op.roi_pct) : '—'}
+                                                    </span>
+                                                </div>
+                                                {/* Item 10.6: os mesmos indicadores do Resumo do app. */}
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title="Mês em que o caixa acumulado volta a ficar positivo e assim fica">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Payback</span>
+                                                    <span className="text-lg font-black text-slate-800 font-mono">
+                                                        {indicadores?.paybackSimplesMes != null ? `Mês ${indicadores.paybackSimplesMes}` : '—'}
+                                                    </span>
+                                                </div>
+                                                <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title="Entradas ÷ saídas de caixa">
+                                                    <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Múltiplo do capital</span>
+                                                    <span className="text-lg font-black text-slate-800 font-mono">
+                                                        {indicadores?.multiploDoCapital != null ? `${indicadores.multiploDoCapital.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}x` : '—'}
                                                     </span>
                                                 </div>
                                             </div>

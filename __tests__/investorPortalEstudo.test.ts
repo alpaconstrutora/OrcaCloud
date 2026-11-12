@@ -6,6 +6,8 @@ vi.mock('../lib/supabase', () => ({ supabase: {} }));
 
 import { montarEstudoDoPortal } from '../services/investorPortalTokenService';
 import { computeImovibMath } from '../utils/imovibMotor';
+import { estudoComPrazoDoPortal } from '../utils/imovibVariacoes';
+import { calcularIndicadores } from '../utils/imovibIndicadores';
 import { baseStudy, instancia } from './fixtures/imovibEstudos';
 
 /**
@@ -84,5 +86,30 @@ describe('0.6 — estudo do portal por link', () => {
     it('sem estudo na resposta devolve null', () => {
         expect(montarEstudoDoPortal(null)).toBeNull();
         expect(montarEstudoDoPortal(undefined)).toBeNull();
+    });
+});
+
+describe('10.6 — o portal calcula o mesmo número do app', () => {
+    it('sem mexer no prazo: VGV líquido, TIR e prazo iguais aos do Resumo (mesmo com as durações vazias)', () => {
+        const estudo = baseStudy({ construction_duration_months: null, sales_duration_months: null });
+        const app = computeImovibMath(estudo);
+        const portal = computeImovibMath(estudoComPrazoDoPortal(estudo, 0));
+        expect(portal.netVgvTotal).toBe(app.netVgvTotal);
+        expect(portal.annualIrr).toBe(app.annualIrr);
+        expect(portal.duration).toBe(app.duration);
+    });
+
+    it('atrasar o prazo vale também quando a duração está vazia (antes o controle não fazia nada)', () => {
+        const estudo = baseStudy({ construction_duration_months: null, sales_duration_months: null });
+        expect(computeImovibMath(estudoComPrazoDoPortal(estudo, 6)).duration).toBeGreaterThan(computeImovibMath(estudo).duration);
+    });
+
+    it('payback e múltiplo do portal são os do app', () => {
+        const estudo = baseStudy();
+        const r = computeImovibMath(estudoComPrazoDoPortal(estudo, 0));
+        const app = calcularIndicadores(computeImovibMath(estudo), 12);
+        const portal = calcularIndicadores(r, 12);
+        expect(portal.paybackSimplesMes).toBe(app.paybackSimplesMes);
+        expect(portal.multiploDoCapital).toBe(app.multiploDoCapital);
     });
 });

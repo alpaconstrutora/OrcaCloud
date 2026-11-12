@@ -32,6 +32,12 @@ export interface LinhaDoMemorial {
 const D = IMOVIB_DEFAULTS;
 const vazio = (x: unknown) => x == null || (typeof x === 'number' && Number.isNaN(x)) || (Array.isArray(x) && x.length === 0);
 const num = (x: number | null | undefined, padrao: number) => (vazio(x) ? padrao : (x as number));
+/** Mês/duração como o motor lê (`mes` em montarPremissas): vazio ou abaixo do mínimo = padrão; fração arredonda. */
+const mesDoMotor = (x: number | null | undefined, padrao: number, minimo = 1) =>
+    vazio(x) || (x as number) < minimo ? padrao : Math.round(x as number);
+const invalido = (x: number | null | undefined, minimo = 1) =>
+    !vazio(x) && (x as number) < minimo ? `Inválido (${x}): o cálculo usa o padrão` : null;
+const simplificadoAtivo = (s: ImovibStudy) => s.capex_mode === 'simplified' && !!s.capex_simplified_cost_sqm;
 const pctBR = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
 
 const ROTULO_CURVA_VENDAS: Record<string, string> = { linear: 'Linear', lancamento: 'Lançamento forte', vso: 'VSO (sobre o estoque)', custom: 'Personalizada' };
@@ -72,23 +78,24 @@ const soNaCurva = (tipo: string, rotulo: string) => (s: ImovibStudy) => ((s.sale
 const DESCRITORES: Descritor[] = [
     // Cronograma
     { grupo: 'Cronograma', premissa: 'Data-base', campo: 'base_date', valor: s => s.base_date ?? null, observacao: s => (s.base_date ? null : 'Sem data-base: os meses saem numerados') },
-    { grupo: 'Cronograma', premissa: 'Início das vendas', campo: 'sales_start_month', unidade: 'mês', valor: s => num(s.sales_start_month, D.sales_start_month) },
-    { grupo: 'Cronograma', premissa: 'Duração das vendas', campo: 'sales_duration_months', unidade: 'meses', valor: s => num(s.sales_duration_months, D.sales_duration_months) },
-    { grupo: 'Cronograma', premissa: 'Início da obra', campo: 'construction_start_month', unidade: 'mês', valor: s => num(s.construction_start_month, D.construction_start_month) },
-    { grupo: 'Cronograma', premissa: 'Duração da obra', campo: 'construction_duration_months', unidade: 'meses', valor: s => num(s.construction_duration_months, D.construction_duration_months) },
-    { grupo: 'Cronograma', premissa: 'Aquisição do terreno', campo: 'acquisition_month', unidade: 'mês', valor: s => num(s.acquisition_month, D.acquisition_month) },
+    { grupo: 'Cronograma', premissa: 'Início das vendas', campo: 'sales_start_month', unidade: 'mês', valor: s => mesDoMotor(s.sales_start_month, D.sales_start_month), observacao: s => invalido(s.sales_start_month) },
+    { grupo: 'Cronograma', premissa: 'Duração das vendas', campo: 'sales_duration_months', unidade: 'meses', valor: s => mesDoMotor(s.sales_duration_months, D.sales_duration_months), observacao: s => invalido(s.sales_duration_months) },
+    { grupo: 'Cronograma', premissa: 'Início da obra', campo: 'construction_start_month', unidade: 'mês', valor: s => mesDoMotor(s.construction_start_month, D.construction_start_month), observacao: s => invalido(s.construction_start_month) },
+    { grupo: 'Cronograma', premissa: 'Duração da obra', campo: 'construction_duration_months', unidade: 'meses', valor: s => mesDoMotor(s.construction_duration_months, D.construction_duration_months), observacao: s => invalido(s.construction_duration_months) },
+    { grupo: 'Cronograma', premissa: 'Aquisição do terreno', campo: 'acquisition_month', unidade: 'mês', valor: s => Math.max(1, Math.round(num(s.acquisition_month, D.acquisition_month))) },
     { grupo: 'Cronograma', premissa: 'Aprovação do projeto', campo: 'approval_month', unidade: 'mês', valor: s => s.approval_month ?? null, observacao: () => 'Marco: não muda o cálculo' },
     { grupo: 'Cronograma', premissa: 'Registro da incorporação', campo: 'incorporation_registry_month', unidade: 'mês', valor: s => s.incorporation_registry_month ?? null, observacao: () => 'Marco: não muda o cálculo' },
     // Terreno
     { grupo: 'Terreno', premissa: 'Custo do terreno', campo: 'land_cost', unidade: 'R$', valor: s => num(s.land_cost, 0) },
     {
         grupo: 'Terreno', premissa: 'Pagamento do terreno', campo: 'land_payment_schedule',
-        valor: s => (vazio(s.land_payment_schedule) ? 'À vista no mês da aquisição' : `${(s.land_payment_schedule as unknown[]).length} parcelas`),
+        valor: s => (vazio(s.land_payment_schedule) ? 'À vista no mês da aquisição'
+            : (s.land_payment_schedule as { month: number; percent: number }[]).map(x => `mês ${x.month}: ${pctBR(Number(x.percent) || 0)}`).join(' · ')),
     },
     // Custos
-    { grupo: 'Custos', premissa: 'Modo do CAPEX', campo: 'capex_mode', valor: s => (s.capex_mode === 'simplified' ? 'Simplificado (área × custo/m²)' : 'Completo (por torre e rubricas)') },
-    { grupo: 'Custos', premissa: 'Custo/m² do CAPEX simplificado', campo: 'capex_simplified_cost_sqm', unidade: 'R$/m²', valor: s => s.capex_simplified_cost_sqm ?? null, observacao: s => (s.capex_mode === 'simplified' ? null : 'Só no CAPEX simplificado') },
-    { grupo: 'Custos', premissa: 'Área do CAPEX simplificado', campo: 'capex_simplified_area_sqm', unidade: 'm²', valor: s => s.capex_simplified_area_sqm ?? null, observacao: s => (s.capex_mode !== 'simplified' ? 'Só no CAPEX simplificado' : vazio(s.capex_simplified_area_sqm) ? 'Vazio: a área construída das torres' : null) },
+    { grupo: 'Custos', premissa: 'Modo do CAPEX', campo: 'capex_mode', valor: s => (simplificadoAtivo(s) ? 'Simplificado (área × custo/m²)' : 'Completo (por torre e rubricas)'), observacao: s => (s.capex_mode === 'simplified' && !simplificadoAtivo(s) ? 'Simplificado sem custo/m²: o cálculo usa o Completo' : null) },
+    { grupo: 'Custos', premissa: 'Custo/m² do CAPEX simplificado', campo: 'capex_simplified_cost_sqm', unidade: 'R$/m²', valor: s => s.capex_simplified_cost_sqm ?? null, observacao: s => (simplificadoAtivo(s) ? null : 'Só no CAPEX simplificado') },
+    { grupo: 'Custos', premissa: 'Área do CAPEX simplificado', campo: 'capex_simplified_area_sqm', unidade: 'm²', valor: s => s.capex_simplified_area_sqm ?? null, observacao: s => (!simplificadoAtivo(s) ? 'Só no CAPEX simplificado' : !s.capex_simplified_area_sqm ? 'Vazio ou zero: vale a área construída das torres' : null) },
     { grupo: 'Custos', premissa: 'Curva de desembolso da obra', campo: 'cost_curve_type', valor: s => ROTULO_CURVA_OBRA[s.cost_curve_type ?? D.cost_curve_type] ?? String(s.cost_curve_type) },
     { grupo: 'Custos', premissa: 'Pesos da curva de desembolso', campo: 'cost_curve_custom', valor: s => (vazio(s.cost_curve_custom) ? null : `${(s.cost_curve_custom as number[]).length} meses`), observacao: s => ((s.cost_curve_type ?? D.cost_curve_type) === 'custom' ? null : 'Só na curva personalizada') },
     { grupo: 'Custos', premissa: 'Custo do estoque', campo: 'stock_carrying_cost_unit_month', unidade: 'R$ por unidade/mês', valor: s => num(s.stock_carrying_cost_unit_month, D.stock_carrying_cost_unit_month), observacao: () => 'Depois do fim da obra' },

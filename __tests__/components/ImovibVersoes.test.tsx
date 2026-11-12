@@ -66,6 +66,17 @@ describe('10.2 — aba Versões', () => {
     });
 });
 
+describe('10.2 (revisão) — erro ao ler a versão', () => {
+    it('mostra o erro e não fica em "Lendo as versões…"', async () => {
+        const v = versao('v1', 'Comitê de outubro');
+        svc.listarVersoes.mockResolvedValue([v.linha]);
+        svc.snapshotDaVersao.mockRejectedValue(new Error('rede caiu'));
+        render(comEdicao(<ImovibVersoesTab study={estudo() as never} />));
+        expect(await screen.findByText(/rede caiu/)).toBeTruthy();
+        expect(screen.queryByText(/Lendo as versões/)).toBeNull();
+    });
+});
+
 describe('10.2 — congelar versão', () => {
     it('grava com o nome e as observações e avisa que não se altera depois', async () => {
         const user = userEvent.setup();

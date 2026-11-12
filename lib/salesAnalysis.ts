@@ -819,3 +819,21 @@ export function vendasPorMesDoEmpreendimento(
     }
     return [...porMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([mes, v]) => ({ mes, ...v }));
 }
+
+/**
+ * Unidades do empreendimento vendidas SEM negociação (legado: status SOLD direto no
+ * imóvel). Não têm data de venda, então ficam fora de `vendasPorMesDoEmpreendimento`
+ * — quem mostra as vendas por mês avisa quantas são.
+ */
+export function vendidasSemNegociacao(
+    input: Pick<GroupSalesAnalysisInput, 'properties' | 'deals' | 'empreendimentoByProperty'>,
+    empreendimentoId: string,
+): number {
+    const byId = new Map(input.properties.map(p => [key(p.id), p]));
+    const classificador = saleUnitClassifier(input.deals);
+    return leafNodes(input.properties).filter(p =>
+        String(p.status ?? '').toUpperCase() === 'SOLD'
+        && !classificador.dealOf(p.id)
+        && empreendimentoOfProperty(p, byId, input.empreendimentoByProperty)?.id === empreendimentoId,
+    ).length;
+}

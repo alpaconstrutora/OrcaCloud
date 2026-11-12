@@ -75,8 +75,8 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
     const meses = useMemo<MesDoAcompanhamento[]>(() => {
         if (!previsto || !dados || !study.base_date) return [];
         const r = computeImovibMath(previsto);
-        // A data-base é a do estudo atual: é ela que diz qual mês do calendário é o mês 1.
-        return compararComRealizado(r.monthlyFlows, study.base_date, dados.financeiro, dados.vendas, r.vendasPorMes, hojeAnoMes());
+        // A data-base da versão, se ela tinha uma: é ela que diz qual mês do calendário era o mês 1.
+        return compararComRealizado(r.monthlyFlows, previsto.base_date ?? study.base_date, dados.financeiro, dados.vendas, r.vendasPorMes, hojeAnoMes());
     }, [previsto, dados, study.base_date]);
 
     const acumulados = useMemo(() => {
@@ -129,9 +129,25 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                         </h2>
                         <p className="text-slate-500 text-sm mt-1">
                             {semObra
-                                ? 'O empreendimento não tem obra vinculada: só as vendas reais são comparadas. Vincule a obra no cadastro do empreendimento para comparar receitas e custos.'
-                                : `Realizado das obras: ${dados.obras.map(o => o.nome).join(', ')}. Vendas reais: negociações com contrato, pelo mês da negociação.`}
+                                ? 'O empreendimento não tem obra vinculada nesta organização: só as vendas reais são comparadas. Vincule a obra no cadastro do empreendimento para comparar receitas e custos.'
+                                : `Realizado das obras ${dados.obras.map(o => o.nome).join(', ')}: só lançamentos conciliados. Vendas reais: negociações com contrato, pelo mês da negociação.`}
                         </p>
+                        {!semObra && (
+                            <p className="text-slate-500 text-xs mt-1">
+                                Previsto: receita = o que os compradores pagam no mês; custo = terreno, obra e rubricas do estudo. Realizado: entradas e saídas lançadas nas obras (inclui financiamento, aportes e transferências).
+                            </p>
+                        )}
+                        <ul className="text-xs text-amber-800 mt-2 space-y-0.5">
+                            {(dados.aConciliar.entradas > 0 || dados.aConciliar.saidas > 0) && (
+                                <li>Lançado nas obras e ainda não conciliado (fora do realizado): {moneyBRL(dados.aConciliar.entradas)} de entradas e {moneyBRL(dados.aConciliar.saidas)} de saídas.</li>
+                            )}
+                            {dados.obrasDeOutraOrganizacao.length > 0 && (
+                                <li>Obra de outra organização fica fora: {dados.obrasDeOutraOrganizacao.join(', ')}. Lançamentos de outras organizações nas obras também.</li>
+                            )}
+                            {dados.vendidasSemNegociacao > 0 && (
+                                <li>{dados.vendidasSemNegociacao} unidades vendidas sem negociação (sem data de venda) ficam fora das vendas reais.</li>
+                            )}
+                        </ul>
                     </div>
                     <label className="space-y-1.5">
                         <span className="block text-xs font-semibold text-slate-500">Previsto de</span>

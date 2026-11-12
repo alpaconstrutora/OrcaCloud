@@ -65,6 +65,17 @@ describe('10.1 — sub-aba Memorial', () => {
         expect(within(memorial()).getByText(`${total - 1} de ${total} premissas sem fonte`)).toBeTruthy();
     });
 
+    it('"Salvar Premissas" não regrava o parecer nem os mínimos (outra pessoa pode ter registrado depois)', async () => {
+        const user = await tela({ recommendation: 'reprovar', recommendation_notes: 'x', recommended_by: 'Bruno', hurdle_margin_percent: 20 });
+        await user.type(within(memorial()).getByLabelText('Fonte de TMA'), 'Comitê');
+        await user.click(screen.getByRole('button', { name: /Salvar Premissas/ }));
+        const enviado = svc.updateStudy.mock.calls[0][1];
+        for (const k of ['recommendation', 'recommendation_notes', 'recommended_by', 'recommended_at', 'hurdle_irr_spread', 'hurdle_margin_percent', 'hurdle_max_exposure']) {
+            expect(enviado, k).not.toHaveProperty(k);
+        }
+        expect(enviado).toHaveProperty('premise_notes');
+    });
+
     it('quem só lê não edita a fonte', async () => {
         await tela({}, true);
         expect(within(memorial()).getByLabelText('Fonte de TMA').matches(':disabled')).toBe(true);

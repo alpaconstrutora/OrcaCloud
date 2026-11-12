@@ -56,3 +56,33 @@ describe('10.1 — memorial de premissas', () => {
         expect(linhas.find(l => l.campo === 'inflation_rate')).toMatchObject({ fonte: null, data: null });
     });
 });
+
+describe('10.1 (revisão) — o memorial mostra o valor que o motor usa, mesmo com entrada incomum', () => {
+    const de = (over: Record<string, unknown>, campo: string) => memorialDePremissas(baseStudy(over)).find(l => l.campo === campo)!;
+
+    it('duração 0 vale o padrão (o motor recusa e avisa); fração é arredondada', () => {
+        expect(de({ construction_duration_months: 0 }, 'construction_duration_months')).toMatchObject({ valor: IMOVIB_DEFAULTS.construction_duration_months });
+        expect(de({ construction_duration_months: 0 }, 'construction_duration_months').observacao).toMatch(/inválid/i);
+        expect(de({ sales_duration_months: 24.6 }, 'sales_duration_months').valor).toBe(25);
+    });
+
+    it('aquisição antes do mês 1 vale o mês 1', () => {
+        expect(de({ acquisition_month: 0 }, 'acquisition_month').valor).toBe(1);
+    });
+
+    it('CAPEX simplificado sem custo/m² é calculado pelo Completo, e o memorial diz isso', () => {
+        const l = de({ capex_mode: 'simplified', capex_simplified_cost_sqm: null }, 'capex_mode');
+        expect(l.valor).toMatch(/^Completo/);
+        expect(l.observacao).toMatch(/sem custo\/m²/i);
+    });
+
+    it('área do simplificado 0 usa a área das torres, e o memorial diz isso', () => {
+        const l = de({ capex_mode: 'simplified', capex_simplified_cost_sqm: 4_000, capex_simplified_area_sqm: 0 }, 'capex_simplified_area_sqm');
+        expect(l.observacao).toMatch(/área construída das torres/);
+    });
+
+    it('com as rubricas no cálculo, imposto e corretagem dizem que não entram', () => {
+        const l = memorialDePremissas(baseStudy(), { rubricasAtivas: true }).find(x => x.campo === 'brokerage_fee')!;
+        expect(l.observacao).toMatch(/Não entra/);
+    });
+});

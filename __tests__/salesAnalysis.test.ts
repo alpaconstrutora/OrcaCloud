@@ -13,6 +13,7 @@ import {
     saleDealStage,
     receivableSchedule,
     vendasPorMesDoEmpreendimento,
+    vendidasSemNegociacao,
     SEM_EMPREENDIMENTO,
     type SaleProperty,
     type SaleDeal,
@@ -248,5 +249,12 @@ describe('vendasPorMesDoEmpreendimento — vendas reais do estudo (item 10.4 do 
     it('negociação sem data fica fora (não há mês para pôr)', () => {
         const semData: SaleDeal[] = [{ id: 'x', type: 'SALE', status: 'CONTRATO', property_id: '103', value: 1, date: null }];
         expect(vendasPorMesDoEmpreendimento({ ...base, deals: semData }, 'e1')).toEqual([]);
+    });
+});
+
+describe('vendidasSemNegociacao — o que as vendas por mês não conseguem datar', () => {
+    it('unidade SOLD sem negociação no empreendimento (legado) é contada', () => {
+        expect(vendidasSemNegociacao({ properties, deals, empreendimentoByProperty: emp }, 'e1')).toBe(1); // 104
+        expect(vendidasSemNegociacao({ properties, deals, empreendimentoByProperty: emp }, 'e2')).toBe(0);
     });
 });

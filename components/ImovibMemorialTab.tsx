@@ -3,6 +3,7 @@ import { BookOpen } from 'lucide-react';
 import { ImovibStudy } from '../types';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { memorialDePremissas, premissasSemFonte, type LinhaDoMemorial } from '../utils/imovibMemorial';
+import { computeImovibMath } from '../utils/imovibMotor';
 import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 
 interface Props {
@@ -39,7 +40,8 @@ const valorFormatado = (l: LinhaDoMemorial): string => {
 const ImovibMemorialTab: React.FC<Props> = ({ study, formData, setCampo }) => {
     const { pode, motivo } = useImovibEdicao();
     const estudo = useMemo(() => ({ ...study, ...formData }) as ImovibStudy, [study, formData]);
-    const linhas = useMemo(() => memorialDePremissas(estudo), [estudo]);
+    // As rubricas no cálculo (modo Completo) tiram o imposto e a corretagem da Dinâmica — o memorial diz.
+    const linhas = useMemo(() => memorialDePremissas(estudo, { rubricasAtivas: computeImovibMath(estudo).capexRubricasAtivas }), [estudo]);
     const semFonte = premissasSemFonte(linhas);
 
     const anotar = (campo: string, k: 'fonte' | 'data', v: string) => {

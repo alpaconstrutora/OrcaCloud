@@ -59,7 +59,8 @@ export function resultadosDoEstudo(study: ImovibStudy): ResultadosDaVersao {
         tirAnual: finito(r.annualIrr),
         vplProjeto: r.vplProjeto,
         tirProjetoAnual: finito(r.annualIrrProjeto),
-        exposicaoMaxima: r.maxExposure,
+        // Positiva, como no parecer e no relatório (o motor guarda o caixa mínimo, negativo).
+        exposicaoMaxima: Math.max(0, -r.maxExposure),
         duracao: r.duration,
         lucroLiquido: ind.lucroLiquido,
         margemLiquidaPct: ind.margemLiquidaSobreVgv == null ? null : ind.margemLiquidaSobreVgv * 100,
@@ -91,14 +92,35 @@ export interface DiferencaEntreVersoes {
     indicadores: { chave: keyof ResultadosDaVersao; rotulo: string; unidade: string; a: number | null; b: number | null }[];
 }
 
+/** O que mexe no número e não é premissa do memorial: torres, rubricas, espelho, fontes. */
+const semDatas = (x: unknown): unknown => JSON.parse(JSON.stringify(x ?? null, (k, v) => (k === 'created_at' || k === 'updated_at' ? undefined : v)));
+const ordenado = <T extends { id?: string }>(xs: T[] | null | undefined) => [...(xs ?? [])].sort((p, q) => String(p.id).localeCompare(String(q.id)));
+const ESTRUTURA: { id: string; rotulo: string; chave: (s: ImovibStudy) => string; resumo: (s: ImovibStudy) => string }[] = [
+    { id: 'blocks', rotulo: 'Torres, tipologias e preços', chave: s => JSON.stringify(semDatas(ordenado(s.blocks))), resumo: s => `${(s.blocks ?? []).length} torre(s)` },
+    { id: 'capex_items', rotulo: 'Rubricas do orçamento', chave: s => JSON.stringify(semDatas(ordenado(s.capex_items))), resumo: s => `${(s.capex_items ?? []).length} rubrica(s)` },
+    { id: 'unit_instances', rotulo: 'Espelho de vendas', chave: s => JSON.stringify(semDatas(ordenado(s.unit_instances))), resumo: s => `${(s.unit_instances ?? []).length} unidade(s)` },
+    { id: 'funding_sources', rotulo: 'Outras fontes de capital', chave: s => JSON.stringify(semDatas(ordenado(s.funding_sources))), resumo: s => `${(s.funding_sources ?? []).length} fonte(s)` },
+];
+
 export function diferencaEntreVersoes(a: LadoDaComparacao, b: LadoDaComparacao): DiferencaEntreVersoes {
     const ma = memorialDePremissas(a.snapshot);
     const mb = new Map(memorialDePremissas(b.snapshot).map(l => [String(l.campo), l]));
+    const bruto = (s: ImovibStudy, campo: string) => JSON.stringify((s as unknown as Record<string, unknown>)[campo] ?? null);
     const premissas = ma.flatMap(l => {
         const outra = mb.get(String(l.campo));
-        if (!outra || outra.valor === l.valor) return [];
-        return [{ campo: String(l.campo), grupo: l.grupo, premissa: l.premissa, unidade: l.unidade, antes: l.valor, depois: outra.valor }];
+        if (!outra) return [];
+        const campo = String(l.campo);
+        // Lista (curva personalizada, parcelas): o texto pode ficar igual com o conteúdo diferente.
+        const mudouOConteudo = bruto(a.snapshot, campo) !== bruto(b.snapshot, campo);
+        if (outra.valor === l.valor && !mudouOConteudo) return [];
+        const depois = outra.valor === l.valor ? `${outra.valor ?? '—'} (conteúdo alterado)` : outra.valor;
+        return [{ campo, grupo: l.grupo, premissa: l.premissa, unidade: l.unidade, antes: l.valor, depois }];
     });
+    for (const e of ESTRUTURA) {
+        const xa = e.chave(a.snapshot);
+        const xb = e.chave(b.snapshot);
+        if (xa !== xb) premissas.push({ campo: e.id, grupo: 'Estrutura', premissa: e.rotulo, unidade: '', antes: e.resumo(a.snapshot), depois: `${e.resumo(b.snapshot)} (alterado)` });
+    }
     const indicadores = INDICADORES_DA_VERSAO.map(i => ({ ...i, a: a.results[i.chave] ?? null, b: b.results[i.chave] ?? null }));
     return { premissas, indicadores };
 }

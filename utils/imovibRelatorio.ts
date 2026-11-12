@@ -73,7 +73,7 @@ export function secoesDoRelatorio(d: DadosDoRelatorio): SecaoDoRelatorio[] {
         paragrafos: [
             `Estudo: ${study.name}${study.version ? ` (v${study.version})` : ''}`,
             `Relatório gerado em ${dataBR(hoje)}`,
-            `Parecer: ${parecer}${study.recommended_by ? `, por ${study.recommended_by}` : ''}${study.recommended_at ? ` em ${dataBR(study.recommended_at)}` : ''}`,
+            `Parecer: ${parecer}${study.recommended_by ? `, por ${study.recommended_by}` : ''}${study.recommended_at ? ` em ${new Date(study.recommended_at).toLocaleDateString('pt-BR')}` : ''}`,
             ...(study.recommendation_notes ? [`Justificativa: ${study.recommendation_notes}`] : []),
         ],
         tabelas: [{
@@ -229,7 +229,7 @@ export function secoesDoRelatorio(d: DadosDoRelatorio): SecaoDoRelatorio[] {
         tabelas: [
             { colunas: ['De onde vem o dinheiro', 'Valor'], linhas: [['Capital próprio', brl(r.capital.proprio)], ['Financiamento liberado', brl(r.capital.divida)], ['Vendas durante a obra', brl(r.capital.vendasNaObra)], ['Permuta', brl(r.capital.permuta)], ['Outras fontes', brl(r.capital.terceiros)]] },
             ...((study.funding_sources ?? []).length ? [{ titulo: 'Outras fontes de capital', colunas: ['Fonte', 'Valor', 'Como é paga'], linhas: (study.funding_sources ?? []).map(f => [f.name, brl(Number(f.amount) || 0), descreverFonte(f)]) }] : []),
-            ...(d.socios.length ? [{ titulo: 'Sócios', colunas: ['Sócio', 'Resultado', 'Aportes', 'Aporta', 'Recebe', 'Lucro', 'TIR'], linhas: d.socios.map((s, i) => { const x = socios.socios[i]; return [s.name, pct(Number(s.share_percent)), pct(Number(s.capital_percent)), brl(x.aportes), brl(x.distribuicoes), brl(x.lucro), Number.isNaN(x.tirAnual) ? '—' : `${num(x.tirAnual)}% a.a.`]; }) }] : []),
+            ...(d.socios.length ? [{ titulo: 'Sócios', colunas: ['Sócio', '% do resultado', '% dos aportes', 'Aporta', 'Recebe', 'Lucro', 'TIR'], linhas: d.socios.map((s, i) => { const x = socios.socios[i]; return [s.name, pct(Number(s.share_percent)), pct(Number(s.capital_percent)), brl(x.aportes), brl(x.distribuicoes), brl(x.lucro), Number.isNaN(x.tirAnual) ? '—' : `${num(x.tirAnual)}% a.a.`]; }) }] : []),
         ],
     });
 

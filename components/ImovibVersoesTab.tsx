@@ -136,7 +136,7 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                     </div>
 
                     {!diferenca ? (
-                        <p className="text-sm text-slate-600 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Lendo as versões…</p>
+                        erro ? null : <p className="text-sm text-slate-600 flex items-center gap-2"><Loader2 className="w-4 h-4 animate-spin" /> Lendo as versões…</p>
                     ) : (
                         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6">
                             <section aria-label="Premissas que mudaram" className="space-y-2">

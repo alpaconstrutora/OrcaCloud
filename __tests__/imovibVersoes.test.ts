@@ -40,3 +40,24 @@ describe('10.2 — versões congeladas', () => {
         for (const i of INDICADORES_DA_VERSAO) expect(i.rotulo && i.unidade).toBeTruthy();
     });
 });
+
+describe('10.2 (revisão) — a comparação vê mudança em lista e na estrutura', () => {
+    it('mudar o mês de uma parcela do terreno aparece (antes só contava as parcelas)', () => {
+        const a = baseStudy({ land_payment_schedule: [{ month: 1, percent: 50 }, { month: 6, percent: 50 }] });
+        const b = baseStudy({ land_payment_schedule: [{ month: 1, percent: 50 }, { month: 30, percent: 50 }] });
+        const d = diferencaEntreVersoes(versao(a), versao(b));
+        expect(d.premissas.map(p => p.premissa)).toContain('Pagamento do terreno');
+    });
+
+    it('mudar preço por torre, rubrica, espelho ou fonte aparece como mudança de estrutura', () => {
+        const a = baseStudy();
+        const b = baseStudy();
+        b.blocks[0].sales_price_sqm = 12_000;
+        const d = diferencaEntreVersoes(versao(a), versao(b));
+        expect(d.premissas.map(p => p.premissa)).toContain('Torres, tipologias e preços');
+    });
+
+    it('a exposição máxima sai positiva (o mesmo sinal do parecer e do relatório)', () => {
+        expect(resultadosDoEstudo(withCost(14_000)).exposicaoMaxima).toBeGreaterThan(0);
+    });
+});

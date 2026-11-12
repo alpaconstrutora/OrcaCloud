@@ -36,8 +36,11 @@ describe('10.4 — aba Acompanhamento', () => {
     it('com obra: tabela mensal com previsto, realizado e desvio; mês sem lançamento fica "—"', async () => {
         realizado.doEstudo.mockResolvedValue({
             obras: [{ id: 'o1', nome: 'Obra Garden' }],
+            obrasDeOutraOrganizacao: [],
             financeiro: [{ mes: '2026-02', entradas: 0, saidas: 120_000 }],
+            aConciliar: { entradas: 0, saidas: 0 },
             vendas: [{ mes: '2026-01', unidades: 2, valor: 1_400_000 }],
+            vendidasSemNegociacao: 0,
         });
         tela({ base_date: '2026-01' });
         const tabela = await screen.findByRole('region', { name: 'Mês a mês' });
@@ -48,8 +51,24 @@ describe('10.4 — aba Acompanhamento', () => {
         expect(screen.getByText('Vendas acumuladas')).toBeTruthy();
     });
 
+    it('diz que o realizado é só o conciliado, mostra o lançado a conciliar, a obra de outra organização e as vendas sem data', async () => {
+        realizado.doEstudo.mockResolvedValue({
+            obras: [{ id: 'o1', nome: 'Obra Garden' }],
+            obrasDeOutraOrganizacao: ['Obra Vizinha'],
+            financeiro: [{ mes: '2026-02', entradas: 0, saidas: 62 }],
+            aConciliar: { entradas: 0, saidas: 198_756 },
+            vendas: [],
+            vendidasSemNegociacao: 4,
+        });
+        tela({ base_date: '2026-01' });
+        expect(await screen.findByText(/só lançamentos conciliados/i)).toBeTruthy();
+        expect(screen.getByText(/198\.756/)).toBeTruthy();
+        expect(screen.getByText(/Obra Vizinha/)).toBeTruthy();
+        expect(screen.getByText(/4 unidades vendidas sem negociação/i)).toBeTruthy();
+    });
+
     it('sem obra vinculada: mostra só as vendas e diz por quê', async () => {
-        realizado.doEstudo.mockResolvedValue({ obras: [], financeiro: [], vendas: [{ mes: '2026-01', unidades: 1, valor: 700_000 }] });
+        realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [{ mes: '2026-01', unidades: 1, valor: 700_000 }], vendidasSemNegociacao: 0 });
         tela({ base_date: '2026-01' });
         expect(await screen.findByText(/não tem obra vinculada/i)).toBeTruthy();
         expect(screen.queryByText('Receita e custo acumulados')).toBeNull();

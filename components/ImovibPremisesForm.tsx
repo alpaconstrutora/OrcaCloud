@@ -88,7 +88,10 @@ const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataCh
             // devolver null e fazer o template de rubricas voltar.
             // unit_instances (espelho), estrutura e funding_sources vêm montados em memória, não são colunas.
             // opura_terrain_study_id não é editado aqui e o banco o zera quando o estudo de terreno é apagado (item 7.2).
-            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, opura_terrain_study_id, ...cleanData } = formData as any;
+            // Parecer e mínimos (item 10.3) gravam no cartão do Resumo: regravar o valor de quando
+            // a tela abriu apagaria um parecer registrado por outra pessoa nesse meio-tempo.
+            const { id, created_at, updated_at, blocks, capex_items, unit_instances, estrutura, funding_sources, organization_id, capex_seeded_at, opura_terrain_study_id,
+                recommendation, recommendation_notes, recommended_by, recommended_at, hurdle_irr_spread, hurdle_margin_percent, hurdle_max_exposure, ...cleanData } = formData as any;
             await imovibService.updateStudy(study.id, {
                 ...cleanData,
                 ...imovibIdentificacaoParaGravar({

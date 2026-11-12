@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import { resultadoPorSocio } from '../utils/imovibSocios';
 import type { LinhaDeAporte } from '../utils/imovibAportes';
+import { computeImovibMath } from '../hooks/useImovibMath';
+import { baseStudy } from './fixtures/imovibEstudos';
 
 /**
  * Resultado por sócio (item 9.2 do plano
@@ -51,6 +53,26 @@ describe('9.2 — resultado por sócio', () => {
         const r = resultadoPorSocio(comFonte, [socio('A', 100, 100)]);
         expect(r.socios[0].distribuicoes).toBeCloseTo(2_200, 6);
         expect(r.socios[0].lucro).toBeCloseTo(700, 6);
+    });
+
+    it('aportes somando menos de 100%: o capital sem dono volta para ninguém, não vira lucro do sócio', () => {
+        const r = resultadoPorSocio(LINHAS, [socio('A', 50, 50)]);
+        expect(r.socios[0].aportes).toBeCloseTo(750, 6);
+        expect(r.socios[0].lucro).toBeCloseTo(500, 6);
+        expect(r.socios[0].distribuicoes).toBeCloseTo(1_250, 6);
+    });
+
+    it('cruzado com o motor: com 100% nos dois, os sócios recebem a parte do incorporador (sem a das fontes)', () => {
+        const estudo = baseStudy({
+            funding_sources: [{ id: 'f1', study_id: 'estudo-teste', name: 'Investidor', kind: 'investidor', amount: 1_000_000, entry_month: 3,
+                remuneration: 'participacao', rate_annual: null, profit_share_percent: 30, amortization: 'BULLET', term_months: 24, grace_months: 0, sort_order: 0 }],
+        });
+        const linhas = computeImovibMath(estudo as never).aportes;
+        expect(linhas.some(l => l.paraTerceiros > 0)).toBe(true);
+        const r = resultadoPorSocio(linhas, [socio('A', 70, 70), socio('B', 30, 30)]);
+        const doIncorporador = linhas.reduce((a, l) => a + l.distribuicao - l.paraTerceiros, 0);
+        expect(r.socios[0].distribuicoes + r.socios[1].distribuicoes).toBeCloseTo(doIncorporador, 2);
+        expect(r.socios[0].tirAnual).toBeCloseTo(r.tirDoIncorporador, 6);
     });
 
     it('sem sócios: lista vazia e sem aviso', () => {

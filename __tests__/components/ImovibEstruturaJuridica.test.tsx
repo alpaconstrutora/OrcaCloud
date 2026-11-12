@@ -72,10 +72,21 @@ describe('9.1 — estrutura jurídica', () => {
         expect(await within(cartao()).findByText('R-7/12.345')).toBeTruthy();
         expect(within(cartao()).getByText('2º RI de Campinas')).toBeTruthy();
         await user.click(within(cartao()).getByRole('button', { name: /Usar o cadastro da empresa/ }));
-        expect((within(cartao()).getByLabelText('Veículo da incorporação') as HTMLSelectElement).value).toBe('propria');
+        // Patrimônio de afetação marca só a afetação: o veículo (SPE ou própria) não vem desse tipo.
+        expect((within(cartao()).getByLabelText('Veículo da incorporação') as HTMLSelectElement).value).toBe('');
         expect((within(cartao()).getByLabelText('Patrimônio de afetação') as HTMLInputElement).checked).toBe(true);
         await user.click(screen.getByRole('button', { name: /Salvar Premissas/ }));
-        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', expect.objectContaining({ legal_vehicle: 'propria', patrimonio_afetacao: true }));
+        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', expect.objectContaining({ patrimonio_afetacao: true }));
+    });
+
+    it('empresa SPE: preenche o veículo e NÃO desmarca a afetação já marcada (SPE com afetação é o caso comum)', async () => {
+        emp.getById.mockResolvedValue({ id: 'emp-1', company_id: 'cia-1' });
+        cia.get.mockResolvedValue({ id: 'cia-1', razao_social: 'Residencial SPE Ltda' });
+        cia.getIncorporacao.mockResolvedValue({ company_id: 'cia-1', tipo_spe: 'spe' });
+        const user = tela({ estrutura: vinculado, patrimonio_afetacao: true });
+        await user.click(await within(cartao()).findByRole('button', { name: /Usar o cadastro da empresa/ }));
+        expect((within(cartao()).getByLabelText('Veículo da incorporação') as HTMLSelectElement).value).toBe('spe');
+        expect((within(cartao()).getByLabelText('Patrimônio de afetação') as HTMLInputElement).checked).toBe(true);
     });
 
     it('empresa sem dados de incorporação: diz onde cadastrar', async () => {

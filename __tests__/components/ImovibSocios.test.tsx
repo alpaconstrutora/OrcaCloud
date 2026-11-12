@@ -82,13 +82,37 @@ describe('9.2 — sócios e resultado por sócio', () => {
         cia.listPartners.mockResolvedValue([
             { id: 'p1', nome: 'Ana', participacao_pct: 70 },
             { id: 'p2', nome: 'Saiu', participacao_pct: 30, data_saida: '2020-01-01' },
+            { id: 'p3', nome: 'Ainda não entrou', participacao_pct: 10, data_entrada: '2999-01-01' },
         ]);
         svc.listarSocios.mockResolvedValue([]);
         svc.importarSociosDaEmpresa.mockResolvedValue([socio('x', 'Ana', 70, 70)]);
         const user = tela({ estrutura: vinculado });
-        await user.click(await within(cartao()).findByRole('button', { name: /Importar os sócios da empresa/ }));
+        const botao = await within(cartao()).findByRole('button', { name: /Importar os sócios da empresa/ }) as HTMLButtonElement;
+        await vi.waitFor(() => expect(botao.disabled).toBe(false));
+        await user.click(botao);
         expect(svc.importarSociosDaEmpresa).toHaveBeenCalledWith('estudo-teste', [{ id: 'p1', nome: 'Ana', participacao_pct: 70 }], 0);
         expect(await within(cartao()).findByText('Ana')).toBeTruthy();
+    });
+
+    it('importar quando todos já estão na lista: avisa em vez de não fazer nada', async () => {
+        emp.getById.mockResolvedValue({ id: 'emp-1', company_id: 'cia-1' });
+        cia.get.mockResolvedValue({ id: 'cia-1', razao_social: 'Residencial SPE Ltda' });
+        cia.listPartners.mockResolvedValue([{ id: 'p1', nome: 'Ana', participacao_pct: 60 }]);
+        svc.listarSocios.mockResolvedValue([{ ...socio('a', 'Ana', 60, 60), company_partner_id: 'p1' }]);
+        svc.importarSociosDaEmpresa.mockResolvedValue([{ ...socio('a', 'Ana', 60, 60), company_partner_id: 'p1' }]);
+        const user = tela({ estrutura: vinculado });
+        await within(cartao()).findByText('Ana');
+        const botao = await within(cartao()).findByRole('button', { name: /Importar os sócios da empresa/ }) as HTMLButtonElement;
+        await vi.waitFor(() => expect(botao.disabled).toBe(false));
+        await user.click(botao);
+        expect(await screen.findByText(/já estão na lista/i)).toBeTruthy();
+    });
+
+    it('falha ao ler a empresa: o botão diz o erro, não "não tem empresa"', async () => {
+        emp.getById.mockRejectedValue(new Error('rede caiu'));
+        tela({ estrutura: vinculado });
+        const botao = await within(cartao()).findByRole('button', { name: /Importar os sócios da empresa/ });
+        await vi.waitFor(() => expect(botao.getAttribute('title')).toMatch(/rede caiu/));
     });
 
     it('estudo sem vínculo: não oferece importar', async () => {

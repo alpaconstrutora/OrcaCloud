@@ -39,9 +39,9 @@ const COLUNAS: StandardTableColumn[] = [
     { key: 'margem', label: 'Margem', width: 110, align: 'right' },
 ];
 
-/** Regime sugerido pela empresa dona do empreendimento: patrimônio de afetação → RET. */
-function regimeSugerido(tipoSpe?: string | null, regimeDaEmpresa?: string | null): RegimeTributarioDoEstudo | null {
-    if (tipoSpe === 'patrimonio_afetacao') return 'ret';
+/** Regime sugerido: patrimônio de afetação → RET; senão, o regime da empresa dona do empreendimento. */
+function regimeSugerido(afetacao: boolean, regimeDaEmpresa?: string | null): RegimeTributarioDoEstudo | null {
+    if (afetacao) return 'ret';
     if (regimeDaEmpresa === 'lucro_presumido') return 'presumido';
     if (regimeDaEmpresa === 'lucro_real') return 'real';
     return null;
@@ -61,6 +61,7 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
 
     // Sugestão pela empresa do empreendimento vinculado — só lê, não grava.
     const empId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.empreendimento_id : undefined;
+    const afetacaoInformada = study.patrimonio_afetacao ?? null;
     const [sugestao, setSugestao] = useState<{ regime: RegimeTributarioDoEstudo; empresa: string; porque: string } | null>(null);
     useEffect(() => {
         if (!empId) { setSugestao(null); return; }
@@ -69,18 +70,21 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
             const emp = await empreendimentoService.getById(empId);
             if (!emp?.company_id) return null;
             const [empresa, incorporacao] = await Promise.all([companyService.get(emp.company_id), companyService.getIncorporacao(emp.company_id)]);
-            const r = regimeSugerido(incorporacao?.tipo_spe, empresa?.regime_tributario);
+            // A afetação marcada no estudo vale mais que o tipo cadastrado na empresa.
+            const afetacaoDoEstudo = afetacaoInformada;
+            const afetacao = afetacaoDoEstudo ?? incorporacao?.tipo_spe === 'patrimonio_afetacao';
+            const r = regimeSugerido(afetacao, empresa?.regime_tributario);
             if (!r) return null;
             return {
                 regime: r,
                 empresa: empresa?.nome_fantasia || empresa?.razao_social || 'a empresa do empreendimento',
-                porque: incorporacao?.tipo_spe === 'patrimonio_afetacao' ? 'tem patrimônio de afetação' : `está no ${r === 'presumido' ? 'lucro presumido' : 'lucro real'}`,
+                porque: r === 'ret' ? (afetacaoDoEstudo ? 'o estudo tem patrimônio de afetação' : 'tem patrimônio de afetação') : `está no ${r === 'presumido' ? 'lucro presumido' : 'lucro real'}`,
             };
         })()
             .then(s => { if (vivo) setSugestao(s); })
             .catch(() => { if (vivo) setSugestao(null); });
         return () => { vivo = false; };
-    }, [empId]);
+    }, [empId, afetacaoInformada]);
 
     const salvarHipotese = (k: ChaveDaHipotese, v: number | null) => {
         const atual = { ...(study.tax_hypotheses ?? {}) };
@@ -115,7 +119,7 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
 
             {sugestao && sugestao.regime !== regime && (
                 <div className="flex flex-wrap items-center justify-between gap-2 rounded-[10px] border border-slate-200 px-3 py-2 text-sm text-slate-700">
-                    <span>Sugestão: {ROTULO_DO_REGIME[sugestao.regime]} — {sugestao.empresa} {sugestao.porque}.</span>
+                    <span>Sugestão: {ROTULO_DO_REGIME[sugestao.regime]} — {sugestao.porque.startsWith('o estudo') ? sugestao.porque : `${sugestao.empresa} ${sugestao.porque}`}.</span>
                     <button
                         type="button"
                         disabled={!pode}

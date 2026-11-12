@@ -7,8 +7,9 @@
  * O que é do incorporador em cada mês: o aporte inteiro e a distribuição menos a
  * parte das fontes por participação (`paraTerceiros`). Os sócios aportam pela
  * participação nos aportes. Cada distribuição devolve primeiro o capital ainda não
- * devolvido a cada sócio, na proporção do que falta a cada um; o que passa disso é
- * lucro, repartido pela participação no resultado — a mesma regra das fontes
+ * devolvido do incorporador; cada sócio recebe a parte que aportou desse capital (com
+ * aportes somando menos de 100%, a parte sem dono volta para ninguém, nunca vira
+ * lucro). O que passa do capital é lucro, repartido pela participação no resultado — a mesma regra das fontes
  * (`partilhaDasDistribuicoes`). Retorno preferencial fica fora (plano, "Fora do escopo").
  * Soma diferente de 100% gera aviso e calcula como veio.
  */
@@ -69,21 +70,25 @@ export function resultadoPorSocio(linhas: readonly LinhaDeAporte[], socios: read
     }
 
     const emAberto = socios.map(() => 0);
+    /** Capital do incorporador inteiro ainda não devolvido (inclusive a parte sem dono). */
+    let emAbertoDoIncorporador = 0;
     const fluxos = socios.map(() => [] as number[]);
     const aportes = socios.map(() => 0);
     const distribuicoes = socios.map(() => 0);
     for (const l of linhas) {
         const distribuido = l.distribuicao - l.paraTerceiros;
+        emAbertoDoIncorporador += l.aporte;
         socios.forEach((s, k) => {
             const aporte = l.aporte * (s.capital_percent || 0) / 100;
             emAberto[k] += aporte;
             aportes[k] += aporte;
             fluxos[k].push(-aporte);
         });
-        const totalEmAberto = emAberto.reduce((a, v) => a + v, 0);
-        const devolvido = Math.min(Math.max(0, distribuido), totalEmAberto);
+        const devolvido = Math.min(Math.max(0, distribuido), emAbertoDoIncorporador);
+        const fracao = emAbertoDoIncorporador > 0 ? devolvido / emAbertoDoIncorporador : 0;
+        emAbertoDoIncorporador -= devolvido;
         socios.forEach((s, k) => {
-            const capital = totalEmAberto > 0 ? devolvido * (emAberto[k] / totalEmAberto) : 0;
+            const capital = emAberto[k] * fracao;
             const recebe = capital + (distribuido - devolvido) * (s.share_percent || 0) / 100;
             emAberto[k] -= capital;
             distribuicoes[k] += recebe;

@@ -106,6 +106,22 @@ describe('Regime tributário', () => {
         expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', { tax_regime: 'ret' });
     });
 
+    it('a afetação do estudo vale mais que o tipo da empresa: estudo com afetação sugere RET', async () => {
+        emp.getById.mockResolvedValue({ id: 'e1', company_id: 'c1' });
+        empresas.get.mockResolvedValue({ id: 'c1', razao_social: 'SPE Garden Ltda', regime_tributario: 'lucro_presumido' });
+        empresas.getIncorporacao.mockResolvedValue({ company_id: 'c1', tipo_spe: 'spe' });
+        tela({ patrimonio_afetacao: true, estrutura: { origem: 'empreendimento', empreendimento_id: 'e1', torres: 1, unidades: 40, blocos_fora_do_calculo: [] } });
+        expect(await screen.findByText(/o estudo tem patrimônio de afetação/)).toBeTruthy();
+    });
+
+    it('estudo marcado sem afetação: não sugere RET mesmo com a empresa no tipo patrimônio de afetação', async () => {
+        emp.getById.mockResolvedValue({ id: 'e1', company_id: 'c1' });
+        empresas.get.mockResolvedValue({ id: 'c1', razao_social: 'SPE Garden Ltda', regime_tributario: 'lucro_presumido' });
+        empresas.getIncorporacao.mockResolvedValue({ company_id: 'c1', tipo_spe: 'patrimonio_afetacao' });
+        tela({ patrimonio_afetacao: false, estrutura: { origem: 'empreendimento', empreendimento_id: 'e1', torres: 1, unidades: 40, blocos_fora_do_calculo: [] } });
+        expect(await screen.findByText(/está no lucro presumido/)).toBeTruthy();
+    });
+
     it('só leitura: o regime não muda e nada grava', async () => {
         tela({}, true);
         const secao = await screen.findByRole('region', { name: 'Regime tributário' });

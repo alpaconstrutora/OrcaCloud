@@ -660,7 +660,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     if ((regimeTributario === 'ret' || regimeTributario === 'ret_his') && !study.patrimonio_afetacao) {
         avisos.push({
             codigo: 'ret_sem_afetacao',
-            mensagem: 'O RET só vale para incorporação submetida ao patrimônio de afetação, e o estudo está sem afetação. Marque o patrimônio de afetação em Premissas › Identificação ou troque o regime tributário.',
+            mensagem: `O RET só vale para incorporação submetida ao patrimônio de afetação, e ${study.patrimonio_afetacao == null ? 'o patrimônio de afetação do estudo não foi informado' : 'o estudo está sem patrimônio de afetação'}. Marque-o em Premissas › Identificação ou troque o regime tributário.`,
             aba: 'premises',
         });
     }

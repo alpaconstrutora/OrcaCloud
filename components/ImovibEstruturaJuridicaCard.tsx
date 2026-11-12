@@ -15,10 +15,14 @@ const VEICULOS: { valor: Veiculo; rotulo: string }[] = [
     { valor: 'scp', rotulo: 'SCP (sociedade em conta de participação)' },
 ];
 
-/** O tipo cadastrado na empresa (Incorporação) → os dois campos do estudo. */
-export const estruturaDoCadastro = (tipo: TipoSPE): { legal_vehicle: Veiculo; patrimonio_afetacao: boolean } =>
-    tipo === 'patrimonio_afetacao' ? { legal_vehicle: 'propria', patrimonio_afetacao: true }
-        : { legal_vehicle: tipo, patrimonio_afetacao: false };
+/**
+ * O tipo cadastrado na empresa (Incorporação, escolha única) → o campo do estudo que
+ * ele diz: SPE e SCP dizem o veículo; patrimônio de afetação diz a afetação. O outro
+ * campo fica como está — SPE com afetação é o caso comum, e "SPE" no cadastro não
+ * quer dizer "sem afetação".
+ */
+export const estruturaDoCadastro = (tipo: TipoSPE): { legal_vehicle?: Veiculo; patrimonio_afetacao?: boolean } =>
+    tipo === 'patrimonio_afetacao' ? { patrimonio_afetacao: true } : { legal_vehicle: tipo };
 
 const dataBR = (d?: string | null) => (d ? d.slice(0, 10).split('-').reverse().join('/') : '');
 
@@ -63,8 +67,8 @@ const ImovibEstruturaJuridicaCard: React.FC<Props> = ({ study, formData, setCamp
     const usarCadastro = () => {
         if (!inc?.tipo_spe) return;
         const e = estruturaDoCadastro(inc.tipo_spe);
-        setCampo('legal_vehicle', e.legal_vehicle);
-        setCampo('patrimonio_afetacao', e.patrimonio_afetacao);
+        if (e.legal_vehicle) setCampo('legal_vehicle', e.legal_vehicle);
+        if (e.patrimonio_afetacao) setCampo('patrimonio_afetacao', true);
     };
     const linhas: [string, string][] = inc ? ([
         ['Tipo', inc.tipo_spe ? TIPO_SPE_LABELS[inc.tipo_spe] : ''],
@@ -134,7 +138,7 @@ const ImovibEstruturaJuridicaCard: React.FC<Props> = ({ study, formData, setCamp
                                 type="button"
                                 onClick={usarCadastro}
                                 disabled={!!motivoDoBotao}
-                                title={motivoDoBotao}
+                                title={motivoDoBotao ?? (inc.tipo_spe === 'patrimonio_afetacao' ? 'Marca o patrimônio de afetação; o veículo continua como está.' : 'Preenche o veículo; o patrimônio de afetação continua como está.')}
                                 className="h-9 px-3.5 rounded-[6px] border border-indigo-200 text-indigo-700 text-[13px] font-medium hover:bg-indigo-50 disabled:opacity-60 disabled:cursor-not-allowed"
                             >
                                 Usar o cadastro da empresa

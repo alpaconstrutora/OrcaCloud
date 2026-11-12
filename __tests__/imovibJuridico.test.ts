@@ -19,6 +19,12 @@ describe('9.1 — RET exige patrimônio de afetação', () => {
         expect(aviso?.aba).toBe('premises');
     });
 
+    it('afetação não informada diz "não informado"; desmarcada diz "sem patrimônio de afetação"', () => {
+        const msg = (over: Record<string, unknown>) => computeImovibMath(baseStudy({ tax_regime: 'ret', ...over })).avisos.find(a => a.codigo === 'ret_sem_afetacao')?.mensagem ?? '';
+        expect(msg({})).toMatch(/não foi informado/);
+        expect(msg({ patrimonio_afetacao: false })).toMatch(/sem patrimônio de afetação/);
+    });
+
     it('RET com afetação, ou outro regime, não avisa', () => {
         expect(temAviso(baseStudy({ tax_regime: 'ret', patrimonio_afetacao: true }))).toBe(false);
         expect(temAviso(baseStudy({ tax_regime: 'presumido' }))).toBe(false);

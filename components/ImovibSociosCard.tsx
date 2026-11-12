@@ -63,7 +63,7 @@ const ImovibSociosCard: React.FC<ImovibSociosCardProps> = ({ study, resultado })
 
     // Sócios da empresa do empreendimento vinculado — só lê; importar é por botão.
     const empId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.empreendimento_id : undefined;
-    const [daEmpresa, setDaEmpresa] = useState<{ empresa: string | null; socios: SocioDaEmpresa[] } | null>(null);
+    const [daEmpresa, setDaEmpresa] = useState<{ empresa: string | null; socios: SocioDaEmpresa[]; erro?: string } | null>(null);
     useEffect(() => {
         setDaEmpresa(null);
         if (!empId) return;
@@ -75,11 +75,14 @@ const ImovibSociosCard: React.FC<ImovibSociosCardProps> = ({ study, resultado })
             const hoje = hojeLocal();
             return {
                 empresa: empresa?.nome_fantasia || empresa?.razao_social || 'a empresa do empreendimento',
-                socios: socios.filter(p => !p.data_saida || p.data_saida > hoje).map(p => ({ id: p.id, nome: p.nome, participacao_pct: p.participacao_pct })),
+                // Sócios atuais: já entraram e ainda não saíram.
+                socios: socios
+                    .filter(p => (!p.data_entrada || p.data_entrada <= hoje) && (!p.data_saida || p.data_saida > hoje))
+                    .map(p => ({ id: p.id, nome: p.nome, participacao_pct: p.participacao_pct })),
             };
         })()
             .then(r => { if (vivo) setDaEmpresa(r); })
-            .catch(() => { if (vivo) setDaEmpresa({ empresa: null, socios: [] }); });
+            .catch(e => { if (vivo) setDaEmpresa({ empresa: null, socios: [], erro: `Não foi possível ler os sócios da empresa: ${(e as Error).message}` }); });
         return () => { vivo = false; };
     }, [empId]);
 
@@ -88,6 +91,7 @@ const ImovibSociosCard: React.FC<ImovibSociosCardProps> = ({ study, resultado })
 
     const motivoImportar = !pode ? motivo
         : !daEmpresa ? 'Lendo os sócios da empresa…'
+            : daEmpresa.erro ? daEmpresa.erro
             : !daEmpresa.empresa ? 'O empreendimento vinculado não tem empresa: defina a empresa (SPE) no cadastro do empreendimento.'
                 : daEmpresa.socios.length === 0 ? `${daEmpresa.empresa} não tem sócios atuais no quadro societário.` : undefined;
 
@@ -95,7 +99,10 @@ const ImovibSociosCard: React.FC<ImovibSociosCardProps> = ({ study, resultado })
         if (motivoImportar || !daEmpresa) return;
         setImportando(true);
         try {
-            setLista(await imovibService.importarSociosDaEmpresa(study.id, daEmpresa.socios, lista.length));
+            const antes = lista.length;
+            const nova = await imovibService.importarSociosDaEmpresa(study.id, daEmpresa.socios, lista.length);
+            setLista(nova);
+            if (nova.length === antes) showToast('Os sócios atuais da empresa já estão na lista.', 'success');
         } catch (e) {
             showToast((e as Error).message, 'error');
         } finally {
@@ -199,7 +206,7 @@ const ImovibSociosCard: React.FC<ImovibSociosCardProps> = ({ study, resultado })
             />
             {lista.length > 0 && (
                 <p className="text-xs text-slate-600">
-                    TIR do incorporador (aportes e distribuições): {Number.isNaN(calculo.tirDoIncorporador) ? '—' : `${calculo.tirDoIncorporador.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% a.a.`} Sócio com mais resultado que aportes tem TIR maior que essa.
+                    TIR do incorporador sobre os aportes e distribuições acima: {Number.isNaN(calculo.tirDoIncorporador) ? '—' : `${calculo.tirDoIncorporador.toLocaleString('pt-BR', { maximumFractionDigits: 1 })}% a.a.`} Difere da TIR do Resumo, que é sobre o fluxo do mês, porque o caixa mínimo e a reserva seguram parte do dinheiro antes de distribuir. Sócio com mais resultado que aportes tem TIR maior que essa.
                 </p>
             )}
 

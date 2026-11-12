@@ -42,25 +42,27 @@ import {
 
 // ─── Colunas ────────────────────────────────────────────────────────────────
 
+// Soma alvo das visíveis + Ações (190) ≈ 1270 px: cabe sem rolagem lateral numa
+// tela de 1600 px (área útil ~1290). Protocolo/Responsável nascem ocultas.
 const COLUNAS_LEGAIS: StandardTableColumn[] = [
-  { key: 'titulo', label: 'Documento', sortable: true, width: 300 },
-  { key: 'numero', label: 'Número', sortable: true, width: 140 },
-  { key: 'orgao', label: 'Órgão emissor', sortable: true, width: 200 },
+  { key: 'titulo', label: 'Documento', sortable: true, width: 250 },
+  { key: 'numero', label: 'Número', sortable: true, width: 110 },
+  { key: 'orgao', label: 'Órgão emissor', sortable: true, width: 170 },
   { key: 'protocolo', label: 'Protocolo', sortable: true, width: 140, defaultHidden: true },
-  { key: 'emissao', label: 'Emissão', sortable: true, width: 110 },
+  { key: 'emissao', label: 'Emissão', sortable: true, width: 100 },
   { key: 'validade', label: 'Validade', sortable: true, width: 130 },
-  { key: 'situacao', label: 'Situação', sortable: true, width: 170 },
-  { key: 'arquivo', label: 'Arquivo', sortable: true, width: 220 },
+  { key: 'situacao', label: 'Situação', sortable: true, width: 140 },
+  { key: 'arquivo', label: 'Arquivo', sortable: true, width: 180 },
   { key: 'responsavel', label: 'Responsável', sortable: true, width: 160, defaultHidden: true },
 ];
 
 const COLUNAS_OUTROS: StandardTableColumn[] = [
   { key: 'nome', label: 'Documento', sortable: true, width: 300 },
-  { key: 'categoria', label: 'Categoria no GED', sortable: true, width: 170 },
+  { key: 'categoria', label: 'Categoria no GED', sortable: true, width: 190 },
   { key: 'tipo', label: 'Tipo', sortable: true, width: 180 },
   { key: 'validade', label: 'Validade', sortable: true, width: 110 },
-  { key: 'tamanho', label: 'Tamanho', sortable: true, width: 100, align: 'right' },
-  { key: 'enviado', label: 'Enviado em', sortable: true, width: 120 },
+  { key: 'tamanho', label: 'Tamanho', sortable: true, width: 110, align: 'right' },
+  { key: 'enviado', label: 'Enviado em', sortable: true, width: 140 },
 ];
 
 const CATEGORIAS_GED: OpuraDocumentCategoria[] = ['engenharia', 'juridico', 'compliance', 'financeiro', 'comercial'];
@@ -415,36 +417,80 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
     } catch (err) { notify(err instanceof Error ? err.message : 'Erro ao excluir.', 'error'); }
   };
 
-  // ── "Outros documentos": envio direto ao GED ──────────────────────────────
+  // ── "Outros documentos": criar / editar / excluir, direto no GED ─────────
+  type FormOutro = { nome: string; categoria: OpuraDocumentCategoria; tipo: string; validade: string };
+  const FORM_OUTRO_VAZIO: FormOutro = { nome: '', categoria: 'engenharia', tipo: '', validade: '' };
   const [envioAberto, setEnvioAberto] = React.useState(false);
+  /** `null` = enviando um novo; documento = editando esse. */
+  const [outroEditando, setOutroEditando] = React.useState<OpuraDocument | null>(null);
   const [arquivoOutro, setArquivoOutro] = React.useState<File | null>(null);
-  const [formOutro, setFormOutro] = React.useState<{ nome: string; categoria: OpuraDocumentCategoria; tipo: string; validade: string }>(
-    { nome: '', categoria: 'engenharia', tipo: '', validade: '' },
-  );
+  const [formOutro, setFormOutro] = React.useState<FormOutro>(FORM_OUTRO_VAZIO);
+  const [outroSujo, setOutroSujo] = React.useState(false);
+  const campoOutro = <K extends keyof FormOutro>(k: K, v: FormOutro[K]) => {
+    setFormOutro(f => ({ ...f, [k]: v }));
+    setOutroSujo(true);
+  };
+  const abrirEnvio = () => {
+    setOutroEditando(null);
+    setFormOutro(FORM_OUTRO_VAZIO);
+    setArquivoOutro(null);
+    setOutroSujo(false);
+    setEnvioAberto(true);
+  };
+  const abrirEdicaoOutro = (d: OpuraDocument) => {
+    setOutroEditando(d);
+    setFormOutro({ nome: d.nome, categoria: d.categoria, tipo: d.tipo_documento ?? '', validade: d.data_validade ?? '' });
+    setArquivoOutro(null);
+    setOutroSujo(false);
+    setEnvioAberto(true);
+  };
   const fecharEnvio = () => {
     setEnvioAberto(false);
+    setOutroEditando(null);
     setArquivoOutro(null);
-    setFormOutro({ nome: '', categoria: 'engenharia', tipo: '', validade: '' });
+    setOutroSujo(false);
+    setFormOutro(FORM_OUTRO_VAZIO);
   };
-  const enviarOutro = async () => {
-    if (!arquivoOutro) { notify('Escolha o arquivo a enviar.', 'error'); return; }
+  const salvarOutro = async () => {
+    if (!outroEditando && !arquivoOutro) { notify('Escolha o arquivo a enviar.', 'error'); return; }
     if (!formOutro.nome.trim()) { notify('Dê um nome ao documento.', 'error'); return; }
+    const meta = {
+      nome: formOutro.nome.trim(),
+      categoria: formOutro.categoria,
+      tipo_documento: formOutro.tipo.trim() || 'Documento do empreendimento',
+      data_validade: formOutro.validade || null,
+    };
     setSalvando(true);
     try {
-      const doc = await svc.enviarOutro(e, arquivoOutro, {
-        nome: formOutro.nome.trim(),
-        categoria: formOutro.categoria,
-        tipo_documento: formOutro.tipo.trim() || 'Documento do empreendimento',
-        data_validade: formOutro.validade || null,
-      });
-      setDoGed(prev => [doc, ...prev]);
-      fecharEnvio();
-      notify(`Enviado ao GED, em ${CATEGORIA_GED_ROTULO[doc.categoria]}.`);
+      if (outroEditando) {
+        const doc = await svc.atualizarOutro(outroEditando, meta, arquivoOutro);
+        setDoGed(prev => prev.map(x => (x.id === doc.id ? doc : x)));
+        fecharEnvio();
+        notify(arquivoOutro ? 'Documento salvo e nova versão enviada ao GED.' : 'Documento salvo.');
+      } else {
+        const doc = await svc.enviarOutro(e, arquivoOutro!, meta);
+        setDoGed(prev => [doc, ...prev]);
+        fecharEnvio();
+        notify(`Enviado ao GED, em ${CATEGORIA_GED_ROTULO[doc.categoria]}.`);
+      }
     } catch (err) {
-      notify(err instanceof Error ? err.message : 'Erro ao enviar o documento.', 'error');
+      notify(err instanceof Error ? err.message : 'Erro ao salvar o documento.', 'error');
     } finally {
       setSalvando(false);
     }
+  };
+  const excluirOutro = async (d: OpuraDocument) => {
+    const ok = await confirm({
+      title: 'Excluir o documento?',
+      message: `"${d.nome}" é apagado do GED, com todas as versões e arquivos. Esta ação não pode ser desfeita.`,
+      variant: 'danger', confirmLabel: 'Excluir',
+    });
+    if (!ok) return;
+    try {
+      await svc.excluirOutro(d);
+      setDoGed(prev => prev.filter(x => x.id !== d.id));
+      notify('Documento excluído.');
+    } catch (err) { notify(err instanceof Error ? err.message : 'Erro ao excluir.', 'error'); }
   };
 
   // ── Células ───────────────────────────────────────────────────────────────
@@ -606,9 +652,10 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
             </>
           }
           actions={{
-            width: 120,
+            width: 190,
             render: d => (
               <div className="flex items-center justify-end gap-1.5">
+                <ActionIconButton kind="edit" title="Editar" onClick={ev => { ev.stopPropagation(); abrirItem(d); }} />
                 <ActionIconButton
                   kind="download"
                   icon={<Upload className="w-4 h-4" />}
@@ -616,6 +663,7 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                   disabled={ocupado}
                   onClick={ev => { ev.stopPropagation(); pedirArquivo(d); }}
                 />
+                <ActionIconButton kind="delete" title="Tirar do checklist" onClick={ev => { ev.stopPropagation(); excluirItem(d); }} />
                 <InlineDisclosureMenu
                   menuItems={[
                     { icon: <Link2 className="w-[18px] h-[18px]" />, label: 'Vincular documento do GED', onClick: () => setVincularItem(d) },
@@ -630,8 +678,6 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
                       disabled: !d.document_id, title: d.document_id ? undefined : 'Este item não tem arquivo vinculado.',
                     },
                   ]}
-                  showDelete
-                  onDelete={() => excluirItem(d)}
                 />
               </div>
             ),
@@ -665,21 +711,23 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
           onRowClick={d => d.active_version?.storage_path && abrirArquivo(d.active_version.storage_path)}
           rowLabel={d => `${d.nome}. Abrir o arquivo`}
           toolbarRight={
-            <button type="button" onClick={() => setEnvioAberto(true)} className={BOTAO_PRIMARIO}>
+            <button type="button" onClick={abrirEnvio} className={BOTAO_PRIMARIO}>
               <Upload className="w-[15px] h-[15px]" />
               Enviar documento
             </button>
           }
           actions={{
-            width: 90,
+            width: 150,
             render: d => (
               <div className="flex items-center justify-end gap-1.5">
+                <ActionIconButton kind="edit" title="Editar" onClick={ev => { ev.stopPropagation(); abrirEdicaoOutro(d); }} />
                 <ActionIconButton
                   kind="view"
                   icon={<ExternalLink className="w-4 h-4" />}
                   title="Abrir no GED"
                   onClick={ev => { ev.stopPropagation(); abrirNoGed(d.id); }}
                 />
+                <ActionIconButton kind="delete" title="Excluir do GED" onClick={ev => { ev.stopPropagation(); excluirOutro(d); }} />
               </div>
             ),
           }}
@@ -867,54 +915,72 @@ const DocumentosEmpreendimentoTab: React.FC<Props> = ({ empreendimento: e }) => 
       </Sheet>
 
       {/* ── Sheet: enviar outro documento ── */}
-      <Sheet open={envioAberto} onClose={fecharEnvio} size="md" dirty={!!arquivoOutro}>
+      <Sheet open={envioAberto} onClose={fecharEnvio} size="md" dirty={outroSujo || !!arquivoOutro}>
         <SheetHeader onClose={fecharEnvio}>
-          <SheetTitle>Enviar documento</SheetTitle>
+          <SheetTitle>{outroEditando ? outroEditando.nome : 'Enviar documento'}</SheetTitle>
           <SheetDescription>{e.name}</SheetDescription>
         </SheetHeader>
         <SheetPanel className="p-6">
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-4">
+            {outroEditando?.active_version?.storage_path && (
+              <div className="sm:col-span-2 flex items-center justify-between gap-3 text-sm">
+                <button type="button" onClick={() => abrirArquivo(outroEditando.active_version!.storage_path)}
+                  className="flex items-center gap-1.5 min-w-0 text-blue-600 hover:text-blue-800">
+                  <Paperclip className="w-4 h-4 shrink-0" />
+                  <span className="truncate">{nomeDoArquivo(outroEditando.active_version.storage_path) || 'Abrir arquivo atual'}</span>
+                </button>
+                <span className="text-xs text-gray-500 shrink-0">Versão {outroEditando.active_version.version_number}</span>
+              </div>
+            )}
             <div className="space-y-1.5 sm:col-span-2">
-              <label className={ROTULO} htmlFor="outro-arquivo">Arquivo</label>
-              <input id="outro-arquivo" type="file" accept={EXTENSOES_ACEITAS} className={ARQUIVO}
+              <label className={ROTULO} htmlFor="outro-arquivo">{outroEditando ? 'Enviar nova versão' : 'Arquivo'}</label>
+              <input id="outro-arquivo" key={outroEditando ? `outro-${outroEditando.id}` : 'outro-novo'} type="file" accept={EXTENSOES_ACEITAS} className={ARQUIVO}
                 onChange={ev => {
                   const f = ev.target.files?.[0] || null;
                   setArquivoOutro(f);
-                  if (f) setFormOutro(prev => (prev.nome.trim() ? prev : { ...prev, nome: semExtensao(f.name) }));
+                  if (f && !outroEditando) setFormOutro(prev => (prev.nome.trim() ? prev : { ...prev, nome: semExtensao(f.name) }));
                 }} />
               <p className="text-xs text-gray-500">
-                {arquivoOutro ? `${arquivoOutro.name} · ${formatarTamanho(arquivoOutro.size)}` : `Até ${TAMANHO_MAXIMO_BYTES / 1048576} MB.`}
+                {arquivoOutro
+                  ? `${arquivoOutro.name} · ${formatarTamanho(arquivoOutro.size)}`
+                  : outroEditando
+                    ? 'Opcional. A versão atual fica guardada no histórico do GED.'
+                    : `Até ${TAMANHO_MAXIMO_BYTES / 1048576} MB.`}
               </p>
             </div>
             <div className="space-y-1.5 sm:col-span-2">
               <label className={ROTULO} htmlFor="outro-nome">Nome</label>
-              <input id="outro-nome" className={CAMPO} value={formOutro.nome} onChange={ev => setFormOutro(f => ({ ...f, nome: ev.target.value }))}
+              <input id="outro-nome" className={CAMPO} value={formOutro.nome} onChange={ev => campoOutro('nome', ev.target.value)}
                 placeholder="Ex: Memorial descritivo – Torre A" />
             </div>
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="outro-categoria">Categoria no GED</label>
               <select id="outro-categoria" className={CAMPO} value={formOutro.categoria}
-                onChange={ev => setFormOutro(f => ({ ...f, categoria: ev.target.value as OpuraDocumentCategoria }))}>
+                onChange={ev => campoOutro('categoria', ev.target.value as OpuraDocumentCategoria)}>
                 {CATEGORIAS_GED.map(c => <option key={c} value={c}>{CATEGORIA_GED_ROTULO[c]}</option>)}
               </select>
             </div>
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="outro-tipo">Tipo</label>
-              <input id="outro-tipo" className={CAMPO} value={formOutro.tipo} onChange={ev => setFormOutro(f => ({ ...f, tipo: ev.target.value }))}
+              <input id="outro-tipo" className={CAMPO} value={formOutro.tipo} onChange={ev => campoOutro('tipo', ev.target.value)}
                 placeholder="Ex: Memorial, Planta, Foto" />
             </div>
             <div className="space-y-1.5">
               <label className={ROTULO} htmlFor="outro-validade">Validade</label>
               <input id="outro-validade" type="date" className={CAMPO} value={formOutro.validade}
-                onChange={ev => setFormOutro(f => ({ ...f, validade: ev.target.value }))} />
+                onChange={ev => campoOutro('validade', ev.target.value)} />
             </div>
           </div>
         </SheetPanel>
         <SheetFooter>
-          <button type="button" onClick={fecharEnvio} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">Cancelar</button>
-          <button type="button" onClick={enviarOutro} disabled={salvando} className={BOTAO_PRIMARIO}>
-            {salvando ? 'Enviando...' : 'Enviar ao GED'}
+          <button type="button" onClick={fecharEnvio} className="h-9 px-3.5 rounded-[6px] text-sm font-medium text-gray-600 hover:bg-gray-100 transition-all">
+            {outroEditando ? 'Voltar' : 'Cancelar'}
           </button>
+          <span title={outroEditando && !outroSujo && !arquivoOutro ? 'Nada foi alterado.' : undefined}>
+            <button type="button" onClick={salvarOutro} disabled={salvando || (!!outroEditando && !outroSujo && !arquivoOutro)} className={BOTAO_PRIMARIO}>
+              {salvando ? 'Salvando...' : outroEditando ? 'Salvar alterações' : 'Enviar ao GED'}
+            </button>
+          </span>
         </SheetFooter>
       </Sheet>
 

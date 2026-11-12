@@ -274,6 +274,41 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     esperarSoCaminhoDoLink()
   })
 
+  it('assinarFotos: path acima de 300 caracteres fica fora (derrubaria o lote na Edge)', async () => {
+    mocks.invoke.mockResolvedValue(ok({ urls: { 'o/p/a.jpg': 'https://assinada/a' } }))
+    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['x'.repeat(301), 'o/p/a.jpg'])
+    expect(mocks.invoke).toHaveBeenCalledTimes(1)
+    expect(mocks.invoke.mock.calls[0][1].body.paths).toEqual(['o/p/a.jpg'])
+    expect(r).toEqual({ 'o/p/a.jpg': 'https://assinada/a' })
+  })
+
+  it('removerFotos: 230 paths → 3 pedidos (100/100/30), disparados juntos', async () => {
+    const paths = Array.from({ length: 230 }, (_, i) => `o/p/${i}.jpg`)
+    const soltar: (() => void)[] = []
+    mocks.invoke.mockImplementation(() => new Promise(res => { soltar.push(() => res(ok({ removidos: [] }))) }))
+    const pronto = fonteDiarioDoLink('tk', { podeAprovar: false }).removerFotos(PROJ, paths)
+    // Em paralelo: os 3 lotes já saíram antes de qualquer resposta chegar.
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(3))
+    expect(mocks.invoke.mock.calls.map(c => c[1].body.paths.length)).toEqual([100, 100, 30])
+    expect(new Set(mocks.invoke.mock.calls.flatMap(c => c[1].body.paths)).size).toBe(230)
+    soltar.forEach(f => f())
+    await expect(pronto).resolves.toBeUndefined()
+  })
+
+  it('removerFotos: recusa do token em dois lotes → aoRecusar uma vez só; nada é lançado', async () => {
+    const aoRecusar = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const paths = Array.from({ length: 230 }, (_, i) => `o/p/${i}.jpg`)
+    mocks.invoke
+      .mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
+      .mockResolvedValueOnce(ok({ removidos: [] }))
+      .mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
+    await expect(fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false }).removerFotos(PROJ, paths)).resolves.toBeUndefined()
+    expect(mocks.invoke).toHaveBeenCalledTimes(3)
+    expect(aoRecusar).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
   it('erro 400 da Edge vira Error com a mensagem do corpo', async () => {
     mocks.invoke.mockResolvedValue(erroDaEdge(400, { error: 'paths deve ter de 1 a 100 caminhos' }))
     await expect(fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['o/p/a.jpg']))

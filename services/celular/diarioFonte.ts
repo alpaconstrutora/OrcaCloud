@@ -199,15 +199,21 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
     return data as T
   }
 
+  /** Chama a Edge de mídia e lança o erro já traduzido (`erroDaEdge`), sem avisar ninguém. */
+  async function invocarMidia<T>(body: Record<string, unknown>): Promise<T> {
+    const { data, error } = await supabase.functions.invoke(EDGE_MIDIA, { body: { ...body, token } })
+    if (error) throw await erroDaEdge(error)
+    return data as T
+  }
+
   /** Chama a Edge de mídia; mesma regra de recusa do token. */
   async function midia<T>(body: Record<string, unknown>): Promise<T> {
-    const { data, error } = await supabase.functions.invoke(EDGE_MIDIA, { body: { ...body, token } })
-    if (error) {
-      const falha = await erroDaEdge(error)
+    try {
+      return await invocarMidia<T>(body)
+    } catch (falha) {
       if (ehRecusaDoLink(falha)) opts.aoRecusar?.()
       throw falha
     }
-    return data as T
   }
 
   async function carregarPlanejamento(diarioId: string, planejamentoId: string) {
@@ -281,15 +287,22 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
       return out
     },
 
+    /**
+     * Lotes em paralelo. A recusa do token avisa `aoRecusar` UMA vez só, mesmo
+     * que vários lotes sejam recusados; o resto das falhas é best-effort.
+     */
     async removerFotos(projectId, refs) {
-      const paths = pathsParaEdge(refs)
-      for (const lote of emLotes(paths, MAX_PATHS_POR_PEDIDO)) {
-        try {
-          await midia({ acao: 'remover', project_id: projectId, paths: lote })
-        } catch (err) {
-          console.warn('[diaryMedia] falha ao remover objetos pelo link do celular:', (err as { message?: string })?.message ?? err)
-        }
+      const lotes = emLotes(pathsParaEdge(refs), MAX_PATHS_POR_PEDIDO)
+      const resultados = await Promise.allSettled(
+        lotes.map(lote => invocarMidia({ acao: 'remover', project_id: projectId, paths: lote })),
+      )
+      let recusado = false
+      for (const r of resultados) {
+        if (r.status === 'fulfilled') continue
+        if (ehRecusaDoLink(r.reason)) recusado = true
+        console.warn('[diaryMedia] falha ao remover objetos pelo link do celular:', (r.reason as { message?: string })?.message ?? r.reason)
       }
+      if (recusado) opts.aoRecusar?.()
     },
   }
 }

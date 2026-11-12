@@ -1,6 +1,7 @@
-import { ImovibStudy, ImovibCapexItem, ImovibCapexBase } from '../types';
+import { ImovibStudy, ImovibCapexItem, ImovibCapexBase, ImovibCapexTiming } from '../types';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
-import { curvaDeVendas, TipoCurvaDeVendas } from './imovibCurvas';
+import { curvaDeVendas, TipoCurvaDeVendas, curvaDeDesembolso, TipoCurvaDeDesembolso } from './imovibCurvas';
+import { nomeDoMes } from './imovibCronograma';
 import { recebimentoPorSafra, SerieDeRecebimento } from './imovibRecebimento';
 import { fluxoDaDivida, PremissasDoFinanciamento } from './imovibFinanciamento';
 import { aportesEDistribuicoes, LinhaDeAporte } from './imovibAportes';
@@ -95,7 +96,8 @@ export type ImovibAba = 'premises' | 'capex' | 'receitas' | 'capital' | 'viabili
  * (com o padrão, ou com o valor como veio) e AVISA — nunca troca em silêncio.
  */
 export interface ImovibAviso {
-    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital';
+    codigo: 'recebimento_nao_soma_100' | 'cronograma_invalido' | 'sem_area' | 'sem_preco' | 'bloco_sem_preco' | 'estrutura_do_estudo' | 'blocos_fora_do_calculo' | 'divida_quitada_no_fim' | 'permuta_em_dobro' | 'tir_multipla' | 'receita_liquida_negativa' | 'estoque_nao_vendido' | 'pos_chaves_sem_prazo' | 'distrato_parcial' | 'financiamento_nao_liberado' | 'fontes_de_capital'
+        | 'lancamento_antes_do_registro' | 'obra_antes_da_aprovacao' | 'terreno_nao_soma_100' | 'curva_de_desembolso_nao_soma_100';
     mensagem: string;
     aba: ImovibAba;
 }
@@ -283,6 +285,9 @@ export const CAMPOS_DO_MOTOR = [
     // Fase 4 (migration aplicar_20271111970000)
     'financing_release_lag_months', 'financing_min_sales_percent', 'financing_interest_mode', 'financing_amortization',
     'min_cash_balance',
+    // Fase 5 (migration aplicar_20271112100000); base_date dá nome aos meses
+    'base_date', 'acquisition_month', 'approval_month', 'incorporation_registry_month', 'land_payment_schedule',
+    'cost_curve_type', 'cost_curve_custom', 'stock_carrying_cost_unit_month',
 ] as const satisfies readonly (keyof ImovibStudy)[];
 
 /** Campo vazio (null/undefined/NaN) usa o padrão; 0 digitado continua 0. */
@@ -321,6 +326,19 @@ const EMPTY_RESULT: ImovibMathResult = {
 };
 
 // ── 1. Premissas ────────────────────────────────────────────────────────────
+
+/** Rubrica que sai no seu próprio momento (item 5.5), não pela base. */
+interface RubricaComMomento {
+    id: string;
+    base: ImovibCapexBase;
+    /** Valor total, antes do índice. */
+    valor: number;
+    timing: ImovibCapexTiming;
+    /** `pos_obra`: meses depois do fim da obra. */
+    meses: number | null;
+    /** Fração do valor em cada mês (índice 0 = mês 1), preenchida em montarPremissas. */
+    pesos?: number[];
+}
 
 /** Tudo o que as etapas seguintes leem do estudo, já com padrões aplicados. */
 interface Premissas {
@@ -363,6 +381,17 @@ interface Premissas {
     totalCommonArea: number;
     /** Recebimento de todas as safras, sem índice e já sem a inadimplência. */
     recebimento: SerieDeRecebimento;
+    // Fase 5
+    /** Parcelas do terreno: mês e fração do custo (vazio = 100% na aquisição). */
+    parcelasTerreno: { mes: number; fracao: number }[];
+    /** Rubricas de terreno sem momento saem aqui. */
+    mesDaPrimeiraParcela: number;
+    /** Fração do custo de obra em cada mês da obra; null = linear (conta de antes). */
+    curvaObra: number[] | null;
+    rubricasComMomento: RubricaComMomento[];
+    handoverMonth: number;
+    unidadesVendaveis: number;
+    custoDoEstoqueUnidadeMes: number;
 }
 
 function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premissas {
@@ -423,12 +452,15 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     const instancias = study.unit_instances || [];
     let espelhoTemPermutada = false;
     let permutaDoEspelho = 0;
+    /** Unidades à venda (item 5.6): do espelho quando o bloco tem, senão das tipologias vendáveis. */
+    let unidadesVendaveis = 0;
     const blocosSemPreco: string[] = [];
 
     study.blocks?.forEach(block => {
         let blockPrivateArea = 0;
         let blockCommonArea = 0;
         let blockVendavelArea = 0;
+        let blockUnidadesVendaveis = 0;
         block.units?.forEach(u => {
             const pav = u.pavimentos || 1;
             const priv = (u.quantity || 0) * pav * (u.private_area || 0);
@@ -436,7 +468,10 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             blockCommonArea += (u.quantity || 0) * pav * (u.common_area || 0);
             // Tipologia não vendável é área comum (o espelho e o sync a tratam
             // assim): entra no custo de obra, NÃO no VGV. Antes entrava nos dois.
-            if (u.is_vendavel !== false) blockVendavelArea += priv;
+            if (u.is_vendavel !== false) {
+                blockVendavelArea += priv;
+                blockUnidadesVendaveis += (u.quantity || 0) * pav;
+            }
         });
 
         // VGV do bloco: espelho de vendas quando existe (decisão de 2026-10-12),
@@ -453,9 +488,11 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
             // Fora do VGV, mas é capital do terrenista: entra na fatia da permuta (item 4.2).
             permutaDoEspelho += doBloco.filter(i => i.status === 'PERMUTADO').reduce((acc, i) => acc + precoDa(i), 0);
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'espelho' };
+            unidadesVendaveis += doBloco.filter(i => i.status !== 'PERMUTADO').length;
         } else {
             blockVgv = blockVendavelArea * precoM2;
             vgvPorBloco[block.id] = { vgv: blockVgv, fonte: 'preco_m2' };
+            unidadesVendaveis += blockUnidadesVendaveis;
         }
 
         if (blockVendavelArea > 0 && blockVgv <= 0) blocosSemPreco.push(block.name);
@@ -536,10 +573,21 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     let rubricaVgvPct = 0;
     let rubricaVgvFixo = 0;
     const rubricaPct = { impostos: 0, comercial: 0, outras: 0 };
+    // Rubricas com momento próprio (item 5.5): valor total aqui, calendário em montarSeries.
+    const rubricasComMomento: RubricaComMomento[] = [];
     rubricas.forEach(item => {
         const v = Number(item.value) || 0;
         const pct = item.value_type === 'percent';
-        switch (baseDaRubrica(item)) {
+        const base = baseDaRubrica(item);
+        // % do VGV é dedução sobre a receita de cada mês: o momento não se aplica.
+        if (item.timing && !(base === 'vgv' && pct)) {
+            const valor = base === 'terreno' ? (pct ? landCost * v / 100 : v)
+                : base === 'obra' ? (pct ? constCostTotal * v / 100 : v * costDeltaMultiplier)
+                    : v;
+            rubricasComMomento.push({ id: item.id, base, valor, timing: item.timing, meses: item.timing_months ?? null });
+            return;
+        }
+        switch (base) {
             case 'terreno':
                 rubricaTerreno += pct ? landCost * v / 100 : v;
                 break;
@@ -663,7 +711,89 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     for (const linha of ['parcelasObra', 'intermediarias', 'posChaves'] as const) {
         recebimento[linha] = recebimento[linha].map(v => v * (1 - defaultRate));
     }
-    const duration = Math.max(duracaoBase, recebimento.sinal.length);
+
+    // ── Fase 5: tempo e custos ──
+    // Marcos (item 5.1): só avisam; o cálculo segue o cronograma como está.
+    const registro = study.incorporation_registry_month;
+    if (registro != null && salesStart < registro) {
+        avisos.push({
+            codigo: 'lancamento_antes_do_registro',
+            mensagem: `O lançamento (mês ${salesStart}) vem antes do registro da incorporação (mês ${registro}): pela Lei 4.591/64, art. 32, só se negociam unidades depois do registro.`,
+            aba: 'premises',
+        });
+    }
+    const aprovacao = study.approval_month;
+    if (aprovacao != null && constStart < aprovacao) {
+        avisos.push({
+            codigo: 'obra_antes_da_aprovacao',
+            mensagem: `A obra começa (mês ${constStart}) antes da aprovação do projeto (mês ${aprovacao}).`,
+            aba: 'premises',
+        });
+    }
+
+    // Terreno parcelado (item 5.2): vazio = 100% no mês da aquisição.
+    const acquisitionMonth = Math.max(1, Math.round(val(study.acquisition_month, D.acquisition_month)));
+    const parcelasInformadas = (study.land_payment_schedule ?? []).filter(p => p && Number(p.percent) !== 0);
+    const parcelasTerreno = parcelasInformadas.length
+        ? parcelasInformadas.map(p => ({ mes: Math.max(1, Math.round(Number(p.month) || 1)), fracao: (Number(p.percent) || 0) / 100 }))
+        : [{ mes: acquisitionMonth, fracao: 1 }];
+    const somaDoTerreno = parcelasInformadas.reduce((a, p) => a + (Number(p.percent) || 0), 0);
+    if (parcelasInformadas.length && Math.abs(somaDoTerreno - 100) > 0.01) {
+        avisos.push({
+            codigo: 'terreno_nao_soma_100',
+            mensagem: `As parcelas do terreno somam ${Number(somaDoTerreno.toFixed(2)).toLocaleString('pt-BR')}% do custo: o cálculo usa os valores como estão (${fmtBRL(landCost * somaDoTerreno / 100)}).`,
+            aba: 'premises',
+        });
+    }
+    const mesDaPrimeiraParcela = Math.min(...parcelasTerreno.map(p => p.mes));
+
+    // Curva de desembolso da obra (item 5.3). Linear fica null: o motor usa a
+    // conta de antes (custo ÷ meses), para o padrão dar o mesmo centavo.
+    const tipoCurvaObra = (study.cost_curve_type ?? D.cost_curve_type) as TipoCurvaDeDesembolso;
+    let curvaObra: number[] | null = null;
+    if (tipoCurvaObra !== 'linear') {
+        const c = curvaDeDesembolso(tipoCurvaObra, constDur, study.cost_curve_custom);
+        curvaObra = c.pesos;
+        if (c.somaInformada != null) {
+            avisos.push({
+                codigo: 'curva_de_desembolso_nao_soma_100',
+                mensagem: `A curva de desembolso personalizada soma ${Number(c.somaInformada.toFixed(2)).toLocaleString('pt-BR')}%: o custo de obra foi distribuído na proporção dos pesos.`,
+                aba: 'capex',
+            });
+        }
+    }
+
+    // Calendário de cada rubrica com momento (item 5.5): peso por mês (índice 0 = mês 1).
+    const pesosDaObra = curvaObra ?? Array.from({ length: Math.max(1, constDur) }, () => 1 / Math.max(1, constDur));
+    const totalVendido = vendasPorMes.reduce((a, b) => a + b, 0);
+    const calendario = (t: RubricaComMomento): number[] => {
+        const em = (meses: number[], pesos?: number[]) => {
+            const out: number[] = [];
+            meses.forEach((m, k) => { out[m - 1] = (out[m - 1] ?? 0) + (pesos ? pesos[k] : 1 / meses.length); });
+            return Array.from(out, x => x ?? 0);
+        };
+        const intervalo = (de: number, ate: number) => Array.from({ length: Math.max(0, ate - de + 1) }, (_, k) => de + k);
+        switch (t.timing) {
+            case 'aquisicao': return em([acquisitionMonth]);
+            case 'pre_obra': {
+                const meses = intervalo(acquisitionMonth, constStart - 1);
+                return em(meses.length ? meses : [acquisitionMonth]);
+            }
+            case 'lancamento': return em(intervalo(Math.max(1, salesStart - 2), salesStart));
+            case 'obra': return em(intervalo(constStart, constStart + pesosDaObra.length - 1), pesosDaObra);
+            case 'vendas': return totalVendido > 0 ? vendasPorMes.map(v => v / totalVendido) : em([salesStart]);
+            case 'pos_obra': return em(intervalo(handoverMonth + 1, handoverMonth + Math.max(1, Math.round(t.meses ?? D.pos_obra_meses))));
+        }
+    };
+    rubricasComMomento.forEach(t => { t.pesos = calendario(t); });
+
+    // O fluxo vai até a última saída: parcela do terreno ou rubrica de pós-obra.
+    const duration = Math.max(
+        duracaoBase,
+        recebimento.sinal.length,
+        ...parcelasTerreno.map(p => p.mes),
+        ...rubricasComMomento.map(t => t.pesos!.length),
+    );
     const netVgvTotal = (Object.values(recebimento) as number[][])
         .reduce((acc, serie) => acc + serie.reduce((a, b) => a + b, 0), 0);
 
@@ -736,6 +866,13 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         totalPrivateArea,
         totalCommonArea,
         recebimento,
+        parcelasTerreno,
+        mesDaPrimeiraParcela,
+        curvaObra,
+        rubricasComMomento,
+        handoverMonth,
+        unidadesVendaveis,
+        custoDoEstoqueUnidadeMes: val(study.stock_carrying_cost_unit_month, D.stock_carrying_cost_unit_month),
     };
 }
 
@@ -756,6 +893,8 @@ interface Series {
     totalGrossRev: number;
     somaInflacaoVendas: number;
     rubricaVgvTotal: number;
+    /** Valor de cada rubrica com momento no cálculo, já com índice (item 5.5). */
+    valorComMomento: Record<string, number>;
 }
 
 function montarSeries(P: Premissas): Series {
@@ -767,8 +906,11 @@ function montarSeries(P: Premissas): Series {
 
     const S: Series = {
         receitaBruta: [], deducaoReceita: [], devolucao: [], custoProprio: [], custoObra: [], linhas: [],
-        totalGrossRev: 0, somaInflacaoVendas: 0, rubricaVgvTotal: 0,
+        totalGrossRev: 0, somaInflacaoVendas: 0, rubricaVgvTotal: 0, valorComMomento: {},
     };
+    // Estoque depois da obra (item 5.6): fração do VGV vendável ainda não vendida no fim de cada mês.
+    let vendidoAcumulado = 0;
+    const LINHA_DA_BASE = { terreno: 'rubricasTerreno', obra: 'rubricasObra', vgv: 'rubricasVendas' } as const;
 
     for (let m = 1; m <= duration; m++) {
         const i = m - 1;
@@ -799,10 +941,15 @@ function montarSeries(P: Premissas): Series {
         if (P.capexRubricasAtivas) S.rubricaVgvTotal += revenueDeduction;
 
         let proprio = 0;
-        if (m === 1) {
-            proprio += P.landCost + P.rubricaTerreno;
-            linhas.terreno = -P.landCost;
-            linhas.rubricasTerreno = -P.rubricaTerreno;
+        // Terreno nas parcelas (item 5.2); as rubricas de terreno sem momento, na 1ª.
+        // Sem parcelas: 100% no mês da aquisição (1), a mesma conta de antes.
+        let terrenoDoMes = 0;
+        for (const p of P.parcelasTerreno) if (p.mes === m) terrenoDoMes += P.landCost * p.fracao;
+        const rubricaTerrenoDoMes = m === P.mesDaPrimeiraParcela ? P.rubricaTerreno : 0;
+        if (terrenoDoMes !== 0 || m === P.mesDaPrimeiraParcela) {
+            proprio += terrenoDoMes + rubricaTerrenoDoMes;
+            linhas.terreno = -terrenoDoMes;
+            linhas.rubricasTerreno = -rubricaTerrenoDoMes;
         }
         if (monthlyVgvFixo > 0 && emVendas) {
             const fixo = monthlyVgvFixo * multVendas;
@@ -810,16 +957,49 @@ function montarSeries(P: Premissas): Series {
             S.rubricaVgvTotal += fixo;
             linhas.rubricasVendas = -fixo;
         }
+        let custoObraDoMes = 0;
         if (emObra) {
-            linhas.obra = -(P.constCostTotal / constMonths) * multObra;
-            linhas.rubricasObra = -(P.rubricaObra / constMonths) * multObra;
+            if (P.curvaObra) {
+                // Curva S ou personalizada (item 5.3).
+                const w = P.curvaObra[m - constStart] ?? 0;
+                linhas.obra = -(P.constCostTotal * w) * multObra;
+                linhas.rubricasObra = -(P.rubricaObra * w) * multObra;
+                custoObraDoMes = (P.constCostTotal + P.rubricaObra) * w * multObra;
+            } else {
+                linhas.obra = -(P.constCostTotal / constMonths) * multObra;
+                linhas.rubricasObra = -(P.rubricaObra / constMonths) * multObra;
+                custoObraDoMes = monthlyConstCost * multObra;
+            }
+        }
+
+        // Rubricas com momento (item 5.5). Aquisição sem índice; lançamento e
+        // vendas pelo índice das vendas; o resto pelo da obra. Só as de momento
+        // 'obra' são financiáveis.
+        for (const t of P.rubricasComMomento) {
+            const peso = t.pesos?.[i] ?? 0;
+            if (!peso) continue;
+            const mult = t.timing === 'aquisicao' ? 1 : t.timing === 'lancamento' || t.timing === 'vendas' ? multVendas : multObra;
+            const valor = t.valor * peso * mult;
+            linhas[LINHA_DA_BASE[t.base]] -= valor;
+            S.valorComMomento[t.id] = (S.valorComMomento[t.id] ?? 0) + valor;
+            if (t.timing === 'obra') custoObraDoMes += valor;
+            else proprio += valor;
+        }
+
+        // Condomínio e IPTU das unidades em estoque, depois da obra (item 5.6).
+        vendidoAcumulado += P.vendasPorMes[i] ?? 0;
+        if (P.custoDoEstoqueUnidadeMes > 0 && m > P.handoverMonth && P.vgvVendavel > 0) {
+            const emEstoque = Math.max(0, 1 - vendidoAcumulado / P.vgvVendavel) * P.unidadesVendaveis;
+            const carregamento = emEstoque * P.custoDoEstoqueUnidadeMes * multObra;
+            linhas.carregamentoDoEstoque = -carregamento;
+            proprio += carregamento;
         }
 
         S.receitaBruta.push(grossRev);
         S.deducaoReceita.push(revenueDeduction);
         S.devolucao.push(linhas.devolucaoDistrato);
         S.custoProprio.push(proprio);
-        S.custoObra.push(emObra ? monthlyConstCost * multObra : 0);
+        S.custoObra.push(custoObraDoMes);
         S.linhas.push(linhas);
     }
     return S;
@@ -934,7 +1114,7 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
         accProjeto += netProjeto;
 
         monthlyFlows.push({
-            month: m, name: `Mês ${m}`, rev: S.receitaBruta[i], cost: S.custoProprio[i] + S.custoObra[i],
+            month: m, name: nomeDoMes(P.study.base_date, m), rev: S.receitaBruta[i], cost: S.custoProprio[i] + S.custoObra[i],
             net: netFlow, acc: accumulatedFlow, netProjeto, accProjeto, jurosDoMes: D.juros[i], linhas,
         });
         net.push(netFlow);
@@ -999,8 +1179,12 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
             case 'obra': valor = pct ? P.constCostTotal * v / 100 : v * P.costDeltaMultiplier; break;
             case 'vgv': valor = pct ? S.totalGrossRev * v / 100 : v * fatorVendas; break;
         }
-        capexValorPorRubrica[item.id] = valor;
+        // Com momento próprio (item 5.5): o que saiu de fato, com o índice do mês.
+        capexValorPorRubrica[item.id] = S.valorComMomento[item.id] ?? valor;
     });
+    // Totais por base, somando as rubricas com momento.
+    const comMomento = { terreno: 0, obra: 0, vgv: 0 };
+    P.rubricasComMomento.forEach(t => { comMomento[t.base] += S.valorComMomento[t.id] ?? 0; });
 
     const vpl = calculateNPV(P.monthlyDiscount, F.net); // Using monthly discount rate
 
@@ -1053,10 +1237,10 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         aportes: F.aportes,
         capexRubricasAtivas: P.capexRubricasAtivas,
         capexRubricas: {
-            terreno: P.rubricaTerreno,
-            obra: P.rubricaObra,
-            vgv: S.rubricaVgvTotal,
-            total: P.rubricaTerreno + P.rubricaObra + S.rubricaVgvTotal,
+            terreno: P.rubricaTerreno + comMomento.terreno,
+            obra: P.rubricaObra + comMomento.obra,
+            vgv: S.rubricaVgvTotal + comMomento.vgv,
+            total: (P.rubricaTerreno + comMomento.terreno) + (P.rubricaObra + comMomento.obra) + (S.rubricaVgvTotal + comMomento.vgv),
         },
         capexValorPorRubrica,
         avisos: P.avisos,

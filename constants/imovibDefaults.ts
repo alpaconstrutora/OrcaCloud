@@ -75,7 +75,11 @@ export const IMOVIB_DEFAULTS = {
     financing_interest_mode: 'capitaliza', // ou 'paga_mensal'
     financing_amortization: 'receitas', // toda a receita líquida amortiza; ou 'repasse'
     min_cash_balance: 0, // caixa mínimo da SPE, R$
-    // Fase 5 — Marcos, terreno, desembolso, rubricas
+    // Fase 5 — Marcos, terreno, desembolso, rubricas (os padrões reproduzem o cálculo de antes)
+    acquisition_month: 1, // terreno vazio = 100% neste mês
+    cost_curve_type: 'linear', // ou 'curva_s' (3x² − 2x³) ou 'custom'
+    pos_obra_meses: 12, // rubrica 'pos_obra' sem timing_months
+    stock_carrying_cost_unit_month: 0, // R$ por unidade em estoque por mês, depois da obra
     // Fase 6 — Tributos
     // Fase 10 — Critérios do parecer
 } as const;

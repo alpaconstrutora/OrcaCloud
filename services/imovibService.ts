@@ -13,7 +13,8 @@ import { CAMPOS_DO_MOTOR } from '../utils/imovibMotor';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
-const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, created_at, updated_at';
+// timing e timing_months: aplicar_20271112110000 (item 5.5).
+const CAPEX_COLS = 'id, study_id, category, subcategory, name, value_type, value, base, timing, timing_months, created_at, updated_at';
 
 // Listagem com métricas: metadados da tabela + tudo o que o motor lê
 // (CAMPOS_DO_MOTOR). Campo novo do motor entra lá, não aqui.

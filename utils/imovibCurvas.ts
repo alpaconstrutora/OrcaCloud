@@ -65,3 +65,29 @@ export function curvaDeVendas(p: ParametrosDaCurvaDeVendas): number[] {
             return iguais(n);
     }
 }
+
+export type TipoCurvaDeDesembolso = 'linear' | 'curva_s' | 'custom';
+
+/** Curva S acumulada: 3x² − 2x³ (a mesma de parametricService.generateSCurveData). */
+const curvaSAcumulada = (x: number) => 3 * x * x - 2 * x * x * x;
+
+/**
+ * Fração do custo de obra paga em cada mês da obra (índice 0 = 1º mês), somando 1
+ * (item 5.3 do plano). `custom` recebe os pesos em % (somam 100); só os primeiros
+ * `duracao` contam e falta vira 0. Pesos que não somam 100 são distribuídos na
+ * proporção e `somaInformada` diz quanto somavam (o motor avisa); vazios ou
+ * zerados caem na linear.
+ */
+export function curvaDeDesembolso(tipo: TipoCurvaDeDesembolso, duracao: number, pesos?: number[] | null): { pesos: number[]; somaInformada: number | null } {
+    const n = Math.round(duracao);
+    if (!(n > 0)) return { pesos: [], somaInformada: null };
+    if (tipo === 'curva_s') {
+        return { pesos: Array.from({ length: n }, (_, i) => curvaSAcumulada((i + 1) / n) - curvaSAcumulada(i / n)), somaInformada: null };
+    }
+    if (tipo === 'custom') {
+        const w = Array.from({ length: n }, (_, i) => Math.max(0, Number(pesos?.[i]) || 0));
+        const total = w.reduce((a, b) => a + b, 0);
+        if (total > 0) return { pesos: w.map(x => x / total), somaInformada: Math.abs(total - 100) > 0.01 ? total : null };
+    }
+    return { pesos: iguais(n), somaInformada: null };
+}

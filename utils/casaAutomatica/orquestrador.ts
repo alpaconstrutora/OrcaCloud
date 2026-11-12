@@ -194,6 +194,9 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   return fica;
 }
 
+// A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
+export type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem' | 'muro'>;
+
 export function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 | 3 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
     ...HIPOTESES_DA_CASA_PADRAO,
@@ -657,8 +660,6 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     contextoDeRegras: { lote: loteDasRegras, zona: zonaDasRegras },
   };
 
-  // A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
-  type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem' | 'muro'>;
   const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
     // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
     // ventilação mecânica — fica para conferir no código de obras, não "sem solução".

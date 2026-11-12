@@ -195,5 +195,5 @@ mobiliário que não coube, composição do teto, pressão, entrada de energia, 
 (o mesmo da revisão guiada de pontas): seleciona os ids e leva a vista ao ponto da pendência. O plano previa
 "enquadrar-nos-ids" como ação nova; centrar no ponto com os elementos selecionados cobre o pedido sem duplicar a
 navegação.
-| D1 | a fazer |
+| D1 | feito — `__tests__/casaAutomaticaMarco.test.ts` + `__tests__/fixtures/casaAutomaticaMarco.json`, gravado de `main` 6f5a4279 (etapa C já dentro); local: gravar 125 s, comparar 123 s (8/8); CI do PR = a prova no Node 20 |
 | D2 | a fazer |

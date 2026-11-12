@@ -164,7 +164,7 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
         const { indicadores } = montarPlanilhaImovib(s, m);
         for (const rotulo of ['Lucro líquido', 'Margem líquida sobre o VGV', 'Payback simples', 'Payback descontado', 'Múltiplo do capital',
             'Retorno sobre o capital', 'TIR modificada', 'Mês da exposição máxima', 'VPL do projeto', 'TIR do projeto',
-            'Valor máximo do terreno (VPL zero)', 'Terreno para margem de 15%', 'Variação de preço que zera o VPL',
+            'Valor máximo do terreno (VPL zero)', 'Terreno para margem de 15% (padrão)', 'Variação de preço que zera o VPL',
             'Variação do custo de obra que zera o VPL', 'Vendas mínimas', 'Estoque não vendido']) {
             const l = linha(indicadores, rotulo);
             expect(l[1] === null || typeof l[1] === 'number', rotulo).toBe(true);
@@ -198,5 +198,20 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
             expect(somaLinhas).toBeCloseTo(m.monthlyFlows[i].net, 4);
             expect(l[col('Caixa do projeto (R$)')]).toBeCloseTo(m.monthlyFlows[i].netProjeto, 6);
         });
+    });
+});
+
+/** Pendência da Fase 2: o Excel usava sempre 15%, qualquer que fosse a margem-alvo da tela. */
+describe('margem-alvo do Excel', () => {
+    it('usa a margem-alvo da tela', () => {
+        const s = estudo();
+        const { indicadores } = montarPlanilhaImovib(s, computeImovibMath(s), { margemAlvoPct: 20 });
+        expect(indicadores.some(l => String(l[0]).startsWith('Terreno para margem de 20%'))).toBe(true);
+    });
+
+    it('sem margem na tela: o padrão, dito no rótulo', () => {
+        const s = estudo();
+        const { indicadores } = montarPlanilhaImovib(s, computeImovibMath(s));
+        expect(indicadores.some(l => String(l[0]) === 'Terreno para margem de 15% (padrão)')).toBe(true);
     });
 });

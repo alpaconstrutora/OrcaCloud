@@ -6,6 +6,9 @@ import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEq
 
 interface ImovibPontosDeEquilibrioCardProps {
     study: ImovibStudy;
+    /** Margem-alvo (texto do campo) controlada pelo Resumo, que a usa também no Excel. Sem ela, fica local. */
+    margemAlvo?: string;
+    onMargemAlvo?: (texto: string) => void;
 }
 
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
@@ -35,16 +38,21 @@ const Linha: React.FC<{ rotulo: string; ajuda: string; ponto: PontoDeEquilibrio;
  * de rodar o motor de novo sobre cópias do estudo (utils/imovibEquilibrio.ts);
  * a margem-alvo é hipótese desta tela, não é gravada.
  */
-const ImovibPontosDeEquilibrioCard: React.FC<ImovibPontosDeEquilibrioCardProps> = ({ study }) => {
-    const [margemAlvo, setMargemAlvo] = useState<string>(String(IMOVIB_DEFAULTS.margem_alvo_terreno_percent));
+const ImovibPontosDeEquilibrioCard: React.FC<ImovibPontosDeEquilibrioCardProps> = ({ study, margemAlvo: margemDoPai, onMargemAlvo }) => {
+    const [margemLocal, setMargemLocal] = useState<string>(String(IMOVIB_DEFAULTS.margem_alvo_terreno_percent));
+    const margemAlvo = margemDoPai ?? margemLocal;
+    const setMargemAlvo = (t: string) => { setMargemLocal(t); onMargemAlvo?.(t); };
     const margem = parseFloat(margemAlvo);
 
-    const fixos = useMemo(() => ({
-        terrenoVplZero: terrenoMaximo(study, { tipo: 'vpl_zero' }),
-        preco: precoMinimo(study),
-        custo: custoMaximoDeObra(study),
-        vendas: vendasMinimas(study),
-    }), [study]);
+    const fixos = useMemo(() => {
+        const preco = precoMinimo(study);
+        return {
+            terrenoVplZero: terrenoMaximo(study, { tipo: 'vpl_zero' }),
+            preco,
+            custo: custoMaximoDeObra(study),
+            vendas: vendasMinimas(study, preco),
+        };
+    }, [study]);
     const terrenoMargem = useMemo(
         () => (Number.isFinite(margem) ? terrenoMaximo(study, { tipo: 'margem', pct: margem }) : { valor: null, motivo: 'sem_raiz' as const }),
         [study, margem],
@@ -84,7 +92,8 @@ const ImovibPontosDeEquilibrioCard: React.FC<ImovibPontosDeEquilibrioCardProps> 
                     </label>
                 </div>
                 <p className={`text-sm font-semibold whitespace-nowrap ${terrenoMargem.valor == null ? 'text-slate-500' : 'text-slate-900'}`}>
-                    {terrenoMargem.valor == null ? MOTIVO[terrenoMargem.motivo ?? 'sem_raiz'] : brl(terrenoMargem.valor)}
+                    {/* Campo vazio não é "não existe": falta a margem (pendência da Fase 2). */}
+                    {!Number.isFinite(margem) ? 'Informe a margem-alvo' : terrenoMargem.valor == null ? MOTIVO[terrenoMargem.motivo ?? 'sem_raiz'] : brl(terrenoMargem.valor)}
                 </p>
             </div>
             <Linha

@@ -87,6 +87,12 @@ export interface MonthlyFlow {
 export interface ImovibMathOptions {
     vgvDelta?: number; // percentage (-10 to 10)
     costDelta?: number; // percentage (-10 to 10)
+    /**
+     * Não calcula as TIRs (ficam NaN, sem o aviso `tir_multipla`). Para as buscas que
+     * rodam o motor dezenas de vezes e só olham VPL, lucro ou margem (pontos de
+     * equilíbrio): a varredura da TIR é o grosso do tempo de cada chamada.
+     */
+    semTir?: boolean;
 }
 
 /** Aba do detalhe do estudo onde a premissa de um aviso é corrigida. */
@@ -1317,7 +1323,7 @@ function indicadoresDeProduto(P: Premissas): IndicadoresDeProduto {
     };
 }
 
-function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): ImovibMathResult {
+function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista, semTir = false): ImovibMathResult {
     // Valor de cada rubrica no cálculo — mesma regra de montarPremissas, item a item.
     const capexValorPorRubrica: Record<string, number> = {};
     const fatorVendas = P.salesDur > 0 ? S.somaInflacaoVendas / P.salesDur : 1;
@@ -1340,14 +1346,14 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
     const vpl = calculateNPV(P.monthlyDiscount, F.net); // Using monthly discount rate
 
     // IRR is returned as a monthly rate. Convert to annual.
-    const tir = calcularTirMensal(F.net);
+    const tir = semTir ? { taxa: NaN, raizes: 0 } : calcularTirMensal(F.net);
     const monthlyIrr = tir.taxa;
     let annualIrr = NaN;
     if (!isNaN(monthlyIrr) && isFinite(monthlyIrr)) {
         annualIrr = (Math.pow(1 + monthlyIrr, 12) - 1) * 100;
     }
     const vplProjeto = calculateNPV(P.monthlyDiscount, F.netProjeto);
-    const tirProjeto = calcularTirMensal(F.netProjeto).taxa;
+    const tirProjeto = semTir ? NaN : calcularTirMensal(F.netProjeto).taxa;
     const annualIrrProjeto = Number.isFinite(tirProjeto) ? (Math.pow(1 + tirProjeto, 12) - 1) * 100 : NaN;
     if (tir.raizes > 1) {
         P.avisos.push({
@@ -1413,5 +1419,5 @@ export const computeImovibMath = (study: ImovibStudy | null | undefined, options
     const P = montarPremissas(study, options);
     const S = montarSeries(P);
     const F = aplicarFinanciamento(P, S);
-    return calcularResultado(P, S, F);
+    return calcularResultado(P, S, F, options?.semTir === true);
 };

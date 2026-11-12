@@ -12,7 +12,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
-import { agruparMembros, OPCOES_AGRUPAR_MEMBRO, type CampoAgruparMembro } from '../utils/membrosGrupos';
+import { agruparMembros, OPCOES_AGRUPAR_MEMBRO, ROTULO_FUNCAO, type CampoAgruparMembro } from '../utils/membrosGrupos';
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import LinkDoCelularBloco, { motivoGerarBloqueadoPara } from './celular/LinkDoCelularBloco';
@@ -88,6 +88,10 @@ function renderMemberCell(
                         onChange={(e) => ctx.onRoleChange(member.id, e.target.value as OrganizationRole)}
                         className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer appearance-none transition-all"
                     >
+                        {/* Só para quem JÁ é proprietário: sem a opção o select não tinha o valor dele e mostrava
+                            "Admin". Não é oferecida a mais ninguém — promover a proprietário não é troca de linha
+                            de tabela (a RLS deixa qualquer gestor gravar `owner`; o proprietário nasce com a organização). */}
+                        {member.role === 'owner' && <option value="owner">{ROTULO_FUNCAO.owner}</option>}
                         <option value="admin">Admin</option>
                         <option value="member">Membro</option>
                         <option value="viewer">Visitante</option>

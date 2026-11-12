@@ -234,6 +234,30 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
         }
     };
 
+    // Item 10.5: relatório completo (12 seções, texto e tabelas de verdade). As listas
+    // que o estudo não traz carregado são lidas na hora; o PDF é montado à parte.
+    const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+    const exportarRelatorio = async () => {
+        setGerandoRelatorio(true);
+        try {
+            const [comparaveis, riscos, cenarios, dueDiligence, socios, { secoesDoRelatorio }, { pdfDoRelatorio }] = await Promise.all([
+                imovibService.listarComparaveis(study.id),
+                imovibService.listarRiscos(study.id),
+                imovibService.listarCenarios(study.id),
+                imovibService.listarDueDiligence(study.id),
+                imovibService.listarSocios(study.id),
+                import('../utils/imovibRelatorio'),
+                import('../utils/imovibRelatorioPdf'),
+            ]);
+            const pdf = pdfDoRelatorio(secoesDoRelatorio({ study, comparaveis, riscos, cenarios, dueDiligence, socios }), study.name);
+            pdf.save(`Relatorio_${nomeDeArquivo(study.name)}.pdf`);
+        } catch (err) {
+            showToast(`Erro ao gerar o relatório completo: ${(err as Error).message}`, 'error');
+        } finally {
+            setGerandoRelatorio(false);
+        }
+    };
+
     const exportToPDF = async () => {
         if (!printRef.current) return;
         try {
@@ -310,7 +334,16 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-slate-900 text-white hover:bg-slate-800 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-70"
                     >
                         {isExporting ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Download className="w-[15px] h-[15px]" />}
-                        {isExporting ? 'Gerando...' : 'Exportar PDF'}
+                        {isExporting ? 'Gerando...' : 'Resumo em PDF'}
+                    </button>
+                    <button
+                        onClick={() => void exportarRelatorio()}
+                        disabled={gerandoRelatorio}
+                        title="Capa e parecer, indicadores, premissas com as fontes, mercado, produto, cronograma, fluxo anual, cenários, riscos, due diligence, tributos, capital e sócios"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-slate-700 hover:bg-gray-50 border border-gray-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-70"
+                    >
+                        {gerandoRelatorio ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileText className="w-[15px] h-[15px]" />}
+                        {gerandoRelatorio ? 'Gerando...' : 'Relatório completo'}
                     </button>
                 </div>
             </div>
@@ -335,6 +368,13 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                                 {/* Título do relatório = h1 do guia §20. */}
                                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">{study.name}</h1>
                                 <p className="text-gray-500 text-sm mt-1.5">Relatório Executivo de Viabilidade Financeira</p>
+                                {/* Item 10.3: o cartão do parecer fica fora da captura (tem campos); aqui sai o registrado. */}
+                                <p className="text-gray-700 text-sm mt-2">
+                                    Parecer: {study.recommendation ? ROTULO_DO_PARECER[study.recommendation] : 'não registrado'}
+                                    {study.recommended_by ? `, por ${study.recommended_by}` : ''}
+                                    {study.recommended_at ? ` em ${new Date(study.recommended_at).toLocaleDateString('pt-BR')}` : ''}
+                                    {study.recommendation_notes ? ` — ${study.recommendation_notes}` : ''}
+                                </p>
                             </div>
                         </div>
                     </div>

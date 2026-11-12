@@ -115,7 +115,7 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
     return (
       <TelaDeEstado
         icone={<Loader2 className="w-6 h-6 animate-spin text-slate-400" aria-hidden="true" />}
-        titulo="Abrindo suas tarefas…"
+        titulo="Abrindo…"
       />
     )
   }

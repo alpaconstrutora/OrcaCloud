@@ -43,8 +43,10 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
             title: 'Portal do Investidor',
             desc: 'Gestão de patrimônio, cotas e novos empreendimentos.',
             icon: TrendingUp,
-            color: 'purple',
-            theme: 'bg-purple-600'
+            // Coral do Portal do Investidor (P.accent do PortalKit, §24) — o mesmo do
+            // login (InvestorLogin) e do portal, para a cor não mudar entre escolher e entrar.
+            color: 'orange',
+            theme: 'bg-[#E1553C]'
         },
         {
             id: ProfileGroup.DEVELOPER,
@@ -143,7 +145,7 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
                 </div>
 
                 <div className="mt-16 text-center flex flex-col items-center gap-4">
-                    <div className="flex items-center gap-2 px-4 py-2 bg-slate-100 rounded-full text-xs font-bold text-slate-400 uppercase tracking-[0.2em]">
+                    <div className="flex items-center gap-2 text-xs font-medium text-slate-400">
                         <ShieldCheck className="w-3.5 h-3.5" />
                         Acesso Seguro e Protegido
                     </div>

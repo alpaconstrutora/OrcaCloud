@@ -204,3 +204,11 @@ terraplenagem/acesso/muro ~260) usam de 13 a 39 nomes do escopo da função, inc
 `telhado`, `resumoDoMuro`, `imp`). Extrair por etapa pede um `ContextoDaCasa` tipado (~40 campos, os `let` por getter/setter)
 e a troca `m` → `ctx.m` pelo analisador do TypeScript (troca de texto pegaria o "m" de metro dentro dos textos das
 pendências). Viável, com o marco como rede; mais trabalho e risco do que o plano previa.
+
+**Decisão do usuário (12/11/2026), pergunta de múltipla escolha:** **"Parar no passo 1 (Recomendado)"** — o passo 2 fica para
+uma fase própria, quando o motor voltar a ser mexido. Técnica anotada: extrair os blocos um por vez (terraplenagem/acesso/
+muro → arquitetura → estrutura/telhado → instalações → sobrado), cada um como função de primeiro nível que recebe um
+`ContextoDaCasa` (consts por desestruturação; `let`s por getter/setter), a troca `m` → `ctx.m` feita pela AST do TypeScript
+(nunca regex: pegaria o "m" de metro nos textos), e o marco das 8 casas verde a cada extração.
+
+**Fase "itens 6 a 11": A, B, C e D1 no ar; D2 com 1 de 2 passos (o passo 2 adiado por decisão do usuário).**

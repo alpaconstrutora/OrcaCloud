@@ -7,9 +7,11 @@
  *    (ou ao voltar a aba para a frente) desmonta Minhas Tarefas e mostra a recusa;
  *    outro 42501 (recusa de UMA ação) e falha de rede não derrubam a tela;
  *  - a fonte é estável entre renders (R8: ela está nas deps de efeito de TasksMobileApp);
- *  - a barra de seções tem "Tarefas" e "Diário"; tocar "Diário" monta DiarioDoLink com a
+ *  - o seletor de seções (pílula, role=tablist) fica no TOPO, antes do conteúdo, e NÃO há
+ *    barra de seções embaixo; tem "Tarefas" e "Diário"; tocar "Diário" monta DiarioDoLink com a
  *    fonte do link (estável entre renders), e a recusa do token numa RPC do Diário leva
- *    ao mesmo texto de recusa das Tarefas.
+ *    ao mesmo texto de recusa das Tarefas;
+ *  - cabeçalho sem nome: só a organização, sem o "·" solto.
  */
 import React from 'react'
 import { render, screen, waitFor, act, fireEvent, within } from '@testing-library/react'
@@ -93,35 +95,75 @@ describe('CelularTokenGate', () => {
     expect(screen.queryByTestId('tela-de-tarefas')).toBeNull()
   })
 
-  it('sessão válida: abre Minhas Tarefas com nome e organização; a barra tem Tarefas e Diário', async () => {
+  it('sessão válida: abre Minhas Tarefas com nome e organização; o seletor tem Tarefas e Diário', async () => {
     responder({ celular_sessao: () => ok(SESSAO) })
     render(<CelularTokenGate token={TOKEN} />)
     expect(await screen.findByTestId('tela-de-tarefas')).toHaveTextContent('tarefas de o1')
     expect(screen.getByText('Ana Souza')).toBeInTheDocument()
-    const barra = screen.getByRole('navigation', { name: 'Seções' })
-    expect(within(barra).getByRole('button', { name: 'Tarefas' })).toHaveAttribute('aria-current', 'page')
-    expect(within(barra).getByRole('button', { name: 'Diário' })).not.toHaveAttribute('aria-current')
+    const seletor = screen.getByRole('tablist', { name: 'Seções' })
+    expect(within(seletor).getByRole('tab', { name: 'Tarefas' })).toHaveAttribute('aria-selected', 'true')
+    expect(within(seletor).getByRole('tab', { name: 'Diário' })).toHaveAttribute('aria-selected', 'false')
     expect(screen.queryByTestId('tela-do-diario')).toBeNull()
+  })
+
+  it('o seletor fica no topo (antes do conteúdo) e não há barra de seções embaixo', async () => {
+    responder({ celular_sessao: () => ok(SESSAO) })
+    render(<CelularTokenGate token={TOKEN} />)
+    const conteudo = await screen.findByTestId('tela-de-tarefas')
+    const seletor = screen.getByRole('tablist', { name: 'Seções' })
+    // O seletor precede o conteúdo no DOM.
+    expect(seletor.compareDocumentPosition(conteudo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    // Nada de seletor (nem navegação "Seções") DEPOIS do conteúdo.
+    expect(screen.queryByRole('navigation', { name: 'Seções' })).toBeNull()
+    expect(screen.getAllByRole('tab')).toHaveLength(2)
+    for (const aba of screen.getAllByRole('tab')) {
+      expect(aba.compareDocumentPosition(conteudo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
+    }
+    // O seletor está no cabeçalho, junto de nome e organização.
+    const cab = seletor.parentElement as HTMLElement
+    expect(cab).toHaveTextContent('Ana Souza')
+    expect(cab).toHaveTextContent('Alpa')
+  })
+
+  it('cabeçalho sem nome: mostra só a organização, sem "·" solto', async () => {
+    for (const nome of ['', '   ']) {
+      responder({ celular_sessao: () => ok({ ...SESSAO, nome }) })
+      const { container, unmount } = render(<CelularTokenGate token={TOKEN} />)
+      await screen.findByTestId('tela-de-tarefas')
+      const cab = container.querySelector('header') as HTMLElement
+      expect(cab.querySelector('p')?.textContent).toBe('Alpa')
+      expect(cab.textContent).not.toContain('·')
+      unmount()
+    }
+  })
+
+  it('cabeçalho com nome: "nome · organização"', async () => {
+    responder({ celular_sessao: () => ok(SESSAO) })
+    const { container } = render(<CelularTokenGate token={TOKEN} />)
+    await screen.findByTestId('tela-de-tarefas')
+    expect((container.querySelector('header') as HTMLElement).querySelector('p')?.textContent).toBe('Ana Souza · Alpa')
   })
 
   it('tocar "Diário" monta o Diário com a fonte do link; voltar a "Tarefas" traz as tarefas', async () => {
     responder({ celular_sessao: () => ok({ ...SESSAO, pode_aprovar_diario: true }) })
     render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
-    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Diário' }))
     expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('diário link aprova=true')
     expect(screen.queryByTestId('tela-de-tarefas')).toBeNull()
-    expect(screen.getByRole('button', { name: 'Diário' })).toHaveAttribute('aria-current', 'page')
-    fireEvent.click(screen.getByRole('button', { name: 'Tarefas' }))
+    expect(screen.getByRole('tab', { name: 'Diário' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('tab', { name: 'Tarefas' })).toHaveAttribute('aria-selected', 'false')
+    fireEvent.click(screen.getByRole('tab', { name: 'Tarefas' }))
     expect(await screen.findByTestId('tela-de-tarefas')).toBeInTheDocument()
     expect(screen.queryByTestId('tela-do-diario')).toBeNull()
+    expect(screen.getByRole('tab', { name: 'Tarefas' })).toHaveAttribute('aria-selected', 'true')
   })
 
   it('sessão sem pode_aprovar_diario: a fonte do Diário diz que não aprova', async () => {
     responder({ celular_sessao: () => ok(SESSAO) })
     render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
-    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Diário' }))
     expect(await screen.findByTestId('tela-do-diario')).toHaveTextContent('aprova=false')
   })
 
@@ -129,7 +171,7 @@ describe('CelularTokenGate', () => {
     responder({ celular_sessao: () => ok(SESSAO), celular_diarios_listar: () => ok([]) })
     const { rerender } = render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
-    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Diário' }))
     await screen.findByTestId('tela-do-diario')
     rerender(<CelularTokenGate token={TOKEN} />)
     rerender(<CelularTokenGate token={TOKEN} />)
@@ -142,7 +184,7 @@ describe('CelularTokenGate', () => {
     responder({ celular_sessao: () => ok(SESSAO), celular_diarios_listar: () => falha(RECUSA) })
     render(<CelularTokenGate token={TOKEN} />)
     await screen.findByTestId('tela-de-tarefas')
-    fireEvent.click(screen.getByRole('button', { name: 'Diário' }))
+    fireEvent.click(screen.getByRole('tab', { name: 'Diário' }))
     await waitFor(() => expect(screen.getByRole('alert')).toHaveTextContent(TEXTO_LINK_INVALIDO))
     expect(screen.queryByTestId('tela-do-diario')).toBeNull()
     expect(screen.queryByText('Ana Souza')).toBeNull()

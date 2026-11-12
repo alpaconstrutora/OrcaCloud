@@ -30,7 +30,7 @@ type Estado =
 
 export const TEXTO_LINK_INVALIDO = 'Link inválido ou vencido — peça um novo ao administrador'
 
-/** Seções da barra de baixo. */
+/** Seções do seletor (pílula) no topo — a única barra de baixo é a de cada seção. */
 type AbaId = 'tarefas' | 'diario'
 const ABAS: { id: AbaId; rotulo: string; Icone: LucideIcon }[] = [
   { id: 'tarefas', rotulo: 'Tarefas', Icone: CheckSquare },
@@ -142,18 +142,57 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   }
 
   const { sessao } = estado
+  // Sem nome (conta sem nome cadastrado): só a organização, sem o "· " solto na frente.
+  // `celular_sessao` não devolve e-mail — não há outro identificador para mostrar.
+  const nome = sessao.nome?.trim() ?? ''
   return (
     <div className="h-[100dvh] flex flex-col bg-[#eef2ff] font-sans overflow-hidden">
-      <div className="bg-white border-b border-slate-200 px-4 h-10 flex items-center flex-shrink-0">
+      <header className="bg-white border-b border-slate-200 px-4 pt-2 pb-2 flex-shrink-0 flex flex-col gap-2">
         <p className="text-xs text-slate-600 truncate">
-          <span className="font-medium text-slate-800">{sessao.nome}</span> · {sessao.org_nome}
+          {nome ? (
+            <>
+              <span className="font-medium text-slate-800">{nome}</span> · {sessao.org_nome}
+            </>
+          ) : (
+            <span className="font-medium text-slate-800">{sessao.org_nome}</span>
+          )}
         </p>
-      </div>
+        {/* Seletor de seção: pílula segmentada no topo. Só ele troca de seção; embaixo fica
+            apenas a barra própria de cada seção (Entrada/+/Espaços ou Registros/Resumo). */}
+        <div role="tablist" aria-label="Seções" className="flex bg-slate-100 rounded-full p-1 gap-1">
+          {ABAS.map(({ id, rotulo, Icone }) => {
+            const ativa = id === aba
+            return (
+              <button
+                key={id}
+                id={`celular-aba-${id}`}
+                type="button"
+                role="tab"
+                aria-selected={ativa}
+                aria-controls="celular-painel"
+                onClick={() => setAba(id)}
+                className={`flex-1 h-10 rounded-full inline-flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
+                  ativa ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'
+                }`}
+              >
+                <Icone className="w-4 h-4" aria-hidden="true" />
+                {rotulo}
+              </button>
+            )
+          })}
+        </div>
+      </header>
 
-      {/* TasksMobileApp foi feito para viver dentro do <main> do Layout e anula o gutter dele
-          com margem negativa (-m-4 md:-m-6): este recipiente devolve o mesmo gutter. */}
+      {/* TasksMobileApp/DiaryMobileApp foram feitos para viver dentro do <main> do Layout e anulam
+          o gutter dele com margem negativa (-m-4 md:-m-6): este recipiente devolve o mesmo gutter.
+          É `flex-1 min-h-0`: o cabeçalho cresce com a pílula e a área da seção encolhe junto. */}
       {/* Só a aba ativa fica montada: trocar de aba pode remontar a outra (é aceito). */}
-      <div className="relative flex-1 min-h-0 p-4 md:p-6">
+      <div
+        id="celular-painel"
+        role="tabpanel"
+        aria-labelledby={`celular-aba-${aba}`}
+        className="relative flex-1 min-h-0 p-4 md:p-6"
+      >
         {aba === 'tarefas' ? (
           <TarefasFonteContext.Provider value={fonte}>
             <TasksMobileApp orgId={sessao.org_id} />
@@ -162,21 +201,6 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
           <DiarioDoLink fonte={fonteDiario} />
         )}
       </div>
-
-      <nav aria-label="Seções" className="bg-white border-t border-slate-200 flex-shrink-0 pb-[env(safe-area-inset-bottom)] flex">
-        {ABAS.map(({ id, rotulo, Icone }) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setAba(id)}
-            aria-current={id === aba ? 'page' : undefined}
-            className={`flex-1 h-12 flex flex-col items-center justify-center gap-0.5 ${id === aba ? 'text-blue-600' : 'text-slate-500'}`}
-          >
-            <Icone className="w-5 h-5" aria-hidden="true" />
-            <span className="text-[11px] font-medium">{rotulo}</span>
-          </button>
-        ))}
-      </nav>
     </div>
   )
 }

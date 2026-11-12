@@ -76,22 +76,28 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
     };
     const inflacaoGeral = study.inflation_rate ?? D.inflation_rate;
 
-    const handleSave = async () => {
+    type CampoNumerico = 'construction_duration_months' | 'sales_duration_months' | 'construction_start_month' | 'sales_start_month'
+        | 'inflation_rate' | 'discount_rate' | 'tax_rate' | 'brokerage_fee' | 'financing_rate_annual';
+    const INTEIROS: CampoNumerico[] = ['construction_duration_months', 'sales_duration_months', 'construction_start_month', 'sales_start_month'];
+
+    /**
+     * Grava UM campo ao sair dele, só se mudou (pendência da Fase 1 do plano
+     * 2026-11-11). Vazio grava vazio (`null`) e o campo volta a mostrar o padrão — o
+     * motor usa o padrão quando a coluna está vazia; antes, apagar gravava 0 e cada
+     * saída de campo regravava os nove. Valor impossível (mês 0) é gravado como veio
+     * e o motor avisa (cronograma_invalido) em vez de esconder.
+     */
+    const salvarNumero = async (campo: CampoNumerico, texto: string, setTexto: (t: string) => void) => {
+        const t = texto.trim();
+        const n = t === '' ? NaN : INTEIROS.includes(campo) ? parseInt(t, 10) : parseFloat(t);
+        const valor = Number.isNaN(n) ? null : n;
+        setTexto(String(valor ?? D[campo]));
+        const gravado = study[campo] ?? null;
+        // Coluna vazia mostra o padrão: sair do campo com o padrão nele não muda nada.
+        if (valor === gravado || (gravado === null && valor === D[campo])) return;
         try {
             setSaving(true);
-            await imovibService.updateStudy(study.id, {
-                // Mês/duração vazio cai no padrão; valor impossível é gravado como
-                // veio e o motor avisa (cronograma_invalido) em vez de esconder.
-                construction_duration_months: parseInt(constructionDurationMonths) || D.construction_duration_months,
-                sales_duration_months: parseInt(salesDurationMonths) || D.sales_duration_months,
-                construction_start_month: parseInt(constructionStartMonth) || D.construction_start_month,
-                sales_start_month: parseInt(salesStartMonth) || D.sales_start_month,
-                inflation_rate: parseFloat(inflationRate) || 0,
-                discount_rate: parseFloat(discountRate) || 0,
-                tax_rate: parseFloat(taxRate) || 0,
-                brokerage_fee: parseFloat(brokerageFee) || 0,
-                financing_rate_annual: parseFloat(financingRateAnnual) || 0,
-            });
+            await imovibService.updateStudy(study.id, { [campo]: valor } as ImovibStudyUpdate);
             onDataChanged();
         } catch (e) {
             console.error(e);
@@ -116,7 +122,7 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                 )}
             </div>
 
-            {/* Todos os campos gravam no blur (handleSave). */}
+            {/* Cada campo grava ao sair dele (salvarNumero). */}
             <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                 {/* Time Parameters */}
@@ -126,42 +132,46 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Duração Obras (Meses)</label>
+                            <label htmlFor="imovib-construction_duration_months" className="block text-xs font-semibold text-slate-500 mb-1.5">Duração Obras (Meses)</label>
                             <input
                                 type="number"
+                                id="imovib-construction_duration_months"
                                 value={constructionDurationMonths}
                                 onChange={(e) => setConstructionDurationMonths(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('construction_duration_months', constructionDurationMonths, setConstructionDurationMonths)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mês Início Obras</label>
+                            <label htmlFor="imovib-construction_start_month" className="block text-xs font-semibold text-slate-500 mb-1.5">Mês Início Obras</label>
                             <input
                                 type="number"
+                                id="imovib-construction_start_month"
                                 value={constructionStartMonth}
                                 onChange={(e) => setConstructionStartMonth(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('construction_start_month', constructionStartMonth, setConstructionStartMonth)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Duração Vendas (Meses)</label>
+                            <label htmlFor="imovib-sales_duration_months" className="block text-xs font-semibold text-slate-500 mb-1.5">Duração Vendas (Meses)</label>
                             <input
                                 type="number"
+                                id="imovib-sales_duration_months"
                                 value={salesDurationMonths}
                                 onChange={(e) => setSalesDurationMonths(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('sales_duration_months', salesDurationMonths, setSalesDurationMonths)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Mês Início Vendas</label>
+                            <label htmlFor="imovib-sales_start_month" className="block text-xs font-semibold text-slate-500 mb-1.5">Mês Início Vendas</label>
                             <input
                                 type="number"
+                                id="imovib-sales_start_month"
                                 value={salesStartMonth}
                                 onChange={(e) => setSalesStartMonth(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('sales_start_month', salesStartMonth, setSalesStartMonth)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
@@ -175,24 +185,26 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5" title="Corrige receita e custo quando o índice das vendas ou da obra fica vazio, e deflaciona a visão real.">Inflação geral (% a.m.)</label>
+                            <label htmlFor="imovib-inflation_rate" className="block text-xs font-semibold text-slate-500 mb-1.5" title="Corrige receita e custo quando o índice das vendas ou da obra fica vazio, e deflaciona a visão real.">Inflação geral (% a.m.)</label>
                             <input
                                 type="number"
                                 step="0.01"
+                                id="imovib-inflation_rate"
                                 value={inflationRate}
                                 onChange={(e) => setInflationRate(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('inflation_rate', inflationRate, setInflationRate)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">TMA / Desconto (Ano)</label>
+                            <label htmlFor="imovib-discount_rate" className="block text-xs font-semibold text-slate-500 mb-1.5">TMA / Desconto (Ano)</label>
                             <input
                                 type="number"
                                 step="0.1"
+                                id="imovib-discount_rate"
                                 value={discountRate}
                                 onChange={(e) => setDiscountRate(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('discount_rate', discountRate, setDiscountRate)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none text-sm transition-colors"
                             />
                         </div>
@@ -249,26 +261,28 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                     </h4>
                     <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Impostos (Ex: RET)</label>
+                            <label htmlFor="imovib-tax_rate" className="block text-xs font-semibold text-slate-500 mb-1.5">Impostos (Ex: RET)</label>
                             <input
                                 type="number"
                                 step="0.01"
+                                id="imovib-tax_rate"
                                 value={taxRate}
                                 onChange={(e) => setTaxRate(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('tax_rate', taxRate, setTaxRate)}
                                 disabled={capexRubricasAtivas || impostoPeloRegime}
                                 title={impostoPeloRegime ? 'O imposto vem do regime tributário escolhido em Orçamento (CAPEX): este campo não entra no cálculo.' : capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
                                 className="disabled:opacity-50 disabled:cursor-not-allowed w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors text-red-700"
                             />
                         </div>
                         <div>
-                            <label className="block text-xs font-semibold text-slate-500 mb-1.5">Comissão / Marketing</label>
+                            <label htmlFor="imovib-brokerage_fee" className="block text-xs font-semibold text-slate-500 mb-1.5">Comissão / Marketing</label>
                             <input
                                 type="number"
                                 step="0.01"
+                                id="imovib-brokerage_fee"
                                 value={brokerageFee}
                                 onChange={(e) => setBrokerageFee(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('brokerage_fee', brokerageFee, setBrokerageFee)}
                                 disabled={capexRubricasAtivas}
                                 title={capexRubricasAtivas ? motivoDeducoesForaDoCalculo : undefined}
                                 className="disabled:opacity-50 disabled:cursor-not-allowed w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors text-red-700"
@@ -302,9 +316,10 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
                             <input
                                 type="number"
                                 step="0.1"
+                                id="imovib-financing_rate_annual"
                                 value={financingRateAnnual}
                                 onChange={(e) => setFinancingRateAnnual(e.target.value)}
-                                onBlur={handleSave}
+                                onBlur={() => void salvarNumero('financing_rate_annual', financingRateAnnual, setFinancingRateAnnual)}
                                 className="w-full h-9 px-3 bg-gray-50 border border-gray-200 rounded-[6px] focus:border-red-500 focus:ring-1 focus:ring-red-500 outline-none text-sm transition-colors"
                             />
                         </div>

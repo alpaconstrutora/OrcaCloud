@@ -69,7 +69,9 @@ const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onC
                         if (texto.trim() === '' && padrao != null) {
                             setTexto(String(padrao));
                             onChange?.(padrao);
-                            onCommit(null);
+                            // Já mostrava o padrão (coluna vazia, ou o próprio valor do padrão):
+                            // o cálculo não muda — não regrava a cada saída do campo.
+                            if (valorAoFocar.current !== padrao) onCommit(null);
                             return;
                         }
                         const n = parseFloat(texto) || 0;

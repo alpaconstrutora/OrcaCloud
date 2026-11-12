@@ -61,4 +61,16 @@ describe('ImovibInputRow — campo apagado volta ao padrão (item 2.6)', () => {
         await user.tab();
         expect(onCommit).toHaveBeenCalledWith(0);
     });
+
+    it('campo que já mostra o padrão: apagar e sair não grava de novo', async () => {
+        // Pendência da Fase 1 do plano 2026-11-11: regravava null a cada saída.
+        const user = userEvent.setup();
+        const onCommit = vi.fn();
+        render(<ImovibInputRow label="Meses até o distrato" value={12} padrao={12} onCommit={onCommit} />);
+        const campo = screen.getByLabelText('Meses até o distrato') as HTMLInputElement;
+        await user.clear(campo);
+        await user.tab();
+        expect(onCommit).not.toHaveBeenCalled();
+        expect(campo.value).toBe('12');
+    });
 });

@@ -67,6 +67,23 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
 
     const descricao = TIPOS.find(t => t.id === tipo)?.desc;
 
+    // Nome acessível com os números (§28.5).
+    const pico = dados.reduce((m, d) => (d.vendas > m.vendas ? d : m), { mes: '', vendas: 0, estoque: 0 });
+    const vendidoNoPrazo = dados.reduce((a, d) => a + d.vendas, 0);
+    const nomeDoGrafico = `Vendas por mês: ${moneyBRL(vendidoNoPrazo)} vendidos de ${dados[0]?.mes ?? ''} a ${dados[dados.length - 1]?.mes ?? ''}; maior venda em ${pico.mes}, ${moneyBRL(pico.vendas)}; estoque no fim ${moneyBRL(dados[dados.length - 1]?.estoque ?? 0)}.`;
+
+    // Gráfico sem vendas: a causa certa, na ordem em que o motor desconta (VGV → permutas → curva).
+    // Antes, sem vendas a culpa era sempre da VSO, mesmo com permuta de 100%.
+    const vendavelPct = (1 - Math.min(100, Math.max(0, study.swap_physical_percent ?? D.swap_physical_percent)) / 100)
+        * (1 - Math.min(100, Math.max(0, study.swap_financial_percent ?? D.swap_financial_percent)) / 100);
+    const motivoSemVendas = !(math.vgvTotal > 0)
+        ? 'Sem VGV para distribuir: informe o preço de venda em Orçamento › Por torre.'
+        : vendavelPct <= 0
+            ? 'As permutas ficam com todo o VGV: não sobra nada para vender. Confira as permutas em Capital.'
+            : tipo === 'vso' && !((study.sales_vso_percent ?? D.sales_vso_percent) > 0)
+                ? 'A curva não vende nada no prazo: com VSO de 0%, o estoque inteiro fica sem vender.'
+                : 'A curva não vende nada no prazo: confira os percentuais da curva acima.';
+
     return (
         <div className="bg-white rounded-[10px] p-6 border border-gray-200 space-y-6">
             <div>
@@ -156,24 +173,20 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
 
                 <ChartCard title="Vendas por mês" subtitle="VGV vendido no mês (eixo da esquerda) e estoque que resta (eixo da direita), sem correção.">
                     {dados.length === 0 || dados.every(d => d.vendas === 0) ? (
-                        <ChartEmpty>
-                            {math.vgvTotal > 0
-                                ? 'A curva não vende nada no prazo: com VSO de 0%, o estoque inteiro fica sem vender.'
-                                : 'Sem VGV para distribuir: informe o preço de venda em Orçamento › Por torre.'}
-                        </ChartEmpty>
+                        <ChartEmpty>{motivoSemVendas}</ChartEmpty>
                     ) : (
                         <>
                             <Legend items={[{ label: 'Vendas do mês', color: SERIE_PRINCIPAL }, { label: 'Estoque', color: SERIE_CONTEXTO }]} />
-                            <div className="h-56">
+                            <div className="h-56" role="img" aria-label={nomeDoGrafico}>
                                 <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
                                     {/* Eixos separados: a venda do mês é ~1/36 do estoque inicial e sumiria no mesmo eixo. */}
-                                    <ComposedChart data={dados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                                    <ComposedChart accessibilityLayer={false} data={dados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                                         <CartesianGrid vertical={false} stroke={GRID} />
                                         <XAxis dataKey="mes" tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />
                                         <YAxis yAxisId="vendas" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
                                         <YAxis yAxisId="estoque" orientation="right" tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
                                         <Tooltip contentStyle={TOOLTIP_STYLE} cursor={TOOLTIP_CURSOR} formatter={(v: unknown) => moneyBRL(Number(v))} />
-                                        <Bar yAxisId="vendas" dataKey="vendas" name="Vendas do mês" fill={SERIE_PRINCIPAL} radius={[3, 3, 0, 0]} />
+                                        <Bar yAxisId="vendas" dataKey="vendas" name="Vendas do mês" fill={SERIE_PRINCIPAL} radius={[4, 4, 0, 0]} maxBarSize={24} />
                                         <Line yAxisId="estoque" dataKey="estoque" name="Estoque" stroke={SERIE_CONTEXTO} strokeWidth={2} dot={false} type="monotone" />
                                     </ComposedChart>
                                 </ResponsiveContainer>

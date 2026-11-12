@@ -780,16 +780,18 @@ Conferido no navegador em 11/11 (Garden Cambuhy e Bruninho, usuário de leitura,
 
 Conferido no navegador em 11/11 (Garden e Bruninho, roteiro `c:/tmp/pwtest/imovib_fase4.js`): cinco fatias, 0 escritas, 0 erros de console.
 
-**Fase 5 — Tempo e custos:** 0 de 9
-- [ ] 5.1 Marcos e datas
-- [ ] 5.2 Terreno parcelado
-- [ ] 5.3 Curva de desembolso
-- [ ] 5.4 Importar a curva do planejamento
-- [ ] 5.5 Momento de cada rubrica
-- [ ] 5.6 Pós-obra e estoque
-- [ ] 5.7 Referência de CUB
-- [ ] 5.8 Zoneamento no estudo
-- [ ] 5.9 Due diligence do terreno
+**Fase 5 — Tempo e custos:** 9 de 9 — em revisão; migrations `aplicar_20271112100000` (marcos, terreno, curva, estoque), `aplicar_20271112110000` (momento das rubricas) e `aplicar_20271112120000` (due diligence) aplicadas em 11/11 com OK do usuário (*"Pode aplicar"*): 7 + 2 colunas, 4 policies só `authenticated`, anon sem SELECT
+- [x] 5.1 Marcos e datas — `utils/imovibCronograma.ts` (`marcosDoEstudo`, `nomeDoMes`, `dataDoMes`, `mesDaData`); data em 'AAAA-MM' (aritmética de texto, sem `Date`). Com data-base os meses do fluxo viram "jan/27". Sub-aba "2. Cronograma" de Premissas; "Usar as datas do empreendimento" preenche início das vendas e prazo da obra no formulário.
+- [x] 5.2 Terreno parcelado — sub-aba "3. Terreno" (o custo saiu do CAPEX, que mostra só o resumo). Parcela depois do fim estende o fluxo.
+- [x] 5.3 Curva de desembolso — `curvaDeDesembolso` devolve `{ pesos, somaInformada }`; a linear continua na conta antiga (custo ÷ meses) para o padrão dar o mesmo centavo. O teste compara com 3x² − 2x³ direto: `generateSCurveData` arredonda para inteiro e não serve para frações.
+- [x] 5.4 Importar a curva do planejamento — `services/imovibCurvaDoPlanejamento.ts` + `curvaDoCronograma`: soma o VALOR das distribuições por mês do calendário (o `percentage` é por item); planejamentos das obras, ou as obras se nenhum planejamento tiver valores. Garden: botão desligado com "As obras do empreendimento não têm cronograma físico-financeiro com valores."
+- [x] 5.5 Momento de cada rubrica — vale para valor fixo e % de terreno/obra; % do VGV continua dedução da receita ("Com a receita" na tela). Só o momento `obra` é financiável. Modelo de estudo novo com `pre_obra` em Projetos e Legais e `lancamento` em Stand e Decorado.
+- [x] 5.6 Pós-obra e estoque — botão cria "10. Pós-obra" (UNIQUE impede duplicar; desligado no CAPEX simplificado); categorias em ordem numérica. Custo do estoque nos dois modos.
+- [x] 5.7 Referência de CUB — UF do terreno do empreendimento (ou seletor), padrão pela subclassificação, acréscimo 25% — hipóteses da tela, não gravadas. Garden: CUB R8-A/MG R$ 2.984,01/m² (01/2026); Torre A +0,5%.
+- [x] 5.8 Zoneamento no estudo — cartão só leitura em Identificação; taxa de ocupação guardada como fração (0,9) aparece como 90%.
+- [x] 5.9 Due diligence do terreno — 14 itens por botão; grava item a item; Resumo mostra "x de 14 ok, y com problema".
+
+Conferido no navegador em 11/11 (Garden Cambuhy, usuário de leitura, escritas interceptadas; roteiro `c:/tmp/pwtest/imovib_fase5.js`): listagem = Resumo (R$ 3.998.485, o mesmo de antes); Premissas (zoneamento, cronograma, terreno, due diligence), CAPEX (desembolso, pós-obra, CUB) e Resumo abrem; 0 escritas, 0 erros de console. O Bruninho e o Davi Bueno não existem mais em `imovib_studies` (a oportunidade "Quintino Bocaiúva" ficou sem estudo) — apagados fora desta frente, entre a conferência da Fase 4 e esta.
 
 **Fase 6 — Tributos:** 0 de 4
 - [ ] 6.1 Cálculo por regime (D4)

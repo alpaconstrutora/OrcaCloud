@@ -99,6 +99,12 @@ import type { ImplantacaoDaCasa } from './quadroEImplantacao';
 import { hipotesesDoForroDaCasa, forroDaEletrica, forroDaAguaDaCasa, rebaixoDoForroMm, decidirPressao } from './forroEPressao';
 import type { DecisaoDaPressao } from './forroEPressao';
 import { PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM, pluvialRenteAoEsgoto, motivoParaNaoGerar, GRAVE, problemasGraves, escolherSemente, norteNoQuadro, comandosNoMundo, comandosLocaisNoMundo, gruposDoTuboDeQueda, coletoresForaDoShaft, paredesSobORebaixo, LUZ_ALEM_DO_REBAIXO_MM, LUZ_FORA_DO_PILAR_MM, foraDoPoligono, FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM } from './escolhaEShaft';
+import type { ContextoDaCasa, SemContexto } from './contexto';
+import { portaDaFrente as portaDaFrenteDaEtapa, lancarEscadaDeAcesso as lancarEscadaDeAcessoDaEtapa, garagemNoQuadro as garagemNoQuadroDaEtapa, lancarRampaDaGaragem as lancarRampaDaGaragemDaEtapa, lancarMuroDaCasa as lancarMuroDaCasaDaEtapa } from './etapaAcessoEMuro';
+import { fechar as fecharDaEtapa, gerarTodas as gerarTodasDaEtapa } from './etapaArquitetura';
+import { etapaEstrutural as etapaEstruturalDaEtapa, etapaDoTelhado as etapaDoTelhadoDaEtapa } from './etapaEstruturaETelhado';
+import { instalacoes as instalacoesDaEtapa } from './etapaInstalacoes';
+import { planejarOSobrado as planejarOSobradoDaEtapa } from './sobrado';
 
 /** F22: por que a TÉRREA não comporta o programa (`null` = comporta): medida mínima de ambiente violada, ou a TO. */
 export function terreaNaoComporta(p: PlanoDaCasa): string | null {
@@ -194,6 +200,9 @@ export function planejarCasa(original: BlueprintModel, entrada: EntradaDaCasa, h
   return fica;
 }
 
+// A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
+export type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem' | 'muro'>;
+
 export function planejarComPavimentos(original: BlueprintModel, entrada: EntradaDaCasa, hipParcial: Partial<HipotesesDaCasa> & { pavimentos: 1 | 2 | 3 }, opcoes: OpcoesDoPlanoDaCasa = {}): PlanoDaCasa {
   const hip: HipotesesDaCasa = {
     ...HIPOTESES_DA_CASA_PADRAO,
@@ -242,6 +251,160 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     comandos.push(...lote);
     criados.push(...r.diff.created);
     return lote.length;
+  };
+  // P2 (12/11/2026): o CONTEXTO que as etapas extraídas (`utils/casaAutomatica/etapa*.ts`) recebem no lugar do fechamento —
+  // lido na hora (getter), e os `let` regraváveis (setter).
+  const ctx: ContextoDaCasa = {
+    get andarMm() {
+      return andarMm;
+    },
+    get aplicar() {
+      return aplicar;
+    },
+    get comandos() {
+      return comandos;
+    },
+    get criados() {
+      return criados;
+    },
+    get decisoes() {
+      return decisoes;
+    },
+    get divididos() {
+      return divididos;
+    },
+    get doCurto() {
+      return doCurto;
+    },
+    get entrada() {
+      return entrada;
+    },
+    get entradaDoGerador() {
+      return entradaDoGerador;
+    },
+    get estrutura() {
+      return estrutura;
+    },
+    get etapa() {
+      return etapa;
+    },
+    get etapaDoTelhado() {
+      return etapaDoTelhado;
+    },
+    get etapaEstrutural() {
+      return etapaEstrutural;
+    },
+    get etapas() {
+      return etapas;
+    },
+    get faixaNoMundo() {
+      return faixaNoMundo;
+    },
+    get fechar() {
+      return fechar;
+    },
+    get forroDoComodo() {
+      return forroDoComodo;
+    },
+    get forroLigado() {
+      return forroLigado;
+    },
+    get garagemNoQuadro() {
+      return garagemNoQuadro;
+    },
+    get gerarTodas() {
+      return gerarTodas;
+    },
+    get hip() {
+      return hip;
+    },
+    get hipGerador() {
+      return hipGerador;
+    },
+    get hipImplantacao() {
+      return hipImplantacao;
+    },
+    get implantacao() {
+      return implantacao;
+    },
+    get instalacoes() {
+      return instalacoes;
+    },
+    get lancarEscadaDeAcesso() {
+      return lancarEscadaDeAcesso;
+    },
+    get lancarMuroDaCasa() {
+      return lancarMuroDaCasa;
+    },
+    get lancarRampaDaGaragem() {
+      return lancarRampaDaGaragem;
+    },
+    get loteDasRegras() {
+      return loteDasRegras;
+    },
+    get m() {
+      return m;
+    },
+    set m(v) {
+      m = v;
+    },
+    get original() {
+      return original;
+    },
+    get pedidos() {
+      return pedidos;
+    },
+    get peDireitoMm() {
+      return peDireitoMm;
+    },
+    get pendencias() {
+      return pendencias;
+    },
+    get portaDaFrente() {
+      return portaDaFrente;
+    },
+    get programa() {
+      return programa;
+    },
+    get q() {
+      return q;
+    },
+    get rebaixoDoForro() {
+      return rebaixoDoForro;
+    },
+    get resumoDoMuro() {
+      return resumoDoMuro;
+    },
+    set resumoDoMuro(v) {
+      resumoDoMuro = v;
+    },
+    get rl() {
+      return rl;
+    },
+    get telhado() {
+      return telhado;
+    },
+    set telhado(v) {
+      telhado = v;
+    },
+    get temTerreno() {
+      return temTerreno;
+    },
+    get terraplenagemDaCasa() {
+      return terraplenagemDaCasa;
+    },
+    set terraplenagemDaCasa(v) {
+      terraplenagemDaCasa = v;
+    },
+    get terreno() {
+      return terreno;
+    },
+    get vazio() {
+      return vazio;
+    },
+    get zonaDasRegras() {
+      return zonaDasRegras;
+    },
   };
 
   const doCurto = programaDaCasa(entrada.curto, hip.programa);
@@ -411,210 +574,21 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
   // porta de entrada — `Escada.desdeCotaMm` (kernel 0.103.0). Sai da face da fachada diante da porta, rumo à rua, com os
   // pontos do lado baixo para o alto; só quando cabe no recuo de frente (senão a pendência diz, e ela fica à mão).
   // A porta de entrada: a mais larga na parede da fachada da frente do térreo (no quadro da frente, `local`).
-  const portaDaFrente = () => {
-    const qd = implantacao.quadro;
-    const rlE = implantacao.retanguloLocal;
-    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    return (
-      m.openings
-        .filter((o) => o.kind === 'door')
-        .map((o) => ({ o, w: m.walls.find((x) => x.id === o.wallId) }))
-        .filter((x): x is { o: (typeof m.openings)[number]; w: (typeof m.walls)[number] } => !!x.w && x.w.levelId === entrada.levelId)
-        .map(({ o, w }) => {
-          const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
-          const t = o.offsetMm + o.widthMm / 2;
-          const meioDaPorta = { x: w.a.x + ((w.b.x - w.a.x) / L) * t, y: w.a.y + ((w.b.y - w.a.y) / L) * t };
-          return { o, meioDaPorta, local: paraLocal(qd, meioDaPorta) };
-        })
-        .filter((x) => Math.abs(x.local.y - rlE.y0) <= meia + 1)
-        .sort((p, q2) => q2.o.widthMm - p.o.widthMm)[0] ?? null
-    );
-  };
-  const lancarEscadaDeAcesso = () => {
-    const tr = terraplenagemDaCasa;
-    if (!tr || tr.entrada.tipo === 'NENHUMA') return;
-    const e = tr.entrada;
-    const sentido = e.desnivelMm > 0 ? 'sobe' : 'desce';
-    const desc =
-      e.tipo === 'RAMPA'
-        ? `rampa de ${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m a ${hip.terraplenagem.rampaMaximaPct.toLocaleString('pt-BR')} %`
-        : `escada de ${e.degraus} degrau(s) de ${e.espelhoMm} mm (${(e.comprimentoMm / 1000).toLocaleString('pt-BR')} m)`;
-    const desnivel = `${(Math.abs(e.desnivelMm) / 1000).toLocaleString('pt-BR')} m`;
-    if (!e.cabe || e.cotaDaCalcadaMm == null) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, que não cabe no recuo de frente; desenhe o acesso à mão.` });
-      return;
-    }
-    const qd = implantacao.quadro;
-    const rlE = implantacao.retanguloLocal;
-    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    const porta = portaDaFrente();
-    if (!porta) {
-      pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}; a porta de entrada não está na fachada da frente: desenhe o acesso à mão.` });
-      return;
-    }
-    const naFace = paraMundo(qd, { x: porta.local.x, y: rlE.y0 - meia });
-    const naRua = paraMundo(qd, { x: porta.local.x, y: rlE.y0 - meia - e.comprimentoMm });
-    const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) });
-    // Do baixo para o alto: a calçada abaixo do piso → começa na rua; acima → começa na porta.
-    const pontos = e.desnivelMm > 0 ? [inteiro(naRua), inteiro(naFace)] : [inteiro(naFace), inteiro(naRua)];
-    try {
-      aplicar([
-        {
-          type: 'AddEscada',
-          levelId: entrada.levelId,
-          pontos,
-          tipo: e.tipo === 'RAMPA' ? 'RAMPA' : 'ESCADA',
-          larguraMm: Math.max(1200, porta.o.widthMm + 300),
-          alvoEspelhoMm: e.tipo === 'ESCADA' ? Math.min(hip.terraplenagem.espelhoMaximoMm, Math.max(1, e.espelhoMm)) : 175,
-          rotulo: 'Acesso',
-          desdeCotaMm: e.cotaDaCalcadaMm,
-        },
-      ]);
-      pendencias.push({ grupo: 'CONFERIR', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, lançada diante da porta de entrada.`, ...comLocal(localDoElemento(m, [porta.o.id])) });
-    } catch (x) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a escada de acesso não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.`, ...comLocal(localDoElemento(m, [porta.o.id])) });
-    }
-  };
+  const portaDaFrente = () => portaDaFrenteDaEtapa(ctx);
+  const lancarEscadaDeAcesso = () => lancarEscadaDeAcessoDaEtapa(ctx);
 
   // A garagem coberta no quadro da frente: o ambiente de uso GARAGEM no térreo (caixa do anel).
-  const garagemNoQuadro = () => {
-    const qd = implantacao.quadro;
-    const et = m.labels.find((l) => l.levelId === entrada.levelId && l.uso === 'GARAGEM');
-    const sp = et ? m.spaces.find((x) => x.levelId === entrada.levelId && pointInPolygon(x.ring, et.at)) : undefined;
-    if (!sp) return null;
-    const pts = sp.ring.map((p) => paraLocal(qd, p));
-    return { x0: Math.min(...pts.map((p) => p.x)), x1: Math.max(...pts.map((p) => p.x)) };
-  };
+  const garagemNoQuadro = () => garagemNoQuadroDaEtapa(ctx);
   // F26 (decisão do usuário, 18/10/2026: "Automático: rampa, recuando a casa"): a RAMPA DE VEÍCULOS (escada de acesso
   // tipo RAMPA, `veicular`, kernel 0.104.0) da calçada diante da garagem até a fachada — a implantação já recuou a casa
   // para ela caber; aqui, no lugar real da garagem, ela é lançada ou a pendência diz por que não.
-  const lancarRampaDaGaragem = () => {
-    const tr = terraplenagemDaCasa;
-    const leitor = entrada.leitorDoTerreno;
-    if (!tr || !leitor) return;
-    const g = garagemNoQuadro();
-    if (!g) return;
-    const qd = implantacao.quadro;
-    const rlG = implantacao.retanguloLocal;
-    const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-    const yF = Math.min(...(entrada.ctx.terreno?.anel ?? []).map((p) => paraLocal(qd, p).y));
-    const xm = (g.x0 + g.x1) / 2;
-    const rua = leitor.cotaEmM(paraMundo(qd, { x: xm, y: yF }));
-    if (rua == null || !Number.isFinite(rua)) return;
-    const calcadaMm = Math.round((rua - leitor.cotaZeroM) * 1000);
-    const delta = tr.elevacaoDoTerreoMm - calcadaMm;
-    if (Math.abs(delta) <= hip.terraplenagem.desnivelSemDegrauMm) return;
-    const pct = hip.terraplenagem.rampaDeVeiculosMaxPct;
-    const comprimento = Math.ceil(Math.abs(delta) / (pct / 100));
-    const face = rlG.y0 - meia;
-    const disponivel = face - (yF + hip.muro.espessuraMm);
-    const sentido = delta > 0 ? 'sobe' : 'desce';
-    if (comprimento > disponivel) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: a rampa de veículos ${sentido} ${f2(Math.abs(delta) / 1000)} m da rua ao piso — a ${f2(pct)} %, ${f2(comprimento / 1000)} m, e só há ${f2(Math.max(0, disponivel) / 1000)} m entre o muro e a fachada; desenhe a garagem na cota da rua ou a rampa mais inclinada, à mão.` });
-      return;
-    }
-    const naFace = paraMundo(qd, { x: xm, y: face });
-    const naRua = paraMundo(qd, { x: xm, y: face - comprimento });
-    const inteiro = (p: Point): Point => ({ x: Math.round(p.x), y: Math.round(p.y) });
-    try {
-      aplicar([
-        {
-          type: 'AddEscada',
-          levelId: entrada.levelId,
-          pontos: delta > 0 ? [inteiro(naRua), inteiro(naFace)] : [inteiro(naFace), inteiro(naRua)],
-          tipo: 'RAMPA',
-          veicular: true,
-          larguraMm: Math.max(2500, Math.round(g.x1 - g.x0)),
-          rotulo: 'Rampa da garagem',
-          desdeCotaMm: calcadaMm,
-        },
-      ]);
-      pendencias.push({ grupo: 'CONFERIR', texto: `Garagem: rampa de veículos ${sentido === 'sobe' ? 'subindo' : 'descendo'} ${f2(Math.abs(delta) / 1000)} m em ${f2(comprimento / 1000)} m (${f2(pct)} %), da rua à garagem — confira a inclinação no código de obras.` });
-    } catch (x) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Garagem: a rampa de veículos não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.` });
-    }
-  };
+  const lancarRampaDaGaragem = () => lancarRampaDaGaragemDaEtapa(ctx);
 
   // F26 (decisões do usuário: "muro + portão + calçada", "família nova no kernel"): o muro do lote (kernel 0.104.0), o
   // portão de pedestre diante da porta, o de garagem diante da garagem e as calçadas — depois da casa inteira, que é
   // de onde saem a porta, a garagem e a escada de acesso.
   let resumoDoMuro: PlanoDoMuroDaCasa['resumo'] | null = null;
-  const lancarMuroDaCasa = (): PlanoDoMuroDaCasa['resumo'] | null => {
-    if (!hip.muro.lancar) {
-      etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
-      return null;
-    }
-    try {
-      const qd = implantacao.quadro;
-      const rlM = implantacao.retanguloLocal;
-      const meia = (hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm) / 2;
-      const local = (p: Point) => paraLocal(qd, p);
-      const porta = portaDaFrente();
-      const acesso = (m.stairs ?? []).find((x) => x.levelId === entrada.levelId && x.desdeCotaMm != null && !x.veicular);
-      // A garagem coberta: o ambiente de uso GARAGEM no térreo — a largura dela e até a fachada.
-      const garagemLocal = garagemNoQuadro();
-      const leitor = entrada.leitorDoTerreno;
-      const plano = planejarMuroDaCasa(
-        {
-          levelId: entrada.levelId,
-          anelDoLote: entrada.ctx.terreno?.anel ?? [],
-          limites: entrada.ctx.limites,
-          quadro: qd,
-          portaX: porta ? porta.local.x : null,
-          faceDaFachadaY: rlM.y0 - meia,
-          inicioDaEscadaY: acesso ? Math.min(...acesso.pontos.map((p) => local(p).y)) : null,
-          casaNoMundo: implantacao.anelNoMundo,
-          meiaParedeMm: meia,
-          // A escada de acesso no chão: a faixa dela no quadro (o percurso ± meia largura).
-          obstaculos: (m.stairs ?? [])
-            .filter((x) => x.levelId === entrada.levelId && x.desdeCotaMm != null)
-            .map((x) => {
-              const pts = x.pontos.map(local);
-              const xs = pts.map((p) => p.x);
-              const ys = pts.map((p) => p.y);
-              const dx = Math.max(...xs) - Math.min(...xs);
-              const dy = Math.max(...ys) - Math.min(...ys);
-              const w = x.larguraMm / 2;
-              return dy >= dx ? { x0: Math.min(...xs) - w, x1: Math.max(...xs) + w, y0: Math.min(...ys), y1: Math.max(...ys) } : { x0: Math.min(...xs), x1: Math.max(...xs), y0: Math.min(...ys) - w, y1: Math.max(...ys) + w };
-            }),
-          garagem: garagemLocal ? { x0: garagemLocal.x0, x1: garagemLocal.x1, yFim: rlM.y0 - meia } : null,
-          vagasDescobertas: !garagemLocal && implantacao.vagasDescobertas ? implantacao.vagasDescobertas.caixa : null,
-          cotaDoTerreno:
-            temTerreno && leitor
-              ? (p: Point) => {
-                  const c = leitor.cotaEmM(p);
-                  return c == null || !Number.isFinite(c) ? null : (c - leitor.cotaZeroM) * 1000;
-                }
-              : null,
-        },
-        hip.muro,
-      );
-      for (const pd of plano.pendencias) pendencias.push(pd);
-      const n = aplicar(plano.comandos);
-      const r = plano.resumo;
-      etapa(
-        'MURO',
-        ROTULO_DA_ETAPA_DA_CASA.MURO,
-        'LANCOU',
-        n,
-        `frente ${f2(r.frenteM)} m e divisas ${f2(r.divisasM)} m; ${r.portoesDePedestre} portão(ões) de pedestre e ${r.portoesDeGaragem} de garagem; calçadas ${f2(r.calcadasM2)} m²`,
-      );
-      // A permeabilidade com as calçadas desenhadas: a projeção + o impermeável delas contra o mínimo da zona.
-      const lote = entrada.ctx.terreno?.areaMm2 ? entrada.ctx.terreno.areaMm2 / 1e6 : null;
-      const minimo = entrada.ctx.zona.taxaPermeabilidadeMinPct;
-      if (lote && minimo != null) {
-        const permeavel = ((lote - implantacao.medidas.projecaoM2 - r.impermeavelM2) / lote) * 100;
-        if (permeavel < minimo)
-          pendencias.push({ grupo: 'VERIFICACAO', texto: `Muro: com as calçadas, a permeabilidade cai a ${f2(permeavel)} % (a zona pede ${f2(minimo)} %) — troque o piso do acesso por drenante ou encurte as calçadas.` });
-      }
-      return r;
-    } catch (x) {
-      const motivo = x instanceof Error ? x.message : String(x);
-      etapa('MURO', ROTULO_DA_ETAPA_DA_CASA.MURO, 'NAO_RODOU', 0, motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Muro: ${motivo}` });
-      return null;
-    }
-  };
+  const lancarMuroDaCasa = (): PlanoDoMuroDaCasa['resumo'] | null => lancarMuroDaCasaDaEtapa(ctx);
 
   // ── ARQUITETURA ───────────────────────────────────────────────────────────
   const q = implantacao.quadro;
@@ -657,1662 +631,34 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     contextoDeRegras: { lote: loteDasRegras, zona: zonaDasRegras },
   };
 
-  // A CONFERÊNCIA e o plano — o fim comum da térrea e do sobrado. TO pela projeção; CA pela soma dos pavimentos.
-  type ResumoDasDisciplinas = Omit<PlanoDaCasa['resumo'], 'areaConstruidaM2' | 'ambientesPedidos' | 'ambientesAtendidos' | 'regrasVioladas' | 'terraplenagem' | 'muro'>;
-  const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => {
-    // F21: o molhado sem lado externo que ganhou EXAUSTOR (a climatização lança onde não há janela) está resolvido pela
-    // ventilação mecânica — fica para conferir no código de obras, não "sem solução".
-    for (const pd of pendencias) {
-      const nome = /^Arquitetura: (.+) exige ventilação e ficou sem lado externo\.$/.exec(pd.texto)?.[1];
-      if (!nome) continue;
-      const sp = m.spaces.find((x) => x.name === nome);
-      if (sp && (m.terminais ?? []).some((t) => t.tipoHidraulico === 'EXAUSTOR_AR' && t.levelId === sp.levelId && pointInPolygon(sp.ring, t.at))) {
-        pd.grupo = 'CONFERIR';
-        pd.texto = `Arquitetura: ${nome} sem lado externo — ventilação por exaustor com duto até a fachada (confira no código de obras).`;
-      }
-    }
-    const conferencia = conferirPrograma(m, programa);
-    for (const it of conferencia.itens) {
-      if (it.item.uso === 'CIRCULACAO' || it.faltam <= 0) continue;
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: falta ${it.faltam} × ${it.item.nome} no desenho` });
-    }
-    for (const rel of conferencia.relacoes) {
-      if (rel.estado === 'VIOLADA' && rel.relacao.tipo !== 'DESEJAVEL') pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: ${rel.a.nome} × ${rel.b.nome} — ${rel.relacao.tipo === 'OBRIGATORIA' ? 'deviam ter porta direta' : 'não podiam ser vizinhos'} (${rel.valor})`, ...comLocal(localDoElemento(m, [rel.spaceA, rel.spaceB].filter((x): x is string => !!x))) });
-    }
-    const atendidos = conferencia.itens.filter((it) => it.item.uso !== 'CIRCULACAO').reduce((s, it) => s + it.casados.length, 0);
-    const regras = avaliarRegras(m, REGRAS_SEMENTE, {
-      lote: loteDasRegras,
-      zona: zonaDasRegras,
-      taxaOcupacaoPct: loteDasRegras && loteDasRegras.areaM2 > 0 ? Math.round((f.projecaoM2 / loteDasRegras.areaM2) * 1000) / 10 : null,
-      coeficiente: loteDasRegras && loteDasRegras.areaM2 > 0 ? Math.round((f.areaConstruidaM2 / loteDasRegras.areaM2) * 100) / 100 : null,
-      alturaM: f.alturaM,
-    });
-    const violadas = regras.filter((x) => x.estado === 'VIOLADA' && x.regra.severidade === 'ERRO');
-    for (const v of violadas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Legislação: ${v.regra.nome} — ${v.alvoRotulo}${v.valores ? ` (${v.valores})` : ''}`, ...comLocal(localDoElemento(m, [v.selecionarId ?? v.alvoId].filter((x): x is string => !!x))) });
-    etapa('CONFERENCIA', ROTULO_DA_ETAPA_DA_CASA.CONFERENCIA, 'CALCULOU', 0, `${atendidos} de ${pedidos} ambientes do programa; ${violadas.length} regra(s) violada(s)`);
-    return {
-      levelId: entrada.levelId,
-      comandos,
-      criados,
-      etapas,
-      pendencias,
-      resultado: m,
-      programa,
-      implantacao,
-      semente: f.semente,
-      escolha: f.escolha,
-      decisoes,
-      sobrado: f.sobrado,
-      resumo: { areaConstruidaM2: f.areaConstruidaM2, ambientesPedidos: pedidos, ambientesAtendidos: atendidos, regrasVioladas: violadas.length, ...f.disciplinas, terraplenagem: terraplenagemDaCasa, muro: resumoDoMuro },
-    };
-  };
+  const fechar = (f: { projecaoM2: number; areaConstruidaM2: number; alturaM: number; semente: number; escolha: string; sobrado: ResumoDoSobrado | null; disciplinas: ResumoDasDisciplinas }): PlanoDaCasa => fecharDaEtapa(ctx, f);
 
-  const gerarTodas = (p: Programa) => {
-    const resultados: ResultadoDoGerador[] = [];
-    const falhas: string[] = [];
-    for (const s of hip.sementes.length ? hip.sementes : [1]) {
-      try {
-        resultados.push(gerar({ ...entradaDoGerador, programa: p }, s, hipGerador));
-      } catch (e) {
-        falhas.push(`semente ${s}: ${e instanceof Error ? e.message : String(e)}`);
-      }
-    }
-    return { resultados, falhas };
-  };
+  const gerarTodas = (p: Programa) => gerarTodasDaEtapa(ctx, p);
 
   // ── ESTRUTURA (F4) — o molde das etapas estruturais (a térrea e o sobrado) ─────
   // Os lançamentos automáticos da gaveta Estrutural, em cadeia: cada um lê o modelo com o anterior aplicado
   // (vigas apoiam nos pilares, fundações descem dos pilares). Falha ou recusa = motivo na etapa e segue.
   const estrutura = { ...ESTRUTURA_ZERADA };
   const L = entrada.levelId;
-  const etapaEstrutural = <P extends { comandos: Command[]; motivo: string | null; avisos?: string[] }>(
-    id: Exclude<EtapaDaCasaId, 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA'>,
-    planejar: (modelo: BlueprintModel) => P,
-    contar: (plano: P) => { nota: string; foraDoPlano?: string[] },
-  ) => {
-    if (!hip.estrutura.lancar) {
-      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
-      return;
-    }
-    try {
-      const plano = planejar(m);
-      if (!plano.comandos.length) {
-        // Sem nada a lançar: o motivo (recusa) ou, não havendo, o aviso diz por quê (paredes oblíquas, nos eixos).
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], plano.motivo ? 'NAO_RODOU' : 'NADA_A_FAZER', 0, plano.motivo ?? (plano.avisos?.length ? plano.avisos.join('; ') : null));
-        if (plano.motivo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${plano.motivo}` });
-        return;
-      }
-      const n = aplicar(plano.comandos);
-      const { nota, foraDoPlano = [] } = contar(plano);
-      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota);
-      for (const a of plano.avisos ?? []) pendencias.push({ grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${a}` });
-      // "Fora do plano" é o planejador PULANDO um ponto (pilar quase duplicado, viga já existente…): o lugar ficou
-      // atendido por outra peça ou pede conferência — não é falta de solução.
-      // F23: o nó a menos de uma seção de outro pilar é atendido por ele (que apoia as paredes do nó) — para conferir.
-      for (const f of foraDoPlano)
-        pendencias.push(/a menos de uma seção de outro pilar/.test(f) ? { grupo: 'CONFERIR', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f} — o pilar vizinho atende os dois encontros` } : { grupo: 'VERIFICACAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${f}` });
-    } catch (e) {
-      const motivo = e instanceof Error ? e.message : String(e);
-      etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
-    }
-  };
+  const etapaEstrutural = <P extends { comandos: Command[]; motivo: string | null; avisos?: string[] }>(id: Exclude<EtapaDaCasaId, 'IMPLANTACAO' | 'ARQUITETURA' | 'CONFERENCIA'>, planejar: (modelo: BlueprintModel) => P, contar: (plano: P) => { nota: string; foraDoPlano?: string[] }) => etapaEstruturalDaEtapa<P>(ctx, id, planejar, contar);
   // ── TELHADO (F5) ──────────────────────────────────────────────────────────
   // Duas águas (ou uma) por extrusão sobre o retângulo da arquitetura, no quadro da frente. A parede termina
   // no pé-direito; com laje lançada, o telhado começa em cima dela. No sobrado, sobre o pavimento de cima.
   let telhado: ResumoDoTelhado | null = null;
-  const etapaDoTelhado = (levelId: ObjectId, ret: Retangulo, anexos: readonly Retangulo[], comLaje: boolean) => {
-    if (!hip.telhado.lancar) {
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
-      return;
-    }
-    const espessuraExterna = hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm;
-    const topo = peDireitoMm + (comLaje ? hip.estrutura.lajes.espessuraMm : 0);
-    const t = comandosDoTelhado(levelId, ret, q, topo, espessuraExterna / 2, hip.telhado);
-    if (!t.ok) {
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, t.motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${t.motivo}` });
-      return;
-    }
-    // F24: o anexo da casa em L ganha UMA água caindo para fora do principal (atrás → fundos, à frente → frente, ao
-    // lado → para aquele lado). O que não encosta em nenhum lado do principal fica para cobrir à mão.
-    const dosAnexos: Command[] = [];
-    let anexosSemCobertura = 0;
-    for (const a of anexos) {
-      const caimento = a.y0 >= ret.y1 - 1 ? 'FUNDOS' : a.y1 <= ret.y0 + 1 ? 'FRENTE' : a.x0 >= ret.x1 - 1 ? 'DIREITA' : a.x1 <= ret.x0 + 1 ? 'ESQUERDA' : null;
-      const ta = caimento ? comandosDoTelhado(levelId, a, q, topo, espessuraExterna / 2, { ...hip.telhado, tipo: 'UMA_AGUA', caimentoUmaAgua: caimento }) : null;
-      if (ta?.ok) dosAnexos.push(...ta.comandos);
-      else anexosSemCobertura++;
-    }
-    try {
-      const antes = new Set((m.roofs ?? []).map((r) => r.id));
-      const n = aplicar([...t.comandos, ...dosAnexos]);
-      // F19 da casa automática: a COMPOSIÇÃO do teto nas águas (de cima para baixo) — sem ela a carga térmica não avaliava
-      // o teto ("cobertura sem camadas declaradas") em todo cômodo. O ático como câmara de ar, a laje e o forro de gesso;
-      // a telha fica fora (sem condutividade na biblioteca, anularia a conta). Presumida: dita.
-      const camadas: CamadaParede[] = [
-        { espessuraMm: 300, itemCode: '', descricao: 'Ático (câmara de ar)', funcao: 'CAMARA_AR' },
-        ...(comLaje ? [{ espessuraMm: hip.estrutura.lajes.espessuraMm, itemCode: 'INT-CONCRETO', descricao: 'Laje de concreto', funcao: 'ESTRUTURAL' as const }] : []),
-        ...(hip.forro.lancar ? [{ espessuraMm: 13, itemCode: 'INT-GESSO', descricao: 'Forro de gesso', funcao: 'ACABAMENTO' as const }] : []),
-      ];
-      const novas = (m.roofs ?? []).filter((r) => !antes.has(r.id));
-      if (novas.length) {
-        aplicar(novas.map((r) => ({ type: 'SetAguaProps', aguaId: r.id, camadas }) as Command));
-        pendencias.push({ grupo: 'CONFERIR', texto: `Telhado: composição do teto presumida para a carga térmica (ático + ${comLaje ? `laje de ${hip.estrutura.lajes.espessuraMm} mm` : 'sem laje'}${hip.forro.lancar ? ' + forro de gesso' : ''}) — declare as camadas reais nas águas.` });
-      }
-      telhado = t.resumo;
-      const tr = t.resumo;
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'LANCOU', n, `${tr.aguas === 2 ? 'duas águas' : 'uma água'} a ${String(hip.telhado.inclinacaoPct).replace('.', ',')} %, cumeeira ${tr.direcao} (${String(tr.cumeeiraM).replace('.', ',')} m), beiral de ${String(hip.telhado.beiralMm / 1000).replace('.', ',')} m — ${String(tr.projecaoM2).replace('.', ',')} m² de projeção`);
-      if (dosAnexos.length) pendencias.push({ grupo: 'CONFERIR', texto: `Telhado: ${dosAnexos.length} anexo(s) em uma água caindo para fora do principal — confira o encontro das águas (rufo/calha).` });
-      if (anexosSemCobertura) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Telhado: ${anexosSemCobertura} anexo(s) da planta ficaram sem cobertura — cubra à mão (Telhado › Extrusão).` });
-    } catch (e) {
-      const motivo = e instanceof Error ? e.message : String(e);
-      etapa('TELHADO', ROTULO_DA_ETAPA_DA_CASA.TELHADO, 'NAO_RODOU', 0, motivo);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Telhado: ${motivo}` });
-    }
-  };
+  const etapaDoTelhado = (levelId: ObjectId, ret: Retangulo, anexos: readonly Retangulo[], comLaje: boolean) => etapaDoTelhadoDaEtapa(ctx, levelId, ret, anexos, comLaje);
 
   // ── INSTALAÇÕES (F6–F9) — da térrea e do sobrado: `niveis` = [térreo] ou [térreo, superior] ─────────
   // Água, esgoto, pluvial, eletrodutos e climatização já leem o modelo inteiro (colunas, tubo de queda, prumadas);
   // âncoras, mobiliário, pontos, circuitos e as conferências rodam pavimento a pavimento.
-  const instalacoes = (niveis: ObjectId[], ret: Retangulo, notaDoShaft: string | null = null) => {
-    // ── ÂNCORAS (F6) ──────────────────────────────────────────────────────────
-    // As peças que os lançamentos de instalações exigem no desenho: caixa d'água (água fria), aquecedor (água
-    // quente), caixa de gordura (pia → CG → CI) e as vagas. O destino do esgoto já é hipótese do estudo
-    // (`hidro.esgoto.destino`, de 14/10) e entra na F8.
-    // No sobrado (F12c): a caixa d'água no pavimento de CIMA (sobre o banheiro, acima da laje dele); aquecedor, caixa
-    // de gordura e vagas no térreo.
-    let ancoras: ResultadoDasAncoras['resumo'] | null = null;
-    if (!hip.ancoras.lancar) etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'NAO_EXIGIDA', 0, 'desligadas nas hipóteses da casa');
-    else {
-      try {
-        const espessuraExterna = hipGerador.espessuraExternaMm ?? HIPOTESES_DO_GERADOR_PADRAO.espessuraExternaMm;
-        const topoDe = (L: ObjectId) => peDireitoMm + ((m.structures ?? []).some((x) => x.levelId === L && x.kind === 'LAJE') ? hip.estrutura.lajes.espessuraMm : 0);
-        const base = {
-          padrao: doCurto.curto.padrao,
-          espessuraExternaMm: espessuraExterna,
-          garagemCoberta: doCurto.curto.garagemCoberta,
-          quadro: q,
-          retanguloLocal: ret,
-          anelDoLote: terreno?.anel ?? null,
-          vagasDescobertas: implantacao.vagasDescobertas,
-          reservatorio: (entrada.hidro ?? HIPOTESES_HIDRO_PADRAO).reservatorio,
-        };
-        const terreo = niveis[0];
-        const topo = niveis[niveis.length - 1];
-        const a = comandosDasAncoras(m, { ...base, levelId: terreo, topoMm: topoDe(terreo), vagas: doCurto.curto.vagas, caixaDagua: topo === terreo }, hip.ancoras);
-        let n = aplicar(a.comandos);
-        const notas = [...a.notas];
-        const resumo = { ...a.resumo };
-        const pend = [...a.pendencias];
-        if (topo !== terreo) {
-          const c = comandosDasAncoras(m, { ...base, levelId: topo, topoMm: topoDe(topo), vagas: 0 }, { ...hip.ancoras, aguaQuente: 'NENHUM', caixaDeGordura: false });
-          n += aplicar(c.comandos);
-          notas.unshift(...c.notas);
-          pend.push(...c.pendencias);
-          resumo.caixaDaguaL = c.resumo.caixaDaguaL;
-        }
-        ancoras = resumo;
-        if (notaDoShaft) notas.unshift(notaDoShaft);
-      etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'LANCOU', n, notas.join(' ') || null);
-        // Item 8 (decisão do usuário, 19/10/2026: "parede interna + duto"): o aquecedor na parede interna é a solução
-        // escolhida — fica para CONFERIR (o duto), não para decidir.
-        for (const x of pend) pendencias.push({ grupo: /ficou numa parede interna/.test(x) ? 'CONFERIR' : 'NAO_DECIDIDO', texto: x });
-      } catch (e) {
-        const motivo = e instanceof Error ? e.message : String(e);
-        etapa('ANCORAS', ROTULO_DA_ETAPA_DA_CASA.ANCORAS, 'NAO_RODOU', 0, motivo);
-        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Peças-âncora: ${motivo}` });
-      }
-    }
-
-    // ── MOBILIÁRIO, LOUÇAS E PONTOS (F7) ──────────────────────────────────────
-    // O kit mínimo de cada ambiente (cama, armário, bancada com pia, vaso, lavatório, box, tanque, máquina…); cada
-    // LOUÇA lança os pontos dela (água e esgoto, na face da parede — `pontosDasLoucasCriadas`); o planejador por
-    // ambiente completa o kit hidráulico SEM duplicar (pula tipo × disciplina que já existe no ambiente): entram a
-    // caixa sifonada do banheiro e o que nenhuma louça cobre. Tudo `sugerida`. Água QUENTE só com aquecedor: no
-    // chuveiro elétrico (R1-B) ou sem água quente, nenhum ponto de AQ — não há rede para ligá-los.
-    const mobiliario = { pecas: 0, pontosDasLoucas: 0, pontosDoKit: 0 };
-    const semAguaQuente = !ancoras?.aquecedor && (ancoras?.chuveiroEletrico || hip.ancoras.aguaQuente === 'NENHUM' || hip.ancoras.aguaQuente === 'CHUVEIRO_ELETRICO');
-    const hipPontos: HipotesesDePontos = semAguaQuente ? { ...hip.pontos, aguaQuenteEm: [] } : hip.pontos;
-    const etapaSimples = (id: 'MOBILIARIO' | 'LOUCAS' | 'PONTOS_HIDRAULICOS', fazer: () => { comandos: Command[]; nota: string }) => {
-      if (!hip.mobiliario.lancar) {
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa');
-        return 0;
-      }
-      try {
-        const { comandos: lote, nota } = fazer();
-        const n = aplicar(lote);
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota);
-        return n;
-      } catch (e) {
-        const motivo = e instanceof Error ? e.message : String(e);
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
-        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
-        return 0;
-      }
-    };
-    let criadosDoMobiliario: ObjectId[] = [];
-    etapaSimples('MOBILIARIO', () => {
-      const porNivel = niveis.map((L) => ({ L, lista: mobiliarNivel(m, L, hip.mobiliario) }));
-      const lista = porNivel.flatMap((x) => x.lista);
-      const lote = porNivel.flatMap((x) => comandosDeMobiliario(x.lista, x.L, m));
-      // Os ids que o mobiliário vai criar (o kernel é determinístico: a simulação dá os mesmos ids da aplicação) —
-      // os pontos das louças são planejados para eles.
-      criadosDoMobiliario = lote.length ? applyBatch(m, lote).diff.created : [];
-      const naoCouberam = lista.flatMap((a) => a.naoCouberam.map((x) => `${a.rotulo}: ${x}`));
-      for (const a of lista) for (const x of a.naoCouberam) pendencias.push({ grupo: 'VERIFICACAO', texto: `Mobiliário: ${a.rotulo}: ${x}`, ...comLocal(localDoElemento(m, [a.spaceId])) });
-      // F20: a peça que só coube menor — para conferir, não decidir.
-      const reduzidas = lista.flatMap((a) => a.reduzidas.map((x) => `${a.rotulo}: ${x}`));
-      for (const a of lista) for (const x of a.reduzidas) pendencias.push({ grupo: 'CONFERIR', texto: `Mobiliário: ${a.rotulo}: ${x} (a maior não coube)`, ...comLocal(localDoElemento(m, [a.spaceId])) });
-      mobiliario.pecas = lote.length;
-      return { comandos: lote, nota: `${lote.length} peça(s) em ${lista.filter((a) => a.pecas.length).length} ambiente(s)${reduzidas.length ? `; ${reduzidas.length} menor(es)` : ''}${naoCouberam.length ? `; ${naoCouberam.length} não couberam` : ''}` };
-    });
-    etapaSimples('LOUCAS', () => {
-      const lote = pontosDasLoucasCriadas(m, criadosDoMobiliario, hipPontos, { sugerida: true });
-      mobiliario.pontosDasLoucas = lote.length;
-      return { comandos: lote, nota: `${lote.length} ponto(s) — cada louça liga a sua água e o seu esgoto${semAguaQuente ? '; sem água quente (não há aquecedor)' : ''}` };
-    });
-    etapaSimples('PONTOS_HIDRAULICOS', () => {
-      const planos = niveis.flatMap((L) => planejarPontosDoNivel(m, L, hipPontos));
-      // F14c: o coletor do box (caixa sifonada, ralo) que cai DENTRO de um shaft (o do F12c nasce antes dele) sai pelo
-      // lado mais perto, 15 cm além da face, no mesmo cômodo — dentro, o esgoto que chega nele cruzava as colunas de
-      // água do centro do shaft (sobrado a 30°).
-      const lote = coletoresForaDoShaft(m, planos.flatMap((pl) => pl.comandos));
-      for (const pl of planos) if (pl.motivo && !pl.comandos.length && pl.aCriar === 0 && pl.jaExistentes === 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Pontos de ${pl.nome}: ${pl.motivo}` });
-      mobiliario.pontosDoKit = lote.length;
-      return { comandos: lote, nota: `${lote.length} ponto(s) que nenhuma louça cobre (caixa sifonada, ralo…)` };
-    });
-
-    // F14c: no sobrado, cada grupo de peças de cima (o banheiro) com o shaft a até `shaftAteAsPecasMm` do centro delas —
-    // o shaft do F12c nasce antes do mobiliário e, no banheiro comprido, ficava a 5 m das peças; sem um perto, ganha um
-    // junto delas (o tubo de queda desce ali e o esgoto cabe no enchimento da laje rebaixada).
-    // F27-D4: em cada pavimento de cima — na casa de 3, o shaft do banheiro do 2º desce até o térreo atravessando o 1º.
-    const T0 = niveis[0];
-    for (let k = 1; k < niveis.length; k++) {
-      const S0 = niveis[k];
-      const meio = niveis.slice(1, k);
-      const pecas = (m.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
-      const grupos = gruposDoTuboDeQueda(m, S0, pecas, hip.sobrado.grupoDoTuboDeQuedaMm);
-      const escada = m.spaces.find((sp) => sp.levelId === S0 && /escada/i.test(sp.name ?? ''))?.ring ?? null;
-      const novos: string[] = [];
-      for (const g of grupos) {
-        const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
-        const ban = m.spaces.find((sp) => sp.levelId === S0 && g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
-        if (!ban) continue;
-        const sh = shaftDoGrupo(m, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, meio);
-        // S4: o shaft de baixo sob o banheiro sobe até ele.
-        if (sh?.estender) aplicar([{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: S0 } as Command]);
-        if (sh && !sh.novo) continue;
-        if (!sh) {
-          pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Shaft: ${ban.name} não tem lugar junto das peças para o shaft (parede com parede embaixo, ou cômodo de baixo que aceite a caixa) — o tubo de queda desce longe delas; ponha o shaft à mão.`, ...comLocal(localDoElemento(m, [ban.id])) });
-          continue;
-        }
-        aplicar([{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]);
-        novos.push(`${ban.name}${sh.noTerreo ? ` (descendo na ${sh.noTerreo})` : ''}`);
-      }
-      if (novos.length) pendencias.push({ grupo: 'CONFERIR', texto: `Shaft junto das peças: ${novos.join('; ')} — o do F12c ficava a mais de ${f2(hip.sobrado.shaftAteAsPecasMm / 1000)} m delas.` });
-    }
-
-    // ── HIDRÁULICA (F8) ───────────────────────────────────────────────────────
-    // Os "Lançar tudo" das gavetas, na ordem e com as premissas do ESTUDO (`hidro`, as mesmas da gaveta):
-    //  - ÁGUA: peças da caixa → barrilete, colunas e ramais (fria e, com aquecedor, quente) → hidrômetro e
-    //    alimentador na frente do lote → recalque, se houver reservatório inferior;
-    //  - ESGOTO: caixa de inspeção, ramais e coletor até a LIGAÇÃO à rede pública — ou, com o destino TRATAMENTO
-    //    (`hidro.esgoto.destino`), tanque séptico, filtro e sumidouro dimensionados pela reservação — e ventilação;
-    //  - PLUVIAL: calhas no beiral do telhado, condutores e saída na frente (precisa da intensidade de chuva:
-    //    a cidade ou o valor nas premissas).
-    // O que cada um PRESUMIU (cota estimada da rede, posição da caixa…) vai às pendências CONFERIR; o que faltou do
-    // mundo, às PREMISSA. A casa nasce num pavimento vazio: não há peça confirmada do outro destino para apagar.
-    // F14a ("forro com faixas"): a água quente e o esgoto traçados nas FAIXAS deles — a fria no eixo das paredes.
-    const hidroDoEstudo = entrada.hidro ?? HIPOTESES_HIDRO_PADRAO;
-    const hidro: HipotesesHidro = {
-      ...hidroDoEstudo,
-      // F14b: e os ramais no forro, nas faixas da fria e da quente.
-      agua: {
-        ...hidroDoEstudo.agua,
-        faixaDaAguaQuente: faixaNoMundo(hip.faixas.aguaQuenteMm),
-        noForro: forroDaAguaDaCasa(hip),
-      },
-      // F17 (decisão do usuário, "sobe pela fachada"): o alimentador enterrado só até a parede da frente — sobe nela e
-      // corre sobre a laje até a caixa; sob o piso ele cruzava o esgoto enterrado. A premissa do estudo, se houver, vale.
-      alimentacao: { ...hidroDoEstudo.alimentacao, subida: hidroDoEstudo.alimentacao.subida ?? SUBIDA_DO_ALIMENTADOR_DA_CASA },
-      // F14c: no sobrado, um tubo de queda por banheiro de cima (cada um no shaft dele).
-      esgoto: { ...hidroDoEstudo.esgoto, faixa: faixaNoMundo(hip.faixas.esgotoMm), ...(niveis.length > 1 ? { tuboDeQuedaPorGrupoMm: hip.sobrado.grupoDoTuboDeQuedaMm, raioDoShaftMm: hip.sobrado.tuboDeQuedaAteOShaftMm } : {}) },
-    };
-    const terrenoHidro = entrada.leitorDoTerreno ?? null;
-    const hidraulica = HIDRAULICA_ZERADA();
-    const contar = (lote: Command[]) => ({ pecas: lote.filter((c) => c.type === 'AddTerminal').length, tubos: lote.filter((c) => c.type === 'AddTrecho').length });
-    // F3 do relançar (24/10/2026): `registro` — o REGISTRO do lançamento (com que escolhas), no mesmo lote da casa, logo
-    // depois da rede (não entra na contagem da etapa). O painel do sistema avisa quando as premissas de lá diferem.
-    const etapaDeRede = (
-      id: 'AGUA' | 'ESGOTO' | 'PLUVIAL',
-      planejar: () => { comandos: Command[]; presumido: string[]; pendencias: string[] },
-      nota: (n: { pecas: number; tubos: number }) => string,
-      registro?: () => Command,
-    ): { pecas: number; tubos: number } => {
-      if (!hip.hidraulica.lancar) {
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
-        return { pecas: 0, tubos: 0 };
-      }
-      try {
-        const plano = planejar();
-        for (const x of plano.presumido) pendencias.push({ grupo: 'CONFERIR', texto: `${ROTULO_DA_ETAPA_DA_CASA[id].split(' (')[0]}: ${x}` });
-        for (const x of plano.pendencias) pendencias.push({ grupo: 'PREMISSA', texto: `${ROTULO_DA_ETAPA_DA_CASA[id].split(' (')[0]}: ${x}` });
-        if (!plano.comandos.length) {
-          etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], plano.pendencias.length ? 'NAO_RODOU' : 'NADA_A_FAZER', 0, plano.pendencias[0] ?? null);
-          return { pecas: 0, tubos: 0 };
-        }
-        const c = contar(plano.comandos);
-        // A água ENCOSTA na face da parede o ponto solto no cômodo (`TranslateEntities`), e o kernel trata mover
-        // como decidir: a marca "sugerida" cai. Aqui ninguém decidiu nada — o ponto continua proposta do sistema,
-        // e volta a ser marcado no mesmo lote.
-        const sugeridos = new Set(m.terminais.filter((t) => t.sugerida).map((t) => t.id));
-        let n = aplicar(plano.comandos);
-        n += aplicar(m.terminais.filter((t) => sugeridos.has(t.id) && !t.sugerida).map((t): Command => ({ type: 'SetTerminalProps', terminalId: t.id, sugerida: true })));
-        if (registro) aplicar([registro()]);
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'LANCOU', n, nota(c) + (plano.pendencias.length ? ` — ${plano.pendencias.length} pendência(s)` : ''));
-        return c;
-      } catch (e) {
-        const motivo = e instanceof Error ? e.message : String(e);
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
-        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
-        return { pecas: 0, tubos: 0 };
-      }
-    };
-    // F13: a pressão por caso, ANTES do traçado — a caixa elevada ou o pressurizador entram no mesmo lote.
-    let pressao: DecisaoDaPressao | null = null;
-    hidraulica.agua = etapaDeRede(
-      'AGUA',
-      () => {
-        pressao = decidirPressao(m, hidro, terrenoHidro, hip.pressao);
-        // O plano da última simulação já é o traçado sobre o modelo com a solução — sem traçar de novo.
-        const plano = pressao.plano ?? planejarAguaCompleta(pressao.comandos.length ? applyBatch(m, pressao.comandos).model : m, hidro, terrenoHidro);
-        return { ...plano, comandos: [...pressao.comandos, ...plano.comandos] };
-      },
-      (c) => {
-        const d = pressao as DecisaoDaPressao | null;
-        const sol =
-          d?.solucao === 'CAIXA_ELEVADA'
-            ? `; caixa d'água elevada em ${f2(d.elevacaoMm / 1000)} m para a pressão`
-            : d?.solucao === 'PRESSURIZADOR'
-              ? `; pressurizador na saída da caixa (+${hidro.pressao.ganhoDoPressurizadorKpa} kPa)`
-              : '';
-        return `${c.tubos} tubo(s) e ${c.pecas} peça(s)${sol}`;
-      },
-      // Com o forro, a faixa da quente e a subida pela fachada (sem rótulo): o relançar pelo editor os mantém.
-      () => comandoDeRegistro('AGUA', null, escolhasDaAgua(hidro)),
-    );
-    {
-      const d = pressao as DecisaoDaPressao | null;
-      if (d?.solucao === 'CAIXA_ELEVADA')
-        pendencias.push({ grupo: 'CONFERIR', texto: `Pressão: a caixa d'água subiu ${f2(d.elevacaoMm / 1000)} m (faltavam ${f2(d.deficitM)} m de coluna no ponto mais desfavorável) — preveja a base elevada (torre) na estrutura.` });
-      if (d?.solucao === 'PRESSURIZADOR')
-        pendencias.push({
-          grupo: 'CONFERIR',
-          texto: `Pressão: faltavam ${f2(d.deficitM)} m de coluna — elevar a caixa até ${f2(hip.pressao.caixaElevadaAteMm / 1000)} m não basta; pressurizador na saída da caixa (+${hidro.pressao.ganhoDoPressurizadorKpa} kPa, ${hip.pressao.potenciaDoPressurizadorW} W, com ponto elétrico e circuito)${d.elevacaoMm > 0 ? ` e, como ele sozinho também não bastava, a caixa subiu ${f2(d.elevacaoMm / 1000)} m — preveja a base elevada (torre)` : ''} — confira o modelo no catálogo.`,
-        });
-    }
-    const destino = destinoDoEsgoto(hidro.esgoto);
-    hidraulica.esgoto = {
-      ...etapaDeRede(
-        'ESGOTO',
-        () => {
-          const medidas = destino === 'TRATAMENTO' ? medidasDimensionadas(dimensionarTratamento(m, hidro.tratamento, hidro.reservatorio)) : undefined;
-          return planejarEsgotoCompleto(m, hidro.esgoto, terrenoHidro, { tratamento: { comFiltro: hidro.tratamento.comFiltro, medidas } });
-        },
-        (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s) — destino: ${destino === 'TRATAMENTO' ? 'tratamento individual (tanque, filtro, sumidouro)' : 'rede pública'}`,
-        // F4 do relançar (24/10/2026): as escolhas do ESTUDO com rótulo, e o que só a casa decide — a faixa do esgoto e,
-        // no sobrado, o tubo de queda por grupo e o raio do shaft — sem rótulo: o relançar pelo editor os mantém.
-        () =>
-          comandoDeRegistro(
-            'ESGOTO',
-            null,
-            escolhasDoEsgoto(
-              { esgoto: hidroDoEstudo.esgoto, tratamento: hidro.tratamento, reservatorio: hidro.reservatorio },
-              { faixa: hidro.esgoto.faixa ?? null, tuboDeQuedaPorGrupoMm: hidro.esgoto.tuboDeQuedaPorGrupoMm ?? null, raioDoShaftMm: niveis.length > 1 ? (hidro.esgoto.raioDoShaftMm ?? null) : null },
-            ),
-          ),
-      ),
-      destino,
-    };
-    hidraulica.pluvial = etapaDeRede(
-      'PLUVIAL',
-      () => planejarPluvialCompleta(m, hidro.pluvial, terrenoHidro),
-      (c) => `${c.tubos} tubo(s) e ${c.pecas} peça(s)`,
-      () => comandoDeRegistro('PLUVIAL', null, escolhasDoPluvial(hidro.pluvial)),
-    );
-    // F18: o condutor pluvial horizontal (enterrado, para a saída na frente do lote) é traçado depois do esgoto e o
-    // cruzava rente (15 × 25: a ligação de esgoto, com 6 cm entre os eixos). Ele passa POR CIMA — a saída fica na
-    // sarjeta —: o início sobe (`profundidadeDoCondutorMm`) até livrar todo cruzamento, sem passar do recobrimento.
-    if (hip.hidraulica.lancar && hidraulica.pluvial.tubos > 0 && pluvialRenteAoEsgoto(m) > 0) {
-      let prof = hidro.pluvial.profundidadeDoCondutorMm;
-      const minimo = hidro.alimentacao.recobrimentoMinimoMm ?? 150;
-      // F25: cada passo planejado a partir do MESMO desenho e fica o de menos encontros (o inicial, se nenhum melhora) —
-      // parar no primeiro passo que não melhora perdia o que livrava dois passos adiante; aceitar todos estragava o
-      // cruzamento por baixo perto da saída (o coletor fundo no terreno inclinado).
-      let melhor: { prof: number; comandos: Command[]; encontros: number } | null = null;
-      let encontros = pluvialRenteAoEsgoto(m);
-      for (let volta = 1; volta <= 4; volta++) {
-        const nova = hidro.pluvial.profundidadeDoCondutorMm - volta * PASSO_DO_PLUVIAL_SOBRE_O_ESGOTO_MM;
-        if (nova < minimo) break;
-        const cond = planejarCondutores(m, { ...hidro.pluvial, profundidadeDoCondutorMm: nova }, terrenoHidro);
-        if (cond.motivo || !cond.comandos.length) break;
-        const n = pluvialRenteAoEsgoto(applyBatch(m, cond.comandos).model);
-        if (n < encontros) {
-          melhor = { prof: nova, comandos: cond.comandos, encontros: n };
-          encontros = n;
-          if (n === 0) break;
-        }
-      }
-      if (melhor) {
-        prof = melhor.prof;
-        // O registro guarda a profundidade AJUSTADA (sem rótulo): relançar pelo editor não volta o condutor rente ao esgoto.
-        aplicar([...melhor.comandos, comandoDeRegistro('PLUVIAL', null, escolhasDoPluvial(hidro.pluvial, { profundidadeAjustadaDoCondutorMm: melhor.prof }))]);
-      }
-      if (pluvialRenteAoEsgoto(m) > 0) pendencias.push({ grupo: 'VERIFICACAO', texto: `Águas pluviais: o condutor horizontal passa rente ao esgoto mesmo começando a ${f2(-prof / 1000)} m — confira o cruzamento (ou mude a saída).` });
-      else pendencias.push({ grupo: 'CONFERIR', texto: `Águas pluviais: o condutor horizontal começa a ${f2(-prof / 1000)} m para passar por cima do esgoto.` });
-    }
-    // F18: o alimentador ENTERRADO é traçado antes do esgoto e do pluvial, que depois o cruzavam na mesma cota (o
-    // esgoto e o condutor horizontal correm para a frente do lote). Agora ele passa POR CIMA deles (NBR 5626) — ou,
-    // sem recobrimento para isso, por baixo, dito.
-    if (hip.hidraulica.lancar) {
-      const ajuste = cotaEnterradaAcimaDasRedes(m, hidro.alimentacao);
-      if (ajuste.cruzamentos > 0 && ajuste.cotaMm !== hidro.alimentacao.cotaEnterradaMm) {
-        const alim = planejarAlimentador(m, { ...hidro.alimentacao, cotaEnterradaMm: ajuste.cotaMm }, hidro.reservatorio, hidro.pressao.qMaxDoHidrometroM3h, terrenoHidro);
-        if (!alim.motivo && alim.comandos.length) {
-          // O registro guarda a cota AJUSTADA (sem rótulo): relançar pelo editor não volta o alimentador a cruzar o esgoto.
-          const registro = registroDe(m, 'AGUA', null) ? [comandoDeRegistro('AGUA', null, escolhasDaAgua(hidro, { cotaEnterradaAjustadaMm: ajuste.cotaMm }))] : [];
-          aplicar([...alim.comandos, ...registro]);
-          const cota = f2(ajuste.cotaMm / 1000);
-          pendencias.push(
-            ajuste.sob
-              ? { grupo: 'VERIFICACAO', texto: `Alimentador: a ${cota} m, POR BAIXO de ${ajuste.cruzamentos} cruzamento(s) com esgoto/pluvial — por cima não havia recobrimento; proteja a travessia (luva) e confira (NBR 5626).` }
-              : { grupo: 'CONFERIR', texto: `Alimentador: a ${cota} m, por cima de ${ajuste.cruzamentos} cruzamento(s) com esgoto/pluvial (NBR 5626).` },
-          );
-        }
-      }
-    }
-
-    // A VERIFICAÇÃO DE REDE do app sobre o resultado: tubos soltos, sem destino, contrafluxo, desconector sem
-    // ventilação, tubo atravessando pilar ou cruzando viga. O que ela acusa vira pendência com a contagem, por tipo
-    // (ERRO → VERIFICACAO; AVISO → CONFERIR). Medido em 15/10: a rede sai ligada (nenhuma ponta aberta, nenhum
-    // trecho sem destino), mas o traçado pelas paredes cruza os pilares dos encontros — compatibilização à parte.
-    const verificarRedes = (rotulos: Record<string, string>, alvo: { erros: number; avisos: number; porTipo: Record<string, number> }) => {
-      const marcas = niveis.flatMap((L) => marcasDeVerificacao(m, L, [], hidro.pluvial)).filter((x) => x.disciplina && x.disciplina in rotulos);
-      const grupos = new Map<string, { severidade: 'ERRO' | 'AVISO'; disciplina: string; tipo: string; n: number; texto: string; locais: LocalDaPendencia[] }>();
-      for (const x of marcas) {
-        const k = `${x.severidade}|${x.disciplina}|${x.tipo}`;
-        const g = grupos.get(k) ?? { severidade: x.severidade, disciplina: x.disciplina!, tipo: x.tipo, n: 0, texto: x.texto, locais: [] };
-        g.n++;
-        g.locais.push({ levelId: x.levelId, ids: [x.alvoId], ponto: { x: x.at.x, y: x.at.y } });
-        grupos.set(k, g);
-      }
-      for (const g of grupos.values()) {
-        alvo[g.severidade === 'ERRO' ? 'erros' : 'avisos'] += g.n;
-        alvo.porTipo[g.tipo] = (alvo.porTipo[g.tipo] ?? 0) + g.n;
-        const oque = MARCA_DA_REDE[g.tipo] ? `${g.n} ${MARCA_DA_REDE[g.tipo]}` : `${g.n} × ${g.texto}`;
-        pendencias.push({ grupo: g.severidade === 'ERRO' ? 'VERIFICACAO' : 'CONFERIR', texto: `Rede de ${rotulos[g.disciplina]}: ${oque}`, locais: g.locais });
-      }
-    };
-    if (hip.hidraulica.lancar && (hidraulica.agua.tubos + hidraulica.esgoto.tubos + hidraulica.pluvial.tubos) > 0) verificarRedes(ROTULO_DA_DISCIPLINA_DA_REDE, hidraulica.verificacao);
-
-    // A PRESSÃO nos pontos (o cálculo do app, o mesmo do selo no desenho): por gravidade, a caixa pouco acima do teto
-    // não vence a perda do aquecedor (térrea) nem a altura dos pontos de cima (sobrado) — medido em 15/10/2026, a
-    // água quente da térrea saía com −27 a −65 kPa e nada dizia. Aqui fica DITO, por rede, com as saídas; resolver
-    // (caixa elevada ou pressurizador) é decisão de projeto.
-    if (hip.hidraulica.lancar && hidraulica.agua.tubos > 0) {
-      const caixa = (m.terminais ?? []).find((t) => t.tipoHidraulico === 'RESERVATORIO');
-      const cotaDaCaixaM = caixa ? ((m.levels.find((l) => l.id === caixa.levelId)?.elevationMm ?? 0) + caixa.cotaMm) / 1000 : null;
-      for (const rede of pressoesDoModelo(m)) {
-        const baixos = rede.pontos.filter((x) => x.estado === 'INSUFICIENTE' && x.disponivelKpa != null);
-        if (!baixos.length) continue;
-        const pior = [...baixos].sort((a, b) => a.disponivelKpa! - a.minimaKpa - (b.disponivelKpa! - b.minimaKpa))[0];
-        const comodo = m.spaces.find((x) => x.levelId === pior.levelId && pointInPolygon(x.ring, pior.at as Point))?.name;
-        hidraulica.pressaoInsuficiente[rede.disciplina === 'AGUA_QUENTE' ? 'quente' : 'fria'] += baixos.length;
-        pendencias.push({
-          grupo: 'VERIFICACAO',
-          texto: `Pressão da ${ROTULO_DA_DISCIPLINA_DA_REDE[rede.disciplina]}: ${baixos.length} ponto(s) abaixo do mínimo — o pior, ${pior.nome}${comodo ? ` (${comodo})` : ''}, com ${pior.disponivelKpa!.toFixed(1).replace('.', ',')} kPa (mínimo ${String(pior.minimaKpa).replace('.', ',')}). ${cotaDaCaixaM != null ? `Com a caixa d'água a ${f2(cotaDaCaixaM)} m, a gravidade não basta: ` : ''}eleve a caixa (hipótese "caixa acima da laje") ou preveja um pressurizador.`,
-        });
-      }
-    }
-
-    // ── ELÉTRICA E CLIMATIZAÇÃO (F9) ──────────────────────────────────────────
-    // A ordem é a que as peças pedem: os PONTOS pela norma (com a potência padrão — o centro de cargas precisa
-    // dela) e o chuveiro elétrico → o QUADRO no centro de cargas (+ entrada de serviço e medidor na frente) →
-    // os CIRCUITOS → a CLIMATIZAÇÃO (ela liga os circuitos dos splits só com UM quadro e nenhum ponto solto, por
-    // isso depois) → DR e DPS (o DR é por circuito) → ELETRODUTOS por último (precisam dos circuitos). No fim,
-    // `conferirNbr5410` sobre o resultado: FALTA → VERIFICACAO, AVISO → CONFERIR.
-    const eletrica = ELETRICA_ZERADA();
-    const climatizacao = CLIMATIZACAO_ZERADA();
-    const hipCircuitos = entrada.circuitos ?? HIPOTESES_CIRCUITOS_PADRAO;
-    const hipEletricas = entrada.eletricas ?? HIPOTESES_ELETRICAS_PADRAO;
-    const ETAPAS_ELETRICAS = ['PONTOS_ELETRICOS', 'QUADRO', 'CIRCUITOS', 'CLIMATIZACAO', 'DR_DPS', 'ELETRODUTOS'] as const;
-    let quadroId: ObjectId | null = null;
-    const tentarEletrica = (id: (typeof ETAPAS_ELETRICAS)[number], fazer: () => void) => {
-      try {
-        fazer();
-      } catch (e) {
-        const motivo = e instanceof Error ? e.message : String(e);
-        etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_RODOU', 0, motivo);
-        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `${ROTULO_DA_ETAPA_DA_CASA[id]}: ${motivo}` });
-      }
-    };
-    if (!hip.eletrica.lancar) {
-      for (const id of ETAPAS_ELETRICAS) etapa(id, ROTULO_DA_ETAPA_DA_CASA[id], 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
-    } else {
-      tentarEletrica('PONTOS_ELETRICOS', () => {
-        const lote = niveis.flatMap((L) =>
-          comandosDePontosDoNivel(m, L, {
-            peDireitoMm: m.levels.find((l) => l.id === L)!.defaultHeightMm,
-            areaPorLuminariaM2: hip.eletrica.areaPorLuminariaM2,
-            // F14b: no forro, a tomada também fica longe do ponto de água (a descida dela cruzava a entrada da quente no
-            // aquecedor, na mesma posição ao longo da parede).
-            // F14c: e das PRUMADAS das outras redes que correm na parede (a coluna de ventilação do esgoto: a descida da
-            // tomada caía em cima dela, térrea a 30°).
-            ocupados: [
-              ...(m.terminais ?? []).filter((t) => t.levelId === L && (t.disciplina === 'ELETRICA' || (forroLigado && (t.disciplina === 'AGUA_FRIA' || t.disciplina === 'AGUA_QUENTE')))).map((t) => t.at),
-              ...(forroLigado ? (m.trechos ?? []).filter((t) => t.levelId === L && t.disciplina !== 'ELETRICA' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > 300).map((t) => t.a) : []),
-              // F14c: e da parede sob a laje REBAIXADA — ali o forro não tem plenum, e o eletroduto não chega pelo anel
-              // (a tomada do canto da cozinha, sob o banheiro da suíte, ficava ligada em reta pelo meio do cômodo).
-              ...(forroLigado ? paredesSobORebaixo(m, L) : []),
-            ],
-          }),
-        );
-        // F14b: a luz de teto na FACE do forro do cômodo — a rede corre no plenum, acima dela.
-        if (forroLigado) {
-          for (let i = 0; i < lote.length; i++) {
-            const c = lote[i];
-            if (c.type !== 'AddTerminal' || (c as { tipoEletrico?: string | null }).tipoEletrico !== 'ILUMINACAO_TETO') continue;
-            const sp = comodosComForro(m, c.levelId).find((x) => pointInPolygon(x.ring, c.at));
-            // F14c: e fora da laje REBAIXADA (sob o banheiro de cima): ali o forro não tem plenum, e o eletroduto da luz
-            // atravessava a área rebaixada em reta (sobrado a 0°).
-            const teto = m.levels.find((l) => l.id === c.levelId)?.defaultHeightMm ?? Infinity;
-            const rebaixos = (m.structures ?? []).filter((x) => x.kind === 'LAJE' && x.levelId === c.levelId && x.baseMm < teto - 1).map((x) => x.pontos as Point[]);
-            const at = (sp && foraDoPoligono(rebaixos, c.at, sp.ring, LUZ_ALEM_DO_REBAIXO_MM)) || c.at;
-            if (sp) lote[i] = { ...c, at, cotaMm: Math.round(forroDoComodo(m, sp).faceMm) } as Command;
-          }
-        }
-        // F18: os pontos NA PAREDE (interruptor, tomada) fora do PILAR: escorregam pela face, fora de vão — o interruptor
-        // junto da porta caía na pegada do pilar do canto, e a descida do eletroduto corria dentro dele (15 × 25).
-        for (let i = 0; i < lote.length; i++) {
-          const c = lote[i] as Extract<Command, { type: 'AddTerminal' }>;
-          if (c.type !== 'AddTerminal' || !c.tipoEletrico || c.tipoEletrico === 'ILUMINACAO_TETO') continue;
-          const aneis = pegadasDePilares(m, c.levelId).map((g) => anelDoPilar(g, LUZ_FORA_DO_PILAR_MM) as Point[]);
-          if (!aneis.some((g) => pointInPolygon(g, c.at))) continue;
-          const enc = encaixarNaParede(c.at, m.walls.filter((w) => w.levelId === c.levelId), 400);
-          if (!enc) continue;
-          const w = enc.parede;
-          const L = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
-          const u = { x: (w.b.x - w.a.x) / L, y: (w.b.y - w.a.y) / L };
-          const t0 = (c.at.x - w.a.x) * u.x + (c.at.y - w.a.y) * u.y;
-          const noVao = (t: number) => m.openings.some((o) => o.wallId === w.id && t > o.offsetMm - LUZ_FORA_DO_PILAR_MM && t < o.offsetMm + o.widthMm + LUZ_FORA_DO_PILAR_MM && c.cotaMm > o.sillMm - LUZ_FORA_DO_PILAR_MM && c.cotaMm < o.sillMm + o.heightMm);
-          for (let d = 50; d <= 800; d += 50) {
-            const q = [d, -d].map((k) => ({ k, p: { x: Math.round(c.at.x + u.x * k), y: Math.round(c.at.y + u.y * k) } as Point })).find(({ k, p }) => t0 + k >= 0 && t0 + k <= L && !noVao(t0 + k) && !aneis.some((g) => pointInPolygon(g, p)));
-            if (q) {
-              lote[i] = { ...c, at: q.p } as Command;
-              break;
-            }
-          }
-        }
-        // F18: e a luz de teto fora do PILAR (com ou sem forro) — no centro de um cômodo pequeno ela caía na pegada dele,
-        // e o eletroduto subia por dentro do pilar (R1-A).
-        for (let i = 0; i < lote.length; i++) {
-          const c = lote[i];
-          if (c.type !== 'AddTerminal' || (c as { tipoEletrico?: string | null }).tipoEletrico !== 'ILUMINACAO_TETO') continue;
-          const pilares = pegadasDePilares(m, c.levelId).map((g) => anelDoPilar(g, LUZ_FORA_DO_PILAR_MM) as Point[]);
-          const sp = m.spaces.find((x) => x.levelId === c.levelId && pointInPolygon(x.ring, c.at));
-          const at = foraDoPoligono(pilares, c.at, sp?.ring ?? null, LUZ_ALEM_DO_REBAIXO_MM);
-          if (at) lote[i] = { ...c, at } as Command;
-        }
-        // O CHUVEIRO ELÉTRICO é LIGAÇÃO DIRETA (a 9.5.2.3 acusa chuveiro em tomada), no ponto hidráulico dele, com a
-        // potência declarada — a padrão não dá potência a ligação direta. Exige DR e ganha circuito próprio.
-        if (ancoras?.chuveiroEletrico) {
-          for (const c of (m.terminais ?? []).filter((t) => niveis.includes(t.levelId) && t.tipoHidraulico === 'CHUVEIRO' && t.disciplina === 'AGUA_FRIA')) {
-            // F18: AO LADO da saída d'água, na face (o afastamento lateral dos pontos), do lado sem tubo — no mesmo ponto, a
-            // água e o eletroduto desciam juntos na parede e se cruzavam (R1-B).
-            const cota = COTA_USUAL_DO_PONTO_ELETRICO.LIGACAO_DIRETA;
-            const enc = encaixarNaParede(c.at, m.walls.filter((w) => w.levelId === c.levelId), 400);
-            const afast = hip.pontos.afastamentoFriaQuenteMm ?? 150;
-            const u = enc ? { x: (enc.parede.b.x - enc.parede.a.x) / Math.hypot(enc.parede.b.x - enc.parede.a.x, enc.parede.b.y - enc.parede.a.y), y: (enc.parede.b.y - enc.parede.a.y) / Math.hypot(enc.parede.b.x - enc.parede.a.x, enc.parede.b.y - enc.parede.a.y) } : null;
-            const lados = u ? [1, -1].map((k) => ({ x: Math.round(c.at.x + u.x * afast * k), y: Math.round(c.at.y + u.y * afast * k) })) : [];
-            const livre = (q: Point) => (m.trechos ?? []).every((t) => t.levelId !== c.levelId || distanciaAoTrecho3D(q, cota, t) > t.bitolaMm / 2 + afast / 2);
-            const at = lados.find(livre) ?? { ...c.at };
-            lote.push({
-              type: 'AddTerminal', levelId: c.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at,
-              cotaMm: COTA_USUAL_DO_PONTO_ELETRICO.LIGACAO_DIRETA, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.eletrica.chuveiroEletricoVA, rotulo: 'Chuveiro', sugerida: true,
-            } as Command);
-          }
-        }
-        // F13: o PRESSURIZADOR é ligação direta, com a potência das hipóteses (ganha circuito próprio).
-        // F22: o ponto ao LADO da bomba onde a subida do eletroduto (do forro até ele) não encontra tubo — no lugar dela,
-        // ela subia através do barrilete que sai da caixa (12 × 30).
-        const teto = (L: string) => (m.levels.find((l) => l.id === L)?.defaultHeightMm ?? 2800) - 45;
-        const subidaLivre = (q: Point, levelId: string, cota: number) => {
-          const A = { x: q.x, y: q.y, z: Math.min(teto(levelId), cota) };
-          const B = { x: q.x, y: q.y, z: Math.max(teto(levelId), cota) };
-          return (m.trechos ?? []).every((t) => t.levelId !== levelId || distanciaEntreEixos3D(A, B, { x: t.a.x, y: t.a.y, z: t.cotaAMm }, { x: t.b.x, y: t.b.y, z: t.cotaBMm }) > envelopeDoTrecho(t).raioPlantaMm + 25 + FOLGA_DA_SUBIDA_DO_PRESSURIZADOR_MM);
-        };
-        for (const b of (m.terminais ?? []).filter((t) => niveis.includes(t.levelId) && t.tipoHidraulico === 'BOMBA' && t.disciplina === 'AGUA_FRIA')) {
-          const lugares = [{ x: 0, y: 0 }, ...[150, 300, 450].flatMap((d) => [{ x: d, y: 0 }, { x: -d, y: 0 }, { x: 0, y: d }, { x: 0, y: -d }])].map((o) => point(b.at.x + o.x, b.at.y + o.y));
-          const at = lugares.find((q) => subidaLivre(q, b.levelId, b.cotaMm)) ?? { ...b.at };
-          lote.push({
-            type: 'AddTerminal', levelId: b.levelId, disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO.LIGACAO_DIRETA, at,
-            cotaMm: b.cotaMm, tipoEletrico: 'LIGACAO_DIRETA', potenciaW: hip.pressao.potenciaDoPressurizadorW, rotulo: 'Pressurizador', sugerida: true,
-          } as Command);
-        }
-        const tipoDe = (c: Command) => (c.type === 'AddTerminal' ? (c as { tipoEletrico?: string | null }).tipoEletrico ?? null : null);
-        eletrica.pontos = {
-          tomadas: lote.filter((c) => tipoDe(c) === 'TUG' || tipoDe(c) === 'TUE').length,
-          luzes: lote.filter((c) => /^ILUMINACAO/.test(tipoDe(c) ?? '')).length,
-          interruptores: lote.filter((c) => tipoDe(c) === 'INTERRUPTOR').length,
-          ligacoesDiretas: lote.filter((c) => tipoDe(c) === 'LIGACAO_DIRETA').length,
-        };
-        const p = eletrica.pontos;
-        etapa('PONTOS_ELETRICOS', ROTULO_DA_ETAPA_DA_CASA.PONTOS_ELETRICOS, 'LANCOU', aplicar(lote), `${p.tomadas} tomada(s), ${p.luzes} luz(es), ${p.interruptores} interruptor(es)${p.ligacoesDiretas ? `, ${p.ligacoesDiretas} chuveiro(s) elétrico(s) de ${hip.eletrica.chuveiroEletricoVA} W` : ''}`);
-      });
-      tentarEletrica('QUADRO', () => {
-        // No sobrado, o quadro fica no TÉRREO (perto do medidor e da cozinha), no centro de cargas de lá — solto, o
-        // centro iria para o pavimento de mais carga, que pode ser o de cima.
-        const c0 = centroDeCargas(niveis.length > 1 ? { ...m, terminais: (m.terminais ?? []).filter((t) => t.disciplina !== 'ELETRICA' || t.levelId === niveis[0]) } : m, null);
-      // E a prumada do eletroduto sobe na posição do quadro: no sobrado, o quadro vai para a parede do térreo que
-      // tem parede em cima (a até 3 m do centro de cargas) — senão a prumada sobe pelo meio de um cômodo de cima.
-      const paredeMinimaDoQuadro = hip.eletrica.paredeMinimaDoQuadroMm ?? HIPOTESES_DA_ELETRICA_DA_CASA_PADRAO.paredeMinimaDoQuadroMm;
-      const sobreParede = c0 && niveis.length > 1 ? encaixarNaParede(c0.posicaoSugerida, paredesEmComum(m.walls.filter((w) => w.levelId === niveis[0]), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L)), 50, paredeMinimaDoQuadro), 3000) : null;
-      const c = c0 && sobreParede ? { ...c0, posicaoSugerida: { x: Math.round(sobreParede.q.x), y: Math.round(sobreParede.q.y) }, paredeId: sobreParede.parede.id } : c0;
-        if (!c) {
-          etapa('QUADRO', ROTULO_DA_ETAPA_DA_CASA.QUADRO, 'NAO_RODOU', 0, 'nenhum ponto com potência — sem centro de cargas');
-          return;
-        }
-        // F14b: no forro, os eletrodutos sobem do quadro até a faixa deles — se a travessia de outra rede (lançada antes)
-        // passa bem ali, o quadro escorrega pela parede até ficar livre (de 10 em 10 cm, até 80 cm; fora de vão e pilar).
-        if (forroLigado) {
-          const L0 = niveis[0];
-          const teto = m.levels.find((l) => l.id === L0)!.defaultHeightMm;
-          const parede = encaixarNaParede(c.posicaoSugerida, m.walls.filter((w) => w.levelId === L0), 600)?.parede ?? null;
-          const dSeg = (p: Point, a: Point, b: Point) => {
-            const dx = b.x - a.x;
-            const dy = b.y - a.y;
-            const L2 = dx * dx + dy * dy;
-            const t = L2 === 0 ? 0 : Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / L2));
-            return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
-          };
-          const noForro = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.cotaAMm === t.cotaBMm && t.cotaAMm > teto - rebaixoDoForro && t.cotaAMm < teto);
-          // S1 (20/10/2026): e as VERTICAIS de outra rede na altura da subida do quadro (de 1,60 m ao teto) — a descida da
-          // fria do vaso ficava a 3 cm do eletroduto que sobe do quadro (10 × 30, 4 dorm.).
-          const verticais = (m.trechos ?? []).filter((t) => t.levelId === L0 && t.disciplina !== 'ELETRICA' && t.a.x === t.b.x && t.a.y === t.b.y && Math.max(t.cotaAMm, t.cotaBMm) > 1600 && Math.min(t.cotaAMm, t.cotaBMm) < teto);
-          const pilares = pegadasDePilares(m, L0);
-          // No sobrado, só dentro do trecho de parede que tem parede em cima (a prumada do eletroduto sobe ali).
-          const emComum = niveis.length > 1 ? paredesEmComum(m.walls.filter((w) => w.levelId === L0), niveis.slice(1).map((L) => m.walls.filter((w) => w.levelId === L)), 50, paredeMinimaDoQuadro) : null;
-          const livre = (p: Point) =>
-            (!emComum || !!encaixarNaParede(p, emComum, 5)) &&
-            noForro.every((t) => dSeg(p, t.a, t.b) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
-            verticais.every((t) => Math.hypot(p.x - t.a.x, p.y - t.a.y) > SUBIDA_DO_QUADRO_MM + envelopeDoTrecho(t).raioPlantaMm + 20) &&
-            !pilares.some((g) => pointInPolygon(g as Point[], p)) &&
-            !(parede && m.openings.some((o) => {
-              if (o.wallId !== parede.id) return false;
-              const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y);
-              const t = ((p.x - parede.a.x) * (parede.b.x - parede.a.x) + (p.y - parede.a.y) * (parede.b.y - parede.a.y)) / (L || 1);
-              return t > o.offsetMm - 300 && t < o.offsetMm + o.widthMm + 300;
-            }));
-          if (parede && !livre(c.posicaoSugerida)) {
-            const L = Math.hypot(parede.b.x - parede.a.x, parede.b.y - parede.a.y) || 1;
-            const u = { x: (parede.b.x - parede.a.x) / L, y: (parede.b.y - parede.a.y) / L };
-            const desvios = [100, -100, 200, -200, 300, -300, 400, -400, 500, -500, 600, -600, 700, -700, 800, -800];
-            const novo = desvios.map((d) => point(Math.round(c.posicaoSugerida.x + u.x * d), Math.round(c.posicaoSugerida.y + u.y * d))).find(livre);
-            // F18: sem posição que atenda tudo, ao menos FORA do pilar e do vão (com parede em cima no sobrado), até 1,50 m —
-            // o quadro do sobrado ficava dentro do pilar, e a prumada do eletroduto subia por ele os dois pavimentos.
-            // Pela mesma parede e, na esquina (a ponta dela é o pilar), pelas outras paredes até 1,50 m — o ponto livre mais perto.
-            const p0 = c.posicaoSugerida;
-            const candidatas = (emComum ?? m.walls.filter((w) => w.levelId === L0)).flatMap((w) => {
-              const Lw = Math.hypot(w.b.x - w.a.x, w.b.y - w.a.y) || 1;
-              const uw = { x: (w.b.x - w.a.x) / Lw, y: (w.b.y - w.a.y) / Lw };
-              const t0 = (p0.x - w.a.x) * uw.x + (p0.y - w.a.y) * uw.y;
-              const pts: Point[] = [];
-              for (let t = Math.max(0, Math.round((t0 - 1500) / 50) * 50); t <= Math.min(Lw, t0 + 1500); t += 50) pts.push(point(Math.round(w.a.x + uw.x * t), Math.round(w.a.y + uw.y * t)));
-              return pts;
-            });
-            const livreNaSuaParede = (q: Point) => {
-              const pw = encaixarNaParede(q, m.walls.filter((w) => w.levelId === L0), 5)?.parede;
-              return !!pw && !pilares.some((g) => pointInPolygon(g as Point[], q)) && (!emComum || !!encaixarNaParede(q, emComum, 5)) && !m.openings.some((o) => {
-                if (o.wallId !== pw.id) return false;
-                const Lp = Math.hypot(pw.b.x - pw.a.x, pw.b.y - pw.a.y) || 1;
-                const t = ((q.x - pw.a.x) * (pw.b.x - pw.a.x) + (q.y - pw.a.y) * (pw.b.y - pw.a.y)) / Lp;
-                return t > o.offsetMm - 300 && t < o.offsetMm + o.widthMm + 300;
-              });
-            };
-            const reserva = novo ?? candidatas.filter((q) => Math.hypot(q.x - p0.x, q.y - p0.y) <= 1500 && livreNaSuaParede(q)).sort((a, b) => Math.hypot(a.x - p0.x, a.y - p0.y) - Math.hypot(b.x - p0.x, b.y - p0.y))[0];
-            if (reserva) c.posicaoSugerida = reserva;
-          }
-        }
-        const antes = new Set((m.quadros ?? []).map((q) => q.id));
-        let n = aplicar(comandosParaOCentro(m, c));
-        const quadro = (m.quadros ?? []).find((q) => !antes.has(q.id)) ?? (m.quadros ?? []).find((q) => q.id === c.quadroId) ?? null;
-        quadroId = quadro?.id ?? null;
-        eletrica.quadro = quadro?.nome ?? null;
-        let nota = quadro ? `${quadro.nome} no centro de cargas` : 'sem quadro';
-        if (quadro && hip.eletrica.medidor) {
-          // F26: o medidor fica no muro, fora do vão dos portões.
-          const frente = pontoNaFrente(m, quadro.at, { foraDosPortoes: true });
-          if (frente) {
-            const infra = (tipoEletrico: 'ENTRADA_SERVICO' | 'MEDIDOR'): Command => ({
-              type: 'AddTerminal', levelId: niveis[0], disciplina: 'ELETRICA', tipo: ROTULO_DO_PONTO_ELETRICO[tipoEletrico], at: { ...frente.ponto },
-              cotaMm: COTA_USUAL_DO_PONTO_ELETRICO[tipoEletrico], tipoEletrico, quadroId: quadro.id, sugerida: true,
-            } as Command);
-            n += aplicar([infra('ENTRADA_SERVICO'), infra('MEDIDOR')]);
-            eletrica.medidor = true;
-            nota += '; entrada de serviço e medidor na frente do lote';
-            pendencias.push({ grupo: 'CONFERIR', texto: 'Entrada de energia: medidor posto na frente do lote, junto da divisa — confira o padrão de entrada da concessionária.' });
-          } else {
-            pendencias.push({ grupo: 'PREMISSA', texto: 'Entrada de energia: sem a frente do lote para o medidor.' });
-          }
-        }
-        etapa('QUADRO', ROTULO_DA_ETAPA_DA_CASA.QUADRO, 'LANCOU', n, nota);
-      });
-      tentarEletrica('CIRCUITOS', () => {
-        if (!quadroId) {
-          etapa('CIRCUITOS', ROTULO_DA_ETAPA_DA_CASA.CIRCUITOS, 'NAO_RODOU', 0, 'sem quadro');
-          return;
-        }
-        // Um quadro para a casa: os circuitos de cada pavimento saem dele (no sobrado, os de cima sobem por prumada).
-        let n = 0;
-        let circuitos = 0;
-        let motivo: string | null = null;
-        const porPavimento: string[] = [];
-        for (const L of niveis) {
-          const plano = planejarCircuitos(m, L, quadroId, hipCircuitos, hipEletricas);
-          for (const f of plano.foraDoPlano) pendencias.push({ grupo: 'CONFERIR', texto: `Circuitos: ponto ${f.terminalId} fora do plano — ${f.motivo}`, ...comLocal(localDoElemento(m, [f.terminalId])) });
-          circuitos += plano.circuitos.length;
-          n += aplicar(plano.comandos);
-          motivo ??= plano.comandos.length ? null : plano.motivo;
-          if (niveis.length > 1) porPavimento.push(`${plano.circuitos.length} ${L === niveis[0] ? 'no térreo' : niveis.length > 2 ? `no ${niveis.indexOf(L)}º` : 'no superior'}`);
-        }
-        eletrica.circuitos = circuitos;
-        etapa('CIRCUITOS', ROTULO_DA_ETAPA_DA_CASA.CIRCUITOS, n ? 'LANCOU' : 'NADA_A_FAZER', n, n ? `${circuitos} circuito(s)${porPavimento.length ? ` (${porPavimento.join(', ')})` : ''}` : motivo);
-      });
-      tentarEletrica('CLIMATIZACAO', () => {
-        if (!hip.climatizacao.lancar) {
-          etapa('CLIMATIZACAO', ROTULO_DA_ETAPA_DA_CASA.CLIMATIZACAO, 'NAO_EXIGIDA', 0, 'desligada nas hipóteses da casa');
-          return;
-        }
-        const modelos = entrada.modelosDeClimatizacao ?? [];
-        if (modelos.length === 0) {
-          const motivo = 'sem catálogo de evaporadoras — cadastre os modelos (Catálogo de tipos) para escolher os splits';
-          etapa('CLIMATIZACAO', ROTULO_DA_ETAPA_DA_CASA.CLIMATIZACAO, 'NAO_RODOU', 0, motivo);
-          pendencias.push({ grupo: 'PREMISSA', texto: `Climatização: ${motivo}` });
-          return;
-        }
-        // F14d (decisão do usuário, 16/10/2026: "Evaporadora na parede externa"): o split na parede externa, mesmo sobre a
-        // janela (o topo da evaporadora abaixo do forro), e a linha e o dreno saindo juntos pela parede atrás dela.
-        const tetoDoAr = Math.min(...niveis.map((L) => m.levels.find((l) => l.id === L)?.defaultHeightMm ?? 2800));
-        const topoDaEvaporadora = forroLigado ? tetoDoAr - rebaixoDoForro - hip.climatizacao.folgaDaEvaporadoraAoForroMm : tetoDoAr - hip.climatizacao.folgaDaEvaporadoraAoForroMm - 200;
-        const plano = gerarClimatizacao(m, entrada.climatizacao ?? HIPOTESES_CLIMATIZACAO_PADRAO, {
-          modelos,
-          circuitos: { hip: hipCircuitos, eletricas: hipEletricas },
-          linhaNoForro: forroLigado ? { faixa: hip.forro.frigorigena, folgaSobAVigaMm: hip.forro.folgaSobAVigaMm } : null,
-          splitNaParedeExterna: hip.climatizacao.naParedeExterna ? { topoMaximoMm: topoDaEvaporadora } : null,
-          // F19: com o forro (decisão "manter 2,80 m, furar vigas"), a travessia de viga é furo previsto, como nas outras redes.
-          travessiaDeVigaEhFuro: forroLigado,
-          ...(entrada.cargaDaClimatizacao ? { carga: entrada.cargaDaClimatizacao } : {}),
-        });
-        for (const e of plano.etapas) climatizacao.etapas[e.id] = e.situacao;
-        // O "conflito" de 0 mm é ENCOSTO (redes paralelas lado a lado — a linha com o dreno do mesmo split, o ramal ao
-        // lado do eletroduto): nenhum eixo dentro. Um a um, eram ~90 linhas que escondiam o resto; vira uma, com a conta.
-        const encostos = plano.pendencias.filter((x) => x.grupo === 'CONFLITO' && /\(0 mm dentro\)/.test(x.texto)).length;
-        for (const x of plano.pendencias) if (!(x.grupo === 'CONFLITO' && /\(0 mm dentro\)/.test(x.texto))) pendencias.push({ ...x, texto: `Climatização: ${x.texto}` });
-        if (encostos) pendencias.push({ grupo: 'CONFERIR', texto: `Climatização: ${encostos} encosto(s) entre redes (lado a lado, nenhum eixo dentro) — o afastamento entre redes não é tratado` });
-        const n = aplicar(plano.comandos);
-        climatizacao.equipamentos = plano.comandos.filter((c) => c.type === 'AddTerminal' && (c as { tipoEletrico?: string | null }).tipoEletrico === 'AR_CONDICIONADO').length;
-        const lancou = plano.etapas.filter((e) => e.situacao === 'LANCOU').map((e) => e.rotulo.toLowerCase());
-        const travou = plano.etapas.find((e) => e.situacao === 'NAO_RODOU');
-        etapa('CLIMATIZACAO', ROTULO_DA_ETAPA_DA_CASA.CLIMATIZACAO, n > 0 ? 'LANCOU' : 'NAO_RODOU', n, n > 0 ? `${climatizacao.equipamentos} split(s); lançou: ${lancou.join(', ')}` : (travou?.nota ?? 'nada a climatizar'));
-        if (n > 0) verificarRedes(ROTULO_DA_DISCIPLINA_DO_AR, climatizacao.verificacao);
-      });
-      tentarEletrica('DR_DPS', () => {
-        if (!quadroId) {
-          etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'NAO_RODOU', 0, 'sem quadro');
-          return;
-        }
-        const drs = comandosDasSugestoesDeDR(sugerirDRs(m, quadroId, hipEletricas));
-        const quadro = (m.quadros ?? []).find((q) => q.id === quadroId);
-        const dps: Command[] = quadro && !quadro.dps ? [{ type: 'SetQuadroProps', quadroId, dps: sugerirDPS(hipEletricas) } as Command] : [];
-        // A LIGAÇÃO pela demanda (com os circuitos prontos): a menor categoria do padrão de entrada que comporta a
-        // demanda — no empate, a de menos fases. O quadro nasce sem ligação (vale FN), e a casa com chuveiro, forno e
-        // ar passa dos 10 kVA de uma monofásica.
-        const nFases = { FN: 1, FF: 2, FFF: 3 } as Record<string, number>;
-        const entradaAgora = entradaDoQuadro(m, quadroId, hipEletricas);
-        const categoria = entradaAgora
-          ? [...padraoDeEntrada(hipEletricas.padraoDeEntrada).categorias].sort((a, b) => a.demandaMaxKva - b.demandaMaxKva || (nFases[a.ligacao] ?? 9) - (nFases[b.ligacao] ?? 9)).find((c) => c.demandaMaxKva >= entradaAgora.demandaKva) ?? null
-          : null;
-        const ligacao: Command[] = categoria && entradaAgora && categoria.ligacao !== entradaAgora.ligacao ? [{ type: 'SetQuadroProps', quadroId, ligacao: categoria.ligacao } as Command] : [];
-        eletrica.drs = drs.length;
-        eletrica.dps = dps.length > 0 || !!quadro?.dps;
-        eletrica.entrada = categoria && entradaAgora ? { categoria: categoria.id, ligacao: categoria.ligacao, demandaKva: Math.round(entradaAgora.demandaKva * 10) / 10 } : null;
-        if (entradaAgora && !categoria) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Entrada de energia: demanda ${entradaAgora.demandaKva.toFixed(1)} kVA acima da maior categoria do padrão — trate com a concessionária` });
-        const notaDaEntrada = eletrica.entrada ? `; entrada ${eletrica.entrada.categoria} (${eletrica.entrada.ligacao}, ${eletrica.entrada.demandaKva.toLocaleString('pt-BR')} kVA)` : '';
-        etapa('DR_DPS', ROTULO_DA_ETAPA_DA_CASA.DR_DPS, 'LANCOU', aplicar([...drs, ...dps, ...ligacao]), `${drs.length} DR(s) de 30 mA${dps.length ? '; DPS no quadro' : ''}${notaDaEntrada}`);
-      });
-      // F5 do relançar (24/10/2026): o REGISTRO dos circuitos automáticos, por pavimento, no lote da casa — com que
-      // escolhas e QUAIS circuitos a casa criou (pelo motor: os do pavimento e os do ar-condicionado, mesmas escolhas).
-      // O painel dos circuitos avisa quando as escolhas de lá diferem e o "Relançar" refaz só estes; o circuito que o
-      // usuário alterar depois fica. Depois do DR (que não muda o circuito) e antes dos eletrodutos (idem).
-      {
-        const daCasa = new Set((m.circuitos ?? []).map((c) => c.id).filter((id) => !(original.circuitos ?? []).some((c) => c.id === id)));
-        for (const L of niveis) {
-          const registro = comandoDeRegistroDosCircuitosCriados(m, L, daCasa, hipCircuitos, hipEletricas);
-          if (registro) aplicar([registro]);
-        }
-      }
-      tentarEletrica('ELETRODUTOS', () => {
-        // F14b: no forro, na faixa do eletroduto. Task 3 (24/10/2026, "a regra vale também no forro"): quadro → luz do
-        // ambiente → tomadas, como na obra — a luz → ponto reta pela faixa até a vertical dele no anel, e a descida do
-        // forro; os anéis dos cômodos ficam para o ambiente sem luz. O que cruzar outra rede, o detector de conflitos avisa.
-        // F2 (24/10/2026): as caixas de passagem são a preferência do usuário (padrão "pela luz do teto", sem caixas). As
-        // outras escolhas (bitola, rota pela parede, encaminhamento) são as do planejador: com o painel dos eletrodutos no
-        // padrão, o registro bate e não há aviso; com o painel fora do padrão, o aviso acende — e é diferença real (relançar
-        // pelo painel usaria as escolhas de lá).
-        const caixas = entrada.caixasDePassagem === 'CAIXAS' ? REGRA_DE_CAIXAS_PADRAO : null;
-        const hipEletrodutos: HipotesesDeEletroduto = forroLigado
-          ? { ...HIPOTESES_ELETRODUTO_PADRAO, caixas, encaminhamento: 'PELA_LUZ_DO_AMBIENTE' as const, noForro: forroDaEletrica(hip.forro) }
-          : { ...HIPOTESES_ELETRODUTO_PADRAO, caixas };
-        const planos = planejarEletrodutosDoModelo(m, hipEletrodutos, hipEletricas);
-        // O REGISTRO do lançamento (com que escolhas), por quadro, no mesmo lote — o painel dos eletrodutos avisa quando
-        // as escolhas de lá diferem e oferece refazer.
-        const escolhas = escolhasDoEletroduto(hipEletrodutos, hipEletricas);
-        const lote = planos.flatMap((p) => (p.comandos.length ? [...p.comandos, comandoDeRegistro('ELETRODUTOS', p.quadroId, escolhas)] : []));
-        for (const a of new Set(planos.flatMap((p) => p.avisos))) pendencias.push({ grupo: 'CONFERIR', texto: `Eletrodutos: ${a}` });
-        eletrica.eletrodutos = lote.filter((c) => c.type === 'AddTrecho').length;
-        const motivo = planos.find((p) => p.motivo)?.motivo ?? null;
-        let n = aplicar(lote);
-        // O diâmetro pela fiação DERIVADA (a régua da conferência 6.2.11.1.6), não pela base por ligação.
-        const bitolas = comandosDeBitolaPelaOcupacao(m, hipEletricas);
-        n += aplicar(bitolas);
-        etapa('ELETRODUTOS', ROTULO_DA_ETAPA_DA_CASA.ELETRODUTOS, lote.length ? 'LANCOU' : 'NAO_RODOU', n, lote.length ? `${eletrica.eletrodutos} trecho(s)${bitolas.length ? `; ${bitolas.length} com o diâmetro aumentado pela ocupação` : ''}` : (motivo ?? 'nada a ligar'));
-      });
-
-      eletrica.circuitos = (m.circuitos ?? []).filter((c) => c.quadroId === quadroId).length;
-      // A CONFERÊNCIA NBR 5410 do app sobre o resultado, por regra.
-      for (const r of niveis.flatMap((L) => conferirNbr5410(m, L, hipEletricas).regras)) {
-        const faltas = r.achados.filter((a) => a.nivel === 'FALTA').length;
-        const avisosR = r.achados.filter((a) => a.nivel === 'AVISO').length;
-        if (!faltas && !avisosR) continue;
-        eletrica.conferencia.porRegra[r.codigo] = { faltas, avisos: avisosR };
-        eletrica.conferencia.faltas += faltas;
-        eletrica.conferencia.avisos += avisosR;
-        const locaisDos = (nivel: 'FALTA' | 'AVISO') => r.achados.filter((a) => a.nivel === nivel).flatMap((a) => (a.ids.length ? [localDoElemento(m, a.ids)].filter((l): l is LocalDaPendencia => !!l) : []));
-        if (faltas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${faltas} falta(s) — ${r.achados.find((a) => a.nivel === 'FALTA')!.mensagem}`, ...comLocais(locaisDos('FALTA')) });
-        if (avisosR) pendencias.push({ grupo: 'CONFERIR', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${avisosR} aviso(s) — ${r.achados.find((a) => a.nivel === 'AVISO')!.mensagem}`, ...comLocais(locaisDos('AVISO')) });
-      }
-    }
-
-    // ── FORRO (F14b) ───────────────────────────────────────────────────────────
-    // O forro de cada cômodo com nome (o vazio da escada e o shaft, não) — gesso; PVC nos molhados — ao rebaixo que
-    // acomoda as faixas das redes; o pé-direito livre conferido pelo uso (permanência ou não).
-    let forro: PlanoDaCasa['resumo']['forro'] = null;
-    if (!forroLigado) etapa('FORRO', ROTULO_DA_ETAPA_DA_CASA.FORRO, 'NAO_EXIGIDA', 0, 'desligado nas hipóteses da casa — as redes correm 10 cm sob a viga');
-    else {
-      const lote: Command[] = [];
-      let menorLivre = Infinity;
-      const abaixo: string[] = [];
-      const locaisDoForroBaixo: LocalDaPendencia[] = [];
-      for (const L of niveis) {
-        for (const sp of comodosComForro(m, L)) {
-          const f = forroDoComodo(m, sp);
-          if (!f.etiqueta) continue;
-          const livre = f.faceMm - hip.forro.pisoAcabadoMm;
-          menorLivre = Math.min(menorLivre, livre);
-          if (livre < f.minimoMm) {
-            abaixo.push(`${sp.name} (${f2(livre / 1000)} m; mínimo ${f2(f.minimoMm / 1000)} m)`);
-            const l = localDoElemento(m, [sp.id]);
-            if (l) locaisDoForroBaixo.push(l);
-          }
-          lote.push({
-            type: 'SetSpaceLabelProps',
-            labelId: f.etiqueta.id,
-            acabamentos: { ...(f.etiqueta.acabamentos ?? {}), forro: { camadas: f.preset.camadas.map((c) => ({ ...c })), rebaixoMm: rebaixoDoForro } },
-          } as Command);
-        }
-      }
-      const n = aplicar(lote);
-      forro = { comodos: lote.length, rebaixoMm: rebaixoDoForro, peDireitoLivreMinimoMm: Number.isFinite(menorLivre) ? Math.round(menorLivre) : null };
-      if (abaixo.length)
-        pendencias.push({ grupo: 'PREMISSA', texto: `Forro: pé-direito livre abaixo do mínimo em ${abaixo.join(', ')} — as faixas das redes pedem ${f2(rebaixoDoForro / 1000)} m de plenum; aumente o pé-direito ou aperte as faixas`, ...comLocais(locaisDoForroBaixo) });
-      pendencias.push({ grupo: 'CONFERIR', texto: `Forro: as redes correm no plenum (${f2(rebaixoDoForro / 1000)} m), atravessam as vigas entre os cômodos e descem aos pontos junto da viga, em caixote de gesso — os furos vão ao calculista (F14c)` });
-      etapa('FORRO', ROTULO_DA_ETAPA_DA_CASA.FORRO, 'LANCOU', n, `${lote.length} cômodo(s), rebaixo de ${f2(rebaixoDoForro / 1000)} m; pé-direito livre mínimo de ${Number.isFinite(menorLivre) ? f2(menorLivre / 1000) : '—'} m`);
-    }
-
-    // ── FUROS PREVISTOS (F14c) ─────────────────────────────────────────────────
-    // Toda passagem de rede por viga, baldrame e laje, com a avaliação dos critérios na viga — a lista para o calculista
-    // (decisão do usuário: "manter 2,80 m, furar vigas"). Sai do modelo como ele ficou, com todas as redes.
-    const listaDeFuros = furosPrevistos(m);
-    const naViga = listaDeFuros.filter((f) => f.tipoDaPeca === 'VIGA');
-    const furos: PlanoDaCasa['resumo']['furos'] = {
-      emViga: naViga.length,
-      dispensa: naViga.filter((f) => f.dispensa).length,
-      verificar: naViga.filter((f) => f.dispensa === false).length,
-      emBaldrame: listaDeFuros.filter((f) => f.tipoDaPeca === 'VIGA_FUNDACAO').length,
-      emLaje: listaDeFuros.filter((f) => f.tipoDaPeca === 'LAJE').length,
-      lista: listaDeFuros,
-    };
-    if (listaDeFuros.length)
-      pendencias.push({
-        grupo: 'CONFERIR',
-        texto: `Furos previstos para o calculista: ${furos.emViga} em viga (${furos.dispensa} dispensam a verificação pelos critérios da NBR 6118, 13.2.5.1; ${furos.verificar} a verificar), ${furos.emBaldrame} em baldrame e ${furos.emLaje} passagem(ns) em laje — a lista está na tela da casa.`,
-      });
-
-    // As redes × PORTAS e JANELAS: o tubo que corre na cota do topo da janela (2,20 m — a mesma dos ramais, do
-    // eletroduto e da linha abaixo da viga) ou que sai da parede para fora no vão dela. Fica à vista, por rede.
-    const redesEmAberturas: Record<string, number> = {};
-    {
-      const porId = new Map((m.trechos ?? []).map((t) => [t.id, t]));
-      // Etapa C (11/11/2026): cada contagem leva os locais dos conflitos — o Relatório leva à planta da prévia e ao editor.
-      const locaisDasAberturas: Record<string, LocalDaPendencia[]> = {};
-      const juntar = (alvo: Record<string, LocalDaPendencia[]>, k: string, l: LocalDaPendencia | null) => {
-        if (l) (alvo[k] ??= []).push(l);
-      };
-      for (const c of conflitosDoModelo(m)) {
-        if (c.classe !== 'ABERTURA' || c.comprimentoDentroMm <= 0) continue;
-        const d = porId.get(c.trechoId)?.disciplina;
-        if (d) {
-          redesEmAberturas[d] = (redesEmAberturas[d] ?? 0) + 1;
-          juntar(locaisDasAberturas, d, localDoConflito(m, c));
-        }
-      }
-      const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
-      for (const [d, n] of Object.entries(redesEmAberturas)) pendencias.push({ grupo: 'VERIFICACAO', texto: `Rede de ${nome[d] ?? d.toLowerCase()}: ${n} trecho(s) passando por porta ou janela`, ...comLocais(locaisDasAberturas[d]) });
-      // F27 da casa automática (18/10/2026): os ENCONTROS de uma rede com outra, e o tubo que atravessa pilar, também
-      // ficam à vista — por par de redes. Até aqui só a sonda os contava: a tela não dizia, e o Automático, que pesa as
-      // pendências, escolhia o sobrado com o esgoto suspenso cruzando os eletrodutos do forro do térreo contra uma térrea
-      // sem encontro nenhum.
-      const est = new Map((m.structures ?? []).map((x) => [x.id, x]));
-      const pares: Record<string, number> = {};
-      const locaisDosPares: Record<string, LocalDaPendencia[]> = {};
-      const locaisDosPilares: Record<string, LocalDaPendencia[]> = {};
-      let emPilar = 0;
-      for (const c of conflitosDoModelo(m)) {
-        const t = porId.get(c.trechoId);
-        if (!t) continue;
-        if (c.classe === 'REDE') {
-          const o = porId.get(c.outroId);
-          if (!o) continue;
-          const chave = [nome[t.disciplina] ?? t.disciplina.toLowerCase(), nome[o.disciplina] ?? o.disciplina.toLowerCase()].sort().join(' × ');
-          pares[chave] = (pares[chave] ?? 0) + 1;
-          juntar(locaisDosPares, chave, localDoConflito(m, c));
-        } else if (c.classe === 'ESTRUTURA' && est.get(c.outroId)?.kind === 'PILAR' && c.comprimentoDentroMm > 0) {
-          emPilar++;
-          juntar(locaisDosPilares, 'pilar', localDoConflito(m, c));
-        }
-      }
-      for (const [par, n] of Object.entries(pares)) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${n} encontro(s) de ${par}`, ...comLocais(locaisDosPares[par]) });
-      if (emPilar) pendencias.push({ grupo: 'CONFLITO', texto: `Redes: ${emPilar} trecho(s) atravessando pilar`, ...comLocais(locaisDosPilares.pilar) });
-    }
-    return { ancoras, mobiliario, hidraulica, eletrica, climatizacao, redesEmAberturas, forro, furos };
-  };
+  const instalacoes = (niveis: ObjectId[], ret: Retangulo, notaDoShaft: string | null = null) => instalacoesDaEtapa(ctx, niveis, ret, notaDoShaft);
 
   // ── SOBRADO (F12a) ────────────────────────────────────────────────────────
   // Os dois pavimentos no MESMO retângulo, gerados cada um com a sua parte do programa; o núcleo da escada
   // recortado depois na ponta do corredor de cima (ver `blueprintSobrado.ts`). A estrutura e as instalações dos
   // dois pavimentos ainda não rodam aqui: as etapas dizem isso, e o plano fecha na conferência.
-  if (divididos) {
-    const t = gerarTodas(divididos.terreo);
-    const sup = gerarTodas(divididos.superior);
-    // A escada chega no corredor de cima: só servem as alternativas do superior que têm corredor.
-    const comCorredor = sup.resultados.filter((x) => x.ambientes.some((a) => a.item.uso === 'CIRCULACAO'));
-    const semPlanta = !t.resultados.length
-      ? `o gerador não fechou o térreo (${t.falhas.join('; ') || 'sem alternativa'})`
-      : !comCorredor.length
-        ? `nenhuma alternativa do pavimento superior saiu com corredor para a escada chegar (${sup.resultados.length} tentada(s)${sup.falhas.length ? `; ${sup.falhas.join('; ')}` : ''})`
-        : null;
-    let et = t.resultados.length ? escolherSemente(t.resultados) : null;
-    let es = comCorredor.length ? escolherSemente(comCorredor) : null;
-    let corredor = es?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
-    // F27-D4: em 3 pavimentos, como no sobrado — o 2º se alinha ao patamar nos dois sentidos da escada (o núcleo pode sobrar
-    // fora dele). A preferência pelos fundos da D2 fazia o núcleo comer o banheiro do 1º (10 × 30: 3,38 m², a caixa
-    // sifonada dentro da escada).
-    const nucleo = et && es ? escolherNucleo(rl, corredor, et.r.ambientes, es.r.ambientes, hip.sobrado) : null;
-    // F27 item 5 (decisão do usuário, 19/10/2026: "mover o lavabo"): o núcleo que espreme o lavabo do térreo — o térreo é
-    // gerado de novo, na mesma semente, com o lavabo na outra ponta do par (`lavaboForaDoNucleo`).
-    if (et && nucleo) {
-      const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
-      const mover = (amb: AmbienteGerado[]) => lavaboForaDoNucleo(amb, nucleo, hip.sobrado, malha);
-      if (mover(et.r.ambientes.map((a) => ({ ...a, ret: { ...a.ret } })))) {
-        try {
-          const novo = gerar({ ...entradaDoGerador, programa: divididos.terreo, rearranjar: mover, motivoDoRearranjo: 'o lavabo na outra ponta, fora do núcleo da escada' }, et.r.semente, hipGerador);
-          if (novo.decisoes.some((d) => d.startsWith('Arranjo ajustado'))) {
-            et = { r: novo, texto: et.texto };
-            decisoes.push('Térreo: o núcleo da escada espremia o lavabo — o lavabo foi para a outra ponta do par, fora do núcleo.');
-          }
-        } catch {
-          // O gerador não fechou com o lavabo movido: fica o arranjo de antes.
-        }
-      }
-    }
-    // F27 item 5.3 (decisão do usuário, 19/10/2026: "recuar o 1º também"): na casa de 3, o 1º num retângulo com a área do
-    // programa dele — a mesma regra do 2º (nos fundos, encostado na fachada do núcleo, alinhado ao patamar); o excedente do
-    // térreo vira o terraço do 1º. Herdando a pegada inteira do térreo, os dormitórios do 1º chegavam a 53 m².
-    let retDoPrimeiro: Retangulo | null = null;
-    // O 1º na pegada do térreo — volta a ser ele se o 2º não fechar dentro do 1º recuado.
-    const primeiroNaPegada = { es, corredor };
-    let decisaoDoPrimeiro: string | null = null;
-    /** Os 1º recuados que fecharam (largura toda, proporção) — fica o primeiro em que o 2º também fecha. */
-    const primeirosRecuados: { es: NonNullable<typeof es>; corredor: Retangulo | null; ret: Retangulo; decisao: string }[] = [];
-    if (divididos.segundo && nucleo && es && !semPlanta) {
-      const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
-      // A área do maior programa entre o 1º e o 2º — o 2º recua DENTRO do 1º (com 2 dormitórios, o 1º leva um dormitório e
-      // o banho, e o 2º, a suíte: menor que o 2º, o 1º não o continha).
-      const programaM2 = Math.max(resumoDoPrograma(divididos.superior).areaIdealComCirculacaoM2, resumoDoPrograma(divididos.segundo).areaIdealComCirculacaoM2);
-      const areaM2 = (programaM2 + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6) * (hipImplantacao.fatorDoRetanguloSobreUtil ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.fatorDoRetanguloSobreUtil);
-      const anelDoRet = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
-      // Primeiro só em profundidade (as fachadas laterais sobre as do térreo), depois pela proporção, como o 2º.
-      const modos = (hip.sobrado.primeiroRecuaSoNaProfundidade ?? true) ? [true, false] : [false];
-      for (const larguraToda of modos) {
-        const proposto = retanguloDoSegundo(rl, nucleo, areaM2, hipImplantacao.proporcaoFrenteFundo ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.proporcaoFrenteFundo, hip.sobrado, malha, larguraToda);
-        if ((proposto.x1 - proposto.x0) * (proposto.y1 - proposto.y0) >= (rl.x1 - rl.x0) * (rl.y1 - rl.y0)) continue;
-        const alinhados = (hip.sementes.length ? hip.sementes : [1]).flatMap((semente) => {
-          const a = alinharSegundoAoPatamar(
-            (r, invertida) => {
-              try {
-                const x = gerar({ ...entradaDoGerador, programa: divididos.superior, envelope: anelDoRet(r), direcaoDaFrente: invertida ? point(0, 1) : null }, semente, hipGerador);
-                return x.ambientes.some((amb) => amb.item.uso === 'CIRCULACAO') ? x : null;
-              } catch {
-                return null;
-              }
-            },
-            rl,
-            proposto,
-            nucleo,
-            hip.sobrado,
-            malha,
-            // 5.3b: o 1º cresce para a frente a cada volta e o corredor se aproxima do patamar devagar (10 × 30, 4 dorm.:
-            // 15,7 → 15,1 m em 4 voltas, com o patamar em 14,9) — mais voltas que o 2º.
-            VOLTAS_DO_PRIMEIRO_RECUADO,
-            nucleo.paraOsFundos ? [false, true] : [true, false],
-          );
-          return a ? [a] : [];
-        });
-        if (!alinhados.length) continue;
-        const e1 = escolherSemente(alinhados.map((a) => a.r));
-        const escolhido = alinhados.find((a) => a.r === e1.r)!;
-        const ret = escolhido.ret;
-        primeirosRecuados.push({
-          es: e1,
-          ret,
-          corredor: e1.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? corredor,
-          decisao: `3 pavimentos: o 1º recuado em ${f2((ret.x1 - ret.x0) / 1000)} × ${f2((ret.y1 - ret.y0) / 1000)} m (a área do programa dele${larguraToda ? ', na largura toda do térreo' : ''}) — o excedente do térreo é o terraço do 1º${escolhido.invertida ? '; o íntimo à frente do corredor (a planta invertida)' : ''}.`,
-        });
-      }
-      if (!primeirosRecuados.length) decisaoDoPrimeiro = '3 pavimentos: o 1º recuado não fechou com o corredor no patamar da escada — o 1º fica com a pegada do térreo.';
-    }
-    if (semPlanta || !nucleo || !et || !es) {
-      const texto = semPlanta ?? `não cabe o núcleo da escada (${f2(hip.sobrado.nucleoLarguraMm / 1000)} × ${f2(hip.sobrado.nucleoProfundidadeMm / 1000)} m) na ponta do corredor de cima`;
-      etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto });
-      return vazio(texto, implantacao);
-    }
-    // F27-D2 (decisão do usuário, 18/10/2026: "recuado com terraço"): o 2º pavimento num retângulo menor, nos fundos e
-    // do lado do núcleo (o terraço na frente, sobre a laje do 1º), com o corredor no patamar da escada.
-    let eg: { r: ResultadoDoGerador; texto: string } | null = null;
-    let retDoSegundo: Retangulo | null = null;
-    if (divididos.segundo) {
-      // S4 (20/10/2026): o item social SOZINHO no 2º (o escritório do R1-A — o resto é a suíte e o banho dela) vai ao fundo,
-      // ao lado da suíte: sozinho na frente, a faixa dele tinha a largura toda e a profundidade da área (7,40 × 1,70 m,
-      // mínimo 2,20).
-      const naoIntimos = divididos.segundo.itens.filter((i) => i.privacidade !== 'INTIMO' && i.uso !== 'CIRCULACAO');
-      const seg = naoIntimos.length === 1 ? { ...divididos.segundo, itens: divididos.segundo.itens.map((i) => (i === naoIntimos[0] ? { ...i, privacidade: 'INTIMO' as const } : i)) } : divididos.segundo;
-      const malha = hipGerador.malhaMm ?? HIPOTESES_DO_GERADOR_PADRAO.malhaMm;
-      const areaM2 = (resumoDoPrograma(seg).areaIdealComCirculacaoM2 + (hip.sobrado.nucleoLarguraMm * hip.sobrado.nucleoProfundidadeMm) / 1e6) * (hipImplantacao.fatorDoRetanguloSobreUtil ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.fatorDoRetanguloSobreUtil);
-      // F27 item 5.3: o 2º recua dentro do 1º (recuado ou não).
-      const anel = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
-      const alinharDentroDe = (casaDoSegundo: Retangulo) => {
-        const inicial = retanguloDoSegundo(casaDoSegundo, nucleo, areaM2, hipImplantacao.proporcaoFrenteFundo ?? HIPOTESES_DA_IMPLANTACAO_PADRAO.proporcaoFrenteFundo, hip.sobrado, malha);
-        return (hip.sementes.length ? hip.sementes : [1]).flatMap((semente) => {
-          const a = alinharSegundoAoPatamar(
-            (r, invertida) => {
-              try {
-                return gerar({ ...entradaDoGerador, programa: seg, envelope: anel(r), direcaoDaFrente: invertida ? point(0, 1) : null, rearranjar: (amb) => banheiroAlemDoNucleo(amb, nucleo) }, semente, hipGerador);
-              } catch {
-                return null;
-              }
-            },
-            casaDoSegundo,
-            inicial,
-            nucleo,
-            hip.sobrado,
-            malha,
-            // 5.3b: dentro do 1º recuado, as mesmas voltas dele.
-            casaDoSegundo === rl ? 4 : VOLTAS_DO_PRIMEIRO_RECUADO,
-            // F27-D4: a suíte do lado para onde o núcleo avança (o banheiro vai além da ponta dele): de frente quando a escada
-            // sobe para os fundos, invertida quando sobe para a frente; o outro sentido só se este não fechar.
-            nucleo.paraOsFundos ? [false, true] : [true, false],
-          );
-          return a ? [a] : [];
-        });
-      };
-      // F27 item 5.3: o primeiro 1º recuado em que o 2º fecha; nenhum — o 1º com a pegada do térreo.
-      let alinhados: ReturnType<typeof alinharDentroDe> = [];
-      // 5.3b: de todos os 1º recuados em que o 2º fecha, o de menos problemas graves no 1º e no 2º juntos, e entre esses o
-      // de MENOR área (o objetivo é o 1º do tamanho do programa). O primeiro que fechava podia ser o maior (12 × 30: os
-      // dormitórios de 31 m² em vez de 19) ou deixar o 2º com um cômodo abaixo da largura mínima (R1-A: o escritório de
-      // 1,70 m).
-      const area = (r: Retangulo) => (r.x1 - r.x0) * (r.y1 - r.y0);
-      let melhor: { c: (typeof primeirosRecuados)[number]; alinhados: ReturnType<typeof alinharDentroDe>; graves: number } | null = null;
-      for (const c of primeirosRecuados) {
-        const al = alinharDentroDe(c.ret);
-        if (!al.length) continue;
-        // E os cômodos abaixo da largura mínima do uso deles (o gerador não os conta como graves).
-        const estreitos = (x: ResultadoDoGerador) => x.ambientes.filter((amb) => amb.item.uso !== 'CIRCULACAO' && Math.min(amb.ret.x1 - amb.ret.x0, amb.ret.y1 - amb.ret.y0) < amb.item.larguraMinMm).length;
-        const doSegundo = escolherSemente(al.map((x) => x.r)).r;
-        const graves = problemasGraves(c.es.r) + problemasGraves(doSegundo) + estreitos(c.es.r) + estreitos(doSegundo);
-        if (!melhor || graves < melhor.graves || (graves === melhor.graves && area(c.ret) < area(melhor.c.ret))) melhor = { c, alinhados: al, graves };
-      }
-      // S3 (20/10/2026): o 2º do tamanho do 1º recuado (2 dorm.: a suíte em cima, 24,9 m², maior que o programa do 1º)
-      // preenche-o inteiro e não tem para onde andar até o patamar (10 × 30: o corredor a 100 mm dele) — o 1º voltava à
-      // pegada do térreo, com o dormitório de 4 × a área ideal. Então o 1º EM VOLTA do 2º: o 2º alinhado na pegada, e o
-      // menor retângulo que o contém (a sobra além dele, de cada lado, zero ou ao menos a faixa do terraço) em que o
-      // corredor do 1º também cai no patamar.
-      if (!melhor && primeirosRecuados.length) {
-        const naPegada = alinharDentroDe(rl);
-        const seg = naPegada.length ? naPegada.find((a) => a.r === escolherSemente(naPegada.map((x) => x.r)).r)!.ret : null;
-        if (seg) {
-          const faixa = hip.sobrado.faixaMinimaDoTerracoMm;
-          const meio = nucleo.paraOsFundos ? nucleo.ret.y0 + hip.sobrado.patamarMm / 2 : nucleo.ret.y1 - hip.sobrado.patamarMm / 2;
-          const bordas = (de: number, ate: number) => {
-            const v = [de];
-            for (let d = faixa; d < Math.abs(ate - de); d += PASSO_DO_PRIMEIRO_EM_VOLTA_DO_SEGUNDO_MM) v.push(de + Math.sign(ate - de) * d);
-            if (ate !== de) v.push(ate);
-            return v;
-          };
-          const larguras = [...((hip.sobrado.primeiroRecuaSoNaProfundidade ?? true) ? [[rl.x0, rl.x1]] : []), [seg.x0, seg.x1]];
-          const rets = larguras
-            .flatMap(([x0, x1]) => bordas(seg.y0, rl.y0).flatMap((y0) => bordas(seg.y1, rl.y1).map((y1) => ({ x0, x1, y0, y1 }))))
-            .filter((r) => area(r) < area(rl))
-            .sort((p, q) => area(p) - area(q));
-          const sementes = hip.sementes.length ? hip.sementes : [1];
-          const anelDoRet = (r: Retangulo) => [point(r.x0, r.y0), point(r.x1, r.y0), point(r.x1, r.y1), point(r.x0, r.y1)];
-          const noPatamar = (r: Retangulo, semente: number, invertida: boolean) => {
-            try {
-              const x = gerar({ ...entradaDoGerador, programa: divididos.superior, envelope: anelDoRet(r), direcaoDaFrente: invertida ? point(0, 1) : null }, semente, hipGerador);
-              const cor = x.ambientes.find((amb) => amb.item.uso === 'CIRCULACAO')?.ret;
-              return cor && cor.y0 < meio && meio < cor.y1 ? x : null;
-            } catch {
-              return null;
-            }
-          };
-          for (const r of rets) {
-            // A 1ª semente filtra (o corredor cai no mesmo lugar em todas); as outras só no retângulo que passa.
-            const sentidos = [false, true].filter((inv) => noPatamar(r, sementes[0], inv));
-            if (!sentidos.length) continue;
-            const al = alinharDentroDe(r);
-            if (!al.length) continue;
-            const doPrimeiro = sentidos.flatMap((inv) => sementes.map((sm) => noPatamar(r, sm, inv)).filter((x): x is ResultadoDoGerador => !!x).map((x) => ({ x, inv })));
-            const e1 = escolherSemente(doPrimeiro.map((d) => d.x));
-            const invertida = doPrimeiro.find((d) => d.x === e1.r)!.inv;
-            melhor = {
-              c: {
-                es: e1,
-                ret: r,
-                corredor: e1.r.ambientes.find((amb) => amb.item.uso === 'CIRCULACAO')?.ret ?? corredor,
-                decisao: `3 pavimentos: o 1º recuado em ${f2((r.x1 - r.x0) / 1000)} × ${f2((r.y1 - r.y0) / 1000)} m, em volta do 2º (do tamanho do programa do 1º, o 2º não tinha para onde andar até o patamar) — o excedente do térreo é o terraço do 1º${invertida ? '; o íntimo à frente do corredor (a planta invertida)' : ''}.`,
-              },
-              alinhados: al,
-              graves: 0,
-            };
-            break;
-          }
-        }
-      }
-      if (melhor) {
-        alinhados = melhor.alinhados;
-        ({ es, corredor } = melhor.c);
-        retDoPrimeiro = melhor.c.ret;
-        decisaoDoPrimeiro = melhor.c.decisao;
-      }
-      if (!alinhados.length) {
-        ({ es, corredor } = primeiroNaPegada);
-        retDoPrimeiro = null;
-        if (primeirosRecuados.length) decisaoDoPrimeiro = '3 pavimentos: o 2º não fechou dentro do 1º recuado (o corredor no patamar da escada) — o 1º fica com a pegada do térreo.';
-        alinhados = alinharDentroDe(rl);
-      }
-      if (!alinhados.length) {
-        const texto = 'o 2º pavimento não fechou com o corredor no patamar da escada (nenhuma alternativa do gerador) — gere o sobrado';
-        etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
-        pendencias.push({ grupo: 'SEM_SOLUCAO', texto });
-        return vazio(texto, implantacao);
-      }
-      eg = escolherSemente(alinhados.map((a) => a.r));
-      const escolhido = alinhados.find((a) => a.r === eg!.r)!;
-      retDoSegundo = escolhido.ret;
-      if (escolhido.invertida) decisoes.push(`2º pavimento: o íntimo à frente do corredor (a planta invertida) — ${nucleo.paraOsFundos ? 'atrás do patamar da escada não cabia' : 'do lado para onde a escada avança, com o banheiro além da ponta do núcleo'}.`);
-    }
-    if (decisaoDoPrimeiro) decisoes.push(decisaoDoPrimeiro);
-    if (!es) return vazio('sem o 1º pavimento', implantacao);
-    const pavimentosGerados: [string, ResultadoDoGerador][] = [['Térreo', et.r], [eg ? '1º pavimento' : 'Superior', es.r], ...(eg ? [['2º pavimento', eg.r] as [string, ResultadoDoGerador]] : [])];
-    for (const [pav, x] of pavimentosGerados) decisoes.push(...x.decisoes.map((d) => `${pav}: ${d}`));
-    const T = entrada.levelId;
-    // F25: a cota do térreo JÁ no platô (a terraplenagem o move antes) — do original, o superior ficava a 1,8 m dele.
-    const nivel = m.levels.find((l) => l.id === T)!;
-    let sobrado: ResumoDoSobrado;
-    let n = 0;
-    try {
-      n += aplicar([{ type: 'AddLevel', name: eg ? '1º pavimento' : 'Pavimento superior', elevationMm: nivel.elevationMm + andarMm, defaultHeightMm: nivel.defaultHeightMm, uid: uidDeterministico(`casa-automatica:superior:${T}`) }]);
-      const S = m.levels.find((l) => !original.levels.some((o) => o.id === l.id))!.id;
-      let G: ObjectId | null = null;
-      if (eg) {
-        n += aplicar([{ type: 'AddLevel', name: '2º pavimento', elevationMm: nivel.elevationMm + 2 * andarMm, defaultHeightMm: nivel.defaultHeightMm, uid: uidDeterministico(`casa-automatica:segundo:${T}`) }]);
-        G = m.levels.find((l) => l.id !== S && !original.levels.some((o) => o.id === l.id))!.id;
-      }
-      const pt = pavimentoComNucleo(comUidsDoPavimento(comandosDeAplicacao(et.r, T), 'T'), T, nucleo, et.r.ambientes, 'T', peDireitoMm, hip.sobrado);
-      // O superior não tem porta para a rua: a porta de entrada que o gerador pôs na fachada sai antes.
-      const psBase = pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(es.r, S), rl), 'S'), S, nucleo, es.r.ambientes, 'S', peDireitoMm, hip.sobrado, corredor);
-      // F27 item 5.3: o 1º recuado abre para o terraço dele (na planta invertida a "entrada" ficava nos fundos).
-      const terracoDoPrimeiro = retDoPrimeiro ? portaParaOTerraco(psBase.comandos, rl, es.r.ambientes, hip.sobrado.alturaDaPortaMm) : null;
-      const ps = terracoDoPrimeiro ? { ...psBase, comandos: terracoDoPrimeiro.comandos } : psBase;
-      if (terracoDoPrimeiro?.comodo) decisoes.push(`3 pavimentos: a janela de ${terracoDoPrimeiro.comodo} para o terraço do 1º virou porta de correr (o 1º sem porta para o terraço).`);
-      // F27-D2: o 2º sem as portas para FORA da casa (fundos e laterais); a do terraço (a "entrada" do gerador na frente
-      // do retângulo recuado) fica. A segunda escada, empilhada no mesmo núcleo, sai do 1º.
-      const corredorDoSegundo = eg?.r.ambientes.find((a) => a.item.uso === 'CIRCULACAO')?.ret ?? null;
-      const pgBase = eg && G ? pavimentoComNucleo(comUidsDoPavimento(semPortaDeEntrada(comandosDeAplicacao(eg.r, G), retDoPrimeiro ?? rl), 'G'), G, nucleo, eg.r.ambientes, 'G', peDireitoMm, hip.sobrado, corredorDoSegundo) : null;
-      // F27-D5: o 2º abre para o terraço (na planta invertida a "entrada" ficava nos fundos).
-      const terraco = pgBase && eg ? portaParaOTerraco(pgBase.comandos, retDoPrimeiro ?? rl, eg.r.ambientes, hip.sobrado.alturaDaPortaMm) : null;
-      const pg = pgBase && terraco ? { ...pgBase, comandos: terraco.comandos } : pgBase;
-      if (terraco?.comodo) decisoes.push(`3 pavimentos: a janela de ${terraco.comodo} para o terraço virou porta de correr (o 2º sem porta para o terraço).`);
-      const exata = implantacao.alinhadaAoDesenho;
-      n += aplicar([
-        ...comandosLocaisNoMundo(pt.comandos, q, exata),
-        ...comandosLocaisNoMundo(ps.comandos, q, exata),
-        ...(pg ? comandosLocaisNoMundo(pg.comandos, q, exata) : []),
-        ...comandosLocaisNoMundo([comandoDaEscada(T, nucleo, hip.sobrado), ...(G ? [comandoDaEscada(S, nucleo, hip.sobrado)] : [])], q, exata),
-      ]);
-      const med = medirEscada(m, m.stairs[m.stairs.length - 1]);
-      sobrado = {
-        nivelSuperiorId: S,
-        nucleo,
-        escada: { degraus: med.degraus, espelhoMm: Math.round(med.espelhoMm), pisoMm: Math.round(med.pisoMm), blondelMm: Math.round(med.blondelMm) },
-        portas: { terreo: pt.porta?.vizinho ?? null, superior: ps.porta?.vizinho ?? null },
-        primeiro: retDoPrimeiro ? { retangulo: retDoPrimeiro, terracoM2: Math.round(((rl.x1 - rl.x0) * (rl.y1 - rl.y0) - (retDoPrimeiro.x1 - retDoPrimeiro.x0) * (retDoPrimeiro.y1 - retDoPrimeiro.y0)) / 1e4) / 100 } : null,
-        segundo:
-          G && pg && retDoSegundo
-            ? { nivelId: G, retangulo: retDoSegundo, porta: pg.porta?.vizinho ?? null, terracoM2: Math.round((((retDoPrimeiro ?? rl).x1 - (retDoPrimeiro ?? rl).x0) * ((retDoPrimeiro ?? rl).y1 - (retDoPrimeiro ?? rl).y0) - (retDoSegundo.x1 - retDoSegundo.x0) * (retDoSegundo.y1 - retDoSegundo.y0)) / 1e4) / 100 }
-            : null,
-      };
-      for (const a of med.avisos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: ${a}` });
-    } catch (e) {
-      const texto = `as paredes geradas não entraram no desenho: ${e instanceof Error ? e.message : String(e)}`;
-      etapa('ARQUITETURA', ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA, 'NAO_RODOU', 0, texto);
-      pendencias.push({ grupo: 'SEM_SOLUCAO', texto });
-      return vazio(texto, implantacao);
-    }
-    const lado = nucleo.lado === 'DIREITA' ? 'direita' : 'esquerda';
-    if (!sobrado.portas.terreo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: nenhum ambiente do térreo encosta no patamar — abra a porta do núcleo à mão.' });
-    if (!sobrado.portas.superior) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o patamar ${eg ? 'do 1º pavimento' : 'de cima'} não encosta no corredor — abra a porta do núcleo à mão.` });
-    if (sobrado.segundo && !sobrado.segundo.porta) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: 'Escada: o patamar do 2º pavimento não encosta no corredor — abra a porta do núcleo à mão.' });
-    // O que o núcleo comeu, medido no DESENHO: abaixo do mínimo do programa é sem solução; acima, conferir.
-    for (const a of nucleo.perdidos) {
-      const amb = [...et.r.ambientes, ...es.r.ambientes].find((x) => x.nome === a);
-      const sp = m.spaces.find((x) => (x.levelId === T || x.levelId === sobrado.nivelSuperiorId) && x.name === a);
-      const ficouM2 = sp ? Math.round(sp.areaMm2 / 1e4) / 100 : null;
-      const minimoM2 = amb?.item.areaMinM2 ?? null;
-      if (ficouM2 != null && minimoM2 != null && ficouM2 >= minimoM2)
-        pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come boa parte de ${a} — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(minimoM2)} m²); confira o uso ou mude a escada de lugar.`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
-      else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a} ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}${minimoM2 != null ? `, abaixo do mínimo de ${f2(minimoM2)} m²` : ''} — mude a escada de lugar.`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
-    }
-    for (const a of nucleo.partidos) {
-      const sp = m.spaces.find((x) => (x.levelId === T || x.levelId === sobrado.nivelSuperiorId) && x.name === a);
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: o núcleo parte ${a} em dois — o pedaço menor fica sem nome.`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
-    }
-    // F27-D2: o 2º não entrou na escolha do núcleo — o que ele comeu lá, medido no desenho.
-    if (eg && sobrado.segundo) {
-      const G = sobrado.segundo.nivelId;
-      for (const a of eg.r.ambientes) {
-        if (a.item.uso === 'CIRCULACAO' || !(a.ret.x0 < nucleo.ret.x1 && a.ret.x1 > nucleo.ret.x0 && a.ret.y0 < nucleo.ret.y1 && a.ret.y1 > nucleo.ret.y0)) continue;
-        const sp = m.spaces.find((x) => x.levelId === G && x.name === a.nome);
-        const ficouM2 = sp ? Math.round(sp.areaMm2 / 1e4) / 100 : null;
-        if (ficouM2 != null && ficouM2 >= a.item.areaMinM2) pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come parte de ${a.nome} no 2º pavimento — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(a.item.areaMinM2)} m²).`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
-        else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a.nome} no 2º pavimento ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}, abaixo do mínimo de ${f2(a.item.areaMinM2)} m².`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
-      }
-    }
-    // F22: "sem porta direta" já sai na CONFERÊNCIA do programa — aqui só pesa na escolha (como na térrea).
-    for (const [pav, x] of pavimentosGerados) for (const a of x.avisos) if (!/sem porta direta \(relação obrigatória\)/.test(a)) pendencias.push({ grupo: GRAVE.test(a) ? 'SEM_SOLUCAO' : 'VERIFICACAO', texto: `Arquitetura (${pav.toLowerCase()}): ${a}` });
-    const paredes = m.walls.filter((w) => w.levelId === T || w.levelId === sobrado.nivelSuperiorId || w.levelId === sobrado.segundo?.nivelId).length;
-    etapa(
-      'ARQUITETURA',
-      ROTULO_DA_ETAPA_DA_CASA.ARQUITETURA,
-      'LANCOU',
-      n,
-      eg && sobrado.segundo
-        ? `3 pavimentos: ${paredes} paredes; térreo com ${et.r.ambientes.length}, 1º com ${es.r.ambientes.length} e 2º com ${eg.r.ambientes.length} ambientes; o 2º recuado em ${f2((sobrado.segundo.retangulo.x1 - sobrado.segundo.retangulo.x0) / 1000)} × ${f2((sobrado.segundo.retangulo.y1 - sobrado.segundo.retangulo.y0) / 1000)} m (terraço de ${f2(sobrado.segundo.terracoM2)} m²); duas escadas em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) empilhadas no núcleo à ${lado} — térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}`
-        : `sobrado: ${paredes} paredes; térreo com ${et.r.ambientes.length} e superior com ${es.r.ambientes.length} ambientes; escada em U de ${sobrado.escada.degraus} degraus (${sobrado.escada.espelhoMm} × ${sobrado.escada.pisoMm} mm) no núcleo à ${lado} — térreo: ${et.texto}; superior: ${es.texto}`,
-    );
-
-    // F27: as janelas de cima alinhadas com as de baixo, antes dos pilares (o intermediário do térreo sobe entre elas).
-    {
-      const alinhadas = alinharJanelasDoSuperior(m, T, sobrado.nivelSuperiorId);
-      if (alinhadas.length) {
-        aplicar(alinhadas);
-        decisoes.push(`Sobrado: ${alinhadas.length} janela(s) do ${eg ? '1º pavimento' : 'superior'} alinhada(s) com as do térreo, na mesma fachada.`);
-      }
-      // F27-D2: par a par — as do 2º com as do 1º.
-      const doSegundo = sobrado.segundo ? alinharJanelasDoSuperior(m, sobrado.nivelSuperiorId, sobrado.segundo.nivelId) : [];
-      if (doSegundo.length) {
-        aplicar(doSegundo);
-        decisoes.push(`3 pavimentos: ${doSegundo.length} janela(s) do 2º alinhada(s) com as do 1º, na mesma fachada.`);
-      }
-    }
-    lancarEscadaDeAcesso();
-    lancarRampaDaGaragem();
-    // F26: o muro logo depois da casa — antes da água e da elétrica, que põem o hidrômetro e o medidor nele.
-    resumoDoMuro = lancarMuroDaCasa();
-
-    // ── ESTRUTURA E TELHADO DO SOBRADO (F12b) ──
-    // Pilares em prumada (ver `pilaresDoSobrado`); vigas e lajes em cada pavimento — a laje do térreo é o piso de
-    // cima, e o furo da escada nela é derivado pelo kernel (`furosDaEscada`); fundação só no térreo; eixos do térreo;
-    // telhado sobre o superior; corrimãos dos lances e guarda-corpo na borda do furo.
-    const S = sobrado.nivelSuperiorId;
-    // F27-D3: na casa de 3, o 2º pavimento — os pilares descem a prumada inteira, vigas e lajes por nível, a viga de
-    // transição do 1º sob as paredes do 2º sem parede embaixo, o telhado sobre o 2º.
-    const G = sobrado.segundo?.nivelId ?? null;
-    type PlanoEstrutural = { comandos: Command[]; motivo: string | null; avisos?: string[]; foraDoPlano: { motivo: string }[] };
-    const emDois = <A extends PlanoEstrutural, B extends PlanoEstrutural>(x: BlueprintModel, fa: (y: BlueprintModel) => A, fb: (y: BlueprintModel) => B) => {
-      const a = fa(x);
-      const b = fb(a.comandos.length ? applyBatch(x, a.comandos).model : x);
-      return {
-        a,
-        b,
-        comandos: [...a.comandos, ...b.comandos],
-        motivo: a.comandos.length || b.comandos.length ? null : (a.motivo ?? b.motivo),
-        avisos: [...(a.avisos ?? []).map((t) => `térreo: ${t}`), ...(b.avisos ?? []).map((t) => `superior: ${t}`)],
-        foraDoPlano: [...a.foraDoPlano.map((f) => `térreo: ${f.motivo}`), ...b.foraDoPlano.map((f) => `superior: ${f.motivo}`)],
-      };
-    };
-    // Onde a parede do superior não tem parede embaixo, a viga de transição do térreo a sustenta — e o pilar do
-    // superior que cai sobre ela nasce nela.
-    const transicao = trechosDeTransicao(m, T, S);
-    const transicaoDeCima = G ? trechosDeTransicao(m, S, G) : [];
-    let nascemEmViga = 0;
-    etapaEstrutural(
-      'PILARES',
-      (x) => {
-        const a = pilaresDoSobrado(x, T, S, hip.estrutura.pilares, transicao);
-        if (!G) return { ...a, de3: null };
-        const de3 = pilaresDoTerceiro(a.comandos.length ? applyBatch(x, a.comandos).model : x, T, S, G, hip.estrutura.pilares, transicao, transicaoDeCima);
-        return { ...a, de3, comandos: [...a.comandos, ...de3.comandos], motivo: a.comandos.length || de3.comandos.length ? null : a.motivo, avisos: [...a.avisos, ...de3.avisos], foraDoPlano: [...a.foraDoPlano, ...de3.foraDoPlano] };
-      },
-      (p) => {
-        const d = p.de3;
-        estrutura.pilares = p.terreo + p.superior + (d ? d.segundo + d.descemAoPrimeiro + d.descemAoTerreo : 0);
-        nascemEmViga = p.nascemEmViga + (d?.nascemEmViga ?? 0);
-        const de2 = `${p.terreo} pilar(es) no térreo e ${p.superior} no ${d ? '1º' : 'superior'} — ${p.sobem} sobem do térreo, ${p.descem} descem do ${d ? '1º' : 'superior'}${p.nascemEmViga ? `, ${p.nascemEmViga} nascem em viga de transição` : ''}${p.semApoio ? `, ${p.semApoio} sem apoio embaixo ficaram fora` : ''}`;
-        const doSegundo = d ? `; ${d.segundo} no 2º — ${d.sobem} sobem do 1º, ${d.descemAoPrimeiro} descem ao 1º e ${d.descemAoTerreo} até o térreo${d.nascemEmViga ? `, ${d.nascemEmViga} nascem em viga de transição` : ''}${d.semApoio ? `, ${d.semApoio} sem prumada até o chão ficaram fora` : ''}` : '';
-        return { nota: de2 + doSegundo, foraDoPlano: p.foraDoPlano };
-      },
-    );
-    etapaEstrutural(
-      'VIGAS',
-      (x) => {
-        const d = emDois(x, (y) => planejarVigas(y, T, hip.estrutura.vigas), (y) => planejarVigas(y, S, hip.estrutura.vigas));
-        const x1 = d.comandos.length ? applyBatch(x, d.comandos).model : x;
-        const vt = vigasDeTransicao(x1, T, transicao, hip.estrutura.vigas);
-        // F27-D3: as vigas do 2º e as de transição do 1º (sob as paredes do 2º sem parede do 1º embaixo).
-        const x2 = vt.comandos.length ? applyBatch(x1, vt.comandos).model : x1;
-        const vG = G ? planejarVigas(x2, G, hip.estrutura.vigas) : null;
-        const x3 = vG?.comandos.length ? applyBatch(x2, vG.comandos).model : x2;
-        const vtG = G ? vigasDeTransicao(x3, S, transicaoDeCima, hip.estrutura.vigas) : null;
-        const comandos = [...d.comandos, ...vt.comandos, ...(vG?.comandos ?? []), ...(vtG?.comandos ?? [])];
-        return { ...d, vt, vG, vtG, comandos, motivo: comandos.length ? null : d.motivo, foraDoPlano: [...d.foraDoPlano, ...(vG?.foraDoPlano ?? []).map((f) => `2º pavimento: ${f.motivo}`)] };
-      },
-      (p) => {
-        estrutura.vigas = p.a.vigas.length + p.b.vigas.length + p.vt.vigas + (p.vG?.vigas.length ?? 0) + (p.vtG?.vigas ?? 0);
-        if (p.vtG?.vigas)
-          pendencias.push({
-            grupo: 'CONFERIR',
-            texto: `Estrutura: ${p.vtG.vigas} viga(s) de transição no 1º pavimento sustentam ${String(p.vtG.metros).replace('.', ',')} m de parede do 2º sem parede embaixo (maior vão ${String(Math.round(p.vtG.maiorVaoMm / 100) / 10).replace('.', ',')} m) — confira com o calculista.`,
-          });
-        if (p.vt.vigas)
-          pendencias.push({
-            grupo: 'CONFERIR',
-            texto: `Estrutura: ${p.vt.vigas} viga(s) de transição no térreo sustentam ${String(p.vt.metros).replace('.', ',')} m de parede do superior sem parede embaixo (maior vão ${String(Math.round(p.vt.maiorVaoMm / 100) / 10).replace('.', ',')} m)${nascemEmViga ? ` e ${nascemEmViga} pilar(es) que nascem nelas` : ''} — confira com o calculista.`,
-          });
-        return {
-          nota: p.vG
-            ? `${p.a.vigas.length} viga(s) no térreo, ${p.vt.vigas} de transição sob paredes do 1º, ${p.b.vigas.length} no 1º, ${p.vtG?.vigas ?? 0} de transição sob paredes do 2º e ${p.vG.vigas.length} no 2º`
-            : `${p.a.vigas.length} viga(s) no térreo (sob o piso de cima), ${p.vt.vigas} de transição sob paredes do superior e ${p.b.vigas.length} no superior`,
-          foraDoPlano: p.foraDoPlano,
-        };
-      },
-    );
-    let guardas = 0;
-    let lajesRebaixadas = 0;
-    let lajesRebaixadasDoPrimeiro = 0;
-    /** F14c: as áreas molhadas dos banheiros de cima, pelas peças de esgoto PREVISTAS (simulação de mobiliário, louças e kit). */
-    // F27-D4: `niveis` de baixo para cima e `k` o pavimento dos banheiros (a laje rebaixada é a do pavimento de baixo
-    // dele). A previsão repete a sequência das instalações: os shafts do F12c de cada pavimento de cima (o do 2º descendo
-    // pelo 1º), o mobiliário de todos, e os shafts junto das peças pavimento a pavimento até o `k`.
-    const zonasMolhadasDeCima = (x: BlueprintModel, niveis: ObjectId[], k: number): Point[][] => {
-      const T0 = niveis[0];
-      const S0 = niveis[k];
-      if (!hip.mobiliario.lancar || hip.sobrado.rebaixoDaLajeDoBanheiroMm <= 0) return [];
-      try {
-        // F27 da casa automática (18/10/2026): primeiro os shafts do F12c, como nas instalações — sem eles a previsão
-        // escolhia OUTRO shaft para o grupo (o do F12c ainda não existia), a laje descia até ele, e o passo do shaft,
-        // adiante, reaproveitava o do F12c: o esgoto corria do rebaixo até lá pelo forro do térreo, cruzando os
-        // eletrodutos (sobrado 10 × 30).
-        const nucleoNoMundo = [
-          { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y0 },
-          { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y0 },
-          { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y1 },
-          { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y1 },
-        ].map((p) => paraMundo(q, p));
-        let x0 = x;
-        for (let j = 1; j < niveis.length && hip.hidraulica.lancar; j++) {
-          const doF12c = shaftsDoSobrado(x0, T0, niveis[j], nucleoNoMundo, hip.sobrado.shaftMm, 2500, niveis.slice(1, j));
-          if (doF12c.length) x0 = applyBatch(x0, doF12c.map((sh): Command => ({ type: 'AddNucleo', levelId: T0, ateLevelId: niveis[j], tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' }))).model;
-        }
-        // Todos os pavimentos, como as etapas de lá: o shaft previsto não pode cair em cima de uma peça de baixo.
-        const porNivel = niveis.map((L) => ({ L, lista: mobiliarNivel(x0, L, hip.mobiliario) }));
-        const mob = porNivel.flatMap((p) => comandosDeMobiliario(p.lista, p.L, x0));
-        const r1 = mob.length ? applyBatch(x0, mob) : null;
-        const m1 = r1?.model ?? x0;
-        const louc = pontosDasLoucasCriadas(m1, r1?.diff.created ?? [], hip.pontos, { sugerida: true });
-        const m2 = louc.length ? applyBatch(m1, louc).model : m1;
-        const kit = coletoresForaDoShaft(m2, niveis.flatMap((L) => planejarPontosDoNivel(m2, L, hip.pontos)).flatMap((pl) => pl.comandos));
-        let m3 = kit.length ? applyBatch(m2, kit).model : m2;
-        // Os pavimentos de baixo do `k` ganham os shafts junto das peças antes (como no passo do shaft, que anda de baixo
-        // para cima): o do 2º não cai em cima de um do 1º.
-        for (let j = 1; j < k; j++) {
-          const Lj = niveis[j];
-          const pj = (m3.terminais ?? []).filter((t) => t.levelId === Lj && t.disciplina === 'ESGOTO');
-          const esc = m3.spaces.find((sp) => sp.levelId === Lj && /escada/i.test(sp.name ?? ''))?.ring ?? null;
-          for (const g of gruposDoTuboDeQueda(m3, Lj, pj, hip.sobrado.grupoDoTuboDeQuedaMm)) {
-            const ban = m3.spaces.find((sp) => sp.levelId === Lj && g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
-            if (!ban) continue;
-            const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
-            const sh = shaftDoGrupo(m3, T0, Lj, ban.ring, alvo, esc, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, niveis.slice(1, j));
-            if (sh?.novo) m3 = applyBatch(m3, [{ type: 'AddNucleo', levelId: T0, ateLevelId: Lj, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
-            if (sh?.estender) m3 = applyBatch(m3, [{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: Lj } as Command]).model;
-          }
-        }
-        const pecas = (m3.terminais ?? []).filter((t) => t.levelId === S0 && t.disciplina === 'ESGOTO');
-        const grupos = gruposDoTuboDeQueda(m3, S0, pecas, hip.sobrado.grupoDoTuboDeQuedaMm);
-        const zonas: Point[][] = [];
-        const escada = m3.spaces.find((sp) => sp.levelId === S0 && /escada/i.test(sp.name ?? ''))?.ring ?? null;
-        const banheiros = m3.spaces.filter((sp) => sp.levelId === S0 && ['BANHEIRO', 'LAVABO'].includes(usoDoNome(sp.name) ?? ''));
-        // O shaft onde o tubo de queda de cada grupo vai descer — a mesma decisão do passo do shaft, adiante (e o shaft
-        // novo entra no modelo, como lá, para o grupo seguinte não cair em cima dele).
-        let m4 = m3;
-        const shaftDo = new Map<(typeof grupos)[number], Point[]>();
-        for (const g of grupos) {
-          const ban = banheiros.find((sp) => g.filter((t) => pointInPolygon(sp.ring, t.at)).length * 2 >= g.length);
-          if (!ban) continue;
-          const alvo = { x: g.reduce((a, t) => a + t.at.x, 0) / g.length, y: g.reduce((a, t) => a + t.at.y, 0) / g.length };
-          const sh = shaftDoGrupo(m4, T0, S0, ban.ring, alvo, escada, hip.sobrado.shaftMm, hip.sobrado.shaftAteAsPecasMm, niveis.slice(1, k));
-          if (!sh) continue;
-          shaftDo.set(g, sh.ring);
-          if (sh.novo) m4 = applyBatch(m4, [{ type: 'AddNucleo', levelId: T0, ateLevelId: S0, tipo: 'SHAFT', ring: sh.ring, rotulo: 'Shaft' } as Command]).model;
-          if (sh.estender) m4 = applyBatch(m4, [{ type: 'SetNucleoProps', nucleoId: sh.estender, ateLevelId: S0 } as Command]).model;
-        }
-        // Uma zona por GRUPO e por banheiro que ele toca: as peças do grupo nele e o caminho delas até o shaft (a reta de
-        // cada peça ao centro dele), até a face do shaft. Por grupo: no banheiro comprido da suíte, a caixa sifonada de
-        // uma ponta e o vaso da outra cercavam o shaft e o rebaixo o engolia (a água de baixo não chegava às colunas). Por
-        // banheiro: o grupo pode juntar peças de dois vizinhos (a 30°, a caixa sifonada do social desce no shaft da
-        // suíte) — cada um ganha o pedaço dele.
-        for (const g of grupos) {
-          const sh = shaftDo.get(g) ?? null;
-          const centro = sh ? { x: sh.reduce((a, p) => a + p.x, 0) / sh.length, y: sh.reduce((a, p) => a + p.y, 0) / sh.length } : null;
-          for (const ban of banheiros) {
-            const doBanheiro = g.filter((t) => pointInPolygon(ban.ring, t.at)).map((t) => t.at);
-            const caminho: Point[] = [];
-            if (centro) {
-              for (const t of g) {
-                const L = Math.hypot(centro.x - t.at.x, centro.y - t.at.y);
-                for (let d = 0; d <= L; d += 100) {
-                  const q = { x: t.at.x + ((centro.x - t.at.x) * d) / (L || 1), y: t.at.y + ((centro.y - t.at.y) * d) / (L || 1) } as Point;
-                  if (pointInPolygon(ban.ring, q) && !pointInPolygon(sh!, q)) caminho.push(q);
-                }
-              }
-            }
-            if (!doBanheiro.length && !caminho.length) continue;
-            zonas.push(...zonasMolhadasDoBanheiro(ban.ring, doBanheiro, hip.sobrado.margemDoRebaixoMm, sh, caminho));
-          }
-        }
-        if (!zonas.length) pendencias.push({ grupo: 'CONFERIR', texto: `Laje rebaixada: nenhuma área molhada prevista nos banheiros de cima (${pecas.length} peça(s) de esgoto, ${grupos.length} grupo(s)) — a laje ficou sem rebaixo.` });
-        return zonas;
-      } catch (e) {
-        pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Laje rebaixada: a previsão das peças de cima falhou (${e instanceof Error ? e.message : String(e)}) — a laje ficou sem rebaixo.` });
-        return [];
-      }
-    };
-    etapaEstrutural(
-      'LAJES',
-      (x) => {
-        const d = emDois(x, (y) => planejarLajes(y, T, hip.estrutura.lajes), (y) => planejarLajes(y, S, hip.estrutura.lajes));
-        // F14c ("laje rebaixada"): a laje do térreo — o piso de cima — desce sob a ÁREA MOLHADA de cada banheiro de cima.
-        // As peças ainda não existem aqui (a laje vem antes do mobiliário): são PREVISTAS rodando mobiliário, louças e kit
-        // numa cópia — determinísticos, dão as posições que as etapas de lá vão lançar.
-        const zonas = zonasMolhadasDeCima(x, G ? [T, S, G] : [T, S], 1);
-        const comRebaixo = lajesComRebaixo(d.a.comandos, T, zonas, hip.sobrado.rebaixoDaLajeDoBanheiroMm);
-        lajesRebaixadas = comRebaixo.rebaixadas;
-        // F27-D3: na casa de 3, o guarda-corpo do furo só no 2º (no 1º, o lance que sobe sai da borda do furo de baixo).
-        const g = [...guardaCorpoDaEscada(x, T, S, !G), ...(G ? guardaCorpoDaEscada(x, S, G) : [])];
-        guardas = g.length;
-        const lG = G ? planejarLajes(d.comandos.length ? applyBatch(x, d.comandos).model : x, G, hip.estrutura.lajes) : null;
-        // F27-D4: na casa de 3, a laje do 1º (o piso do 2º) desce sob a área molhada de cada banheiro do 2º.
-        const doPrimeiro = G ? lajesComRebaixo(d.b.comandos, S, zonasMolhadasDeCima(x, [T, S, G], 2), hip.sobrado.rebaixoDaLajeDoBanheiroMm) : null;
-        lajesRebaixadasDoPrimeiro = doPrimeiro?.rebaixadas ?? 0;
-        const comandos = [...comRebaixo.comandos, ...(doPrimeiro?.comandos ?? d.b.comandos), ...(lG?.comandos ?? []), ...g];
-        return { ...d, lG, comandos, motivo: comandos.length ? null : d.motivo, foraDoPlano: [...d.foraDoPlano, ...(lG?.foraDoPlano ?? []).map((f) => `2º pavimento: ${f.motivo}`)] };
-      },
-      (p) => {
-        estrutura.lajes = p.a.lajes.length + p.b.lajes.length + (p.lG?.lajes.length ?? 0);
-        const guardaDoFuro = guardas ? `; ${guardas - 1} corrimão(s) nos lances e guarda-corpo na borda do furo${p.lG ? ' do 2º' : ''}` : '';
-        return {
-          nota: p.lG
-            ? `${p.a.lajes.length} laje(s) no térreo, ${p.b.lajes.length} no 1º (o piso do 2º e o terraço) e ${p.lG.lajes.length} no 2º, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; a do térreo rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro do 1º` : ''}${lajesRebaixadasDoPrimeiro ? `; a do 1º sob ${lajesRebaixadasDoPrimeiro} trecho(s) de banheiro do 2º` : ''}${guardaDoFuro}`
-            : `${p.a.lajes.length} laje(s) no térreo (o piso de cima, com o furo da escada) e ${p.b.lajes.length} no superior, de ${hip.estrutura.lajes.espessuraMm} mm${lajesRebaixadas ? `; rebaixada ${f2(hip.sobrado.rebaixoDaLajeDoBanheiroMm / 1000)} m sob ${lajesRebaixadas} trecho(s) de banheiro de cima` : ''}${guardaDoFuro}`,
-          foraDoPlano: p.foraDoPlano,
-        };
-      },
-    );
-    etapaEstrutural(
-      'FUNDACOES',
-      (x) => planejarFundacoes(x, T, hip.estrutura.fundacoes),
-      (p) => {
-        estrutura.blocos = p.blocos.length;
-        estrutura.estacas = p.estacas.length;
-        estrutura.baldrames = p.baldrames.length;
-        return { nota: `${p.blocos.length} bloco(s), ${p.estacas.length} estaca(s), ${p.baldrames.length} baldrame(s) — só no térreo` };
-      },
-    );
-    etapaEstrutural(
-      'EIXOS',
-      (x) => {
-        const p = propostaDeEixos(x, T, hip.estrutura.eixos);
-        return { ...p, motivo: p.comandos.length ? null : p.motivoVazio && p.paredesObliquas === 0 ? p.motivoVazio : null, avisos: p.paredesObliquas ? [`${p.paredesObliquas} parede(s) oblíqua(s) ao desenho ficam fora da malha de eixos`] : [] };
-      },
-      (p) => {
-        estrutura.eixos = p.novos;
-        return { nota: `${p.novos} eixo(s)` };
-      },
-    );
-    // F27-D3: na casa de 3, o telhado sobre o 2º (o retângulo recuado). F27-D5: o núcleo que sobra fora dele entra como
-    // anexo (uma água caindo para fora) — sem isso a escada ficava descoberta.
-    if (G && eg) {
-      const sg = sobrado.segundo!.retangulo;
-      const r = nucleo.ret;
-      const fora: Retangulo[] = [
-        ...(r.y0 < sg.y0 ? [{ x0: r.x0, x1: r.x1, y0: r.y0, y1: Math.min(r.y1, sg.y0) }] : []),
-        ...(r.y1 > sg.y1 ? [{ x0: r.x0, x1: r.x1, y0: Math.max(r.y0, sg.y1), y1: r.y1 }] : []),
-      ];
-      etapaDoTelhado(G, eg.r.retangulo, [...eg.r.anexos, ...fora], (m.structures ?? []).some((x) => x.levelId === G && x.kind === 'LAJE'));
-      // F27-D5: o guarda-corpo no contorno do terraço (a borda da laje do 1º que o 2º não cobre), no piso do 2º.
-      const alturaDoGuardaCorpo = HIPOTESES_DE_GUARDA_CORPO_PADRAO.alturaGuardaCorpoMm;
-      const linhas = contornoDoTerraco(retDoPrimeiro ?? rl, sg, r);
-      if (linhas.length) {
-        const noMundo = (p: Point) => {
-          const w = paraMundo(q, p);
-          return point(Math.round(w.x), Math.round(w.y));
-        };
-        aplicar(linhas.map((l, k): Command => ({ type: 'AddGuardaCorpo', levelId: G, tipo: 'GUARDA_CORPO', pontos: l.map(noMundo), alturaMm: alturaDoGuardaCorpo, material: 'METALICO', rotulo: `Terraço · guarda-corpo${linhas.length > 1 ? ` ${k + 1}` : ''}`, sugerido: true })));
-        const metros = linhas.reduce((s, l) => s + l.slice(1).reduce((t, p, i) => t + Math.hypot(p.x - l[i].x, p.y - l[i].y), 0), 0) / 1000;
-        decisoes.push(`3 pavimentos: guarda-corpo de ${f2(alturaDoGuardaCorpo / 1000)} m no contorno do terraço (${f2(metros)} m).`);
-      }
-      // F27 item 5.3: e o do terraço do 1º (a borda da laje do térreo que o 1º recuado não cobre), no piso do 1º.
-      const doPrimeiro = retDoPrimeiro ? contornoDoTerraco(rl, retDoPrimeiro, r) : [];
-      if (doPrimeiro.length) {
-        const noMundo = (p: Point) => {
-          const w = paraMundo(q, p);
-          return point(Math.round(w.x), Math.round(w.y));
-        };
-        aplicar(doPrimeiro.map((l, k): Command => ({ type: 'AddGuardaCorpo', levelId: S, tipo: 'GUARDA_CORPO', pontos: l.map(noMundo), alturaMm: alturaDoGuardaCorpo, material: 'METALICO', rotulo: `Terraço do 1º · guarda-corpo${doPrimeiro.length > 1 ? ` ${k + 1}` : ''}`, sugerido: true })));
-        const metros = doPrimeiro.reduce((s, l) => s + l.slice(1).reduce((t, p, i) => t + Math.hypot(p.x - l[i].x, p.y - l[i].y), 0), 0) / 1000;
-        decisoes.push(`3 pavimentos: guarda-corpo de ${f2(alturaDoGuardaCorpo / 1000)} m no contorno do terraço do 1º (${f2(metros)} m).`);
-      }
-    }
-    else etapaDoTelhado(S, es.r.retangulo, es.r.anexos, (m.structures ?? []).some((x) => x.levelId === S && x.kind === 'LAJE'));
-    // ── INSTALAÇÕES DO SOBRADO (F12c) ──
-    // O SHAFT junto de cada banheiro de cima, antes de tudo: o tubo de queda e as colunas de água descem por ele
-    // (sem ele, desciam no ponto do vaso — no meio da garagem ou da cozinha de baixo).
-    let notaDoShaft: string | null = null;
-    if (hip.hidraulica.lancar) {
-      const nucleoNoMundo = [
-        { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y0 },
-        { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y0 },
-        { x: sobrado.nucleo.ret.x1, y: sobrado.nucleo.ret.y1 },
-        { x: sobrado.nucleo.ret.x0, y: sobrado.nucleo.ret.y1 },
-      ].map((p) => paraMundo(q, p));
-      const shafts = shaftsDoSobrado(m, T, S, nucleoNoMundo, hip.sobrado.shaftMm);
-      aplicar(shafts.map((x): Command => ({ type: 'AddNucleo', levelId: T, ateLevelId: S, tipo: 'SHAFT', ring: x.ring, rotulo: 'Shaft' })));
-      // F27-D4: na casa de 3, o shaft de cada banheiro do 2º — desce até o térreo atravessando o 1º.
-      if (G) {
-        const doSegundo = shaftsDoSobrado(m, T, G, nucleoNoMundo, hip.sobrado.shaftMm, 2500, [S]);
-        aplicar(doSegundo.map((x): Command => ({ type: 'AddNucleo', levelId: T, ateLevelId: G, tipo: 'SHAFT', ring: x.ring, rotulo: 'Shaft' })));
-        shafts.push(...doSegundo.map((x) => ({ ...x, banheiro: `${x.banheiro} (2º pavimento)` })));
-      }
-      if (shafts.length) notaDoShaft = `${shafts.length} shaft(s) de ${hip.sobrado.shaftMm / 10} cm: ${shafts.map((x) => `junto do ${x.banheiro}${x.noTerreo ? `, descendo na ${x.noTerreo}` : ''}`).join('; ')}.`;
-      else pendencias.push({ grupo: 'NAO_DECIDIDO', texto: 'Shaft: nenhuma parede dos banheiros de cima tem parede embaixo livre de porta, janela e pilar — o tubo de queda desce no ponto do vaso; ponha o shaft à mão (Núcleo vertical).' });
-    }
-    // F27 item 5.3: as âncoras do térreo (vagas, medidor) pelo retângulo do térreo — o do 1º pode ser o recuado.
-    const inst = instalacoes(G ? [T, S, G] : [T, S], retDoPrimeiro ? rl : es.r.retangulo, notaDoShaft);
-    const soltas = prumadasPeloMeioDoComodo(m);
-    if (soltas.length) {
-      const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
-      const porComodo = new Map<string, string[]>();
-      const locaisPorComodo = new Map<string, LocalDaPendencia[]>();
-      for (const x of soltas) {
-        const k = `${x.comodo} (${x.nivel.toLowerCase()})`;
-        porComodo.set(k, [...(porComodo.get(k) ?? []), x.rotulo?.toLowerCase() || nome[x.disciplina] || x.disciplina.toLowerCase()]);
-        const l = localDoElemento(m, [x.trechoId, x.comodoId]);
-        if (l) locaisPorComodo.set(k, [...(locaisPorComodo.get(k) ?? []), l]);
-      }
-      for (const [k, v] of porComodo) pendencias.push({ grupo: 'VERIFICACAO', texto: `Prumada pelo meio do cômodo: ${v.join(', ')} atravessa ${k} — leve-a pela parede ou pelo shaft.`, ...comLocais(locaisPorComodo.get(k)) });
-    }
-    return fechar({
-      projecaoM2: et.r.resumo.areaConstruidaM2,
-      areaConstruidaM2: et.r.resumo.areaConstruidaM2 + es.r.resumo.areaConstruidaM2 + (eg?.r.resumo.areaConstruidaM2 ?? 0),
-      alturaM: ((eg ? 3 : 2) * andarMm) / 1000,
-      semente: et.r.semente,
-      escolha: eg ? `térreo: ${et.texto}; 1º: ${es.texto}; 2º: ${eg.texto}` : `térreo: ${et.texto}; superior: ${es.texto}`,
-      sobrado,
-      disciplinas: { estrutura, telhado, ancoras: inst.ancoras, mobiliario: inst.mobiliario, hidraulica: inst.hidraulica, eletrica: inst.eletrica, aberturas: inst.redesEmAberturas, climatizacao: inst.climatizacao, forro: inst.forro, furos: inst.furos },
-    });
+  {
+    const plano = planejarOSobradoDaEtapa(ctx);
+    if (plano) return plano;
   }
 
   const { resultados, falhas } = gerarTodas(programa);

@@ -45,4 +45,17 @@ CI verdes; nenhum arquivo do motor passa de ~600 linhas (ou, se algum passar, o 
 | Item | Situação |
 |---|---|
 | P1 | feito — 7 pontos do motor com local; teste do motor (térrea e sobrado 12×30); marco REGRAVADO: nas 8 casas mudou SÓ o hash das pendências (modelo, ids, etapas e contagens iguais); no app a casa 12×30 foi de 4 para 8 pendências com "ver na planta" (3 de mobiliário, 1 da NBR 5410) e a de mobiliário marca o cômodo |
-| P2 | a fazer |
+| P2 | feito, com 3 arquivos acima de ~600 linhas (porquê abaixo) — 4 extrações, cada uma com o marco idêntico ao do P1: acesso e muro (`etapaAcessoEMuro.ts` 217), arquitetura (`etapaArquitetura.ts` 78), estrutura e telhado (`etapaEstruturaETelhado.ts` 93), instalações (`etapaInstalacoes.ts` 890), sobrado (`sobrado.ts` 691, o bloco `if (divididos)` → `planejarOSobrado(ctx)`); `contexto.ts` 135; orquestrador 2.423 → 767 |
+
+**Como foi feito (P2, 12/11/2026).** Uma ferramenta pela AST do TypeScript com o VERIFICADOR DE TIPOS (scratchpad
+`extrair_motor.cjs`): só vira `ctx.x` a referência cujo símbolo é a declaração de fora (a função tinha `r`, `n`, `L`, `q` e
+`comandos` sombreados por dentro — troca por nome teria quebrado). Os `const` chegam por desestruturação, os 6 `let`
+(`m`, `n`, `telhado`, `terraplenagemDaCasa`, `resumoDoMuro`, `imp`) por getter/setter; o tipo de cada campo do
+`ContextoDaCasa` vem do verificador. O orquestrador chama as etapas por embrulhos de mesmo nome (`const instalacoes =
+(…) => instalacoesDaEtapa(ctx, …)`), então o roteiro não mudou de texto.
+
+**Por que três arquivos passam de ~600 linhas.** `etapaInstalacoes.ts` (890) e `sobrado.ts` (691) são UMA função cada,
+com subetapas internas que compartilham estado local (instalações: mobiliário → âncoras → água/esgoto/pluvial → elétrica →
+clima, com os acumuladores de cada disciplina; sobrado: núcleo, pavimentos e as instalações deles). Parti-los é repetir a
+técnica um nível abaixo, com um contexto por etapa. `orquestrador.ts` (767) é ~350 linhas do roteiro mais `planejarCasa`,
+`planejarTerrea` e os auxiliares de módulo. Fica anotado para quando o motor for mexido de novo.

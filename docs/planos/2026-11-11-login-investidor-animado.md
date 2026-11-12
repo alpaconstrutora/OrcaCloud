@@ -84,3 +84,13 @@ rastro com 40% de opacidade virava faixa marrom e o botão desabilitado (70%) fi
    **Pronto quando:** estilo computado no navegador = `rgb(225, 85, 60)` sem `background-image`.
    ✅ 11/11/2026 — medido no vite local (painel, rastro e botão `rgb(225, 85, 60)`, `none`);
    prints dos dois lados; InvestorLogin + campoAlturaGuard 11/11 testes, `tsc` 0, check-ui limpo.
+
+## Pedido 3 — 11/11/2026
+
+> sim
+
+(Resposta a "o cartão do Investidor no seletor continua roxo; quer que eu troque para #E1553C?")
+
+7. `components/LoginGateway.tsx` — cartão do Investidor `bg-purple-600` → `bg-[#E1553C]`.
+   **Pronto quando:** fundo do ícone do cartão = `rgb(225, 85, 60)` no navegador.
+   ✅ 11/11/2026 — medido no vite local; o "Em aberto" acima fica resolvido.

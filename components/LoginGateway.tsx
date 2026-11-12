@@ -43,8 +43,10 @@ const LoginGateway: React.FC<LoginGatewayProps> = ({ onSelectGroup }) => {
             title: 'Portal do Investidor',
             desc: 'Gestão de patrimônio, cotas e novos empreendimentos.',
             icon: TrendingUp,
-            color: 'purple',
-            theme: 'bg-purple-600'
+            // Coral do Portal do Investidor (P.accent do PortalKit, §24) — o mesmo do
+            // login (InvestorLogin) e do portal, para a cor não mudar entre escolher e entrar.
+            color: 'orange',
+            theme: 'bg-[#E1553C]'
         },
         {
             id: ProfileGroup.DEVELOPER,

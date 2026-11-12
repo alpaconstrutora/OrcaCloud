@@ -379,9 +379,13 @@ export const imovibService = {
     },
 
     async updateStudy(id: string, updates: ImovibStudyUpdate): Promise<ImovibStudy> {
+        // Montados em memória pelo getStudyById, não são colunas: quem grava o
+        // estudo inteiro (Premissas) não pode levá-los ao banco (PGRST204).
+        const { blocks, capex_items, unit_instances, estrutura, funding_sources, ...colunas } =
+            updates as ImovibStudyUpdate & Pick<ImovibStudy, 'blocks' | 'estrutura' | 'funding_sources'>;
         const { data, error } = await supabase
             .from('imovib_studies')
-            .update(updates)
+            .update(colunas)
             .eq('id', id)
             .select()
             .single();

@@ -12,7 +12,7 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
-import { agruparMembros, OPCOES_AGRUPAR_MEMBRO, type CampoAgruparMembro } from '../utils/membrosGrupos';
+import { agruparMembros, OPCOES_AGRUPAR_MEMBRO, ROTULO_FUNCAO, type CampoAgruparMembro } from '../utils/membrosGrupos';
 import { useDepartamentosDaOrg } from '../hooks/useDepartamentosDaOrg';
 import { temAcessoTotal } from '../lib/acessoTotal';
 import LinkDoCelularBloco, { motivoGerarBloqueadoPara } from './celular/LinkDoCelularBloco';
@@ -56,7 +56,7 @@ const MEMBER_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 function renderMemberCell(
     key: string,
     member: OrganizationMember,
-    ctx: { customRoles: OrganizationCustomRole[]; onRoleChange: (id: string, role: OrganizationRole) => void },
+    ctx: { customRoles: OrganizationCustomRole[]; onRoleChange: (id: string, role: OrganizationRole) => void; podePromoverProprietario: boolean },
 ): React.ReactNode {
     switch (key) {
         case 'code':
@@ -88,6 +88,10 @@ function renderMemberCell(
                         onChange={(e) => ctx.onRoleChange(member.id, e.target.value as OrganizationRole)}
                         className="w-fit text-sm font-normal text-gray-900 bg-gray-50 border border-gray-100 rounded px-2 py-1 outline-none cursor-pointer appearance-none transition-all"
                     >
+                        {/* Proprietário e admin (e o desenvolvedor) podem promover a proprietário — decisão do usuário,
+                            12/11/2026; é o que a RLS (`is_org_manager`) já permitia. Quem JÁ é proprietário sempre tem a
+                            opção: sem ela o select não tem o valor dele e mostraria "Admin". */}
+                        {(member.role === 'owner' || ctx.podePromoverProprietario) && <option value="owner">{ROTULO_FUNCAO.owner}</option>}
                         <option value="admin">Admin</option>
                         <option value="member">Membro</option>
                         <option value="viewer">Visitante</option>
@@ -232,6 +236,10 @@ const getDefaultPermissions = (role: OrganizationRole): UserPermissions => {
     };
 
     switch (role) {
+        // `owner` = todas as permissões, como o admin. Sem este caso caía no `default` (visitante): promover a
+        // proprietário pelo select zerava as permissões da pessoa, e o proprietário aparecia com o padrão de visitante
+        // onde a tela usa o padrão do papel como fallback.
+        case 'owner':
         case 'admin':
             return Object.keys(baseViewer).reduce((acc, key) => ({
                 ...acc,
@@ -492,6 +500,8 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
     // O usuário é admin na organização?
     const memberSelf = members.find(m => m.email.toLowerCase() === userEmail);
     const isAdmin = memberSelf?.role === 'admin' || isDeveloper || isDevEmail;
+    // Quem pode promover a proprietário: proprietário e admin da organização (e o desenvolvedor) — mesma regra da RLS.
+    const podePromoverProprietario = memberSelf?.role === 'owner' || memberSelf?.role === 'admin' || isDeveloper;
 
     const [activeSubTab, setActiveSubTab] = useState<'members' | 'roles' | 'visibility'>('members');
     const [memberSearch, setMemberSearch] = usePersistedState<string>('organizationUsersMembersSearch', '');
@@ -889,7 +899,30 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
         }
     };
 
-    const handleMemberRoleChange = (id: string, newRole: OrganizationRole) => {
+    const handleMemberRoleChange = async (id: string, newRole: OrganizationRole) => {
+        const alvo = members.find(m => m.id === id);
+        if (!alvo || alvo.role === newRole) return;
+        // Promover a proprietário ou rebaixar um proprietário troca as permissões da pessoa pelas da função nova
+        // (como toda troca de função) — nas duas pontas do topo da hierarquia vale confirmar antes. Não bloqueia:
+        // rebaixar o último proprietário é permitido, só avisa que é o último.
+        if (newRole === 'owner') {
+            const ok = await confirm({
+                title: `Tornar ${alvo.name} proprietário?`,
+                message: 'Esta pessoa passa a ter todas as permissões da organização. O cargo e as permissões atuais são substituídos.',
+                variant: 'warning',
+                confirmLabel: 'Tornar proprietário',
+            });
+            if (!ok) return;
+        } else if (alvo.role === 'owner') {
+            const ultimo = members.filter(m => m.role === 'owner').length === 1;
+            const ok = await confirm({
+                title: `Deixar de ser proprietário?`,
+                message: `${alvo.name} passa a ter a função ${ROTULO_FUNCAO[newRole]}, e as permissões atuais são substituídas pelas dessa função.${ultimo ? ' Esta é a única pessoa com a função de proprietário nesta organização.' : ''}`,
+                variant: 'warning',
+                confirmLabel: 'Alterar função',
+            });
+            if (!ok) return;
+        }
         void persistMemberAccess(id, {
             role: newRole,
             customRoleId: null,
@@ -1343,7 +1376,7 @@ const OrganizationUsers: React.FC<OrganizationUsersProps> = ({
                                             <tr className="hover:bg-blue-50/50 transition-colors">
                                                 {memberColumns.orderedVisibleColumns.filter(key => key !== 'actions').map(key => (
                                                     <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
-                                                        {renderMemberCell(key, member, { customRoles, onRoleChange: handleMemberRoleChange })}
+                                                        {renderMemberCell(key, member, { customRoles, onRoleChange: handleMemberRoleChange, podePromoverProprietario })}
                                                     </td>
                                                 ))}
                                                 {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}

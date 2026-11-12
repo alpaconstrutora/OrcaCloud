@@ -171,7 +171,7 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
                 aria-selected={ativa}
                 aria-controls="celular-painel"
                 onClick={() => setAba(id)}
-                className={`flex-1 h-10 rounded-full inline-flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
+                className={`flex-1 h-11 rounded-full inline-flex items-center justify-center gap-2 text-sm font-medium transition-colors ${
                   ativa ? 'bg-blue-600 text-white shadow-sm' : 'text-slate-600 hover:text-slate-800'
                 }`}
               >

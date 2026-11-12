@@ -153,7 +153,7 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
   })
 
   it('limite de uso do link na foto: mostra a mensagem da Edge e para de tentar as seguintes', async () => {
-    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos'
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
     const fonte = criarFonte()
     fonte.subirFoto
       .mockResolvedValueOnce('org1/d1/primeira.jpg')
@@ -171,7 +171,7 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
   })
 
   it('limite de uso do link na única foto: a mensagem da Edge, sem o texto genérico', async () => {
-    const LIMITE = 'limite de uso do link atingido — tente de novo em alguns minutos'
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
     const fonte = criarFonte()
     fonte.subirFoto.mockRejectedValueOnce(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
     const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -181,6 +181,20 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     const input = container.querySelector('input[type="file"]') as HTMLInputElement
     fireEvent.change(input, { target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] } })
     expect(await screen.findByText(LIMITE)).toBeInTheDocument()
+    expect(screen.queryByText('A foto não subiu. Tente novamente.')).toBeNull()
+    erro.mockRestore()
+  })
+
+  it('limite de uso do link ao assinar as fotos: a tela mostra o aviso com a mensagem do servidor', async () => {
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
+    const fonte = criarFonte()
+    fonte.assinarFotos.mockRejectedValue(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    montar(fonte)
+    // Folha do registro (tem a foto antiga): o cartão de Fotos avisa.
+    fireEvent.click(await abrirDiario())
+    expect(await screen.findByText(LIMITE)).toBeInTheDocument()
+    expect(fonte.assinarFotos).toHaveBeenCalledWith(['org1/d1/foto-antiga.jpg'])
     expect(screen.queryByText('A foto não subiu. Tente novamente.')).toBeNull()
     erro.mockRestore()
   })

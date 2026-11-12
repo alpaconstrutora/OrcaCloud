@@ -164,6 +164,14 @@ function useAssinarFotos() {
     return useCallback((paths: readonly string[]) => fonte.assinarFotos(paths), [fonte]);
 }
 
+/** Aviso (âmbar) de que o link bateu o limite de uso: mostra a mensagem do servidor. */
+const AvisoLimiteDeUso: React.FC<{ mensagem: string }> = ({ mensagem }) => (
+    <div className="bg-amber-50 border border-amber-100 rounded-xl px-3 py-2.5 flex items-start gap-2 mt-3">
+        <AlertTriangle className="w-4 h-4 text-amber-500 flex-shrink-0 mt-0.5" />
+        <p className="text-xs font-bold text-amber-700">{mensagem}</p>
+    </div>
+);
+
 /** Onde a foto vai parar no bucket: `{org}/{projeto}/…` — a org é o que a policy lê. */
 interface UploadTarget {
     orgId: string | null;
@@ -393,7 +401,9 @@ const ResumoScreen: React.FC<{ entries: DiaryEntry[] }> = ({ entries }) => {
         [entries],
     );
     const assinarFotos = useAssinarFotos();
-    const fotoUrls = useDiaryMediaUrls(useMemo(() => ultimasFotos.map(f => f.src), [ultimasFotos]), undefined, assinarFotos);
+    /** Limite de uso do link ao assinar as fotos: as já assinadas ficam, e o cartão avisa. */
+    const [avisoLimite, setAvisoLimite] = useState<string | null>(null);
+    const fotoUrls = useDiaryMediaUrls(useMemo(() => ultimasFotos.map(f => f.src), [ultimasFotos]), undefined, assinarFotos, setAvisoLimite);
 
     return (
         <div className="flex-1 overflow-y-auto px-4 py-3 space-y-4">
@@ -415,6 +425,7 @@ const ResumoScreen: React.FC<{ entries: DiaryEntry[] }> = ({ entries }) => {
             {ultimasFotos.length > 0 && (
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3">
                     <SectionTitle icon={ImageIcon} label="Fotos recentes" />
+                    {avisoLimite && <AvisoLimiteDeUso mensagem={avisoLimite} />}
                     <div className="grid grid-cols-3 gap-1.5 mt-3">
                         {ultimasFotos.map((f, i) => (
                             fotoUrls[f.src]
@@ -502,7 +513,9 @@ const EntrySheet: React.FC<{
     const fotoRef = useRef<HTMLInputElement>(null);
     const fonte = useDiarioFonte();
     const assinarFotos = useAssinarFotos();
-    const fotoUrls = useDiaryMediaUrls(form.images, undefined, assinarFotos);
+    /** Limite de uso do link ao assinar as fotos: as já assinadas ficam, e o cartão avisa. */
+    const [avisoLimite, setAvisoLimite] = useState<string | null>(null);
+    const fotoUrls = useDiaryMediaUrls(form.images, undefined, assinarFotos, setAvisoLimite);
 
     // Cancelar depois de tirar foto: o objeto já subiu — sai do bucket junto.
     const cancelar = () => {
@@ -918,6 +931,7 @@ const EntrySheet: React.FC<{
                 {/* Fotos */}
                 <div className="bg-white rounded-2xl border border-slate-100 shadow-sm px-4 py-3 space-y-3">
                     <SectionTitle icon={Camera} label="Fotos" />
+                    {avisoLimite && <AvisoLimiteDeUso mensagem={avisoLimite} />}
                     {erroFoto && (
                         <div className="bg-red-50 border border-red-100 rounded-xl px-3 py-2.5 flex items-start gap-2">
                             <AlertTriangle className="w-4 h-4 text-red-500 flex-shrink-0 mt-0.5" />

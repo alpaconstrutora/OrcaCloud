@@ -168,6 +168,11 @@ function Resultado({ v, motivoSemOrg, onSalvar, onExportarPdf, onCriarViabilidad
             <Building2 className="w-[15px] h-[15px]" /> Criar viabilidade (IMOVIB)
           </Button>
         )}
+        {onCriarViabilidade && !v.estudoDeOrigemId && (
+          <p className="text-xs text-amber-700">
+            Estudo não salvo: a viabilidade nasce sem o estudo de mercado de origem. Salve antes para ligar os dois.
+          </p>
+        )}
       </div>
     </div>
   );

@@ -38,3 +38,13 @@ export function taxaMensalMedia(valores: PontoDoIndice[], meses: number): number
     if (!(n > 0) || !(de > 0) || !(ate > 0)) return null;
     return (Math.pow(ate / de, 1 / n) - 1) * 100;
 }
+
+/**
+ * A série de um índice: a da organização inteira, se ela cadastrou alguma; senão a
+ * global inteira. Nunca as duas misturadas mês a mês — números-índice podem estar
+ * em bases diferentes, e um mês de cada daria variação falsa (pendência da Fase 1).
+ */
+export function serieDoIndice<T extends PontoDoIndice & { organization_id?: string | null }>(valores: T[]): T[] {
+    const daOrganizacao = valores.filter(v => v.organization_id != null);
+    return daOrganizacao.length > 0 ? daOrganizacao : valores.filter(v => v.organization_id == null);
+}

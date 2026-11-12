@@ -123,6 +123,24 @@ apontados nas revisões da Parte 2 (carregador do planejamento no serviço, `toR
 paralelo com uma recusa só, `pode_aprovar_diario` obrigatório, `IS NOT TRUE` nas checagens de planejamento).
 Cabeçalho sem nome: cai só na organização — `celular_sessao` não devolve e-mail, então não há e-mail para o fallback.
 
+### Ajustes — superadmin vê e edita toda tarefa (2026-11-12)
+
+Pedido literal (com prints do celular e do desktop):
+
+> verifique uma divergencia entre minhas tarefas na versão mobilie a na versão desktop para o usuario Iago marques.
+> 6 tarefas na versão mobilie e 4 tarefas  versão desktop
+
+Medido no banco: o celular do Iago estava certo (6 abertas: 4 como responsável + 2 criadas por ele). O desktop estava
+logado como **desenvolvedor@** (superadmin), que só via tarefas de espaço: as 2 do Altair e as 2 do Iago **sem espaço**
+ficavam de fora — a regra "superadmin tem acesso a tudo" (`aplicar_20271024950000`) só o pôs como owner de todo espaço.
+Decisão do usuário (2026-11-12): **"Ver e editar todas"** — apagar não muda.
+Migration `aplicar_20271112995000_tarefas_superadmin_ve_e_edita.sql` (policies `tasks_select_superadmin` /
+`tasks_update_superadmin` com `(SELECT public.is_superadmin())`; superadmin fora da trava do responsável; gere envolvidos
+de qualquer tarefa). Prova `scripts/teste-tarefas-superadmin.sql`. Rollback: `DROP POLICY tasks_select_superadmin` e
+`tasks_update_superadmin` + recriar `_tasks_responsavel_so_conteudo` do arquivo `aplicar_20271111995000` e
+`pode_gerir_envolvidos_da_tarefa` do arquivo `aplicar_20271112800000`. Fora do escopo (não pedido): o link do celular de
+um superadmin continua mostrando só as tarefas dele (regra do link = a pessoa, sem a perna de superadmin).
+
 ## Design
 
 ### Contexto medido (origin/main e banco, 2026-11-11)

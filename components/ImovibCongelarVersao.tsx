@@ -51,6 +51,8 @@ const ImovibCongelarVersao: React.FC<Props> = ({ open, study, onClose, onCongela
         }
     };
 
+    // Fechada, não existe na página (o Sheet manteria o texto no DOM).
+    if (!open) return null;
     return (
         <Sheet open={open} onClose={onClose} size="md">
             <SheetHeader onClose={onClose}>

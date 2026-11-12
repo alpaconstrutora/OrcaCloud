@@ -1574,8 +1574,9 @@ export function shaftDoGrupo(
 /** Até isto além da face, a prumada está rente à parede (no enchimento, e na faixa da disciplina — F14a), não no meio do cômodo. */
 const RENTE_A_PAREDE_MM = 100;
 
-export function prumadasPeloMeioDoComodo(model: BlueprintModel, minimoMm = 1500): { disciplina: string; rotulo: string | null; nivel: string; comodo: string }[] {
-  const saida: { disciplina: string; rotulo: string | null; nivel: string; comodo: string }[] = [];
+export function prumadasPeloMeioDoComodo(model: BlueprintModel, minimoMm = 1500): { disciplina: string; rotulo: string | null; nivel: string; comodo: string; trechoId: ObjectId; comodoId: ObjectId }[] {
+  // 12/11/2026: `trechoId`/`comodoId` — a pendência da casa automática leva ao lugar ("ver na planta").
+  const saida: { disciplina: string; rotulo: string | null; nivel: string; comodo: string; trechoId: ObjectId; comodoId: ObjectId }[] = [];
   for (const t of model.trechos ?? []) {
     if (Math.abs(t.a.x - t.b.x) >= 1 || Math.abs(t.a.y - t.b.y) >= 1) continue;
     if (Math.min(t.cotaAMm, t.cotaBMm) !== 0 || Math.abs(t.cotaAMm - t.cotaBMm) < minimoMm) continue;
@@ -1588,7 +1589,7 @@ export function prumadasPeloMeioDoComodo(model: BlueprintModel, minimoMm = 1500)
     if (rente || (model.nucleos ?? []).some((n) => pointInPolygon(n.ring, t.a))) continue;
     const comodo = model.spaces.find((x) => x.levelId === t.levelId && pointInPolygon(x.ring, t.a));
     if (!comodo) continue;
-    saida.push({ disciplina: t.disciplina, rotulo: t.rotulo ?? null, nivel: model.levels.find((l) => l.id === t.levelId)?.name ?? '', comodo: comodo.name ?? 'cômodo sem nome' });
+    saida.push({ disciplina: t.disciplina, rotulo: t.rotulo ?? null, nivel: model.levels.find((l) => l.id === t.levelId)?.name ?? '', comodo: comodo.name ?? 'cômodo sem nome', trechoId: t.id, comodoId: comodo.id });
   }
   return saida;
 }

@@ -398,7 +398,7 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
           return Math.abs(dy) >= Math.abs(dx) ? (dy < 0 ? 'da frente' : 'dos fundos') : dx < 0 ? 'da esquerda' : 'da direita';
         };
         for (const b of muros)
-          pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: muro de arrimo na borda ${ladoDaBorda(b)}, de ${b.comprimentoM.toLocaleString('pt-BR')} m e até ${b.alturaMaxM.toLocaleString('pt-BR')} m de altura (${b.lado === 'CORTE' ? 'segura o corte' : 'segura o aterro'}; ${b.motivo}) — dimensione com o calculista.` });
+          pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: muro de arrimo na borda ${ladoDaBorda(b)}, de ${b.comprimentoM.toLocaleString('pt-BR')} m e até ${b.alturaMaxM.toLocaleString('pt-BR')} m de altura (${b.lado === 'CORTE' ? 'segura o corte' : 'segura o aterro'}; ${b.motivo}) — dimensione com o calculista.`, ...comLocal({ levelId: entrada.levelId, ids: [], ponto: { x: (b.a.x + b.b.x) / 2, y: (b.a.y + b.b.y) / 2 } }) });
       }
     } catch (e) {
       const motivo = e instanceof Error ? e.message : String(e);
@@ -470,9 +470,9 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
           desdeCotaMm: e.cotaDaCalcadaMm,
         },
       ]);
-      pendencias.push({ grupo: 'CONFERIR', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, lançada diante da porta de entrada.` });
+      pendencias.push({ grupo: 'CONFERIR', texto: `Terraplenagem: a entrada ${sentido} ${desnivel} da calçada ao piso — ${desc}, lançada diante da porta de entrada.`, ...comLocal(localDoElemento(m, [porta.o.id])) });
     } catch (x) {
-      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a escada de acesso não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.` });
+      pendencias.push({ grupo: 'VERIFICACAO', texto: `Terraplenagem: a escada de acesso não entrou (${x instanceof Error ? x.message : String(x)}) — desenhe-a à mão.`, ...comLocal(localDoElemento(m, [porta.o.id])) });
     }
   };
 
@@ -677,7 +677,7 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
       pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: falta ${it.faltam} × ${it.item.nome} no desenho` });
     }
     for (const rel of conferencia.relacoes) {
-      if (rel.estado === 'VIOLADA' && rel.relacao.tipo !== 'DESEJAVEL') pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: ${rel.a.nome} × ${rel.b.nome} — ${rel.relacao.tipo === 'OBRIGATORIA' ? 'deviam ter porta direta' : 'não podiam ser vizinhos'} (${rel.valor})` });
+      if (rel.estado === 'VIOLADA' && rel.relacao.tipo !== 'DESEJAVEL') pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Programa: ${rel.a.nome} × ${rel.b.nome} — ${rel.relacao.tipo === 'OBRIGATORIA' ? 'deviam ter porta direta' : 'não podiam ser vizinhos'} (${rel.valor})`, ...comLocal(localDoElemento(m, [rel.spaceA, rel.spaceB].filter((x): x is string => !!x))) });
     }
     const atendidos = conferencia.itens.filter((it) => it.item.uso !== 'CIRCULACAO').reduce((s, it) => s + it.casados.length, 0);
     const regras = avaliarRegras(m, REGRAS_SEMENTE, {
@@ -900,10 +900,10 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
       // os pontos das louças são planejados para eles.
       criadosDoMobiliario = lote.length ? applyBatch(m, lote).diff.created : [];
       const naoCouberam = lista.flatMap((a) => a.naoCouberam.map((x) => `${a.rotulo}: ${x}`));
-      for (const x of naoCouberam) pendencias.push({ grupo: 'VERIFICACAO', texto: `Mobiliário: ${x}` });
+      for (const a of lista) for (const x of a.naoCouberam) pendencias.push({ grupo: 'VERIFICACAO', texto: `Mobiliário: ${a.rotulo}: ${x}`, ...comLocal(localDoElemento(m, [a.spaceId])) });
       // F20: a peça que só coube menor — para conferir, não decidir.
       const reduzidas = lista.flatMap((a) => a.reduzidas.map((x) => `${a.rotulo}: ${x}`));
-      for (const x of reduzidas) pendencias.push({ grupo: 'CONFERIR', texto: `Mobiliário: ${x} (a maior não coube)` });
+      for (const a of lista) for (const x of a.reduzidas) pendencias.push({ grupo: 'CONFERIR', texto: `Mobiliário: ${a.rotulo}: ${x} (a maior não coube)`, ...comLocal(localDoElemento(m, [a.spaceId])) });
       mobiliario.pecas = lote.length;
       return { comandos: lote, nota: `${lote.length} peça(s) em ${lista.filter((a) => a.pecas.length).length} ambiente(s)${reduzidas.length ? `; ${reduzidas.length} menor(es)` : ''}${naoCouberam.length ? `; ${naoCouberam.length} não couberam` : ''}` };
     });
@@ -1538,8 +1538,9 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
         eletrica.conferencia.porRegra[r.codigo] = { faltas, avisos: avisosR };
         eletrica.conferencia.faltas += faltas;
         eletrica.conferencia.avisos += avisosR;
-        if (faltas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${faltas} falta(s) — ${r.achados.find((a) => a.nivel === 'FALTA')!.mensagem}` });
-        if (avisosR) pendencias.push({ grupo: 'CONFERIR', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${avisosR} aviso(s) — ${r.achados.find((a) => a.nivel === 'AVISO')!.mensagem}` });
+        const locaisDos = (nivel: 'FALTA' | 'AVISO') => r.achados.filter((a) => a.nivel === nivel).flatMap((a) => (a.ids.length ? [localDoElemento(m, a.ids)].filter((l): l is LocalDaPendencia => !!l) : []));
+        if (faltas) pendencias.push({ grupo: 'VERIFICACAO', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${faltas} falta(s) — ${r.achados.find((a) => a.nivel === 'FALTA')!.mensagem}`, ...comLocais(locaisDos('FALTA')) });
+        if (avisosR) pendencias.push({ grupo: 'CONFERIR', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${avisosR} aviso(s) — ${r.achados.find((a) => a.nivel === 'AVISO')!.mensagem}`, ...comLocais(locaisDos('AVISO')) });
       }
     }
 
@@ -1552,13 +1553,18 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
       const lote: Command[] = [];
       let menorLivre = Infinity;
       const abaixo: string[] = [];
+      const locaisDoForroBaixo: LocalDaPendencia[] = [];
       for (const L of niveis) {
         for (const sp of comodosComForro(m, L)) {
           const f = forroDoComodo(m, sp);
           if (!f.etiqueta) continue;
           const livre = f.faceMm - hip.forro.pisoAcabadoMm;
           menorLivre = Math.min(menorLivre, livre);
-          if (livre < f.minimoMm) abaixo.push(`${sp.name} (${f2(livre / 1000)} m; mínimo ${f2(f.minimoMm / 1000)} m)`);
+          if (livre < f.minimoMm) {
+            abaixo.push(`${sp.name} (${f2(livre / 1000)} m; mínimo ${f2(f.minimoMm / 1000)} m)`);
+            const l = localDoElemento(m, [sp.id]);
+            if (l) locaisDoForroBaixo.push(l);
+          }
           lote.push({
             type: 'SetSpaceLabelProps',
             labelId: f.etiqueta.id,
@@ -1569,7 +1575,7 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
       const n = aplicar(lote);
       forro = { comodos: lote.length, rebaixoMm: rebaixoDoForro, peDireitoLivreMinimoMm: Number.isFinite(menorLivre) ? Math.round(menorLivre) : null };
       if (abaixo.length)
-        pendencias.push({ grupo: 'PREMISSA', texto: `Forro: pé-direito livre abaixo do mínimo em ${abaixo.join(', ')} — as faixas das redes pedem ${f2(rebaixoDoForro / 1000)} m de plenum; aumente o pé-direito ou aperte as faixas` });
+        pendencias.push({ grupo: 'PREMISSA', texto: `Forro: pé-direito livre abaixo do mínimo em ${abaixo.join(', ')} — as faixas das redes pedem ${f2(rebaixoDoForro / 1000)} m de plenum; aumente o pé-direito ou aperte as faixas`, ...comLocais(locaisDoForroBaixo) });
       pendencias.push({ grupo: 'CONFERIR', texto: `Forro: as redes correm no plenum (${f2(rebaixoDoForro / 1000)} m), atravessam as vigas entre os cômodos e descem aos pontos junto da viga, em caixote de gesso — os furos vão ao calculista (F14c)` });
       etapa('FORRO', ROTULO_DA_ETAPA_DA_CASA.FORRO, 'LANCOU', n, `${lote.length} cômodo(s), rebaixo de ${f2(rebaixoDoForro / 1000)} m; pé-direito livre mínimo de ${Number.isFinite(menorLivre) ? f2(menorLivre / 1000) : '—'} m`);
     }
@@ -1946,10 +1952,13 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
       const ficouM2 = sp ? Math.round(sp.areaMm2 / 1e4) / 100 : null;
       const minimoM2 = amb?.item.areaMinM2 ?? null;
       if (ficouM2 != null && minimoM2 != null && ficouM2 >= minimoM2)
-        pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come boa parte de ${a} — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(minimoM2)} m²); confira o uso ou mude a escada de lugar.` });
-      else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a} ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}${minimoM2 != null ? `, abaixo do mínimo de ${f2(minimoM2)} m²` : ''} — mude a escada de lugar.` });
+        pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come boa parte de ${a} — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(minimoM2)} m²); confira o uso ou mude a escada de lugar.`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
+      else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a} ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}${minimoM2 != null ? `, abaixo do mínimo de ${f2(minimoM2)} m²` : ''} — mude a escada de lugar.`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
     }
-    for (const a of nucleo.partidos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: o núcleo parte ${a} em dois — o pedaço menor fica sem nome.` });
+    for (const a of nucleo.partidos) {
+      const sp = m.spaces.find((x) => (x.levelId === T || x.levelId === sobrado.nivelSuperiorId) && x.name === a);
+      pendencias.push({ grupo: 'VERIFICACAO', texto: `Escada: o núcleo parte ${a} em dois — o pedaço menor fica sem nome.`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
+    }
     // F27-D2: o 2º não entrou na escolha do núcleo — o que ele comeu lá, medido no desenho.
     if (eg && sobrado.segundo) {
       const G = sobrado.segundo.nivelId;
@@ -1957,8 +1966,8 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
         if (a.item.uso === 'CIRCULACAO' || !(a.ret.x0 < nucleo.ret.x1 && a.ret.x1 > nucleo.ret.x0 && a.ret.y0 < nucleo.ret.y1 && a.ret.y1 > nucleo.ret.y0)) continue;
         const sp = m.spaces.find((x) => x.levelId === G && x.name === a.nome);
         const ficouM2 = sp ? Math.round(sp.areaMm2 / 1e4) / 100 : null;
-        if (ficouM2 != null && ficouM2 >= a.item.areaMinM2) pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come parte de ${a.nome} no 2º pavimento — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(a.item.areaMinM2)} m²).` });
-        else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a.nome} no 2º pavimento ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}, abaixo do mínimo de ${f2(a.item.areaMinM2)} m².` });
+        if (ficouM2 != null && ficouM2 >= a.item.areaMinM2) pendencias.push({ grupo: 'CONFERIR', texto: `Escada: o núcleo come parte de ${a.nome} no 2º pavimento — fica com ${f2(ficouM2)} m² (mínimo do programa ${f2(a.item.areaMinM2)} m²).`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
+        else pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Escada: o núcleo deixa ${a.nome} no 2º pavimento ${ficouM2 != null ? `com ${f2(ficouM2)} m²` : 'sem área'}, abaixo do mínimo de ${f2(a.item.areaMinM2)} m².`, ...comLocal(sp ? localDoElemento(m, [sp.id]) : null) });
       }
     }
     // F22: "sem porta direta" já sai na CONFERÊNCIA do programa — aqui só pesa na escolha (como na térrea).
@@ -2286,11 +2295,14 @@ export function planejarComPavimentos(original: BlueprintModel, entrada: Entrada
     if (soltas.length) {
       const nome: Record<string, string> = { ...ROTULO_DA_DISCIPLINA_DA_REDE, ...ROTULO_DA_DISCIPLINA_DO_AR, ELETRICA: 'eletroduto' };
       const porComodo = new Map<string, string[]>();
+      const locaisPorComodo = new Map<string, LocalDaPendencia[]>();
       for (const x of soltas) {
         const k = `${x.comodo} (${x.nivel.toLowerCase()})`;
         porComodo.set(k, [...(porComodo.get(k) ?? []), x.rotulo?.toLowerCase() || nome[x.disciplina] || x.disciplina.toLowerCase()]);
+        const l = localDoElemento(m, [x.trechoId, x.comodoId]);
+        if (l) locaisPorComodo.set(k, [...(locaisPorComodo.get(k) ?? []), l]);
       }
-      for (const [k, v] of porComodo) pendencias.push({ grupo: 'VERIFICACAO', texto: `Prumada pelo meio do cômodo: ${v.join(', ')} atravessa ${k} — leve-a pela parede ou pelo shaft.` });
+      for (const [k, v] of porComodo) pendencias.push({ grupo: 'VERIFICACAO', texto: `Prumada pelo meio do cômodo: ${v.join(', ')} atravessa ${k} — leve-a pela parede ou pelo shaft.`, ...comLocais(locaisPorComodo.get(k)) });
     }
     return fechar({
       projecaoM2: et.r.resumo.areaConstruidaM2,

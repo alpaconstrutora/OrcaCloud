@@ -60,7 +60,19 @@ describe('locais das pendências da casa', () => {
         expect(l.ids.some((id) => centroDoElemento(plano.resultado, id)), `${p.texto}: ids ${l.ids.join(',')}`).toBe(true);
       }
     }
-    // As de premissa (sem elemento) continuam só texto.
-    expect(plano.pendencias.filter((p) => p.grupo === 'PREMISSA').every((p) => !p.locais)).toBe(true);
+    // As de premissa (sem elemento) continuam só texto — menos a do forro, que nomeia os cômodos.
+    expect(plano.pendencias.filter((p) => p.grupo === 'PREMISSA' && !/^Forro:/.test(p.texto)).every((p) => !p.locais)).toBe(true);
   });
+
+  // 12/11/2026 (plano 2026-11-12-casa-automatica-pendencias.md, P1): os tipos que passaram a ter local — o elemento é
+  // garantido pela origem (o ambiente do mobiliário, do forro e da relação; o trecho e o cômodo da prumada; a borda do muro).
+  const EXIGE_LOCAL = /^(Mobiliário: |Prumada pelo meio do cômodo: |Forro: pé-direito livre abaixo|Programa: .+ × .+ — |Terraplenagem: muro de arrimo)/;
+  for (const pav of [1, 2] as const) {
+    it(`P1 (${pav === 1 ? 'térrea' : 'sobrado'} 12×30): mobiliário, prumada, forro, relação e muro de arrimo levam local quando aparecem`, () => {
+      const m0 = lote();
+      const plano = planejarCasa(m0, entrada(m0), { ...hipotesesDasPremissas(PREMISSAS_DA_CASA_PADRAO), pavimentos: pav });
+      const exigidas = plano.pendencias.filter((p) => EXIGE_LOCAL.test(p.texto));
+      for (const p of exigidas) expect(p.locais?.length ?? 0, p.texto).toBeGreaterThan(0);
+    });
+  }
 });

@@ -16777,7 +16777,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
           <Layers className="mt-0.5 h-4 w-4 shrink-0" />
           <span className="flex-1">
             <strong>{nivelAtivoVinculado.name}</strong> é cópia viva do pavimento tipo <strong>{nivelAtivoVinculado.tipo.name}</strong>: paredes, esquadrias,
-            estrutura e telhado se editam no tipo e propagam para cá. Instalações e as propriedades do pavimento são próprias.
+            estrutura e telhado{nivelAtivoVinculado.tipo.copiaInstalacoes ? ', e também as instalações (pontos, trechos, quadros e circuitos),' : ''} se editam no tipo e propagam
+            para cá. {nivelAtivoVinculado.tipo.copiaInstalacoes ? 'As propriedades do pavimento são próprias.' : 'Instalações e as propriedades do pavimento são próprias.'}
           </span>
           <button type="button" onClick={() => setNivelAtivoId(nivelAtivoVinculado.tipo.id)} className="shrink-0 text-xs font-medium underline">
             editar o tipo

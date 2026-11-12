@@ -12,7 +12,7 @@ const confirmar = vi.fn(async () => true);
 vi.mock('../../components/ui/confirm', () => ({ useConfirm: () => confirmar }));
 
 import TelaCasaAutomatica, { MOTIVO_GERANDO, MOTIVO_PREVIA_VELHA } from '../../components/blueprint/TelaCasaAutomatica';
-import { emptyModel } from '../../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, point, type Command } from '../../utils/blueprintKernel';
 import { PREMISSAS_DA_CASA_PADRAO } from '../../utils/blueprintPremissasDaCasa';
 import type { EstadoDaCasaAutomatica } from '../../hooks/useCasaAutomatica';
 import type { PlanoDaCasa } from '../../utils/blueprintCasaAutomatica';
@@ -288,6 +288,21 @@ describe('TelaCasaAutomatica (F10)', () => {
     const campo = screen.getByLabelText('Arranjos testados');
     expect(campo.closest('label')?.getAttribute('title')).toMatch(/arranjos/);
     expect(screen.queryByText('Alternativas tentadas')).toBeNull();
+    cleanup();
+  });
+
+  it('B3 (11/11/2026): a planta da prévia está na aba Resultado, no pavimento da casa; sem pavimento na prévia, não aparece', () => {
+    // A prévia de sempre (resultado = emptyModel, sem pavimento): nada a desenhar.
+    tela({ casa: casa({ plano }) });
+    expect(screen.queryByTestId('planta-da-previa')).toBeNull();
+    cleanup();
+    let m = applyCommand(emptyModel(), { type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 2800 }).model;
+    const t = m.levels[0].id;
+    const w = (ax: number, ay: number, bx: number, by: number): Command => ({ type: 'AddWall', levelId: t, a: point(ax, ay), b: point(bx, by), thicknessMm: 150, heightMm: 2800 });
+    m = applyBatch(m, [w(0, 0, 8000, 0), w(8000, 0, 8000, 5000), w(8000, 5000, 0, 5000), w(0, 5000, 0, 0)]).model;
+    tela({ casa: casa({ plano: { ...plano, levelId: t, resultado: m } }) });
+    const planta = within(screen.getByTestId('previa-da-casa')).getByTestId('planta-da-previa');
+    expect(within(planta).getByRole('img').getAttribute('aria-label')).toBe('Planta da prévia — Térreo · Arquitetura');
     cleanup();
   });
 

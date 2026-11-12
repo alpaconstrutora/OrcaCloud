@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import type { BlueprintModel } from '../../utils/blueprintKernel';
-import type { Desenhista, EstiloTraco } from '../../utils/blueprintExport';
+import { DesenhistaSvg } from './DesenhistaSvg';
 import { HIPOTESES_PADRAO, type HipotesesEletricas } from '../../utils/blueprintEletricaDimensionamento';
 import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUnifilar, montarUnifilar, rodapeDoUnifilar, temHierarquia } from '../../utils/blueprintUnifilar';
 
@@ -17,63 +17,6 @@ import { desenharUnifilar, desenharUnifilarEmArvore, layoutDaArvore, medidasDoUn
  * largura curta, não uma escolha.
  */
 const PX_POR_MM = 4.4;
-
-/** Coleta as primitivas do `Desenhista` como nós SVG. */
-class DesenhistaSvg implements Desenhista {
-  readonly nos: React.ReactNode[] = [];
-  private n = 0;
-  constructor(private readonly k: number) {}
-  private px(v: number) {
-    return v * this.k;
-  }
-  linha(x1: number, y1: number, x2: number, y2: number, estilo: EstiloTraco): void {
-    this.nos.push(
-      <line
-        key={this.n++}
-        x1={this.px(x1)}
-        y1={this.px(y1)}
-        x2={this.px(x2)}
-        y2={this.px(y2)}
-        stroke={estilo.cor}
-        strokeWidth={Math.max(1, this.px(estilo.espessuraMm))}
-        strokeLinecap="round"
-      />,
-    );
-  }
-  poligono(pontos: { x: number; y: number }[], preenchimento: string): void {
-    this.nos.push(
-      <polygon key={this.n++} points={pontos.map((p) => `${this.px(p.x)},${this.px(p.y)}`).join(' ')} fill={preenchimento} />,
-    );
-  }
-  texto(x: number, y: number, texto: string, alturaMm: number, cor?: string): void {
-    this.nos.push(
-      <text
-        key={this.n++}
-        x={this.px(x)}
-        y={this.px(y)}
-        fontSize={Math.max(9, this.px(alturaMm) * 1.25)}
-        fill={cor ?? '#0f172a'}
-        fontFamily="ui-sans-serif, system-ui, sans-serif"
-      >
-        {texto}
-      </text>,
-    );
-  }
-  retangulo(x: number, y: number, w: number, h: number, estilo: EstiloTraco): void {
-    this.nos.push(
-      <rect
-        key={this.n++}
-        x={this.px(x)}
-        y={this.px(y)}
-        width={this.px(w)}
-        height={this.px(h)}
-        fill="#ffffff"
-        stroke={estilo.cor}
-        strokeWidth={Math.max(1, this.px(estilo.espessuraMm))}
-      />,
-    );
-  }
-}
 
 export default function PainelUnifilar({
   model,

@@ -1914,7 +1914,7 @@ const COR_DO_MOBILIARIO = '#1f2937';
  * polilinha (1,2 cheio · 0,8 vazio mm) — a elipse tesselada tem lados menores que o traço, e recomeçar a fase em
  * cada lado a desenharia cheia.
  */
-function linhaDoMobiliario(d: Desenhista, pts: { x: number; y: number }[], pena: Pena, tracejada: boolean, cor: string): void {
+export function linhaDoMobiliario(d: Desenhista, pts: { x: number; y: number }[], pena: Pena, tracejada: boolean, cor: string): void {
   const estilo = { espessuraMm: PENA_MM[pena], cor };
   if (!tracejada) {
     for (let i = 0; i + 1 < pts.length; i++) d.linha(pts[i].x, pts[i].y, pts[i + 1].x, pts[i + 1].y, estilo);
@@ -1922,6 +1922,10 @@ function linhaDoMobiliario(d: Desenhista, pts: { x: number; y: number }[], pena:
   }
   const CHEIO = 1.2;
   const PERIODO = 2;
+  // A um fio de uma fronteira (fim do período, fim do traço cheio) o resto viraria ~1e-16 e `t + resto === t`: o laço
+  // desenhava linhas de comprimento zero para sempre (planta humanizada a 1:75, 11/11/2026). Com a folga, quem está a
+  // menos de EPS da fronteira já está do outro lado — o passo nunca é menor que EPS.
+  const EPS = 1e-9;
   let s = 0;
   for (let i = 0; i + 1 < pts.length; i++) {
     const a = pts[i];
@@ -1930,10 +1934,12 @@ function linhaDoMobiliario(d: Desenhista, pts: { x: number; y: number }[], pena:
     if (comp < 1e-9) continue;
     let t = 0;
     while (t < comp) {
-      const fase = (s + t) % PERIODO;
-      const resto = fase < CHEIO ? CHEIO - fase : PERIODO - fase;
+      const bruta = (s + t) % PERIODO;
+      const fase = PERIODO - bruta < EPS ? 0 : bruta;
+      const cheio = fase < CHEIO - EPS;
+      const resto = cheio ? CHEIO - fase : PERIODO - fase;
       const fim = Math.min(comp, t + resto);
-      if (fase < CHEIO) d.linha(a.x + ((b.x - a.x) * t) / comp, a.y + ((b.y - a.y) * t) / comp, a.x + ((b.x - a.x) * fim) / comp, a.y + ((b.y - a.y) * fim) / comp, estilo);
+      if (cheio) d.linha(a.x + ((b.x - a.x) * t) / comp, a.y + ((b.y - a.y) * t) / comp, a.x + ((b.x - a.x) * fim) / comp, a.y + ((b.y - a.y) * fim) / comp, estilo);
       t = fim;
     }
     s += comp;

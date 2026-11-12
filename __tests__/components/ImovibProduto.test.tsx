@@ -62,6 +62,25 @@ describe('8.2 — área equivalente NBR 12721', () => {
         expect(screen.getByText(/versão 4 · só a técnica aprovada/i)).toBeTruthy();
     });
 
+    it('trocar de Planta não mostra o total da anterior enquanto carrega', async () => {
+        svc.areaEquivalenteDaPlanta.mockResolvedValueOnce({ snapshotId: 's1', revisao: 1, total: 3_240, situacao: 'Sem aprovação', status: 'success' });
+        svc.areaEquivalenteDaPlanta.mockReturnValueOnce(new Promise(() => {}));
+        const base = { ...baseStudy(), organization_id: 'org', version: '1.0', created_at: '', updated_at: '' };
+        const { rerender } = render(<ImovibStaticViability study={{ ...base, estrutura: estrutura('planta-1') } as never} />);
+        expect(await screen.findByText('3.240 m²')).toBeTruthy();
+        rerender(<ImovibStaticViability study={{ ...base, estrutura: estrutura('planta-2') } as never} />);
+        expect(screen.queryByText('3.240 m²')).toBeNull();
+        expect(screen.getByText('Não medido')).toBeTruthy();
+    });
+
+    it('custo do estudo sem área comum: avisa que o custo por m² equivalente fica subestimado', async () => {
+        svc.areaEquivalenteDaPlanta.mockResolvedValue({ snapshotId: 's1', revisao: 4, total: 3_240, situacao: 'Sem aprovação', status: 'success' });
+        const s = baseStudy({ estrutura: estrutura('planta-1') });
+        s.blocks[0].units[0].common_area = 0;
+        render(<ImovibStaticViability study={{ ...s, organization_id: 'org', version: '1.0', created_at: '', updated_at: '' } as never} />);
+        expect(await screen.findByText(/sem área comum/i, { selector: 'p' })).toBeTruthy();
+    });
+
     it('quadro com pendência bloqueante: mostra o total e avisa', async () => {
         svc.areaEquivalenteDaPlanta.mockResolvedValue({ snapshotId: 's1', revisao: 2, total: 3_240, situacao: 'Sem aprovação', status: 'failed' });
         tela({ estrutura: estrutura('planta-1') });

@@ -8,6 +8,8 @@ interface Props {
     study: ImovibStudy;
     /** Custo de obra do motor — o mesmo da DRE da Estática. */
     custoObra: number;
+    /** A área do custo de obra não tem área comum (resultado.produto.custoSemAreaComum). */
+    custoSemAreaComum: boolean;
 }
 
 const formatArea = (v: number) => new Intl.NumberFormat('pt-BR', { maximumFractionDigits: 2 }).format(v) + ' m²';
@@ -19,7 +21,7 @@ const formatM2 = (v: number) =>
  * congelado numa versão publicada da Planta Inteligente do empreendimento. O
  * estudo não recalcula a norma; sem quadro, "Não medido" — nunca zero.
  */
-const ImovibAreaEquivalenteCard: React.FC<Props> = ({ study, custoObra }) => {
+const ImovibAreaEquivalenteCard: React.FC<Props> = ({ study, custoObra, custoSemAreaComum }) => {
     const plantaId = study.estrutura?.origem === 'empreendimento' ? study.estrutura.blueprint_study_id ?? null : null;
     const [area, setArea] = useState<AreaEquivalenteDaPlanta | null>(null);
     const [carregando, setCarregando] = useState(!!plantaId);
@@ -28,6 +30,7 @@ const ImovibAreaEquivalenteCard: React.FC<Props> = ({ study, custoObra }) => {
     useEffect(() => {
         if (!plantaId) { setArea(null); setCarregando(false); return; }
         let vivo = true;
+        setArea(null);
         setCarregando(true);
         setErro(null);
         imovibService.areaEquivalenteDaPlanta(plantaId)
@@ -71,11 +74,17 @@ const ImovibAreaEquivalenteCard: React.FC<Props> = ({ study, custoObra }) => {
                 </div>
                 <div>
                     <span className="text-xs font-semibold text-gray-500">Custo de obra por m² equivalente</span>
-                    <div className="text-xl font-semibold text-gray-900 mt-1">{area ? formatM2(custoObra / area.total) : '—'}</div>
+                    <div className="text-xl font-semibold text-gray-900 mt-1">{area && custoObra > 0 ? formatM2(custoObra / area.total) : '—'}</div>
                 </div>
             </div>
             <div className="px-6 pb-4 space-y-1">
                 <p className="text-xs text-gray-600">{explicacao}</p>
+                {area && custoObra <= 0 && (
+                    <p className="text-xs text-gray-600">Sem custo de obra no estudo (Orçamento › Por torre).</p>
+                )}
+                {area && custoObra > 0 && custoSemAreaComum && (
+                    <p className="text-xs text-amber-700">O custo de obra do estudo foi calculado sem área comum (as tipologias não têm área comum cadastrada); o custo por m² equivalente fica subestimado.</p>
+                )}
                 {area?.status === 'failed' && (
                     <p className="text-xs text-amber-700">O quadro desta versão tem pendência bloqueante; corrija na Planta e publique de novo.</p>
                 )}

@@ -423,6 +423,30 @@ describe('8.1 — indicadores de produto', () => {
         expect(r.produto.eficiencia).toBeCloseTo(70 / 90, 6);
     });
 
+    it('sem área comum cadastrada: eficiência vazia (privativa ÷ construída daria ~100%)', () => {
+        const s = baseStudy();
+        s.blocks[0].units[0].common_area = 0;
+        expect(computeImovibMath(s).produto.eficiencia).toBeNull();
+    });
+
+    it('CAPEX simplificado com área: a eficiência usa a mesma área construída do custo', () => {
+        const r = computeImovibMath(baseStudy({ capex_mode: 'simplified', capex_simplified_area_sqm: 5_000, capex_simplified_cost_sqm: 4_000 }));
+        expect(r.produto.eficiencia).toBeCloseTo(2_800 / 5_000, 6);
+        expect(r.produto.custoObraPorM2Privativo).toBeCloseTo((5_000 * 4_000) / 2_800);
+    });
+
+    it('sensibilidade: tíquete e VGV por m² acompanham o VGV, como o custo acompanha o custo', () => {
+        const p = computeImovibMath(baseStudy(), { vgvDelta: 10 }).produto;
+        expect(p.ticketMedio).toBeCloseTo(70 * 10_000 * 1.1);
+        expect(p.vgvPorM2Privativo).toBeCloseTo(11_000);
+    });
+
+    it('custo de obra zero: custo por m² vazio, não R$ 0', () => {
+        const s = baseStudy();
+        s.blocks[0].construction_cost_sqm = 0;
+        expect(computeImovibMath(s).produto.custoObraPorM2Privativo).toBeNull();
+    });
+
     it('sem área nem unidades: indicadores vazios, nunca 0 nem infinito', () => {
         const p = computeImovibMath(baseStudy({ blocks: [] })).produto;
         expect(p.unidadesVendaveis).toBe(0);

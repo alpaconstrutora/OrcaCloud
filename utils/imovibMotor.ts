@@ -105,8 +105,14 @@ export interface ImovibAviso {
 }
 
 export interface IndicadoresDeProduto {
-    /** Área privativa das tipologias vendáveis ÷ área construída (0 a 1). */
+    /**
+     * Área privativa das tipologias vendáveis ÷ área construída do custo (0 a 1).
+     * null sem área comum cadastrada (daria ~100%, que nenhum prédio tem), salvo
+     * no CAPEX simplificado com área digitada.
+     */
     eficiencia: number | null;
+    /** A área do custo de obra não tem área comum: custo por m² equivalente fica subestimado. */
+    custoSemAreaComum: boolean;
     unidadesVendaveis: number;
     /** VGV ÷ unidades à venda. */
     ticketMedio: number | null;
@@ -344,7 +350,7 @@ const EMPTY_RESULT: ImovibMathResult = {
     totalBlockArea: 0,
     totalPrivateArea: 0,
     areaPrivativaVendavel: 0,
-    produto: { eficiencia: null, unidadesVendaveis: 0, ticketMedio: null, vgvPorM2Privativo: null, custoObraPorM2Privativo: null },
+    produto: { eficiencia: null, custoSemAreaComum: false, unidadesVendaveis: 0, ticketMedio: null, vgvPorM2Privativo: null, custoObraPorM2Privativo: null },
     totalCommonArea: 0,
     vgvBase: 0,
     vgvPorBloco: {},
@@ -415,6 +421,8 @@ interface Premissas {
     areaPrivativaVendavel: number;
     /** Área privativa das tipologias vendáveis, com as permutadas (item 8.1). */
     areaPrivativaDasTipologiasVendaveis: number;
+    /** Área construída sobre a qual o custo de obra é calculado: a do CAPEX simplificado quando digitada. */
+    areaConstruidaDoCusto: number;
     /** Recebimento de todas as safras, sem índice e já sem a inadimplência. */
     recebimento: SerieDeRecebimento;
     // Fase 5
@@ -604,8 +612,10 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
     // E as rubricas do detalhado.
     const simplificadoAtivo = study.capex_mode === 'simplified' && !!study.capex_simplified_cost_sqm;
     let constCostTotal: number;
+    let areaConstruidaDoCusto = totalBlockArea;
     if (simplificadoAtivo) {
         const effectiveArea = study.capex_simplified_area_sqm || totalBlockArea;
+        areaConstruidaDoCusto = effectiveArea;
         constCostTotal = effectiveArea * (study.capex_simplified_cost_sqm || 0) * costDeltaMultiplier;
     } else {
         constCostTotal = baseConstCostTotal * costDeltaMultiplier;
@@ -940,6 +950,7 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
         totalCommonArea,
         areaPrivativaVendavel,
         areaPrivativaDasTipologiasVendaveis,
+        areaConstruidaDoCusto,
         recebimento,
         parcelasTerreno,
         mesDaPrimeiraParcela,
@@ -1263,6 +1274,21 @@ function aplicarFinanciamento(P: Premissas, S: Series): FluxoDoAcionista {
 /** a ÷ b, ou null quando não há base. */
 const razao = (a: number, b: number): number | null => (b > 0 ? a / b : null);
 
+function indicadoresDeProduto(P: Premissas): IndicadoresDeProduto {
+    // A área do custo vem das tipologias quando não há área digitada no CAPEX simplificado.
+    const areaDasTipologias = P.areaConstruidaDoCusto === P.totalBlockArea;
+    const custoSemAreaComum = areaDasTipologias && P.totalBlockArea > 0 && P.totalCommonArea <= 0;
+    return {
+        eficiencia: custoSemAreaComum ? null : razao(P.areaPrivativaDasTipologiasVendaveis, P.areaConstruidaDoCusto),
+        custoSemAreaComum,
+        unidadesVendaveis: P.unidadesVendaveis,
+        // VGV com a sensibilidade, como o custo de obra (o Portal do Investidor roda os dois).
+        ticketMedio: razao(P.vgvTotal, P.unidadesVendaveis),
+        vgvPorM2Privativo: razao(P.vgvTotal, P.areaPrivativaVendavel),
+        custoObraPorM2Privativo: P.constCostTotal > 0 ? razao(P.constCostTotal, P.areaPrivativaDasTipologiasVendaveis) : null,
+    };
+}
+
 function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): ImovibMathResult {
     // Valor de cada rubrica no cálculo — mesma regra de montarPremissas, item a item.
     const capexValorPorRubrica: Record<string, number> = {};
@@ -1321,13 +1347,7 @@ function calcularResultado(P: Premissas, S: Series, F: FluxoDoAcionista): Imovib
         totalPrivateArea: P.totalPrivateArea,
         areaPrivativaVendavel: P.areaPrivativaVendavel,
         totalCommonArea: P.totalCommonArea,
-        produto: {
-            eficiencia: razao(P.areaPrivativaDasTipologiasVendaveis, P.totalBlockArea),
-            unidadesVendaveis: P.unidadesVendaveis,
-            ticketMedio: razao(P.baseVgvTotal, P.unidadesVendaveis),
-            vgvPorM2Privativo: razao(P.baseVgvTotal, P.areaPrivativaVendavel),
-            custoObraPorM2Privativo: razao(P.constCostTotal, P.areaPrivativaDasTipologiasVendaveis),
-        },
+        produto: indicadoresDeProduto(P),
         vgvBase: P.baseVgvTotal,
         vgvPorBloco: P.vgvPorBloco,
         debtPayoffAtEnd: F.debtPayoffAtEnd,

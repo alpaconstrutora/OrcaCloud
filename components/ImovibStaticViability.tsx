@@ -162,16 +162,16 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
                 <KpiCard
                     label="Eficiência"
                     value={produto.eficiencia == null ? '—' : `${(produto.eficiencia * 100).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}%`}
-                    sub={produto.eficiencia == null ? 'Sem área construída' : 'Privativa ÷ construída'}
-                    title="Área privativa das tipologias vendáveis (com as permutadas) ÷ área construída"
+                    sub={produto.eficiencia == null ? (produto.custoSemAreaComum ? 'Sem área comum cadastrada' : 'Sem área construída') : 'Privativa vendável ÷ construída'}
+                    title="Área privativa das tipologias vendáveis (com as permutadas) ÷ área construída do custo de obra"
                     icon={<Percent className="w-4 h-4" />}
                     color="indigo"
                 />
                 <KpiCard
                     label="Unidades à venda"
                     value={produto.unidadesVendaveis.toLocaleString('pt-BR')}
-                    sub="Sem permutadas"
-                    title="Unidades das tipologias vendáveis, sem as permutadas do espelho"
+                    sub="Sem as permutadas do espelho"
+                    title="Unidades das tipologias vendáveis, sem as permutadas do espelho; a permuta física em % não tira unidades"
                     icon={<Home className="w-4 h-4" />}
                     color="blue"
                 />
@@ -193,14 +193,14 @@ const ImovibStaticViability: React.FC<ImovibStaticViabilityProps> = ({ study, on
                 <KpiCard
                     label="Obra por m² privativo"
                     value={formatM2(produto.custoObraPorM2Privativo)}
-                    sub={produto.custoObraPorM2Privativo == null ? 'Sem área privativa' : 'Custo de obra ÷ privativa'}
+                    sub={produto.custoObraPorM2Privativo == null ? (constructionCost > 0 ? 'Sem área privativa' : 'Sem custo de obra') : 'Custo de obra ÷ privativa'}
                     title="Custo de obra ÷ área privativa das tipologias vendáveis (com as permutadas)"
                     icon={<HardHat className="w-4 h-4" />}
                     color="orange"
                 />
             </div>
 
-            <ImovibAreaEquivalenteCard study={study} custoObra={constructionCost} />
+            <ImovibAreaEquivalenteCard study={study} custoObra={constructionCost} custoSemAreaComum={produto.custoSemAreaComum} />
         </div>
     );
 };

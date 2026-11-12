@@ -325,6 +325,21 @@ const unitIdsOf = (d: SaleDeal): string[] =>
         ? d.units.map(u => u.property_id)
         : (d.property_id ? [d.property_id] : []);
 
+/** Parte da unidade no valor da negociação: o valor da própria unidade
+ *  quando o contrato o traz, senão rateio pelo preço de tabela (ou por
+ *  igual, sem tabela). Nunca o valor cheio em cada unidade — somaria N vezes. */
+const parteDaUnidadeNaNegociacao = (d: SaleDeal, unidadeId: string, byId: Map<string, SaleProperty>): number => {
+    const total = Number(d.value) || 0;
+    const ids = unitIdsOf(d);
+    if (ids.length <= 1) return total;
+    const propria = d.units?.find(u => key(u.property_id) === key(unidadeId));
+    if (propria?.value != null && Number(propria.value) > 0) return Number(propria.value);
+    const precos = ids.map(id => tablePriceOf(byId.get(key(id)) ?? {}));
+    const soma = precos.reduce((a, v) => a + v, 0);
+    const meu = tablePriceOf(byId.get(key(unidadeId)) ?? {});
+    return soma > 0 ? total * (meu / soma) : total / ids.length;
+};
+
 const MESES_CURTOS = ['jan', 'fev', 'mar', 'abr', 'mai', 'jun', 'jul', 'ago', 'set', 'out', 'nov', 'dez'];
 const monthKey = (d: Date): string => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 const monthLabel = (d: Date, comAno: boolean): string =>
@@ -455,20 +470,7 @@ export const groupSalesAnalysis = (input: GroupSalesAnalysisInput): {
         }
     }
 
-    /** Parte da unidade no valor da negociação: o valor da própria unidade
-     *  quando o contrato o traz, senão rateio pelo preço de tabela (ou por
-     *  igual, sem tabela). Nunca o valor cheio em cada unidade — somaria N vezes. */
-    const parteDaUnidade = (d: SaleDeal, unidadeId: string): number => {
-        const total = Number(d.value) || 0;
-        const ids = unitIdsOf(d);
-        if (ids.length <= 1) return total;
-        const propria = d.units?.find(u => key(u.property_id) === key(unidadeId));
-        if (propria?.value != null && Number(propria.value) > 0) return Number(propria.value);
-        const precos = ids.map(id => tablePriceOf(byId.get(key(id)) ?? {}));
-        const soma = precos.reduce((a, v) => a + v, 0);
-        const meu = tablePriceOf(byId.get(key(unidadeId)) ?? {});
-        return soma > 0 ? total * (meu / soma) : total / ids.length;
-    };
+    const parteDaUnidade = (d: SaleDeal, unidadeId: string): number => parteDaUnidadeNaNegociacao(d, unidadeId, byId);
 
     const escopoDe = (b: Bucket): SalesAnalysisScope => {
         const unitStatus: SaleUnitStatusBreakdown = { sold: 0, reserved: 0, available: 0, exchanged: 0, other: 0, total: b.leaves.length };
@@ -788,3 +790,50 @@ export const groupSalesByClientType = (input: {
     });
     return { rows, total: escopo(total) };
 };
+
+/**
+ * Vendas reais de um empreendimento por mês da negociação (`date`), para a
+ * viabilidade × realizado do Imovib (item 10.4 do plano 2026-11-11). Mesma regra
+ * de "vendida" das telas de Vendas (`saleDealStage`: Contrato, Assinatura ou
+ * Concluído), sem o limite de 12 meses. Negociação de várias unidades conta só as
+ * do empreendimento, cada uma pela sua parte do valor. Sem data, fica fora.
+ */
+export function vendasPorMesDoEmpreendimento(
+    input: Pick<GroupSalesAnalysisInput, 'properties' | 'deals' | 'empreendimentoByProperty'>,
+    empreendimentoId: string,
+): { mes: string; unidades: number; valor: number }[] {
+    const byId = new Map(input.properties.map(p => [key(p.id), p]));
+    const porMes = new Map<string, { unidades: number; valor: number }>();
+    for (const d of input.deals) {
+        if (saleDealStage(d.status) !== 'sold') continue;
+        const mes = /^\d{4}-\d{2}/.exec(d.date ?? '')?.[0];
+        if (!mes) continue;
+        for (const id of unitIdsOf(d)) {
+            const imovel = byId.get(key(id));
+            if (!imovel || empreendimentoOfProperty(imovel, byId, input.empreendimentoByProperty)?.id !== empreendimentoId) continue;
+            const m = porMes.get(mes) ?? { unidades: 0, valor: 0 };
+            m.unidades += 1;
+            m.valor += parteDaUnidadeNaNegociacao(d, id, byId);
+            porMes.set(mes, m);
+        }
+    }
+    return [...porMes.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([mes, v]) => ({ mes, ...v }));
+}
+
+/**
+ * Unidades do empreendimento vendidas SEM negociação (legado: status SOLD direto no
+ * imóvel). Não têm data de venda, então ficam fora de `vendasPorMesDoEmpreendimento`
+ * — quem mostra as vendas por mês avisa quantas são.
+ */
+export function vendidasSemNegociacao(
+    input: Pick<GroupSalesAnalysisInput, 'properties' | 'deals' | 'empreendimentoByProperty'>,
+    empreendimentoId: string,
+): number {
+    const byId = new Map(input.properties.map(p => [key(p.id), p]));
+    const classificador = saleUnitClassifier(input.deals);
+    return leafNodes(input.properties).filter(p =>
+        String(p.status ?? '').toUpperCase() === 'SOLD'
+        && !classificador.dealOf(p.id)
+        && empreendimentoOfProperty(p, byId, input.empreendimentoByProperty)?.id === empreendimentoId,
+    ).length;
+}

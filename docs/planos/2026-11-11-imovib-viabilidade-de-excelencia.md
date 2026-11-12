@@ -36,11 +36,12 @@ lacunas que mais pesam e ofereceu um plano só para as duas primeiras. A respost
 | 2026-11-11 | D2: o campo "Capital Próprio (Equity)" vira número calculado ou continua editável? | **Calculado.** O campo editável sai da aba Capital; a coluna `funding_equity_percent` fica no banco, sem uso. |
 | 2026-11-11 | D4: quem confirma as alíquotas padrão dos regimes antes de publicar a Fase 6? (opções: publicar como hipótese editável com aviso; esperar a contabilidade; o usuário passa as alíquotas; sem padrão) | **Opção 1:** *"Opção 1"* — publicar com os padrões do plano (RET 4%, RET social 1%, presumido 6,73%, real estimado), editáveis por estudo, com o aviso "confirme com a contabilidade" no cartão. Estudo existente continua no regime manual até alguém trocar. |
 | 2026-11-12 | A revisão da Fase 7 achou que a VSO dos comparáveis (vendidas ÷ total ÷ meses) é absorção linear sobre o total, e a curva VSO aplica a % sobre o estoque: 80 de 100 em 12 meses dá 6,67%, e a curva com 6,67% vende só 56%. Como calcular? E o botão deve mudar a curva? | **Pela definição da curva:** VSO = 1 − (1 − vendidas/total)^(1/meses) (80 de 100 em 12 meses = 12,55%). **O botão preenche as duas** (VSO da região e VSO mensal da curva) e diz o tipo atual da curva. |
+| 2026-11-12 | D5: versão congelada é imutável (não se edita nem se apaga)? | **Sim** (*"Resposrta sim"*). A tabela de versões só tem SELECT e INSERT; apagar o estudo apaga as versões dele. |
 | 2026-11-11 | A revisão da Fase 6 achou que, no lucro real, tributar cada ano sem compensar prejuízo dava imposto maior que o lucro do projeto (o custo vem antes da receita). Compensar com a trava de 30%, sem limite, ou apurar uma vez no fim? | **Compensar sem limite:** *"Compensar sem limite"*. O lucro de cada ano também passa a descontar corretagem, outras deduções e devolução de distrato. |
 
 ### Decisões ainda em aberto (perguntar antes do item que depende delas)
 
-Cada uma traz a recomendação de quem escreveu o plano. D1, D2, D3, D4, D6 e D7 já foram respondidas (tabela acima); D5 segue em aberto.
+Cada uma traz a recomendação de quem escreveu o plano. Todas já foram respondidas (tabela acima).
 
 - **D1 (item 1.4).** O recebimento por safra muda VPL, TIR e exposição dos estudos que já existem. Hoje são 3 no banco (Davi Bueno, Garden Cambuhy, Bruninho), nenhum editado desde 19/10/2026. Um modelo só para todos, com a tabela antes → depois dos 3 estudos, ou manter o modelo antigo nos estudos existentes? **Recomendação: um modelo só.** Dois modelos divergem para sempre e a listagem passa a comparar estudos calculados de jeitos diferentes.
 - **D2 (item 4.2).** O campo "Capital Próprio (Equity)" é gravado e exportado, mas o motor não o lê. Virar número calculado (capital necessário em R$ e em %), ou continuar editável e passar a travar a soma com a dívida? **Recomendação: calculado.**
@@ -825,13 +826,15 @@ Pendências da revisão da Fase 8, feitas a pedido do usuário (*"corrigir: 1. �
 
 Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_fase9.js`): listagem = Resumo (R$ 3.998.485); Estrutura jurídica com a empresa da SPE e "não tem os dados de incorporação"; Sócios vazio, importar desligado com "não tem sócios atuais no quadro societário"; 0 escritas, 0 erros de console.
 
-**Fase 10 — Governança:** 0 de 6
-- [ ] 10.1 Memorial de premissas
-- [ ] 10.2 Versões congeladas (D5)
-- [ ] 10.3 Parecer e critérios
-- [ ] 10.4 Viabilidade × realizado
-- [ ] 10.5 Relatório completo em PDF
-- [ ] 10.6 Conferência final do Portal do Investidor
+**Fase 10 — Governança:** 6 de 6; migration `aplicar_20271112500000` (colunas de governança, `imovib_study_versions` só SELECT/INSERT, função do portal sem as colunas internas) aplicada em 12/11 com OK do usuário (*"Pode aplicar"*). Conferido no banco: como `authenticated`, UPDATE e DELETE em versões dão `42501 permission denied`; o portal recusa token inválido e não tem EXECUTE para PUBLIC. A função do portal foi reescrita (não estava no plano): `row_to_json(s)` mandaria o parecer interno a quem abre o link do investidor
+- [x] 10.1 Memorial de premissas — `utils/imovibMemorial.ts` (uma linha por campo de `CAMPOS_DO_MOTOR`; o teste derruba premissa nova sem descrição), sub-aba "4. Memorial" (fonte e data editáveis, grava com "Salvar Premissas"); a aba "Premissas" do Excel sai do memorial (colunas Fonte e Data; grupos novos Terreno, Custos e Jurídico).
+- [x] 10.2 Versões congeladas (D5) — `utils/imovibVersoes.ts`; "Congelar versão" no cabeçalho grava o estudo carregado + cenários e os indicadores (NaN vira null); aba Versões compara duas versões ou uma versão com o estudo atual. Recalcular o snapshot reproduz os resultados gravados (teste pela ida e volta do JSON).
+- [x] 10.3 Parecer e critérios — `utils/imovibParecer.ts`, cartão no topo do Resumo (mínimos editáveis, padrões em `IMOVIB_DEFAULTS`: margem 15%, folga da TIR 0 p.p.; exposição sem padrão = sem critério); aba "Parecer" no Excel; o cabeçalho do "Resumo em PDF" traz o parecer registrado (o cartão tem campos e fica fora da captura).
+- [x] 10.4 Viabilidade × realizado — `vendasPorMesDoEmpreendimento` em `lib/salesAnalysis.ts` (a parte de cada unidade no valor virou função de módulo usada pelos dois), `utils/imovibAcompanhamento.ts` (com `hoje` opcional: depois dele não há realizado), `services/imovibRealizadoService.ts` (arquivo próprio: lê quatro serviços), aba Acompanhamento só para estudo vinculado. Conferido no navegador com data-base injetada só na resposta (o Garden não tem data-base): obra do Garden encontrada, realizado mês a mês, mês sem lançamento "—"; nenhuma venda da organização está com contrato, então as vendas reais são R$ 0.
+- [x] 10.5 Relatório completo em PDF — `utils/imovibRelatorio.ts` (12 seções; vazio com frase) e `utils/imovibRelatorioPdf.ts` (texto e tabelas de verdade, linha nunca cortada); botão "Relatório completo"; o PDF de hoje virou "Resumo em PDF". Sem gráficos como imagem (ficam no Resumo em PDF).
+- [x] 10.6 Conferência final do Portal do Investidor — o simulador somava os meses de atraso no campo e, com a duração vazia, não mudava nada; `estudoComPrazoDoPortal` usa `aplicarVariacao`. Payback e múltiplo no quadro do portal. Teste: sem atraso, VGV líquido, TIR e prazo do portal = Resumo.
+
+Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_fase10.js`): parecer com os 4 critérios e o terreno máximo; Memorial 55 premissas; Versões vazia com o motivo; Acompanhamento pede a data-base (e, com ela injetada, compara); 0 escritas, 0 erros de console. O VPL do Garden passou de R$ 3.998.485 para R$ 4.021.204 porque o estudo foi editado em 12/11 (14:30 UTC) e está com patrimônio de afetação marcado: devolução padrão no distrato de 50% (Fase 9).
 
 ## Verificação
 

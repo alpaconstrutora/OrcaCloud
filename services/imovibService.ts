@@ -15,6 +15,7 @@ import type { ImovibComparable } from '../utils/imovibMercado';
 import { areaEquivalenteDaVersao, type AreaEquivalenteDaPlanta, type LinhaDoQuadroI, type VersaoDoQuadro } from '../utils/imovibAreaEquivalente';
 import { versaoDoMemorial } from '../utils/nbr12721/documento';
 import { planoDeImportacao, type ImovibPartner, type SocioDaEmpresa } from '../utils/imovibSocios';
+import { resultadosDoEstudo, type ImovibStudyVersion } from '../utils/imovibVersoes';
 
 // `base` existe desde aplicar_20271012100000_imovib_capex_base.sql — a migration
 // tem de estar no banco ANTES de publicar código que lê esta lista (42703).
@@ -30,6 +31,7 @@ export const COLUNAS_DA_LISTAGEM = [METADADOS_DA_LISTAGEM, ...CAMPOS_DO_MOTOR].j
 const INSTANCIA_VGV_COLS = 'id, study_id, block_id, unit_id, name, floor, private_area, position_type, sun_orientation, price, status, created_at, updated_at';
 
 // Outras fontes de capital (aplicar_20271111980000) — o motor lê todas as colunas.
+const VERSAO_COLS = 'id, study_id, label, notes, results, created_at, created_by';
 const SOCIO_COLS = 'id, study_id, name, share_percent, capital_percent, notes, company_partner_id, sort_order, created_at';
 const FONTE_COLS = 'id, study_id, name, kind, amount, entry_month, remuneration, rate_annual, profit_share_percent, amortization, term_months, grace_months, sort_order, created_at';
 
@@ -898,6 +900,41 @@ export const imovibService = {
             .upsert(linhas, { onConflict: 'study_id,company_partner_id', ignoreDuplicates: true });
         if (error) throw new Error(`Falha ao importar os sócios: ${error.message}`);
         return { lista: await this.listarSocios(studyId), vinculados: plano.vincular.length, criados: linhas.length };
+    },
+
+    // ── Versões congeladas (item 10.2 do plano 2026-11-11, D5: imutáveis) ────
+
+    /**
+     * Grava o estudo como está carregado (premissas, rubricas, estrutura, espelho,
+     * fontes) mais os cenários, e os indicadores do momento. A tabela não tem
+     * UPDATE nem DELETE: a versão não muda depois de gravada.
+     */
+    async congelarVersao(study: ImovibStudy, label: string, notes: string | null): Promise<ImovibStudyVersion> {
+        const cenarios = await this.listarCenarios(study.id);
+        const snapshot = JSON.parse(JSON.stringify({ ...study, cenarios }));
+        const { data, error } = await supabase
+            .from('imovib_study_versions')
+            .insert({ study_id: study.id, label, notes, snapshot, results: resultadosDoEstudo(study) })
+            .select(VERSAO_COLS);
+        if (error) throw new Error(`Falha ao congelar a versão: ${error.message}`);
+        if (!data?.length) throw new Error('Sem permissão para congelar versões deste estudo.');
+        return data[0] as unknown as ImovibStudyVersion;
+    },
+
+    async listarVersoes(studyId: string): Promise<ImovibStudyVersion[]> {
+        const { data, error } = await supabase
+            .from('imovib_study_versions')
+            .select(VERSAO_COLS)
+            .eq('study_id', studyId)
+            .order('created_at', { ascending: false });
+        if (error) throw new Error(`Falha ao ler as versões: ${error.message}`);
+        return (data || []) as unknown as ImovibStudyVersion[];
+    },
+
+    async snapshotDaVersao(id: string): Promise<ImovibStudy> {
+        const { data, error } = await supabase.from('imovib_study_versions').select('snapshot').eq('id', id).single();
+        if (error) throw new Error(`Falha ao ler a versão: ${error.message}`);
+        return (data as { snapshot: ImovibStudy }).snapshot;
     },
 
     // ── Área equivalente NBR 12721 (item 8.2 do plano 2026-11-11) ───────────

@@ -4,7 +4,6 @@ import { imovibService } from '../services/imovibService';
 import { resumoDaDueDiligence } from './ImovibDueDiligenceCard';
 import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
-import { devolucaoPadraoDoDistrato } from '../utils/imovibMotor';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
@@ -21,14 +20,17 @@ import * as XLSX from 'xlsx';
 import { useToast } from '../hooks/useToast';
 import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, PontoDeEquilibrio } from '../utils/imovibEquilibrio';
 import { GRUPOS_DO_FLUXO } from '../utils/imovibVisaoDoFluxo';
-import { ROTULO_DOS_JUROS_NA_OBRA, ROTULO_DA_AMORTIZACAO } from '../utils/imovibFinanciamento';
 import { descreverFonte } from '../utils/imovibFontes';
-import { ROTULO_DO_REGIME, RegimeTributarioDoEstudo, hipotesesDoEstudo } from '../utils/imovibTributos';
+import { memorialDePremissas } from '../utils/imovibMemorial';
+import { criteriosDoParecer, ROTULO_DO_PARECER } from '../utils/imovibParecer';
+import ImovibParecerCard from './ImovibParecerCard';
 
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
     onIrPara?: (aba: ImovibAba) => void;
+    /** Recarrega o estudo depois de gravar o parecer ou os mínimos (item 10.3). */
+    onDataChanged?: () => void;
 }
 
 const formatCurrency = (value: number) => {
@@ -54,6 +56,7 @@ type Linha = (string | number | null)[];
 export interface PlanilhaImovib {
     indicadores: Linha[];
     premissas: Linha[];
+    parecer: Linha[];
     fluxo: Linha[];
     aportes: Linha[];
 }
@@ -123,62 +126,14 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Duração', m.duration, 'meses', null],
     ];
 
-    const naoEntra = rubricas ? 'Não entra no cálculo: vem das rubricas do CAPEX (modo Completo)' : null;
-    // Item 6.3: regime tributário e as alíquotas que valem nele.
-    const regime = (study.tax_regime ?? D.tax_regime) as RegimeTributarioDoEstudo;
-    const h = hipotesesDoEstudo(study);
-    const pctBR = (v: number) => `${v.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`;
-    const aliquotasDoRegime = regime === 'ret' ? `${pctBR(h.retPct)} da receita`
-        : regime === 'ret_his' ? `${pctBR(h.retHisPct)} da receita`
-            : regime === 'presumido' ? `${pctBR(h.presumidoPct)} da receita`
-                : `PIS/Cofins ${pctBR(h.realPisCofinsPct)} da receita, crédito de ${pctBR(h.realCreditoSobreCustoPct)} do custo, IRPJ/CSLL ${pctBR(h.realIrCsPct)} do lucro do ano (estimativa)`;
-    const inflacao = premissa(study.inflation_rate, D.inflation_rate);
-    const ROTULO_CURVA: Record<string, string> = { linear: 'Linear', lancamento: 'Lançamento forte', vso: 'VSO (sobre o estoque)', custom: 'Personalizada' };
-    const tipoCurva = study.sales_curve_type ?? D.sales_curve_type;
-    const revende = study.cancellation_resale ?? D.cancellation_resale;
+    // Item 10.1: a aba sai do memorial de premissas — toda premissa que o motor lê,
+    // com a fonte e a data anotadas; as outras fontes de capital vêm no fim.
     const premissas: Linha[] = [
-        ['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação'],
-        ['Cronograma', 'Início das vendas', premissa(study.sales_start_month, D.sales_start_month), 'mês', null],
-        ['Cronograma', 'Duração das vendas', premissa(study.sales_duration_months, D.sales_duration_months), 'meses', null],
-        ['Cronograma', 'Início da obra', premissa(study.construction_start_month, D.construction_start_month), 'mês', null],
-        ['Cronograma', 'Duração da obra', premissa(study.construction_duration_months, D.construction_duration_months), 'meses', null],
-        ['Taxas', 'Inflação geral', inflacao, '% a.m.', null],
-        ['Taxas', 'TMA', tma, '% a.a.', origemDaTma],
-        ['Taxas', 'Regime tributário', ROTULO_DO_REGIME[regime], null, regime === 'manual' ? null : aliquotasDoRegime],
-        ['Taxas', 'Impostos sobre a receita', premissa(study.tax_rate, D.tax_rate), '%', regime !== 'manual' ? 'Não entra no cálculo: o imposto vem do regime tributário' : naoEntra],
-        ['Taxas', 'Corretagem', premissa(study.brokerage_fee, D.brokerage_fee), '%', naoEntra],
-        ['Taxas', 'Inadimplência', premissa(study.default_rate_percent, D.default_rate_percent), '%', 'Sobre parcelas de obra, intermediárias e pós-chaves'],
-        ['Curva de vendas', 'Tipo da curva', ROTULO_CURVA[tipoCurva] ?? tipoCurva, null, null],
-        ['Curva de vendas', 'Vendido no lançamento', premissa(study.sales_launch_percent, D.sales_launch_percent), '%', tipoCurva === 'lancamento' ? null : 'Só na curva de lançamento'],
-        ['Curva de vendas', 'Meses do lançamento', premissa(study.sales_launch_months, D.sales_launch_months), 'meses', tipoCurva === 'lancamento' ? null : 'Só na curva de lançamento'],
-        ['Curva de vendas', 'VSO mensal', premissa(study.sales_vso_percent, D.sales_vso_percent), '% do estoque', tipoCurva === 'vso' ? null : 'Só na curva VSO'],
-        ['Perfil de recebimento', 'Sinal / ato', premissa(study.revenue_downpayment_percent, D.revenue_downpayment_percent), '%', null],
-        ['Perfil de recebimento', 'Mensais / obra', premissa(study.revenue_construction_percent, D.revenue_construction_percent), '%', null],
-        ['Perfil de recebimento', 'Intermediárias', premissa(study.revenue_intermediate_percent, D.revenue_intermediate_percent), '%', null],
-        ['Perfil de recebimento', 'Intervalo das intermediárias', premissa(study.revenue_intermediate_interval_months, D.revenue_intermediate_interval_months), 'meses', null],
-        ['Perfil de recebimento', 'Repasse bancário / chaves', premissa(study.revenue_handover_percent, D.revenue_handover_percent), '%', null],
-        ['Perfil de recebimento', 'Atraso do repasse', premissa(study.handover_delay_months, D.handover_delay_months), 'meses', null],
-        ['Perfil de recebimento', 'Pós-chaves', premissa(study.revenue_post_handover_percent, D.revenue_post_handover_percent), '%', null],
-        ['Perfil de recebimento', 'Prazo do pós-chaves', premissa(study.post_handover_months, D.post_handover_months), 'meses', null],
-        ['Perfil de recebimento', 'Juro do pós-chaves', premissa(study.post_handover_rate_monthly, D.post_handover_rate_monthly), '% a.m.', 'Price'],
-        ['Distrato', 'Distrato', premissa(study.cancellation_rate_percent, D.cancellation_rate_percent), '% de cada safra', 'Só vendas antes das chaves; acontece no máximo nas chaves'],
-        ['Distrato', 'Meses até o distrato', premissa(study.cancellation_lag_months, D.cancellation_lag_months), 'meses', null],
-        ['Distrato', 'Devolução ao comprador', premissa(study.cancellation_refund_percent, devolucaoPadraoDoDistrato(study)), '% do pago', study.cancellation_refund_percent == null && study.patrimonio_afetacao ? 'Padrão com patrimônio de afetação' : null],
-        ['Distrato', 'Revender a unidade distratada', revende ? 'Sim' : 'Não', null, null],
-        ['Distrato', 'Deságio da revenda', premissa(study.cancellation_resale_discount_percent, D.cancellation_resale_discount_percent), '%', revende ? null : 'Sem revenda'],
-        ['Índices', 'Índice da obra', premissa(study.cost_index_rate_monthly, inflacao), '% a.m.', study.cost_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_obra ?? null)],
-        ['Índices', 'Índice das vendas', premissa(study.sales_index_rate_monthly, inflacao), '% a.m.', study.sales_index_rate_monthly == null ? 'Vazio: segue a inflação geral' : (study.inflation_index_vendas ?? null)],
-        // Mesma regra do motor (actualFinPct): campo novo preenchido vale; vazio → "% Financiado" legado.
-        ['Financiamento', 'Financiamento à produção / dívida', study.funding_debt_percent != null ? study.funding_debt_percent : premissa(study.financing_percent, D.financing_percent), '%', study.funding_debt_percent == null && (study.financing_percent ?? 0) > 0 ? 'valor legado (% Financiado)' : null],
-        ['Financiamento', 'Taxa do financiamento', premissa(study.financing_rate_annual, D.financing_rate_annual), '% a.a.', null],
-        ['Financiamento', 'Defasagem da liberação', premissa(study.financing_release_lag_months, D.financing_release_lag_months), 'meses', null],
-        ['Financiamento', 'Vendas mínimas para liberar', premissa(study.financing_min_sales_percent, D.financing_min_sales_percent), '% do VGV vendável', null],
-        ['Financiamento', 'Juros do financiamento na obra', ROTULO_DOS_JUROS_NA_OBRA[study.financing_interest_mode ?? D.financing_interest_mode], null, null],
-        ['Financiamento', 'Amortização do financiamento', ROTULO_DA_AMORTIZACAO[study.financing_amortization ?? D.financing_amortization], null, null],
-        ['Financiamento', 'Caixa mínimo', premissa(study.min_cash_balance, D.min_cash_balance), 'R$', 'Aportes e distribuições'],
-        ['Financiamento', 'Permuta financeira', premissa(study.swap_financial_percent, D.swap_financial_percent), '%', null],
-        ['Financiamento', 'Permuta física', premissa(study.swap_physical_percent, D.swap_physical_percent), '%', null],
-        ...(study.funding_sources ?? []).map((f): Linha => ['Outras fontes', f.name, Number(f.amount) || 0, 'R$', descreverFonte(f)]),
+        ['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação', 'Fonte', 'Data'],
+        ...memorialDePremissas(study, { rubricasAtivas: rubricas }).map((l): Linha => [
+            l.grupo, l.premissa, l.valor, l.unidade || null, l.observacao, l.fonte, l.data,
+        ]),
+        ...(study.funding_sources ?? []).map((f): Linha => ['Outras fontes', f.name, Number(f.amount) || 0, 'R$', descreverFonte(f), null, null]),
     ];
 
     const linhasDoFluxo = GRUPOS_DO_FLUXO.flatMap(g => g.linhas);
@@ -198,7 +153,17 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ...m.aportes.map(a => [a.mes, a.aporte, a.distribuicao, a.paraTerceiros, a.caixa]),
     ];
 
-    return { indicadores, premissas, fluxo, aportes };
+    // Item 10.3: o parecer registrado e os critérios, com o mínimo e se atende.
+    const parecer: Linha[] = [
+        ['Item', 'Valor', 'Mínimo / limite', 'Atende', 'Unidade'],
+        ['Parecer', study.recommendation ? ROTULO_DO_PARECER[study.recommendation] : 'Não registrado', null, null, null],
+        ['Justificativa', study.recommendation_notes ?? null, null, null, null],
+        ['Registrado por', study.recommended_by ?? null, null, null, null],
+        ['Registrado em', study.recommended_at ? new Date(study.recommended_at).toLocaleString('pt-BR') : null, null, null, null],
+        ...criteriosDoParecer(study, m, ind).map((c): Linha => [c.rotulo, c.valor, c.minimo, c.atende == null ? 'Sem como avaliar' : c.atende ? 'Sim' : 'Não', c.unidade]),
+    ];
+
+    return { indicadores, premissas, parecer, fluxo, aportes };
 }
 
 /** Nome de arquivo sem espaço nem caractere proibido no Windows. */
@@ -241,7 +206,7 @@ function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara
     );
 }
 
-const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara }) => {
+const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, onIrPara, onDataChanged }) => {
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
@@ -258,13 +223,38 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
             const planilha = montarPlanilhaImovib(study, cashFlowData);
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
-            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60]), 'Premissas');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.parecer, [34, 40, 18, 16, 10]), 'Parecer');
+            XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.premissas, [22, 36, 12, 10, 60, 30, 12]), 'Premissas');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.fluxo, [16, 12, 18, 18, ...planilha.fluxo[0].slice(4, -4).map(() => 20), 24, 24, 24, 24]), 'Fluxo de caixa');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.aportes, [10, 18, 20, 34, 26]), 'Aportes');
             XLSX.writeFile(wb, `Imovib_${nomeDeArquivo(study.name)}_Viabilidade.xlsx`);
         } catch (err) {
             console.error('Error exporting Excel:', err);
             showToast(`Erro ao exportar o fluxo de caixa para Excel: ${(err as Error).message}`, 'error');
+        }
+    };
+
+    // Item 10.5: relatório completo (12 seções, texto e tabelas de verdade). As listas
+    // que o estudo não traz carregado são lidas na hora; o PDF é montado à parte.
+    const [gerandoRelatorio, setGerandoRelatorio] = useState(false);
+    const exportarRelatorio = async () => {
+        setGerandoRelatorio(true);
+        try {
+            const [comparaveis, riscos, cenarios, dueDiligence, socios, { secoesDoRelatorio }, { pdfDoRelatorio }] = await Promise.all([
+                imovibService.listarComparaveis(study.id),
+                imovibService.listarRiscos(study.id),
+                imovibService.listarCenarios(study.id),
+                imovibService.listarDueDiligence(study.id),
+                imovibService.listarSocios(study.id),
+                import('../utils/imovibRelatorio'),
+                import('../utils/imovibRelatorioPdf'),
+            ]);
+            const pdf = pdfDoRelatorio(secoesDoRelatorio({ study, comparaveis, riscos, cenarios, dueDiligence, socios }), study.name);
+            pdf.save(`Relatorio_${nomeDeArquivo(study.name)}.pdf`);
+        } catch (err) {
+            showToast(`Erro ao gerar o relatório completo: ${(err as Error).message}`, 'error');
+        } finally {
+            setGerandoRelatorio(false);
         }
     };
 
@@ -344,12 +334,24 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                         className="flex items-center gap-1.5 h-9 px-3.5 bg-slate-900 text-white hover:bg-slate-800 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-70"
                     >
                         {isExporting ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <Download className="w-[15px] h-[15px]" />}
-                        {isExporting ? 'Gerando...' : 'Exportar PDF'}
+                        {isExporting ? 'Gerando...' : 'Resumo em PDF'}
+                    </button>
+                    <button
+                        onClick={() => void exportarRelatorio()}
+                        disabled={gerandoRelatorio}
+                        title="Capa e parecer, indicadores, premissas com as fontes, mercado, produto, cronograma, fluxo anual, cenários, riscos, due diligence, tributos, capital e sócios"
+                        className="flex items-center gap-1.5 h-9 px-3.5 bg-white text-slate-700 hover:bg-gray-50 border border-gray-200 rounded-[6px] font-medium text-[13px] transition-all active:scale-95 disabled:opacity-70"
+                    >
+                        {gerandoRelatorio ? <Loader2 className="w-[15px] h-[15px] animate-spin" /> : <FileText className="w-[15px] h-[15px]" />}
+                        {gerandoRelatorio ? 'Gerando...' : 'Relatório completo'}
                     </button>
                 </div>
             </div>
 
             <ImovibAvisosBanner avisos={cashFlowData.avisos} onIrPara={onIrPara} />
+
+            {/* Item 10.3: parecer e critérios no topo do Resumo (entra no PDF, que é a captura desta tela). */}
+            <ImovibParecerCard study={study} resultado={cashFlowData} indicadores={ind} onDataChanged={() => onDataChanged?.()} />
             <ResumoDaDueDiligence studyId={study.id} onIrPara={onIrPara} />
 
             {/* Printable Container — capturado pelo html2canvas no PDF: nada de backdrop-filter aqui.
@@ -366,6 +368,13 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                                 {/* Título do relatório = h1 do guia §20. */}
                                 <h1 className="text-3xl font-black text-gray-900 tracking-tight">{study.name}</h1>
                                 <p className="text-gray-500 text-sm mt-1.5">Relatório Executivo de Viabilidade Financeira</p>
+                                {/* Item 10.3: o cartão do parecer fica fora da captura (tem campos); aqui sai o registrado. */}
+                                <p className="text-gray-700 text-sm mt-2">
+                                    Parecer: {study.recommendation ? ROTULO_DO_PARECER[study.recommendation] : 'não registrado'}
+                                    {study.recommended_by ? `, por ${study.recommended_by}` : ''}
+                                    {study.recommended_at ? ` em ${new Date(study.recommended_at).toLocaleDateString('pt-BR')}` : ''}
+                                    {study.recommendation_notes ? ` — ${study.recommendation_notes}` : ''}
+                                </p>
                             </div>
                         </div>
                     </div>

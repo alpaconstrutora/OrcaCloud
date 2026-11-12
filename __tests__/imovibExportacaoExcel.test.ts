@@ -63,20 +63,26 @@ describe('montarPlanilhaImovib — abas do Excel do Resumo Executivo', () => {
     });
 
     it('Premissas: cronograma, taxas, recebimento e financiamento; vazio usa o padrão do motor', () => {
-        const s = estudo({ discount_rate: null, funding_debt_percent: 60 });
+        const s = estudo({ discount_rate: null, funding_debt_percent: 60, premise_notes: { discount_rate: { fonte: 'Comitê de investimento', data: '2026-11-01' } } });
         const { premissas } = montarPlanilhaImovib(s, computeImovibMath(s));
 
-        expect(premissas[0]).toEqual(['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação']);
+        // Item 10.1: a aba sai do memorial, com a fonte e a data de cada premissa.
+        expect(premissas[0]).toEqual(['Grupo', 'Premissa', 'Valor', 'Unidade', 'Observação', 'Fonte', 'Data']);
+        expect(linha(premissas, 'TMA', 1).slice(5)).toEqual(['Comitê de investimento', '2026-11-01']);
         expect(linha(premissas, 'Duração da obra', 1)[2]).toBe(24);
         expect(linha(premissas, 'TMA', 1)[2]).toBe(12); // IMOVIB_DEFAULTS.discount_rate
         expect(linha(premissas, 'Repasse bancário / chaves', 1)[2]).toBe(70);
         expect(linha(premissas, 'Financiamento à produção / dívida', 1)[2]).toBe(60);
         const grupos = new Set(premissas.slice(1).map(l => l[0]));
-        expect([...grupos]).toEqual(['Cronograma', 'Taxas', 'Curva de vendas', 'Perfil de recebimento', 'Distrato', 'Índices', 'Financiamento']);
-        // Número em toda premissa, exceto as que são escolha (tipo da curva, revenda, regras do financiamento).
-        const ESCOLHAS = ['Tipo da curva', 'Revender a unidade distratada', 'Juros do financiamento na obra', 'Amortização do financiamento', 'Regime tributário'];
+        expect([...grupos]).toEqual(['Cronograma', 'Terreno', 'Custos', 'Taxas', 'Curva de vendas', 'Perfil de recebimento', 'Distrato', 'Índices', 'Financiamento', 'Jurídico']);
+        // Número em toda premissa, exceto as que são escolha (texto) e as opcionais sem padrão (vazias).
+        const ESCOLHAS = ['Tipo da curva', 'Revender a unidade distratada', 'Juros do financiamento na obra', 'Amortização do financiamento', 'Regime tributário',
+            'Pagamento do terreno', 'Modo do CAPEX', 'Curva de desembolso da obra', 'Alíquotas do regime', 'Patrimônio de afetação'];
+        const OPCIONAIS = ['Data-base', 'Aprovação do projeto', 'Registro da incorporação', 'Custo/m² do CAPEX simplificado', 'Área do CAPEX simplificado',
+            'Pesos da curva de desembolso', 'Pesos da curva de vendas'];
         for (const l of premissas.slice(1)) {
             if (ESCOLHAS.includes(String(l[1]))) expect(typeof l[2]).toBe('string');
+            else if (OPCIONAIS.includes(String(l[1]))) expect(l[2] === null || typeof l[2] === 'number' || typeof l[2] === 'string', String(l[1])).toBe(true);
             else expect(typeof l[2], String(l[1])).toBe('number');
         }
     });

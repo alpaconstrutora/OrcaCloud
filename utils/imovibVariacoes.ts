@@ -88,3 +88,15 @@ export function aplicarChoques(study: ImovibStudy, choques: Choques): { study: I
     }
     return { study: atual === study ? { ...study } : atual, options };
 }
+
+/**
+ * O estudo que o simulador do Portal do Investidor calcula (item 10.6 do plano
+ * 2026-11-11): o atraso de prazo vale na obra e nas vendas, pela mesma regra do
+ * app (`aplicarVariacao`) — antes o portal somava os meses no campo e, com a
+ * duração vazia (o motor usa o padrão), o controle não mudava nada.
+ */
+export function estudoComPrazoDoPortal(study: ImovibStudy, deltaMeses: number): ImovibStudy {
+    if (!deltaMeses) return study;
+    const obra = aplicarVariacao(study, 'prazo_obra', deltaMeses).study;
+    return aplicarVariacao(obra, 'velocidade_vendas', deltaMeses).study;
+}

@@ -667,6 +667,17 @@ export interface ImovibStudy {
     legal_vehicle?: 'propria' | 'spe' | 'scp' | null;
     /** Patrimônio de afetação. Vazio = não informado (o motor trata como sem afetação). */
     patrimonio_afetacao?: boolean | null;
+    /** Fonte e data de cada premissa, por campo (migration aplicar_20271112500000, item 10.1). */
+    premise_notes?: Record<string, { fonte?: string | null; data?: string | null }> | null;
+    /** Parecer (item 10.3): preenchido por uma pessoa; o sistema não escolhe. */
+    recommendation?: 'aprovar' | 'aprovar_com_condicoes' | 'renegociar' | 'reprovar' | null;
+    recommendation_notes?: string | null;
+    recommended_by?: string | null;
+    recommended_at?: string | null;
+    /** Mínimos dos critérios do parecer; vazio = padrão do sistema (exposição: sem critério). */
+    hurdle_irr_spread?: number | null;
+    hurdle_margin_percent?: number | null;
+    hurdle_max_exposure?: number | null;
     created_at: string;
     updated_at: string;
     blocks?: ImovibBlock[];

@@ -12,6 +12,8 @@ import {
     groupSalesByClientType,
     saleDealStage,
     receivableSchedule,
+    vendasPorMesDoEmpreendimento,
+    vendidasSemNegociacao,
     SEM_EMPREENDIMENTO,
     type SaleProperty,
     type SaleDeal,
@@ -214,5 +216,45 @@ describe('groupSalesByClientType', () => {
         expect(r.rows.map(x => x.label)).toEqual(['Investidor']);
         expect(r.rows[0]).toMatchObject({ clientCount: 1, salesCount: 2, vgv: 1_480_000 });
         expect(r.total.salesCount).toBe(2);
+    });
+});
+
+describe('vendasPorMesDoEmpreendimento — vendas reais do estudo (item 10.4 do plano 2026-11-11)', () => {
+    const base = { properties, empreendimentoByProperty: emp, now: AGORA };
+
+    it('só vendida (Contrato, Assinatura, Concluído), pelo mês da negociação, sem o limite de 12 meses', () => {
+        const maisDeals: SaleDeal[] = [
+            ...deals,
+            { id: 'd5', type: 'SALE', status: 'COMPLETED', property_id: '103', value: 450_000, date: '2024-03-20' },
+        ];
+        expect(vendasPorMesDoEmpreendimento({ ...base, deals: maisDeals }, 'e1')).toEqual([
+            { mes: '2024-03', unidades: 1, valor: 450_000 },
+            { mes: '2026-09', unidades: 1, valor: 480_000 },
+        ]);
+    });
+
+    it('venda cancelada e negociação aberta não contam; outro empreendimento fica fora', () => {
+        const r = vendasPorMesDoEmpreendimento({ ...base, deals }, 'e1');
+        expect(r.some(m => m.mes === '2026-08')).toBe(false); // d4 cancelada
+        expect(r.some(m => m.mes === '2026-10')).toBe(false); // d2 em reserva
+        expect(vendasPorMesDoEmpreendimento({ ...base, deals }, 'e2')).toEqual([{ mes: '2025-01', unidades: 1, valor: 1_000_000 }]);
+    });
+
+    it('negociação de várias unidades: conta só as do empreendimento, com a parte de cada uma no valor', () => {
+        const multi: SaleDeal[] = [{ id: 'm1', type: 'SALE', status: 'CONTRATO', value: 1_500_000, date: '2026-07-05',
+            units: [{ property_id: '103', value: 500_000 }, { property_id: '201', value: 1_000_000 }] }];
+        expect(vendasPorMesDoEmpreendimento({ ...base, deals: multi }, 'e1')).toEqual([{ mes: '2026-07', unidades: 1, valor: 500_000 }]);
+    });
+
+    it('negociação sem data fica fora (não há mês para pôr)', () => {
+        const semData: SaleDeal[] = [{ id: 'x', type: 'SALE', status: 'CONTRATO', property_id: '103', value: 1, date: null }];
+        expect(vendasPorMesDoEmpreendimento({ ...base, deals: semData }, 'e1')).toEqual([]);
+    });
+});
+
+describe('vendidasSemNegociacao — o que as vendas por mês não conseguem datar', () => {
+    it('unidade SOLD sem negociação no empreendimento (legado) é contada', () => {
+        expect(vendidasSemNegociacao({ properties, deals, empreendimentoByProperty: emp }, 'e1')).toBe(1); // 104
+        expect(vendidasSemNegociacao({ properties, deals, empreendimentoByProperty: emp }, 'e2')).toBe(0);
     });
 });

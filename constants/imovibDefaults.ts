@@ -83,6 +83,8 @@ export const IMOVIB_DEFAULTS = {
     stock_carrying_cost_unit_month: 0, // R$ por unidade em estoque por mês, depois da obra
     // Fase 6 — Tributos (as alíquotas de cada regime em HIPOTESES_TRIBUTARIAS, abaixo)
     tax_regime: 'manual', // vazio = manual: rubricas da categoria 7 ou o imposto da Dinâmica
+    hurdle_margin_percent: 15, // parecer (item 10.3): margem líquida mínima sobre o VGV, %
+    hurdle_irr_spread: 0, // parecer: folga mínima da TIR sobre a TMA, p.p.
     // Fase 10 — Critérios do parecer
 } as const;
 

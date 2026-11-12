@@ -23,7 +23,16 @@ Frente: `C:\D\frentes\rls-por-conjunto` (branch `feat/rls-por-conjunto`).
       diferentes em 9.876**.
 - [x] Storage: `postgres` NÃO é dono de storage.objects (supabase_storage_admin), mas o
       ALTER POLICY é permitido (testado com a expressão atual, desfeito).
-- [ ] Lote 1 `aplicar_20271112300000` (21 policies, 10 tabelas ≥ 300 linhas) → aplicar → medir.
+- [x] Lote 1 `aplicar_20271112300000` (21 policies, 10 tabelas ≥ 300 linhas) aplicado pelo
+      usuário (12/11/2026). Conferido: 21 de 21 com `minhas_orgs_membro`, 0 com
+      `is_org_member`. Medido (mesmo script, como authenticated, JWT real, desenvolvedor@),
+      custo de RLS por `count(*)`, mesmas linhas visíveis:
+      boletos_auditoria 316 → 3,4 ms · reconciliation_classification_memory 103 → 1,7 ·
+      boletos 38 → 1,4 · blueprint_objects 31 → 1,2 · supplier_org_shares 24 → 1,0 ·
+      blueprint_audit_events 15 → 1,0 · contract_precedent_conditions / invoices /
+      suppliers 11–13 → 1,0–1,1 · notifications 150 → 38 ms. Em notifications o resto é a
+      outra perna do OR, `lower(recipient_email) = lower(auth.jwt()->>'email')`, que lê o
+      JWT por linha — fora da troca mecânica (candidata: `(SELECT lower(auth.jwt()->>'email'))`).
 - [ ] Lote 2 `aplicar_20271112310000` (564 policies, 332 tabelas; GRANT anon) → aplicar → conferir.
 - [ ] Lote 3 `aplicar_20271112320000` (29 policies do storage) → aplicar → testar upload/
       download/listagem pelo app.

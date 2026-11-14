@@ -30,7 +30,7 @@ import { agruparLinhas, chavePorCombinacao, chavePorNome, entradasDaPagina, type
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { clientPropagacaoService, contagemDoPlano, type PlanoDePropagacao } from '../services/clientPropagacaoService';
-import { camposAlterados, descreverCampos, linhasDoResumo } from '../utils/clientPropagacao';
+import { camposAlterados, descreverCampos, descreverCamposComDe, linhasDoResumo } from '../utils/clientPropagacao';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -536,13 +536,19 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             plano = await clientPropagacaoService.planejar(saved.id, campos);
         } catch (err) {
             console.error('Erro ao procurar cópias do cliente para propagar:', err);
+            showToast(`O cadastro foi salvo, mas não foi possível verificar onde mais ${descreverCampos(campos)} aparece no app.`, 'error');
             return;
         }
         const linhas = linhasDoResumo(contagemDoPlano(plano));
-        if (!linhas.length) return;
+        // Nada a corrigir também é resposta: calada, a tela parecia ter
+        // esquecido a pergunta (relato de 14/11/2026).
+        if (!linhas.length) {
+            showToast(`Nenhum outro registro do app guarda cópia ${descreverCamposComDe(campos)} deste cliente — nada a propagar.`, 'success');
+            return;
+        }
         const ok = await confirm({
             title: `Propagar ${descreverCampos(campos)} pelo app?`,
-            message: `O cadastro foi salvo. Estes registros guardam uma cópia de ${descreverCampos(campos)} do cliente e ainda mostram o valor antigo:\n\n${linhas.map(l => `• ${l}`).join('\n')}\n\nRecibos, notas fiscais e o histórico de cobrança já emitidos não mudam.`,
+            message: `O cadastro foi salvo. Estes registros guardam uma cópia ${descreverCamposComDe(campos)} do cliente e ainda mostram o valor antigo:\n\n${linhas.map(l => `• ${l}`).join('\n')}\n\nRecibos, notas fiscais e o histórico de cobrança já emitidos não mudam.`,
             confirmLabel: 'Propagar',
             cancelLabel: 'Só no cadastro',
         });

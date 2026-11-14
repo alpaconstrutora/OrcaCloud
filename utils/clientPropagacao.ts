@@ -114,3 +114,9 @@ export function descreverCampos(c: CamposPropagaveis): string {
     if (c.name && c.email) return 'o nome e o e-mail';
     return c.name ? 'o nome' : 'o e-mail';
 }
+
+/** O mesmo, contraído com "de": "cópia do nome" (não "cópia de o nome"). */
+export function descreverCamposComDe(c: CamposPropagaveis): string {
+    if (c.name && c.email) return 'do nome e do e-mail';
+    return c.name ? 'do nome' : 'do e-mail';
+}

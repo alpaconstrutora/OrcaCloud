@@ -59,7 +59,7 @@ function predio(c: Caso) {
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
   const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
   const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
-  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pavimentos: plano.resumo.pavimentos };
+  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, pavimentos: plano.resumo.pavimentos };
 }
 
 /** O que o marco guarda de um prédio. */
@@ -87,6 +87,9 @@ function marcoDoPredio(c: Caso) {
     trechosDeEsgoto: (m.trechos ?? []).filter((t) => t.disciplina === 'ESGOTO').length,
     esgoto: p.esgoto,
     andaresComUnidade: p.pavimentos,
+    // PA7b: o pluvial da cobertura.
+    trechosPluviais: (m.trechos ?? []).filter((t) => t.disciplina === 'PLUVIAL').length,
+    pluvial: p.pluvial,
   };
 }
 

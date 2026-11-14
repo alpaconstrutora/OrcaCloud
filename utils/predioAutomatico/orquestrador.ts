@@ -33,6 +33,8 @@ import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
+import { lancarPluvial } from './pluvial';
+import type { HipotesesPluviais } from '../blueprintPluvial';
 import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
@@ -44,6 +46,8 @@ export interface EntradaDoPredio {
   rotacaoNorteDeg: number | null;
   /** PA5b: o catálogo de evaporadoras e as premissas da carga térmica (do editor, como na casa); ausente = sem climatização. */
   climatizacao?: ClimatizacaoDoPedido | null;
+  /** PA7b: as premissas pluviais do estudo (a cidade, a intensidade, a declividade); ausente = as padrão. */
+  pluvial?: Partial<HipotesesPluviais> | null;
 }
 
 /** Por que não dá para gerar o prédio deste bloco; `null` = dá. Os mesmos motivos do painel do bloco. */
@@ -274,6 +278,16 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     );
   }
 
+  // ── Pluvial da cobertura (PA7b): os condutores verticais no tipo — também antes da marca.
+  let pluvial: ReturnType<typeof lancarPluvial> | null = null;
+  if (!hip.pluvial) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else if (!cobertura) etapa('PLUVIAL', 'NAO_EXIGIDA', 0, 'Sem a cobertura, o pluvial fica para o projetista.');
+  else {
+    pluvial = lancarPluvial(ctx, base, terreo ? { levelId: terreo.levelId } : null, { levelId: cobertura.levelId }, entrada.pluvial ?? null);
+    pendencias.push(...pluvial.pendencias);
+    etapa('PLUVIAL', 'LANCOU', pluvial.comandos, `${pluvial.condutores.length} condutor(es) DN ${pluvial.condutores[0]?.dnMm ?? '—'} · ${Math.round(pluvial.vazaoLMin).toLocaleString('pt-BR')} L/min de ${Math.round(pluvial.areaM2).toLocaleString('pt-BR')} m² a ${pluvial.intensidadeMmH} mm/h`);
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -388,6 +402,16 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,
+      pluvial: pluvial
+        ? {
+            areaM2: Math.round(pluvial.areaM2 * 10) / 10,
+            intensidadeMmH: pluvial.intensidadeMmH,
+            vazaoLMin: Math.round(pluvial.vazaoLMin),
+            condutores: pluvial.condutores.length,
+            dnVerticalMm: Math.max(0, ...pluvial.condutores.map((c) => c.dnMm)),
+            dnHorizontalMm: pluvial.dnHorizontalMm,
+          }
+        : null,
       esgoto: esgoto?.tubos.length
         ? {
             tubosDeQueda: esgoto.tubos.length,

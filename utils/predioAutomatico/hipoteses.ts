@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'ESGOTO' | 'PLUVIAL' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -25,6 +25,7 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   LOUCAS: 'Louças e pontos de água no tipo (o kit de cada ambiente e os pontos de cada louça)',
   AGUA_FRIA: 'Água fria (alimentador, recalque, barrilete, coluna no shaft, hidrômetro por unidade no hall, rede das unidades)',
   ESGOTO: 'Esgoto e ventilação (ramais, tubo de queda por grupo molhado, ventilação, desvio no térreo, coletor)',
+  PLUVIAL: 'Pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
   PRESSAO_DA_AGUA: 'Pressão da água fria no prédio inteiro (pressurizador em cima, VRP embaixo)',
   CONFERENCIA: 'Conferência (avisos da divisão, da montagem e das plantas)',
@@ -57,6 +58,8 @@ export interface HipotesesDoPredio {
   agua: boolean;
   /** PA7a: o esgoto e a ventilação — pede a água (as louças vêm com ela). */
   esgoto: boolean;
+  /** PA7b: o pluvial da cobertura — pede a cobertura. */
+  pluvial: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -78,6 +81,7 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   climatizacao: true,
   agua: true,
   esgoto: true,
+  pluvial: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -188,6 +192,8 @@ export interface PlanoDoPredio {
       tubos: { uhcPorAndar: number; comBacia: boolean; dnMm: number }[];
       coletor: { dnMm: number; declividadePct: number; porGravidade: boolean } | null;
     } | null;
+    /** PA7b: o pluvial da cobertura — a área, a intensidade, a vazão e os condutores; `null` desligado ou sem cobertura. */
+    pluvial: { areaM2: number; intensidadeMmH: number; vazaoLMin: number; condutores: number; dnVerticalMm: number; dnHorizontalMm: number | null } | null;
   };
 }
 

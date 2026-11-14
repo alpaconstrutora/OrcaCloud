@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "7e2c2f4b18a5774db6efa074e0e5a4bb988473e6b294426829fa0fdd4cbe4714",
+    "modelo": "e73f7935c0068c58aa3ee10998ee76af83097080070cf9331d5e7b40fb232542",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,7 +10,7 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 646,
+    "terminais": 651,
     "trechosDeAgua": 472,
     "agua": {
       "pontos": 36,
@@ -57,10 +57,19 @@
         "porGravidade": true
       }
     },
-    "andaresComUnidade": 3
+    "andaresComUnidade": 3,
+    "trechosPluviais": 16,
+    "pluvial": {
+      "areaM2": 240,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 600,
+      "condutores": 2,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 150
+    }
   },
   "R8": {
-    "modelo": "9c764313b2f38b891206d3dc791b998c96805a43388db60d80d3bdca49e211a9",
+    "modelo": "cb73a8ceb6eb2f952aa7333e96524d580d96f641fafd6c8c3478288ee5b5ab9f",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 10,
     "copias": 6,
@@ -70,7 +79,7 @@
     "nucleos": 2,
     "estruturas": 546,
     "quadros": 44,
-    "terminais": 3346,
+    "terminais": 3351,
     "trechosDeAgua": 2480,
     "agua": {
       "pontos": 85,
@@ -132,10 +141,19 @@
         "porGravidade": true
       }
     },
-    "andaresComUnidade": 7
+    "andaresComUnidade": 7,
+    "trechosPluviais": 24,
+    "pluvial": {
+      "areaM2": 480,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 1200,
+      "condutores": 2,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 200
+    }
   },
   "R12": {
-    "modelo": "50dc7f53b4b9b122114f33b522b5d561b243a334638207dc5afb2ce4f2bb155a",
+    "modelo": "00f179bda1ebdb3dc692cbd8a49d3ab427c0585f46096b8fb55b9a21fd3f2be6",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 14,
     "copias": 10,
@@ -145,7 +163,7 @@
     "nucleos": 3,
     "estruturas": 1059,
     "quadros": 101,
-    "terminais": 8659,
+    "terminais": 8666,
     "trechosDeAgua": 6110,
     "agua": {
       "pontos": 144,
@@ -222,10 +240,19 @@
         "porGravidade": true
       }
     },
-    "andaresComUnidade": 11
+    "andaresComUnidade": 11,
+    "trechosPluviais": 48,
+    "pluvial": {
+      "areaM2": 720,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 1800,
+      "condutores": 3,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 200
+    }
   },
   "RL": {
-    "modelo": "abb79ced7ec022e21163ed81f5d3d39f5913fc1a9113632258684285042e75bf",
+    "modelo": "7987a797131c4800748705dfcb97d895c776d1ffb650d889bca7f143e5fbe269",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -235,7 +262,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 8814,
+    "terminais": 8825,
     "trechosDeAgua": 6708,
     "agua": {
       "pontos": 229,
@@ -337,6 +364,15 @@
         "porGravidade": true
       }
     },
-    "andaresComUnidade": 7
+    "andaresComUnidade": 7,
+    "trechosPluviais": 60,
+    "pluvial": {
+      "areaM2": 1104,
+      "intensidadeMmH": 150,
+      "vazaoLMin": 2760,
+      "condutores": 5,
+      "dnVerticalMm": 100,
+      "dnHorizontalMm": 250
+    }
   }
 }

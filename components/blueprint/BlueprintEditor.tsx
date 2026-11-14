@@ -9193,9 +9193,11 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
             rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null,
             // PA5b: a climatização das unidades — o catálogo de evaporadoras e as premissas, como na casa.
             climatizacao: { hip: climatizacaoDoEstudo.hipoteses, modelos: modelosDeClimatizacao, carga: { materiais: biblioteca.materiais, cidadeDoContexto: zona.cidade?.name ?? null } },
+            // PA7b: as premissas pluviais do estudo (a cidade da intensidade), as mesmas da gaveta do pluvial.
+            pluvial: hidroDoEstudo.hipoteses.pluvial,
           }
         : null,
-    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name],
+    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg, climatizacaoDoEstudo.hipoteses, modelosDeClimatizacao, biblioteca.materiais, zona.cidade?.name, hidroDoEstudo.hipoteses.pluvial],
   );
   const motivoParaNaoGerarOPredio = useMemo(
     () => (telaAberta === 'predio' && entradaDoPredio ? motivoParaNaoGerarPredio(editor.model, entradaDoPredio) : null),

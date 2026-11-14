@@ -309,6 +309,13 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">O tubo de queda de cada unidade empilha pelos andares e sobe 2 m acima da cobertura, com a coluna de ventilação ao lado; o DN sai das UHC acumuladas (NBR 8160).</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.pluvial} disabled={!props.hipoteses.cobertura} title={props.hipoteses.cobertura ? undefined : 'O pluvial drena a cobertura — ligue a cobertura'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, pluvial: e.target.checked })} data-testid="hipotese-pluvial" />
+            <span>
+              Lançar o pluvial da cobertura (ralos, condutores na fachada, caixas de areia, saída na frente)
+              <span className="block text-xs text-slate-500">A vazão pela área do bloco e a intensidade da cidade das premissas pluviais do estudo (NBR 10844); no mínimo dois condutores.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -373,6 +380,11 @@ export default function TelaPredioAutomatico(props: Props) {
                   ? `${plano.resumo.reservacao.pessoas} pessoa(s)${plano.resumo.reservacao.inferiorL != null ? ` · inferior ${plano.resumo.reservacao.inferiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.reservacao.superiorL != null ? ` · superior ${plano.resumo.reservacao.superiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.agua?.rtiL ? ` + ${(plano.resumo.agua.rtiL / 1000).toLocaleString('pt-BR')} m³ de reserva de incêndio` : ''}`
                   : undefined
               }
+            />
+            <Dado
+              rotulo="Pluvial"
+              valor={plano.resumo.pluvial ? `${plano.resumo.pluvial.condutores} condutor(es)` : '—'}
+              nota={plano.resumo.pluvial ? `DN ${plano.resumo.pluvial.dnVerticalMm} · ${plano.resumo.pluvial.vazaoLMin.toLocaleString('pt-BR')} L/min a ${plano.resumo.pluvial.intensidadeMmH} mm/h` : 'desligado nas hipóteses'}
             />
             <Dado
               rotulo="Esgoto"

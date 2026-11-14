@@ -888,8 +888,8 @@ Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_f
 
 ### Deixados para depois (minors das revisões das pendências)
 
-- [ ] Cálculo (#398) · versão antiga com payback "Mês 1" × nova com vazio parece mudança (não há versões); rótulos do gráfico do Acompanhamento usam a data-base do estudo atual quando o previsto é de versão com outra data-base; `receita_liquida_negativa` mostra valor positivo com inadimplência acima de 100%.
-- [ ] Tela (#403) · cenário personalizado chamado "Pessimista" deixa "criar padrão" habilitado sem efeito; corrida A→B→A na aba Dinâmica antes da recarga; texto da curva vazia limita a permuta a 0–100% (o motor não); teste de `tir_multipla` com `semTir` passa sem o aviso existir no estudo-base.
+- [x] Cálculo (#398) · versão antiga com payback "Mês 1" × nova com vazio parece mudança (não há versões); rótulos do gráfico do Acompanhamento usam a data-base do estudo atual quando o previsto é de versão com outra data-base; `receita_liquida_negativa` mostra valor positivo com inadimplência acima de 100%. — **#418**
+- [x] Tela (#403) · cenário personalizado chamado "Pessimista" deixa "criar padrão" habilitado sem efeito; corrida A→B→A na aba Dinâmica antes da recarga; texto da curva vazia limita a permuta a 0–100% (o motor não); teste de `tir_multipla` com `semTir` passa sem o aviso existir no estudo-base. — **#418**
 - [ ] Fora do Imovib · testes instáveis que derrubaram o CI nesta rodada: `CelularTokenGate`, `DiaryMobileAppFonte`, `dealModalAvisoReceitaFinanceira` (passam isolados e na reexecução).
 
 ### Limites de dado (o código está no ar, mas não foi conferido com dado real)

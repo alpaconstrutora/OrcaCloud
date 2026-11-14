@@ -8,7 +8,7 @@
 import type { ImovibStudy, ImovibRisk, ImovibScenario, ImovibLandChecklistItem } from '../types';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import { computeImovibMath } from './imovibMotor';
-import { calcularIndicadores } from './imovibIndicadores';
+import { calcularIndicadores, textoDoPayback } from './imovibIndicadores';
 import { memorialDePremissas } from './imovibMemorial';
 import { criteriosDoParecer, ROTULO_DO_PARECER } from './imovibParecer';
 import { terrenoMaximo, precoMinimo, custoMaximoDeObra, vendasMinimas, type PontoDeEquilibrio } from './imovibEquilibrio';
@@ -104,7 +104,7 @@ export function secoesDoRelatorio(d: DadosDoRelatorio): SecaoDoRelatorio[] {
                     ['Lucro líquido', brl(ind.lucroLiquido)],
                     ['Margem líquida sobre o VGV', ind.margemLiquidaSobreVgv == null ? '—' : pct(ind.margemLiquidaSobreVgv * 100)],
                     ['Exposição máxima de caixa', brl(Math.max(0, -r.maxExposure))],
-                    ['Payback simples', ind.paybackSimplesMes == null ? '—' : `mês ${ind.paybackSimplesMes}`],
+                    ['Payback simples', textoDoPayback(ind)],
                     ['Múltiplo do capital', ind.multiploDoCapital == null ? '—' : `${num(ind.multiploDoCapital)}x`],
                     ['Duração', num(r.duration, 'meses')],
                 ],

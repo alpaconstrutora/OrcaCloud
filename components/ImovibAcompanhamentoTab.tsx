@@ -147,6 +147,9 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                             {dados.vendidasSemNegociacao > 0 && (
                                 <li>{dados.vendidasSemNegociacao} unidades vendidas sem negociação (sem data de venda) ficam fora das vendas reais.</li>
                             )}
+                            {meses[0]?.antesDaDataBase && (
+                                <li>O realizado de antes da data-base ({moneyBRL(meses[0].antesDaDataBase.entradas)} de entradas e {moneyBRL(meses[0].antesDaDataBase.saidas)} de saídas) entra no primeiro mês.</li>
+                            )}
                         </ul>
                     </div>
                     <label className="space-y-1.5">

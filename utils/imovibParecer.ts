@@ -34,6 +34,19 @@ const finito = (x: number | null | undefined) => (x == null || !Number.isFinite(
 const compara = (valor: number | null, minimo: number | null, ok: (v: number, m: number) => boolean) =>
     valor == null || minimo == null ? null : ok(valor, minimo);
 
+/**
+ * Sem TIR, o fluxo de um lado só ainda diz algo: só saída de caixa nunca recupera
+ * (não atende); só entrada é retorno sem capital (atende). Fluxo misto sem TIR
+ * calculável continua "sem como avaliar" (pendência da Fase 10).
+ */
+const tirDeUmLadoSo = (r: ImovibMathResult): boolean | null => {
+    const net = r.monthlyFlows.map(f => f.net);
+    if (net.length === 0) return null;
+    if (net.every(v => v <= 0) && net.some(v => v < 0)) return false;
+    if (net.every(v => v >= 0) && net.some(v => v > 0)) return true;
+    return null;
+};
+
 export function criteriosDoParecer(study: ImovibStudy, r: ImovibMathResult, ind: IndicadoresDoEstudo): CriterioDoParecer[] {
     const tma = study.discount_rate ?? IMOVIB_DEFAULTS.discount_rate;
     const tir = finito(r.annualIrr);
@@ -43,7 +56,7 @@ export function criteriosDoParecer(study: ImovibStudy, r: ImovibMathResult, ind:
     const exposicao = Math.max(0, -r.maxExposure);
     const limiteExposicao = study.hurdle_max_exposure ?? null;
     return [
-        { id: 'tir_acima_da_tma', rotulo: 'TIR acima da TMA', valor: tir, minimo: minimoTir, unidade: '% a.a.', atende: compara(tir, minimoTir, (v, m) => v >= m) },
+        { id: 'tir_acima_da_tma', rotulo: 'TIR acima da TMA', valor: tir, minimo: minimoTir, unidade: '% a.a.', atende: tir != null ? tir >= minimoTir : tirDeUmLadoSo(r) },
         { id: 'margem_minima', rotulo: 'Margem líquida sobre o VGV', valor: margem, minimo: minimoMargem, unidade: '%', atende: compara(margem, minimoMargem, (v, m) => v >= m) },
         { id: 'exposicao_maxima', rotulo: 'Exposição máxima de caixa', valor: exposicao, minimo: limiteExposicao, unidade: 'R$', atende: compara(exposicao, limiteExposicao, (v, m) => v <= m) },
         { id: 'vpl_positivo', rotulo: 'VPL positivo', valor: finito(r.vpl), minimo: 0, unidade: 'R$', atende: compara(finito(r.vpl), 0, (v) => v > 0) },

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { ImovibStudyUpdate } from '../types';
-import { contractIndexService, IndexName, ContractIndexValue } from '../services/contractIndexService';
-import { taxaMensalMedia } from '../utils/indiceVariacao';
+import { contractIndexService, IndexName } from '../services/contractIndexService';
+import { serieDoIndice, taxaMensalMedia } from '../utils/indiceVariacao';
 
 type CampoNome = 'inflation_index_obra' | 'inflation_index_vendas';
 type CampoTaxa = 'cost_index_rate_monthly' | 'sales_index_rate_monthly';
@@ -20,16 +20,6 @@ interface ImovibIndiceDeCorrecaoProps {
 
 const INDICES: IndexName[] = ['INCC-M', 'INCC', 'IPCA', 'IGP-M', 'CUB'];
 const fmt = (v: number) => v.toLocaleString('pt-BR', { maximumFractionDigits: 4 });
-
-/** Uma série por mês: o valor da organização vence o global. */
-const porMes = (valores: ContractIndexValue[]) => {
-    const m = new Map<string, ContractIndexValue>();
-    for (const v of valores) {
-        const atual = m.get(v.reference_month);
-        if (!atual || (atual.organization_id == null && v.organization_id != null)) m.set(v.reference_month, v);
-    }
-    return [...m.values()];
-};
 
 /**
  * Índice de correção da obra ou das vendas (item 1.7 do plano
@@ -61,7 +51,7 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
         contractIndexService.list(nome as IndexName, organizationId, 26)
             .then(valores => {
                 if (!vivo) return;
-                const m = taxaMensalMedia(porMes(valores), 12);
+                const m = taxaMensalMedia(serieDoIndice(valores), 12);
                 setMedia(m);
                 setMotivo(m == null ? `Não há série do ${nome} com dois meses ou mais. Cadastre em Contratos › Índices.` : '');
                 if (preencherPara.current !== nome) return;
@@ -126,6 +116,10 @@ const ImovibIndiceDeCorrecao: React.FC<ImovibIndiceDeCorrecaoProps> = ({
                 </button>
                 {taxa == null && (
                     <span className="text-xs text-slate-500">Sem taxa própria: segue a inflação geral ({fmt(inflacaoGeral)}% a.m.).</span>
+                )}
+                {/* Trocar o índice não troca a taxa já digitada: a tela diz quando elas não batem (pendência da Fase 1). */}
+                {taxa != null && media != null && nome && Math.abs(taxa - Math.round(media * 10000) / 10000) > 0.00005 && (
+                    <span className="text-xs text-amber-700">A taxa no cálculo ({fmt(taxa)}% a.m.) não é a média do {nome} ({fmt(media)}% a.m.).</span>
                 )}
             </div>
         </div>

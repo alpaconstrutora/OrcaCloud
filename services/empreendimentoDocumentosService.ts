@@ -48,6 +48,41 @@ async function emailDoUsuario(): Promise<string | undefined> {
   return data.user?.email ?? undefined;
 }
 
+/**
+ * UPDATE em opura_documents aceitando `null` (limpar data). O tipo
+ * `OpuraDocumentUpdate` do GED só tem `string | undefined` nas datas, e o
+ * supabase-js OMITE campo `undefined` — limpar por ele não limpa nada.
+ */
+async function atualizarNoGed(
+  id: string,
+  campos: Partial<{
+    nome: string; categoria: OpuraDocumentCategoria; tipo_documento: string;
+    data_emissao: string | null; data_validade: string | null; alerta_dias_antecedencia: number;
+  }>,
+): Promise<OpuraDocument> {
+  const { data, error } = await supabase
+    .from('opura_documents')
+    .update(campos)
+    .eq('id', id)
+    .select('*, active_version:opura_document_versions!fk_active_version(*)')
+    .single();
+  if (error) throw new Error(`Erro ao atualizar o documento no GED: ${error.message}`);
+  return data as OpuraDocument;
+}
+
+/** Próxima versão de um documento do GED (o número vem do maior já gravado). */
+async function subirNovaVersao(doc: Pick<OpuraDocument, 'id' | 'organization_id'>, arquivo: File, email?: string) {
+  const { data: versoes, error } = await supabase
+    .from('opura_document_versions')
+    .select('version_number')
+    .eq('document_id', doc.id)
+    .order('version_number', { ascending: false })
+    .limit(1);
+  if (error) throw new Error(`Erro ao ler as versões do documento: ${error.message}`);
+  const proxima = ((versoes?.[0]?.version_number as number | undefined) ?? 0) + 1;
+  return documentService.uploadNewVersion(doc.id, doc.organization_id, proxima, arquivo, email || 'sistema');
+}
+
 export interface ResultadoDoItem {
   item: DocumentoLegal;
   /** Preenchido quando o item gravou mas a cópia das datas para o GED falhou. */
@@ -103,9 +138,11 @@ export const empreendimentoDocumentosService = {
     const mudouData = CAMPOS_DE_DATA.some(c => c in updates && updates[c] !== item[c]);
     if (salvo.document_id && mudouData) {
       try {
-        await documentService.updateDocument(salvo.document_id, {
-          data_emissao: salvo.data_emissao ?? undefined,
-          data_validade: salvo.data_validade ?? undefined,
+        // `null` vai como null: apagar a validade aqui tem de apagar lá, senão o
+        // cron do GED continua avisando de um vencimento que não existe mais.
+        await atualizarNoGed(salvo.document_id, {
+          data_emissao: salvo.data_emissao,
+          data_validade: salvo.data_validade,
           alerta_dias_antecedencia: salvo.alerta_dias_antecedencia,
         });
       } catch (err) {
@@ -145,14 +182,7 @@ export const empreendimentoDocumentosService = {
     const existente = item.document_id ? await documentService.getDocumentById(item.document_id).catch(() => null) : null;
 
     if (existente) {
-      const { data: versoes } = await supabase
-        .from('opura_document_versions')
-        .select('version_number')
-        .eq('document_id', existente.id)
-        .order('version_number', { ascending: false })
-        .limit(1);
-      const proxima = ((versoes?.[0]?.version_number as number | undefined) ?? 0) + 1;
-      const versao = await documentService.uploadNewVersion(existente.id, existente.organization_id, proxima, arquivo, email || 'sistema');
+      const versao = await subirNovaVersao(existente, arquivo, email);
       documentId = existente.id;
       storagePath = versao.storage_path;
     } else {
@@ -279,6 +309,36 @@ export const empreendimentoDocumentosService = {
    * "Empreendimento" e o nome sob o documento). Uma consulta só, pelos ids que
    * aparecem na tela — não a lista inteira da organização.
    */
+  /**
+   * Edita os dados de um documento do GED pela aba. Com `arquivo`, sobe uma nova
+   * versão antes (o GED guarda a anterior). Devolve o documento relido, com a
+   * versão ativa nova.
+   */
+  async atualizarOutro(
+    doc: OpuraDocument,
+    meta: { nome: string; categoria: OpuraDocumentCategoria; tipo_documento: string; data_validade?: string | null },
+    arquivo?: File | null,
+  ): Promise<OpuraDocument> {
+    if (arquivo) {
+      validarArquivo(arquivo);
+      await subirNovaVersao(doc, arquivo, await emailDoUsuario());
+    }
+    return atualizarNoGed(doc.id, {
+      nome: meta.nome,
+      categoria: meta.categoria,
+      tipo_documento: meta.tipo_documento,
+      data_validade: meta.data_validade || null, // vazio limpa a validade
+    });
+  },
+
+  /**
+   * Apaga o documento do GED (todas as versões e os arquivos). O GED recusa
+   * documento emitido (versão congelada) antes de tocar no armazenamento.
+   */
+  async excluirOutro(doc: Pick<OpuraDocument, 'id' | 'organization_id'>): Promise<void> {
+    await documentService.deleteDocument(doc.id, doc.organization_id);
+  },
+
   async nomesDosEmpreendimentos(ids: string[]): Promise<Record<string, string>> {
     const unicos = Array.from(new Set(ids.filter(Boolean)));
     if (unicos.length === 0) return {};

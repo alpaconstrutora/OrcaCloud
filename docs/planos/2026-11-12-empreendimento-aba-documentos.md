@@ -12,6 +12,12 @@ Pedido seguinte, na mesma sessão:
 
 Sessão: Claude Code (VS Code) · 12/11/2026, tarde.
 
+Pedido de 12/11/2026, depois de publicado (#397):
+
+> faltou botoes CRUD
+
+→ ver a seção **"Rodada 2 — botões CRUD"** no fim.
+
 ## Decisões tomadas com o usuário
 
 | Data | Pergunta | Resposta |
@@ -162,3 +168,35 @@ Como sei que terminou: o documento enviado pela aba aparece no GED, na categoria
    - Abrir o arquivo.
    - GED › Licenças & Alvarás › filtro Empreendimento: o documento aparece com o nome.
 5. `opura_documents.data_validade` do documento vinculado acompanha a edição da validade no checklist (conferido por `db query`).
+
+## Rodada 2 — botões CRUD (12/11/2026)
+
+O que faltava em #397:
+- Em "Outros documentos" não havia como editar nem excluir.
+- No checklist, editar só existia pelo clique na linha, e excluir ficava escondido no menu "⋮".
+
+### Itens
+
+- [x] **`components/empreendimento/DocumentosEmpreendimentoTab.tsx`**
+  - **Documentos legais:** Editar (lápis), Enviar arquivo e Excluir (lixeira, "Tirar do checklist") ficam visíveis na coluna Ações. Vincular, Abrir no GED e Desvincular continuam no "⋮". Excluir o item não apaga o arquivo do GED: ele passa para "Outros documentos".
+  - **Outros documentos:** Editar abre o mesmo Sheet do envio, agora em modo edição (nome, categoria, tipo, validade e "Enviar nova versão" opcional). Ficam também Abrir no GED e Excluir (lixeira, "Excluir do GED").
+  - **Larguras:** colunas reajustadas para a tabela de legais caber em 1600 px. Medido: tabela 1282 px = área 1282 px, sem rolagem lateral.
+- [x] **`services/empreendimentoDocumentosService.ts`**
+  - `atualizarOutro`: edita os dados e, se vier arquivo, sobe nova versão.
+  - `excluirOutro`: `documentService.deleteDocument`, que recusa documento emitido (versão congelada) e apaga versões e arquivos.
+  - `subirNovaVersao`: helper que serve ao checklist e a "Outros".
+- [x] **Defeito achado e corrigido:** apagar a validade no checklist NÃO apagava no GED. A cópia usava `?? undefined`, e o supabase-js omite campo `undefined`, então o cron continuaria avisando de um vencimento que não existe mais. As escritas no GED passaram a `atualizarNoGed`, que manda `null`.
+
+### Verificação no app (Playwright, conta de leitura, "016 - Casa Condomínio")
+
+- O lápis abre o Sheet.
+- Validade +10 dias com PDF: "Vence em 10 dias".
+- Apagar a validade: "Não vence"; no banco, `opura_documents.data_validade` = NULL, igual ao checklist.
+- Lixeira: "Alvará de demolição" sai da lista.
+- Outros:
+  - criar: aparece;
+  - editar: o Sheet mostra "Versão 1"; nome trocado e nova versão: a linha mostra o nome novo;
+  - excluir: sai da tela, e no bucket só sobrou o PDF do alvará do checklist, então as duas versões foram apagadas.
+- Console e rede: nenhum erro fora da Central de Controle.
+- Dados de teste apagados (checklist, documentos e arquivos do empreendimento de teste): 0.
+- `tsc` 0 erros; `check-ui-standard.sh` limpo; vitest 6 arquivos e 49 testes verdes.

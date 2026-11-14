@@ -120,9 +120,13 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     fireEvent.click(screen.getByRole('button', { name: /Salvar registro/ }))
     await waitFor(() => expect(fonte.salvarRegistro).toHaveBeenCalledTimes(1))
     expect(fonte.salvarRegistro).toHaveBeenCalledWith('d1', expect.objectContaining({ description: 'Alvenaria do 2º pavimento' }))
-    // A lista só se atualiza depois do resto do `persist`; na CI, com a suíte
-    // inteira em paralelo, 1 s (padrão do findBy) não bastou uma vez.
-    expect(await screen.findByText('Alvenaria do 2º pavimento', {}, { timeout: 5000 })).toBeInTheDocument()
+    // A folha fecha e o registro aparece na LISTA. A causa da falha de 12/11 não era tempo:
+    // o findByText achava a textarea da folha ainda aberta (o React espelha o valor no
+    // defaultValue) e, se ela fechasse entre achar e conferir, o toBeInTheDocument caía.
+    await waitFor(() => expect(screen.queryByPlaceholderText('O que aconteceu na obra hoje')).toBeNull(), { timeout: 5000 })
+    const achado = await screen.findByText('Alvenaria do 2º pavimento', {}, { timeout: 5000 })
+    expect(achado.tagName).not.toBe('TEXTAREA')
+    expect(achado).toBeInTheDocument()
   })
 
   it('registro Aprovado sem permissão no link: lixeira e Salvar desabilitados com o motivo', async () => {
@@ -309,7 +313,12 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
   it('sem Provider (fonteDiarioLogado): abre, lista efetivo e salva pelos serviços logados', async () => {
     logado.loadProject.mockResolvedValue(DIARIO)
     logado.listEmployees.mockResolvedValue([])
-    logado.salvarRegistroDiario.mockImplementation(async (_id: string, entry: DiaryEntry) => ({ entries: [APROVADO, entry], anterior: null }))
+    // Salvar com um pouco de rede (como no CI carregado): enquanto ele não volta, a folha de
+    // edição segue aberta com o texto na textarea — e o getByText também acha textarea.
+    logado.salvarRegistroDiario.mockImplementation(async (_id: string, entry: DiaryEntry) => {
+      await new Promise(r => setTimeout(r, 30))
+      return { entries: [APROVADO, entry], anterior: null }
+    })
     const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {})
     render(<DiaryMobileApp projects={PROJETOS} />)
     await abrirDiario()
@@ -320,7 +329,13 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     fireEvent.click(screen.getByRole('button', { name: /Salvar registro/ }))
     await waitFor(() => expect(logado.salvarRegistroDiario).toHaveBeenCalledTimes(1))
     expect(logado.salvarRegistroDiario).toHaveBeenCalledWith('d1', expect.objectContaining({ description: 'Reboco externo' }))
-    expect(await screen.findByText('Reboco externo', {}, { timeout: 5000 })).toBeInTheDocument()
+    // A folha fecha e o registro aparece na LISTA. Sem esperar a folha fechar, o findByText
+    // achava a textarea (o React espelha o valor no defaultValue) e, se a folha fechasse entre
+    // achar e conferir, o toBeInTheDocument caía — a falha intermitente do CI (14/11).
+    await waitFor(() => expect(screen.queryByPlaceholderText('O que aconteceu na obra hoje')).toBeNull(), { timeout: 5000 })
+    const achado = await screen.findByText('Reboco externo', {}, { timeout: 5000 })
+    expect(achado.tagName).not.toBe('TEXTAREA')
+    expect(achado).toBeInTheDocument()
     aviso.mockRestore()
   })
 })

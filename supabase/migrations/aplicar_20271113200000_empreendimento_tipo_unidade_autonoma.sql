@@ -1,3 +1,9 @@
+-- ⚠️ RENOMEADA em 14/11/2026: era aplicar_20271113100000_… — o mesmo prefixo de
+-- aplicar_20271113100000_email_capture_busca_diaria.sql (#406), e a trava __tests__/migrationsPrefixo.test.ts
+-- recusa prefixo repetido. JÁ APLICADA no banco (conferido em 14/11: o CHECK
+-- empreendimento_types_estrutura_check já aceita 'UNIDADE_AUTONOMA'). Só o nome mudou; não precisa rodar de novo
+-- (é idempotente, então rodar também não estraga).
+--
 -- Empreendimento do tipo Apartamento Residencial = só a unidade, sem terreno (13/11/2026).
 -- Pedido: "Empreendimento cujo o tipo for apartamento residencial, subsitituir torres e unidades
 -- para unidade como quando tipo é casa residencia. Porem sem o terreno. Apenas unidade."

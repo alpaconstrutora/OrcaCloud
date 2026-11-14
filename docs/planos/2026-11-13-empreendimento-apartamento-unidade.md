@@ -21,7 +21,7 @@ Quarta estrutura, `UNIDADE_AUTONOMA` ("Unidade sem terreno (apartamento, sala)")
 
 ## Itens
 
-- [x] `supabase/migrations/aplicar_20271113100000_empreendimento_tipo_unidade_autonoma.sql`: o CHECK aceita `UNIDADE_AUTONOMA`; `UPDATE` pelo **nome** "Apartamento Residencial", só onde ainda era `TORRES`. Sem policy nem função.
+- [x] `supabase/migrations/aplicar_20271113200000_empreendimento_tipo_unidade_autonoma.sql`: o CHECK aceita `UNIDADE_AUTONOMA`; `UPDATE` pelo **nome** "Apartamento Residencial", só onde ainda era `TORRES`. Sem policy nem função.
   **Pronto:** aplicada em 13/11 e conferida: 4 tipos Apartamento Residencial = `UNIDADE_AUTONOMA`; Casa (4) e Chácara (1) = `IMOVEL_UNICO` e Lote (4) = `LOTE`, intocados.
   Aplicar antes do código não quebra nada: o código antigo trata estrutura desconhecida como `TORRES`.
 - [x] `utils/empreendimentoTipos.ts`: tipo, opção no seletor de Configurações, e `ehEstrutura` derivado da lista. Antes era uma lista à mão que esqueceria o valor novo.

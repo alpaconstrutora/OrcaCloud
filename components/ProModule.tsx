@@ -125,7 +125,6 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
             onNewOrcamento={handleCreateOrcamento}
             onEditOrcamento={handleEditOrcamento}
             onViewServico={handleViewServico}
-            onNavigate={onChangeView}
           />
         )}
 
@@ -144,7 +143,6 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
             servicoId={selectedServicoId}
             abrirRecebimento={abrirRecebimento}
             onBack={() => onChangeView('pro-dashboard')}
-            onSave={() => onChangeView('pro-dashboard')}
           />
         )}
 

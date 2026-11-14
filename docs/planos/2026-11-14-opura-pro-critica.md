@@ -138,7 +138,7 @@ Pedido (mesma sessão): "autorizado".
 - Celular (iframe 390px da mesma origem): barra visível sem rolar; último conteúdo
   acima da barra na Agenda e no serviço (tela mais longa).
 
-**Estado (14/11/2026): implementado e conferido; falta publicar.**
+**Estado (14/11/2026): publicado** — PR #430, `2806395` no `main`; `conferir-producao.sh "Novo orçamento"` ✅.
 - `tsc` exit 0; `check-ui-standard` limpo no `ProModule`; nos outros 4 arquivos
   sobra só §8 preexistente (passo 4); travas e testes do Pro verdes (50/50).
 - Navegador com dados fictícios (`pro_*` simulado na aba, escritas recusadas — 0):
@@ -169,7 +169,10 @@ coordenador revisou, conferiu na tela e corrigiu o que escapou.
 - Navegador, computador e celular (390px), com dados fictícios: painel, serviço (3
   alturas), orçamento, clientes (cartão aberto) e ajustes.
 
-**Estado (14/11/2026): implementado e conferido; falta publicar** (depende do #430).
+**Estado (14/11/2026): publicado** — PR #434, `8f2a95b` no `main`; produção ✅ (domínio serviu `8f2a95b`).
+A CI falhou 2× no mesmo teste lento da Planta; o usuário escolheu "subir o limite do teste" — o
+PR #437 (300 s → 600 s) ficou redundante porque o #433 (PA6) subiu o mesmo limite no `main`
+enquanto rodava; #437 fechado, e o #434 passou de primeira com o `main` novo.
 - 6 telas sem ❌; busca vazia; `tsc` exit 0; 12 arquivos de trava/teste, 89 testes verdes.
 - Achado na conferência e corrigido: dois azuis sólidos na tela do serviço ("Copiar Pix"
   virou secundário — o primário é "Finalizar serviço"); Title Case que sobrou no
@@ -216,7 +219,7 @@ Pedido (mesma sessão): "Autorizado". ("A receber" já tinha sido corrigido no p
   ver todos; erro e recuperação no painel e no serviço; Pix com a cidade; foto
   comprimida; rótulos ligados; total aprovado.
 
-**Estado (14/11/2026): implementado e conferido; PR depois do merge do #434.**
+**Estado (14/11/2026): merge feito** — PR #438, `54e8de5` no `main` (CI verde de primeira).
 - 16 arquivos de teste, 145 testes verdes (inclui `comprimirFoto` e `diarioFonte`, que
   usam o utilitário de foto); `tsc` exit 0; 6 telas sem ❌.
 - Navegador: "Atrasado · 12/11" no topo de Hoje; "Sem data marcada" no fim de Próximos;
@@ -233,8 +236,43 @@ Pedido (mesma sessão): "Autorizado". ("A receber" já tinha sido corrigido no p
 - Fica de fora: checklist fixo de 3 etapas (editar etapas é recurso novo) e profissão
   padrão "Ar-condicionado" sem cadastro.
 
-### 6. Textos (`/impeccable clarify`) — pendente
-Status traduzido, "Faturamento", "QR Code Dinâmico", PDF com dados do emissor,
-vazios com ação.
+### 6. Textos (`/impeccable clarify`) e 7. polimento final (`/impeccable polish`) — frente `pro-textos-polimento`
 
-### 7. `/impeccable polish` — pendente
+Pedido (mesma sessão): "passos 6 (textos) e 7 (polimento final) autorizados". Feitos juntos.
+
+**O que muda — textos**
+- Erros sem jargão: toasts de falha dizem o que falhou e "Confira a internet e tente de
+  novo." (antes juntavam a mensagem crua do servidor); "Por favor…"/"com sucesso!" saem.
+- PDF do orçamento: quem emite é o profissional (nome comercial + cidade), não
+  "Profissional Autônomo Parceiro ÒPURA Pro"; comprovante: "Concluído em" pela data de
+  conclusão real (antes: data da assinatura ou o dia em que o PDF era gerado).
+- "QR Code Dinâmico" (falso — o QR é estático) → "Vai no QR Code e no Pix Copia e Cola…".
+- Excluir modelo em Ajustes avisa a verdade: só vale ao "Salvar ajustes".
+- Termos: a tela é "Ajustes" em todo lugar (título, subtítulo, botão "Salvar ajustes",
+  aviso de Pix); "Notas" → "Observações"; "Cliente & local" → "Cliente e local"; opções
+  de profissão e exemplos em capitalização normal; placeholders viram exemplos.
+- Estados vazios com o próximo passo: painel ("Criar o primeiro orçamento"; quando
+  aparecem os serviços de hoje), clientes, modelos.
+
+**O que muda — polimento**
+- Um primário azul por tela: "Cobrar" da lista "Aguardando pagamento" vira secundário
+  com destaque azul (com vários devedores, eram vários primários + "Novo orçamento").
+- "Recebido R$ 0,00" deixa de ser verde (verde só quando há valor).
+- Limpeza: imports de tipo sem uso (3) e props mortas (`onSave` do serviço desde o
+  passo 2; `onNavigate` do painel, nunca usado).
+
+**Como sei que terminou**
+- `tsc` exit 0; 6 telas sem ❌; travas + testes do Pro verdes.
+- Detector do impeccable: 38 achados na crítica → 2 (`text-[13px]` dos botões §17 do
+  computador — tamanho canônico do app; a régua do detector é o DESIGN.md do Portal do
+  Colaborador).
+- Navegador: celular 390px vazio (painel, clientes, ajustes) e com dados (painel, serviço
+  concluído com Recebi); computador; console sem erro.
+
+**Estado (14/11/2026): implementado e conferido; PR aberto** (último da fila).
+- `tsc` exit 0; 14 arquivos de trava/teste, 99 testes verdes; 6 telas sem ❌; detector 2
+  avisos intencionais; 0 erro de console; 0 escrita.
+- A crítica de 14/11 (17/40) fica encerrada pelo próprio helper: o alvo mudou desde ela.
+  Uma nova `/impeccable critique` mede a nota de agora.
+- Fica de fora: editar etapas do checklist (recurso novo); profissão padrão sem cadastro;
+  ditado e WhatsApp sem teste em aparelho real.

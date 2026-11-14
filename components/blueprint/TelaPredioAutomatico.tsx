@@ -295,6 +295,13 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">Pelo catálogo de evaporadoras da organização e as premissas de climatização do estudo; os eletrodutos e a prumada no shaft vêm junto.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.agua} disabled={!props.hipoteses.plantas} title={props.hipoteses.plantas ? undefined : 'A água chega às louças dos cômodos — ligue a planta das unidades'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, agua: e.target.checked })} data-testid="hipotese-agua" />
+            <span>
+              Lançar a água fria (louças, hidrômetro por unidade, coluna no shaft, recalque e barrilete)
+              <span className="block text-xs text-slate-500">Um hidrômetro por unidade na parede do hall; a pressão é conferida no prédio inteiro — pressurizador no superior se o último andar não chega à mínima, VRP no ramal das unidades se a estática passa de 400 kPa.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -356,8 +363,17 @@ export default function TelaPredioAutomatico(props: Props) {
               valor={plano.resumo.reservacao ? `${plano.resumo.reservacao.totalL.toLocaleString('pt-BR')} L` : '—'}
               nota={
                 plano.resumo.reservacao
-                  ? `${plano.resumo.reservacao.pessoas} pessoa(s)${plano.resumo.reservacao.inferiorL != null ? ` · inferior ${plano.resumo.reservacao.inferiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.reservacao.superiorL != null ? ` · superior ${plano.resumo.reservacao.superiorL.toLocaleString('pt-BR')} L` : ''}`
+                  ? `${plano.resumo.reservacao.pessoas} pessoa(s)${plano.resumo.reservacao.inferiorL != null ? ` · inferior ${plano.resumo.reservacao.inferiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.reservacao.superiorL != null ? ` · superior ${plano.resumo.reservacao.superiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.agua?.rtiL ? ` + ${(plano.resumo.agua.rtiL / 1000).toLocaleString('pt-BR')} m³ de reserva de incêndio` : ''}`
                   : undefined
+              }
+            />
+            <Dado
+              rotulo="Água fria"
+              valor={plano.resumo.agua ? `${plano.resumo.agua.unidadesMedidas} hidrômetro(s)` : '—'}
+              nota={
+                plano.resumo.agua
+                  ? `${plano.resumo.agua.hidrometros} por andar · coluna DN ${plano.resumo.agua.colunaDnMm ?? '—'}${plano.resumo.agua.recalque ? ` · recalque DN ${plano.resumo.agua.recalque.dnMm}, ${plano.resumo.agua.recalque.motorCv.toLocaleString('pt-BR')} cv` : ''}${plano.resumo.agua.dinamicaMinKpa != null ? ` · pressão de ${plano.resumo.agua.dinamicaMinKpa} a ${plano.resumo.agua.estaticaMaxKpa} kPa` : ''}${plano.resumo.agua.pressurizador ? ' · pressurizador' : ''}${plano.resumo.agua.vrp ? ' · VRP' : ''}`
+                  : 'desligada nas hipóteses'
               }
             />
           </dl>

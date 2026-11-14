@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.107.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.108.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -327,11 +327,18 @@ function stableStringify(value) {
 
 // utils/blueprintKernel/identity.ts
 function uidDeterministico(semente) {
+  const ja = UIDS_JA_CALCULADOS.get(semente);
+  if (ja !== void 0) return ja;
   const hex = sha256(semente);
   const bytes = new Uint8Array(16);
   for (let i = 0; i < 16; i++) bytes[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16);
-  return formatarUuid(bytes, 8);
+  const uid = formatarUuid(bytes, 8);
+  if (UIDS_JA_CALCULADOS.size >= MAX_UIDS_GUARDADOS) UIDS_JA_CALCULADOS.clear();
+  UIDS_JA_CALCULADOS.set(semente, uid);
+  return uid;
 }
+var UIDS_JA_CALCULADOS = /* @__PURE__ */ new Map();
+var MAX_UIDS_GUARDADOS = 5e5;
 function formatarUuid(b, versao) {
   b[6] = b[6] & 15 | (versao & 15) << 4;
   b[8] = b[8] & 63 | 128;

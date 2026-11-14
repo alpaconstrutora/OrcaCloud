@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'CLIMATIZACAO' | 'ELETRODUTOS' | 'LOUCAS' | 'AGUA_FRIA' | 'INSTALACOES_NO_TIPO' | 'PRESSAO_DA_AGUA' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -22,7 +22,10 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   ELETRICA: 'Elétrica coletiva (pontos, QD por unidade, QGBT e medidores, quadro de serviço, DR)',
   CLIMATIZACAO: 'Climatização no tipo (splits, linhas e drenos; o circuito no QD da unidade)',
   ELETRODUTOS: 'Eletrodutos por quadro e a prumada dos alimentadores no shaft',
+  LOUCAS: 'Louças e pontos de água no tipo (o kit de cada ambiente e os pontos de cada louça)',
+  AGUA_FRIA: 'Água fria (alimentador, recalque, barrilete, coluna no shaft, hidrômetro por unidade no hall, rede das unidades)',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
+  PRESSAO_DA_AGUA: 'Pressão da água fria no prédio inteiro (pressurizador em cima, VRP embaixo)',
   CONFERENCIA: 'Conferência (avisos da divisão, da montagem e das plantas)',
 };
 
@@ -49,6 +52,8 @@ export interface HipotesesDoPredio {
   eletrica: boolean;
   /** PA5b: a climatização das unidades (precisa do catálogo de evaporadoras da organização) — só com a elétrica. */
   climatizacao: boolean;
+  /** PA6: a água fria — louças e pontos no tipo, hidrômetro por unidade, coluna, barrilete, recalque e a pressão. */
+  agua: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -68,6 +73,7 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   estrutura: true,
   eletrica: true,
   climatizacao: true,
+  agua: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -143,6 +149,27 @@ export interface PlanoDoPredio {
     } | null;
     /** PA3: a reservação — pessoas contadas e o volume de cada reservatório lançado (`null` = não lançado). */
     reservacao: { pessoas: number; totalL: number; inferiorL: number | null; superiorL: number | null } | null;
+    /**
+     * PA6: a água fria — por andar (pontos, hidrômetros), a coluna, o recalque, a reserva de incêndio no superior e a
+     * pressão do prédio inteiro; `null` desligada.
+     */
+    agua: {
+      pontos: number;
+      hidrometros: number;
+      /** No prédio inteiro: hidrômetros por andar × pavimentos. */
+      unidadesMedidas: number;
+      colunaDnMm: number | null;
+      recalque: { dnMm: number; motorCv: number; alturaManometricaM: number } | null;
+      alimentadorDnMm: number | null;
+      rtiL: number | null;
+      estaticaMaxKpa: number | null;
+      dinamicaMinKpa: number | null;
+      pressurizador: boolean;
+      vrp: boolean;
+      insuficientes: number;
+      excessivas: number;
+      naoAvaliados: number;
+    } | null;
   };
 }
 

@@ -49,3 +49,16 @@ describe('10.3 — critérios do parecer', () => {
         expect(de(criterios({}, { vpl: 1 }), 'vpl_positivo').atende).toBe(true);
     });
 });
+
+describe('pendência da Fase 10 — TIR inexistente porque o fluxo é de um lado só', () => {
+    const fluxo = (net: number[]) => ({ monthlyFlows: net.map((n, i) => ({ month: i + 1, net: n })) as never, annualIrr: NaN });
+    it('só saída de caixa (nunca recupera): a TIR não atende — reprova, não "sem como avaliar"', () => {
+        expect(de(criterios({}, fluxo([-100, -50, -10])), 'tir_acima_da_tma').atende).toBe(false);
+    });
+    it('só entrada de caixa (retorno sem capital): atende', () => {
+        expect(de(criterios({}, fluxo([10, 20, 30])), 'tir_acima_da_tma').atende).toBe(true);
+    });
+    it('fluxo misto sem TIR calculável continua sem como avaliar', () => {
+        expect(de(criterios({}, fluxo([-100, 300, -250])), 'tir_acima_da_tma').atende).toBeNull();
+    });
+});

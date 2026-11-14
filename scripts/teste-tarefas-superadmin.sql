@@ -2,7 +2,7 @@
 -- Prova: superadmin (public.superadmins) vê e edita QUALQUER tarefa — inclusive as
 -- de fora de espaço ("agenda pessoal") de outra pessoa —, mexe nos envolvidos dela e
 -- não apaga; quem não é superadmin continua sem ver a agenda pessoal alheia.
--- Migration: supabase/migrations/aplicar_20271112995000_tarefas_superadmin_ve_e_edita.sql
+-- Migration: supabase/migrations/aplicar_20271112997000_tarefas_superadmin_ve_e_edita.sql
 -- Plano: docs/planos/2026-11-11-link-celular-tarefas-diario.md (Ajustes — superadmin).
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';

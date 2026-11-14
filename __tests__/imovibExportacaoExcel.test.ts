@@ -215,3 +215,24 @@ describe('margem-alvo do Excel', () => {
         expect(indicadores.some(l => String(l[0]) === 'Terreno para margem de 15% (padrão)')).toBe(true);
     });
 });
+
+describe('Excel (pendência da Fase 2) — nenhuma célula com NaN ou infinito', () => {
+    // `typeof NaN === 'number'`: a checagem "é número" deixava NaN passar.
+    const finitas = (nome: string, tabelas: Record<string, (string | number | null)[][]>) => {
+        for (const [aba, linhas] of Object.entries(tabelas)) {
+            for (const l of linhas) for (const c of l) {
+                if (typeof c === 'number') expect(Number.isFinite(c), `${nome} › ${aba} › ${String(l[0])}/${String(l[1])}`).toBe(true);
+            }
+        }
+    };
+
+    it('estudo normal, estudo sem torres (sem VGV, sem TIR) e estudo com dívida', () => {
+        for (const [nome, s] of [
+            ['normal', estudo()],
+            ['sem torres', estudo({ blocks: [] })],
+            ['com dívida', estudo({ funding_debt_percent: 80, financing_rate_annual: 14 })],
+        ] as const) {
+            finitas(nome, montarPlanilhaImovib(s, computeImovibMath(s)) as unknown as Record<string, (string | number | null)[][]>);
+        }
+    });
+});

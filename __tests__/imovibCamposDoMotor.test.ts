@@ -31,6 +31,33 @@ describe('0.4 — campos do motor', () => {
         expect(lidos.size).toBeGreaterThan(10); // o regex achou as leituras
     });
 
+    // Pendência da Fase 0: a leitura por texto acima não vê `study?.x`, desestruturação
+    // nem os módulos que o motor chama (tributos, financiamento, recebimento…). Aqui o
+    // estudo é um espião: cada campo lido, venha de onde vier, fica anotado.
+    for (const [nome, estudo] of Object.entries(ESTUDOS_DE_REGRESSAO)) {
+        it(`${nome}: todo campo que o cálculo LÊ (em qualquer módulo) está em CAMPOS_DO_MOTOR`, () => {
+            const lidos = new Set<string>();
+            const espiao = new Proxy({ ...estudo(), organization_id: 'org', version: '1.0' } as Record<string, unknown>, {
+                get(alvo, chave, recebedor) {
+                    if (typeof chave === 'string') lidos.add(chave);
+                    return Reflect.get(alvo, chave, recebedor);
+                },
+                ownKeys(alvo) {
+                    // Copiar o estudo inteiro (spread) leria tudo e esconderia o que importa.
+                    throw new Error('o motor copiou o estudo inteiro — não dá para saber o que ele lê');
+                    return Reflect.ownKeys(alvo);
+                },
+            });
+            computeImovibMath(espiao as never);
+            const permitidos = new Set<string>([...CAMPOS_DO_MOTOR, ...ESTRUTURA, 'id', 'name', 'organization_id']);
+            expect([...lidos].filter(c => !permitidos.has(c))).toEqual([]);
+            expect(lidos.size).toBeGreaterThan(10);
+            // O espião vê o que a busca por texto não via: `tax_hypotheses` só é lido em
+            // utils/imovibTributos.ts (o motor nunca escreve `study.tax_hypotheses`).
+            expect(lidos.has('tax_hypotheses')).toBe(true);
+        });
+    }
+
     it('a listagem seleciona todos os campos do motor', () => {
         const colunas = COLUNAS_DA_LISTAGEM.split(',').map(c => c.trim());
         expect(CAMPOS_DO_MOTOR.filter(c => !colunas.includes(c))).toEqual([]);

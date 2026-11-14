@@ -24,10 +24,10 @@ import { fmtBRL, fmtPct, fmtM2 } from '../../utils/format';
 import { imovibService } from '../../services/imovibService';
 import { useImovibMath } from '../../hooks/useImovibMath';
 import { estudoComPrazoDoPortal } from '../../utils/imovibVariacoes';
-import { calcularIndicadores } from '../../utils/imovibIndicadores';
+import { calcularIndicadores, textoDoPayback } from '../../utils/imovibIndicadores';
 import { IMOVIB_DEFAULTS } from '../../constants/imovibDefaults';
 import { composicaoDoCapital, ROTULO_DO_CAPITAL, COR_DO_CAPITAL } from '../../utils/imovibFinanciamento';
-import { TITULO_VGV_LIQUIDO } from '../../constants/imovibClassificacao';
+import { TITULO_VGV_LIQUIDO, vgvLiquidoPassaDoBruto, notaDoVgvLiquido } from '../../constants/imovibClassificacao';
 import { ImovibStudy } from '../../types';
 import { InvestmentSimulator } from './InvestmentSimulator';
 import Button from '../ui/Button';
@@ -711,6 +711,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                     <span className="text-lg font-black text-blue-900 font-mono">
                                                         {studyMath ? fmtBRL(studyMath.netVgvTotal) : op.vgv ? fmtBRL(op.vgv) : '—'}
                                                     </span>
+                                                    {studyMath && vgvLiquidoPassaDoBruto(studyMath) && <span className="block text-xs text-gray-500 mt-1">{notaDoVgvLiquido(study ?? {})}</span>}
                                                 </div>
                                                 <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4">
                                                     <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Custo Estimado</span>
@@ -736,7 +737,7 @@ const OpportunityDetail: React.FC<Props> = ({ opportunity: op, organizationId, i
                                                 <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title="Mês em que o caixa acumulado volta a ficar positivo e assim fica">
                                                     <span className="text-[10px] font-black text-gray-400 uppercase block mb-1">Payback</span>
                                                     <span className="text-lg font-black text-slate-800 font-mono">
-                                                        {indicadores?.paybackSimplesMes != null ? `Mês ${indicadores.paybackSimplesMes}` : '—'}
+                                                        {indicadores ? textoDoPayback(indicadores) : '—'}
                                                     </span>
                                                 </div>
                                                 <div className="bg-gray-50/50 border border-gray-100 rounded-2xl p-4" title="Entradas ÷ saídas de caixa">

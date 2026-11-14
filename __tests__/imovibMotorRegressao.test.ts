@@ -17,6 +17,10 @@ import { ESTUDOS_DE_REGRESSAO } from './fixtures/imovibEstudos';
  *     completo 730.847 → 577.155; espelhoInflacao 1.186.680 → 2.801.758
  *     (inadimplência e distrato deixam de descontar o VGV; distrato com
  *     revenda retém 25% do pago).
+ *   Pendências da Fase 1 (12/11): a devolução do distrato passa a ser sobre o
+ *     que o comprador PAGOU, sem a parte inadimplente das parcelas. VPL:
+ *     espelhoInflacao 2.702.613,88 → 2.706.390,72 (+3.776,84); base, divida60
+ *     e completo não mudam.
  */
 
 const centavos = (x: number) => Math.round(x * 100) / 100;
@@ -52,12 +56,12 @@ const ESPERADO: Record<string, Esperado> = {
         ],
     },
     espelhoInflacao: {
-        vpl: 2702613.88, annualIrr: 26.417731, maxExposure: -13827023.1, netVgvTotal: 28344234.19, duration: 30,
+        vpl: 2706390.72, annualIrr: 26.437698, maxExposure: -13824386.23, netVgvTotal: 28348532.89, duration: 30,
         net: [
             -4891634.17, 116337.53, 124651.58, 133333.37, 142411.25, -536691.37, -529476.14, -521767.35,
-            -513518.61, -504676.67, -495180.02, -484957.01, -482683.03, -466185.22, -453137.63, -438896.56,
-            -423279.71, -406059.35, -386945.86, -365562.9, -341408.94, -313794.68, -281735.81, -243756.42,
-            -316757.91, -316638.27, -315758.41, -313254.78, 19549765.71, 435370.43,
+            -513518.61, -504676.67, -495180.02, -484957.01, -482572.6, -466070.25, -453017.76, -438771.39,
+            -423148.8, -405922.21, -386801.91, -365411.49, -341249.32, -313625.99, -281557.04, -243566.38,
+            -316555.18, -316421.16, -315524.86, -313002.26, 19551857.13, 435370.43,
         ],
     },
 };

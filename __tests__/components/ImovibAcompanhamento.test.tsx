@@ -67,6 +67,16 @@ describe('10.4 — aba Acompanhamento', () => {
         expect(screen.getByText(/4 unidades vendidas sem negociação/i)).toBeTruthy();
     });
 
+    it('realizado de antes da data-base: a tela diz que entra no primeiro mês', async () => {
+        realizado.doEstudo.mockResolvedValue({
+            obras: [{ id: 'o1', nome: 'Obra Garden' }], obrasDeOutraOrganizacao: [],
+            financeiro: [{ mes: '2025-11', entradas: 0, saidas: 50_000 }], aConciliar: { entradas: 0, saidas: 0 },
+            vendas: [], vendidasSemNegociacao: 0,
+        });
+        tela({ base_date: '2026-01' });
+        expect(await screen.findByText(/realizado de antes da data-base/i)).toBeTruthy();
+    });
+
     it('sem obra vinculada: mostra só as vendas e diz por quê', async () => {
         realizado.doEstudo.mockResolvedValue({ obras: [], obrasDeOutraOrganizacao: [], financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [{ mes: '2026-01', unidades: 1, valor: 700_000 }], vendidasSemNegociacao: 0 });
         tela({ base_date: '2026-01' });

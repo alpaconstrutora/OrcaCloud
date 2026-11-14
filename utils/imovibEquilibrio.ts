@@ -71,7 +71,13 @@ export function terrenoMaximo(study: ImovibStudy, alvo: AlvoDoTerreno): PontoDeE
         switch (alvo.tipo) {
             case 'vpl_zero': return r.vpl;
             case 'margem': return r.monthlyFlows.reduce((a, f) => a + f.net, 0) / r.vgvTotal - alvo.pct / 100;
-            case 'tir': return Number.isFinite(r.annualIrr) ? r.annualIrr - alvo.pctAnual : -Infinity;
+            case 'tir': {
+                if (Number.isFinite(r.annualIrr)) return r.annualIrr - alvo.pctAnual;
+                // Sem TIR porque o caixa nunca fica negativo = retorno sem capital: acima de
+                // qualquer alvo (antes virava −∞ e a busca desistia com "sem raiz").
+                const net = r.monthlyFlows.map(f => f.net);
+                return net.some(v => v > 0) && net.every(v => v >= 0) ? Infinity : -Infinity;
+            }
         }
     };
     if (!(metrica(0) > 0)) return SEM_RAIZ;

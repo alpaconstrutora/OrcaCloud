@@ -328,7 +328,7 @@ BEGIN
     PERFORM pg_temp.confere(
         (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks'
             AND policyname IN ('tasks_select_assignee', 'tasks_update_assignee')) = 2
-        -- INSERT e DELETE seguem com uma policy cada (o superadmin, aplicar_20271112995000,
+        -- INSERT e DELETE seguem com uma policy cada (o superadmin, aplicar_20271112997000,
         -- acrescenta só SELECT e UPDATE).
         AND (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks' AND cmd = 'INSERT') = 1
         AND (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks' AND cmd = 'DELETE') = 1,

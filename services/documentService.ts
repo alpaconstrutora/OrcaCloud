@@ -740,6 +740,7 @@ export const documentService = {
         supplier_id: docData.supplier_id || null,
         client_id: docData.client_id || null,
         investor_id: docData.investor_id || null,
+        empreendimento_id: docData.empreendimento_id || null,
         folder_id: docData.folder_id || null,
         ...(opcoes?.metadados ? { metadados: opcoes.metadados } : {}),
       })

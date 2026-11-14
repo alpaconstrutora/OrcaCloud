@@ -148,3 +148,26 @@ describe('pontos de equilíbrio sem trabalho repetido', () => {
         expect(computeImovibMath({ ...s, land_cost: t.valor! }).annualIrr).toBeCloseTo(20, 1);
     });
 });
+
+describe('pendência da Fase 2 — TIR-alvo quando o fluxo com terreno 0 não tem TIR', () => {
+    // Tudo à vista no sinal e obra barata: com terreno 0 o caixa nunca fica negativo (TIR "infinita").
+    const semSaida = () => {
+        const e = baseStudy({
+            land_cost: 0, revenue_downpayment_percent: 100, revenue_construction_percent: 0, revenue_handover_percent: 0,
+            default_rate_percent: 0, cancellation_rate_percent: 0, tax_rate: 0, brokerage_fee: 0,
+        });
+        e.blocks[0].construction_cost_sqm = 0;
+        return e;
+    };
+
+    it('a pré-condição vale: sem terreno, o fluxo não tem TIR', () => {
+        expect(Number.isFinite(computeImovibMath(semSaida()).annualIrr)).toBe(false);
+    });
+
+    it('acha o terreno que leva a TIR ao alvo em vez de "sem raiz"', () => {
+        const p = terrenoMaximo(semSaida(), { tipo: 'tir', pctAnual: 20 });
+        expect(p.valor).not.toBeNull();
+        const r = computeImovibMath({ ...semSaida(), land_cost: p.valor! });
+        expect(r.annualIrr).toBeCloseTo(20, 0);
+    });
+});

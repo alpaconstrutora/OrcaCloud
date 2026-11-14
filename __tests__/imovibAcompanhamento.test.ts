@@ -48,3 +48,28 @@ describe('pendências — o mês de hoje está em curso', () => {
         expect(r.map(m => m.emCurso)).toEqual([false, true, false]);
     });
 });
+
+describe('pendência da Fase 10 — realizado anterior à data-base', () => {
+    it('entra no mês 1 (como a venda anterior), em vez de sumir', () => {
+        const r = compararComRealizado(fluxo(3), '2026-03', [
+            { mes: '2026-01', entradas: 5, saidas: 100 },
+            { mes: '2026-03', entradas: 10, saidas: 20 },
+        ], [], [0, 0, 0]);
+        expect(r[0]).toMatchObject({ receitaRealizada: 15, custoRealizado: 120 });
+        expect(r[0].antesDaDataBase).toEqual({ entradas: 5, saidas: 100 });
+    });
+
+    it('sem lançamento antes da data-base, nada muda', () => {
+        const r = compararComRealizado(fluxo(2), '2026-03', [{ mes: '2026-03', entradas: 10, saidas: 20 }], [], [0, 0]);
+        expect(r[0]).toMatchObject({ receitaRealizada: 10, custoRealizado: 20 });
+        expect(r[0].antesDaDataBase).toBeUndefined();
+    });
+});
+
+describe('revisão — realizado antes da data-base quando o mês 1 ainda é futuro', () => {
+    it('não marca a linha 0 (que não mostra realizado)', () => {
+        const r = compararComRealizado(fluxo(2), '2027-01', [{ mes: '2026-06', entradas: 0, saidas: 50 }], [], [0, 0], '2026-11');
+        expect(r[0].receitaRealizada).toBeNull();
+        expect(r[0].antesDaDataBase).toBeUndefined();
+    });
+});

@@ -57,3 +57,12 @@ export function imovibIdentificacaoParaGravar(c: { cnpj: string; developer: stri
 
 /** O que é o "VGV líquido" desde a Fase 1 do plano 2026-11-11 (item 2.6): `title` na listagem e no portal. */
 export const TITULO_VGV_LIQUIDO = 'Receita dos compradores sem índice: VGV vendido depois das permutas, menos inadimplência e devolução de distratos. Pode passar do VGV com os juros do pós-chaves.';
+
+/**
+ * O VGV líquido passa do bruto (os juros do pós-chaves entram nele): a listagem e
+ * o portal marcam isso no próprio valor, e não só na dica (pendência da Fase 1).
+ */
+export const vgvLiquidoPassaDoBruto = (r: { netVgvTotal: number; vgvTotal: number }): boolean => r.netVgvTotal > r.vgvTotal + 0.5;
+/** A nota diz o motivo que dá para afirmar: os juros do pós-chaves, quando há; senão só que passou. */
+export const notaDoVgvLiquido = (study: { post_handover_rate_monthly?: number | null }): string =>
+    (study.post_handover_rate_monthly ?? 0) > 0 ? 'inclui juros do pós-chaves' : 'acima do VGV bruto';

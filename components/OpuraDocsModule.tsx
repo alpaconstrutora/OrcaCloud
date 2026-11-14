@@ -62,6 +62,7 @@ import {
   DEFAULT_FILE_EXTENSIONS,
   normalizeExtension,
 } from '../services/documentService';
+import { empreendimentoDocumentosService } from '../services/empreendimentoDocumentosService';
 import { partnerService } from '../services/partnerService';
 import { clientService } from '../services/clientService';
 import { laborService } from '../services/laborService';
@@ -327,6 +328,10 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
   // Aba Normas — filtros rápidos de escolha única (§5.4 do guia). '' = sem recorte.
   const [filterNormaSituacao, setFilterNormaSituacao] = usePersistedState<string>('opuraDocs:normaSituacao', '');
   const [filterNormaOrgao, setFilterNormaOrgao] = usePersistedState<string>('opuraDocs:normaOrgao', '');
+  // Empreendimento (12/11/2026) — documentos enviados pela aba Documentos do
+  // empreendimento carregam `empreendimento_id`. Recorte em memória, como os de Normas.
+  const [filterEmpreendimento, setFilterEmpreendimento] = usePersistedState<string>('opuraDocs:empreendimento', '');
+  const [empreendimentoNomes, setEmpreendimentoNomes] = React.useState<Record<string, string>>({});
   const [selectedTags, setSelectedTags] = React.useState<string[]>([]);
   const [disciplines, setDisciplines] = React.useState<OpuraDmsDiscipline[]>([]);
   const [suppliers, setSuppliers] = React.useState<Supplier[]>([]);
@@ -1679,6 +1684,11 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
       if (filterNormaOrgao) result = result.filter(doc => (doc.norma_orgao || '').trim() === filterNormaOrgao);
     }
 
+    // 1c. Empreendimento (documento integrado — contrato, NF… — não tem, e sai do recorte)
+    if (filterEmpreendimento) {
+      result = result.filter(doc => doc.empreendimento_id === filterEmpreendimento);
+    }
+
     // 2. Filtrar por tags selecionadas
     if (selectedTags.length > 0) {
       result = result.filter(doc => 
@@ -1733,7 +1743,37 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
     }
 
     return result;
-  }, [documents, searchQuery, filterStatus, selectedTags, selectedDisciplineCode, folders, activeTab, filterNormaSituacao, filterNormaOrgao]);
+  }, [documents, searchQuery, filterStatus, selectedTags, selectedDisciplineCode, folders, activeTab, filterNormaSituacao, filterNormaOrgao, filterEmpreendimento]);
+
+  // Nomes dos empreendimentos citados na lista (e o do filtro guardado, que pode
+  // não ter documento nesta aba). Só busca os ids que ainda não conhece.
+  React.useEffect(() => {
+    const ids = documents.map(d => d.empreendimento_id).filter((x): x is string => !!x);
+    if (filterEmpreendimento) ids.push(filterEmpreendimento);
+    const faltam = Array.from(new Set(ids)).filter(id => !(id in empreendimentoNomes));
+    if (faltam.length === 0) return;
+    let vivo = true;
+    empreendimentoDocumentosService.nomesDosEmpreendimentos(faltam)
+      // Todo id pedido entra no mapa, com nome de reserva se não voltou (apagado
+      // ou de outra organização) — senão o efeito pediria de novo a cada render.
+      .then(nomes => {
+        if (!vivo) return;
+        const resolvidos = Object.fromEntries(faltam.map(id => [id, nomes[id] ?? 'Empreendimento indisponível']));
+        setEmpreendimentoNomes(prev => ({ ...prev, ...resolvidos }));
+      })
+      .catch(err => console.error('[OpuraDocsModule] Erro ao carregar nomes de empreendimentos:', err));
+    return () => { vivo = false; };
+  }, [documents, filterEmpreendimento, empreendimentoNomes]);
+
+  // Só os empreendimentos que têm documento nesta aba, mais o escolhido (para poder limpar).
+  const empreendimentoFilterOptions = React.useMemo(() => {
+    const ids = new Set(documents.map(d => d.empreendimento_id).filter((x): x is string => !!x));
+    if (filterEmpreendimento) ids.add(filterEmpreendimento);
+    const opcoes = Array.from(ids)
+      .map(id => ({ value: id, label: empreendimentoNomes[id] ?? 'Carregando…' }))
+      .sort((a, b) => a.label.localeCompare(b.label, 'pt-BR'));
+    return [{ value: '', label: 'Todos' }, ...opcoes];
+  }, [documents, filterEmpreendimento, empreendimentoNomes]);
 
   // Opções do filtro "Órgão" — os valores que as normas carregadas de fato têm
   // (o campo é texto livre; a lista sugerida no formulário não é fechada).
@@ -2859,6 +2899,17 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               </>
             )}
 
+            {/* Empreendimento — só aparece quando há documento com empreendimento na aba
+                (ou um recorte guardado, para poder limpá-lo). §5.4 do guia. */}
+            {empreendimentoFilterOptions.length > 1 && (
+              <FilterPopover<string>
+                label="Empreendimento"
+                value={filterEmpreendimento}
+                onChange={setFilterEmpreendimento}
+                options={empreendimentoFilterOptions}
+              />
+            )}
+
             <button
               onClick={() => { fetchDocs(); fetchFolders(); }}
               disabled={loading}
@@ -3163,6 +3214,13 @@ export const OpuraDocsModule: React.FC<OpuraDocsModuleProps> = ({
               extensionIcons={extensionIcons}
               resolveProjectName={resolveGedProjectName}
               resolveDisciplineLabel={resolveDisciplineLabel}
+              renderNameDetail={(doc) =>
+                doc.empreendimento_id ? (
+                  <span className="block truncate text-sm text-gray-500 mt-0.5" title={`Empreendimento: ${empreendimentoNomes[doc.empreendimento_id] ?? ''}`}>
+                    Empreendimento: {empreendimentoNomes[doc.empreendimento_id] ?? '…'}
+                  </span>
+                ) : null
+              }
               dynamicColumns={visibleDynamicColumns}
               getDynamicColumnLabel={getDynamicColumnLabel}
               getDynamicCellValue={(doc, col) => {

@@ -1515,7 +1515,10 @@ Na aba **Extrato** (`docs/planos/2026-10-24-extrato-agrupar.md`) o controle vai 
 Em 24/10/2026 para Minha Organização › Centro de custo (`CostCenterModule.tsx`, `docs/planos/2026-10-24-centro-de-custo-agrupar.md`).
 A tela é uma **árvore** (grupo → centro de custo): agrupar a **achata** nos centros de custo e os divide por
 Centro de custo (grupo), Organização (só em "Todas"), Empreendimento ou Obra; grupo-pai sem filho não aparece
-agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel).
+agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel). Desde 13/11/2026 o grupo vazio
+não some sem rastro: abaixo da tabela, uma linha `text-[13px] text-gray-600` diz quantos ficaram fora (com
+código e nome, até 3) e um link "Ver sem agrupar" volta para a árvore — sem ela, o grupo parecia excluído aqui
+e seguia no drawer de outras telas. O drawer (`CostCenterSelect`) também esconde grupo sem filho que não é escolhível.
 
 Em 13/11/2026 para ÒPURA · Relatórios › aba **Centro de Custo** (`OpuraReports.tsx`,
 `docs/planos/2026-11-13-relatorios-centro-de-custo-colunas-agrupar.md`). A árvore numa coluna só (que não ordenava)

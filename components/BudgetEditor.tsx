@@ -2,7 +2,7 @@
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { BudgetEntry, ProjectSettings, SinapiItem, WBSPhase, SinapiType, BudgetVersion, WBSGroup, CustomDatabase, CompositionComponent } from '../types';
 import { sinapiService, SinapiReference, resolveReferenceDate } from '../services/sinapiService'; // Importação do Serviço
-import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal } from 'lucide-react';
+import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal, ArrowUpDown } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { customDatabaseService } from '../services/customDatabaseService';
@@ -66,6 +66,21 @@ interface TechnicalIssueRow {
   issueCodes: TechnicalDashboardFilter[];
   financialAlerts: string[];
 }
+
+/** Valor do filtro "Todos os grupos" (id de grupo nunca é vazio). */
+const ALL_GROUPS = '';
+
+type GroupOrder = 'eap' | 'code' | 'name' | 'value-desc' | 'value-asc';
+
+const GROUP_ORDER_OPTIONS: { value: GroupOrder; label: string }[] = [
+  { value: 'eap', label: 'Ordem da EAP' },
+  { value: 'code', label: 'Código' },
+  { value: 'name', label: 'Nome (A → Z)' },
+  { value: 'value-desc', label: 'Maior valor' },
+  { value: 'value-asc', label: 'Menor valor' },
+];
+
+const MOTIVO_SEM_MOVER_GRUPO = 'Para mover grupos, escolha "Todos os grupos" e a ordem "Ordem da EAP"';
 
 const splitName = (fullName: string | null | undefined) => {
   if (!fullName) return { id: '', name: '' };
@@ -219,6 +234,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [wbsSearch, setWbsSearch] = usePersistedState('budgetEditor:wbsSearch', '');
   const wbsQuery = wbsSearch.trim().toLowerCase();
   const isSearching_wbs = wbsQuery.length > 0;
+  // Recorte por GRUPO da EAP e ordem de exibição dos grupos (toolbar acoplada).
+  // O filtro NÃO é persistido: o id do grupo ("1", "2"...) se repete entre
+  // orçamentos, e lembrar "só o grupo 2" ao abrir outro orçamento esconderia a
+  // EAP inteira sem o usuário ter pedido (mesma razão de searchLocation acima).
+  // A ordem é preferência de leitura, então sobrevive — e é só de EXIBIÇÃO: não
+  // reordena `settings.wbs`, que é a numeração real da EAP (setas ↑↓ do grupo).
+  const [groupFilter, setGroupFilter] = React.useState<string>(ALL_GROUPS);
+  const [groupOrder, setGroupOrder] = usePersistedState<GroupOrder>('budgetEditor:groupOrder', 'eap');
 
   /** Item bate com a busca (código ou descrição). Sem busca, tudo passa. */
   const matchesWbsSearch = React.useCallback((item: BudgetEntry) => {
@@ -1786,6 +1809,26 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       .reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0) * (1 + (item.bdi ?? settings.bdi) / 100)), 0);
   };
 
+  // Grupos na tela: filtro + ordem. Cada um leva o índice REAL em `settings.wbs`
+  // (`gIndex`) — mover/duplicar/editar/excluir operam por esse índice, não pela
+  // posição na tela. Filtro que aponta para um grupo que já não existe (excluído)
+  // vale como "Todos".
+  const wbsGroups = settings?.wbs || [];
+  const effectiveGroupFilter = wbsGroups.some(g => g?.id === groupFilter) ? groupFilter : ALL_GROUPS;
+  const canReorderGroups = effectiveGroupFilter === ALL_GROUPS && groupOrder === 'eap';
+  const visibleGroups = (() => {
+    const base = wbsGroups
+      .map((group, gIndex) => ({ group, gIndex }))
+      .filter(({ group }) => !!group && (effectiveGroupFilter === ALL_GROUPS || group.id === effectiveGroupFilter));
+    if (groupOrder === 'eap') return base;
+    const byText = (a: string, b: string) => a.localeCompare(b, 'pt-BR', { numeric: true, sensitivity: 'base' });
+    if (groupOrder === 'code') return [...base].sort((a, b) => byText(a.group.id, b.group.id));
+    if (groupOrder === 'name') return [...base].sort((a, b) => byText(splitName(a.group.name).name, splitName(b.group.name).name));
+    const totals = new Map(base.map(({ group }) => [group.id, calculateGroupTotal(group.name)]));
+    const dir = groupOrder === 'value-desc' ? -1 : 1;
+    return [...base].sort((a, b) => dir * ((totals.get(a.group.id) ?? 0) - (totals.get(b.group.id) ?? 0)));
+  })();
+
   const calculateSubPhaseNatureTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
     const total = { labor: 0, material: 0, equipment: 0 };
     budget
@@ -1997,36 +2040,45 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           </div>
         </div>
       )}
-      {/* Título (§20) com o indicador de pendências técnicas à direita. Era um
-          banner acima do h1 que, somado a título + KPIs + toolbar, tomava metade
-          da tela (pedido de 2026-09-21). Agora é só o ícone com o contador; o
-          detalhe fica no title e o clique abre o Painel de pendências técnicas. */}
-      <div className="flex items-start justify-between gap-4">
+      {/* Título (§20) com os KPIs à direita, na MESMA linha (pedido de 2026-11-13:
+          os cards saíram da faixa própria abaixo da toolbar). Exceção documentada
+          em docs/ui_ux_guia_unificado.md §20.4. O indicador de pendências técnicas
+          (ícone com contador → Painel de pendências técnicas, pedido de 2026-09-21)
+          fecha a fila, depois dos cards. Sem espaço, o grupo da direita quebra para
+          baixo do título, alinhado à direita. Preço Final é o total do qual os
+          outros dois são a decomposição (Custo Direto + BDI = Preço Final) —
+          quebra de simetria (§4.2). */}
+      <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-          <p className="text-gray-400 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
+          <p className="text-gray-500 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
         </div>
-        {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
-          <div className="relative shrink-0 mt-1">
-            <ActionIconButton
-              kind="view"
-              icon={<ClipboardList className="w-4 h-4" />}
-              title={`Memória técnica pendente: ${itemsWithoutCalculationMemory} item(s) sem memória de cálculo e ${itemsWithoutPrecisionClass} item(s) sem classe de precisão. Clique para abrir o painel de pendências técnicas.`}
-              aria-label="Abrir painel de pendências técnicas"
-              onClick={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
-            />
-            <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
-              {itemsComPendenciaTecnica}
-            </span>
-          </div>
-        )}
+        <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
+          <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
+          <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
+          <KpiCard size="sm" className="shrink-0" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
+          {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
+            <div className="relative shrink-0">
+              <ActionIconButton
+                kind="view"
+                icon={<ClipboardList className="w-4 h-4" />}
+                title={`Memória técnica pendente: ${itemsWithoutCalculationMemory} item(s) sem memória de cálculo e ${itemsWithoutPrecisionClass} item(s) sem classe de precisão. Clique para abrir o painel de pendências técnicas.`}
+                aria-label="Abrir painel de pendências técnicas"
+                onClick={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
+              />
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
+                {itemsComPendenciaTecnica}
+              </span>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* Toolbar de botões (§5.3): controles de escopo/visualização + ação
           primária. Barra PRÓPRIA, acima da toolbar acoplada — muda o que a tela
-          mostra, não o recorte das linhas. Vem ANTES dos KPIs (pedido de
-          2026-09-21): o BDI (%) daqui é o que define o Preço Venda e o BDI dos
-          cards — mesma razão de as abas virem antes dos KPIs (§5.3, nota). */}
+          mostra, não o recorte das linhas. O BDI (%) daqui é o que
+          define o Preço Final e o BDI dos cards, que moram na linha do título
+          (acima desta barra). */}
       <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
         <div className="flex flex-wrap items-center gap-3">
           {isLocked && (
@@ -2235,14 +2287,6 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         </div>
       </div>
 
-      {/* Statistics — KpiCard (§4). Preço Venda é o total do qual os outros dois são a
-          decomposição (Custo Direto + BDI = Preço Venda) — quebra de simetria (§4.2). */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-3">
-        <KpiCard size="lg" className="col-span-2" label="Preço Venda" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
-        <KpiCard size="sm" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
-        <KpiCard size="sm" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
-      </div>
-
       {/* Banner de nova competência SINAPI + rebase */}
       <SinapiRebaseModal
         budget={budget}
@@ -2285,6 +2329,47 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <X className="w-3.5 h-3.5" />
               </button>
             )}
+          </div>
+
+          {/* Filtro por GRUPO da EAP + ordem dos grupos (mesmo desenho do "Agrupar",
+              §6.12). Recortam o que a tabela mostra; não mexem na EAP gravada. */}
+          <div className="relative shrink-0">
+            <Layers className={`absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none ${effectiveGroupFilter !== ALL_GROUPS ? 'text-white' : 'text-gray-500'}`} />
+            <select
+              value={effectiveGroupFilter}
+              onChange={(e) => {
+                const id = e.target.value;
+                setGroupFilter(id);
+                // Escolheu UM grupo: já abre, senão o recorte mostra só o cabeçalho fechado.
+                if (id !== ALL_GROUPS) setExpandedGroups(prev => (prev.includes(id) ? prev : [...prev, id]));
+              }}
+              title="Filtrar por grupo da EAP"
+              aria-label="Filtrar por grupo"
+              className={`h-9 pl-8 pr-3 max-w-[16rem] rounded-[6px] text-[13px] font-medium border appearance-none cursor-pointer transition-all ${
+                effectiveGroupFilter !== ALL_GROUPS
+                  ? 'bg-blue-600 text-white border-blue-600 [&>option]:bg-white [&>option]:text-gray-900'
+                  : 'border-gray-200 text-gray-700 bg-white hover:bg-gray-50'
+              }`}
+            >
+              <option value={ALL_GROUPS}>Todos os grupos</option>
+              {wbsGroups.filter(Boolean).map(g => {
+                const { name } = splitName(g.name);
+                return <option key={g.id} value={g.id}>{g.id} · {name}</option>;
+              })}
+            </select>
+          </div>
+
+          <div className="relative shrink-0">
+            <ArrowUpDown className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none text-gray-500" />
+            <select
+              value={groupOrder}
+              onChange={(e) => setGroupOrder(e.target.value as GroupOrder)}
+              title="Ordem em que os grupos aparecem na tela"
+              aria-label="Ordem dos grupos"
+              className="h-9 pl-8 pr-3 rounded-[6px] text-[13px] font-medium border border-gray-200 text-gray-700 bg-white hover:bg-gray-50 appearance-none cursor-pointer transition-all"
+            >
+              {GROUP_ORDER_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </select>
           </div>
 
           <button
@@ -2743,8 +2828,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 )}
               </tr>
             </thead>
-          {(settings?.wbs || []).map((group, gIndex) => {
-            if (!group) return null;
+          {visibleGroups.map(({ group, gIndex }) => {
             // Com busca ativa, grupo sem nenhum item correspondente sai inteiro.
             if (isSearching_wbs && !budget.some(b => b.group === group.name && matchesWbsSearch(b))) return null;
             // A busca também abre a árvore: o resultado não pode ficar escondido
@@ -2775,15 +2859,30 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <span className="font-medium text-sm whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                       <div className="flex gap-1 items-center">
                         <div className="flex items-center">
-                          {gIndex > 0 && (
-                            <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
-                              <ArrowUp className="w-3 h-3" />
-                            </button>
-                          )}
-                          {gIndex < settings.wbs.length - 1 && (
-                            <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'DOWN')} className="text-gray-400 hover:text-white p-1" title="Mover para Baixo">
-                              <ArrowDown className="w-3 h-3" />
-                            </button>
+                          {canReorderGroups ? (
+                            <>
+                              {gIndex > 0 && (
+                                <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
+                                  <ArrowUp className="w-3 h-3" />
+                                </button>
+                              )}
+                              {gIndex < settings.wbs.length - 1 && (
+                                <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'DOWN')} className="text-gray-400 hover:text-white p-1" title="Mover para Baixo">
+                                  <ArrowDown className="w-3 h-3" />
+                                </button>
+                              )}
+                            </>
+                          ) : (
+                            // Filtro/ordem ativos: a posição na tela não é a da EAP, então mover
+                            // aqui faria o grupo "pular" sem lógica. Desligado, com o motivo.
+                            <>
+                              <span title={MOTIVO_SEM_MOVER_GRUPO}>
+                                <button type="button" disabled aria-label="Mover para Cima" className="text-gray-400 p-1 opacity-40 cursor-not-allowed"><ArrowUp className="w-3 h-3" /></button>
+                              </span>
+                              <span title={MOTIVO_SEM_MOVER_GRUPO}>
+                                <button type="button" disabled aria-label="Mover para Baixo" className="text-gray-400 p-1 opacity-40 cursor-not-allowed"><ArrowDown className="w-3 h-3" /></button>
+                              </span>
+                            </>
                           )}
                         </div>
                         <button type="button" onClick={(e) => handleDuplicateGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-gray-400 hover:text-white" title="Duplicar Grupo"><Copy className="w-3.5 h-3.5" /></button>

@@ -12,8 +12,10 @@ import type { DirecaoGrupos } from '../utils/agruparLinhas';
  * ou o sentido, recolher/expandir) — a tela zera ali a âncora do Shift+clique,
  * cujo índice passaria a apontar para outra linha.
  */
-export function useAgrupamento<C extends string>(storageKey: string, onReorganizar?: () => void) {
-    const [campo, setCampoPersistido] = usePersistedState<C | 'none'>(storageKey, 'none');
+export function useAgrupamento<C extends string>(storageKey: string, onReorganizar?: () => void, padrao: C | 'none' = 'none') {
+    // `padrao` = campo com que a tela abre na 1ª vez (ex.: ÒPURA › Centro de Custo abre por grupo);
+    // depois vale o que o usuário escolheu, inclusive "Agrupar" (= 'none').
+    const [campo, setCampoPersistido] = usePersistedState<C | 'none'>(storageKey, padrao);
     const [direcaoGuardada, setDirecaoPersistida] = usePersistedState<DirecaoGrupos>(`${storageKey}:direcao`, 'asc');
     // localStorage é texto livre: qualquer coisa que não seja 'desc' vale como o padrão.
     const direcao: DirecaoGrupos = direcaoGuardada === 'desc' ? 'desc' : 'asc';

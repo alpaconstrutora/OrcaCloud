@@ -26,6 +26,7 @@ describe('costCenterSelectItems — várias organizações', () => {
         { id: 'g1', code: '001', name: 'Administrativo', parent_id: null, organization_id: 'A' },
         { id: 'f1', code: '002', name: 'Administrativo > Pro-labore', parent_id: 'g1', organization_id: 'A' },
         { id: 'g2', code: '001', name: 'Obra', parent_id: null, organization_id: 'B' },
+        { id: 'f2', code: '002', name: 'Obra > Bloco A', parent_id: 'g2', organization_id: 'B' },
     ];
     it('cabeçalho por org; grupo pendura na org, filho continua no grupo', () => {
         const itens = costCenterSelectItems(ccs, new Map([['A', 'Altair'], ['B', 'Alpa']]));

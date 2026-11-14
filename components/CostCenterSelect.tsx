@@ -64,13 +64,23 @@ interface Props {
 /** Itens do drawer a partir da lista crua. Exportado para quem precisa da
  *  mesma resolução fora do seletor (ex.: rótulo em célula). */
 export function costCenterSelectItems(
-    costCenters: CostCenterOption[],
+    todos: CostCenterOption[],
     orgNames: ReadonlyMap<string, string> = new Map(),
-    opts: { permitirGrupo?: boolean } = {},
+    opts: { permitirGrupo?: boolean; /** id (ou nome, com valueField 'name') gravado no campo — nunca some. */ valorAtual?: string } = {},
 ): HierarchicalSelectItem[] {
-    const porId = new Map(costCenters.map(c => [c.id, c]));
     const selecionavelDe = (cc: CostCenterOption): boolean | undefined =>
         cc.selecionavel ?? (!opts.permitirGrupo && cc.parent_id === null ? false : undefined);
+    // Grupo sem nenhum centro de custo dentro e que não pode ser escolhido não tem o que
+    // oferecer: abria para o vazio e parecia um centro de custo que "não foi excluído"
+    // (13/11/2026 — "001 Condomínio" do Condomínio Portinari, cujo filho tinha sido
+    // excluído; a tela Centro de Custo agrupada não mostra grupo vazio, o drawer mostrava).
+    // Fica se for o valor gravado no campo, para o gatilho não perder o rótulo.
+    const temFilho = new Set(todos.map(c => c.parent_id).filter(Boolean));
+    const costCenters = todos.filter(cc =>
+        !(cc.parent_id === null && !temFilho.has(cc.id) && selecionavelDe(cc) === false)
+        || (!!opts.valorAtual && (cc.id === opts.valorAtual || cc.name === opts.valorAtual)),
+    );
+    const porId = new Map(costCenters.map(c => [c.id, c]));
     const orgs = [...new Set(costCenters.map(c => c.organization_id ?? ''))];
     const agruparPorOrg = orgs.length > 1;
     const orgNodeId = (org: string | null | undefined) => `org:${org ?? ''}`;
@@ -102,7 +112,7 @@ const CostCenterSelect: React.FC<Props> = ({
 }) => {
     const organizations = useStore(s => s.organizations);
     const orgNames = useMemo(() => new Map(organizations.map(o => [o.id, o.name])), [organizations]);
-    const items = useMemo(() => costCenterSelectItems(costCenters, orgNames, { permitirGrupo }), [costCenters, orgNames, permitirGrupo]);
+    const items = useMemo(() => costCenterSelectItems(costCenters, orgNames, { permitirGrupo, valorAtual: value }), [costCenters, orgNames, permitirGrupo, value]);
     return (
         <HierarchicalSelect
             items={items}

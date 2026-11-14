@@ -88,6 +88,18 @@ describe('Centro de custo › Agrupar', () => {
         expect(screen.queryByText('Vazio')).toBeNull();                       // grupo-pai sem filho não é linha agrupável
     });
 
+    // 13/11/2026: grupo vazio fora do agrupamento parecia excluído e seguia no drawer do Extrato.
+    it('agrupado, avisa o grupo sem centro de custo que ficou de fora e volta para a árvore', async () => {
+        await abrir();
+        expect(screen.queryByText(/fica fora do agrupamento/)).toBeNull();     // árvore: o grupo já aparece
+        agrupar('grupo');
+        expect(screen.getByText(/1 grupo sem centro de custo fica fora do agrupamento/)).toBeTruthy();
+        expect(screen.getByText('G3 Vazio')).toBeTruthy();
+        fireEvent.click(screen.getByText('Ver sem agrupar'));
+        expect(screen.getByText('Vazio')).toBeTruthy();
+        expect(screen.queryByText(/fica fora do agrupamento/)).toBeNull();
+    });
+
     it('por Empreendimento usa o nome que a coluna mostra', async () => {
         await abrir();
         agrupar('empreendimento');

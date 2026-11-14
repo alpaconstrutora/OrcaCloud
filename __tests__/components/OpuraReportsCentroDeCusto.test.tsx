@@ -1,9 +1,10 @@
 // @vitest-environment jsdom
 /**
- * ÒPURA · Relatórios › dimensão "Centro de Custo" — a tabela espelha a
- * hierarquia de Organização › Centro de Custo (grupo → centros), com os
- * totais somados no grupo e chevron para recolher.
- * Pedido de 13/09/2026, docs/planos/2026-09-13-relatorios-centro-de-custo-grupos.md
+ * ÒPURA · Relatórios › dimensão "Centro de Custo" — colunas Grupo de centro de
+ * custo / Centro de custo, "Agrupar" pelo grupo (abre agrupado, com Crescente/
+ * Decrescente) e o botão de recolher/expandir todos (guia §6.12).
+ * Pedido de 13/11/2026, docs/planos/2026-11-13-relatorios-centro-de-custo-colunas-agrupar.md
+ * (substitui a árvore numa coluna só de 13/09/2026).
  */
 import React from 'react';
 import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
@@ -57,38 +58,83 @@ async function abrirCentroDeCusto() {
     render(<ConfirmProvider><OpuraReports organizationId="org1" /></ConfirmProvider>);
     // A dimensão é uma aba (§19.1 TabsBar → role="tab")
     fireEvent.click(await screen.findByRole('tab', { name: 'Centro de Custo' }));
-    await waitFor(() => expect(screen.getByText('Condomínios')).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Manutenção')).toBeInTheDocument());
 }
 
 const linhaDe = (texto: string) => screen.getByText(texto).closest('tr') as HTMLTableRowElement;
+const textosDasLinhas = () => screen.getAllByRole('row').map(r => r.textContent ?? '');
+const posicoes = (ordem: string[]) => {
+    const linhas = textosDasLinhas();
+    return ordem.map(t => linhas.findIndex(r => r.includes(t)));
+};
+const agrupar = () => screen.getByTitle('Agrupar os centros de custo') as HTMLSelectElement;
 
-describe('ÒPURA · Relatórios › Centro de Custo em grupos', () => {
+describe('ÒPURA · Relatórios › Centro de Custo — colunas Grupo / Centro de custo + Agrupar', () => {
     // Filtros/abas/modo persistem em localStorage (§3): cada teste parte limpo.
     beforeEach(() => localStorage.clear());
 
-    it('lista grupo → centros na ordem do cadastro, com os filhos indentados e o grupo somando', async () => {
+    it('tem as colunas "Grupo de centro de custo" e "Centro de custo", ordenáveis', async () => {
         await abrirCentroDeCusto();
-        const rotulos = screen.getAllByRole('row').map(r => r.textContent ?? '');
-        const ordem = ['Administrativo', 'Condomínios', '010 - Galeria Altavista', '007 - Bella Vista', 'Ativos', 'Manutenção', '— Sem centro de custo'];
-        const posicoes = ordem.map(t => rotulos.findIndex(r => r.includes(t)));
-        expect(posicoes).toEqual([...posicoes].sort((a, b) => a - b));
-        expect(posicoes.every(p => p > 0)).toBe(true);
-
-        // Grupo "Condomínios" soma os filhos: 50 + 12 lançamentos, realizado −23.817
-        const cond = within(linhaDe('Condomínios'));
-        expect(cond.getByText('62')).toBeInTheDocument();
-        expect(cond.getByText('-R$ 23.817,00')).toBeInTheDocument(); // por extenso, nunca abreviado
-        // "Obra" (001) não tem lançamento no período: fica de fora da tabela
-        expect(rotulos.some(r => r.startsWith('001Obra'))).toBe(false);
+        expect(screen.getByRole('columnheader', { name: /Grupo de centro de custo/ })).toBeInTheDocument();
+        expect(screen.getByRole('columnheader', { name: /^Centro de custo/ })).toBeInTheDocument();
+        // Lista plana: sem o cabeçalho de grupo repetindo o mesmo texto da célula
+        fireEvent.change(agrupar(), { target: { value: 'none' } });
+        // Cada centro mostra o seu grupo na própria linha
+        expect(within(linhaDe('007 - Bella Vista')).getByText('006 Condomínios')).toBeInTheDocument();
+        expect(within(linhaDe('Manutenção')).getByText('020 Ativos')).toBeInTheDocument();
+        // Lançamento legado direto no grupo "Administrativo"
+        expect(within(linhaDe('002 Administrativo')).getByText('(lançado no grupo)')).toBeInTheDocument();
     });
 
-    it('clicar no grupo recolhe os filhos; clicar de novo expande', async () => {
+    it('abre agrupado pelo grupo: cabeçalho com contagem e soma do realizado, "Sem grupo" no fim', async () => {
         await abrirCentroDeCusto();
-        expect(screen.getByText('Manutenção')).toBeInTheDocument();
-        fireEvent.click(linhaDe('Ativos'));
+        expect(agrupar().value).toBe('grupo');
+        const p = posicoes(['002 Administrativo', '006 Condomínios', '010 - Galeria Altavista', '007 - Bella Vista', '020 Ativos', 'Manutenção', 'Sem grupo', '— Sem centro de custo']);
+        expect(p.every(x => x > 0)).toBe(true);
+        expect(p).toEqual([...p].sort((a, b) => a - b));
+        // Cabeçalho do grupo Condomínios: 2 centros, realizado −23.817 (por extenso)
+        const cabecalho = screen.getAllByText('006 Condomínios').find(el => el.className.includes('font-semibold'))!;
+        const linhaGrupo = within(cabecalho.closest('tr') as HTMLTableRowElement);
+        expect(linhaGrupo.getByText('2')).toBeInTheDocument();
+        expect(linhaGrupo.getByTitle('Soma do realizado do grupo').textContent).toMatch(/23\.817,00/);
+    });
+
+    it('Decrescente inverte a ordem dos grupos; "Sem grupo" continua no fim', async () => {
+        await abrirCentroDeCusto();
+        fireEvent.change(screen.getByLabelText('Ordem dos grupos'), { target: { value: 'desc' } });
+        const p = posicoes(['020 Ativos', '006 Condomínios', '002 Administrativo', '— Sem centro de custo']);
+        expect(p).toEqual([...p].sort((a, b) => a - b));
+    });
+
+    it('o botão recolhe e expande todos os grupos; o cabeçalho recolhe só o seu', async () => {
+        await abrirCentroDeCusto();
+        fireEvent.click(screen.getByRole('button', { name: 'Recolher todos os grupos' }));
         expect(screen.queryByText('Manutenção')).not.toBeInTheDocument();
-        fireEvent.click(linhaDe('Ativos'));
+        expect(screen.queryByText('007 - Bella Vista')).not.toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: 'Expandir todos os grupos' }));
         expect(screen.getByText('Manutenção')).toBeInTheDocument();
+
+        const cabecalhoAtivos = screen.getAllByText('020 Ativos').find(el => el.className.includes('font-semibold'))!;
+        fireEvent.click(cabecalhoAtivos);
+        expect(screen.queryByText('Manutenção')).not.toBeInTheDocument();
+        expect(screen.getByText('007 - Bella Vista')).toBeInTheDocument();
+    });
+
+    it('sem agrupamento a lista é plana e o botão fica desligado dizendo o motivo', async () => {
+        await abrirCentroDeCusto();
+        fireEvent.change(agrupar(), { target: { value: 'none' } });
+        expect(screen.queryByTitle('Soma do realizado do grupo')).not.toBeInTheDocument();
+        const botao = screen.getByRole('button', { name: 'Recolher todos os grupos' });
+        expect(botao).toBeDisabled();
+        expect(botao.getAttribute('title')).toMatch(/Agrupar/);
+        // A escolha persiste: reabrir não volta a agrupar sozinho
+        expect(localStorage.getItem('opuraReports:pivotCc:groupBy')).toContain('none');
+    });
+
+    it('clicar na linha do centro abre o extrato dele', async () => {
+        await abrirCentroDeCusto();
+        fireEvent.click(linhaDe('Manutenção'));
+        expect(await screen.findByRole('heading', { name: 'Manutenção' })).toBeInTheDocument();
     });
 
     it('modo Comparar troca as colunas (Período A/B/Δ/Var.) — a tabela remonta, não herda as do pivot', async () => {
@@ -102,7 +148,7 @@ describe('ÒPURA · Relatórios › Centro de Custo em grupos', () => {
         expect(within(linhaDe('Administrativo')).getByText('-R$ 34.482,00')).toBeInTheDocument();
     });
 
-    it('o total do rodapé continua sendo o total plano (não conta grupo duas vezes)', async () => {
+    it('o total do rodapé continua sendo o total da RPC', async () => {
         await abrirCentroDeCusto();
         // Rodapé §6.7/§6.10: `footer` do StandardTable — linha de totais fora do <tbody>
         expect(screen.getByText(/Total · 5 linhas · 734 lançamentos/)).toBeInTheDocument();

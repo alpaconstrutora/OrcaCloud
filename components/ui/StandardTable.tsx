@@ -133,6 +133,8 @@ interface StandardTableProps<T> {
         title?: string;
         /** `title` do total do grupo — diz o que foi somado. */
         tituloTotal?: string;
+        /** Campo com que a tabela abre na 1ª vez (padrão: sem agrupamento). */
+        padrao?: string;
     };
 }
 
@@ -184,7 +186,7 @@ export function StandardTable<T>({
     }, [rows, search, searchText, tableColumns.sortColumn, tableColumns.sortDirection, getSort]);
 
     // "Agrupar" §6.12 — o hook roda sempre (regra dos hooks); sem a prop, nada agrupa.
-    const grupoEstado = useAgrupamento<string>(`${storageKey}:groupBy`);
+    const grupoEstado = useAgrupamento<string>(`${storageKey}:groupBy`, undefined, agrupar?.padrao ?? 'none');
     // Campo guardado que não está mais entre as opções (ex.: "Organização" só existe em "Todas")
     // vale como 'none' — senão a tabela seguiria agrupada com o seletor mostrando "Agrupar".
     const campoAgrupar = agrupar && agrupar.opcoes.some(o => o.value === grupoEstado.campo) ? grupoEstado.campo : 'none';

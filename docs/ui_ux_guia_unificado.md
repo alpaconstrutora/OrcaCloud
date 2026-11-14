@@ -809,8 +809,10 @@ toolbar de busca, porque muda o escopo — não o recorte.
 > dos KPIs (ANATOMIA): o dado não pode aparecer antes do controle que o
 > determina. Caso concreto: Engenharia › Orçamento Analítico
 > (`BudgetEditor.tsx`, 2026-09-21, a pedido do usuário) — o campo BDI (%) da
-> toolbar de botões é o que calcula "Preço Venda" e "BDI" dos cards, então a
-> ordem ali é título → toolbar de botões → KPIs → toolbar acoplada. Não vale
+> toolbar de botões é o que calcula "Preço Final" e "BDI" dos cards, então a
+> ordem ali era título → toolbar de botões → KPIs → toolbar acoplada. Desde
+> 2026-11-13 os KPIs foram para a linha do título (§20.4), então o cartão fica
+> acima da barra que o define, sem faixa própria. Não vale
 > para barra de escopo que só **recorta** (conta, competência, período): essa
 > continua depois dos KPIs, como no Extrato.
 > ⚠️ **Aviso persistente não vira banner acima do `<h1>`.** Um banner de
@@ -1513,7 +1515,17 @@ Na aba **Extrato** (`docs/planos/2026-10-24-extrato-agrupar.md`) o controle vai 
 Em 24/10/2026 para Minha Organização › Centro de custo (`CostCenterModule.tsx`, `docs/planos/2026-10-24-centro-de-custo-agrupar.md`).
 A tela é uma **árvore** (grupo → centro de custo): agrupar a **achata** nos centros de custo e os divide por
 Centro de custo (grupo), Organização (só em "Todas"), Empreendimento ou Obra; grupo-pai sem filho não aparece
-agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel).
+agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel). Desde 13/11/2026 o grupo vazio
+não some sem rastro: abaixo da tabela, uma linha `text-[13px] text-gray-600` diz quantos ficaram fora (com
+código e nome, até 3) e um link "Ver sem agrupar" volta para a árvore — sem ela, o grupo parecia excluído aqui
+e seguia no drawer de outras telas. O drawer (`CostCenterSelect`) também esconde grupo sem filho que não é escolhível.
+
+Em 13/11/2026 para ÒPURA · Relatórios › aba **Centro de Custo** (`OpuraReports.tsx`,
+`docs/planos/2026-11-13-relatorios-centro-de-custo-colunas-agrupar.md`). A árvore numa coluna só (que não ordenava)
+virou lista plana com as colunas **Grupo de centro de custo** e **Centro de custo**, todas ordenáveis; a leitura por
+grupo é o Agrupar com a única opção "Grupo de centro de custo", que **abre agrupado** (`agrupamento.padrao` do
+`StandardTable` / 3º parâmetro do `useAgrupamento` — o campo da 1ª visita; depois vale o que o usuário escolheu).
+Total do grupo = soma do realizado. Lançamento legado gravado direto no grupo aparece como "(lançado no grupo)" dentro dele.
 
 Em 12/11/2026 para Minha Organização › Usuários › **Membros** (`OrganizationUsers.tsx`, `docs/planos/2026-11-12-usuarios-agrupar.md`).
 Opções: Função (na hierarquia Proprietário → Admin → Membro → Visitante, não alfabética), Cargo (o nome que a célula mostra;
@@ -2743,6 +2755,34 @@ abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
 
 > ❌ Não copiar para outras telas: a exceção é da tela de entrada. Lista, cadastro e
 > painel analítico seguem o §20.
+
+### 20.4 Exceção — KPIs na linha do título, à direita (13/11/2026)
+
+**Onde:** Engenharia › Orçamento Analítico (`BudgetEditor.tsx`), por pedido
+explícito do usuário. Os três cards (Preço Final, Custo Direto, BDI) deixaram a
+faixa própria abaixo da toolbar de botões e passaram a ocupar a linha do
+`<h1>`, alinhados à direita. Antes era "Preço Venda"; o nome agora é **Preço Final**.
+
+```tsx
+<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+  <div>{/* h1 + p — §20, intactos */}</div>
+  <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
+    <KpiCard size="lg" className="shrink-0" label="Preço Final" ... />
+    <KpiCard size="sm" className="shrink-0" label="Custo Direto" ... />
+    <KpiCard size="sm" className="shrink-0" label="BDI (25%)" ... />
+    {/* indicador de pendências (ícone + contador), se houver, fecha a fila */}
+  </div>
+</div>
+```
+
+> ✅ Os KPIs continuam sendo `KpiCard` (§4) com quebra de simetria (§4.2): o
+> principal em `size="lg"`, os outros em `sm`. Só mudou **onde** moram.
+> ✅ `flex-wrap` + `ml-auto`: sem largura para os quatro lado a lado, o grupo da
+> direita quebra para baixo do título, ainda à direita — nunca espreme o card
+> nem corta o valor (`shrink-0` em cada um).
+> ❌ Não é regra geral: telas de lista/cadastro seguem o §20 (KPIs em grade
+> abaixo do título). Esta forma só vale onde o pedido for explícito e a tela
+> tiver poucos KPIs (≤ 3 + um indicador).
 
 ---
 

@@ -1548,6 +1548,8 @@ Em 14/11/2026 para Engenharia › **Orçamentos** (a lista, `ProjectList.tsx`; p
 
 Em 14/11/2026 para Comercial › Venda de Ativos › **Unidades do edifício** (`SalesModule.tsx`; mesmo pedido "filtro grupo + botão classificação + botão expandir / recolher"). Só com um edifício aberto e no modo lista — na visão mestre as linhas são edifícios, e grade/torres não têm linha. Opções: Bloco, Andar (ordem numérica, subsolo antes do térreo, rótulo igual à célula: "Térreo", "3º") e Status (o texto da célula — a etapa da negociação que ocupa a unidade — na ordem do fluxo: Disponível → Proposta … Concluído → rótulos do cadastro). Total do grupo = soma do Preço. Função pura em `utils/unidadeVendaGrupos.ts`; Shift+clique sobre as linhas da tela sem os grupos recolhidos.
 
+Em 14/11/2026 para Comercial › **Condomínios** (`components/condominio/CondominiosModule.tsx`, tabela feita à mão; `docs/planos/2026-11-14-condominios-organizacao-agrupar.md`). Junto veio a coluna **Organização** = quem OPERA o condomínio (`orgDoCondominio`), visível também com uma org no topo (a lista traz os que ela opera e os que ela construiu). Opções: Organização (chave = id), Cidade e Centro de custo (combinação, `chavePorCombinacao`). Só contagem (`semTotal`). O controle vai logo depois da busca (a tela não tem Filtro avançado). Função pura em `utils/condominioGrupos.ts`.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

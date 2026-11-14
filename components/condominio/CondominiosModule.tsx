@@ -23,6 +23,11 @@ import CondominioDetail, { type Aba as AbaCondominio } from './CondominioDetail'
 import { condominioRateioService } from '../../services/condominioRateioService';
 import { empreendimentoService } from '../../services/empreendimentoService';
 import { useOrgContext } from '../../hooks/useOrgContext';
+import { useAgrupamento } from '../../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from '../ui/Agrupamento';
+import { entradasDaPagina, type EntradaDaTela } from '../../utils/agruparLinhas';
+import { agruparCondominios, OPCOES_AGRUPAR_CONDOMINIO, type CampoAgruparCondominio } from '../../utils/condominioGrupos';
+import { orgDoCondominio } from '../../utils/orgDoCondominio';
 import { useStore } from '../../store/useStore';
 import type { Empreendimento } from '../../types/empreendimento';
 
@@ -39,6 +44,10 @@ const STATUS_LABEL: Record<string, string> = {
 const COLUMNS: ColumnConfig[] = [
     { key: 'code', label: 'Código', sortable: true },
     { key: 'name', label: 'Condomínio', sortable: true },
+    // Quem OPERA o condomínio (`orgDoCondominio`): a org própria do condomínio,
+    // ou a do empreendimento quando não há. Visível também com uma org no topo,
+    // porque a lista traz os condomínios que ela opera E os que ela construiu.
+    { key: 'organizacao', label: 'Organização', sortable: true },
     { key: 'cnpj', label: 'CNPJ do condomínio', sortable: true },
     { key: 'cidade', label: 'Cidade', sortable: true },
     // Vem do lado INVERSO: `cost_centers_v2.empreendimento_id` aponta para o
@@ -158,6 +167,16 @@ const CondominiosModule: React.FC = () => {
         return ccs.map(c => `${c.code} — ${c.name}`).join(' · ');
     }, [ccPorEmpreendimento]);
 
+    /** Nome da organização que opera o condomínio (coluna Organização). */
+    const nomeOrgPorId = React.useMemo(
+        () => new Map<string, string>(organizations.map((o: any) => [o.id, o.name])),
+        [organizations],
+    );
+    const nomeOrgDoCondominio = React.useCallback(
+        (e: Empreendimento): string => nomeOrgPorId.get(orgDoCondominio(e)) ?? '',
+        [nomeOrgPorId],
+    );
+
     const filtrados = React.useMemo(() => {
         const t = searchTerm.trim().toLowerCase();
         const base = t
@@ -169,13 +188,15 @@ const CondominiosModule: React.FC = () => {
                 // A busca alcança o centro de custo porque ele virou coluna:
                 // coluna visível que a busca não enxerga faz o usuário digitar
                 // "011" e a linha sumir.
-                || rotuloCC(e.id).toLowerCase().includes(t))
+                || rotuloCC(e.id).toLowerCase().includes(t)
+                || nomeOrgDoCondominio(e).toLowerCase().includes(t))
             : emOperacao;
 
         const valor = (e: Empreendimento, col: string): string => {
             switch (col) {
                 case 'code': return e.code || '';
                 case 'name': return e.name;
+                case 'organizacao': return nomeOrgDoCondominio(e);
                 case 'cnpj': return e.condominio_cnpj || '';
                 case 'cidade': return e.endereco_city || '';
                 // Sem centro de custo devolve '' — todos juntos no mesmo
@@ -192,7 +213,28 @@ const CondominiosModule: React.FC = () => {
             }
             return a.name.localeCompare(b.name, 'pt-BR');
         });
-    }, [emOperacao, searchTerm, rotuloCC, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [emOperacao, searchTerm, rotuloCC, nomeOrgDoCondominio, tableColumns.sortColumn, tableColumns.sortDirection]);
+
+    // Agrupar + ordem dos grupos + recolher/expandir todos (guia §6.12). Recorte de
+    // exibição sobre a lista já filtrada e ordenada, sem reconsulta. Campo guardado
+    // que deixou de ser opção vale como sem agrupamento.
+    const agrupamento = useAgrupamento<CampoAgruparCondominio>('condominios:groupBy');
+    const campoAgrupar: CampoAgruparCondominio | 'none' =
+        OPCOES_AGRUPAR_CONDOMINIO.some(o => o.value === agrupamento.campo) ? agrupamento.campo : 'none';
+    const grupos = React.useMemo(
+        () => (campoAgrupar === 'none' ? [] : agruparCondominios(filtrados, campoAgrupar, agrupamento.direcao, {
+            organizacao: e => {
+                const nome = nomeOrgDoCondominio(e);
+                return nome ? { id: orgDoCondominio(e), name: nome } : null;
+            },
+            cidade: e => e.endereco_city,
+            centrosDeCusto: e => (ccPorEmpreendimento.get(e.id) ?? []).map(c => ({ id: c.id, name: `${c.code} — ${c.name}` })),
+        })),
+        [campoAgrupar, filtrados, agrupamento.direcao, nomeOrgDoCondominio, ccPorEmpreendimento],
+    );
+    const entradas: EntradaDaTela<Empreendimento>[] = campoAgrupar === 'none'
+        ? filtrados.map((item, indice) => ({ tipo: 'linha', item, indice }))
+        : entradasDaPagina(grupos, agrupamento.recolhidos);
 
     const abrirImportacao = () => {
         setSelecionados(new Set());
@@ -324,10 +366,25 @@ const CondominiosModule: React.FC = () => {
                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                             <input
                                 type="text"
-                                placeholder="Buscar por nome, código, CNPJ ou cidade..."
+                                placeholder="Buscar por nome, código, organização, CNPJ ou cidade..."
                                 value={searchTerm}
                                 onChange={e => setSearchTerm(e.target.value)}
                                 className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                            />
+                        </div>
+                        {/* Agrupar + ordem dos grupos + recolher/expandir todos (§6.12),
+                            logo depois da busca (a tela não tem Filtro avançado). */}
+                        <div className="flex items-center gap-2.5 shrink-0">
+                            <AgruparControles
+                                opcoes={OPCOES_AGRUPAR_CONDOMINIO}
+                                campo={campoAgrupar}
+                                onCampo={agrupamento.setCampo}
+                                direcao={agrupamento.direcao}
+                                onDirecao={agrupamento.setDirecao}
+                                chavesDosGrupos={grupos.map(g => g.key)}
+                                algumRecolhido={agrupamento.recolhidos.size > 0}
+                                onAlternarTodos={agrupamento.alternarTodos}
+                                title="Agrupar os condomínios"
                             />
                         </div>
                         <button
@@ -374,6 +431,7 @@ const CondominiosModule: React.FC = () => {
                                 <tr className="sticky top-0 z-10 bg-white text-gray-700 font-semibold text-xs border-b border-gray-200">
                                     {v.includes('code') && <SortableHeader colKey="code" label="Código" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('name') && <SortableHeader colKey="name" label="Condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
+                                    {v.includes('organizacao') && <SortableHeader colKey="organizacao" label="Organização" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('cnpj') && <SortableHeader colKey="cnpj" label="CNPJ do condomínio" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('cidade') && <SortableHeader colKey="cidade" label="Cidade" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
                                     {v.includes('centroCusto') && <SortableHeader colKey="centroCusto" label="Centro de custo" uppercase={false} sortColumn={tableColumns.sortColumn} sortDirection={tableColumns.sortDirection} onSort={tableColumns.handleColumnSort} className="px-6 py-2 border-r border-gray-100" />}
@@ -381,7 +439,22 @@ const CondominiosModule: React.FC = () => {
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filtrados.map(e => (
+                                {entradas.map(en => {
+                                    if (en.tipo === 'grupo') {
+                                        return (
+                                            <LinhaDeGrupo
+                                                key={`grupo:${en.grupo.key}`}
+                                                grupo={en.grupo}
+                                                recolhido={en.recolhido}
+                                                continua={en.continua}
+                                                colSpan={v.length}
+                                                onAlternar={agrupamento.alternar}
+                                                semTotal
+                                            />
+                                        );
+                                    }
+                                    const e = en.item;
+                                    return (
                                         <tr
                                             key={e.id}
                                             className="hover:bg-blue-50/50 transition-colors cursor-pointer group"
@@ -389,6 +462,13 @@ const CondominiosModule: React.FC = () => {
                                         >
                                             {v.includes('code') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">{e.code || '—'}</td>}
                                             {v.includes('name') && <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-700">{e.name}</td>}
+                                            {v.includes('organizacao') && (
+                                                <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
+                                                    {nomeOrgDoCondominio(e)
+                                                        ? <span className="block truncate" title={nomeOrgDoCondominio(e)}>{nomeOrgDoCondominio(e)}</span>
+                                                        : '—'}
+                                                </td>
+                                            )}
                                             {v.includes('cnpj') && (
                                                 <td className="px-6 py-2.5 border-r border-gray-100 last:border-r-0 text-sm font-normal text-gray-600">
                                                     {e.condominio_cnpj || <span className="text-gray-400">Não informado</span>}
@@ -421,7 +501,8 @@ const CondominiosModule: React.FC = () => {
                                                 </td>
                                             )}
                                         </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                     </div>

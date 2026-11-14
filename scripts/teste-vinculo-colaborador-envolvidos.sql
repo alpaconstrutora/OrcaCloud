@@ -1,7 +1,9 @@
 -- scripts/teste-vinculo-colaborador-envolvidos.sql
 -- Prova: (1) só owner/admin vincula colaborador a uma conta (employees.user_id,
 -- ou e-mail igual ao de um login); (2) task_collaborators volta a funcionar pela
--- API e só quem gere a tarefa (dono / membro do espaço) mexe nos envolvidos.
+-- API e só quem gere a tarefa mexe nos envolvidos — desde
+-- aplicar_20271112998000 (visibilidade pelo responsável): quem a criou e o
+-- owner/admin da org na tarefa que vê; membro do espaço não.
 -- Migration: supabase/migrations/aplicar_20271112800000_vinculo_colaborador_e_envolvidos_trava.sql
 -- Plano: docs/planos/2026-11-11-link-celular-tarefas-diario.md (Ajustes — brechas).
 --
@@ -12,7 +14,9 @@
 --
 -- Para ensaiar a migration ANTES de aplicá-la, gere um arquivo com o conteúdo
 -- dela no lugar da linha MIGRATION abaixo. Sem ela, a prova falha em
--- "membro comum vinculando o colaborador à própria conta → 42501" (é o RED).
+-- "membro comum vinculando o colaborador à própria conta → 42501" (é o RED). A parte 2
+-- (envolvidos) segue a regra de aplicar_20271112998000: para ensaiá-la, essa migration vai
+-- no lugar da linha MIGRATION; sem ela falha em "membro do espaço NÃO lê os envolvidos".
 
 BEGIN;
 -- MIGRATION
@@ -137,11 +141,13 @@ BEGIN
     -- compara com a caixa exata).
     UPDATE public.employees SET email = y_email WHERE id = e_ja_y;
     UPDATE public.employees SET email = m_email WHERE id = e_m;
-    -- t1: de m2, sem espaço. t2: de g, no espaço s, de que m é membro. t3: de m.
+    -- t1: de m2, sem espaço. t2: de m2, no espaço s (de g), de que m é membro. t3: de m.
+    -- Espaço não dá visão nem gestão (aplicar_20271112998000): quem gere os envolvidos de
+    -- t2 é m2 (quem criou) e g (admin da org); m, só membro do espaço, não.
     INSERT INTO public.tasks (org_id, user_id, title, status, priority) VALUES (org, m2, 'TV t1 de m2', 'open', 3) RETURNING id INTO t1;
     INSERT INTO public.task_spaces (org_id, owner_user_id, name) VALUES (org, g, 'TV espaço') RETURNING id INTO s;
     INSERT INTO public.task_space_members (space_id, user_id, role) VALUES (s, m, 'member');
-    INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id) VALUES (org, g, 'TV t2 no espaço', 'open', 3, s) RETURNING id INTO t2;
+    INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id) VALUES (org, m2, 'TV t2 no espaço', 'open', 3, s) RETURNING id INTO t2;
     INSERT INTO public.tasks (org_id, user_id, title, status, priority) VALUES (org, m, 'TV t3 de m', 'open', 3) RETURNING id INTO t3;
     INSERT INTO public.task_collaborators (task_id, employee_id) VALUES (t2, e_ja_y);
 
@@ -153,17 +159,21 @@ BEGIN
     v := pg_temp.como(m, format('INSERT INTO public.task_collaborators (task_id, employee_id) VALUES (%L, %L) RETURNING 1::text', t3, e_ja_y));
     PERFORM pg_temp.confere(v = 'ok:1', 'dono põe envolvido na própria tarefa (veio ' || v || ')');
     v := pg_temp.como(m, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id = %L', t2));
-    PERFORM pg_temp.confere(v = 'ok:1', 'membro do espaço LÊ os envolvidos da tarefa do espaço (veio ' || v || ')');
+    PERFORM pg_temp.confere(v = 'ok:0', 'membro do espaço NÃO lê os envolvidos de tarefa alheia do espaço (veio ' || v || ')');
     v := pg_temp.como(m, format('INSERT INTO public.task_collaborators (task_id, employee_id) VALUES (%L, %L) RETURNING 1::text', t2, e_m));
-    PERFORM pg_temp.confere(v = 'ok:1', 'membro do espaço põe envolvido (veio ' || v || ')');
+    PERFORM pg_temp.confere(v LIKE '42501:%row-level security%', 'membro do espaço não põe envolvido em tarefa alheia (veio ' || v || ')');
     v := pg_temp.como(m, format('WITH u AS (UPDATE public.task_collaborators SET task_id = %L WHERE task_id = %L AND employee_id = %L RETURNING 1) SELECT count(*)::text FROM u', t1, t3, e_ja_y));
     PERFORM pg_temp.confere(v LIKE '42501:%row-level security%', 'dono levando a linha de envolvido para tarefa alheia → recusa (veio ' || v || ')');
 
-    -- m2 (dono de t1) não mexe nos envolvidos de t2 (não é dono nem do espaço).
-    v := pg_temp.como(m2, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id = %L', t2));
-    PERFORM pg_temp.confere(v = 'ok:0', 'quem não gere a tarefa nem é envolvido não lê os envolvidos (veio ' || v || ')');
-    v := pg_temp.como(m2, format('WITH d AS (DELETE FROM public.task_collaborators WHERE task_id = %L RETURNING 1) SELECT count(*)::text FROM d', t2));
-    PERFORM pg_temp.confere(v = 'ok:0', 'quem não gere a tarefa não apaga envolvidos (veio ' || v || ')');
+    -- g (admin da org) gere os envolvidos de t2 (tarefa de espaço, que ele vê).
+    v := pg_temp.como(g, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id = %L', t2));
+    PERFORM pg_temp.confere(v = 'ok:1', 'admin da org lê os envolvidos da tarefa de espaço (veio ' || v || ')');
+    v := pg_temp.como(g, format('INSERT INTO public.task_collaborators (task_id, employee_id) VALUES (%L, %L) RETURNING 1::text', t2, e_m));
+    PERFORM pg_temp.confere(v = 'ok:1', 'admin da org põe envolvido (veio ' || v || ')');
+
+    -- m agora é envolvido de t2 (e_m tem o e-mail dele): lê, mas não apaga.
+    v := pg_temp.como(m, format('WITH d AS (DELETE FROM public.task_collaborators WHERE task_id = %L RETURNING 1) SELECT count(*)::text FROM d', t2));
+    PERFORM pg_temp.confere(v = 'ok:0', 'quem não gere a tarefa (envolvido, membro do espaço) não apaga envolvidos (veio ' || v || ')');
 
     -- y é envolvido de t2 (e_ja_y tem o e-mail dele): lê a lista da tarefa.
     v := pg_temp.como(y, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id = %L', t2));
@@ -171,9 +181,9 @@ BEGIN
     v := pg_temp.como(y, format('SELECT count(*)::text FROM public.tasks WHERE id = %L', t2));
     PERFORM pg_temp.confere(v = 'ok:1', 'envolvido vê a tarefa (tasks_select_collaborator) (veio ' || v || ')');
 
-    -- O TaskForm do membro do espaço: apaga tudo e reinsere o que leu.
-    v := pg_temp.como(m, format('WITH d AS (DELETE FROM public.task_collaborators WHERE task_id = %L RETURNING 1) SELECT count(*)::text FROM d', t2));
-    PERFORM pg_temp.confere(v = 'ok:2', 'membro do espaço apaga os envolvidos que lê (veio ' || v || ')');
+    -- O TaskForm de quem gere (aqui o admin): apaga tudo e reinsere o que leu.
+    v := pg_temp.como(g, format('WITH d AS (DELETE FROM public.task_collaborators WHERE task_id = %L RETURNING 1) SELECT count(*)::text FROM d', t2));
+    PERFORM pg_temp.confere(v = 'ok:2', 'admin da org apaga os envolvidos que lê (veio ' || v || ')');
 
     -- ── forma ────────────────────────────────────────────────────────────────
     PERFORM pg_temp.confere(

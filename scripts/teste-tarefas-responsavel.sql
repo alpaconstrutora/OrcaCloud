@@ -11,8 +11,13 @@
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';
 -- sucesso = a linha final 'TUDO OK …' (`db query` só devolve o último resultado).
 -- A linha final é um SELECT só de leitura, depois do ROLLBACK, com a contagem
--- das tarefas abertas do Iago na org (regra antiga + como responsável), só como
--- informação.
+-- das tarefas abertas do Iago na org (criador/envolvido + como responsável), só
+-- como informação. O Iago é `member`: pela regra de aplicar_20271112998000 ele não
+-- tem a perna de owner/admin, e o espaço não dá mais visão.
+--
+-- Vale com a migration de hoje aplicada e também com
+-- aplicar_20271112998000_tarefas_visibilidade_por_responsavel.sql no lugar da
+-- linha MIGRATION (ensaio da regra nova).
 --
 --   npx supabase db query --linked -f scripts/teste-tarefas-responsavel.sql
 --
@@ -88,18 +93,22 @@ BEGIN
      ORDER BY om.user_id LIMIT 1;
     PERFORM pg_temp.confere(o2 IS NOT NULL, 'fixture: outro membro o2 da org');
 
-    -- x: terceiro membro — nem dono, nem membro de espaço (as tarefas de teste
-    -- não têm espaço), nem responsável, nem colaborador.
+    -- x: terceiro membro — nem dono, nem responsável, nem colaborador; e papel
+    -- `member` fora de superadmins: owner/admin da org veem toda tarefa com
+    -- responsável (aplicar_20271112998000), e o "não vê" deixaria de provar algo.
     SELECT om.user_id INTO x
       FROM public.organization_members om JOIN auth.users au ON au.id = om.user_id
-     WHERE om.organization_id = org AND om.user_id NOT IN (iago, o2)
+     WHERE om.organization_id = org AND om.user_id NOT IN (iago, o2) AND om.role = 'member'
+       AND NOT EXISTS (SELECT 1 FROM public.superadmins sa WHERE sa.email = lower(au.email))
      ORDER BY om.user_id LIMIT 1;
     PERFORM pg_temp.confere(x IS NOT NULL, 'fixture: terceiro membro x da org');
 
-    -- y: quarto membro da org, com e-mail, para a perna do e-mail.
+    -- y: quarto membro da org, com e-mail, para a perna do e-mail — também
+    -- `member` fora de superadmins (como admin, veria a tarefa sem a perna do e-mail).
     SELECT au.id, au.email INTO y, y_email
       FROM public.organization_members om JOIN auth.users au ON au.id = om.user_id
      WHERE om.organization_id = org AND au.id NOT IN (iago, o2, x) AND nullif(btrim(au.email), '') IS NOT NULL
+       AND om.role = 'member' AND NOT EXISTS (SELECT 1 FROM public.superadmins sa WHERE sa.email = lower(au.email))
        AND public.is_org_member_de(au.id, org)
      ORDER BY au.id LIMIT 1;
     PERFORM pg_temp.confere(y IS NOT NULL, 'fixture: membro y da org com e-mail');
@@ -329,7 +338,7 @@ BEGIN
         (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks'
             AND policyname IN ('tasks_select_assignee', 'tasks_update_assignee')) = 2
         -- INSERT e DELETE seguem com uma policy cada (o superadmin, aplicar_20271112997000,
-        -- acrescenta só SELECT e UPDATE).
+        -- e o owner/admin, aplicar_20271112998000, acrescentam só SELECT e UPDATE).
         AND (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks' AND cmd = 'INSERT') = 1
         AND (SELECT count(*) FROM pg_policies WHERE schemaname = 'public' AND tablename = 'tasks' AND cmd = 'DELETE') = 1,
         'tasks: + tasks_select_assignee e tasks_update_assignee; INSERT e DELETE sem mudança');
@@ -415,14 +424,13 @@ END $$;
 
 ROLLBACK;
 
--- Só leitura, depois do ROLLBACK: tarefas abertas do Iago na org do link pela
--- regra antiga (dono / membro do espaço / colaborador) e como responsável.
-SELECT format('TUDO OK — Iago na org 926cf626: %s abertas pela regra antiga + %s só como responsável = %s',
+-- Só leitura, depois do ROLLBACK: tarefas abertas do Iago na org do link como
+-- criador/envolvido e como responsável (o Iago é `member`: sem perna de owner/admin).
+SELECT format('TUDO OK — Iago na org 926cf626: %s abertas como criador/envolvido + %s só como responsável = %s',
               count(*) FILTER (WHERE r.antiga),
               count(*) FILTER (WHERE r.responsavel AND NOT r.antiga),
               count(*) FILTER (WHERE r.antiga OR r.responsavel)) AS resultado
   FROM (SELECT (t.user_id = i.id
-                OR (t.space_id IS NOT NULL AND public.is_task_space_member_de(i.id, t.space_id))
                 OR public.is_task_collaborator_de(i.id, t.id)) AS antiga,
                EXISTS (SELECT 1 FROM public.employees e
                         WHERE e.id = t.assignee_employee_id

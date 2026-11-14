@@ -18,6 +18,11 @@
 -- conteúdo das duas, em ordem, no lugar da linha MIGRATION abaixo:
 --   aplicar_20271111950000_link_celular_tabela_e_gemeos.sql
 --   aplicar_20271111960000_link_celular_rpcs_tarefas.sql
+--
+-- Desde aplicar_20271112998000_tarefas_visibilidade_por_responsavel.sql o espaço não dá
+-- visão: u (papel `member`) vê no espaço só o que criou, de que é responsável ou em que
+-- está envolvido. Para ensaiar essa migration, ela vai no lugar da linha MIGRATION; sem
+-- ela a prova falha em "listar NÃO traz … de outro no espaço de u" (o RED da regra nova).
 
 BEGIN;
 -- MIGRATION
@@ -443,7 +448,7 @@ DECLARE
     ctx RECORD;
     u UUID; o UUID; m UUID; o2 UUID; tk TEXT; u_email TEXT;
     s_u UUID; s_u2 UUID; s_m UUID; s_o2 UUID; s_dono UUID; f_u UUID; f_u2 UUID;
-    t_own UUID; t_outro UUID; t_sm UUID; t_espaco UUID; t_sempasta UUID; t_colab UUID;
+    t_own UUID; t_outro UUID; t_sm UUID; t_espaco UUID; t_sempasta UUID; t_colab UUID; t_esp_m UUID;
     t_o2 UUID; t_sub UUID; t_done UUID; t_nova UUID;
     e_colab UUID; e_ok UUID; e_fora UUID; e_comp UUID; st_done UUID; st_o2 UUID;
     p_o UUID; p_fora UUID;
@@ -478,10 +483,14 @@ BEGIN
     VALUES (o, m, 'LC de outro, fora de espaço', 'open', 3) RETURNING id INTO t_outro;
     INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id)
     VALUES (o, m, 'LC de outro, em espaço sem u', 'open', 3, s_m) RETURNING id INTO t_sm;
+    -- t_espaco / t_sempasta: de u, no espaço de u (o espaço organiza; quem vê é o criador).
+    -- t_esp_m: de m, no espaço de u, sem responsável — u NÃO vê (espaço não dá visão).
     INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id, folder_id)
-    VALUES (o, m, 'LC na pasta do espaço de u', 'open', 2, s_u, f_u) RETURNING id INTO t_espaco;
+    VALUES (o, u, 'LC na pasta do espaço de u', 'open', 2, s_u, f_u) RETURNING id INTO t_espaco;
     INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id)
-    VALUES (o, m, 'LC sem pasta no espaço de u', 'open', 2, s_u) RETURNING id INTO t_sempasta;
+    VALUES (o, u, 'LC sem pasta no espaço de u', 'open', 2, s_u) RETURNING id INTO t_sempasta;
+    INSERT INTO public.tasks (org_id, user_id, title, status, priority, space_id, folder_id)
+    VALUES (o, m, 'LC de outro no espaço de u', 'open', 2, s_u, f_u) RETURNING id INTO t_esp_m;
     INSERT INTO public.tasks (org_id, user_id, title, status, priority)
     VALUES (o, m, 'LC u só colaborador', 'open', 3) RETURNING id INTO t_colab;
     INSERT INTO public.tasks (org_id, user_id, title, status, priority)
@@ -530,7 +539,9 @@ BEGIN
         'listar (anon + token) = SELECT em tasks com as claims de u na org do link (RLS: ' || ref || ' / RPC: ' || v || ')');
     PERFORM pg_temp.confere(strpos(v, t_own::text) > 0 AND strpos(v, t_espaco::text) > 0
                         AND strpos(v, t_sempasta::text) > 0 AND strpos(v, t_colab::text) > 0,
-        'listar traz a própria, as do espaço de u e a em que u é colaborador');
+        'listar traz as próprias (fora e dentro do espaço de u) e a em que u é colaborador');
+    PERFORM pg_temp.confere(strpos(v, t_esp_m::text) = 0,
+        'listar NÃO traz a de outro no espaço de u, sem responsável (espaço não dá visão)');
     PERFORM pg_temp.confere(strpos(v, t_outro::text) = 0 AND strpos(v, t_sm::text) = 0 AND strpos(v, t_o2::text) = 0
                         AND strpos(v, t_sub::text) = 0 AND strpos(v, t_done::text) = 0,
         'listar NÃO traz: de outro fora de espaço de u, de espaço sem u, de outra org, subtarefa, concluída');
@@ -574,8 +585,10 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE '42501:%', 'atualizar tarefa de u em OUTRA org → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, ''{"title":"LC x"}'')::text', tk, gen_random_uuid()));
     PERFORM pg_temp.confere(v LIKE '42501:%', 'atualizar tarefa inexistente → 42501 (veio ' || v || ')');
+    v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, ''{"title":"LC x"}'')::text', tk, t_esp_m));
+    PERFORM pg_temp.confere(v LIKE '42501:%', 'membro do espaço NÃO edita tarefa de outro no espaço (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, ''{"title":"  LC editada  "}'')->>''title''', tk, t_espaco));
-    PERFORM pg_temp.confere(v = 'ok:LC editada', 'membro do espaço edita tarefa de outro no espaço (veio ' || v || ')');
+    PERFORM pg_temp.confere(v = 'ok:LC editada', 'u edita a própria tarefa no espaço (título aparado) (veio ' || v || ')');
 
     -- ── criar ────────────────────────────────────────────────────────────────
     v := pg_temp.cel(format('SELECT public.celular_tarefa_criar(%L, %L::jsonb)::text', tk, jsonb_build_object('title', 'LC x', 'space_id', s_o2)));

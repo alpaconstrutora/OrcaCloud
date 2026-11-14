@@ -37,6 +37,7 @@ brechas `employees.user_id` gravável por qualquer membro e `task_collaborators`
 | 2026-11-11 | Vincular o colaborador do Iago à conta? | **Sim** (gravado pelo controlador: employees `175d203c…` `user_id = f9809eae…`) |
 | 2026-11-12 | Fechar as brechas do vínculo (`employees.user_id`) e de `task_collaborators`? | **Sim, as duas** — só owner/admin vinculam; envolvidos só por quem gere a tarefa |
 | 2026-11-12 | Fechar a frente ou manter para a Parte 2? | **Manter para a Parte 2** |
+| 2026-11-12 | Quem vê a tarefa? (2ª resposta, final) | **"Quem criou a tarefa, quem é o responsável, o proprietário, o admin e os selecionados para visualizacao vê a tarefa"** — espaço não dá visão; pessoal fica pessoal; Envolvidos = visualização (ver "Ajustes — visibilidade pelo responsável") |
 
 ### Ajustes ao ler o código para o plano (2026-11-11)
 
@@ -140,6 +141,105 @@ de qualquer tarefa). Prova `scripts/teste-tarefas-superadmin.sql`. Rollback: `DR
 `tasks_update_superadmin` + recriar `_tasks_responsavel_so_conteudo` do arquivo `aplicar_20271111995000` e
 `pode_gerir_envolvidos_da_tarefa` do arquivo `aplicar_20271112800000`. Fora do escopo (não pedido): o link do celular de
 um superadmin continua mostrando só as tarefas dele (regra do link = a pessoa, sem a perna de superadmin).
+
+### Ajustes — visibilidade pelo responsável (2026-11-12)
+
+Pedido literal (2026-11-12):
+
+> temos aqui um grande problema. Quando eu coloco o responsavel pela tarefa. deve ficar visivel penas para este responsável. Se o objetivo é mostrar para outro membro apenas para visualizacao, temos que criar um novo campo para adicionar os membros para visualicao
+
+Primeira rodada de decisões (uma pergunta por vez, 2026-11-12) — **substituída** pela regra final abaixo, registrada
+para não se perder:
+
+- com responsável: vê o responsável, quem criou, os superadmins e os Envolvidos (só consulta); membro do espaço deixa de ver;
+- sem responsável e fora de espaço = agenda pessoal: só quem criou (+ Envolvidos); superadmin não vê (some a cópia
+  por membro do "Renovar contrato" que `generate_rental_renewal_alerts` cria);
+- sem responsável e num espaço: os membros do espaço veem;
+- editar: membro do espaço edita o que vê e pode **atribuir** responsável (deixando de ver); apagar: criador, ou dono
+  do espaço se a tarefa não tem responsável.
+
+Essa rodada esbarrou num limite do PostgreSQL, medido em ensaio BEGIN/ROLLBACK: com WHERE que lê colunas (todo
+`.update().eq('id', …)`), as policies de SELECT valem como WITH CHECK sobre a linha NOVA — o membro do espaço que
+atribui um responsável a outra pessoa recebe `42501 new row violates row-level security policy for table "tasks"`,
+com ou sem RETURNING, e nada é gravado. Levado ao usuário, que respondeu com a regra final:
+
+> Quem criou a tarefa, quem é o responsável, o proprietário, o admin e os selecionados para visualizacao vê a tarefa
+
+Decisões da regra final (2026-11-12):
+
+| Pergunta | Resposta |
+|---|---|
+| "Proprietário e admin" de quê? | `organization_members.role` `owner`/`admin` da organização **da tarefa** |
+| Membro do espaço vê as tarefas do espaço? | **Não — espaço não dá visão** (só organiza) |
+| Owner/admin veem a agenda pessoal (sem responsável, fora de espaço)? | **Não — pessoal fica pessoal**: só quem criou e os Envolvidos |
+| "Selecionados para visualização"? | os **Envolvidos** que já existem (`task_collaborators`), só leitura |
+
+Regra implementada (app logado = link do celular):
+
+| | quem |
+|---|---|
+| **Ver** | quem criou · o responsável (membro da org) · os Envolvidos · owner/admin da org **se** a tarefa tem responsável ou está num espaço |
+| **Editar** | quem criou: tudo · owner/admin: tudo, na tarefa que vê · responsável: só conteúdo (gatilho de antes) · Envolvido: nada |
+| **Deixar sem responsável e fora de espaço** | só quem criou (vira a agenda pessoal dele; para outro, a linha sumiria da vista e o banco recusaria com o 42501 genérico — o gatilho recusa antes, explicando) |
+| **Apagar** | **só quem criou** — sai a perna "dono do espaço" (espaço não dá nada) |
+| **Criar** | sem mudança (`tasks_insert`: num espaço, só sendo membro dele — o espaço continua sendo onde a tarefa se organiza) |
+| **Envolvidos** | geridos por quem edita a tarefa inteira: quem criou, ou owner/admin na tarefa que vê |
+
+Superadmin: sem perna própria — os gatilhos de membership o põem como owner/admin em toda organização (medido:
+8 de 8 orgs, para os dois superadmins), e uma regra só mantém o link igual ao app. `tasks_select_superadmin` e
+`tasks_update_superadmin` (aplicar_20271112997000) saem; entram `tasks_select_gestor` / `tasks_update_gestor`.
+
+Impacto medido (ensaio BEGIN/ROLLBACK com a migration, contando como cada conta pela RLS; tarefas abertas de raiz):
+
+| Conta (org 926cf626) | Papel | Abertas antes → depois | Todas as tarefas antes → depois |
+|---|---|---|---|
+| agente-leitura@ | member | 2 → 2 | 2 → 2 |
+| alpaconstrutora@gmail.com | member | 2 → 2 | 2 → 2 |
+| bruna.pereira@ | member | 2 → 2 | 2 → 2 |
+| iago.marques@ | member | 6 → 6 | 8 → 8 |
+| altair.rosa@ (superadmin) | admin | 19 → 10 | 70 → 61 |
+| desenvolvedor@ (superadmin) | owner | 19 → 10 | 70 → 40 |
+
+As 19 abertas da org: 5 em espaço (todas com responsável), 4 com responsável fora de espaço, 10 agenda pessoal — as
+10 são as cópias por membro de "Renovar contrato: 001/010" (`source_module = suprimentos`). Os superadmins deixam de
+ver as 9 cópias alheias (ficam com a própria). Os membros comuns não mudam hoje: as tarefas de espaço já tinham
+responsável, e eles não eram membros desses espaços. No total (todas as situações), 33 tarefas estão em espaço e 8
+delas sem responsável — essas passam a ser vistas só por quem criou, owner/admin e Envolvidos.
+
+Front:
+
+- `TaskForm`: ao lado do Responsável, "Visível para quem criou, o responsável, os Envolvidos (só consulta) e o
+  proprietário/admin da organização."; rótulo "Envolvidos (visualização)"; excluir que o banco recusa (0 linhas)
+  mostra "Só quem criou a tarefa pode excluí-la." e não fecha; erro do banco ao salvar sai explicado
+  (`utils/tarefaPermissoes.ts`).
+- `TasksModule.bulkDelete`: compara os ids pedidos com os que voltaram e avisa (modal `useConfirm` com
+  `hideCancel`) quantas não foram excluídas e por quê.
+- Celular: não exclui tarefa (nada a mudar); a contagem do espaço (`open_task_count` no link,
+  `taskSpaceService.listSpaces` no app) já lê pela regra.
+
+Itens:
+
+- [x] Migration `aplicar_20271112998000_tarefas_visibilidade_por_responsavel.sql` — pronto: ensaios abaixo `TUDO OK`.
+- [x] Prova nova `scripts/teste-tarefas-visibilidade.sql` — RED no banco de hoje ("sm (membro do espaço) vê só a
+  própria … veio ok:S,SM,SR"), GREEN com a migration.
+- [x] Provas adaptadas, GREEN com a migration: `teste-tarefas-superadmin.sql` (invertida: superadmin NÃO vê agenda
+  pessoal alheia — RED hoje), `teste-link-celular-tarefas.sql` (u não vê a de outro no espaço dele — RED hoje),
+  `teste-vinculo-colaborador-envolvidos.sql` (membro do espaço não gere envolvidos; admin sim — RED hoje),
+  `teste-tarefas-responsavel.sql` (x e y passam a ser `member`; `TUDO OK` hoje e com a migration).
+- [x] Front + testes (`__tests__/tarefaPermissoes.test.ts`, `__tests__/components/TaskFormVisibilidade.test.tsx`) — RED
+  no `TaskForm` antigo (2 de 3), GREEN no novo.
+- [ ] Aplicar a migration em produção (aval do usuário) e rodar as 5 provas no banco real → `TUDO OK`.
+- [ ] Publicar o front (push em `main`) e conferir de fora.
+
+Ponto aberto (não pedido, registrado): `taskSpaceService.moveFolder` move a pasta e depois faz `UPDATE tasks SET
+space_id` pelo `folder_id` — pela RLS nova, só as tarefas que quem move pode editar acompanham; as demais ficam com
+`space_id` antigo e `folder_id` da pasta que mudou de espaço. Antes, todo membro do espaço editava todas.
+
+Rollback: ver o cabeçalho da migration — recriar `tasks_select`/`tasks_update`/`tasks_delete` com as pernas de
+membro/dono do espaço, reaplicar `aplicar_20271112997000` inteiro, recriar `_celular_tarefa_visivel` e
+`celular_tarefa_atualizar` do arquivo `aplicar_20271111995000` e, por último, `DROP FUNCTION
+public.is_org_gestor_de(UUID, UUID)` e `public.minhas_orgs_gestor()`. O "Rollback (Parte 1)" abaixo apaga
+`_celular_tarefa_visivel`; `is_org_gestor_de` sobra e pode ser apagada junto.
 
 ## Design
 
@@ -778,6 +878,7 @@ do Diário em `main` levantado em 2026-11-12 (resumo nas decisões abaixo).
 - [x] Task 14 (2026-11-12): suíte 13.489 (1 falha pré-existente, CRLF); `aplicar_20271112950000` e `…960000` APLICADAS; provas diario/tarefas/responsavel/vinculo no banco real `TUDO OK`; `check-rls-postura` 9/9; Edge `celular-diario-midia` publicada (`--no-verify-jwt`); sonda de fora 400/403/400; push `67e18f12..47cb60a1` + texto do link `2822b0da` + folga de teste `11bf400e`; CI verde; domínio = `origin/main`
 - [ ] Prova real da Parte 2 no celular (usuário): registro com foto e atividade vinculada pelo link; conferir no desktop e no cronograma
 - [x] F1 · [x] F2 · [x] F3 · [x] F4 · [x] F5 (no ar; falta só a prova real da Parte 2)
+- [ ] Visibilidade pelo responsável (`aplicar_20271112998000`): migration, provas e front prontos e ensaiados; falta aplicar e publicar (aval do usuário)
 
 ## Rollback (Parte 2)
 

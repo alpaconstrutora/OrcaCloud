@@ -73,6 +73,11 @@ export const END_LABEL = { position: 'right' as const, fontSize: 11, fill: '#647
 export const SERIE_PRINCIPAL = '#3b82f6';
 export const SERIE_CONTEXTO = '#94a3b8';
 
+/** Efeito de um choque (tornado): piora × melhora. Semânticas e fixas, sempre com
+ *  legenda — não são "séries" de uma paleta categórica. */
+export const COR_PIORA = '#ef4444';
+export const COR_MELHORA = '#059669';
+
 /** Faixas de atraso: rampa de UM matiz (vermelho), clara → escura conforme o
  *  atraso cresce. "A vencer" fica fora da rampa, em cinza neutro: não é atraso. */
 export const AGING_COLORS = ['#94a3b8', '#f87171', '#ef4444', '#b91c1c', '#7f1d1d'] as const;

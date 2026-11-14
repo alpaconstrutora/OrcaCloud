@@ -78,7 +78,10 @@ const ImovibMercadoDeOrigemCard: React.FC<{ study: ImovibStudy; onUsarVso: (vsoP
                     )}
                     {absorcao != null && (
                         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-slate-700">
-                            <span>Absorção (hipótese do Market): {fmtNum(absorcao, 2)}% ao mês. Não entra na curva sozinha.</span>
+                            <span>
+                                Absorção gravada no estudo de mercado em {new Date(estudo.updatedAt ?? estudo.createdAt).toLocaleDateString('pt-BR')} (hipótese do Market): {fmtNum(absorcao, 2)}% ao mês. Não entra na curva sozinha.
+                                <span className="block text-xs text-slate-500">Mudou as hipóteses no Market? Salve o estudo no Market para a absorção mudar aqui.</span>
+                            </span>
                             <button
                                 type="button"
                                 disabled={!!motivoVso}

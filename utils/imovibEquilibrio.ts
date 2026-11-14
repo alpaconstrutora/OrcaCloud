@@ -57,13 +57,17 @@ const raizDecrescente = (f: (x: number) => number, x0: number, passoInicial: num
     return bissectar(f, limiteBaixo, x0, tolerancia);
 };
 
-const vplCom = (study: ImovibStudy, options?: ImovibMathOptions) => computeImovibMath(study, options).vpl;
+// As buscas só olham VPL, lucro ou margem: sem TIR, cada chamada do motor sai
+// muito mais barata (pendência da Fase 2 do plano: ~325 ms no Resumo de 108 meses).
+const vplCom = (study: ImovibStudy, options?: ImovibMathOptions) => computeImovibMath(study, { ...options, semTir: true }).vpl;
+const temVgv = (study: ImovibStudy) => computeImovibMath(study, { semTir: true }).vgvTotal > 0;
 
 /** Maior custo de terreno (R$) que ainda atinge o alvo. */
 export function terrenoMaximo(study: ImovibStudy, alvo: AlvoDoTerreno): PontoDeEquilibrio {
-    if (!(computeImovibMath(study).vgvTotal > 0)) return SEM_VGV;
+    const base = computeImovibMath(study, { semTir: true });
+    if (!(base.vgvTotal > 0)) return SEM_VGV;
     const metrica = (terreno: number): number => {
-        const r = computeImovibMath({ ...study, land_cost: terreno });
+        const r = computeImovibMath({ ...study, land_cost: terreno }, { semTir: alvo.tipo !== 'tir' });
         switch (alvo.tipo) {
             case 'vpl_zero': return r.vpl;
             case 'margem': return r.monthlyFlows.reduce((a, f) => a + f.net, 0) / r.vgvTotal - alvo.pct / 100;
@@ -77,13 +81,13 @@ export function terrenoMaximo(study: ImovibStudy, alvo: AlvoDoTerreno): PontoDeE
         }
     };
     if (!(metrica(0) > 0)) return SEM_RAIZ;
-    const valor = raizDecrescente(metrica, 0, Math.max(1, computeImovibMath(study).vgvTotal), 0, 0.01);
+    const valor = raizDecrescente(metrica, 0, Math.max(1, base.vgvTotal), 0, 0.01);
     return valor == null ? SEM_RAIZ : { valor };
 }
 
 /** Variação do preço (%, sobre o VGV) que leva o VPL a zero. Negativa = queda suportada. */
 export function precoMinimo(study: ImovibStudy): PontoDeEquilibrio {
-    if (!(computeImovibMath(study).vgvTotal > 0)) return SEM_VGV;
+    if (!temVgv(study)) return SEM_VGV;
     // O VPL CRESCE com o preço: procura a raiz de −VPL, que é decrescente.
     const f = (d: number) => -vplCom(study, { vgvDelta: d });
     const valor = raizDecrescente(f, 0, 10, -100, 1e-7);
@@ -92,7 +96,7 @@ export function precoMinimo(study: ImovibStudy): PontoDeEquilibrio {
 
 /** Variação do custo de obra (%) que leva o VPL a zero. Positiva = alta suportada. */
 export function custoMaximoDeObra(study: ImovibStudy): PontoDeEquilibrio {
-    if (!(computeImovibMath(study).vgvTotal > 0)) return SEM_VGV;
+    if (!temVgv(study)) return SEM_VGV;
     const f = (d: number) => vplCom(study, { costDelta: d });
     const valor = raizDecrescente(f, 0, 10, -100, 1e-7);
     return valor == null ? SEM_RAIZ : { valor };
@@ -105,10 +109,11 @@ export function custoMaximoDeObra(study: ImovibStudy): PontoDeEquilibrio {
  * fração que a curva vende × (100% + a variação de `precoMinimo`). Acima de 100%
  * do VGV vendável não existe — mesmo vendendo tudo o VPL fica negativo.
  */
-export function vendasMinimas(study: ImovibStudy): PontoDeEquilibrio {
-    const p = precoMinimo(study);
+export function vendasMinimas(study: ImovibStudy, precoJaCalculado?: PontoDeEquilibrio): PontoDeEquilibrio {
+    // A tela já calculou o preço mínimo: repetir a busca dobrava o tempo desta.
+    const p = precoJaCalculado ?? precoMinimo(study);
     if (p.valor == null) return p;
-    const fracaoVendida = 1 - computeImovibMath(study).estoqueNaoVendidoPct;
+    const fracaoVendida = 1 - computeImovibMath(study, { semTir: true }).estoqueNaoVendidoPct;
     const valor = (100 + p.valor) * fracaoVendida;
     return valor > 100 + 1e-9 ? { valor: null, motivo: 'acima_do_vgv' } : { valor };
 }

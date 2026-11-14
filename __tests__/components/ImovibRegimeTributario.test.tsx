@@ -16,7 +16,7 @@ const svc = vi.hoisted(() => ({
     updateCapexItem: vi.fn(),
     adicionarRubricasPosObra: vi.fn(),
 }));
-const emp = vi.hoisted(() => ({ getById: vi.fn() }));
+const emp = vi.hoisted(() => ({ getById: vi.fn(), camposDoEmpreendimento: vi.fn() }));
 const empresas = vi.hoisted(() => ({ get: vi.fn(), getIncorporacao: vi.fn() }));
 vi.mock('../../services/imovibService', () => ({ imovibService: svc }));
 vi.mock('../../services/empreendimentoService', () => ({ empreendimentoService: { ...emp, listRegulatoryZonesByImovibStudy: vi.fn().mockResolvedValue([]) } }));
@@ -51,6 +51,7 @@ beforeEach(() => {
     svc.updateStudy.mockResolvedValue({});
     svc.seedCapexTemplate.mockResolvedValue(rubricas);
     emp.getById.mockResolvedValue(null);
+    emp.camposDoEmpreendimento.mockResolvedValue(null);
 });
 
 describe('Regime tributário', () => {
@@ -127,5 +128,76 @@ describe('Regime tributário', () => {
         const secao = await screen.findByRole('region', { name: 'Regime tributário' });
         expect((within(secao).getByLabelText('Regime') as HTMLSelectElement).closest('fieldset')!.disabled).toBe(true);
         expect(svc.updateStudy).not.toHaveBeenCalled();
+    });
+});
+
+/** Pendências da Fase 6 do plano 2026-11-11. */
+describe('alíquotas do regime', () => {
+    it('duas alíquotas editadas antes da recarga: a segunda gravação leva as duas', async () => {
+        const user = userEvent.setup();
+        tela({ tax_regime: 'real' });
+        const pis = await screen.findByLabelText('Lucro real: PIS e Cofins');
+        await user.clear(pis);
+        await user.type(pis, '5');
+        await user.tab();
+        const ir = screen.getByLabelText('Lucro real: IRPJ e CSLL');
+        await user.clear(ir);
+        await user.type(ir, '30');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenLastCalledWith('estudo-teste', { tax_hypotheses: expect.objectContaining({ realPisCofinsPct: 5, realIrCsPct: 30 }) });
+    });
+
+    it('alíquota negativa não grava (nem vira 0 calado) e avisa', async () => {
+        const user = userEvent.setup();
+        tela({ tax_regime: 'ret' });
+        const ret = await screen.findByLabelText('RET');
+        await user.clear(ret);
+        await user.type(ret, '-2');
+        await user.tab();
+        expect(svc.updateStudy).not.toHaveBeenCalledWith('estudo-teste', expect.objectContaining({ tax_hypotheses: expect.anything() }));
+        expect(await screen.findByText(/não pode ser negativa/)).toBeTruthy();
+    });
+
+    it('alíquota de outro regime é editável sem trocar o regime', async () => {
+        const user = userEvent.setup();
+        tela({ tax_regime: 'presumido' });
+        expect(screen.queryByLabelText('RET')).toBeNull();
+        await user.click(await screen.findByRole('button', { name: 'Ajustar as alíquotas dos outros regimes' }));
+        const ret = screen.getByLabelText('RET');
+        await user.clear(ret);
+        await user.type(ret, '5');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenLastCalledWith('estudo-teste', { tax_hypotheses: { retPct: 5 } });
+        expect(svc.updateStudy).not.toHaveBeenCalledWith('estudo-teste', expect.objectContaining({ tax_regime: expect.anything() }));
+    });
+});
+
+describe('revisão do grupo C — alíquotas', () => {
+    it('gravação que falha não fica na memória para a próxima', async () => {
+        const user = userEvent.setup();
+        svc.updateStudy.mockReset();
+        svc.updateStudy.mockRejectedValueOnce(new Error('falhou')).mockResolvedValue({});
+        tela({ tax_regime: 'real' });
+        const pis = await screen.findByLabelText('Lucro real: PIS e Cofins');
+        await user.clear(pis);
+        await user.type(pis, '5');
+        await user.tab();
+        await screen.findByText(/Erro ao salvar/);
+        const ir = screen.getByLabelText('Lucro real: IRPJ e CSLL');
+        await user.clear(ir);
+        await user.type(ir, '30');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenLastCalledWith('estudo-teste', { tax_hypotheses: { realIrCsPct: 30 } });
+    });
+
+    it('negativa recusada: o campo volta ao valor de antes', async () => {
+        const user = userEvent.setup();
+        tela({ tax_regime: 'ret' });
+        const ret = await screen.findByLabelText('RET') as HTMLInputElement;
+        const antes = ret.value;
+        await user.clear(ret);
+        await user.type(ret, '-2');
+        await user.tab();
+        expect(ret.value).toBe(antes);
     });
 });

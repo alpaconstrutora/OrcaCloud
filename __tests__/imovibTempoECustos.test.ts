@@ -84,6 +84,20 @@ describe('5.5 — momento de cada rubrica', () => {
     const com = (timing: string | null, extra: Record<string, unknown> = {}) =>
         computeImovibMath(baseStudy({ capex_items: [{ ...rubrica('2. Projetos e Consultorias', 'Projeto', 'currency', 100_000, 'obra'), timing, ...extra }] }));
 
+    it('pré-obra sem mês antes da obra (aquisição no início da obra ou depois): avisa onde caiu', () => {
+        // Pendência da Fase 5 do plano 2026-11-11: caía no mês da aquisição sem aviso.
+        const r = computeImovibMath(baseStudy({ construction_start_month: 1, capex_items: [{ ...rubrica('2. Projetos e Consultorias', 'Projeto', 'currency', 100_000, 'obra'), timing: 'pre_obra' }] }));
+        const aviso = r.avisos.find(a => a.codigo === 'pre_obra_sem_meses');
+        expect(aviso?.aba).toBe('premises');
+        expect(aviso?.mensagem).toMatch(/Projeto/);
+        expect(aviso?.mensagem).toMatch(/mês 1/);
+        // Com meses antes da obra, nada a avisar.
+        expect(com('pre_obra').avisos.some(a => a.codigo === 'pre_obra_sem_meses')).toBe(false);
+        // Pré-obra sem valor não avisa.
+        const zero = computeImovibMath(baseStudy({ construction_start_month: 1, capex_items: [{ ...rubrica('2. Projetos e Consultorias', 'Projeto', 'currency', 0, 'obra'), timing: 'pre_obra' }] }));
+        expect(zero.avisos.some(a => a.codigo === 'pre_obra_sem_meses')).toBe(false);
+    });
+
     it('pré-obra: sai inteira antes do início da obra, em partes iguais desde a aquisição, e reduz o VPL frente a "obra"', () => {
         const pre = com('pre_obra');
         const obra = com('obra');

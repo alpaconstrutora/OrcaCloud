@@ -19,6 +19,7 @@ import { useToast } from '../hooks/useToast';
 import ImovibVinculoEmpreendimento from './ImovibVinculoEmpreendimento';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import type { ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import {
     IMOVIB_MODALIDADES, opcoesComValorAtual,
     imovibCnpj, imovibIncorporadora, imovibGestor, imovibIdentificacaoParaGravar,
@@ -30,13 +31,15 @@ interface ImovibPremisesFormProps {
     onDataChanged: () => void;
     /** Avisa o detalhe quando há edição pendente (item 5.4) — ele guarda a troca de aba e o "voltar". */
     onDirtyChange?: (dirty: boolean) => void;
+    /** Sub-aba pedida por um aviso do motor ("Corrigir em Premissas › Cronograma"); `n` muda a cada pedido. */
+    subAba?: { sub: ImovibSubAbaDePremissas; n: number } | null;
 }
 
 // As duas sub-abas editam o mesmo formulário local, gravado por "Salvar Premissas".
 // Blocos e Tipologia, Torres & Unidades e Mapa Regulatório saíram daqui em 2026-10-19:
 // eles moram na Planta Inteligente (docs/planos/2026-10-19-imovib-premissas-planta-inteligente.md).
 // Cronograma e Terreno entraram na Fase 5 do plano 2026-11-11 (itens 5.1, 5.2 e 5.9); Memorial, no item 10.1.
-type SubAba = 'identificacao' | 'mercado' | 'cronograma' | 'terreno' | 'memorial';
+type SubAba = ImovibSubAbaDePremissas;
 
 // Item 5.2: CNPJ, incorporadora e gestor são editados nas colunas canônicas
 // (`cnpj`/`developer`/`manager`, as mesmas da criação e da listagem). O valor
@@ -49,8 +52,9 @@ const comCanonicas = (s: ImovibStudy): Partial<ImovibStudy> => ({
     manager: imovibGestor(s),
 });
 
-const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged, onDirtyChange }) => {
-    const [activeTab, setActiveTab] = useState<SubAba>('identificacao');
+const ImovibPremisesForm: React.FC<ImovibPremisesFormProps> = ({ study, onDataChanged, onDirtyChange, subAba }) => {
+    const [activeTab, setActiveTab] = useState<SubAba>(subAba?.sub ?? 'identificacao');
+    useEffect(() => { if (subAba) setActiveTab(subAba.sub); }, [subAba?.sub, subAba?.n]);
     const [formData, setFormData] = useState<Partial<ImovibStudy>>(() => comCanonicas(study));
     const [isSaving, setIsSaving] = useState(false);
     const { showToast } = useToast();

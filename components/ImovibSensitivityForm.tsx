@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Activity, ShieldAlert } from 'lucide-react';
 import { ImovibStudy, ImovibScenario } from '../types';
-import { useImovibMath, ImovibAba } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba, ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import ImovibAvisosBanner from './ImovibAvisosBanner';
 import { imovibService } from '../services/imovibService';
 import { useToast } from '../hooks/useToast';
@@ -19,7 +19,7 @@ interface ImovibSensitivityFormProps {
     study: ImovibStudy;
     onDataChanged: () => void;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
-    onIrPara?: (aba: ImovibAba) => void;
+    onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void;
 }
 
 /**

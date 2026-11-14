@@ -19,6 +19,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { useToast } from '../hooks/useToast';
 import { useImovibPodeEditar, ImovibEdicaoProvider } from '../hooks/useImovibEdicao';
 import { useUnsavedChanges } from '../hooks/useUnsavedChanges';
+import type { ImovibSubAbaDePremissas } from '../hooks/useImovibMath';
 import { TabsBar, TabsBarItem } from './ui/TabsBar';
 
 interface ImovibDetailViewProps {
@@ -73,9 +74,21 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
         setPremissasKey(k => k + 1);
         return true;
     };
-    const irPara = async (aba: AbaDoEstudo) => {
-        if (aba === activeTab) return;
-        if (await podeSair()) setActiveTab(aba);
+    // Sub-aba de Premissas pedida por um aviso; `n` muda a cada pedido para reabrir
+    // a mesma sub-aba depois de o usuário ter trocado (pendência da Fase 5).
+    const [premissasSubAba, setPremissasSubAba] = useState<{ sub: ImovibSubAbaDePremissas; n: number } | null>(null);
+    // Só vale se a navegação acontece; ir a Premissas sem pedido (aba, recarga) volta
+    // ao comportamento normal (Identificação), sem reabrir um pedido antigo.
+    const pedirSubAba = (subAba?: ImovibSubAbaDePremissas) =>
+        setPremissasSubAba(p => (subAba ? { sub: subAba, n: (p?.n ?? 0) + 1 } : null));
+    const irPara = async (aba: AbaDoEstudo, subAba?: ImovibSubAbaDePremissas) => {
+        if (aba === activeTab) {
+            if (aba === 'premises' && subAba) pedirSubAba(subAba);
+            return;
+        }
+        if (!(await podeSair())) return;
+        pedirSubAba(aba === 'premises' ? subAba : undefined);
+        setActiveTab(aba);
     };
     const voltar = async () => {
         if (await podeSair()) onBack();
@@ -201,6 +214,7 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
                             key={premissasKey}
                             study={study}
                             onDataChanged={loadStudyDetails}
+                            subAba={premissasSubAba}
                             onDirtyChange={(d) => (d ? premissas.markDirty() : premissas.markSaved())}
                         />
                     )}

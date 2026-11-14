@@ -4,7 +4,7 @@ import { ResponsiveContainer, BarChart, Bar, Cell, XAxis, YAxis, CartesianGrid, 
 import { ImovibStudy } from '../types';
 import { tornado, MetricaDoEstudo } from '../utils/imovibSensibilidade';
 import { VARIAVEIS_DO_ESTUDO, ROTULO_DA_VARIAVEL, UNIDADE_DA_VARIAVEL, VariavelDoEstudo } from '../utils/imovibVariacoes';
-import { ChartCard, ChartEmpty, Legend, GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_DIMENSION } from './analysis/chartKit';
+import { ChartCard, ChartEmpty, Legend, GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_DIMENSION, COR_PIORA, COR_MELHORA } from './analysis/chartKit';
 
 export const ROTULO_DA_METRICA: Record<MetricaDoEstudo, string> = {
     tir: 'TIR', vpl: 'VPL', margem: 'Margem líquida', exposicao: 'Exposição máxima',
@@ -18,8 +18,8 @@ export const formatarMetrica = (m: MetricaDoEstudo, v: number): string => {
     return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format(v);
 };
 
-const COR_PIOR = '#ef4444';
-const COR_MELHOR = '#10b981';
+const COR_PIOR = COR_PIORA;
+const COR_MELHOR = COR_MELHORA;
 
 interface ImovibTornadoCardProps {
     study: ImovibStudy;
@@ -55,6 +55,9 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
         };
     });
     const cor = (delta: number) => (delta >= 0 ? COR_MELHOR : COR_PIOR);
+    // Nome acessível com os números (§28.5): quem não vê o gráfico lê a faixa de cada premissa.
+    const nomeDoGrafico = `Tornado de ${ROTULO_DA_METRICA[metrica]}, estudo como está ${formatarMetrica(metrica, base)}: `
+        + barras.map(b => `${b.rotulo} de ${formatarMetrica(metrica, b.abaixo)} a ${formatarMetrica(metrica, b.acima)}`).join('; ');
 
     return (
         <ChartCard title="Gráfico tornado" subtitle={`Quanto cada premissa move a métrica (${ROTULO_DA_METRICA[metrica]}), para cima e para baixo. Estudo como está: ${formatarMetrica(metrica, base)}`}>
@@ -108,9 +111,9 @@ const ImovibTornadoCard: React.FC<ImovibTornadoCardProps> = ({ study, choques, o
             {!Number.isFinite(base) ? (
                 <ChartEmpty>{metrica === 'tir' ? 'O estudo não tem TIR: escolha VPL, margem ou exposição.' : 'Sem dados para calcular.'}</ChartEmpty>
             ) : (
-                <div className="h-[360px]">
+                <div className="h-[360px]" role="img" aria-label={nomeDoGrafico}>
                     <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                        <BarChart layout="vertical" data={dados} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barSize={9} barGap={2}>
+                        <BarChart accessibilityLayer={false} layout="vertical" data={dados} margin={{ top: 4, right: 16, left: 0, bottom: 0 }} barSize={9} barGap={2}>
                             <CartesianGrid horizontal={false} stroke={GRID} />
                             <XAxis type="number" tick={TICK} axisLine={false} tickLine={false} tickFormatter={(v: number) => formatarMetrica(metrica, v + base)} />
                             <YAxis type="category" dataKey="nome" width={230} tick={CATEGORY_TICK} axisLine={false} tickLine={false} />

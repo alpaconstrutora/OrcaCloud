@@ -47,13 +47,14 @@ const ImovibCenariosCard: React.FC<ImovibCenariosCardProps> = ({ study, cenarios
         ];
     }, [study, cenarios, tma]);
 
-    const faltamPadrao = IMOVIB_CENARIOS_PADRAO.filter(p => !cenarios.some(c => c.name === p.name));
+    // Pelo TIPO, não pelo nome: "Pessimista" renomeado continua sendo o pessimista (pendência da Fase 3).
+    const faltamPadrao = IMOVIB_CENARIOS_PADRAO.filter(p => !cenarios.some(c => c.kind === p.kind));
     const motivoPadrao = !pode ? motivo : faltamPadrao.length === 0 ? 'Os cenários Pessimista e Otimista já existem.' : undefined;
 
     const criarPadrao = async () => {
         setCriando(true);
         try {
-            await imovibService.criarCenariosPadrao(study.id, IMOVIB_CENARIOS_PADRAO);
+            await imovibService.criarCenariosPadrao(study.id, faltamPadrao);
             onCenarios(await imovibService.listarCenarios(study.id));
         } catch (e) {
             showToast((e as Error).message, 'error');

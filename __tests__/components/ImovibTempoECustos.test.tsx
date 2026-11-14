@@ -97,7 +97,7 @@ describe('Premissas › Terreno (5.2 e 5.9)', () => {
         await user.selectOptions(screen.getByLabelText('Situação de Matrícula atualizada'), 'ok');
         await user.selectOptions(screen.getByLabelText('Situação de Contaminação'), 'problema');
         await waitFor(() => expect(screen.getByText(/1 de 14 ok, 1 com problema/)).toBeTruthy());
-        expect(svc.salvarItemDaDueDiligence).toHaveBeenCalledWith('dd7', { status: 'problema', notes: null });
+        expect(svc.salvarItemDaDueDiligence).toHaveBeenCalledWith('dd7', { status: 'problema' });
         expect(screen.queryByRole('button', { name: 'Criar checklist' })).toBeNull();
     });
 
@@ -158,5 +158,87 @@ describe('CAPEX: momento das rubricas e pós-obra (5.5 e 5.6)', () => {
         expect(await screen.findByText('10. Pós-obra')).toBeTruthy();
         expect(botao.hasAttribute('disabled')).toBe(true);
         expect(botao.getAttribute('title')).toMatch(/já existem/);
+    });
+});
+
+describe('Premissas abre na sub-aba pedida (aviso → sub-aba)', () => {
+    it('subAba="cronograma" abre o Cronograma e troca quando o pedido muda', () => {
+        const { rerender } = envolver(<ImovibPremisesForm study={estudo() as never} onDataChanged={vi.fn()} subAba={{ sub: 'cronograma', n: 1 }} />);
+        expect(screen.getByRole('list', { name: 'Linha do tempo dos marcos' })).toBeTruthy();
+        rerender(
+            <ToastProvider><ConfirmProvider><ImovibEdicaoProvider value={{ pode: true, motivo: '' }}>
+                <ImovibPremisesForm study={estudo() as never} onDataChanged={vi.fn()} subAba={{ sub: 'terreno', n: 2 }} />
+            </ImovibEdicaoProvider></ConfirmProvider></ToastProvider>,
+        );
+        expect(screen.getByText(/Pagamento à vista/)).toBeTruthy();
+    });
+});
+
+/** Pendências da Fase 5 do plano 2026-11-11: valor digitado ficava no campo depois de erro ao gravar. */
+describe('erro ao gravar volta o campo ao que está gravado', () => {
+    it('observação da due diligence: grava só a observação; com erro, o campo volta', async () => {
+        const user = userEvent.setup();
+        svc.listarDueDiligence.mockResolvedValue(itensDD().map(i => (i.id === 'dd0' ? { ...i, notes: 'velha' } : i)));
+        svc.salvarItemDaDueDiligence.mockRejectedValue(new Error('Sem permissão para editar a due diligence deste estudo.'));
+        premissas();
+        await user.click(screen.getByRole('button', { name: /3\. Terreno/ }));
+        const campo = await screen.findByLabelText('Observação de Matrícula atualizada') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, 'nova');
+        await user.tab();
+        expect(svc.salvarItemDaDueDiligence).toHaveBeenCalledWith('dd0', { notes: 'nova' });
+        await waitFor(() => expect((screen.getByLabelText('Observação de Matrícula atualizada') as HTMLInputElement).value).toBe('velha'));
+    });
+
+    it('meses de pós-obra da rubrica: com erro, o campo volta', async () => {
+        const user = userEvent.setup();
+        svc.seedCapexTemplate.mockResolvedValue([
+            { id: 'p1', study_id: 'estudo-teste', category: '10. Pós-obra', name: 'Assistência técnica', value_type: 'currency', value: 1000, base: 'obra', timing: 'pos_obra', timing_months: 12 },
+        ]);
+        svc.updateCapexItem.mockRejectedValue(new Error('falhou'));
+        envolver(<ImovibCapexForm study={estudo() as never} onDataChanged={vi.fn()} />);
+        const campo = await screen.findByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, '24');
+        await user.tab();
+        expect(svc.updateCapexItem).toHaveBeenCalledWith('p1', { timing_months: 24 });
+        await waitFor(() => expect((screen.getByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement).value).toBe('12'));
+    });
+});
+
+describe('revisão do grupo C — erro numa rubrica não mexe nas outras', () => {
+    it('falha ao gravar A não apaga o que está sendo digitado em B', async () => {
+        const user = userEvent.setup();
+        svc.seedCapexTemplate.mockResolvedValue([
+            { id: 'p1', study_id: 'estudo-teste', category: '10. Pós-obra', name: 'Assistência técnica', value_type: 'currency', value: 1000, base: 'obra', timing: 'pos_obra', timing_months: 12 },
+            { id: 'p2', study_id: 'estudo-teste', category: '10. Pós-obra', name: 'Manutenção', value_type: 'currency', value: 1000, base: 'obra', timing: 'pos_obra', timing_months: 12 },
+        ]);
+        let falhar!: (e: Error) => void;
+        svc.updateCapexItem.mockImplementation(() => new Promise((_, rej) => { falhar = rej; }));
+        envolver(<ImovibCapexForm study={estudo() as never} onDataChanged={vi.fn()} />);
+        const a = await screen.findByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement;
+        await user.clear(a);
+        await user.type(a, '24');
+        const b = screen.getByLabelText('Meses de pós-obra: Manutenção') as HTMLInputElement;
+        await user.click(b);
+        await user.clear(b);
+        await user.type(b, '30');
+        falhar(new Error('falhou'));
+        await waitFor(() => expect((screen.getByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement).value).toBe('12'));
+        expect((screen.getByLabelText('Meses de pós-obra: Manutenção') as HTMLInputElement).value).toBe('30');
+    });
+});
+
+describe('Orçamento › "No cálculo" (pendência da Fase 5)', () => {
+    it('o cabeçalho e a célula de rubrica com momento dizem que o valor leva o índice dos meses em que sai', async () => {
+        svc.seedCapexTemplate.mockResolvedValue([
+            { id: 'r1', study_id: 'estudo-teste', category: '2. Projetos e Consultorias', name: 'Projeto', value_type: 'currency', value: 100000, base: 'obra', timing: 'pre_obra' },
+        ]);
+        envolver(<ImovibCapexForm study={estudo() as never} onDataChanged={vi.fn()} />);
+        await screen.findByLabelText('Quando sai: Projeto');
+        expect(screen.getByRole('columnheader', { name: 'No cálculo' }).getAttribute('title')).toMatch(/índice/);
+        const linha = screen.getByLabelText('Quando sai: Projeto').closest('tr')!;
+        const celula = within(linha).getAllByRole('cell').at(-2)!;
+        expect(celula.getAttribute('title')).toMatch(/índice dos meses em que sai/);
     });
 });

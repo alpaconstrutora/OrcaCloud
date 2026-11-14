@@ -208,13 +208,16 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     };
 
     // Campos do estudo gravados pelos cartões de desembolso e pós-obra (Fase 5).
-    const salvarEstudo = async (campos: ImovibStudyUpdate) => {
+    /** `false` = não gravou (o toast já disse por quê). */
+    const salvarEstudo = async (campos: ImovibStudyUpdate): Promise<boolean> => {
         try {
             await imovibService.updateStudy(study.id, campos);
             onDataChanged();
+            return true;
         } catch (e) {
             console.error('Falha ao salvar o estudo', campos, e);
             showToast(`Erro ao salvar: ${(e as Error).message}`, 'error');
+            return false;
         }
     };
 
@@ -258,6 +261,10 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
         );
     };
 
+    // Erro ao gravar uma rubrica: os campos não controlados (nome, valor, meses de
+    // pós-obra) remontam com o gravado — antes, o digitado ficava como se tivesse gravado.
+    // Por rubrica: remontar todas derrubava o foco e o texto de outra rubrica sendo digitada.
+    const [revisaoDosItens, setRevisaoDosItens] = useState<Record<string, number>>({});
     const handleUpdateItem = async (id: string, updates: Partial<ImovibCapexItem>) => {
         const origItems = [...items];
         setItems(items.map(i => i.id === id ? { ...i, ...updates } : i));
@@ -269,6 +276,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             console.error('Failed to update item', e);
             showToast(`Erro ao salvar a rubrica de CAPEX: ${(e as Error).message}`, 'error');
             setItems(origItems);
+            setRevisaoDosItens(r => ({ ...r, [id]: (r[id] ?? 0) + 1 }));
         } finally {
             setIsSaving(false);
         }
@@ -643,7 +651,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                         <th className="px-6 py-2 border-r border-gray-100">Base</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Quando sai</th>
                                                         <th className="px-6 py-2 border-r border-gray-100">Valor</th>
-                                                        <th className="px-6 py-2 border-r border-gray-100 text-right">No cálculo</th>
+                                                        <th className="px-6 py-2 border-r border-gray-100 text-right" title="Valor que entra no cálculo. Rubrica com momento próprio sai com o índice dos meses em que é paga (obra pelo índice da obra; lançamento e vendas pelo das vendas; aquisição sem índice) — por isso o número muda quando o momento muda.">No cálculo</th>
                                                         <th className="px-6 py-2 w-12"></th>
                                                     </tr>
                                                 </thead>
@@ -653,6 +661,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                             <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <input
                                                                     type="text"
+                                                                    key={`${item.id}-name-${revisaoDosItens[item.id] ?? 0}`}
                                                                     defaultValue={item.name}
                                                                     onBlur={(e) => {
                                                                         if (e.target.value !== item.name && e.target.value.trim()) {
@@ -699,6 +708,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                                 type="number" min="1" step="1"
                                                                                 aria-label={`Meses de pós-obra: ${item.name}`}
                                                                                 title="Em quantos meses depois do fim da obra (vazio = 12)"
+                                                                                key={`${item.id}-timing_months-${revisaoDosItens[item.id] ?? 0}`}
                                                                                 defaultValue={item.timing_months ?? ''}
                                                                                 placeholder="12"
                                                                                 onBlur={(e) => {
@@ -718,6 +728,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                     )}
                                                                     <input
                                                                         type="number"
+                                                                        key={`${item.id}-value-${revisaoDosItens[item.id] ?? 0}`}
                                                                         defaultValue={item.value}
                                                                         disabled={foraPeloRegime(item)}
                                                                         title={foraPeloRegime(item) ? motivoImpostoPeloRegime : undefined}
@@ -740,7 +751,11 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                     )}
                                                                 </div>
                                                             </td>
-                                                            <td className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap">
+                                                            <td
+                                                                className="px-6 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-800 whitespace-nowrap"
+                                                                // Pendência da Fase 5: o número muda com o momento (índice) e a tela não dizia por quê.
+                                                                title={item.timing && !(baseDaRubrica(item) === 'vgv' && item.value_type === 'percent') ? `Com o índice dos meses em que sai (${ROTULO_DO_MOMENTO[item.timing]}).` : undefined}
+                                                            >
                                                                 {fmt(valorNoCalculo[item.id] || 0)}
                                                             </td>
                                                             <td className="px-6 py-2.5 text-right">

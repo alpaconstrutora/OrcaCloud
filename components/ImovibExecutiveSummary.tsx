@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { ImovibStudy, ImovibLandChecklistItem } from '../types';
 import { imovibService } from '../services/imovibService';
 import { resumoDaDueDiligence } from './ImovibDueDiligenceCard';
-import { useImovibMath, ImovibAba, baseDaRubrica } from '../hooks/useImovibMath';
+import { useImovibMath, ImovibAba, ImovibSubAbaDePremissas, baseDaRubrica } from '../hooks/useImovibMath';
 import type { ImovibMathResult } from '../hooks/useImovibMath';
 import { IMOVIB_DEFAULTS } from '../constants/imovibDefaults';
 import type { ImovibCapexBase } from '../types';
@@ -28,7 +28,7 @@ import ImovibParecerCard from './ImovibParecerCard';
 interface ImovibExecutiveSummaryProps {
     study: ImovibStudy;
     /** Abre a aba que corrige a premissa de um aviso do motor. */
-    onIrPara?: (aba: ImovibAba) => void;
+    onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void;
     /** Recarrega o estudo depois de gravar o parecer ou os mínimos (item 10.3). */
     onDataChanged?: () => void;
 }
@@ -66,7 +66,7 @@ export interface PlanilhaImovib {
  * "R$"/"%" dentro da célula), unidade em coluna própria. Pura: testada em
  * __tests__/imovibExportacaoExcel.test.ts. Item 5.6 do plano 2026-10-12.
  */
-export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): PlanilhaImovib {
+export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult, opcoes: { margemAlvoPct?: number | null } = {}): PlanilhaImovib {
     const D = IMOVIB_DEFAULTS;
     const tma = premissa(study.discount_rate, D.discount_rate);
     const origemDaTma = study.discount_rate_basis?.trim() || null;
@@ -74,16 +74,20 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
     const tirProjetoDefinida = Number.isFinite(m.annualIrrProjeto);
     const rubricas = m.capexRubricasAtivas;
     const ind = calcularIndicadores(m, tma);
-    const margemAlvo = D.margem_alvo_terreno_percent;
+    // A margem-alvo é a que está no cartão "Pontos de equilíbrio" (hipótese da tela, não
+    // gravada); vazia lá, o padrão — e o rótulo diz que é o padrão (pendência da Fase 2).
+    const margemDaTela = opcoes.margemAlvoPct != null && Number.isFinite(opcoes.margemAlvoPct) ? opcoes.margemAlvoPct : null;
+    const margemAlvo = margemDaTela ?? D.margem_alvo_terreno_percent;
     const ponto = (p: PontoDeEquilibrio): [number | null, string | null] =>
         p.valor == null
             ? [null, p.motivo === 'sem_vgv' ? 'Sem VGV no estudo' : p.motivo === 'acima_do_vgv' ? 'Nem vendendo tudo: o VPL fica negativo' : 'Não existe: o alvo não é atingido']
             : [p.valor, null];
     const [terrenoVpl, obsTerrenoVpl] = ponto(terrenoMaximo(study, { tipo: 'vpl_zero' }));
     const [terrenoMargem, obsTerrenoMargem] = ponto(terrenoMaximo(study, { tipo: 'margem', pct: margemAlvo }));
-    const [preco, obsPreco] = ponto(precoMinimo(study));
+    const precoCalculado = precoMinimo(study);
+    const [preco, obsPreco] = ponto(precoCalculado);
     const [custo, obsCusto] = ponto(custoMaximoDeObra(study));
-    const [vendas, obsVendas] = ponto(vendasMinimas(study));
+    const [vendas, obsVendas] = ponto(vendasMinimas(study, precoCalculado));
     const vazio = (x: number | null, motivo: string) => (x == null ? motivo : null);
 
     const indicadores: Linha[] = [
@@ -118,7 +122,7 @@ export function montarPlanilhaImovib(study: ImovibStudy, m: ImovibMathResult): P
         ['Outras fontes de capital', m.capital.terceiros, 'R$', null],
         ['Vendas durante a obra', m.capital.vendasNaObra, 'R$', 'Pago pelos compradores até as chaves, sem o repasse, depois das deduções e da devolução de distrato'],
         ['Valor máximo do terreno (VPL zero)', terrenoVpl, 'R$', obsTerrenoVpl],
-        [`Terreno para margem de ${margemAlvo.toLocaleString('pt-BR')}%`, terrenoMargem, 'R$', obsTerrenoMargem ?? 'Margem líquida sobre o VGV'],
+        [`Terreno para margem de ${margemAlvo.toLocaleString('pt-BR')}%${margemDaTela == null ? ' (padrão)' : ''}`, terrenoMargem, 'R$', obsTerrenoMargem ?? 'Margem líquida sobre o VGV'],
         ['Variação de preço que zera o VPL', preco, '%', obsPreco],
         ['Variação do custo de obra que zera o VPL', custo, '%', obsCusto],
         ['Vendas mínimas', vendas, '% do VGV vendável', obsVendas ?? 'No ritmo da curva de vendas'],
@@ -180,7 +184,7 @@ const abaDoExcel = (linhas: Linha[], larguras: number[]) => {
  * "Due diligence: x de 14 ok, y com problema" (item 5.9 do plano 2026-11-11). Só
  * lê; item com problema aparece em destaque. Sem checklist, diz onde criar.
  */
-function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara?: (aba: ImovibAba) => void }) {
+function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara?: (aba: ImovibAba, subAba?: ImovibSubAbaDePremissas) => void }) {
     const [itens, setItens] = useState<ImovibLandChecklistItem[] | null>(null);
     useEffect(() => {
         let vivo = true;
@@ -193,7 +197,7 @@ function ResumoDaDueDiligence({ studyId, onIrPara }: { studyId: string; onIrPara
     return (
         <button
             type="button"
-            onClick={() => onIrPara?.('premises')}
+            onClick={() => onIrPara?.('premises', 'terreno')}
             className={`w-full text-left flex flex-wrap items-center gap-x-3 gap-y-1 px-4 py-3 rounded-[10px] border text-sm ${comProblema.length ? 'bg-rose-50 border-rose-200 text-rose-800' : 'bg-white border-gray-100 text-slate-700'} hover:border-slate-300`}
             title="Abrir Premissas › Terreno"
         >
@@ -210,6 +214,8 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
     const cashFlowData = useImovibMath(study);
     const printRef = useRef<HTMLDivElement>(null);
     const [isExporting, setIsExporting] = useState(false);
+    // Margem-alvo do cartão "Pontos de equilíbrio": aqui em cima para o Excel usar a mesma.
+    const [margemAlvo, setMargemAlvo] = useState<string>(String(IMOVIB_DEFAULTS.margem_alvo_terreno_percent));
     const { showToast } = useToast();
 
     // Indicadores de decisão (item 2.3 do plano 2026-11-11): VPL e lucro em
@@ -220,7 +226,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
 
     const exportToExcel = () => {
         try {
-            const planilha = montarPlanilhaImovib(study, cashFlowData);
+            const planilha = montarPlanilhaImovib(study, cashFlowData, { margemAlvoPct: parseFloat(margemAlvo) });
             const wb = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.indicadores, [46, 18, 10, 48]), 'Indicadores');
             XLSX.utils.book_append_sheet(wb, abaDoExcel(planilha.parecer, [34, 40, 18, 16, 10]), 'Parecer');
@@ -448,7 +454,7 @@ const ImovibExecutiveSummary: React.FC<ImovibExecutiveSummaryProps> = ({ study, 
                     />
                 </div>
 
-                <ImovibPontosDeEquilibrioCard study={study} />
+                <ImovibPontosDeEquilibrioCard study={study} margemAlvo={margemAlvo} onMargemAlvo={setMargemAlvo} />
 
                 {/* KPIs secundários */}
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">

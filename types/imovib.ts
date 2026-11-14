@@ -478,6 +478,8 @@ export interface ImovibLandChecklistItem {
     notes?: string | null;
     sort_order: number;
     checked_at?: string | null;
+    /** Usuário (auth) que mudou a situação por último. */
+    checked_by?: string | null;
 }
 
 /** Parcela do terreno (item 5.2): mês do estudo e % do custo do terreno. */

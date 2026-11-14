@@ -397,6 +397,20 @@ export const empreendimentoService = {
         return { estrutura, quadraLote };
     },
 
+    /**
+     * Só as colunas pedidas do empreendimento — para quem precisa de um ou dois
+     * campos (a UF do terreno, por exemplo) e não da linha inteira com `metadata`.
+     */
+    async camposDoEmpreendimento<K extends keyof Empreendimento>(id: string, campos: readonly K[]): Promise<Pick<Empreendimento, K> | null> {
+        const { data, error } = await supabase
+            .from('empreendimentos')
+            .select(campos.join(', '))
+            .eq('id', id)
+            .maybeSingle();
+        if (error) throw new Error(`Falha ao ler o empreendimento: ${error.message}`);
+        return (data as unknown as Pick<Empreendimento, K> | null) ?? null;
+    },
+
     async getById(id: string, opts?: { includeChildren?: boolean }): Promise<Empreendimento | EmpreendimentoWithChildren | null> {
         const { data: empreendimento, error } = await supabase
             .from('empreendimentos')

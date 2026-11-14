@@ -615,10 +615,10 @@ export const opuraMarketService = {
    * Um estudo de terreno pelo id — o que a viabilidade mostra do estudo de mercado
    * de origem (item 7.2 do plano 2026-11-11). Sem acesso ou apagado: null.
    */
-  async getTerrainStudy(id: string): Promise<Pick<OpuraMarketTerrainStudy, 'id' | 'name' | 'createdAt' | 'radiusStats' | 'estimatedAbsorptionVelocity' | 'analysisRadiusMeters'> | null> {
+  async getTerrainStudy(id: string): Promise<(Pick<OpuraMarketTerrainStudy, 'id' | 'name' | 'createdAt' | 'radiusStats' | 'estimatedAbsorptionVelocity' | 'analysisRadiusMeters'> & { updatedAt: string | null }) | null> {
     const { data, error } = await supabase
       .from('opura_market_terrain_studies')
-      .select('id, name, created_at, radius_stats, estimated_absorption_velocity, analysis_radius_meters')
+      .select('id, name, created_at, updated_at, radius_stats, estimated_absorption_velocity, analysis_radius_meters')
       .eq('id', id)
       .maybeSingle();
     if (error) throw new Error(`Falha ao ler o estudo de mercado: ${error.message}`);
@@ -627,6 +627,9 @@ export const opuraMarketService = {
       id: data.id,
       name: data.name,
       createdAt: data.created_at,
+      // Quando a absorção foi gravada: o Market reaberto com outras hipóteses e não
+      // salvo continua com a gravada (pendência da Fase 7 do plano Imovib 2026-11-11).
+      updatedAt: data.updated_at ?? null,
       radiusStats: data.radius_stats ?? null,
       estimatedAbsorptionVelocity: data.estimated_absorption_velocity ? Number(data.estimated_absorption_velocity) : null,
       analysisRadiusMeters: data.analysis_radius_meters,

@@ -7,11 +7,11 @@ export interface ImovibInputRowProps {
     /** A cada tecla com número válido — atualiza o estado do pai (soma 100%, etc.). */
     onChange?: (valor: number) => void;
     /** Ao sair do campo — grava. `null` = campo apagado, volta ao padrão (só com `padrao`). */
-    onCommit: (valor: number | null) => void;
+    onCommit: (valor: number | null) => unknown;
     /**
      * Padrão da premissa. Com ele, apagar o campo e sair grava vazio (`null`) e o
      * campo mostra o padrão — o motor usa o padrão quando a coluna está vazia.
-     * Sem ele, campo apagado grava 0.
+     * Sem ele, campo apagado grava 0. Devolver `false` recusa o valor e o campo volta.
      */
     padrao?: number;
     /** Texto depois do número, dentro do campo. */
@@ -69,13 +69,19 @@ const ImovibInputRow: React.FC<ImovibInputRowProps> = ({ label, desc, value, onC
                         if (texto.trim() === '' && padrao != null) {
                             setTexto(String(padrao));
                             onChange?.(padrao);
-                            onCommit(null);
+                            // Já mostrava o padrão (coluna vazia, ou o próprio valor do padrão):
+                            // o cálculo não muda — não regrava a cada saída do campo.
+                            if (valorAoFocar.current !== padrao) onCommit(null);
                             return;
                         }
                         const n = parseFloat(texto) || 0;
                         setTexto(String(n));
                         onChange?.(n);
-                        if (n !== valorAoFocar.current) onCommit(n);
+                        // `false` = o pai recusou o valor (ex.: alíquota negativa): o campo volta.
+                        if (n !== valorAoFocar.current && onCommit(n) === false) {
+                            setTexto(String(valorAoFocar.current));
+                            onChange?.(valorAoFocar.current);
+                        }
                     }}
                     step={step}
                     aria-label={label}

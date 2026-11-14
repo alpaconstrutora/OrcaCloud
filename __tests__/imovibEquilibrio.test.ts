@@ -122,6 +122,33 @@ describe('2.2 — pontos de equilíbrio', () => {
     });
 });
 
+/** Pendência da Fase 2: os pontos de equilíbrio levavam ~325 ms (TIR calculada à toa nas buscas). */
+describe('pontos de equilíbrio sem trabalho repetido', () => {
+    it('motor com semTir: mesmo VPL e fluxo, TIR vazia e sem aviso de TIR', () => {
+        const s = baseStudy({ sales_start_month: 1, construction_start_month: 1 });
+        const com = computeImovibMath(s);
+        const sem = computeImovibMath(s, { semTir: true });
+        expect(sem.vpl).toBe(com.vpl);
+        expect(sem.monthlyFlows).toEqual(com.monthlyFlows);
+        expect(sem.annualIrr).toBeNaN();
+        expect(sem.annualIrrProjeto).toBeNaN();
+        expect(sem.avisos.some(a => a.codigo === 'tir_multipla')).toBe(false);
+    });
+
+    it('vendas mínimas aproveitam o preço mínimo já calculado', () => {
+        const s = baseStudy();
+        const p = precoMinimo(s);
+        expect(vendasMinimas(s, p)).toEqual(vendasMinimas(s));
+    });
+
+    it('terreno para a TIR-alvo continua calculando a TIR', () => {
+        const s = baseStudy();
+        const t = terrenoMaximo(s, { tipo: 'tir', pctAnual: 20 });
+        expect(t.valor).not.toBeNull();
+        expect(computeImovibMath({ ...s, land_cost: t.valor! }).annualIrr).toBeCloseTo(20, 1);
+    });
+});
+
 describe('pendência da Fase 2 — TIR-alvo quando o fluxo com terreno 0 não tem TIR', () => {
     // Tudo à vista no sinal e obra barata: com terreno 0 o caixa nunca fica negativo (TIR "infinita").
     const semSaida = () => {

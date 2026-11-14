@@ -68,6 +68,8 @@ export const IMOVIB_DEFAULTS = {
     // Índices das vendas e da obra: vazio = inflation_rate (não têm padrão próprio).
     // Fase 2 — Indicadores e pontos de equilíbrio
     margem_alvo_terreno_percent: 15, // margem líquida sobre o VGV usada no 'terreno máximo' do Resumo (editável na tela)
+    // Fase 7 — Mercado
+    limiar_preco_contra_media_percent: 15, // 'Preço do estudo contra a média' fica em alerta acima de ±15% (dito no cartão)
     // Fase 3 — Sensibilidade, cenários e risco
     monte_carlo_iteracoes: 2000, // sorteios por simulação (botão Simular)
     // Fase 4 — Capital e financiamento (os quatro primeiros reproduzem o cálculo de antes)

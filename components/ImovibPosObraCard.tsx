@@ -13,7 +13,7 @@ interface ImovibPosObraCardProps {
     /** CAPEX simplificado: rubricas ficam fora do cálculo (o custo do estoque vale nos dois modos). */
     simplificado?: boolean;
     onItems: (items: ImovibCapexItem[]) => void;
-    onSalvar: (campos: ImovibStudyUpdate) => Promise<void>;
+    onSalvar: (campos: ImovibStudyUpdate) => Promise<unknown>;
 }
 
 const POS_OBRA = ['Assistência técnica', 'Manutenção e garantia'];

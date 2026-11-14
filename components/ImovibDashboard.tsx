@@ -22,6 +22,14 @@ interface ImovibDashboardProps {
     onViewStudy: (id: string) => void;
 }
 
+// Dica no cabeçalho: o que o número da coluna quer dizer (pendência da Fase 2 do
+// plano 2026-11-11 — a do VGV líquido só aparecia passando o mouse na célula).
+const DICA_DA_COLUNA: Partial<Record<string, string>> = {
+    netVgv: TITULO_VGV_LIQUIDO,
+    payback: 'Mês em que o caixa acumulado do acionista volta ao positivo',
+    multiple: 'Entradas ÷ saídas de caixa do acionista',
+};
+
 // Todas as colunas disponíveis (18) — passadas ao ColumnConfigButton e ao loop de render.
 const IMOVIB_COLUMNS: ColumnConfig[] = [
     { key: 'name', label: 'Estudo', sortable: true },
@@ -355,6 +363,7 @@ const ImovibDashboard: React.FC<ImovibDashboardProps> = ({ onNewStudy, onViewStu
                                             key={col.key}
                                             colKey={col.key}
                                             label={col.label}
+                                            title={DICA_DA_COLUNA[col.key]}
                                             sortable={col.sortable}
                                             uppercase={false}
                                             sortColumn={tableColumns.sortColumn}

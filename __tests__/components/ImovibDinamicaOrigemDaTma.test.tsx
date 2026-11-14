@@ -49,3 +49,50 @@ describe('4.5 — origem da TMA', () => {
         expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', { discount_rate_basis: null });
     });
 });
+
+/** Pendência da Fase 1 do plano: apagar um campo gravava 0 em vez de voltar ao padrão. */
+describe('campos numéricos da aba Dinâmica', () => {
+    beforeEach(() => { svc.updateStudy.mockReset(); svc.updateStudy.mockResolvedValue({}); });
+
+    it('apagar a TMA grava vazio (padrão) e mostra o padrão', async () => {
+        const user = userEvent.setup();
+        tela({ discount_rate: 15 });
+        const campo = screen.getByLabelText('TMA / Desconto (Ano)') as HTMLInputElement;
+        await user.clear(campo);
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', { discount_rate: null });
+        expect(campo.value).toBe('12');
+    });
+
+    it('grava só o campo que mudou', async () => {
+        const user = userEvent.setup();
+        tela({ discount_rate: 12 });
+        const campo = screen.getByLabelText('Inflação geral (% a.m.)') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, '0,5'.replace(',', '.'));
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenCalledTimes(1);
+        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', { inflation_rate: 0.5 });
+    });
+
+    it('apagar campo que já estava vazio, ou sair sem mudar, não grava', async () => {
+        const user = userEvent.setup();
+        tela({ brokerage_fee: null });
+        const campo = screen.getByLabelText('Comissão / Marketing') as HTMLInputElement;
+        await user.click(campo);
+        await user.tab();
+        await user.clear(campo);
+        await user.tab();
+        expect(svc.updateStudy).not.toHaveBeenCalled();
+    });
+
+    it('mês zero é gravado como veio (o motor avisa), não troca pelo padrão', async () => {
+        const user = userEvent.setup();
+        tela();
+        const campo = screen.getByLabelText('Mês Início Vendas') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, '0');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', { sales_start_month: 0 });
+    });
+});

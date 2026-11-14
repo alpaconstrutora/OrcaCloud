@@ -5,16 +5,17 @@
  *
  * Na PA0 o prédio é o que existe hoje: a massa (bloco + produto) → o pavimento tipo (M6a, com núcleo e cópias vivas) → a
  * planta interna das unidades (M6b). Os subsolos de R8 e R12 entram com a garagem (PA8).
+ *
+ * PA2 (13/11/2026): o prédio sai do ORQUESTRADOR (`planejarPredioDoPedido`), que encadeia os mesmos motores e marca o tipo
+ * com `copiaInstalacoes` — o hash do modelo muda só por essa marca; contagens iguais.
  */
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, emptyModel, point, sha256, snapshotHash, type Command, type Point } from '../utils/blueprintKernel';
+import { planejarPredioDoPedido } from '../utils/blueprintPredioAutomatico';
 import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../utils/blueprintTerreno';
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente } from '../utils/blueprintProduto';
-import { direcaoDaRua, ordinalDoTipo } from '../utils/blueprintPavimentoTipoDaMassa';
-import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../utils/blueprintPavimentoOrtogonal';
-import { plantasDasUnidades } from '../utils/blueprintPlantaDaUnidade';
 
 const FIXTURE = new URL('./fixtures/predioAutomaticoMarco.json', import.meta.url);
 const GRAVAR = process.env.GRAVAR_MARCO_PREDIO === '1';
@@ -34,7 +35,7 @@ const CASOS: Record<string, Caso> = {
   RL: { lote: [60000, 60000], bloco: [point(5000, 5000), point(45000, 5000), point(45000, 21000), point(21000, 21000), point(21000, 50000), point(5000, 50000)], pavimentos: 8 },
 };
 
-/** O prédio de hoje: massa → pavimento tipo → planta das unidades. */
+/** O prédio pelo orquestrador: massa → pavimento tipo → planta das unidades. */
 function predio(c: Caso) {
   const [w, d] = c.lote;
   let m = applyBatch(emptyModel(), [{ type: 'AddLevel', name: 'Térreo', elevationMm: 0, defaultHeightMm: 3000 }]).model;
@@ -45,15 +46,9 @@ function predio(c: Caso) {
     { type: 'AddBloco', levelId: t, nome: 'Torre', pontos: c.bloco, pavimentos: c.pavimentos },
   ]).model;
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
-  const pb = distribuirProduto(m, massa, MEDIO).blocos[0];
-  const b = m.blocos![0];
-  const ord = ordinalDoTipo(m, b);
-  const piso = pb.pisos.find((p) => p.ordinal === ord)!;
-  const r = dividirPavimentoDoBloco({ bloco: b, produto: MEDIO, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: null, direcaoDaRua: direcaoDaRua(m) });
-  if (!r.ok) throw new Error(r.motivo);
-  const mont = montarPavimentoTipoDoBloco(m, b, r.divisao);
-  const pl = plantasDasUnidades(mont.model, b, MEDIO);
-  return { model: pl.model, unidadesPorAndar: r.divisao.unidades.length, plantas: pl.unidades.length };
+  const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
+  const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null }, hip: {} });
+  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0 };
 }
 
 /** O que o marco guarda de um prédio. */

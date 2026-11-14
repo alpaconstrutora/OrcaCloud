@@ -141,7 +141,8 @@ export default function PlantaDaPrevia({ modelo, levelId, onLevelId, disciplina,
         <select aria-label="Pavimento da prévia" value={nivel.id} onChange={(e) => onLevelId(e.target.value)} className="h-9 rounded-[6px] border border-gray-200 bg-white px-3 text-sm text-gray-900 focus:border-blue-500 focus:outline-none">
           {modelo.levels.map((l) => (
             <option key={l.id} value={l.id}>
-              {l.name}
+              {/* Prédio automático (PA2): o andar copiado diz que é cópia viva — o desenho dele se edita no tipo. */}
+              {l.tipoDeId ? `${l.name} · cópia do tipo` : l.name}
             </option>
           ))}
         </select>

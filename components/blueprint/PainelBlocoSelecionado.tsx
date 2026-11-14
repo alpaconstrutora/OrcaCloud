@@ -93,6 +93,8 @@ interface Props {
     motivo: string | null;
     onCriarAlternativa: () => Promise<string | void>;
     onMontarAqui: () => Promise<string | void>;
+    /** PA2 do prédio automático (13/11/2026): abre a tela que gera o prédio inteiro numa prévia (tipo, cópias e plantas). */
+    onPredioAutomatico?: () => void;
   };
   /** M6b: a planta interna das unidades do pavimento tipo já montado (gerador da E6.2). */
   plantas?: {
@@ -563,11 +565,23 @@ export default function PainelBlocoSelecionado({ bloco, medida, onProps, onExclu
                 <p key={a} className="text-amber-800">{a}</p>
               ))}
               <div className="flex flex-wrap gap-1.5 pt-1">
+                {pavimentoTipo.onPredioAutomatico && (
+                  <button
+                    type="button"
+                    disabled={!!ocupado}
+                    onClick={pavimentoTipo.onPredioAutomatico}
+                    className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+                    data-testid="abrir-predio-automatico"
+                    title="Tipo, cópias e a planta das unidades numa prévia, antes de lançar (um lote: Ctrl+Z desfaz)"
+                  >
+                    Prédio automático
+                  </button>
+                )}
                 <button
                   type="button"
                   disabled={!!ocupado}
                   onClick={() => void agir('criar', pavimentoTipo.onCriarAlternativa)}
-                  className="rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300"
+                  className={pavimentoTipo.onPredioAutomatico ? 'rounded-md border border-slate-300 px-2 py-1 text-xs font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50' : 'rounded-md bg-blue-600 px-2 py-1 text-xs font-medium text-white hover:bg-blue-700 disabled:bg-slate-300'}
                   data-testid="pavimento-tipo-criar-alternativa"
                 >
                   {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa com o pavimento tipo'}

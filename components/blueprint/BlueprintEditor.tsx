@@ -615,8 +615,11 @@ import { empreendimentoService } from '../../services/empreendimentoService';
 import { espelhoDeVendasService, type ContornoGravado } from '../../services/espelhoDeVendasService';
 import { contornosDasTorres, mesmoContorno } from '../../utils/espelhoContornoDaTorre';
 import TelaCasaAutomatica, { type UnidadeParaOPrograma } from './TelaCasaAutomatica';
+import TelaPredioAutomatico from './TelaPredioAutomatico';
 import { useBlueprintCasa } from '../../hooks/useBlueprintCasa';
 import { planejarCasaNoWorker, useCasaAutomatica } from '../../hooks/useCasaAutomatica';
+import { usePredioAutomatico } from '../../hooks/usePredioAutomatico';
+import { assinaturaDoPedidoDoPredio, conferirPlanoDoPredio, HIPOTESES_DO_PREDIO_PADRAO, motivoParaNaoGerarPredio, type EntradaDoPredio, type HipotesesDoPredio } from '../../utils/blueprintPredioAutomatico';
 import TelaCasasDosLotes, { type ResultadoDoLote } from './TelaCasasDosLotes';
 import { lotesParaCasas, modeloDoLote, programaDoLote } from '../../utils/blueprintCasasDoLoteamento';
 import { criarPlantaDaCasaDoLote, plantasDosLotes } from '../../services/blueprintCasasDoLoteamentoService';
@@ -2228,7 +2231,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
    */
   // "Armadura" entrou aqui em 16/09/2026 (*"criar tela própria para armadura"*): é da aba Analisar, não da elétrica — o nome do tipo ficou pelo histórico.
   // "Quantitativos" virou TELA em 17/09/2026 (*"criar nova tela também em vez de drawer"*).
-  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa' | 'casas-lotes';
+  type TelaDaEletrica = 'quadro-de-cargas' | 'unifilar' | 'executivo-eletrico' | 'armadura' | 'quantitativos' | 'unidades' | 'legislacao' | 'programa' | 'avaliacao' | 'alternativas' | 'gerar' | 'gerar-massa' | 'massa' | 'produto' | 'materiais' | 'api' | 'webhooks' | 'plugins' | 'plugin' | 'acesso' | 'travas' | 'antes-depois' | 'compras' | 'tipos' | 'parametros' | 'tabelas' | 'areas-nbr12721' | 'dimensionamento-agua' | 'casa' | 'casas-lotes' | 'predio';
   const RELATORIOS_EM_DRAWER: ReadonlySet<RelatorioDoDock> = new Set([
     'conflitos',
     'restricoes',
@@ -9172,6 +9175,43 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
     return assinaturaDoPedidoDaCasa(montarPedidoDaCasa(editor.model, levelId, terreno, limitesDoNivel, casaDoEstudo.premissas.curto)) !== casa.assinatura;
   }, [telaAberta, casa.plano, casa.assinatura, levelId, montarPedidoDaCasa, editor.model, terreno, limitesDoNivel, casaDoEstudo.premissas.curto]);
   /**
+   * PRÉDIO AUTOMÁTICO (PA2, 13/11/2026): a tela abre a partir do bloco selecionado e guarda QUAL bloco — a seleção pode
+   * mudar enquanto ela está aberta. A entrada é o produto do estudo distribuído nesse bloco e o norte do desenho.
+   */
+  const predio = usePredioAutomatico();
+  const [blocoDoPredioId, setBlocoDoPredioId] = useState<string | null>(null);
+  const [hipotesesDoPredio, setHipotesesDoPredio] = useState<HipotesesDoPredio>(HIPOTESES_DO_PREDIO_PADRAO);
+  const [lancadoPredio, setLancadoPredio] = useState<string | null>(null);
+  const blocoDoPredio = (editor.model.blocos ?? []).find((b) => b.id === blocoDoPredioId) ?? null;
+  const entradaDoPredio = useMemo<EntradaDoPredio | null>(
+    () =>
+      blocoDoPredioId
+        ? { blocoId: blocoDoPredioId, produto: produtoDoEstudo.produto, doBloco: distribuicaoDoProduto?.blocos.find((x) => x.blocoId === blocoDoPredioId) ?? null, rotacaoNorteDeg: editor.model.georreferencia?.rotacaoNorteDeg ?? null }
+        : null,
+    [blocoDoPredioId, produtoDoEstudo.produto, distribuicaoDoProduto, editor.model.georreferencia?.rotacaoNorteDeg],
+  );
+  const motivoParaNaoGerarOPredio = useMemo(
+    () => (telaAberta === 'predio' && entradaDoPredio ? motivoParaNaoGerarPredio(editor.model, entradaDoPredio) : null),
+    [telaAberta, entradaDoPredio, editor.model],
+  );
+  const provaDoPredio = useMemo(
+    () => (telaAberta === 'predio' && predio.plano && entradaDoPredio ? conferirPlanoDoPredio(editor.model, predio.plano, entradaDoPredio) : null),
+    [telaAberta, predio.plano, entradaDoPredio, editor.model],
+  );
+  const previaDoPredioVelha = useMemo(
+    () => telaAberta === 'predio' && !!predio.plano && !!predio.assinatura && !!entradaDoPredio && assinaturaDoPedidoDoPredio({ original: editor.model, entrada: entradaDoPredio, hip: hipotesesDoPredio }) !== predio.assinatura,
+    [telaAberta, predio.plano, predio.assinatura, entradaDoPredio, hipotesesDoPredio, editor.model],
+  );
+  const abrirPredioAutomatico = useCallback(
+    (blocoId: string) => {
+      if (blocoId !== blocoDoPredioId) predio.limpar();
+      setBlocoDoPredioId(blocoId);
+      setLancadoPredio(null);
+      setTelaAberta('predio');
+    },
+    [blocoDoPredioId, predio],
+  );
+  /**
    * 11/11/2026: o platô que o último "Lançar" da casa gravou na terraplenagem — o lote do editor não o alcança, então o
    * Ctrl+Z que volta ao modelo de antes da casa restaura o platô anterior, e o Ctrl+Y que refaz a casa o regrava.
    */
@@ -11710,6 +11750,7 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   await recarregarRamos();
                   setTelaAberta('alternativas');
                 },
+                onPredioAutomatico: () => abrirPredioAutomatico(blocoSel.id),
                 onMontarAqui: async () => {
                   if (!divisaoDoBlocoSel.ok) return;
                   const mont = montarPavimentoTipoDoBloco(editor.model, blocoSel, divisaoDoBlocoSel.divisao);
@@ -12715,6 +12756,49 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
                   }
                 : null
             }
+          />
+        </div>
+      )}
+      {telaAberta === 'predio' && blocoDoPredio && entradaDoPredio && (
+        <div className="space-y-6 pb-20 animate-in fade-in duration-300" data-tela="predio">
+          {cabecalhoDaTela(
+            'Prédio automático',
+            `Do bloco "${blocoDoPredio.nome}" ao prédio: o pavimento tipo com as unidades, os andares como cópias vivas e a planta de cada unidade — uma prévia, e um lote só para lançar (um Ctrl+Z desfaz tudo).`,
+            Building2,
+            'Massa',
+          )}
+          <TelaPredioAutomatico
+            predio={predio}
+            bloco={{ nome: blocoDoPredio.nome, pavimentos: blocoDoPredio.pavimentos }}
+            produto={produtoDoEstudo.produto}
+            doBloco={entradaDoPredio.doBloco}
+            onEditarProduto={() => setTelaAberta('produto')}
+            hipoteses={hipotesesDoPredio}
+            onHipoteses={setHipotesesDoPredio}
+            motivoParaNaoGerar={motivoParaNaoGerarOPredio}
+            onGerar={() => {
+              setLancadoPredio(null);
+              predio.gerar({ original: editor.model, entrada: entradaDoPredio, hip: hipotesesDoPredio });
+            }}
+            desatualizada={previaDoPredioVelha}
+            prova={provaDoPredio}
+            lancado={lancadoPredio}
+            onLancar={async () => {
+              const plano = predio.plano;
+              if (!plano) return;
+              const prova = conferirPlanoDoPredio(editor.model, plano, entradaDoPredio);
+              if (!prova.ok) throw new Error(prova.motivo);
+              const criados = editor.runBatch(plano.comandos);
+              if (criados.length === 0 && plano.criados.length > 0) throw new Error('O editor recusou o lote — nada foi lançado (veja o aviso no editor).');
+              setLancadoPredio(`${criados.length} elemento(s) lançados num lote só: o pavimento tipo e ${plano.resumo.copias} cópia(s), ${plano.resumo.unidades} unidade(s) no prédio — Ctrl+Z desfaz tudo. Volte ao editor para ver o prédio.`);
+            }}
+            onCriarAlternativa={async () => {
+              const plano = predio.plano;
+              if (!plano) return;
+              await createAlternative({ studyId: study.id, organizationId: study.organization_id, fromBranchId: branchId, nome: `${blocoDoPredio.nome} — prédio automático`.slice(0, 80), descricao: plano.decisoes.join(' '), model: plano.resultado });
+              await recarregarRamos();
+              setTelaAberta('alternativas');
+            }}
           />
         </div>
       )}

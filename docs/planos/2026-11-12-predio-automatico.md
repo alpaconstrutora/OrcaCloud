@@ -79,6 +79,24 @@ destino da água e do esgoto (padrões = os de hoje; o marco da casa prova).
 **Pronto quando.** O marco do prédio grava tipo + unidades pelo orquestrador; no app a tela abre a partir de um Bloco,
 mostra a prévia, lança e desfaz.
 
+**Execução (13/11/2026).** Na PA2 o prédio só tem a arquitetura — o motor encadeia o que hoje são dois botões soltos do
+painel do bloco ("Montar neste estudo" e "Gerar a planta das unidades"), numa prévia e num lote:
+- `utils/predioAutomatico/hipoteses.ts` — `EtapaDoPredioId` (`PAVIMENTO_TIPO`, `PLANTAS`, `INSTALACOES_NO_TIPO`,
+  `CONFERENCIA`; as fases seguintes acrescentam as suas), `EtapaDoPredio`, `HipotesesDoPredio` (`plantas: boolean`),
+  `PlanoDoPredio` (lote, criados, etapas, pendências `PendenciaDoPpci` com locais, resultado, `tipoLevelId`, resumo).
+- `utils/predioAutomatico/orquestrador.ts` — `motivoParaNaoGerarPredio` (bloco sem unidade, tipo já montado, sem
+  produto) e `planejarPredio`: divisão → montagem (tipo + cópias vivas) → plantas internas → `SetLevelProps
+  copiaInstalacoes` no tipo (PA1: as instalações das fases seguintes nascem no tipo e vão aos andares) → conferência
+  (avisos da divisão, da montagem e das plantas viram pendências; cômodo sem fachada aponta a unidade).
+- `utils/predioAutomatico/pedido.ts` — `PedidoDoPredio` (clonável: o desenho, o bloco, o produto, a distribuição do
+  bloco, o norte, as hipóteses), `planejarPredioDoPedido`, `assinaturaDoPedidoDoPredio`, `conferirPlanoDoPredio`.
+- Worker, `hooks/usePredioAutomatico.ts`, `components/blueprint/TelaPredioAutomatico.tsx` (Programa · Hipóteses ·
+  Resultado · Relatório; Gerar, Criar alternativa e Lançar na barra), botão "Prédio automático" no painel do bloco,
+  `PlantaDaPrevia` com "· cópia do tipo" no nome do pavimento copiado.
+- Marco do prédio passa a gerar pelo orquestrador (regravação justificada: o tipo ganha `copiaInstalacoes`).
+- **Desvio:** a parametrização de `instalacoes(..., opcoes?)` da casa vai para a PA5, que é quem a consome — feita aqui,
+  ficaria sem uso e sem teste que a exercite.
+
 ### PA3 — Térreo e cobertura
 **O que muda.** Térreo solto (perímetro, hall/portaria, acesso, centro de medição, casa de bombas, reservatório inferior);
 cobertura (laje ou telhado, reservatório superior, casa de máquinas, área de condensadoras); núcleo do térreo à cobertura.
@@ -139,7 +157,7 @@ PA1 e PA2 podem correr em frentes paralelas.
 |---|---|
 | PA0 | feito — marco com R4 (4 pav · 2 un/andar · 72 paredes), R8 (8 · 5 · 357), R12 (12 · 8 · 891), RL em L (8 · 13 · 910); grava em ~4 s e repete idêntico; tsc limpo. As unidades por andar saem do produto médio na largura de cada bloco (o plano previa 2/2/4 — fica a variedade medida) |
 | PA1 | feito — `Level.copiaInstalacoes?` (0.106.0): quadros, terminais, trechos e componentes do tipo vão para as cópias com uid determinístico, circuitos pelo mapa quadro do tipo → quadro da cópia, e os vínculos (`circuitoId(s)`, `quadroId`, `quadroPaiId`, `drs`, `alvoId`, `condensadoraId`, `centralAlarmeId`, `bombaPrincipalId`, `paiUid`) remapeados; pai fora do tipo (QGBT do térreo) fica. `unidadesAtendidas` conta a unidade de cada andar (`unidadeNoPavimento`: 101 no tipo, 201/301 nas cópias). Testes em `__tests__/blueprintCopiaDeInstalacoes.test.ts`. **Desvios do plano:** (1) em vez do comando `SetCopiaInstalacoes`, é uma opção do `SetLevelProps` (mesmo lugar onde o vínculo `tipoDeId` já é feito); (2) a recusa de editar instalação da cópia varre os campos do comando (como `recusarEdicaoEmPavimentoVinculado`), não o diff; (3) `Terminal.unidadeLevelUid` fica para a PA5, que é quem cria o medidor por unidade no térreo; (4) o dirty-check foi feito: as instalações só ressincronizam quando o comando é de pavimento ou o diff toca instalação do tipo. **Benchmark:** no R4 com instalação, `AddWall` no térreo leva ~40 ms com a flag × ~36 ms sem; mover um ponto do tipo, ~79 ms (teste fixa < 1.500 ms). Prova do bump: com a string em 0.105.0, goldens, os dois marcos e 1.073 testes passaram; depois, só hashes mudaram (marcos regravados: casa `resultado` ×8, prédio `modelo` ×4, nenhuma contagem). **Conferência no app (12/11, `c:/tmp/pwtest/conferencia-predio-pa1.cjs`, estudo descartável arquivado):** térreo + tipo + 2 cópias com QGBT no térreo e QD/circuito/tomada/trecho no tipo — as cópias mostram a instalação do tipo; Ctrl+A e Shift+→ no tipo levaram tomada e QD das duas cópias juntos (+2.000 mm) e o QGBT ficou; Ctrl+Z voltou os três andares. A faixa azul da cópia dizia "Instalações … são próprias" — passou a dizer que as instalações também vêm do tipo quando ele as copia |
-| PA2 | a fazer |
+| PA2 | feito — motor em `utils/predioAutomatico/` (etapas Pavimento tipo · Plantas · Instalações no tipo · Conferência), worker, `usePredioAutomatico`, `TelaPredioAutomatico` (Programa · Hipóteses · Resultado · Relatório), botão "Prédio automático" no painel do bloco, "· cópia do tipo" no seletor da prévia. O lote dá exatamente o desenho dos dois botões de antes + a marca do tipo (`__tests__/predioAutomatico.test.ts`); marco do prédio regravado pelo orquestrador — só os 4 hashes de `modelo` mudaram, e sem a marca o R4 tem o hash antigo (provado). **Conferência no app (13/11, `c:/tmp/pwtest/conferencia-predio-pa2.cjs`, estudo descartável arquivado):** R4 com o produto médio — painel do bloco → Prédio automático → prévia (6 unidades, 2 por andar × 3, tipo + 2 cópias seladas) → Lançar os 3 pavimentos (226 elementos, um lote) → rascunho com 2 cópias e a marca → "Gerar de novo" desligado (tipo já montado) → Ctrl+Z volta ao bloco sozinho. Desvio: `instalacoes(..., opcoes?)` da casa vai para a PA5 |
 | PA3 | a fazer |
 | PA4 | a fazer |
 | PA5 | a fazer |

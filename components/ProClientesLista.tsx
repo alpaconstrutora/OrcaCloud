@@ -111,7 +111,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F3F7F9] text-slate-800">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-800">
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Clientes...</span>
       </div>
@@ -119,10 +119,10 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
   }
 
   return (
-    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-24 space-y-5">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
+    <div className="flex flex-col text-slate-800 space-y-5">
+      {/* Header — no computador a seta e o título vêm da casca (ProModule); o "+ Cadastrar" fica */}
+      <div className="flex items-center justify-between md:justify-end">
+        <div className="flex items-center gap-3 md:hidden">
           <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-lg">
             ←
           </button>

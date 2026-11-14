@@ -5,6 +5,7 @@ import { sinapiService, SinapiReference, resolveReferenceDate } from '../service
 import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal, ArrowUpDown } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -113,6 +114,12 @@ const getTypeBadge = (type: SinapiType) => {
   );
 };
 
+/** Sombra da última coluna fixa: marca que há conteúdo rolando por baixo (§6.13.1). */
+const SOMBRA_FIXA_EAP = '6px 0 8px -6px rgba(15, 23, 42, 0.14)';
+/** Os handlers de grupo/etapa/subetapa recebem o evento do clique só para stopPropagation;
+ *  no menu ⋮ não há linha embaixo para proteger. */
+const SEM_EVENTO = { stopPropagation() { /* nada */ }, preventDefault() { /* nada */ } } as unknown as React.MouseEvent;
+
 /** Colunas redimensionáveis, na ordem em que aparecem — "preco-total" fica fora
  *  porque vem DEPOIS do espaçador do §6.1.1. */
 const WBS_COLUMN_KEYS = ['item', 'base', 'codigo', 'descricao', 'qtd', 'unid', 'custo-unit', 'custo-total', 'bdi', 'preco-unit'] as const;
@@ -133,10 +140,13 @@ const DRAG_COL_WIDTH = 32;
  *  planilha densa. "Descrição" é a coluna que absorve a diferença, por ser a
  *  única com texto longo. */
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  item: 96,
+  // 112 (era 96): "04.01.01.01" + o ícone da CPU não cabiam (medido 87 × 71 px).
+  item: 112,
   base: 84,
   codigo: 104,
-  descricao: 520,
+  // 320 (era 520): a descrição vai em até 2 linhas com o texto inteiro no title, e as colunas
+  // de identificação ficam FIXAS à esquerda — com 520 a parte fixa tomava metade da tela.
+  descricao: 320,
   qtd: 84,
   unid: 72,
   'custo-unit': 128,
@@ -278,6 +288,24 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       ? base + NATURE_COLUMN_KEYS.reduce((sum, key) => sum + cols.getWidth(key), 0)
       : base;
   }, [cols, showNatureBreakdown]);
+  // Colunas FIXAS à esquerda (crítica 2026-11-14, passo 4): arraste + Item + Base + Código +
+  // Descrição. A tabela é mais larga que a tela; sem isso, rolar até Preço total/ações perdia
+  // o item. Mesmo recurso da lista de Orçamentos (guia §6.13.1): tabela em border-separate
+  // (o collapse vaza texto na costura entre células fixas) e fundo opaco em cada célula fixa.
+  const esquerdaFixa = (() => {
+    const left: Record<'drag' | 'item' | 'base' | 'codigo' | 'descricao', number> = { drag: 0, item: 0, base: 0, codigo: 0, descricao: 0 };
+    let x = DRAG_COL_WIDTH;
+    for (const k of ['item', 'base', 'codigo', 'descricao'] as const) { left[k] = x; x += cols.getWidth(k); }
+    return left;
+  })();
+  const fixaEap = (left: number, opts: { cabecalho?: boolean; ultima?: boolean } = {}): React.CSSProperties => ({
+    position: 'sticky',
+    left,
+    // 30 no cabeçalho: a alça de redimensionar das colunas roladas é z-20 (§6.13.1).
+    zIndex: opts.cabecalho ? 30 : 1,
+    ...(opts.cabecalho ? { background: '#fff' } : {}),
+    ...(opts.ultima ? { boxShadow: SOMBRA_FIXA_EAP } : {}),
+  });
   const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
   const [hasCPUChanges, setHasCPUChanges] = React.useState(false);
@@ -2909,7 +2937,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       }
         {/* Conteúdo — SEM bg/border/rounded/shadow próprios: o card pai já supre (§5.2) */}
         <div className="flex-1 overflow-auto min-h-0">
-          <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+          <table
+            ref={cols.tableRef}
+            // border-separate (colunas fixas — §6.13.1): a divisória entre linhas vai nas
+            // células; entre grupos, a faixa de 4px que era borda do <tbody>.
+            className="text-left border-separate border-spacing-0 [&_td]:border-b [&_td]:border-b-gray-100 [&_th]:border-b [&_th]:border-b-gray-200 [&>tbody+tbody>tr:first-child>td]:border-t-4 [&>tbody+tbody>tr:first-child>td]:border-t-gray-100"
+            style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}
+          >
             {/* Uma única definição de coluna para TODAS as linhas (cabeçalho, grupo,
                 etapa, subetapa e item) — antes eram 3 templates de grid distintos
                 (11, 9 e 12 colunas), e por isso as colunas nunca alinhavam.
@@ -2931,11 +2965,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </colgroup>
             <thead>
               <tr className="sticky top-0 z-10 bg-white border-b border-gray-200 text-sm font-semibold text-gray-700">
-                <th className="px-3 py-2 border-r border-gray-100"></th>
-                <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Item<cols.ResizeHandle colKey="item" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Base<cols.ResizeHandle colKey="base" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Código<cols.ResizeHandle colKey="codigo" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Descrição<cols.ResizeHandle colKey="descricao" /></th>
+                <th style={fixaEap(esquerdaFixa.drag, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100"></th>
+                <th style={fixaEap(esquerdaFixa.item, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Item<cols.ResizeHandle colKey="item" /></th>
+                <th style={fixaEap(esquerdaFixa.base, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Base<cols.ResizeHandle colKey="base" /></th>
+                <th style={fixaEap(esquerdaFixa.codigo, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Código<cols.ResizeHandle colKey="codigo" /></th>
+                <th style={fixaEap(esquerdaFixa.descricao, { cabecalho: true, ultima: true })} className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Descrição<cols.ResizeHandle colKey="descricao" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Qtd.<cols.ResizeHandle colKey="qtd" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Unid.<cols.ResizeHandle colKey="unid" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Custo unit.<cols.ResizeHandle colKey="custo-unit" /></th>
@@ -2964,17 +2998,17 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             const { name: groupNameDisplay } = splitName(group.name);
 
             return (
-              <tbody key={group.id} className="border-b-4 border-gray-100 last:border-b-0">
+              <tbody key={group.id}>
                 {/* GROUP HEADER */}
                 <tr className="bg-gray-800 hover:bg-gray-700 transition-colors text-white group">
-                  <td className="px-3 py-2.5 border-r border-gray-700"></td>
-                  <td className="px-3 py-2.5 border-r border-gray-700">
+                  <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700"></td>
+                  <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700">
                     <div className="flex items-center gap-1 cursor-pointer font-semibold text-sm" onClick={() => toggleGroup(group.id)}>
                       {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
                       {group.id}
                     </div>
                   </td>
-                  <td colSpan={3} className="px-3 py-2.5 border-r border-gray-700">
+                  <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700">
                     {/* Contagem e total logo depois do nome (§6.12): a coluna Preço total cai fora
                         da tela numa tabela larga, e o grupo precisa dizer o que tem. */}
                     <div className="flex items-baseline gap-2 min-w-0">
@@ -2986,41 +3020,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   </td>
                   <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
                   <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
-                    <div className="flex flex-col items-end gap-1">
+                      {/* Valor + "Nova etapa" + ⋮ numa linha só (§9.2): eram 6 ícones empilhados
+                          embaixo do valor, e a faixa do grupo tinha 72px de altura. */}
+                    <div className="flex items-center justify-end gap-1.5">
                       <span className="font-medium text-sm whitespace-nowrap">{valorOuTraco(itensDoGrupo, groupTotal)}</span>
-                      <div className="flex gap-1 items-center">
-                        <div className="flex items-center">
-                          {canReorderGroups ? (
-                            <>
-                              {gIndex > 0 && (
-                                <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
-                                  <ArrowUp className="w-3 h-3" />
-                                </button>
-                              )}
-                              {gIndex < settings.wbs.length - 1 && (
-                                <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'DOWN')} className="text-gray-400 hover:text-white p-1" title="Mover para Baixo">
-                                  <ArrowDown className="w-3 h-3" />
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            // Filtro/ordem ativos: a posição na tela não é a da EAP, então mover
-                            // aqui faria o grupo "pular" sem lógica. Desligado, com o motivo.
-                            <>
-                              <span title={MOTIVO_SEM_MOVER_GRUPO}>
-                                <button type="button" disabled aria-label="Mover para Cima" className="text-gray-400 p-1 opacity-40 cursor-not-allowed"><ArrowUp className="w-3 h-3" /></button>
-                              </span>
-                              <span title={MOTIVO_SEM_MOVER_GRUPO}>
-                                <button type="button" disabled aria-label="Mover para Baixo" className="text-gray-400 p-1 opacity-40 cursor-not-allowed"><ArrowDown className="w-3 h-3" /></button>
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        <button type="button" onClick={(e) => handleDuplicateGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-gray-400 hover:text-white" title="Duplicar Grupo"><Copy className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={(e) => handleEditGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-amber-400" title="Editar Grupo"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-blue-300" title="Nova Etapa"><Plus className="w-4 h-4" /></button>
-                        <button type="button" onClick={(e) => handleDeleteGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-red-400" title="Excluir Grupo"><Trash2 className="w-4 h-4" /></button>
-                      </div>
+                      <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-blue-300" title="Nova etapa" aria-label="Nova etapa"><Plus className="w-4 h-4" /></button>
+                      <InlineDisclosureMenu
+                        menuItems={[
+                          { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMoveGroup(SEM_EVENTO, gIndex, 'UP'), disabled: !canReorderGroups || gIndex === 0, title: !canReorderGroups ? MOTIVO_SEM_MOVER_GRUPO : undefined },
+                          { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => handleMoveGroup(SEM_EVENTO, gIndex, 'DOWN'), disabled: !canReorderGroups || gIndex === settings.wbs.length - 1, title: !canReorderGroups ? MOTIVO_SEM_MOVER_GRUPO : undefined },
+                          { icon: <Pencil className="w-[18px] h-[18px]" />, label: 'Editar grupo', onClick: () => handleEditGroup(SEM_EVENTO, gIndex) },
+                          { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar grupo', onClick: () => handleDuplicateGroup(SEM_EVENTO, gIndex) },
+                          { icon: <Trash2 className="w-[18px] h-[18px] text-red-600" />, label: 'Excluir grupo', className: 'text-red-600', onClick: () => { void handleDeleteGroup(SEM_EVENTO, gIndex); } },
+                        ]}
+                      />
                     </div>
                   </td>
                   {showNatureBreakdown && (() => {
@@ -3052,14 +3065,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <React.Fragment key={phase.id}>
                       {/* PHASE HEADER */}
                       <tr className="bg-gray-100 hover:bg-gray-200 border-b border-gray-200 group">
-                        <td className="px-3 py-2.5 border-r border-gray-200"></td>
-                        <td className="px-3 py-2.5 border-r border-gray-200">
+                        <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200"></td>
+                        <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200">
                           <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-800 text-sm" onClick={() => togglePhase(phase.id)}>
                             {isPhaseExpanded ? <ChevronDown className="w-4 h-4 text-gray-600 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />}
                             {phaseIdDisplay}
                           </div>
                         </td>
-                        <td colSpan={3} className="px-3 py-2.5 border-r border-gray-200">
+                        <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200">
                           <div className="flex items-baseline gap-2 min-w-0">
                             <span className="font-semibold text-gray-800 text-sm leading-tight truncate" title={phaseNameDisplay}>{phaseNameDisplay}</span>
                             <span className="shrink-0 text-sm font-normal text-gray-600 whitespace-nowrap">· {rotuloItens(itensDaEtapa)}</span>
@@ -3067,26 +3080,18 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         </td>
                         <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
-                          <div className="flex flex-col items-end gap-1">
+                          <div className="flex items-center justify-end gap-1.5">
                             <span className="font-medium text-gray-800 text-sm whitespace-nowrap">{valorOuTraco(itensDaEtapa, phaseTotal)}</span>
-                            <div className="flex gap-1 items-center">
-                              <div className="flex items-center">
-                                {pIndex > 0 && (
-                                  <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'UP')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Cima">
-                                    <ArrowUp className="w-3 h-3" />
-                                  </button>
-                                )}
-                                {pIndex < group.phases.length - 1 && (
-                                  <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'DOWN')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Baixo">
-                                    <ArrowDown className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                              <button type="button" onClick={(e) => handleDuplicatePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-gray-200 rounded-[6px] text-gray-600" title="Duplicar Etapa"><Copy className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={(e) => handleEditPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-amber-100 rounded-[6px] text-amber-600" title="Editar Etapa"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Nova Subetapa"><Plus className="w-4 h-4" /></button>
-                              <button type="button" onClick={(e) => handleDeletePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-red-200 rounded-[6px] text-red-600" title="Excluir Etapa"><Trash2 className="w-4 h-4" /></button>
-                            </div>
+                            <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Nova subetapa" aria-label="Nova subetapa"><Plus className="w-4 h-4" /></button>
+                            <InlineDisclosureMenu
+                              menuItems={[
+                                { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMovePhase(SEM_EVENTO, gIndex, pIndex, 'UP'), disabled: pIndex === 0 },
+                                { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => handleMovePhase(SEM_EVENTO, gIndex, pIndex, 'DOWN'), disabled: pIndex === group.phases.length - 1 },
+                                { icon: <Pencil className="w-[18px] h-[18px]" />, label: 'Editar etapa', onClick: () => handleEditPhase(SEM_EVENTO, gIndex, pIndex) },
+                                { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar etapa', onClick: () => handleDuplicatePhase(SEM_EVENTO, gIndex, pIndex) },
+                                { icon: <Trash2 className="w-[18px] h-[18px] text-red-600" />, label: 'Excluir etapa', className: 'text-red-600', onClick: () => { void handleDeletePhase(SEM_EVENTO, gIndex, pIndex); } },
+                              ]}
+                            />
                           </div>
                         </td>
                         {showNatureBreakdown && (() => {
@@ -3118,40 +3123,32 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         return (
                           <React.Fragment key={subPhaseName}>
                             <tr className="bg-gray-50 hover:bg-gray-100 border-b border-gray-100 group">
-                              <td className="px-3 py-2.5 border-r border-gray-100"></td>
-                              <td className="px-3 py-2.5 border-r border-gray-100">
+                              <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100"></td>
+                              <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100">
                                 <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm" onClick={() => toggleSubPhase(subPhaseName)}>
                                   {isSubExpanded ? <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" /> : <Folder className="w-3 h-3 text-blue-500 shrink-0" />}
                                   {subIdDisplay}
                                 </div>
                               </td>
-                              <td colSpan={3} className="px-3 py-2.5 border-r border-gray-100">
+                              <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100">
                                 <div className="font-semibold text-gray-700 text-sm leading-tight truncate" title={subNameDisplay}>
                                   {subNameDisplay}
                                 </div>
                               </td>
                               <td colSpan={7} className="px-3 py-2.5 border-r border-gray-100"></td>
                               <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
-                                <div className="flex flex-col items-end gap-1">
+                                <div className="flex items-center justify-end gap-1.5">
                                   <span className="font-medium text-gray-700 text-sm whitespace-nowrap">{valorOuTraco(itensDaSubetapa, subTotal)}</span>
-                                  <div className="flex gap-1 items-center">
-                                    <div className="flex items-center">
-                                      {spIndex > 0 && (
-                                        <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'UP')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Cima">
-                                          <ArrowUp className="w-3 h-3" />
-                                        </button>
-                                      )}
-                                      {spIndex < phase.subPhases.length - 1 && (
-                                        <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'DOWN')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Baixo">
-                                          <ArrowDown className="w-3 h-3" />
-                                        </button>
-                                      )}
-                                    </div>
-                                    <button type="button" onClick={(e) => handleDuplicateSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-gray-200 rounded-[6px] text-gray-600" title="Duplicar Subetapa"><Copy className="w-3 h-3" /></button>
-                                    <button type="button" onClick={(e) => handleEditSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-amber-100 rounded-[6px] text-amber-600" title="Editar Subetapa"><Pencil className="w-3 h-3" /></button>
-                                    <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-emerald-200 rounded-[6px] text-emerald-700 flex items-center gap-1 text-button px-2" title="Adicionar Item"><Plus className="w-3 h-3" /></button>
-                                    <button type="button" onClick={(e) => handleDeleteSubPhase(e, gIndex, pIndex, subPhaseName)} className="p-1.5 hover:bg-red-200 rounded-[6px] text-red-600" title="Excluir Subetapa"><Trash2 className="w-3 h-3" /></button>
-                                  </div>
+                                  <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-emerald-200 rounded-[6px] text-emerald-700" title="Adicionar item" aria-label="Adicionar item"><Plus className="w-4 h-4" /></button>
+                                  <InlineDisclosureMenu
+                                    menuItems={[
+                                      { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMoveSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex, 'UP'), disabled: spIndex === 0 },
+                                      { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => handleMoveSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex, 'DOWN'), disabled: spIndex === phase.subPhases.length - 1 },
+                                      { icon: <Pencil className="w-[18px] h-[18px]" />, label: 'Editar subetapa', onClick: () => handleEditSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex) },
+                                      { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar subetapa', onClick: () => handleDuplicateSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex) },
+                                      { icon: <Trash2 className="w-[18px] h-[18px] text-red-600" />, label: 'Excluir subetapa', className: 'text-red-600', onClick: () => { void handleDeleteSubPhase(SEM_EVENTO, gIndex, pIndex, subPhaseName); } },
+                                    ]}
+                                  />
                                 </div>
                               </td>
                               {showNatureBreakdown && (() => {
@@ -3170,7 +3167,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               items.length === 0 ? (
                                 <tr className="border-b border-gray-100">
                                   <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
-                                    Nenhum item nesta subetapa. Use o botão + (Adicionar item) à direita.
+                                    <span className="sticky left-16">Nenhum item nesta subetapa. Use o botão + (Adicionar item) à direita.</span>
                                   </td>
                                 </tr>
                               ) : (
@@ -3201,6 +3198,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
                                       auxiliaryItems={auxiliaryItems}
                                       isLocked={isLocked}
+                                      esquerdaFixa={esquerdaFixa}
                                     />
                                   ))}
                                 </SortableContext>
@@ -3216,7 +3214,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               type="button"
                               onClick={() => setEtapasComVaziasVisiveis(prev => (prev.includes(phase.id) ? prev.filter(id => id !== phase.id) : [...prev, phase.id]))}
                               aria-expanded={vaziasVisiveis}
-                              className="text-sm text-gray-600 hover:text-blue-700 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                              className="sticky left-10 text-sm text-gray-600 hover:text-blue-700 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
                             >
                               {vaziasVisiveis
                                 ? `Ocultar ${subetapasVazias.length === 1 ? 'a subetapa sem itens' : `as ${subetapasVazias.length} subetapas sem itens`}`

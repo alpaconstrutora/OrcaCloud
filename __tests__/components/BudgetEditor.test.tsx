@@ -11,7 +11,7 @@
  * Todos os serviços externos e sub-componentes pesados são mockados.
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SinapiType } from '../../types';
 import type { BudgetEntry, ProjectSettings } from '../../types';
@@ -494,16 +494,22 @@ describe('Filtro de grupo e ordem dos grupos', () => {
         expect(nomesDosGrupos(container)).toEqual(['Zeta', 'Alfa', 'Mike']);
     });
 
-    it('com filtro ou ordem ativos, as setas de mover grupo ficam desligadas e dizem o motivo', async () => {
+    it('com filtro ou ordem ativos, mover grupo (no ⋮) fica desligado e diz o motivo', async () => {
         const { container } = await montar();
-        // EAP + todos: há seta ativa (Zeta desce).
-        expect(screen.getAllByRole('button', { name: /Mover para Baixo/ }).some(b => !(b as HTMLButtonElement).disabled)).toBe(true);
+        // Desde o passo 4 da crítica do Analítico, mover/editar/duplicar/excluir ficam no ⋮
+        // da linha do grupo. EAP + todos: "Mover para baixo" do 1º grupo está ativo.
+        const menuDoPrimeiroGrupo = () => within(container.querySelector('tr.bg-gray-800') as HTMLElement).getByRole('button', { name: 'Mais ações' });
+        fireEvent.click(menuDoPrimeiroGrupo());
+        expect((screen.getByRole('button', { name: 'Mover para baixo' }) as HTMLButtonElement).disabled).toBe(false);
+        fireEvent.click(menuDoPrimeiroGrupo()); // fecha
 
         fireEvent.change(screen.getByLabelText('Ordem dos grupos'), { target: { value: 'name' } });
-        const baixo = screen.getAllByRole('button', { name: 'Mover para Baixo' }) as HTMLButtonElement[];
-        expect(baixo.length).toBe(nomesDosGrupos(container).length);
-        expect(baixo.every(b => b.disabled)).toBe(true);
-        expect(baixo[0].parentElement?.getAttribute('title')).toContain('Ordem da EAP');
+        fireEvent.click(menuDoPrimeiroGrupo());
+        // o menu anterior pode ainda estar saindo (animação): vale o último, o do menu aberto
+        const baixo = within(container.querySelector('tr.bg-gray-800') as HTMLElement).getAllByRole('button', { name: 'Mover para baixo' }).at(-1) as HTMLButtonElement;
+        expect(baixo.disabled).toBe(true);
+        expect(baixo.getAttribute('title')).toContain('Ordem da EAP');
+        expect(nomesDosGrupos(container).length).toBe(3);
     });
 });
 

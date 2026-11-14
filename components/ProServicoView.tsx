@@ -2,88 +2,23 @@ import React from 'react';
 import { proService } from '../services/proService';
 import { ProServico, ProOSChecklistItem } from '../types';
 import jsPDF from 'jspdf';
+import QRCode from 'qrcode';
+import {
+  montarPixCopiaECola,
+  formatarChavePixParaExibir,
+  ROTULO_TIPO_CHAVE_PIX,
+} from '../utils/pixCopiaECola';
 
-// Função auxiliar para calcular o CRC16 de validação do PIX (Polinômio 0x1021)
-const calculateCRC16 = (str: string): string => {
-  let crc = 0xFFFF;
-  const polynomial = 0x1021;
+// PIX: o payload vem de utils/pixCopiaECola.ts, montado pelo TIPO de chave cadastrado
+// (até 14/11/2026 era por palpite aqui, e CPF com máscara virava telefone +55).
+// O cadastro do Pro ainda não tem cidade; o campo 60 do BR Code é obrigatório e os
+// bancos não o conferem com a chave. Ver docs/planos/2026-11-14-opura-pro-critica.md (passo 5).
+const CIDADE_RECEBEDOR_PADRAO = 'BRASILIA';
 
-  for (let i = 0; i < str.length; i++) {
-    const charCode = str.charCodeAt(i);
-    for (let j = 0; j < 8; j++) {
-      const bit = ((charCode >> (7 - j)) & 1) === 1;
-      const c15 = ((crc >> 15) & 1) === 1;
-      crc <<= 1;
-      if (c15 !== bit) {
-        crc ^= polynomial;
-      }
-    }
-  }
-
-  crc &= 0xFFFF;
-  let crcStr = crc.toString(16).toUpperCase();
-  while (crcStr.length < 4) {
-    crcStr = '0' + crcStr;
-  }
-  return crcStr;
-};
-
-// Gerador de Payload oficial do Pix Copia e Cola no padrão EMV do BC
-const generatePixCopiaECola = (chave: string, valor: number, prestadorNome: string) => {
-  if (!chave) return '';
-
-  let chaveFormatada = chave.trim();
-  const apenasDigitos = chaveFormatada.replace(/\D/g, '');
-  if (apenasDigitos.length === 11 && (chaveFormatada.includes('(') || chaveFormatada.includes('-') || chaveFormatada.startsWith('9') || chaveFormatada.startsWith('8'))) {
-    chaveFormatada = `+55${apenasDigitos}`;
-  } else if (apenasDigitos.length === 11) {
-    chaveFormatada = apenasDigitos;
-  } else if (apenasDigitos.length === 14) {
-    chaveFormatada = apenasDigitos;
-  }
-
-  const formatTag = (id: string, value: string): string => {
-    const len = value.length.toString().padStart(2, '0');
-    return `${id}${len}${value}`;
-  };
-
-  const removeAccents = (str: string): string => {
-    return str
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .replace(/[^a-zA-Z0-9\s]/g, '');
-  };
-
-  let nomeLimpo = removeAccents(prestadorNome || 'OPURA PRO').toUpperCase().trim();
-  if (nomeLimpo.length > 25) {
-    nomeLimpo = nomeLimpo.substring(0, 25);
-  } else if (nomeLimpo.length === 0) {
-    nomeLimpo = 'PRESTADOR AUTONOMO';
-  }
-
-  const tag00 = formatTag('00', '01');
-  const subTag00 = formatTag('00', 'br.gov.bcb.pix');
-  const subTag01 = formatTag('01', chaveFormatada);
-  const tag26 = formatTag('26', `${subTag00}${subTag01}`);
-
-  const tag52 = formatTag('52', '0000');
-  const tag53 = formatTag('53', '986');
-  
-  const valorFormatado = valor.toFixed(2);
-  const tag54 = formatTag('54', valorFormatado);
-
-  const tag58 = formatTag('58', 'BR');
-  const tag59 = formatTag('59', nomeLimpo);
-  const tag60 = formatTag('60', 'BRASILIA');
-
-  const subTag62_05 = formatTag('05', '***');
-  const tag62 = formatTag('62', subTag62_05);
-
-  const rawPayload = `${tag00}${tag26}${tag52}${tag53}${tag54}${tag58}${tag59}${tag60}${tag62}6304`;
-  const crc = calculateCRC16(rawPayload);
-  
-  return `${rawPayload}${crc}`;
-};
+// Assinatura: papel branco e tinta escura, gravados NO canvas (não no CSS) — a imagem
+// salva vai para o cartão branco e para o PDF branco.
+const COR_PAPEL_ASSINATURA = '#FFFFFF';
+const COR_TINTA_ASSINATURA = '#1E293B';
 
 interface ProServicoViewProps {
   userId: string;
@@ -117,7 +52,10 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   // Referência do Canvas
   const canvasRef = React.useRef<HTMLCanvasElement | null>(null);
-  const drawingRef = React.useRef(false);
+  // Um traço por vez: guarda o dedo/caneta que começou; um segundo dedo é ignorado.
+  const ponteiroAtivoRef = React.useRef<number | null>(null);
+  const [temTraco, setTemTraco] = React.useState(false);
+  const [qrPix, setQrPix] = React.useState('');
 
   // Converte data ISO UTC para local formatado para datetime-local input (YYYY-MM-DDTHH:mm)
   const formatISOToLocalDatetime = (isoStr?: string) => {
@@ -176,72 +114,118 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     }
   };
 
-  // Lógica de Assinatura Touch (HTML5 Canvas)
-  const startDrawing = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
+  // Lógica de Assinatura (HTML5 Canvas + Pointer Events: dedo, caneta e mouse)
+  // Pinta o papel branco no próprio canvas — é o que vai para a imagem gravada.
+  const prepararQuadro = React.useCallback(() => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    ctx.fillStyle = COR_PAPEL_ASSINATURA;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ponteiroAtivoRef.current = null;
+    setTemTraco(false);
+  }, []);
 
-    ctx.strokeStyle = '#FFFFFF';
-    ctx.lineWidth = 3;
-    ctx.lineCap = 'round';
+  React.useEffect(() => {
+    if (!mostrarAssinatura) return;
+    prepararQuadro();
+    // Trocar de app no meio do traço não pode deixar a caneta "presa" no quadro.
+    const soltar = () => { ponteiroAtivoRef.current = null; };
+    window.addEventListener('blur', soltar);
+    return () => window.removeEventListener('blur', soltar);
+  }, [mostrarAssinatura, prepararQuadro]);
 
-    drawingRef.current = true;
-
-    // Obter coordenadas
-    const coords = getEventCoords(e, canvas);
-    ctx.beginPath();
-    ctx.moveTo(coords.x, coords.y);
-  };
-
-  const draw = (e: React.MouseEvent<HTMLCanvasElement> | React.TouchEvent<HTMLCanvasElement>) => {
-    if (!drawingRef.current) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-
-    const coords = getEventCoords(e, canvas);
-    ctx.lineTo(coords.x, coords.y);
-    ctx.stroke();
-
-    e.preventDefault();
-  };
-
-  const stopDrawing = () => {
-    drawingRef.current = false;
-  };
-
-  const getEventCoords = (e: any, canvas: HTMLCanvasElement) => {
+  // O canvas tem 320×160 internos, mas é exibido com a largura do cartão:
+  // converte a posição na tela para a posição no desenho.
+  const pontoNoQuadro = (e: React.PointerEvent<HTMLCanvasElement>, canvas: HTMLCanvasElement) => {
     const rect = canvas.getBoundingClientRect();
-    if (e.touches && e.touches.length > 0) {
-      return {
-        x: e.touches[0].clientX - rect.left,
-        y: e.touches[0].clientY - rect.top
-      };
-    }
     return {
-      x: e.clientX - rect.left,
-      y: e.clientY - rect.top
+      x: (e.clientX - rect.left) * (canvas.width / rect.width),
+      y: (e.clientY - rect.top) * (canvas.height / rect.height),
     };
   };
 
-  const clearCanvas = () => {
+  const iniciarTraco = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (ponteiroAtivoRef.current !== null) return;
     const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    e.preventDefault();
+    canvas.setPointerCapture(e.pointerId);
+    ponteiroAtivoRef.current = e.pointerId;
+
+    ctx.strokeStyle = COR_TINTA_ASSINATURA;
+    ctx.lineWidth = 3;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    const p = pontoNoQuadro(e, canvas);
+    ctx.beginPath();
+    ctx.moveTo(p.x, p.y);
+    ctx.lineTo(p.x + 0.1, p.y); // um toque também deixa marca
+    ctx.stroke();
+    setTemTraco(true);
+  };
+
+  const continuarTraco = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (ponteiroAtivoRef.current !== e.pointerId) return;
+    const canvas = canvasRef.current;
+    const ctx = canvas?.getContext('2d');
+    if (!canvas || !ctx) return;
+    e.preventDefault();
+    const p = pontoNoQuadro(e, canvas);
+    ctx.lineTo(p.x, p.y);
+    ctx.stroke();
+  };
+
+  const encerrarTraco = (e: React.PointerEvent<HTMLCanvasElement>) => {
+    if (ponteiroAtivoRef.current !== e.pointerId) return;
+    ponteiroAtivoRef.current = null;
+    const canvas = canvasRef.current;
+    if (canvas?.hasPointerCapture(e.pointerId)) canvas.releasePointerCapture(e.pointerId);
   };
 
   const saveSignature = () => {
     const canvas = canvasRef.current;
-    if (!canvas) return;
+    if (!canvas || !temTraco || !assinaturaNome.trim()) return;
     const imgData = canvas.toDataURL('image/png');
     setAssinaturaImagem(imgData);
     setMostrarAssinatura(false);
   };
+
+  const motivoAssinaturaIncompleta = !assinaturaNome.trim()
+    ? 'Escreva o nome de quem está assinando.'
+    : !temTraco
+      ? 'Peça para o cliente assinar no quadro.'
+      : '';
+
+  // PIX — calculado antes dos retornos antecipados (regra dos hooks).
+  const pix = React.useMemo(() => {
+    if (!servico || !config?.pix_key) return null;
+    return montarPixCopiaECola({
+      tipo: config.pix_key_type,
+      chave: config.pix_key,
+      valor: Number(servico.pro_orcamentos?.valor || 0),
+      nome: config.template_header || '',
+      cidade: CIDADE_RECEBEDOR_PADRAO,
+    });
+  }, [servico, config]);
+
+  // QR gerado no aparelho: a chave e o valor não saem para serviço de terceiros,
+  // e o QR aparece mesmo sem sinal na obra.
+  React.useEffect(() => {
+    let vivo = true;
+    if (!pix?.ok) {
+      setQrPix('');
+      return;
+    }
+    QRCode.toDataURL(pix.payload, { width: 320, margin: 1, errorCorrectionLevel: 'M' })
+      .then(url => { if (vivo) setQrPix(url); })
+      .catch(err => {
+        console.error('Erro ao gerar o QR Code do Pix:', err);
+        if (vivo) setQrPix('');
+      });
+    return () => { vivo = false; };
+  }, [pix]);
 
   const handleFotoAntesUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -535,16 +519,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   const orc = servico.pro_orcamentos;
   const cli = orc?.pro_clientes;
 
-  // Gerador de Pix Copia e Cola Real (Padrão EMV BR Code)
-  const prestadorNome = config?.template_header || 'OPURA PRO';
-  const valor = orc?.valor || 0;
-  const pixCopiaECola = config?.pix_key
-    ? generatePixCopiaECola(config.pix_key, valor, prestadorNome)
-    : '';
-
-  const qrCodeUrl = pixCopiaECola
-    ? `https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(pixCopiaECola)}`
-    : '';
+  const valor = Number(orc?.valor || 0);
 
   return (
     <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-24 space-y-5">
@@ -689,31 +664,34 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               ref={canvasRef}
               width={320}
               height={160}
-              onMouseDown={startDrawing}
-              onMouseMove={draw}
-              onMouseUp={stopDrawing}
-              onMouseLeave={stopDrawing}
-              onTouchStart={startDrawing}
-              onTouchMove={draw}
-              onTouchEnd={stopDrawing}
-              className="bg-slate-800 border border-slate-700 rounded-2xl cursor-crosshair touch-none w-full"
+              aria-label="Quadro de assinatura: assine com o dedo"
+              onPointerDown={iniciarTraco}
+              onPointerMove={continuarTraco}
+              onPointerUp={encerrarTraco}
+              onPointerCancel={encerrarTraco}
+              onLostPointerCapture={encerrarTraco}
+              className="bg-white border border-slate-300 rounded-2xl cursor-crosshair touch-none w-full"
             />
 
             <div className="flex gap-3 pt-2">
               <button
-                onClick={clearCanvas}
-                className="flex-1 py-2 bg-slate-100 text-slate-505 font-bold text-button rounded-xl border border-slate-200 transition-colors hover:bg-slate-200"
+                onClick={prepararQuadro}
+                className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-button rounded-xl border border-slate-200 transition-colors hover:bg-slate-200"
               >
                 Limpar
               </button>
               <button
                 onClick={saveSignature}
-                disabled={!assinaturaNome}
+                disabled={!!motivoAssinaturaIncompleta}
+                title={motivoAssinaturaIncompleta || undefined}
                 className="flex-1 py-2 bg-teal-500 text-white font-bold text-button rounded-xl disabled:opacity-50 transition-colors hover:bg-teal-600"
               >
                 Confirmar
               </button>
             </div>
+            {motivoAssinaturaIncompleta && (
+              <p className="text-xs text-slate-600" role="status">{motivoAssinaturaIncompleta}</p>
+            )}
           </div>
         </div>
       )}
@@ -723,9 +701,20 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         <h2 className="text-xs font-black text-slate-500">Cobrança PIX</h2>
         <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
           <span className="text-xs font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
-          {pixCopiaECola ? (
+          {pix?.ok ? (
             <>
-              <img src={qrCodeUrl} alt="QR Code PIX" className="w-40 h-40 bg-white p-2 rounded-xl border border-slate-100" />
+              <p className="w-full text-left text-xs text-slate-600">
+                Você vai receber na chave{' '}
+                <span className="font-semibold text-slate-800">
+                  {ROTULO_TIPO_CHAVE_PIX[config.pix_key_type as keyof typeof ROTULO_TIPO_CHAVE_PIX] ?? 'Pix'}{' '}
+                  {formatarChavePixParaExibir(config.pix_key_type, pix.chave)}
+                </span>
+              </p>
+              {qrPix ? (
+                <img src={qrPix} alt="QR Code do Pix para o cliente pagar" className="w-40 h-40 bg-white p-2 rounded-xl border border-slate-100" />
+              ) : (
+                <div className="w-40 h-40 rounded-xl bg-slate-100 animate-pulse" aria-label="Gerando QR Code" />
+              )}
               <div className="space-y-1 w-full px-2">
                 <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Valor a Receber</span>
                 <span className="block font-black text-slate-800 text-base">
@@ -735,21 +724,24 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <div className="pt-2">
                   <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 text-left mb-1">Pix Copia e Cola</span>
                   <div className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[9px] font-mono text-slate-600 text-left break-all select-all max-h-12 overflow-y-auto">
-                    {pixCopiaECola}
+                    {pix.payload}
                   </div>
                 </div>
               </div>
               <button
                 onClick={() => {
-                  navigator.clipboard.writeText(pixCopiaECola);
+                  navigator.clipboard.writeText(pix.payload);
                   alert('Código Pix Copia e Cola copiado com sucesso!');
                 }}
                 className="w-full py-2.5 bg-teal-500 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-teal-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
               >
                 📋 Copiar Pix Copia e Cola
               </button>
-              <span className="text-[8px] text-slate-400">Chave cadastrada: {config.pix_key} ({config.pix_key_type})</span>
             </>
+          ) : pix && !pix.ok ? (
+            <p className="text-xs text-red-600" role="alert">
+              Não dá para gerar o Pix: {pix.motivo} Corrija a chave em Ajustes.
+            </p>
           ) : (
             <span className="text-xs text-slate-400 italic">Configure sua chave Pix nas configurações do perfil para gerar o código Copia e Cola e o QR Code.</span>
           )}

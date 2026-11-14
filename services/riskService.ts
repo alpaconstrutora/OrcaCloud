@@ -289,7 +289,7 @@ export const riskService = {
             p_title: `${r.codigo} · ${acao.descricao}`.slice(0, 200),
             p_due: `${acao.prazo}T12:00:00-03:00`,
             p_source_module: 'riscos',
-            p_source_ref: { type: 'risk_action', id: acao.id, risk_id: r.id, route: 'riscos' },
+            p_source_ref: { type: 'risk_action', id: acao.id, risk_id: r.id, route: `/riscos?riskId=${r.id}` }, // "Abrir origem" abre a ficha
             p_description: `Ação de tratamento do risco ${r.codigo} — ${r.titulo}`,
         });
         if (error) throw error;

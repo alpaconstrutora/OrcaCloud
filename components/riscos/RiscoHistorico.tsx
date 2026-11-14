@@ -57,7 +57,7 @@ export function valorLegivel(campo: string | null, v: unknown): string {
 export const RiscoHistorico: React.FC<{ riskId: string; eventos: RiskAuditLog[]; carregando: boolean }> = ({ riskId, eventos, carregando }) => {
     const oQue = (e: RiskAuditLog) => {
         const base = e.field_name ? (ROTULO_CAMPO[e.field_name] ?? e.field_name) : ACAO[e.action];
-        return e.entity_type === 'risk' ? base : `${ENTIDADE[e.entity_type]} · ${base}`;
+        return e.entity_type === 'risk' || ENTIDADE[e.entity_type] === base ? base : `${ENTIDADE[e.entity_type]} · ${base}`;
     };
     return (
         <StandardTable<RiskAuditLog>

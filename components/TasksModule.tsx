@@ -25,6 +25,7 @@ import { FilterPopover } from './ui/FilterPopover'
 import { usePersistedState } from './ui/TableUtils'
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext'
 import { useStore } from '../store/useStore'
+import { destinoDoLinkDeNotificacao } from '../utils/linkNotificacao'
 import { STATUS_NONE, statusNameKey, statusesOfOrg, statusByNameInOrg, statusOfGroupKey, openStatusOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
 import MobilePreviewFrame from './MobilePreviewFrame'
 import TasksMobileApp from './TasksMobileApp'
@@ -47,6 +48,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
   const orgKey = ctxOrgId ?? ''   // forma que os services aceitam ('' = sem .eq)
   const { resolveWriteOrg, orgTargetModal } = useOrgWriteTarget()
   const storeOrganizations = useStore(state => state.organizations)
+  const navigateToFocus = useStore(state => state.navigateToFocus)
   const orgNameOf = useCallback((id: string) =>
     storeOrganizations.find(o => o.id === id)?.name ?? organizations.find(o => o.id === id)?.name ?? 'Organização',
   [storeOrganizations, organizations])
@@ -471,10 +473,15 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     return recusadas.length < ids.length
   }
 
+  // "Abrir origem": mesmo resolvedor dos links de notificação (utils/linkNotificacao).
+  // Até 14/11/2026 só navegava com rota começando em `/` — as 11 tarefas de Suprimentos
+  // (`supplies-contracts`) não abriam nada. Agora aceita o nome da tela sem barra e, com
+  // `?riskId=`/`?tx=`/…, abre o registro em foco (ex.: ação de risco → ficha do risco).
   const handleNavigate = (route: string) => {
-    if (onChangeView && route.startsWith('/')) {
-      onChangeView(route.replace(/^\//, '').split('/')[0])
-    }
+    const destino = destinoDoLinkDeNotificacao(route)
+    if (!destino) return
+    if (destino.foco) { navigateToFocus(destino.view, destino.foco.ref, destino.foco.source); return }
+    onChangeView?.(destino.view.split('/')[0])
   }
 
   // ── Controles de recorte (§5.4) — vão para a toolbar acoplada da lista e, no

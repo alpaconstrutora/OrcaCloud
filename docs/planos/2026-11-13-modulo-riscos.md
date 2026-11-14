@@ -92,13 +92,13 @@ tela: ler `docs/ui_ux_guia_unificado.md` e `UI_PATTERNS.md` inteiros. Depois: ro
 
 ### F0 — Catálogo enriquecido (rascunho para revisão técnica)
 
-- [ ] **F0.1 Eventos-base.** `catalogo/eventos-base.tsv` com a transcrição literal dos 312 eventos.
+- [x] **F0.1 Eventos-base.** `catalogo/eventos-base.tsv` com a transcrição literal dos 312 eventos.
   *Pronto quando:* script conta 25 categorias, 312 códigos únicos, 24 em R14 e 12 nas demais (CA01).
-- [ ] **F0.2 Formato.** `catalogo/FORMATO.md`: esquema, listas fechadas e estilo.
+- [x] **F0.2 Formato.** `catalogo/FORMATO.md`: esquema, listas fechadas e estilo.
   *Pronto quando:* existe e é a única referência usada pelos JSON.
-- [ ] **F0.3 Rascunho dos 25 arquivos** `catalogo/RXX.json`.
+- [x] **F0.3 Rascunho dos 25 arquivos** `catalogo/RXX.json`.
   *Pronto quando:* o validador (F0.4) passa nos 312 itens.
-- [ ] **F0.4 Validador + planilha de revisão.** `catalogo/gerar-planilha.mjs` (Node + `exceljs`,
+- [x] **F0.4 Validador + planilha de revisão.** `catalogo/gerar-planilha.mjs` (Node + `exceljs`,
   rodar da raiz da frente) valida o esquema e gera `catalogo/catalogo-consolidado.json` (fonte do
   seed) e `catalogo/catalogo-riscos-revisao.xlsx`, com uma linha por risco e as colunas de revisão
   (revisor, situação, comentário, texto corrigido).
@@ -110,14 +110,14 @@ tela: ler `docs/ui_ux_guia_unificado.md` e `UI_PATTERNS.md` inteiros. Depois: ro
 
 ### F1 — MVP (P0)
 
-- [ ] **F1.1 Migration de estrutura:** as 7 tabelas da F1, mais RLS, trigger append-only de
+- [x] **F1.1 Migration de estrutura:** as 7 tabelas da F1, mais RLS, trigger append-only de
   `risk_evaluations`, `risk_matrix_config` padrão e REVOKE nas funções.
   *Pronto quando:* aplicada no banco; `segurancaMigrations.test.ts` verde; `check-rls-postura.sh`
   sem achado novo; um UPDATE em `risk_evaluations` é recusado.
-- [ ] **F1.2 Seed do catálogo** (gerado dos JSON por script, idempotente por `codigo`).
+- [x] **F1.2 Seed do catálogo** (gerado dos JSON por script, idempotente por `codigo`).
   *Pronto quando:* `select count(*) from risk_catalog where organization_id is null` = 312, e uma
   segunda execução não duplica.
-- [ ] **F1.3 `services/riskService.ts` + `types/risk.ts`:** pontuação, nível, consolidação pelo
+- [x] **F1.3 `services/riskService.ts` + `types/risk.ts`:** pontuação, nível, consolidação pelo
   máximo e valor esperado em funções puras.
   *Pronto quando:* testes Vitest cobrem P×I nos 25 cruzamentos, as faixas padrão, o máximo
   multidimensional, o gatilho que escala independentemente da cor (CA04) e o valor esperado de
@@ -126,32 +126,32 @@ tela: ler `docs/ui_ux_guia_unificado.md` e `UI_PATTERNS.md` inteiros. Depois: ro
   `OrganizationUsers.tsx`), `utils/modulosPermitidos.ts`, `Layout.tsx` (desktop, mobile e busca)
   e `AppRouter.tsx` (lazy + guard).
   *Pronto quando:* usuário sem `canViewRisks` não vê o item nem abre a rota; `orgContextGuard.test.ts` verde.
-- [ ] **F1.5 Aba Catálogo:** busca/filtro por categoria, fase, tipologia e gatilho; criar risco
+- [x] **F1.5 Aba Catálogo:** busca/filtro por categoria, fase, tipologia e gatilho; criar risco
   próprio da org; "usar na obra".
   *Pronto quando:* os 312 aparecem filtráveis; criar um risco próprio grava com a org do topo
   (em "Todas", pergunta — REGRA #5).
-- [ ] **F1.6 Ficha do risco (Sheet):** criar a partir do catálogo ou do zero; exige causa, evento,
+- [x] **F1.6 Ficha do risco (Sheet):** criar a partir do catálogo ou do zero; exige causa, evento,
   consequência, contexto, proprietário e próxima revisão (CA03).
   *Pronto quando:* salvar sem algum desses campos é bloqueado com o motivo; editar a ficha da obra
   não altera o `risk_catalog` (CA02, conferido no banco).
-- [ ] **F1.7 Avaliação inerente/residual** na ficha, com histórico visível.
+- [x] **F1.7 Avaliação inerente/residual** na ficha, com histórico visível.
   *Pronto quando:* duas avaliações seguidas aparecem no histórico com autor, data, premissas e
   evidência, e a primeira continua intacta no banco (CA05).
-- [ ] **F1.8 Ações de tratamento** com evidência no GED e verificação de eficácia; espelho
+- [x] **F1.8 Ações de tratamento** com evidência no GED e verificação de eficácia; espelho
   opcional em Tarefas.
   *Pronto quando:* ação sem responsável, prazo, estado ou custo não salva; marcar "eficaz" exige
   evidência (CA06); a tarefa espelhada aparece em Minhas Tarefas com o link de volta.
-- [ ] **F1.9 Registro + Matriz + Painel:** tabela padrão (StandardTable), mapa de calor 5×5
+- [x] **F1.9 Registro + Matriz + Painel:** tabela padrão (StandardTable), mapa de calor 5×5
   (extraído de `ImovibRiscosCard` como componente compartilhado), os 10 principais, indicadores
   da seção 5 que já têm dado (ativos/críticos, sem responsável ou plano, tratamentos em atraso,
   exposição, riscos por fase).
   *Pronto quando:* contagens do painel batem com `select` equivalente no banco para o mesmo filtro
   (CA11); `check-ui-standard.sh` passa em cada arquivo.
-- [ ] **F1.10 Alertas fixos** (função SQL + `pg_cron` → `notifications`, tipo `risco_*`): ação
+- [x] **F1.10 Alertas fixos** (função SQL + `pg_cron` → `notifications`, tipo `risco_*`): ação
   vencida, revisão vencida, crítico sem plano. Sem repetir: no máximo 1 aviso por risco/regra/dia.
   *Pronto quando:* forçar os 3 casos gera 1 notificação cada, e rodar o job de novo no mesmo dia
   não gera outra (CA07).
-- [ ] **F1.11 Auditoria:** toda alteração de ficha, avaliação e ação grava em `risk_audit_logs`;
+- [x] **F1.11 Auditoria:** toda alteração de ficha, avaliação e ação grava em `risk_audit_logs`;
   aba Histórico na ficha.
   *Pronto quando:* alterar 2 campos gera 2 eventos com valor antigo e novo (CA12, parte auditoria).
 - [ ] **F1.12 Vínculo com o SST** (decisão 2): campo na ficha dos R14 e contador na `LaborSST`.
@@ -214,6 +214,28 @@ Portal do Investidor; Monte Carlo; BIM/3D; alertas preditivos.
   e usado pelo Imovib (HTML idêntico, guia §28.8). Testes: `__tests__/riskPainel.test.ts`,
   `__tests__/components/RiscosModule.test.tsx`. Nenhum item da F1 está marcado: cada "pronto quando" que fala
   de banco ou de navegador continua pendente da aplicação das migrations.
+- 14/11 usuário: "Aplique" + "Sim" (testar no navegador). **Migrations 637000/638000/639000 APLICADAS** no remoto
+  (seed devolveu 25 | 312; cron `riscos-alertas-diarios` = `0 11 * * *`). Conferido no banco: RLS ligada nas 7,
+  anon sem SELECT, `fn_risk_alerts` não executável por anon/authenticated. Achado: default privileges do Supabase
+  deram UPDATE/DELETE/TRUNCATE a authenticated → `aplicar_20271114641000_modulo_riscos_privilegios.sql` (aplicada;
+  conferido: avaliações e auditoria só SELECT/INSERT, nenhuma com TRUNCATE). ⚠️ O mesmo TRUNCATE existe em tabelas
+  antigas (ex.: `empreendimento_audit_logs`) — fora deste escopo, a tratar à parte.
+- 14/11 **teste ponta a ponta no navegador** (dev server da frente, conta Desenvolvedor, org Alpa, obra Coronel
+  Lambert 345), conferido no banco a cada passo: menu Riscos → Catálogo (312, selo de rascunho) → R05.06 → "Usar em
+  um risco" pergunta a org em "Todas" (single) → ficha pré-preenchida → salvar sem obra/revisão mostra erro por
+  campo e rola ao primeiro (CA03) → RSC-0001 gravado, catálogo mestre intacto v1 (CA02) → inerente 3 × máx(4,2,3) =
+  12 alto, valor esperado R$ 60.000,00 (CA13) → ação com prazo vencido + tarefa espelhada (`source_module=riscos`)
+  → eficaz bloqueado sem evidência e liberado com ela (CA06) → residual 2×3=6 com as duas avaliações no histórico
+  (CA05) → auditoria por campo (CA12) → Matriz inerente (3,4) e residual (2,3) → Painel 1 ativo, 1 crítico pelo
+  gatilho (CA04), 0 sem plano, 0 em atraso, exposição 60.000 = mesma consulta no banco (CA11). Dados de teste
+  apagados (gatilho de imutabilidade desligado SÓ dentro da transação da limpeza e religado, conferido `O`).
+- Corrigido após o teste: código "RSC-0001" quebrando em duas linhas (Registro/Painel/Matriz), "· gatilho"
+  desalinhado, toast "Avaliação alto registrada" → "Avaliação registrada: alto (…)", rótulo "Avaliação · Avaliação"
+  no histórico; e "Abrir origem" de Tarefas, que só navegava com rota iniciada em `/` — não abria nada para a ação
+  de risco NEM para as 11 tarefas antigas de Suprimentos (`supplies-contracts`); agora usa o resolvedor de links
+  das notificações e abre a ficha do risco (`route: /riscos?riskId=`); rótulo "Riscos" na coluna Origem.
+- Observação: o código RSC é `max+1` por org — excluir o último risco (só possível sem avaliação) libera o número
+  para o próximo. Aceito no MVP (exclusão é só para registro feito por engano).
 - Referências a conferir com atenção: IN RFB 2.021/2021 (R10.07), artigos da Lei 14.133/2021 em R24,
   limiar de 75% do art. 59 §4º (R24.02), NBR 5682 e NR-15 anexo 12 (R25), NBR 17170 e CC art. 618 (R21),
   Decreto 10.306/2020 (R19.07).

@@ -106,7 +106,7 @@ export const RiscoAvaliacoes: React.FC<Props> = ({ risco, avaliacoes, carregando
             });
             onAvaliado(avaliacao, atualizado);
             setAberto(false);
-            showToast(`Avaliação ${RISK_ROTULO.nivel[nivelDaPontuacao(avaliacao.pontuacao, faixas)].toLowerCase()} registrada (${avaliacao.probabilidade} × ${avaliacao.impacto} = ${avaliacao.pontuacao}).`);
+            showToast(`Avaliação registrada: ${RISK_ROTULO.nivel[nivelDaPontuacao(avaliacao.pontuacao, faixas)].toLowerCase()} (${avaliacao.probabilidade} × ${avaliacao.impacto} = ${avaliacao.pontuacao}).`);
         } catch (err) {
             showToast(errorMessage(err, 'Não foi possível registrar a avaliação.'), 'error');
         } finally {

@@ -127,7 +127,7 @@ export const RiscosPainel: React.FC<Props> = ({
                         : k === 'pontuacao' ? pontuacaoVigente(r) ?? -1 : r.proxima_revisao}
                     renderCell={(k, r) => {
                         switch (k) {
-                            case 'codigo': return <span className="text-sm font-normal text-gray-600">{r.codigo}</span>;
+                            case 'codigo': return <span className="whitespace-nowrap text-sm font-normal text-gray-600">{r.codigo}</span>;
                             case 'titulo': return <span className="block truncate text-sm font-normal text-gray-700" title={r.titulo}>{r.titulo}</span>;
                             case 'escopo': { const t = rotuloEscopo(r); return <span className="block truncate text-sm font-normal text-gray-700" title={t}>{t}</span>; }
                             case 'nivel': return <NivelTexto nivel={nivelNaOrg(r, faixasPorOrg)} gatilho={r.gatilho_critico} />;

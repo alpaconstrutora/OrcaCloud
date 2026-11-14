@@ -37,11 +37,11 @@ export const ErroDoCampo: React.FC<{ id: string; erro?: string }> = ({ id, erro 
 export const NivelTexto: React.FC<{ nivel: RiskNivel | null; gatilho?: boolean; className?: string }> = ({ nivel, gatilho, className = '' }) => {
     if (!nivel) return <span className={`text-sm font-normal text-gray-500 ${className}`}>Sem avaliação</span>;
     return (
-        <span className={`inline-flex items-center gap-1 text-sm font-normal ${COR_TEXTO_NIVEL[nivel]} ${className}`}
+        <span className={`inline-flex items-center gap-1 whitespace-nowrap text-sm font-normal ${COR_TEXTO_NIVEL[nivel]} ${className}`}
             title={gatilho ? 'Gatilho crítico: tratado como crítico qualquer que seja a pontuação' : undefined}>
             {gatilho && <Flame className="w-3.5 h-3.5 shrink-0" aria-hidden="true" />}
             {RISK_ROTULO.nivel[nivel]}
-            {gatilho && <span className="text-xs text-red-700">· gatilho</span>}
+            {gatilho && <span className="text-red-700">· gatilho</span>}
         </span>
     );
 };

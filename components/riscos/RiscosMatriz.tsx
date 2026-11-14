@@ -144,7 +144,7 @@ export const RiscosMatriz: React.FC<Props> = ({ riscos, carregando, faixasDoMapa
                     renderCell={(k, r) => {
                         const x = pi(r);
                         switch (k) {
-                            case 'codigo': return <span className="text-sm font-normal text-gray-600">{r.codigo}</span>;
+                            case 'codigo': return <span className="whitespace-nowrap text-sm font-normal text-gray-600">{r.codigo}</span>;
                             case 'titulo': return <span className="block truncate text-sm font-normal text-gray-700" title={r.titulo}>{r.titulo}</span>;
                             case 'escopo': { const t = rotuloEscopo(r); return <span className="block truncate text-sm font-normal text-gray-700" title={t}>{t}</span>; }
                             case 'pi': return <span className="text-sm font-normal text-gray-600">{x.p} × {x.i} = {(x.p ?? 0) * (x.i ?? 0)}</span>;

@@ -281,6 +281,7 @@ export const proService = {
       template_header: config.template_header,
       template_footer: config.template_footer,
       profissao: config.profissao,
+      cidade: config.cidade?.trim() || null,
       templates_custom: config.templates_custom || []
     };
 

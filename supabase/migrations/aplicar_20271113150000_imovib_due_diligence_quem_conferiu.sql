@@ -1,3 +1,8 @@
+-- ⚠️ RENOMEADA em 14/11/2026: era aplicar_20271113100000_… — o mesmo prefixo de
+-- aplicar_20271113100000_email_capture_busca_diaria.sql (#406), e a trava __tests__/migrationsPrefixo.test.ts
+-- recusa prefixo repetido. JÁ APLICADA no banco (conferido em 14/11: fn_imovib_land_checklist_conferencia existe,
+-- com o gatilho ligado). Só o nome mudou; não precisa rodar de novo (CREATE OR REPLACE — rodar também não estraga).
+--
 -- Due diligence do terreno: quem conferiu e quando vêm do BANCO, não da tela.
 --
 -- Revisão das pendências de tela do plano docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md

@@ -78,7 +78,7 @@ export const SALE_STATUS_COLORS: Record<SaleUnitStatus, string> = {
 };
 
 /** Status do cadastro, com as grafias em português que ainda existem na base
- *  (mesma normalização de `salesDashboardService`). */
+ *  (era a mesma normalização da antiga aba Resultados, removida em 14/11/2026). */
 const statusDoCadastro = (s?: string | null): string => {
     const v = String(s ?? '').toUpperCase();
     if (v === 'VENDIDO') return 'SOLD';
@@ -107,8 +107,8 @@ const unitIdsOfRef = (d: SaleDealRef): string[] =>
 
 /**
  * Status de venda de cada unidade, pela regra "com contrato" — o ÚNICO lugar
- * que decide. Usado pela aba Análise, pelos cards da aba Imóveis e pela aba
- * Resultados (`salesDashboardService`): três telas, uma regra (antes cada uma
+ * que decide. Usado pela aba Análise e pelos cards da aba Imóveis (a aba
+ * Resultados, que também usava, saiu em 14/11/2026): uma regra (antes cada tela
  * tinha a sua, e duas diziam VGV vendido R$ 0 enquanto havia contratos).
  *
  * Devolve também a negociação que ocupa cada unidade. Uma unidade tem no
@@ -166,6 +166,11 @@ export interface SaleDeal {
     /** Data da negociação — base da velocidade de vendas. */
     date?: string | null;
     client_id?: string | null;
+    /** Corretor da negociação (`broker_profiles.id`) e o nome gravado junto. */
+    broker_id?: string | null;
+    broker_name?: string | null;
+    /** Canal de origem ("Direto", "Imobiliária / Corretor"…). */
+    origin_channel?: string | null;
 }
 
 export interface SaleClient {
@@ -308,8 +313,124 @@ export interface SalesAnalysisScope {
     /** Contratos de venda do balde. `null` = não carregados. */
     contractsCount: number | null;
 
+    /** Negociações (sem as canceladas) por corretor; "Sem corretor" = venda direta. */
+    brokers: SalesBrokerBucket[];
+    /** Negociações (sem as canceladas) por canal de origem; vazio = "Não informado". */
+    origins: SalesOriginBucket[];
+
     units: SaleMirrorCell[];
 }
+
+export interface SalesBrokerBucket {
+    /** `null` = negociação sem corretor. */
+    brokerId: string | null;
+    name: string;
+    deals: number;
+    sold: number;
+    vgvSold: number;
+    openValue: number;
+}
+
+export interface SalesOriginBucket {
+    label: string;
+    deals: number;
+    sold: number;
+    /** Σ valor das negociações do canal (vendidas + abertas). */
+    value: number;
+}
+
+export const SEM_CORRETOR_LABEL = 'Sem corretor';
+export const ORIGEM_NAO_INFORMADA = 'Não informado';
+
+/**
+ * Negociações por corretor: vendido primeiro (VGV, depois quantidade), depois o
+ * que está em aberto. "Sem corretor" vai sempre por último: não é um corretor
+ * disputando posição. Canceladas não contam (são o "Distratos" de cima).
+ */
+export const brokersOfDeals = (deals: SaleDeal[]): SalesBrokerBucket[] => {
+    const map = new Map<string, SalesBrokerBucket>();
+    for (const d of deals) {
+        if (d.status === 'CANCELLED') continue;
+        const id = d.broker_id ? key(d.broker_id) : '';
+        const b = map.get(id) ?? {
+            brokerId: d.broker_id ?? null,
+            name: d.broker_id ? ((d.broker_name ?? '').trim() || 'Corretor sem nome') : SEM_CORRETOR_LABEL,
+            deals: 0, sold: 0, vgvSold: 0, openValue: 0,
+        };
+        b.deals++;
+        const etapa = saleDealStage(d.status);
+        const valor = Number(d.value) || 0;
+        if (etapa === 'sold') { b.sold++; b.vgvSold += valor; }
+        else if (etapa === 'open') b.openValue += valor;
+        map.set(id, b);
+    }
+    return [...map.values()].sort((a, b) => {
+        if ((a.brokerId == null) !== (b.brokerId == null)) return a.brokerId == null ? 1 : -1;
+        return b.vgvSold - a.vgvSold || b.sold - a.sold || b.openValue - a.openValue || b.deals - a.deals
+            || a.name.localeCompare(b.name, 'pt-BR');
+    });
+};
+
+/** Negociações por canal de origem, do mais usado ao menos. Canceladas não contam. */
+export const originsOfDeals = (deals: SaleDeal[]): SalesOriginBucket[] => {
+    const map = new Map<string, SalesOriginBucket>();
+    for (const d of deals) {
+        if (d.status === 'CANCELLED') continue;
+        const label = (d.origin_channel ?? '').trim() || ORIGEM_NAO_INFORMADA;
+        const b = map.get(label) ?? { label, deals: 0, sold: 0, value: 0 };
+        b.deals++;
+        if (saleDealStage(d.status) === 'sold') b.sold++;
+        b.value += Number(d.value) || 0;
+        map.set(label, b);
+    }
+    return [...map.values()].sort((a, b) => {
+        if ((a.label === ORIGEM_NAO_INFORMADA) !== (b.label === ORIGEM_NAO_INFORMADA)) return a.label === ORIGEM_NAO_INFORMADA ? 1 : -1;
+        return b.deals - a.deals || b.value - a.value || a.label.localeCompare(b.label, 'pt-BR');
+    });
+};
+
+export interface ProjecaoDeEsgotamento {
+    /** Unidades que faltam vender: disponíveis + em negociação + outros status. */
+    estoque: number;
+    /** Vendas por mês nos últimos 12 meses (média). 0 = nenhuma venda com data. */
+    velocidadeReal: number;
+    /** `null` sem estoque ou com velocidade 0. */
+    meses: number | null;
+    /** Mês em que o estoque acaba, `YYYY-MM`. `null` junto com `meses`. */
+    mesDoFim: string | null;
+    /** VGV a vender com o ajuste de preço aplicado. */
+    vgvAVender: number;
+    /** VGV vendido + VGV a vender ajustado. */
+    vgvProjetado: number;
+}
+
+/**
+ * Projeção de esgotamento do recorte — o que sobrou da antiga aba Simulação, agora
+ * sobre o ESTOQUE QUE FALTA (lá dividia todas as unidades, vendidas inclusive).
+ * Hipótese explícita de quem usa: `velocidade` unidades/mês, preço ajustado em
+ * `ajustePct` (%) sobre a tabela. Não é previsão; é "se for assim, acaba quando".
+ */
+export const projecaoDeEsgotamento = (
+    scope: Pick<SalesAnalysisScope, 'unitStatus' | 'vgvSold' | 'vgvUnsold' | 'salesByMonth'>,
+    velocidade: number,
+    ajustePct: number,
+    now: Date = new Date(),
+): ProjecaoDeEsgotamento => {
+    const estoque = scope.unitStatus.available + scope.unitStatus.reserved + scope.unitStatus.other;
+    const vendas12 = scope.salesByMonth.reduce((a, m) => a + m.count, 0);
+    const vel = Math.max(0, Number(velocidade) || 0);
+    const meses = estoque === 0 ? null : vel > 0 ? Math.ceil(estoque / vel) : null;
+    const fim = meses == null ? null : new Date(now.getFullYear(), now.getMonth() + meses, 1);
+    const vgvAVender = scope.vgvUnsold * (1 + (Number(ajustePct) || 0) / 100);
+    return {
+        estoque,
+        velocidadeReal: vendas12 / 12,
+        meses,
+        mesDoFim: fim ? monthKey(fim) : null,
+        vgvAVender,
+        vgvProjetado: scope.vgvSold + vgvAVender,
+    };
+};
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Peças
@@ -617,6 +738,8 @@ export const groupSalesAnalysis = (input: GroupSalesAnalysisInput): {
             aging: contracts ? receivablesAging(b.receivables, agora) : null,
             schedule: contracts ? receivableSchedule(b.receivables, agora) : null,
             contractsCount: contracts ? b.contracts.length : null,
+            brokers: brokersOfDeals(b.deals),
+            origins: originsOfDeals(b.deals),
             units,
         };
     };

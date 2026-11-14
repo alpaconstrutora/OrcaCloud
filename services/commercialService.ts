@@ -3,6 +3,7 @@ import { Property, PropertyDeal, PropertyStatus, DealUnit, DealBuyer } from '../
 import { commercialFinanceService } from './commercialFinanceService';
 import { taxPayableService } from './taxPayableService';
 import { generateDocumentNumber } from './documentNumbering';
+import { semUnidadesForaDoEspelho } from './unidadesForaDoEspelhoService';
 
 /**
  * Traduz a violação de FK (23503) ao excluir um imóvel para uma frase acionável.
@@ -147,7 +148,8 @@ export const commercialService = {
      * `includeHidden` traz também as unidades ocultadas pelo switch "Publicar" do
      * Espelho de Vendas (`visible_in_sales = false`). Default `false`: as telas de
      * oferta (Venda de Ativos, proposta, Portal) não devem mostrar unidade oculta —
-     * o vínculo com o Empreendimento continua lá, só não aparece.
+     * o vínculo com o Empreendimento continua lá, só não aparece. Também fica de
+     * fora a unidade que saiu do Espelho de Vendas (`unidadesForaDoEspelhoService`).
      */
     async listProperties(organizationId?: string, projectId?: string, purpose?: 'SALE' | 'RENTAL' | 'BOTH', includeHidden = false) {
         console.log('[commercialService] API Call: listProperties', { organizationId, projectId, purpose, includeHidden });
@@ -184,7 +186,11 @@ export const commercialService = {
         }
 
         if (error) throw error;
-        return (data || []) as unknown as Property[];
+        const lista = (data || []) as unknown as Property[];
+        // Mesma ideia do `visible_in_sales`, para a unidade que SAIU do Espelho de
+        // Vendas (desvinculada, ou apagada do espelho): segue no Comercial, mas não
+        // é mais oferta. Ver lib/espelhoDeVendas.ts (14/11/2026).
+        return includeHidden ? lista : semUnidadesForaDoEspelho(lista);
     },
 
     async saveProperty(property: Partial<Property>) {

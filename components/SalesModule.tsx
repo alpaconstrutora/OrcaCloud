@@ -2,7 +2,7 @@
 import { moverEntreAbas } from './ui/abasPeloTeclado';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import TabsBar from './ui/TabsBar';
-import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, BrainCircuit, Activity, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders, BarChart3, Link2, Check, Download } from 'lucide-react';
+import { Building2, Home, TrendingUp, Plus, Search, Filter, Home as HomeIcon, MapPin, DollarSign, Tag, Calendar, User, Edit, Trash2, LayoutGrid, List, ChevronDown, X, Percent, Target, Mail, Phone, Briefcase, AlertCircle, RefreshCw, MoveHorizontal, Sliders, BarChart3, Link2, Check, Download } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 // Vocabulário ÚNICO do status da negociação (Proposta → … → Concluído), o mesmo
 // do stepper "Etapa da Negociação" em Gerenciar Negociação › Contrato.
@@ -32,7 +32,6 @@ import PropertyModal from './PropertyModal';
 import DealModal from './DealModal';
 import ProjectFinancialManager from './ProjectFinancialManager';
 import PropertyUnitMap from './common/PropertyUnitMap';
-import { SalesDashboard } from './SalesDashboard';
 import SalesPricingIntelligencePanel from './SalesPricingIntelligencePanel';
 import PriceTableManager from './PriceTableManager';
 import SalesPlanManager from './SalesPlanManager';
@@ -87,8 +86,8 @@ const INVENTORY_COLUMNS: (ColumnConfig & { context: 'all' | 'building' })[] = [
     { key: 'private_area', label: 'Á. priv.', sortable: true, context: 'building' },
     { key: 'price', label: 'Preço', sortable: true, context: 'all' },
     { key: 'price_per_m2', label: 'Vlr/m²', sortable: true, context: 'all' },
-    { key: 'position_weight', label: 'Peso pos.', sortable: true, context: 'building' },
-    { key: 'sun_weight', label: 'Peso sol', sortable: true, context: 'building' },
+    // "Peso pos." e "Peso sol" saíram em 14/11/2026 (pedido do usuário): os
+    // coeficientes de posição e orientação já são a aba Inteligência.
     { key: 'floor', label: 'Andar', sortable: true, context: 'building' },
     { key: 'status', label: 'Status', sortable: true, context: 'all' },
     { key: 'actions', label: 'Ações', sortable: false, context: 'all' },
@@ -127,7 +126,7 @@ const BROKERS_COLUMNS: ColumnConfig[] = [
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_INVENTORY_COL_WIDTHS: Record<string, number> = {
     name: 200, empreendimento: 184, address: 220, block: 107, private_area: 117, price: 140, price_per_m2: 130,
-    position_weight: 135, sun_weight: 130, floor: 110, status: 130, actions: 200,
+    floor: 110, status: 130, actions: 200,
 };
 const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
     code: 118, property: 200, client: 220, empreendimento: 184, block: 107, private_area: 117, price_base: 145, price_per_m2_base: 149,
@@ -137,7 +136,7 @@ const DEFAULT_DEALS_COL_WIDTHS: Record<string, number> = {
 // Metadados de header por coluna — usados para renderizar o <thead> a partir de
 // `orderedVisibleColumns` (ordem que o usuário arrasta), em vez de uma sequência
 // fixa de JSX (padrão ClientList.tsx/BoletoManager.tsx). Colunas 'block',
-// 'private_area', 'position_weight', 'sun_weight' e 'floor' só aparecem no
+// 'private_area' e 'floor' só aparecem no
 // inventário quando há um edifício aberto (context: 'building' — ver `isVisible`
 // dentro do render da tabela de Unidades, abaixo).
 const INVENTORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean; className: string }> = {
@@ -148,8 +147,6 @@ const INVENTORY_COLUMN_HEADERS: Record<string, { label: string; sortable?: boole
     private_area: { label: 'Á. priv.', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     price: { label: 'Preço', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
     price_per_m2: { label: 'Vlr/m²', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
-    position_weight: { label: 'Peso pos.', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-    sun_weight: { label: 'Peso sol', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     floor: { label: 'Andar', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
 };
@@ -209,28 +206,6 @@ function renderInventoryDetailCell(
             return <span className="text-sm font-medium text-gray-800">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(property.price || 0)}</span>;
         case 'price_per_m2':
             return <span className="text-sm font-medium text-gray-600">{new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL', maximumFractionDigits: 0 }).format((property.price || 0) / (property.private_area || property.area || 1))}</span>;
-        case 'position_weight':
-            return (
-                <div className="flex flex-col">
-                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
-                        {property.position_type === 'FRONT' ? '1.03x' : property.position_type === 'BACK' ? '0.97x' : '1.00x'}
-                    </span>
-                    <span className="text-xs font-normal text-gray-400">
-                        {property.position_type === 'FRONT' ? 'Frente' : property.position_type === 'BACK' ? 'Fundos' : 'Lateral / Base'}
-                    </span>
-                </div>
-            );
-        case 'sun_weight':
-            return (
-                <div className="flex flex-col">
-                    <span className="text-sm font-normal text-gray-900 leading-none mb-1">
-                        {property.sun_orientation === 'NORTH' ? '1.02x' : property.sun_orientation === 'EAST' ? '1.01x' : property.sun_orientation === 'WEST' ? '0.99x' : property.sun_orientation === 'SOUTH' ? '0.98x' : '1.00x'}
-                    </span>
-                    <span className="text-xs font-normal text-gray-400">
-                        {property.sun_orientation === 'NORTH' ? 'Norte' : property.sun_orientation === 'EAST' ? 'Leste' : property.sun_orientation === 'WEST' ? 'Oeste' : property.sun_orientation === 'SOUTH' ? 'Sul' : 'Base'}
-                    </span>
-                </div>
-            );
         case 'floor':
             return <span className="text-sm font-normal text-gray-600">{property.floor ? `${property.floor}º` : 'Térreo'}</span>;
         case 'status':
@@ -427,12 +402,6 @@ function renderBrokerCell(key: string, broker: BrokerProfile): React.ReactNode {
     }
 }
 
-const getPositionWeight = (p?: { position_type?: string | null }) =>
-    p?.position_type === 'FRONT' ? 1.03 : p?.position_type === 'BACK' ? 0.97 : 1.00;
-
-const getSunWeight = (p?: { sun_orientation?: string | null }) =>
-    p?.sun_orientation === 'NORTH' ? 1.02 : p?.sun_orientation === 'EAST' ? 1.01 : p?.sun_orientation === 'WEST' ? 0.99 : p?.sun_orientation === 'SOUTH' ? 0.98 : 1.00;
-
 // A aba 'contracts' saiu em 2026-09-22 (pedido do usuário). Ela listava os
 // contratos domain='VENDAS' e, ao abrir um, caía no ContractDetailView — a tela
 // de contrato de OBRA/Suprimentos, cujo trilho é montado só por `is_recurring`:
@@ -441,11 +410,16 @@ const getSunWeight = (p?: { sun_orientation?: string | null }) =>
 // Medido / Saldo a Faturar". O contrato de venda já tem tela própria em
 // Gerenciar Negociação › aba Contrato, que é por onde ele nasce.
 // 'analysis' só existe na visão mestre (sem edifício aberto), como em Locações.
-type SalesTab = 'inventory' | 'analysis' | 'deals' | 'dashboard' | 'simulation' | 'price-tables'
+// 'dashboard' (Resultados) e 'simulation' (Simulação) saíram em 14/11/2026 (pedido do
+// usuário): o que valia delas — ranking de corretores, origem das negociações e a
+// projeção de esgotamento — foi para a aba Análise. Aba salva com um desses valores
+// no navegador cai em 'inventory' pela validação de SALES_TABS.
+// Plano: docs/planos/2026-11-14-venda-de-ativos-unidades-analise-contrato-tabela.md.
+type SalesTab = 'inventory' | 'analysis' | 'deals' | 'price-tables'
     | 'sales-plans' | 'brokers' | 'intelligence';
 
 /** Abas que existem hoje — a lista que valida o que veio do localStorage. */
-const SALES_TABS: SalesTab[] = ['inventory', 'analysis', 'deals', 'dashboard', 'simulation',
+const SALES_TABS: SalesTab[] = ['inventory', 'analysis', 'deals',
     'price-tables', 'sales-plans', 'brokers', 'intelligence'];
 
 // ── Aba Análise: colunas, leituras e células ────────────────────────────────
@@ -659,9 +633,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     // Contratos de Venda de Ativos (domain='VENDAS') — isolado dos demais domínios.
 
 
-    // Simulation States
-    const [simMonthlySales, setSimMonthlySales] = useState<number>(2);
-    const [simPriceAdjust, setSimPriceAdjust] = useState<number>(0);
 
     const confirm = useConfirm();
     const [isBulkEditOpen, setIsBulkEditOpen] = useState(false);
@@ -1160,8 +1131,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
             case 'private_area': return p.private_area || 0;
             case 'price': return p.price || 0;
             case 'price_per_m2': return (p.price || 0) / (p.private_area || p.area || 1);
-            case 'position_weight': return getPositionWeight(p);
-            case 'sun_weight': return getSunWeight(p);
             case 'floor': return p.floor ?? -1;
             case 'status': return getUnitStatusDisplay(p).label;
             default: return '';
@@ -2135,8 +2104,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         { id: 'sales-plans', label: 'Planos de vendas', icon: <Percent className="w-3.5 h-3.5" /> },
                         { id: 'brokers', label: 'Corretores', icon: <User className="w-3.5 h-3.5" /> },
                         { id: 'intelligence', label: 'Inteligência', icon: <Sliders className="w-3.5 h-3.5" /> },
-                        { id: 'dashboard', label: 'Resultados', icon: <TrendingUp className="w-3.5 h-3.5" /> },
-                        { id: 'simulation', label: 'Simulação', icon: <Activity className="w-3.5 h-3.5" /> },
                     ]}
                     value={activeTab}
                     onChange={setActiveTab}
@@ -2278,9 +2245,12 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
 
                             {viewMode === 'list' && (() => {
                                 const visible = inventoryColumns.visibleColumns;
-                                const isVisible = (key: string) => visible.includes(key) && (
-                                    INVENTORY_COLUMNS.find(c => c.key === key)?.context === 'all' || !!selectedBuildingId
-                                );
+                                // Coluna que já não existe (ex.: "Peso pos." guardada como visível
+                                // no navegador) não entra: sem isto, ganhava <col> sem cabeçalho.
+                                const isVisible = (key: string) => {
+                                    const col = INVENTORY_COLUMNS.find(c => c.key === key);
+                                    return !!col && visible.includes(key) && (col.context === 'all' || !!selectedBuildingId);
+                                };
                                 // Ordem arrastável (§ "Reordenar colunas por arraste"), filtrada por
                                 // visibilidade+contexto — 'actions' fica de fora por ser renderizada fixa.
                                 const orderedVisible = inventoryColumns.orderedVisibleColumns.filter(key => key !== 'actions' && isVisible(key));
@@ -2539,107 +2509,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             </div>
                         </div>
                     )}
-                </div>
-            )}
-
-            {activeTab === 'simulation' && selectedBuildingId && (
-                <div className="space-y-6">
-                    <div className="bg-white p-6 rounded-[10px] border border-gray-100">
-                        <div className="flex justify-between items-center mb-6">
-                            <div>
-                                <h3 className="text-lg font-bold text-gray-900 tracking-tight">Motor de simulação VGV</h3>
-                                <p className="text-gray-500 text-sm">Ajuste os parâmetros para projetar o futuro financeiro de {currentBuilding?.name}</p>
-                            </div>
-                            <BrainCircuit className="w-5 h-5 text-purple-600" />
-                        </div>
-
-                        <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
-                            <div className="lg:col-span-1 space-y-6 p-5 bg-gray-50 rounded-[10px] border border-gray-100">
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-xs font-semibold text-slate-500">Velocidade de Vendas</label>
-                                        <span className="text-sm font-black text-blue-600 bg-blue-50 px-2 py-1 rounded-[6px]">{simMonthlySales} und/mês</span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="1"
-                                        max="20"
-                                        step="1"
-                                        value={simMonthlySales}
-                                        onChange={(e) => setSimMonthlySales(Number(e.target.value))}
-                                        className="w-full h-2 bg-gray-200 rounded-[6px] appearance-none cursor-pointer accent-blue-600"
-                                    />
-                                    <p className="text-[9px] font-bold text-gray-400 leading-tight">Define quantas unidades do estoque são absorvidas mensalmente.</p>
-                                </div>
-
-                                <div className="space-y-4">
-                                    <div className="flex justify-between items-center">
-                                        <label className="text-xs font-semibold text-slate-500">Ajuste de Preço (VGV)</label>
-                                        <span className={`text-sm font-black px-2 py-1 rounded-[6px] ${simPriceAdjust >= 0 ? 'text-emerald-600 bg-emerald-50' : 'text-red-600 bg-red-50'}`}>
-                                            {simPriceAdjust > 0 ? '+' : ''}{simPriceAdjust}%
-                                        </span>
-                                    </div>
-                                    <input
-                                        type="range"
-                                        min="-20"
-                                        max="50"
-                                        step="1"
-                                        value={simPriceAdjust}
-                                        onChange={(e) => setSimPriceAdjust(Number(e.target.value))}
-                                        className="w-full h-2 bg-gray-200 rounded-[6px] appearance-none cursor-pointer accent-blue-600"
-                                    />
-                                    <p className="text-[9px] font-bold text-gray-400 leading-tight">Simula valorização ou descontos agressivos no estoque remanescente.</p>
-                                </div>
-
-                                <div className="pt-6 border-t border-gray-200 space-y-4">
-                                    <div className="p-4 bg-gray-900 rounded-[10px] text-white">
-                                        <div className="flex items-center gap-2 mb-2">
-                                            <TrendingUp className="w-4 h-4 text-blue-400" />
-                                            <span className="text-[9px] font-black uppercase tracking-widest">Tempo de Esgotamento</span>
-                                        </div>
-                                        <p className="text-2xl font-black">
-                                            {Math.ceil(filteredProperties.length / (simMonthlySales || 1))}
-                                            <span className="text-xs text-gray-400 ml-1">Meses</span>
-                                        </p>
-                                    </div>
-
-                                    <div className="space-y-2">
-                                        <span className="text-[9px] font-black text-gray-400 uppercase tracking-widest px-1">Cenários de Absorção (curva S)</span>
-                                        {pricingService.compareScenarios(filteredProperties.length, 60, [
-                                            { label: 'Lenta', velocity: 0.25 },
-                                            { label: 'Moderada', velocity: 0.5 },
-                                            { label: 'Agressiva', velocity: 0.9 },
-                                        ]).map(s => (
-                                            <div key={s.label} className="flex items-center justify-between px-3 py-2 bg-gray-50 rounded-[6px] border border-gray-100">
-                                                <span className="text-xs font-bold text-gray-600">{s.label}</span>
-                                                <span className="text-xs font-black text-blue-600">{s.monthsToSellOut} meses</span>
-                                            </div>
-                                        ))}
-                                    </div>
-
-                                    <button
-                                        onClick={() => { setSimMonthlySales(2); setSimPriceAdjust(0); }}
-                                        className="w-full h-9 bg-white text-gray-500 hover:text-gray-900 text-sm font-medium rounded-[6px] border border-gray-200 transition-all"
-                                    >
-                                        Resetar simulação
-                                    </button>
-                                </div>
-                            </div>
-
-                            <div className="lg:col-span-3">
-                                <SalesDashboard
-                                    buildings={properties} 
-                                    selectedBuildingId={selectedBuildingId} 
-                                    mode="simulation"
-                                    organizationId={effectiveOrganizationId}
-                                    simulationParams={{
-                                        monthlySales: simMonthlySales,
-                                        priceAdjust: simPriceAdjust
-                                    }}
-                                />
-                            </div>
-                        </div>
-                    </div>
                 </div>
             )}
 
@@ -2927,16 +2796,6 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                         })()}
                         </div>
                     </div>
-                )
-            }
-
-            {
-                activeTab === 'dashboard' && (
-                    <SalesDashboard 
-                        selectedBuildingId={selectedBuildingId} 
-                        buildings={properties} 
-                        organizationId={currentBuilding?.organization_id || organizationId}
-                    />
                 )
             }
 

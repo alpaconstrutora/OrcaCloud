@@ -10,7 +10,7 @@ import {
 import { KpiCard } from '../ui/KpiCard';
 import SalesUnitMirror, { type SalesMirrorDestaque } from './SalesUnitMirror';
 import type { SalesAnalysisScope, SaleMirrorCell, MonthBucket } from '../../lib/salesAnalysis';
-import { SALE_STATUS_COLORS } from '../../lib/salesAnalysis';
+import { SALE_STATUS_COLORS, ORIGEM_NAO_INFORMADA, projecaoDeEsgotamento } from '../../lib/salesAnalysis';
 import {
     moneyBRL, compactAxis, niceTicks, percent1, decimalBR, orDash, plural,
     GRID, TICK, CATEGORY_TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_DIMENSION, END_LABEL,
@@ -397,6 +397,154 @@ const ReceivableScheduleChart: React.FC<{ scope: SalesAnalysisScope; state: Anal
 };
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Vindos das antigas abas Resultados e Simulação do edifício (14/11/2026).
+// Plano: docs/planos/2026-11-14-venda-de-ativos-unidades-analise-contrato-tabela.md.
+// Lá o ranking lia `broker_portal_proposals` (vazia: sempre "Nenhum dado") e
+// tinha um "SLA" que era sempre "---"; aqui sai das negociações do recorte.
+// ─────────────────────────────────────────────────────────────────────────────
+
+/** Até quantos corretores a lista mostra; o resto vira uma linha de "mais N". */
+const MAX_CORRETORES = 6;
+
+/** Ranking de corretores — lista, não gráfico: nomes longos e poucas vendas
+ *  (§28.5), e a pergunta é QUEM, com o número ao lado. */
+const BrokerRankingCard: React.FC<{ scope: SalesAnalysisScope }> = ({ scope }) => {
+    const corretores = scope.brokers.filter(b => b.brokerId != null);
+    const semCorretor = scope.brokers.find(b => b.brokerId == null);
+    const visiveis = corretores.slice(0, MAX_CORRETORES);
+    return (
+        <ChartCard title="Corretores" subtitle="Negociações de cada corretor no recorte, sem as canceladas; ordem pelo VGV vendido.">
+            {corretores.length === 0 ? (
+                <ChartEmpty>
+                    {semCorretor ? `Nenhuma negociação com corretor — ${plural(semCorretor.deals, 'negociação direta', 'negociações diretas')}.` : 'Nenhuma negociação neste recorte.'}
+                </ChartEmpty>
+            ) : (
+                <>
+                    <ol className="flex flex-col divide-y divide-gray-100">
+                        {visiveis.map((b, i) => (
+                            <li key={b.brokerId} className="flex items-center gap-3 py-2 text-sm">
+                                <span className="w-5 shrink-0 text-xs text-gray-500 tabular-nums">{i + 1}º</span>
+                                <div className="min-w-0 flex-1">
+                                    <p className="text-gray-800 truncate">{b.name}</p>
+                                    <p className="text-xs text-gray-500 truncate">
+                                        {plural(b.deals, 'negociação', 'negociações')} · {plural(b.sold, 'vendida', 'vendidas')}
+                                    </p>
+                                </div>
+                                <div className="text-right shrink-0">
+                                    <p className="font-medium text-gray-800 tabular-nums">{moneyBRL(b.vgvSold)}</p>
+                                    <p className="text-xs text-gray-500 tabular-nums">{b.openValue > 0 ? `${moneyBRL(b.openValue)} em aberto` : 'vendido'}</p>
+                                </div>
+                            </li>
+                        ))}
+                    </ol>
+                    {(corretores.length > MAX_CORRETORES || semCorretor) && (
+                        <p className="text-xs text-gray-500 mt-2 pt-2 border-t border-gray-100">
+                            {corretores.length > MAX_CORRETORES && `Mais ${plural(corretores.length - MAX_CORRETORES, 'corretor', 'corretores')} fora da lista. `}
+                            {semCorretor && `${plural(semCorretor.deals, 'negociação', 'negociações')} sem corretor (${moneyBRL(semCorretor.vgvSold)} vendido).`}
+                        </p>
+                    )}
+                </>
+            )}
+        </ChartCard>
+    );
+};
+
+/** Origem das negociações pelo canal gravado nelas. */
+const OriginCard: React.FC<{ scope: SalesAnalysisScope }> = ({ scope }) => {
+    const origens = scope.origins;
+    const total = origens.reduce((a, o) => a + o.deals, 0);
+    return (
+        <ChartCard title="Origem das negociações" subtitle="Canal informado na negociação, sem as canceladas.">
+            {total === 0 ? (
+                <ChartEmpty>Nenhuma negociação neste recorte.</ChartEmpty>
+            ) : (
+                <ul className="flex flex-col divide-y divide-gray-100">
+                    {origens.map(o => (
+                        <li key={o.label} className="flex items-center gap-3 py-2 text-sm">
+                            <div className="min-w-0 flex-1">
+                                <p className={`truncate ${o.label === ORIGEM_NAO_INFORMADA ? 'text-gray-500' : 'text-gray-800'}`}>{o.label}</p>
+                                <p className="text-xs text-gray-500 truncate">
+                                    {plural(o.deals, 'negociação', 'negociações')} · {plural(o.sold, 'vendida', 'vendidas')}
+                                </p>
+                            </div>
+                            <div className="text-right shrink-0">
+                                <p className="font-medium text-gray-800 tabular-nums">{percent1(o.deals / total)}</p>
+                                <p className="text-xs text-gray-500 tabular-nums">{moneyBRL(o.value)}</p>
+                            </div>
+                        </li>
+                    ))}
+                </ul>
+            )}
+        </ChartCard>
+    );
+};
+
+const MESES_LONGOS = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'];
+const mesPorExtenso = (yyyyMm: string) => {
+    const [a, m] = yyyyMm.split('-').map(Number);
+    return `${MESES_LONGOS[m - 1]} de ${a}`;
+};
+
+/**
+ * Projeção de esgotamento — o que valia da antiga aba Simulação. Duas hipóteses
+ * de quem lê (velocidade e ajuste de preço), o resto sai do recorte. A conta
+ * mora em `projecaoDeEsgotamento` (testada).
+ */
+const ProjectionCard: React.FC<{ scope: SalesAnalysisScope }> = ({ scope }) => {
+    const real = projecaoDeEsgotamento(scope, 0, 0).velocidadeReal;
+    // Começa na velocidade medida (arredondada, mínimo 1): o número que a pessoa
+    // ajusta parte do que aconteceu, não de um "2" fixo.
+    // Texto, não número: apagar o campo para digitar outro valor não pode virar "0" no meio.
+    const [velocidade, setVelocidade] = React.useState(() => String(Math.max(1, Math.round(real))));
+    const [ajuste, setAjuste] = React.useState('0');
+    const p = projecaoDeEsgotamento(scope, Number(velocidade.replace(',', '.')) || 0, Number(ajuste.replace(',', '.')) || 0);
+    const campo = 'w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 tabular-nums outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500';
+    return (
+        <ChartCard title="Projeção de esgotamento" subtitle="Se vender no ritmo abaixo, quando o estoque acaba e quanto soma. Hipótese, não previsão.">
+            {p.estoque === 0 ? (
+                <ChartEmpty>Nenhuma unidade a vender neste recorte.</ChartEmpty>
+            ) : (
+                <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                        <div className="space-y-1.5">
+                            <label htmlFor="proj-velocidade" className="text-xs font-semibold text-slate-500">Vendas por mês</label>
+                            <input id="proj-velocidade" type="number" min={0} step={1} className={campo}
+                                value={velocidade}
+                                onChange={e => setVelocidade(e.target.value)} />
+                            <p className="text-xs text-gray-500">Média dos últimos 12 meses: {decimalBR(real, 1)}</p>
+                        </div>
+                        <div className="space-y-1.5">
+                            <label htmlFor="proj-ajuste" className="text-xs font-semibold text-slate-500">Ajuste de preço (%)</label>
+                            <input id="proj-ajuste" type="number" step={1} className={campo}
+                                value={ajuste}
+                                onChange={e => setAjuste(e.target.value)} />
+                            <p className="text-xs text-gray-500">Sobre a tabela do estoque</p>
+                        </div>
+                    </div>
+                    <div className="grid grid-cols-3 gap-3 pt-3 border-t border-gray-100">
+                        <div className="min-w-0">
+                            <p className="text-xs text-gray-500 truncate">Acaba em</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{p.meses == null ? '—' : plural(p.meses, 'mês', 'meses')}</p>
+                            <p className="text-xs text-gray-500 truncate">{p.mesDoFim ? mesPorExtenso(p.mesDoFim) : 'sem vendas por mês'}</p>
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs text-gray-500 truncate">VGV a vender</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{moneyBRL(p.vgvAVender)}</p>
+                            <p className="text-xs text-gray-500 truncate">{plural(p.estoque, 'unidade', 'unidades')}</p>
+                        </div>
+                        <div className="min-w-0">
+                            <p className="text-xs text-gray-500 truncate">VGV projetado</p>
+                            <p className="text-sm font-medium text-gray-800 truncate">{moneyBRL(p.vgvProjetado)}</p>
+                            <p className="text-xs text-gray-500 truncate">vendido + a vender</p>
+                        </div>
+                    </div>
+                </div>
+            )}
+        </ChartCard>
+    );
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
 // O painel
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -546,11 +694,19 @@ const SalesAnalysisOverview: React.FC<Props> = ({ scope, rows, isAll, onSelectEm
 
             {/* ── GRÁFICOS ── por leitura, todos sobre o MESMO `scope`. */}
             {leitura === 'comercial' ? (
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
-                    <FunnelChart scope={scope} />
-                    <SalesByMonthChart scope={scope} />
-                    <UnitStatusChart scope={scope} />
-                </div>
+                <>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+                        <FunnelChart scope={scope} />
+                        <SalesByMonthChart scope={scope} />
+                        <UnitStatusChart scope={scope} />
+                    </div>
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3 mb-3">
+                        <BrokerRankingCard scope={scope} />
+                        <OriginCard scope={scope} />
+                        {/* `key`: trocar de recorte recomeça na velocidade medida dele. */}
+                        <ProjectionCard key={scope.empreendimentoId} scope={scope} />
+                    </div>
+                </>
             ) : (
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
                     {temComparativo && <VgvByEmpreendimentoChart rows={linhasComVgv}onSelect={onSelectEmpreendimento} className="lg:col-span-2" />}

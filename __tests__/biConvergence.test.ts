@@ -36,7 +36,7 @@ interface Deal {
 }
 
 /** Espelho da regra de BI (vw_fact_deal.is_vgv) — type='SALE' AND status='COMPLETED'.
- *  `salesDashboardService` deixou de seguir esta regra em 27/10/2026: ver o
+ *  A antiga aba Resultados (removida em 14/11/2026) deixou de seguir esta regra em 27/10/2026: ver o
  *  bloco "Venda de Ativos" abaixo, que testa a função real. */
 function computeVGV(deals: Deal[]): number {
     return deals

@@ -32,6 +32,7 @@ import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutur
 import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedido } from './climatizacaoERede';
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
+import { lancarEsgoto } from './esgoto';
 import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
@@ -255,6 +256,24 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     );
   }
 
+  // ── Esgoto e ventilação (PA7a): os ramais das unidades e os tubos de queda no tipo — também antes da marca.
+  let esgoto: ReturnType<typeof lancarEsgoto> | null = null;
+  if (!hip.esgoto) etapa('ESGOTO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else if (!agua) etapa('ESGOTO', 'NAO_EXIGIDA', 0, 'Sem a água, não há louças para o esgoto.');
+  else {
+    esgoto = lancarEsgoto(ctx, base, terreo ? { levelId: terreo.levelId } : null, cobertura ? { levelId: cobertura.levelId } : null, 1 + mont.copias);
+    pendencias.push(...esgoto.pendencias);
+    const maior = Math.max(0, ...esgoto.tubos.map((t) => t.dnMm));
+    etapa(
+      'ESGOTO',
+      esgoto.tubos.length ? 'LANCOU' : 'NAO_RODOU',
+      esgoto.comandos,
+      esgoto.tubos.length
+        ? `${esgoto.tubos.length} tubo(s) de queda por andar (até DN ${maior}), ${esgoto.uhcPorAndar} UHC por andar${esgoto.coletor ? ` · coletor DN ${esgoto.coletor.dnMm} a ${esgoto.coletor.declividadePct.toLocaleString('pt-BR')} %` : ''}`
+        : esgoto.pendencias.find((x) => x.grupo === 'SEM_SOLUCAO')?.texto ?? null,
+    );
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -369,6 +388,17 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,
+      esgoto: esgoto?.tubos.length
+        ? {
+            tubosDeQueda: esgoto.tubos.length,
+            pontos: esgoto.pontos,
+            uhcPorAndar: esgoto.uhcPorAndar,
+            dnTuboDeQuedaMm: Math.max(...esgoto.tubos.map((t) => t.dnMm)),
+            dnVentilacaoMm: Math.max(...esgoto.tubos.map((t) => t.dnVentilacaoMm)),
+            tubos: esgoto.tubos.map((t) => ({ uhcPorAndar: t.uhcPorAndar, comBacia: t.comBacia, dnMm: t.dnMm })),
+            coletor: esgoto.coletor,
+          }
+        : null,
     },
   };
 }

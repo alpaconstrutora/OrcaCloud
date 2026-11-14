@@ -34,6 +34,8 @@ END;
 $$;
 
 REVOKE ALL ON FUNCTION public.fn_imovib_land_checklist_conferencia() FROM PUBLIC;
+-- O Supabase dá EXECUTE a anon/authenticated por privilégio padrão; função de gatilho não é RPC.
+REVOKE ALL ON FUNCTION public.fn_imovib_land_checklist_conferencia() FROM anon, authenticated;
 
 DROP TRIGGER IF EXISTS trg_imovib_land_checklist_conferencia ON public.imovib_land_checklist;
 CREATE TRIGGER trg_imovib_land_checklist_conferencia

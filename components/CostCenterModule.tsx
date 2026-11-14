@@ -328,6 +328,10 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
     );
 
     const groups = useMemo(() => items.filter(i => !i.parent_id), [items]);
+    // Agrupado, grupo sem filho não aparece (não tem o que agrupar) — e some sem rastro: em
+    // 13/11/2026 o "001 Condomínio" vazio parecia excluído aqui e seguia no drawer do Extrato.
+    // O aviso abaixo da tabela diz quantos ficaram de fora e como vê-los.
+    const gruposVazios = useMemo(() => groups.filter(g => !childrenByParent.has(g.id)), [groups, childrenByParent]);
 
     const compareItems = useCallback((a: CostCenterV2, b: CostCenterV2) => {
         const dir = tableColumns.sortDirection === 'asc' ? 1 : -1;
@@ -910,6 +914,21 @@ const CostCenterModule: React.FC<CostCenterModuleProps> = () => {
                                 })}
                             </tbody>
                         </table>
+                    </div>
+                )}
+                {!loading && agrupando && gruposVazios.length > 0 && (
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 px-6 py-2.5 border-t border-gray-100 text-[13px] text-gray-600">
+                        <AlertCircle className="w-4 h-4 text-gray-400 shrink-0" />
+                        <span>
+                            {gruposVazios.length === 1 ? '1 grupo sem centro de custo fica fora do agrupamento' : `${gruposVazios.length} grupos sem centro de custo ficam fora do agrupamento`}
+                            {': '}
+                            <span className="font-medium text-gray-800">
+                                {gruposVazios.slice(0, 3).map(g => `${g.code} ${g.name}`).join(', ')}{gruposVazios.length > 3 ? ` e mais ${gruposVazios.length - 3}` : ''}
+                            </span>.
+                        </span>
+                        <button type="button" onClick={() => agrupamento.setCampo('none')} className="font-medium text-blue-600 hover:text-blue-700 hover:underline">
+                            Ver sem agrupar
+                        </button>
                     </div>
                 )}
             </div>

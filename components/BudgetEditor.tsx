@@ -183,6 +183,23 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [expandedGroups, setExpandedGroups] = React.useState<string[]>([]);
   const [expandedPhases, setExpandedPhases] = React.useState<string[]>([]);
   const [expandedSubPhases, setExpandedSubPhases] = React.useState<string[]>([]);
+  // Etapas em que o usuário pediu para ver as subetapas sem itens (por padrão viram uma linha
+  // "N subetapas sem itens · Mostrar" — crítica 2026-11-14).
+  const [etapasComVaziasVisiveis, setEtapasComVaziasVisiveis] = React.useState<string[]>([]);
+  // Expansão inicial "onde há itens": uma vez quando os itens chegam (o orçamento pode chegar
+  // depois da tela montar); antes disso, com orçamento vazio, abre só o 1º grupo.
+  const expandiuComItensRef = React.useRef(false);
+  const expandiuVazioRef = React.useRef(false);
+  React.useEffect(() => {
+    const wbs = settings.wbs as (WBSGroup | WBSPhase)[] | undefined;
+    if (expandiuComItensRef.current || !wbs?.length || !('phases' in wbs[0])) return;
+    if (budget.length === 0) {
+      if (expandiuVazioRef.current) return;
+      expandiuVazioRef.current = true;
+    }
+    expandiuComItensRef.current = expandirOndeHaItens(wbs as WBSGroup[], budget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budget, settings.wbs]);
   const [addingTo, setAddingTo] = React.useState<AddingTarget | null>(null);
   // §3 — preferência de busca (o que o usuário digita/alterna) sobrevive a navegação/reload.
   // Exceção documentada no guia §3.2 (o check-ui-standard acusa as linhas abaixo):
@@ -733,15 +750,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         onUpdateBudget(newBudget);
         setExpandedGroups(['01']);
       } else {
-        // It's already new structure - Expand ALL by default
-        const wbsGroups = currentWBS as WBSGroup[];
-        const allGroupIds = wbsGroups.map((g) => g.id);
-        const allPhaseIds = wbsGroups.flatMap((g) => g.phases.map((p) => p.id));
-        const allSubPhaseNames = wbsGroups.flatMap((g) => g.phases.flatMap((p) => p.subPhases));
-
-        setExpandedGroups(allGroupIds);
-        setExpandedPhases(allPhaseIds);
-        setExpandedSubPhases(allSubPhaseNames);
+        // Estrutura nova: a expansão inicial é do efeito "expandir onde há itens" (abaixo),
+        // que espera os itens chegarem. Até 14/11/2026 abria TUDO aqui — no Garden, 664
+        // linhas (302 "Nenhum item") e o 1º item a 16 telas de rolagem.
       }
     }
 
@@ -925,6 +936,25 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchCode, searchGroupFilter, searchType, searchLocation, searchCharges, searchDatabase, searchScope, searchMode, searchReference, favorites, showOnlyFavorites]);
 
+  /** Abre só grupo/etapa/subetapa que têm item (mesma comparação exata do desenho da árvore).
+   *  Orçamento sem item: abre o 1º grupo e a 1ª etapa, para mostrar onde começar. Devolve
+   *  true se havia itens (a expansão "de verdade" foi feita). */
+  const expandirOndeHaItens = (wbs: WBSGroup[], itens: BudgetEntry[]): boolean => {
+    if (itens.length === 0) {
+      const primeiro = wbs[0];
+      setExpandedGroups(primeiro ? [primeiro.id] : []);
+      setExpandedPhases(primeiro?.phases?.[0] ? [primeiro.phases[0].id] : []);
+      setExpandedSubPhases([]);
+      return false;
+    }
+    const tem = (g: string, ph?: string, sp?: string) =>
+      itens.some(b => b.group === g && (ph === undefined || b.phase === ph) && (sp === undefined || b.subPhase === sp));
+    setExpandedGroups(wbs.filter(g => tem(g.name)).map(g => g.id));
+    setExpandedPhases(wbs.flatMap(g => (g.phases || []).filter(ph => tem(g.name, ph.name)).map(ph => ph.id)));
+    setExpandedSubPhases(wbs.flatMap(g => (g.phases || []).flatMap(ph => (ph.subPhases || []).filter(sp => tem(g.name, ph.name, sp)))));
+    return true;
+  };
+
   const handleExpandAll = () => {
     const allGroupIds = settings.wbs.map(g => g.id);
     const allPhaseIds = settings.wbs.flatMap(g => g.phases.map(p => p.id));
@@ -933,9 +963,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     setExpandedGroups(allGroupIds);
     setExpandedPhases(allPhaseIds);
     setExpandedSubPhases(allSubPhaseNames);
+    setEtapasComVaziasVisiveis(allPhaseIds);
   };
 
   const handleCollapseAll = () => {
+    setEtapasComVaziasVisiveis([]);
     setExpandedGroups([]);
     setExpandedPhases([]);
     setExpandedSubPhases([]);
@@ -1897,6 +1929,30 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     const dir = groupOrder === 'value-desc' ? -1 : 1;
     return [...base].sort((a, b) => dir * ((totals.get(a.group.id) ?? 0) - (totals.get(b.group.id) ?? 0)));
   })();
+
+  // Quantos itens há em cada grupo/etapa/subetapa (mesma comparação exata do desenho).
+  // Nível sem item mostra "—", não "R$ 0,00": zero de verdade (itens sem preço) é outra
+  // coisa, e "R$ 0,00" em grupo vazio lia como "perdi o orçamento" (crítica 2026-11-14).
+  const contagemDeItens = React.useMemo(() => {
+    const porGrupo = new Map<string, number>();
+    const porEtapa = new Map<string, number>();
+    const porSubetapa = new Map<string, number>();
+    for (const b of budget) {
+      const kE = `${b.group}\u0000${b.phase}`;
+      const kS = `${kE}\u0000${b.subPhase}`;
+      porGrupo.set(b.group, (porGrupo.get(b.group) || 0) + 1);
+      porEtapa.set(kE, (porEtapa.get(kE) || 0) + 1);
+      porSubetapa.set(kS, (porSubetapa.get(kS) || 0) + 1);
+    }
+    return {
+      grupo: (g: string) => porGrupo.get(g) || 0,
+      etapa: (g: string, ph: string) => porEtapa.get(`${g}\u0000${ph}`) || 0,
+      subetapa: (g: string, ph: string, sp: string) => porSubetapa.get(`${g}\u0000${ph}\u0000${sp}`) || 0,
+    };
+  }, [budget]);
+  const valorOuTraco = (qtdItens: number, total: number) =>
+    qtdItens === 0 ? '—' : `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rotuloItens = (n: number) => (n === 0 ? 'sem itens' : n === 1 ? '1 item' : `${n} itens`);
 
   const calculateSubPhaseNatureTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
     const total = { labor: 0, material: 0, equipment: 0 };
@@ -2904,6 +2960,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             // dentro de um grupo recolhido.
             const isGroupExpanded = isSearching_wbs || expandedGroups.includes(group.id);
             const groupTotal = calculateGroupTotal(group.name);
+            const itensDoGrupo = contagemDeItens.grupo(group.name);
             const { name: groupNameDisplay } = splitName(group.name);
 
             return (
@@ -2918,14 +2975,19 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                   </td>
                   <td colSpan={3} className="px-3 py-2.5 border-r border-gray-700">
-                    <div className="font-semibold text-sm leading-tight truncate" title={groupNameDisplay}>
-                      {groupNameDisplay}
+                    {/* Contagem e total logo depois do nome (§6.12): a coluna Preço total cai fora
+                        da tela numa tabela larga, e o grupo precisa dizer o que tem. */}
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="font-semibold text-sm leading-tight truncate" title={groupNameDisplay}>{groupNameDisplay}</span>
+                      <span className="shrink-0 text-sm font-normal text-gray-300 whitespace-nowrap">
+                        · {rotuloItens(itensDoGrupo)}{itensDoGrupo > 0 ? ` · ${valorOuTraco(itensDoGrupo, groupTotal)}` : ''}
+                      </span>
                     </div>
                   </td>
                   <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
                   <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
                     <div className="flex flex-col items-end gap-1">
-                      <span className="font-medium text-sm whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      <span className="font-medium text-sm whitespace-nowrap">{valorOuTraco(itensDoGrupo, groupTotal)}</span>
                       <div className="flex gap-1 items-center">
                         <div className="flex items-center">
                           {canReorderGroups ? (
@@ -2979,7 +3041,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   if (isSearching_wbs && !budget.some(b => b.group === group.name && b.phase === phase.name && matchesWbsSearch(b))) return null;
                   const isPhaseExpanded = isSearching_wbs || expandedPhases.includes(phase.id);
                   const phaseTotal = calculatePhaseTotal(group.name, phase.name);
+                  const itensDaEtapa = contagemDeItens.etapa(group.name, phase.name);
                   const { id: phaseIdDisplay, name: phaseNameDisplay } = splitName(phase.name);
+                  // Subetapas sem itens viram UMA linha "N subetapas sem itens · Mostrar" (salvo
+                  // com busca, ou se o usuário pediu para ver).
+                  const subetapasVazias = (phase.subPhases || []).filter(sp => sp && contagemDeItens.subetapa(group.name, phase.name, sp) === 0);
+                  const vaziasVisiveis = isSearching_wbs || etapasComVaziasVisiveis.includes(phase.id);
 
                   return (
                     <React.Fragment key={phase.id}>
@@ -2993,14 +3060,15 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </div>
                         </td>
                         <td colSpan={3} className="px-3 py-2.5 border-r border-gray-200">
-                          <div className="font-semibold text-gray-800 text-sm leading-tight truncate" title={phaseNameDisplay}>
-                            {phaseNameDisplay}
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="font-semibold text-gray-800 text-sm leading-tight truncate" title={phaseNameDisplay}>{phaseNameDisplay}</span>
+                            <span className="shrink-0 text-sm font-normal text-gray-600 whitespace-nowrap">· {rotuloItens(itensDaEtapa)}</span>
                           </div>
                         </td>
                         <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
                           <div className="flex flex-col items-end gap-1">
-                            <span className="font-medium text-gray-800 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                            <span className="font-medium text-gray-800 text-sm whitespace-nowrap">{valorOuTraco(itensDaEtapa, phaseTotal)}</span>
                             <div className="flex gap-1 items-center">
                               <div className="flex items-center">
                                 {pIndex > 0 && (
@@ -3036,6 +3104,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       {/* SUBPHASES LOOP */}
                       {isPhaseExpanded && (phase.subPhases || []).map((subPhaseName, spIndex) => {
                         if (!subPhaseName) return null;
+                        const itensDaSubetapa = contagemDeItens.subetapa(group.name, phase.name, subPhaseName);
+                        if (itensDaSubetapa === 0 && !vaziasVisiveis) return null;
                         const isSubExpanded = isSearching_wbs || expandedSubPhases.includes(subPhaseName);
                         const subTotal = calculateSubPhaseTotal(group.name, phase.name, subPhaseName);
                         const allItems = budget.filter(b => b.group === group.name && b.phase === phase.name && b.subPhase === subPhaseName);
@@ -3063,7 +3133,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               <td colSpan={7} className="px-3 py-2.5 border-r border-gray-100"></td>
                               <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
                                 <div className="flex flex-col items-end gap-1">
-                                  <span className="font-medium text-gray-700 text-sm whitespace-nowrap">R$ {subTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                                  <span className="font-medium text-gray-700 text-sm whitespace-nowrap">{valorOuTraco(itensDaSubetapa, subTotal)}</span>
                                   <div className="flex gap-1 items-center">
                                     <div className="flex items-center">
                                       {spIndex > 0 && (
@@ -3100,7 +3170,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               items.length === 0 ? (
                                 <tr className="border-b border-gray-100">
                                   <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
-                                    Nenhum item nesta subetapa. Clique em "+ Item" para adicionar.
+                                    Nenhum item nesta subetapa. Use o botão + (Adicionar item) à direita.
                                   </td>
                                 </tr>
                               ) : (
@@ -3139,6 +3209,22 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </React.Fragment>
                         );
                       })}
+                      {isPhaseExpanded && !isSearching_wbs && subetapasVazias.length > 0 && (
+                        <tr className="border-b border-gray-100">
+                          <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-1.5 pl-10">
+                            <button
+                              type="button"
+                              onClick={() => setEtapasComVaziasVisiveis(prev => (prev.includes(phase.id) ? prev.filter(id => id !== phase.id) : [...prev, phase.id]))}
+                              aria-expanded={vaziasVisiveis}
+                              className="text-sm text-gray-600 hover:text-blue-700 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            >
+                              {vaziasVisiveis
+                                ? `Ocultar ${subetapasVazias.length === 1 ? 'a subetapa sem itens' : `as ${subetapasVazias.length} subetapas sem itens`}`
+                                : `${subetapasVazias.length === 1 ? '1 subetapa sem itens' : `${subetapasVazias.length} subetapas sem itens`} · Mostrar`}
+                            </button>
+                          </td>
+                        </tr>
+                      )}
                     </React.Fragment>
                   );
                 })}
@@ -3150,7 +3236,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             <tbody>
               <tr>
                 <td colSpan={showNatureBreakdown ? 16 : 13} className="p-8 text-center text-gray-400">
-                  Nenhum grupo definido. Clique em "Nova Etapa" para começar.
+                  Nenhum grupo definido. Clique em "Novo Grupo" para começar.
                 </td>
               </tr>
             </tbody>

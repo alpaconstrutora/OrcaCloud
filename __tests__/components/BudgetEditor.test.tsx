@@ -603,3 +603,43 @@ describe('Analítico — excluir e salvar seguros', () => {
         expect(window.localStorage.getItem('budgetEditor:cpuViewMode')).toContain('inline');
     });
 });
+
+// ─── A EAP mostra o orçamento (crítica do Analítico, 2026-11-14, passo 3) ─────
+
+describe('Analítico — a EAP abre mostrando os itens', () => {
+    const WBS = [
+        { id: '01', name: '01. VAZIO', phases: [{ id: '01.01', name: '01.01. Etapa vazia', subPhases: ['01.01.01. Sub vazia A', '01.01.02. Sub vazia B'] }] },
+        { id: '02', name: '02. COM ITEM', phases: [{ id: '02.01', name: '02.01. Etapa cheia', subPhases: ['02.01.01. Sub cheia', '02.01.02. Sub vazia C'] }] },
+    ];
+    const item = { ...makeEntry('x'), group: '02. COM ITEM', phase: '02.01. Etapa cheia', subPhase: '02.01.01. Sub cheia' } as BudgetEntry;
+
+    const abrir = async () => {
+        const r = renderEditor([item], { wbs: WBS as ProjectSettings['wbs'] });
+        await act(async () => { await new Promise(res => setTimeout(res, 30)); });
+        return r;
+    };
+
+    it('abre direto no item (só grupo/etapa/subetapa com itens ficam abertos)', async () => {
+        await abrir();
+        expect(screen.getByTestId('budget-row-x')).toBeTruthy();
+        // o grupo vazio fica fechado: a etapa dele não aparece
+        expect(screen.queryByText('Etapa vazia')).toBeNull();
+    });
+
+    it('grupo com itens diz quantos e quanto junto do nome; grupo vazio diz "sem itens" e "—", nunca R$ 0,00', async () => {
+        const { container } = await abrir();
+        expect(container.textContent).toContain('· 1 item · R$ 125,00');
+        expect(container.textContent).toContain('· sem itens');
+        expect(container.textContent).not.toContain('R$ 0,00');
+        expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    });
+
+    it('subetapas vazias ficam numa linha "Mostrar"; mostrar e ocultar', async () => {
+        await abrir();
+        expect(screen.queryByText('Sub vazia C')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '1 subetapa sem itens · Mostrar' }));
+        expect(screen.getByText('Sub vazia C')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Ocultar a subetapa sem itens' }));
+        expect(screen.queryByText('Sub vazia C')).toBeNull();
+    });
+});

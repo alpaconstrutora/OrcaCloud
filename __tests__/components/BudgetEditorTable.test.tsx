@@ -302,11 +302,18 @@ describe('Estrutura da tabela da WBS', () => {
         const { container } = renderEditor([]);
         const table = getWbsTable(container);
         const colCount = table.querySelectorAll('colgroup > col').length;
+        const linhaCom = (texto: string) => Array.from(table.querySelectorAll('tbody tr')).find(r =>
+            r.textContent?.includes(texto)) as HTMLTableRowElement | undefined;
 
-        const emptyRow = Array.from(table.querySelectorAll('tbody tr')).find(r =>
-            r.textContent?.includes('Nenhum item nesta subetapa')
-        ) as HTMLTableRowElement | undefined;
+        // Desde 2026-11-14 as subetapas sem itens começam numa linha-resumo
+        // ("N subetapas sem itens · Mostrar") — ela também ocupa a linha inteira.
+        const resumo = linhaCom('subetapa sem itens');
+        expect(resumo).toBeDefined();
+        expect(countCells(resumo!)).toBe(colCount);
 
+        fireEvent.click(within(container).getByRole('button', { name: /subetapa sem itens · Mostrar/ }));
+        fireEvent.click(within(container).getByText('01.01.01.'));
+        const emptyRow = linhaCom('Nenhum item nesta subetapa');
         expect(emptyRow).toBeDefined();
         expect(countCells(emptyRow!)).toBe(colCount);
     });

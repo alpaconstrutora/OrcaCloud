@@ -138,7 +138,9 @@ Pedido (mesma sessão): "autorizado".
 - Celular (iframe 390px da mesma origem): barra visível sem rolar; último conteúdo
   acima da barra na Agenda e no serviço (tela mais longa).
 
-**Estado (14/11/2026): implementado e conferido; falta publicar.**
+**Estado (14/11/2026): merge feito** — PR #430, `2806395` no `main`. A CI falhou 3× em
+`predioAutomaticoMarco.test.ts` (Planta, estoura 300 s desde o #427; também vermelho no
+`main`); por decisão do usuário ("rodar de novo e esperar") só reexecutei — passou na 4ª.
 - `tsc` exit 0; `check-ui-standard` limpo no `ProModule`; nos outros 4 arquivos
   sobra só §8 preexistente (passo 4); travas e testes do Pro verdes (50/50).
 - Navegador com dados fictícios (`pro_*` simulado na aba, escritas recusadas — 0):
@@ -169,7 +171,7 @@ coordenador revisou, conferiu na tela e corrigiu o que escapou.
 - Navegador, computador e celular (390px), com dados fictícios: painel, serviço (3
   alturas), orçamento, clientes (cartão aberto) e ajustes.
 
-**Estado (14/11/2026): implementado e conferido; falta publicar** (depende do #430).
+**Estado (14/11/2026): implementado e conferido; PR aberto depois do merge do #430.**
 - 6 telas sem ❌; busca vazia; `tsc` exit 0; 12 arquivos de trava/teste, 89 testes verdes.
 - Achado na conferência e corrigido: dois azuis sólidos na tela do serviço ("Copiar Pix"
   virou secundário — o primário é "Finalizar serviço"); Title Case que sobrou no

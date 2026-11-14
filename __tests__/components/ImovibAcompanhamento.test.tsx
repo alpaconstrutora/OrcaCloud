@@ -15,6 +15,7 @@ vi.mock('../../lib/supabase', () => ({ supabase: { from: vi.fn(), rpc: vi.fn() }
 
 import ImovibAcompanhamentoTab from '../../components/ImovibAcompanhamentoTab';
 import { baseStudy } from '../fixtures/imovibEstudos';
+import userEvent from '@testing-library/user-event';
 
 const vinculado = { origem: 'empreendimento' as const, empreendimento_id: 'emp-1', empreendimento_nome: 'Residencial', blueprint_study_id: null, torres: 1, unidades: 40, blocos_fora_do_calculo: [] };
 const tela = (over: Record<string, unknown> = {}) =>
@@ -89,5 +90,23 @@ describe('10.4 — aba Acompanhamento', () => {
         realizado.doEstudo.mockRejectedValue(new Error('rede caiu'));
         tela({ base_date: '2026-01' });
         expect(await screen.findByText(/rede caiu/)).toBeTruthy();
+    });
+});
+
+/** Deixado para depois na revisão das pendências: o gráfico usava a data-base do estudo atual. */
+describe('previsto de versão com outra data-base', () => {
+    it('os gráficos usam a data-base da versão escolhida (nome acessível com o período)', async () => {
+        const user = userEvent.setup();
+        realizado.doEstudo.mockResolvedValue({
+            obras: [{ id: 'o1', nome: 'Obra Garden' }], obrasDeOutraOrganizacao: [],
+            financeiro: [], aConciliar: { entradas: 0, saidas: 0 }, vendas: [], vendidasSemNegociacao: 0,
+        });
+        svc.listarVersoes.mockResolvedValue([{ id: 'v1', study_id: 'estudo-teste', label: 'Comitê de março', notes: null, results: {}, created_at: '2025-03-01', created_by: null }]);
+        svc.snapshotDaVersao.mockResolvedValue({ ...baseStudy(), base_date: '2025-03' });
+        tela({ base_date: '2026-01' });
+        await user.selectOptions(await screen.findByLabelText('Previsto de'), 'v1');
+        const fig = await screen.findByRole('img', { name: /Vendas acumuladas de mar\/25/ });
+        expect(fig).toBeTruthy();
+        expect(screen.getByRole('img', { name: /Receita e custo acumulados de mar\/25/ })).toBeTruthy();
     });
 });

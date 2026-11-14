@@ -125,8 +125,12 @@ describe('2.2 — pontos de equilíbrio', () => {
 /** Pendência da Fase 2: os pontos de equilíbrio levavam ~325 ms (TIR calculada à toa nas buscas). */
 describe('pontos de equilíbrio sem trabalho repetido', () => {
     it('motor com semTir: mesmo VPL e fluxo, TIR vazia e sem aviso de TIR', () => {
-        const s = baseStudy({ sales_start_month: 1, construction_start_month: 1 });
+        // Sinal de 10% nas vendas dos 6 primeiros meses, obra depois, chaves no fim: o fluxo
+        // troca de sinal duas vezes e o motor avisa tir_multipla — o teste prova que o aviso
+        // existe COM a TIR e some sem ela (antes passava sem o aviso existir).
+        const s = baseStudy({ land_cost: 0, revenue_downpayment_percent: 10, revenue_construction_percent: 0, revenue_handover_percent: 90, construction_start_month: 6, sales_start_month: 1, sales_duration_months: 6 });
         const com = computeImovibMath(s);
+        expect(com.avisos.some(a => a.codigo === 'tir_multipla')).toBe(true);
         const sem = computeImovibMath(s, { semTir: true });
         expect(sem.vpl).toBe(com.vpl);
         expect(sem.monthlyFlows).toEqual(com.monthlyFlows);

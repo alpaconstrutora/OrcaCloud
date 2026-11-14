@@ -899,6 +899,8 @@ export type Command =
       quadroId?: ObjectId | null;
       /** E4.4: a unidade que o medidor mede. */
       unidadeId?: ObjectId | null;
+      /** 0.107.0: o pavimento da unidade medida (a cópia viva do tipo); ausente = o da própria unidade. */
+      unidadeLevelId?: ObjectId | null;
     }
   | {
       type: 'SetTerminalProps';
@@ -911,8 +913,10 @@ export type Command =
       circuitoId?: ObjectId | null;
       /** E4.3: o quadro da entrada/medidor; `null` desliga. */
       quadroId?: ObjectId | null;
-      /** E4.4: a unidade que o medidor mede; `null` desliga. */
+      /** E4.4: a unidade que o medidor mede; `null` desliga (e leva o pavimento da unidade junto). */
       unidadeId?: ObjectId | null;
+      /** 0.107.0: o pavimento da unidade medida; `null` volta ao da própria unidade. */
+      unidadeLevelId?: ObjectId | null;
       potenciaW?: number | null;
       /** Letra do comando ("a", "b"). `null` apaga. */
       comando?: string | null;
@@ -2529,7 +2533,11 @@ function aplicarSemHash(
       next.unidades = (next.unidades ?? []).filter((x) => x.id !== u.id);
       // E4.4: quadro e medidor que a citavam ficam sem unidade — não somem.
       next.quadros = (next.quadros ?? []).map((q) => (q.unidadeId === u.id ? { ...q, unidadeId: null } : q));
-      next.terminais = (next.terminais ?? []).map((t) => (t.unidadeId === u.id ? { ...t, unidadeId: null } : t));
+      next.terminais = (next.terminais ?? []).map((t) => {
+        if (t.unidadeId !== u.id) return t;
+        const { unidadeLevelId: _semPavimento, ...resto } = t;
+        return { ...resto, unidadeId: null };
+      });
       diff.deleted.push(u.id);
       break;
     }
@@ -3935,6 +3943,7 @@ function aplicarSemHash(
           ...(command.parametros && Object.keys(command.parametros).length > 0 ? { parametros: { ...command.parametros } } : {}),
           ...(command.quadroId ? { quadroId: command.quadroId } : {}),
           ...(command.unidadeId ? { unidadeId: command.unidadeId } : {}),
+          ...(command.unidadeId && command.unidadeLevelId ? { unidadeLevelId: command.unidadeLevelId } : {}),
           ...(command.potenciaW != null ? { potenciaW: command.potenciaW } : {}),
           ...(command.interruptor != null && command.tipoEletrico === 'INTERRUPTOR'
             ? { interruptor: command.interruptor }
@@ -3997,6 +4006,9 @@ function aplicarSemHash(
       if (command.circuitoId !== undefined) terminal.circuitoId = command.circuitoId;
       if (command.quadroId !== undefined) terminal.quadroId = command.quadroId;
       if (command.unidadeId !== undefined) terminal.unidadeId = command.unidadeId;
+      if (command.unidadeLevelId !== undefined) terminal.unidadeLevelId = command.unidadeLevelId;
+      // Sem unidade, o pavimento dela não quer dizer nada.
+      if (!terminal.unidadeId) delete terminal.unidadeLevelId;
       if (command.potenciaW !== undefined) terminal.potenciaW = command.potenciaW;
       if (command.tipoEletrico !== undefined) terminal.tipoEletrico = command.tipoEletrico;
       if (command.comando !== undefined) terminal.comando = command.comando?.trim() || null;
@@ -5598,7 +5610,14 @@ function aplicarSemHash(
       const nucleosDoNivel = (next.nucleos ?? []).filter((n) => n.levelId === level.id);
       next.nucleos = (next.nucleos ?? []).filter((n) => n.levelId !== level.id).map((n) => (n.ateLevelId === level.id ? { ...n, ateLevelId: undefined } : n));
       next.trechos = (next.trechos ?? []).filter((t) => t.levelId !== level.id);
-      next.terminais = (next.terminais ?? []).filter((t) => t.levelId !== level.id);
+      // 0.107.0: o medidor (de outro pavimento) que media a unidade DESTE pavimento volta a medir a do tipo.
+      next.terminais = (next.terminais ?? [])
+        .filter((t) => t.levelId !== level.id)
+        .map((t) => {
+          if (t.unidadeLevelId !== level.id) return t;
+          const { unidadeLevelId: _semPavimento, ...resto } = t;
+          return resto;
+        });
       next.vagas = (next.vagas ?? []).filter((v) => v.levelId !== level.id);
       next.componentes = (next.componentes ?? []).filter((c) => c.levelId !== level.id);
       next.guardaCorpos = (next.guardaCorpos ?? []).filter((g) => g.levelId !== level.id);

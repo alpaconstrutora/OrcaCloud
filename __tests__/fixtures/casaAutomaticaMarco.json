@@ -1,6 +1,6 @@
 {
   "12000,30000,3,1,2,2,R1-N,1": {
-    "resultado": "f2ffc0097da9b88c832b8cafa093de5a9277df0e738eb02a02d84cfa75beb741",
+    "resultado": "927275c2353ed564abbd08a4f1dd5e6393a743c220afb563ad1db1089bf8f8f5",
     "criados": "50450ccc30e5afd6e7725a5c082daca30b6d96a0c3fc78ea6f610021f9c55349",
     "pendencias": "2f9b6d7d85f95d128ae578d59b8ad93751c1f0fed3bb75d4671e34895ba1ca13",
     "etapas": "b669981eb04ad389dc8e6b0b00e343aea0cb23895f5fa5ee846c1af5642641cd",
@@ -9,7 +9,7 @@
     "nPendencias": 35
   },
   "15000,25000,3,1,2,2,R1-N,1": {
-    "resultado": "a3da7621eb676fa8d90ef2a7b2939a147deb28c1859341f040eaf4e67e6bd43e",
+    "resultado": "ad13b3d6fb23aadc25f2351ce6d31c4c54b26fd4e9c338eb25577ca674826903",
     "criados": "a75470cb7d2ee58e10833c4b753c5667a04c8d8e380fb9901b284b54f95fcb6d",
     "pendencias": "105002c4d1fe801aa8bd823a744433b04cf01205a149ed2baeaf0c8f6fc1dc17",
     "etapas": "20dff23f5dd0b407907d5429bb1d4f2929219b0d8710b2090896153e0f6f6fa1",
@@ -18,7 +18,7 @@
     "nPendencias": 32
   },
   "10000,30000,2,1,2,1,R1-N,1": {
-    "resultado": "eb9e61b8027c150121ef4a9a6f5ecde88bb4ff08892738c9cec34e8d7e80b5af",
+    "resultado": "b0176c8172e4e0963658741463f1aee35f35d25c52c81fbb7202c68adf22570e",
     "criados": "128ddadf147623ec22b5a1bec190cbb740a640eea5af3738e505ac8de9aa552c",
     "pendencias": "d7fc64c985ac27d2d23d0bae0ae78db29deae3d51d9fc26578cb1f1961f7f061",
     "etapas": "07cebd59ca9809e0f8dc4bd2bb59affba03588990a0c7b3f172f2a1a480aa6f4",
@@ -27,7 +27,7 @@
     "nPendencias": 30
   },
   "15000,30000,4,1,3,2,R1-N,1": {
-    "resultado": "6b715c5fd4b963429ce11a345c6317fd4ded29b273fbcbd8fd568d1b01d06a29",
+    "resultado": "758cbc562bb4f13523ef503da8b995f4cf7c071390a17bfd75d2fae812bd4d06",
     "criados": "30de5a8942cc4102d1f555de44f5a73f0428e7701696e17124c3cad525bd0a26",
     "pendencias": "cb68f72b4c4a6e4a5b0b2b4ca2e7417730235add16b21dd5cb002d1dd7f61b63",
     "etapas": "087955a4badc5c3448e3e599b4b63d70f5aa9483d4e99fdcc009169a2c99b99f",
@@ -36,7 +36,7 @@
     "nPendencias": 36
   },
   "15000,30000,3,1,2,2,R1-B,1": {
-    "resultado": "d93c0a4434ee05a925010787b9bfa776a65eba96794e976cbf416aa8062d4bc9",
+    "resultado": "1b28877aa40c707d6859eb054ef80861c1df7676808ebfb831840a4ef69ecff6",
     "criados": "c5eb66e1823dc5f6f53280298be2329fcfb4758a096720ab716ad6188945e9ee",
     "pendencias": "66874ee930c85fb7e94ab306f53bc61d04acf44b1e0dd9e41e11c710dd89683a",
     "etapas": "d75aa12e77c6d34e7ffb3bd3d88ae5335194e0ac88e4823da96629a5a08b9599",
@@ -45,7 +45,7 @@
     "nPendencias": 31
   },
   "14000,28000,3,1,2,2,R1-A,1": {
-    "resultado": "c3ad17b5807e1b7cfccd2c085f5845b3976bcb324a4814eedf0aff7ec9a865c8",
+    "resultado": "80b606c3dba34ca34bd6d69f39eb7ec7dc2a4244c1ce8b3c8f1dfdefb5953c08",
     "criados": "8f46240f1ff93ac289029f9ac058c2052d3c8d67f5a480ac30102e9776c36a73",
     "pendencias": "dfefe98dc0b1885240f94d92650902b661194e719e395ea60bb587104cc28f6f",
     "etapas": "6b78fd95274c828e136a07a94f90c1bdddbc2729ccb702ff5cf57e1948900e29",
@@ -54,7 +54,7 @@
     "nPendencias": 30
   },
   "12000,30000,3,1,2,2,R1-N,2": {
-    "resultado": "fa780956ddaf137096ec62c953d64b3a9a03a1ab36965cf984a6ba755e5e6184",
+    "resultado": "f5f9a374e17a14754fa952fd04bc1928aefeeb3911ff87f2dbb7fdc8d6d33ea7",
     "criados": "e02419b475fd2b7598df35d793da4874f94d5bfd8bf5e0c0e9d4627607ae1074",
     "pendencias": "36707ba7a45f48678f44867e2fd1b6eededffdffd4353f4cf8f42d439cde8cf8",
     "etapas": "32199172d3051b13fe92f71d4b4071ddefe9d443ae424b11aa51ca12f076b098",
@@ -63,7 +63,7 @@
     "nPendencias": 32
   },
   "10000,30000,4,1,3,2,R1-N,1": {
-    "resultado": "bb7612c2d687b7a14349a00062fc1211b37407e0aebdaf0ddd17d64aeac3b82d",
+    "resultado": "109d96692f1318b440bcd652e76bb155932b6f23b09e0711ef6b555822360ab4",
     "criados": "99ab47793f84b251cc8a6dd490f364f002166af2d2552ced30fb5e9c99abb49f",
     "pendencias": "0aadcda6ffd09ac1cd5638a462eb9354f30b890e26d65cb8f8d7537b285b8576",
     "etapas": "60e5dab8a9717b5f9365bcd773fb373863b03f8ea6ff1cea7012e6ed710b9e41",

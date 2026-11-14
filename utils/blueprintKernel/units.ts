@@ -740,7 +740,7 @@
  * Omitido quando não há: desenho antigo só muda pela string. Provado antes do bump: com a string em 0.104.0 e tudo no
  * lugar, 1.652 testes dos 125 arquivos de kernel/payload/hash/versão passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.106.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.107.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

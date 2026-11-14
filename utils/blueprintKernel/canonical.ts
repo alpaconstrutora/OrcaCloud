@@ -1068,6 +1068,8 @@ function projetar(model: BlueprintModel): {
       circuito: t.circuitoId != null ? (indiceDoCircuito.get(t.circuitoId) ?? 0) : undefined,
       // E4.3: o quadro da entrada/medidor, por índice — omitido quando ausente.
       quadro: t.quadroId != null && indiceDoQuadro.has(t.quadroId) ? indiceDoQuadro.get(t.quadroId) : undefined,
+      // 0.107.0: o pavimento da unidade medida, por índice — omitido quando ausente.
+      nivelDaUnidade: t.unidadeLevelId != null ? nivel(t.unidadeLevelId) : undefined,
       potenciaW: t.potenciaW ?? undefined,
       tipoEletrico: t.tipoEletrico ?? undefined,
       comando: t.comando ?? undefined,
@@ -1878,6 +1880,8 @@ export interface CanonicalPayload {
     quadro?: number;
     /** E4.4: índice da UNIDADE que o medidor mede. Ausente sob kernel < 0.78.0 e sem vínculo. */
     unidade?: number;
+    /** 0.107.0: índice do PAVIMENTO da unidade medida (a cópia viva). Ausente sob kernel < 0.107.0 e sem ele. */
+    nivelDaUnidade?: number;
     /** Carga DECLARADA. Ausente = ninguém informou — que é diferente de zero. */
     potenciaW?: number;
     /** Letra do comando ("a", "b"). Ausente sob kernel < 0.23.0 e quando não há. */
@@ -2898,6 +2902,7 @@ export function modelFromCanonicalPayload(payload: CanonicalPayload): BlueprintM
     const alvo = model.terminais[i];
     const u = model.unidades[t.unidade];
     if (alvo && u) alvo.unidadeId = u.id;
+    if (alvo && u && t.nivelDaUnidade != null && levelIds[t.nivelDaUnidade]) alvo.unidadeLevelId = levelIds[t.nivelDaUnidade];
   });
   // Incêndio E4.1: a principal da jockey, por índice — depois de existirem todos os terminais.
   (payload.terminais ?? []).forEach((t, i) => {

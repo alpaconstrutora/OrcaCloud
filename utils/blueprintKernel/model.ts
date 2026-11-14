@@ -3836,6 +3836,13 @@ export interface Terminal {
   quadroId?: ObjectId | null;
   /** E4.4: a UNIDADE que este MEDIDOR mede. Só em MEDIDOR; a unidade tem de existir. Omitido sem vínculo. */
   unidadeId?: ObjectId | null;
+  /**
+   * 0.107.0 (prédio automático, PA5): o PAVIMENTO da unidade medida, quando ela é a de uma cópia viva do tipo — o medidor
+   * do térreo que mede o 501 aponta a unidade 101 (a do tipo, a única que existe como registro) e o 5º pavimento.
+   * Ausente = o pavimento da própria unidade. Só com `unidadeId`; o pavimento tem de existir. Omitido no canônico quando
+   * ausente (nenhum hash existente muda).
+   */
+  unidadeLevelId?: ObjectId | null;
   /** Carga DECLARADA do ponto, em watts. Nunca calculada — ver `Circuito`. */
   potenciaW?: number | null;
   /**
@@ -7241,6 +7248,11 @@ export function assertModelInvariants(model: BlueprintModel): void {
     if (t.unidadeId) {
       if (t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não mede unidade — só o medidor`);
       if (!(model.unidades ?? []).some((u) => u.id === t.unidadeId)) throw new KernelError('BAD_UNIT', `Terminal ${t.id} aponta para unidade inexistente: ${t.unidadeId}`);
+    }
+    // 0.107.0: o pavimento da unidade medida só com a unidade, e ele existe.
+    if (t.unidadeLevelId) {
+      if (!t.unidadeId) throw new KernelError('BAD_UNIT', `Terminal ${t.id} tem o pavimento da unidade sem a unidade`);
+      if (!model.levels.some((l) => l.id === t.unidadeLevelId)) throw new KernelError('LEVEL_NOT_FOUND', `Terminal ${t.id} aponta para um pavimento inexistente: ${t.unidadeLevelId}`);
     }
     if (t.potenciaW != null && (!Number.isFinite(t.potenciaW) || t.potenciaW < 0)) {
       throw new KernelError('BAD_POWER', `Potência inválida em ${t.id}: ${t.potenciaW}`);

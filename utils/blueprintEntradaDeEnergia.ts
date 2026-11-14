@@ -11,6 +11,7 @@
  */
 import type { BlueprintModel, LigacaoDoCircuito, ObjectId, Terminal } from './blueprintKernel';
 import { secaoDoPeMm2 } from './blueprintKernel';
+import { unidadeNoPavimento } from './blueprintUnidadesDoPredio';
 import {
   HIPOTESES_PADRAO,
   disjuntorSugeridoA,
@@ -121,7 +122,8 @@ export function entradaDoQuadro(model: BlueprintModel, quadroId: ObjectId, hip: 
   if (medidores.length === 0) achados.push({ nivel: 'AVISO', mensagem: `sem MEDIDOR ligado a ${quadro.nome} no desenho` });
   // E4.4: uso coletivo — cada unidade atendida (filho com unidade) pede o seu medidor.
   const unidadesAtendidas = [...new Set(r.filhos.map((f) => f.unidade).filter((u): u is string => !!u))];
-  const unidadesMedidas = new Set(medidores.map((t) => (model.unidades ?? []).find((u) => u.id === t.unidadeId)?.numero).filter((x): x is string => !!x));
+  // PA5 do prédio: o medidor da unidade de um andar copiado (`unidadeLevelId`) mede o número DAQUELE andar (501, não 101).
+  const unidadesMedidas = new Set(medidores.map((t) => (t.unidadeId ? unidadeNoPavimento(model, t.unidadeId, t.unidadeLevelId ?? null)?.numero : undefined)).filter((x): x is string => !!x));
   const semMedidor = unidadesAtendidas.filter((u) => !unidadesMedidas.has(u));
   if (semMedidor.length) achados.push({ nivel: 'AVISO', mensagem: `unidade(s) sem medidor próprio: ${semMedidor.join(', ')}` });
   return {

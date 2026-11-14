@@ -48,8 +48,9 @@ branch `feat/asaas-boleto-data-cancelamento`) — não se repetem aqui.
 - **9 — coluna Organização**: não existe; com o topo em "Todas" não dá para saber de qual
   organização é cada boleto.
 - **1 — Buscas por período "automático"**: as buscas funcionam (todas concluídas). O padrão no
-  banco: o usuário cria à mão "últimos 30 dias" de tempos em tempos (26/10, 29/10, 12/11). O que
-  "automático" deve significar é decisão do usuário — ver item 1 abaixo.
+  banco: o usuário cria à mão "últimos 30 dias" de tempos em tempos (26/10, 29/10, 12/11).
+  **Decisão do usuário (13/11/2026, pergunta com 4 opções): "Os dois"** — remetente novo dispara a
+  busca dele, e uma varredura diária agendada.
 
 ## Decisões de desenho
 
@@ -68,6 +69,12 @@ branch `feat/asaas-boleto-data-cancelamento`) — não se repetem aqui.
    só rascunho/revisão mudam; cada um dos outros diz por que fica.
 6. **Lote de importação** (3): seletor com "— Selecione a organização —" (organizações graváveis),
    a fila diz "Escolha a organização para começar" em vez de "Aguardando", e aceita PDF e imagem.
+8. **Buscas automáticas** (1): (a) remetente NOVO e ativo → `buscarDoRemetenteNovo` (últimos 30
+   dias, só ele), sem esperar — a janela fecha e a tela diz que está buscando; se a caixa já tem
+   busca, avisa que a varredura diária traz. (b) varredura diária: função SQL
+   `fn_email_capture_busca_diaria` (só o agendador executa) cria às 03:00 de Brasília uma busca
+   `pendente` de 30 dias em cada caixa ativa sem busca rodando; quem processa é o ciclo de 15 min
+   que já existe — nenhuma Edge Function nova nem deploy de função.
 7. **Coluna Organização** (9): nome da organização dona do boleto; ordenável; com campo no filtro
    avançado (o teste do filtro exige um campo por coluna).
 
@@ -82,5 +89,5 @@ branch `feat/asaas-boleto-data-cancelamento`) — não se repetem aqui.
 | 2 | Edição em Lote › Mudar organização (`utils/boletoOrganizacaoLote.ts` puro + teste) | teste verde; tsc | ✅ 2 testes; tsc 0 |
 | 3 | Lote de importação: org vazia explícita, aviso, PDF+imagem | tsc; check-ui | ✅ teste + ui exit 0 |
 | 9 | Coluna Organização + filtro avançado | teste do filtro verde; tsc | ✅ 7/7; tsc 0 |
-| 1 | Buscas por período automáticas | decisão do usuário sobre o que é "automático" | ⏳ aguardando decisão |
+| 1 | Remetente novo busca sozinho + varredura diária (`aplicar_20271113100000_email_capture_busca_diaria.sql`) | testes verdes; migration aplicada; job no `cron.job` | ✅ testes 4+6, tsc 0; ⏳ migration aplicada no merge |
 | — | PR, CI, merge, conferir-producao | CI verde; SHA no domínio | ⏳ |

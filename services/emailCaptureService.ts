@@ -199,7 +199,20 @@ export function filtroDoPeriodo(p: PeriodoHistorico): string {
     return `and(data_email.gte."${ini}",data_email.lt."${fim}"),and(data_email.is.null,created_at.gte."${ini}",created_at.lt."${fim}")`;
 }
 
-const COLUNAS_BUSCA = 'id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, remetentes, created_at, concluida_em';
+/** Janela das buscas automáticas (remetente novo e varredura diária) — a mesma que o usuário
+ *  usava à mão ("últimos 30 dias"). A varredura diária no banco usa o mesmo número
+ *  (migration aplicar_20271113100000_email_capture_busca_diaria.sql). */
+export const DIAS_BUSCA_AUTOMATICA = 30;
+
+/** Hoje e `dias` atrás, em AAAA-MM-DD LOCAL (toISOString é UTC: depois das 21h já é amanhã). */
+export function periodoDosUltimosDias(dias: number, agora = new Date()): { de: string; ate: string } {
+    const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    const ini = new Date(agora);
+    ini.setDate(ini.getDate() - dias);
+    return { de: fmt(ini), ate: fmt(agora) };
+}
+
+const COLUNAS_BUSCA ='id, organization_id, account_id, data_de, data_ate, status, total_mensagens, mensagens_processadas, criados, duplicados, ignorados, erros, ultimo_erro, pedida_por, remetentes, created_at, concluida_em';
 
 async function chamar<T>(nome: 'email-capture-accounts' | 'email-capture-sync', body: Record<string, unknown>, padrao: string): Promise<T> {
     const { data, error } = await supabase.functions.invoke(nome, { body });
@@ -326,6 +339,20 @@ export const emailCaptureService = {
         if (remetentes.length) corpo.remetentes = remetentes;
         const r = await chamar<{ busca: BuscaPeriodo | null }>('email-capture-sync', corpo, 'Não foi possível iniciar a busca.');
         return r.busca;
+    },
+
+    /**
+     * Remetente NOVO: busca sozinha os e-mails dele dos últimos `DIAS_BUSCA_AUTOMATICA` dias
+     * (13/11/2026, "Buscas por período: automático"). Antes, salvar o remetente mostrava "busque o
+     * período de novo na aba Buscas por período" e o usuário fazia isso à mão. Só a 1ª parte roda
+     * agora; o agendador de 15 em 15 minutos continua o resto. Remetente inativo não busca.
+     * Erro (ex.: já há uma busca na caixa) sobe para a tela dizer — a varredura diária cobre depois.
+     */
+    async buscarDoRemetenteNovo(r: Pick<RemetenteCaptura, 'account_id' | 'tipo' | 'email' | 'dominio' | 'ativo'>): Promise<BuscaPeriodo | null> {
+        const alvo = (r.tipo === 'exato' ? r.email : r.dominio)?.trim();
+        if (!alvo || !r.ativo) return null;
+        const { de, ate } = periodoDosUltimosDias(DIAS_BUSCA_AUTOMATICA);
+        return this.buscarPeriodo(r.account_id, de, ate, [alvo]);
     },
 
     /** Processa a próxima parte da busca ativa da caixa. */

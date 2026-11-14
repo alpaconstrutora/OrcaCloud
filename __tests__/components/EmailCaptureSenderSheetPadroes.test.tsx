@@ -7,7 +7,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
-const svc = vi.hoisted(() => ({ salvarRemetente: vi.fn(), definirSenhaPdf: vi.fn(), previaDosPadroes: vi.fn() }));
+const svc = vi.hoisted(() => ({ salvarRemetente: vi.fn(), definirSenhaPdf: vi.fn(), previaDosPadroes: vi.fn(), buscarDoRemetenteNovo: vi.fn() }));
 const boletos = vi.hoisted(() => ({ preencherComPadroesDoRemetente: vi.fn() }));
 vi.mock('../../services/emailCaptureService', () => ({ emailCaptureService: svc }));
 vi.mock('../../services/boletoService', () => ({ boletoService: boletos }));
@@ -48,6 +48,7 @@ beforeEach(() => {
     vi.clearAllMocks();
     svc.salvarRemetente.mockImplementation(async (_id: string, r: Record<string, unknown>) => ({ ...(remetente() as object), ...r, id: 's1' }));
     svc.previaDosPadroes.mockResolvedValue([]);
+    svc.buscarDoRemetenteNovo.mockResolvedValue({ id: 'busca1' });
     boletos.preencherComPadroesDoRemetente.mockResolvedValue({ atualizados: [{ id: 'b1' }, { id: 'b2' }], pulados: 0 });
 });
 
@@ -117,5 +118,13 @@ describe('cadastro do remetente — padrões do boleto', () => {
         fireEvent.click(screen.getAllByRole('button', { name: 'Salvar remetente' }).at(-1)!);
         await waitFor(() => expect(svc.salvarRemetente).toHaveBeenCalled());
         expect(svc.previaDosPadroes).not.toHaveBeenCalled();
+    });
+
+    it('remetente NOVO busca sozinho os e-mails dele (13/11/2026); edição não busca', async () => {
+        const onSalvo = montar(vi.fn(), null as never);
+        fireEvent.change(screen.getByPlaceholderText(/@/), { target: { value: 'cobranca@energisa.com.br' } });
+        fireEvent.click(screen.getAllByRole('button', { name: 'Salvar remetente' }).at(-1)!);
+        await waitFor(() => expect(svc.buscarDoRemetenteNovo).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' })));
+        await waitFor(() => expect(onSalvo).toHaveBeenCalledWith(expect.objectContaining({ id: 's1' }), undefined, expect.any(Promise)));
     });
 });

@@ -1889,13 +1889,16 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                     fornecedores={suppliers.map(s => ({ id: s.id, name: s.name, nickname: s.nickname, document: s.document, category: s.category, organization_id: s.organization_id ?? null }))}
                     remetente={favorito.existente}
                     prefill={favorito.prefill}
-                    onSalvo={(r, resultado) => {
+                    onSalvo={(r, resultado, buscaAutomatica) => {
                         setRemetenteDoEmail(r);
                         const aqui = resultado?.atualizados.find(b => b.id === boleto.id);
                         if (aqui) padroesAplicadosAqui(aqui);
-                        setInfo(resultado
+                        // Remetente novo busca sozinho os e-mails dos últimos 30 dias (13/11/2026).
+                        buscaAutomatica?.catch(e => setError(`Remetente salvo, mas a busca dos e-mails dele não começou: ${e instanceof Error ? e.message : String(e)} A varredura diária vai trazê-los.`));
+                        setInfo((resultado
                             ? `Remetente salvo. Padrões aplicados a ${resultado.atualizados.length} boleto(s) em revisão${aqui ? ', inclusive este' : ''}.`
-                            : 'Remetente salvo. Os próximos boletos dele já chegam com os padrões.');
+                            : 'Remetente salvo. Os próximos boletos dele já chegam com os padrões.')
+                            + (buscaAutomatica ? ' Os e-mails dele dos últimos 30 dias estão sendo buscados (Boletos › Buscas por período).' : ''));
                     }}
                 />
             )}

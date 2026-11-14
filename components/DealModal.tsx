@@ -2889,6 +2889,21 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             formSalvoRef.current = formData;
             setSavedAt(Date.now());
 
+            // Venda que chegou à etapa Contrato (ou já passou dela) sem contrato
+            // gerado: o contrato nasce aqui, e com ele o número pela máscara de
+            // Nomenclatura. Antes só nascia no botão "Gerar Contrato de Venda", e a
+            // negociação ficava na etapa Contrato com o campo do número vazio
+            // (0007 e 0008, medido em 14/11/2026). Só negociação já gravada: a
+            // nova fecha o modal logo abaixo e não teria onde mostrar a falha.
+            // Falta de comprador/unidade vira o aviso do campo (contractError).
+            if (formData.id && formData.type === 'SALE' && !linkedContract
+                && ['CONTRATO', 'ASSINATURA'].includes(formData.status || '')) {
+                const contrato = await handleGenerateContract();
+                if (!contrato && erroContratoRef.current) {
+                    notifyError(`Negociação salva, mas o contrato não foi gerado: ${erroContratoRef.current}`);
+                }
+            }
+
             // "Gerenciar Negociação" (registro já existente) permanece aberta —
             // o aviso some sozinho, igual ao padrão de notifySuccess/notifyError.
             // Só "Nova Negociação Comercial" (criação) continua fechando, com um
@@ -5180,7 +5195,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                         <p className="text-xs text-gray-400">
                                             {linkedContract
                                                 ? (numberLockReason ?? 'Gerado pela máscara em Configurações do Sistema › Nomenclatura.')
-                                                : 'O número é gerado ao criar o contrato, pela máscara em Configurações do Sistema › Nomenclatura. Preencha só para forçar um número específico.'}
+                                                : formData.type === 'SALE'
+                                                    ? 'O contrato e o número são gerados ao salvar a negociação na etapa Contrato, pela máscara em Configurações do Sistema › Nomenclatura. Preencha só para forçar um número específico.'
+                                                    : 'O número é gerado ao criar o contrato, pela máscara em Configurações do Sistema › Nomenclatura. Preencha só para forçar um número específico.'}
                                         </p>
                                     </div>
 

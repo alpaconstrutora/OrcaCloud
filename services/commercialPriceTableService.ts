@@ -1,6 +1,7 @@
 import { supabase } from '../lib/supabase';
 import { contractIndexService, IndexName } from './contractIndexService';
 import { storageService } from './storageService';
+import { idsForaDoEspelhoDeVendas, semUnidadesForaDoEspelho } from './unidadesForaDoEspelhoService';
 
 const PHOTO_BUCKET = 'commercial-property-photos';
 
@@ -67,10 +68,12 @@ export const commercialPriceTableService = {
     async listBuildingUnits(buildingId: string): Promise<{ id: string; name: string | null }[]> {
         const { data, error } = await supabase
             .from('commercial_properties')
-            .select('id, name')
-            .eq('parent_id', buildingId);
+            .select('id, name, parent_id')
+            .eq('parent_id', buildingId)
+            .not('visible_in_sales', 'is', false);
         if (error) throw error;
-        return data ?? [];
+        const unidades = await semUnidadesForaDoEspelho(data ?? []);
+        return unidades.map(({ id, name }) => ({ id, name }));
     },
 
     async getActiveTable(buildingId: string): Promise<CommercialPriceTable | null> {
@@ -87,10 +90,19 @@ export const commercialPriceTableService = {
     async getTableItems(tableId: string): Promise<CommercialPriceTableItem[]> {
         const { data, error } = await supabase
             .from('commercial_price_table_items')
-            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images, typology)`)
+            .select(`${ITEM_COLS}, property:commercial_properties(name, price, status, private_area, bedrooms, bathrooms, parking_spaces, floor, position_type, specs, visible_to_broker, show_price_to_broker, images, typology, parent_id, visible_in_sales)`)
             .eq('price_table_id', tableId);
         if (error) throw error;
-        return (data ?? []).map((row: any) => {
+        // Unidade ocultada no Espelho de Vendas (`visible_in_sales = false`) ou que
+        // saiu dele (desvinculada/apagada) não é oferta: sai da tabela. A versão já
+        // gravada continua com o item, mas ele não aparece nem aqui nem no Portal
+        // do Corretor (que lê esta mesma função no modo logado). 14/11/2026.
+        const linhas = (data ?? []).filter((row: any) => row.property?.visible_in_sales !== false);
+        const fora = await idsForaDoEspelhoDeVendas(linhas.map((row: any) => ({
+            id: row.property_id as string,
+            parent_id: (row.property?.parent_id ?? null) as string | null,
+        })));
+        return linhas.filter((row: any) => !fora.has(row.property_id)).map((row: any) => {
             const p = row.property ?? {};
             const specs = p.specs ?? {};
             // Padrão canônico de PropertyUnitMap.tsx: `coluna || specs || 0`. Usa `||`
@@ -130,12 +142,16 @@ export const commercialPriceTableService = {
         buildingId: string,
         versionLabel: string,
     ): Promise<CommercialPriceTable> {
-        const { data: units, error: unitsErr } = await supabase
+        // Só o que é oferta: sem a unidade ocultada no Espelho de Vendas nem a que
+        // saiu dele — senão a versão nova nascia com as sobras de novo.
+        const { data: todas, error: unitsErr } = await supabase
             .from('commercial_properties')
-            .select('id, price')
-            .eq('parent_id', buildingId);
+            .select('id, price, parent_id')
+            .eq('parent_id', buildingId)
+            .not('visible_in_sales', 'is', false);
         if (unitsErr) throw unitsErr;
-        if (!units || units.length === 0) throw new Error('Nenhuma unidade encontrada para este prédio.');
+        const units = await semUnidadesForaDoEspelho(todas ?? []);
+        if (units.length === 0) throw new Error('Nenhuma unidade publicada no Espelho de Vendas para este prédio.');
 
         const { data: table, error: tableErr } = await supabase
             .from('commercial_price_tables')

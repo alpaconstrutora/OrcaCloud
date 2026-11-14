@@ -1,5 +1,8 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { AlertCircle, CheckCircle2, FileText, LayoutGrid, List, Loader2, Paperclip, Receipt, Search, Upload } from 'lucide-react';
+// Ilustração do topo do cartão (pedido do usuário em 14/11/2026: "altere a
+// imagem do card pelo anexo") — substitui o ícone Receipt.
+import ilustracaoNotaFiscal from '../../assets/ilustracoes/nota-fiscal.webp';
 import StandardTable, { StandardTableColumn } from '../ui/StandardTable';
 import ActionIconButton from '../ui/ActionIconButton';
 import CartaoRecibo from '../ui/CartaoRecibo';
@@ -266,7 +269,7 @@ const PedidoDocumentos: React.FC<PedidoDocumentosProps> = ({
                                 <CartaoRecibo
                                     key={d.id}
                                     titulo={rotuloCategoriaDocumento(d.categoria)}
-                                    icone={<Receipt className="w-5 h-5" />}
+                                    icone={<img src={ilustracaoNotaFiscal} alt="" aria-hidden className="h-20 w-auto select-none" draggable={false} />}
                                     numero={codigoCurtoDocumento(d.id)}
                                     numeroTitulo={d.id}
                                     subtitulo={formatDateTimeBR(d.createdAt)}

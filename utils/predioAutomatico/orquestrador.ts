@@ -26,6 +26,7 @@ import {
   type PlanoDoPredio,
 } from './hipoteses';
 import { lancarReservatorios, montarCobertura, montarTerreo, SALA_BOMBAS, SALA_MEDICAO_E_BOMBAS, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
+import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutura';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
 export interface EntradaDoPredio {
@@ -106,6 +107,37 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapa('TERREO', 'LANCOU', terreo.comandos, `${terreo.salas.map((x) => x.nome).join(' · ')}${terreo.acesso ? ' · porta de entrada para a rua' : ''}`);
   }
 
+  // ── Estrutura (PA4): no tipo, ANTES das plantas (os pilares no esqueleto, não nas divisórias dos apartamentos); a
+  // mesma malha no térreo.
+  let estrutura: ReturnType<typeof lancarEstrutura> | null = null;
+  if (!hip.estrutura) etapa('ESTRUTURA', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
+  else {
+    estrutura = lancarEstrutura(ctx, mont.tipoLevelId, terreo?.levelId ?? null);
+    for (const a of estrutura.avisos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Estrutura: ${a}` });
+    for (const f of estrutura.foraDoPlano) pendencias.push({ grupo: /a menos de uma seção de outro pilar/.test(f) ? 'CONFERIR' : 'VERIFICACAO', texto: `Estrutura: ${f}` });
+    etapa(
+      'ESTRUTURA',
+      'LANCOU',
+      estrutura.comandos,
+      `${estrutura.pilares} pilar(es), ${estrutura.vigas} viga(s) e ${estrutura.lajes} laje(s) por andar${estrutura.noTerreo ? ', a mesma malha no térreo' : ''}${estrutura.eixos ? ` · ${estrutura.eixos} eixo(s)` : ''}`,
+    );
+  }
+
+  // ── Fundações (PA4): sob os pilares do pavimento que assenta no chão — o térreo, ou o tipo quando ele É o térreo. Logo
+  // depois da estrutura e ANTES das plantas: não dependem delas, e cada comando custa pelo tamanho do modelo (no RL, os
+  // 303 comandos levavam 22 s depois das plantas dos 8 andares).
+  let fundacao: ReturnType<typeof lancarFundacao> | null = null;
+  const noChao = terreo?.levelId ?? (dv.ordinalDoTipo < 2 ? mont.tipoLevelId : null);
+  if (!estrutura) etapa('FUNDACOES', 'NAO_EXIGIDA', 0, 'Sem a estrutura, a fundação fica para o projetista.');
+  else if (!noChao) etapa('FUNDACOES', 'NAO_EXIGIDA', 0, 'Sem o térreo, o pavimento que assenta no chão fica para o projetista — e a fundação com ele.');
+  else {
+    fundacao = lancarFundacao(ctx, noChao);
+    if (fundacao.comandos) pendencias.push({ grupo: 'VERIFICACAO', texto: pendenciaDaFundacao(pisos.length) });
+    else if (fundacao.motivo) pendencias.push({ grupo: 'SEM_SOLUCAO', texto: `Fundações: ${fundacao.motivo}` });
+    for (const a of fundacao.avisos) pendencias.push({ grupo: 'VERIFICACAO', texto: `Fundações: ${a}` });
+    etapa('FUNDACOES', fundacao.comandos ? 'LANCOU' : 'NAO_RODOU', fundacao.comandos, fundacao.comandos ? `${fundacao.blocos} bloco(s), ${fundacao.estacas} estaca(s), ${fundacao.baldrames} baldrame(s) — pré-dimensionamento` : fundacao.motivo);
+  }
+
   // ── Plantas internas: o gerador da E6.2 em cada unidade do tipo (as cópias recebem pela cópia viva).
   let plantas: PlanoDoPredio['resumo']['plantas'] = null;
   const semFachada: { numero: string; comodos: string[] }[] = [];
@@ -126,10 +158,12 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   let cobertura: ReturnType<typeof montarCobertura> | null = null;
   if (!hip.cobertura) etapa('COBERTURA', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
   else {
-    cobertura = montarCobertura(ctx, base, hip);
+    const lajeDaEstrutura = !!estrutura && estrutura.lajes > 0;
+    cobertura = montarCobertura(ctx, base, hip, !lajeDaEstrutura);
     if (!terreo) cobertura.comandos += aplicar((m.nucleos ?? []).filter((x) => x.levelId === mont.tipoLevelId && x.tipo === 'ELEVADOR').map((x): Command => ({ type: 'SetNucleoProps', nucleoId: x.id, ateLevelId: base.ultimoLevelId })));
     avisosDoPredio.push(...cobertura.avisos);
-    etapa('COBERTURA', 'LANCOU', cobertura.comandos, `Piso a ${(cobertura.cotaMm / 1000).toLocaleString('pt-BR')} m, laje de ${hip.espessuraDaLajeMm} mm e platibanda de ${hip.alturaDaPlatibandaMm} mm`);
+    const laje = lajeDaEstrutura ? 'a laje é a do teto do último andar (estrutura)' : `laje de ${hip.espessuraDaLajeMm} mm`;
+    etapa('COBERTURA', 'LANCOU', cobertura.comandos, `Piso a ${(cobertura.cotaMm / 1000).toLocaleString('pt-BR')} m, ${laje}, platibanda de ${hip.alturaDaPlatibandaMm} mm`);
   }
 
   // ── Reservatórios: depois das plantas (a população vem dos dormitórios de todos os andares).
@@ -187,6 +221,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       plantas,
       terreo: terreo ? { salas: terreo.salas.map((x) => x.nome), acesso: terreo.acesso } : null,
       cobertura: cobertura ? { cotaM: cobertura.cotaMm / 1000 } : null,
+      estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
     },
   };

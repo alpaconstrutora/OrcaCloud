@@ -274,6 +274,13 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">O inferior na casa de bombas, o superior sobre o núcleo — pela população contada nos dormitórios de todos os andares.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.estrutura} onChange={(e) => props.onHipoteses({ ...props.hipoteses, estrutura: e.target.checked })} data-testid="hipotese-estrutura" />
+            <span>
+              Lançar a estrutura (pilares, vigas, lajes, eixos) e as fundações
+              <span className="block text-xs text-slate-500">No tipo, com as hipóteses padrão das gavetas de lançamento — vai às cópias; a mesma malha no térreo, com os pilares em prumada. A fundação é pré-dimensionamento: o prédio exige cálculo.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -312,6 +319,15 @@ export default function TelaPredioAutomatico(props: Props) {
               nota={plano.resumo.terreo ? `${plano.resumo.terreo.salas.join(' · ')}${plano.resumo.terreo.acesso ? '' : ' · sem porta de entrada'}` : undefined}
             />
             <Dado rotulo="Cobertura" valor={plano.resumo.cobertura ? `+${f2(plano.resumo.cobertura.cotaM)} m` : '—'} nota={plano.resumo.cobertura ? 'laje, platibanda e área técnica' : undefined} />
+            <Dado
+              rotulo="Estrutura por andar"
+              valor={plano.resumo.estrutura ? `${plano.resumo.estrutura.pilares} pilar(es)` : '—'}
+              nota={
+                plano.resumo.estrutura
+                  ? `${plano.resumo.estrutura.vigas} viga(s) · ${plano.resumo.estrutura.lajes} laje(s)${plano.resumo.estrutura.blocos ? ` · ${plano.resumo.estrutura.blocos} bloco(s) de fundação` : ''}`
+                  : 'desligada nas hipóteses'
+              }
+            />
             <Dado
               rotulo="Reservação"
               valor={plano.resumo.reservacao ? `${plano.resumo.reservacao.totalL.toLocaleString('pt-BR')} L` : '—'}

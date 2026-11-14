@@ -39,7 +39,7 @@ const esperaCodigo = (fn: () => unknown, codigo: string) => {
 
 describe('registro do lançamento · versão', () => {
   it('kernel 0.105.0', () => {
-    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.107.0');
+    expect(KERNEL_VERSION).toBe('blueprint-kernel-ts-0.108.0');
   });
 });
 

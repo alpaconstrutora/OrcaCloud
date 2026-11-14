@@ -135,3 +135,12 @@ conta de teste que o usuário criar).
   Portal do Colaborador); guia sem ❌.
 - **DESIGN.md não descreve o mundo do Pro/app** (é o do Portal do Colaborador): registrar o mundo do
   Pro é mudança de sistema — pendente de decisão do usuário.
+
+**P5 (termos e privacidade): rascunho escrito, aguardando revisão.** `docs/legal/pro-termos-RASCUNHO.md`
+e `docs/legal/pro-privacidade-RASCUNHO.md`, a partir do que o Pro guarda de fato (`pro_config`,
+`pro_clientes`, `pro_orcamentos`, `pro_servicos`, login). O app hoje cita "Termos de Serviço e
+Política de Privacidade" no login (`Auth.tsx`, `InvestorLogin.tsx`) sem nenhum texto existir.
+Falta do usuário/jurídico: razão social, CNPJ, endereço, e-mail de privacidade, encarregado (DPO),
+prazos (resposta, exclusão, aviso de cobrança/encerramento), foro, região dos servidores
+(transferência internacional) e se a exclusão/cópia de dados precisa de botão no app antes de abrir
+ao público. Só depois de aprovado vira página (`/pro/termos`, `/pro/privacidade`) linkada na entrada.

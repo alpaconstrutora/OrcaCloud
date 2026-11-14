@@ -181,6 +181,16 @@ const BROKERS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     creci: { label: 'CRECI', className: 'px-6 py-2 border-r border-gray-100' },
 };
 
+/**
+ * Rótulo da coluna conforme a visão. Com um edifício aberto cada linha é uma
+ * UNIDADE dele (pedido do usuário, 14/11/2026: "Altere o nome da coluna Imovel
+ * para unidade"); na visão mestre as linhas são edifícios e imóveis avulsos, e
+ * "Imóvel" continua sendo o nome certo.
+ */
+function inventoryColumnLabel(key: string, label: string, buildingOpen: boolean): string {
+    return buildingOpen && key === 'name' ? 'Unidade' : label;
+}
+
 // Conteúdo de cada <td> da tabela de Unidades (visão de DETALHE — edifício
 // aberto) — extraído para função pura para que o <tbody> possa mapear
 // `orderedVisibleColumns` (ordem arrastável) em vez de repetir um bloco
@@ -2199,7 +2209,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             {viewMode === 'list' && (
                                 <>
                                     <ColumnConfigButton
-                                        columns={INVENTORY_COLUMNS.filter(c => c.key !== 'actions' && (c.context === 'all' || selectedBuildingId))}
+                                        columns={INVENTORY_COLUMNS
+                                            .filter(c => c.key !== 'actions' && (c.context === 'all' || selectedBuildingId))
+                                            .map(c => ({ ...c, label: inventoryColumnLabel(c.key, c.label, !!selectedBuildingId) }))}
                                         visibleColumns={inventoryColumns.visibleColumns}
                                         showColumnConfig={inventoryColumns.showColumnConfig}
                                         onToggleShow={() => inventoryColumns.setShowColumnConfig(!inventoryColumns.showColumnConfig)}
@@ -2331,7 +2343,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     const def = INVENTORY_COLUMN_HEADERS[key];
                                                     if (!def) return null;
                                                     return (
-                                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} {...sortHeaderProps}
+                                                        <SortableHeader key={key} colKey={key} label={inventoryColumnLabel(key, def.label, !!selectedBuildingId)} sortable={def.sortable !== false} {...sortHeaderProps}
                                                             onMoveColumn={inventoryColumns.moveColumn}
                                                             className={def.className}>
                                                             <inventoryResize.ResizeHandle colKey={key} />

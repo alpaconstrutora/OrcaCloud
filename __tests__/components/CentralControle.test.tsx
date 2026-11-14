@@ -243,12 +243,18 @@ describe('CentralControle · tela "Bom dia"', () => {
     });
 
     it('trocar o período do caixa mantém o gráfico anterior esmaecido até o novo chegar', async () => {
+        // Quadros de animação atrasados (CI carregado, 14/11): a contagem visível do
+        // NumeroQueSobe fica no meio do caminho; o valor final está no aria-label.
+        const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation(() => 0);
         bootstrap.mockResolvedValue(painel());
         montar();
-        const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByText('R$ 1.000')).toBeInTheDocument(); return el; });
+        // Pelo aria-label (o valor final, sempre no DOM), não pelo texto visível, que é a
+        // contagem animada e só chega ao valor depois dos quadros da animação.
+        const c = await waitFor(() => { const el = cartao('Caixa projetado'); expect(within(el).getByLabelText('R$ 1.000')).toBeInTheDocument(); return el; });
         cashflow.mockReturnValue(new Promise(() => { /* período novo ainda carregando */ }));
         await userEvent.click(within(c).getByRole('button', { name: '60 dias' }));
         expect(c).toHaveAttribute('aria-busy', 'false');
-        expect(within(c).getByText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+        expect(within(c).getByLabelText('R$ 1.000').closest('[aria-busy="true"]')).not.toBeNull();
+        raf.mockRestore();
     });
 });

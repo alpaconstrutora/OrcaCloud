@@ -229,4 +229,4 @@ $$ LANGUAGE plpgsql SECURITY DEFINER
 SET search_path = public, pg_temp;
 
 REVOKE EXECUTE ON FUNCTION public.client_portal_get_data(TEXT) FROM PUBLIC;
-GRANT  EXECUTE ON FUNCTION public.client_portal_get_data(TEXT) TO anon, authenticated;
+GRANT  EXECUTE ON FUNCTION public.client_portal_get_data(TEXT) TO anon, authenticated, service_role;

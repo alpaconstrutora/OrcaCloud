@@ -48,8 +48,16 @@ const ImovibCenariosCard: React.FC<ImovibCenariosCardProps> = ({ study, cenarios
     }, [study, cenarios, tma]);
 
     // Pelo TIPO, não pelo nome: "Pessimista" renomeado continua sendo o pessimista (pendência da Fase 3).
-    const faltamPadrao = IMOVIB_CENARIOS_PADRAO.filter(p => !cenarios.some(c => c.kind === p.kind));
-    const motivoPadrao = !pode ? motivo : faltamPadrao.length === 0 ? 'Os cenários Pessimista e Otimista já existem.' : undefined;
+    const faltamPelotipo = IMOVIB_CENARIOS_PADRAO.filter(p => !cenarios.some(c => c.kind === p.kind));
+    // O nome é único no estudo: um personalizado chamado "Pessimista" impede criar o padrão
+    // (antes o botão ficava ligado e não criava nada — revisão das pendências).
+    const nomeTomado = (nome: string) => cenarios.some(c => c.name.trim().toLowerCase() === nome.toLowerCase());
+    const faltamPadrao = faltamPelotipo.filter(p => !nomeTomado(p.name));
+    const bloqueados = faltamPelotipo.filter(p => nomeTomado(p.name));
+    const motivoPadrao = !pode ? motivo
+        : faltamPadrao.length > 0 ? undefined
+            : bloqueados.length > 0 ? `Já existe um cenário chamado ${bloqueados.map(b => `"${b.name}"`).join(' e ')} que não é o padrão: renomeie-o para criar o padrão.`
+                : 'Os cenários Pessimista e Otimista já existem.';
 
     const criarPadrao = async () => {
         setCriando(true);

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { ImovibStudy } from '../types';
 import { imovibService } from '../services/imovibService';
 import { Calendar, Percent, Save, TrendingUp } from 'lucide-react';
@@ -87,17 +87,22 @@ const ImovibDynamicForm: React.FC<ImovibDynamicFormProps> = ({ study, onDataChan
      * saída de campo regravava os nove. Valor impossível (mês 0) é gravado como veio
      * e o motor avisa (cronograma_invalido) em vez de esconder.
      */
+    // O que o banco tem agora, campo a campo: o estudo da tela só muda na recarga, e A → B → A
+    // antes dela compararia com o A velho e não gravaria a volta (revisão das pendências).
+    const gravados = useRef<Partial<Record<CampoNumerico, number | null>>>({});
+    useEffect(() => { gravados.current = {}; }, [study]);
     const salvarNumero = async (campo: CampoNumerico, texto: string, setTexto: (t: string) => void) => {
         const t = texto.trim();
         const n = t === '' ? NaN : INTEIROS.includes(campo) ? parseInt(t, 10) : parseFloat(t);
         const valor = Number.isNaN(n) ? null : n;
         setTexto(String(valor ?? D[campo]));
-        const gravado = study[campo] ?? null;
+        const gravado = campo in gravados.current ? gravados.current[campo] ?? null : study[campo] ?? null;
         // Coluna vazia mostra o padrão: sair do campo com o padrão nele não muda nada.
         if (valor === gravado || (gravado === null && valor === D[campo])) return;
         try {
             setSaving(true);
             await imovibService.updateStudy(study.id, { [campo]: valor } as ImovibStudyUpdate);
+            gravados.current[campo] = valor;
             onDataChanged();
         } catch (e) {
             console.error(e);

@@ -1007,10 +1007,17 @@ function montarPremissas(study: ImovibStudy, options?: ImovibMathOptions): Premi
 
     // Percentuais que passam de 100% deixam a receita líquida negativa, e ela sai
     // do caixa (antes era descartada em silêncio). O cálculo segue como veio; avisa.
+    // Cada causa com o seu valor: com inadimplência acima de 100% só as parcelas pagas
+    // direto ficam negativas e o total pode seguir positivo (revisão das pendências).
     if (vgvVendavel < 0 || defaultRate > 1) {
+        const pagoDireto = (['parcelasObra', 'intermediarias', 'posChaves'] as const)
+            .reduce((acc, l) => acc + recebimento[l].reduce((a, b) => a + b, 0), 0);
+        const causas: string[] = [];
+        if (vgvVendavel < 0) causas.push(`Permutas passam de 100%: a receita líquida fica negativa (${fmtBRL(netVgvTotal)})`);
+        if (defaultRate > 1) causas.push(`Inadimplência de ${pctBR(defaultRate)}% passa de 100%: as parcelas pagas direto à incorporadora ficam negativas (${fmtBRL(pagoDireto)})`);
         avisos.push({
             codigo: 'receita_liquida_negativa',
-            mensagem: `Permutas ou inadimplência passam de 100%: a receita líquida fica negativa (${fmtBRL(netVgvTotal)}) e sai do caixa.`,
+            mensagem: `${causas.join('; ')} e sai do caixa.`,
             aba: vgvVendavel < 0 ? 'capital' : 'receitas',
         });
     } else if (deducaoReceitaPct > 1) {

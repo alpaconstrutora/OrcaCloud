@@ -96,3 +96,22 @@ describe('campos numéricos da aba Dinâmica', () => {
         expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', { sales_start_month: 0 });
     });
 });
+
+/** Deixado para depois (M5 da revisão de tela): volta ao valor anterior antes da recarga. */
+describe('aba Dinâmica — A → B → A antes da recarga', () => {
+    beforeEach(() => { svc.updateStudy.mockReset(); svc.updateStudy.mockResolvedValue({}); });
+
+    it('a volta para A também grava (o estudo da tela ainda diz A, o banco já diz B)', async () => {
+        const user = userEvent.setup();
+        tela({ discount_rate: 12 });
+        const campo = screen.getByLabelText('TMA / Desconto (Ano)') as HTMLInputElement;
+        await user.clear(campo);
+        await user.type(campo, '15');
+        await user.tab();
+        await user.clear(campo);
+        await user.type(campo, '12');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenNthCalledWith(1, 'estudo-teste', { discount_rate: 15 });
+        expect(svc.updateStudy).toHaveBeenNthCalledWith(2, 'estudo-teste', { discount_rate: 12 });
+    });
+});

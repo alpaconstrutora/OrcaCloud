@@ -3,7 +3,26 @@ import { proService } from '../services/proService';
 import { ProServico, ProOSChecklistItem } from '../types';
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
-import { CheckCircle2, FileText, HandCoins, Loader2, MessageCircle } from 'lucide-react';
+import {
+  AlertTriangle,
+  Camera,
+  Check,
+  CheckCircle2,
+  ChevronLeft,
+  Copy,
+  Eraser,
+  FileText,
+  HandCoins,
+  Loader2,
+  MapPin,
+  MessageCircle,
+  Pause,
+  PenLine,
+  Play,
+  RotateCcw,
+  Save,
+  X,
+} from 'lucide-react';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import {
@@ -639,8 +658,8 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-800">
-        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Serviço...</span>
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" aria-hidden />
+        <span className="text-sm text-slate-600" role="status">Carregando serviço…</span>
       </div>
     );
   }
@@ -661,43 +680,54 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   return (
     <div className="flex flex-col text-slate-800 space-y-5">
       {/* Header */}
-      <div className="flex items-center gap-3">
-        <button onClick={onBack} className="text-slate-400 hover:text-slate-750 text-lg">
-          ←
+      <div className="flex items-center gap-1">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Voltar"
+          className="w-11 h-11 -ml-2 flex items-center justify-center rounded-[6px] text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+        >
+          <ChevronLeft className="w-5 h-5" aria-hidden />
         </button>
-        <h1 className="text-lg font-black text-slate-800">Executar Serviço</h1>
+        <h1 className="text-lg font-black text-slate-900">Executar serviço</h1>
       </div>
 
       {/* Cartão de Informações */}
-      <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-2">
-        <span className="block text-[9px] font-black uppercase tracking-widest text-teal-600">Cliente & Local</span>
+      <div className="bg-white border border-slate-200 rounded-[10px] p-4 space-y-2">
+        <span className="block text-xs font-semibold text-slate-600">Cliente & local</span>
         <div className="space-y-0.5">
-          <span className="block font-black text-base text-slate-800">{cli?.nome}</span>
-          <span className="block text-xs text-slate-500">{cli?.telefone}</span>
-          <span className="block text-xs text-teal-600 font-semibold">📍 {cli?.endereco || 'Endereço não informado'}</span>
+          <span className="block font-semibold text-base text-slate-900">{cli?.nome}</span>
+          <span className="block text-sm text-slate-600">{cli?.telefone}</span>
+          <span className="flex items-start gap-1.5 text-sm text-slate-700">
+            <MapPin className="w-4 h-4 shrink-0 mt-0.5 text-slate-600" aria-hidden />
+            {cli?.endereco || 'Endereço não informado'}
+          </span>
         </div>
         <div className="pt-2 border-t border-slate-100 mt-2">
-          <span className="block text-[9px] font-black uppercase tracking-widest text-slate-450">Descrição do Trabalho</span>
-          <p className="text-xs text-slate-650 mt-1 font-medium">{orc?.descricao}</p>
+          <span className="block text-xs font-semibold text-slate-600">Descrição do trabalho</span>
+          <p className="text-sm text-slate-700 mt-1">{orc?.descricao}</p>
         </div>
       </div>
 
       {/* Agendamento */}
-      <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] space-y-2">
-        <span className="block text-[9px] font-black uppercase tracking-widest text-teal-600">Data e Hora do Serviço</span>
+      <div className="bg-white border border-slate-200 rounded-[10px] p-4 space-y-2">
+        <label htmlFor="data-agendamento" className="block text-xs font-semibold text-slate-500">Data e hora do serviço</label>
         <div className="flex gap-2 items-center">
-          <div className="flex-1">
+          <div className="flex-1 min-w-0">
             <input
+              id="data-agendamento"
               type="datetime-local"
               value={dataAgendamento}
               onChange={(e) => setDataAgendamento(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500"
+              className="w-full h-11 bg-white border border-slate-300 rounded-[6px] px-3 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600"
             />
           </div>
           <button
+            type="button"
             onClick={() => handleUpdate()}
-            className="bg-teal-500 hover:bg-teal-600 text-white px-4 py-2.5 rounded-xl text-xs font-black uppercase tracking-widest transition-all active:scale-95 shadow-sm"
+            className="h-11 px-4 shrink-0 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
           >
+            <Save className="w-4 h-4" aria-hidden />
             Salvar
           </button>
         </div>
@@ -705,56 +735,82 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Checklist Touch */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black text-slate-500">Etapas do Serviço</h2>
-        <div className="space-y-2.5 bg-white p-4 border border-slate-200/40 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
+        <h2 className="text-sm font-semibold text-slate-900">Etapas do serviço</h2>
+        <div className="bg-white border border-slate-200 rounded-[10px] p-2">
           {checklist.map(item => (
-            <div
+            <button
               key={item.id}
+              type="button"
+              role="checkbox"
+              aria-checked={!!item.completed}
               onClick={() => toggleChecklistItem(item.id)}
-              className="flex items-center gap-3 py-1 cursor-pointer select-none"
+              className="w-full min-h-11 flex items-center gap-3 px-2 py-2 text-left rounded-[6px] select-none hover:bg-slate-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
             >
-              <div className={`w-5 h-5 rounded-md border flex items-center justify-center transition-colors ${
-                item.completed ? 'bg-teal-500 border-teal-600 text-white shadow-sm' : 'border-slate-200 bg-slate-50'
-              }`}>
-                {item.completed && '✓'}
-              </div>
-              <span className={`text-xs font-medium ${item.completed ? 'line-through text-slate-400' : 'text-slate-650'}`}>
+              <span
+                aria-hidden
+                className={`w-5 h-5 shrink-0 rounded-[4px] border flex items-center justify-center transition-colors ${
+                  item.completed ? 'bg-blue-600 border-blue-600 text-white' : 'border-slate-400 bg-white'
+                }`}
+              >
+                {item.completed && <Check className="w-4 h-4" aria-hidden />}
+              </span>
+              <span className={`text-sm ${item.completed ? 'line-through text-slate-600' : 'text-slate-800'}`}>
                 {item.text}
               </span>
-            </div>
+            </button>
           ))}
         </div>
       </div>
 
       {/* Fotos Antes / Depois */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black text-slate-500">Fotos de Registro</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Fotos de registro</h2>
         <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Antes</span>
+            <span className="block text-xs font-semibold text-slate-600">Antes</span>
             {antesFoto ? (
-              <div className="relative rounded-[18px] overflow-hidden border border-slate-200 aspect-video shadow-sm">
+              <div className="relative rounded-[10px] overflow-hidden border border-slate-200 aspect-video">
                 <img src={antesFoto} alt="Antes" className="w-full h-full object-cover" />
-                <button onClick={() => setAntesFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
+                <button
+                  type="button"
+                  onClick={() => setAntesFoto('')}
+                  aria-label="Remover foto de antes"
+                  className="absolute top-0 right-0 w-11 h-11 flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                >
+                  <span className="w-8 h-8 flex items-center justify-center rounded-[6px] bg-white/90 border border-red-300 text-red-700" aria-hidden>
+                    <X className="w-4 h-4" aria-hidden />
+                  </span>
+                </button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
-                📸 Adicionar
-                <input type="file" accept="image/*" className="hidden" onChange={handleFotoAntesUpload} />
+              <label className="w-full h-20 rounded-[10px] bg-white border border-dashed border-slate-300 hover:bg-slate-50 text-slate-700 flex flex-col items-center justify-center gap-1 text-sm font-medium cursor-pointer transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-blue-600">
+                <Camera className="w-4 h-4" aria-hidden />
+                Adicionar
+                <input type="file" accept="image/*" className="sr-only" aria-label="Adicionar foto de antes" onChange={handleFotoAntesUpload} />
               </label>
             )}
           </div>
           <div className="space-y-1">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Depois</span>
+            <span className="block text-xs font-semibold text-slate-600">Depois</span>
             {depoisFoto ? (
-              <div className="relative rounded-[18px] overflow-hidden border border-slate-200 aspect-video shadow-sm">
+              <div className="relative rounded-[10px] overflow-hidden border border-slate-200 aspect-video">
                 <img src={depoisFoto} alt="Depois" className="w-full h-full object-cover" />
-                <button onClick={() => setDepoisFoto('')} className="absolute top-1 right-1 w-6 h-6 rounded-full bg-red-500/80 text-white text-button flex items-center justify-center">×</button>
+                <button
+                  type="button"
+                  onClick={() => setDepoisFoto('')}
+                  aria-label="Remover foto de depois"
+                  className="absolute top-0 right-0 w-11 h-11 flex items-center justify-center focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                >
+                  <span className="w-8 h-8 flex items-center justify-center rounded-[6px] bg-white/90 border border-red-300 text-red-700" aria-hidden>
+                    <X className="w-4 h-4" aria-hidden />
+                  </span>
+                </button>
               </div>
             ) : (
-              <label className="w-full h-20 rounded-[18px] bg-white border border-slate-200/60 hover:border-slate-300 text-slate-400 flex flex-col items-center justify-center text-xs font-bold cursor-pointer transition-all active:scale-[0.98] shadow-sm">
-                📸 Adicionar
-                <input type="file" accept="image/*" className="hidden" onChange={handleFotoDepoisUpload} />
+              <label className="w-full h-20 rounded-[10px] bg-white border border-dashed border-slate-300 hover:bg-slate-50 text-slate-700 flex flex-col items-center justify-center gap-1 text-sm font-medium cursor-pointer transition-colors focus-within:outline focus-within:outline-2 focus-within:outline-blue-600">
+                <Camera className="w-4 h-4" aria-hidden />
+                Adicionar
+                <input type="file" accept="image/*" className="sr-only" aria-label="Adicionar foto de depois" onChange={handleFotoDepoisUpload} />
               </label>
             )}
           </div>
@@ -763,38 +819,60 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Assinatura Digital Touch */}
       <div className="space-y-3">
-        <h2 className="text-xs font-black text-slate-500">Assinatura de Aceite</h2>
+        <h2 className="text-sm font-semibold text-slate-900">Assinatura de aceite</h2>
         {assinaturaImagem ? (
-          <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center gap-2">
+          <div className="bg-white border border-slate-200 rounded-[10px] p-4 flex flex-col items-center gap-2">
             <img src={assinaturaImagem} alt="Assinatura" className="h-16 w-auto border-b border-slate-100 pb-2" />
-            <span className="text-xs font-black uppercase tracking-wider text-slate-400">Assinado por: {assinaturaNome}</span>
-            <button onClick={() => { setAssinaturaImagem(''); setAssinaturaNome(''); }} className="text-[9px] font-black uppercase tracking-widest text-red-500 mt-1">Refazer Assinatura</button>
+            <span className="text-sm text-slate-700">Assinado por: {assinaturaNome}</span>
+            <button
+              type="button"
+              onClick={() => { setAssinaturaImagem(''); setAssinaturaNome(''); }}
+              className="inline-flex items-center gap-1 min-h-11 px-2 text-sm font-medium text-red-700 hover:text-red-800"
+            >
+              <RotateCcw className="w-4 h-4" aria-hidden />
+              Refazer assinatura
+            </button>
           </div>
         ) : (
           <button
+            type="button"
             onClick={() => setMostrarAssinatura(true)}
-            className="w-full py-3 bg-white border border-slate-200 hover:bg-slate-50/50 rounded-2xl font-black text-button uppercase tracking-widest text-slate-600 shadow-sm transition-colors active:scale-98"
+            className="w-full h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
           >
-            ✍ Colher Assinatura Touch
+            <PenLine className="w-4 h-4" aria-hidden />
+            Colher assinatura
           </button>
         )}
       </div>
 
       {/* Modal Assinatura Digital Canvas */}
       {mostrarAssinatura && (
-        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50 animate-in fade-in duration-200">
-          <div className="bg-white border border-slate-200 rounded-[28px] p-5 w-full max-w-sm space-y-4 shadow-2xl">
+        <div className="fixed inset-0 bg-slate-900/60 flex items-center justify-center p-4 z-50">
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="titulo-assinatura"
+            className="bg-white border border-slate-200 rounded-[10px] p-5 w-full max-w-sm space-y-4 shadow-xl"
+          >
             <div className="flex items-center justify-between">
-              <span className="text-xs font-black uppercase tracking-widest text-teal-600">Assine na Tela</span>
-              <button onClick={() => setMostrarAssinatura(false)} className="text-slate-400 text-lg hover:text-slate-650">×</button>
+              <h3 id="titulo-assinatura" className="font-black text-slate-900 text-lg">Assine na tela</h3>
+              <button
+                type="button"
+                onClick={() => setMostrarAssinatura(false)}
+                aria-label="Fechar"
+                className="w-11 h-11 -mr-2 flex items-center justify-center rounded-[6px] text-slate-600 hover:text-slate-900 hover:bg-slate-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+              >
+                <X className="w-5 h-5" aria-hidden />
+              </button>
             </div>
 
             <input
               type="text"
               placeholder="Nome de quem está assinando"
+              aria-label="Nome de quem está assinando"
               value={assinaturaNome}
               onChange={(e) => setAssinaturaNome(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
+              className="w-full h-11 bg-white border border-slate-300 rounded-[6px] px-3 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600"
             />
 
             <canvas
@@ -807,22 +885,26 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               onPointerUp={encerrarTraco}
               onPointerCancel={encerrarTraco}
               onLostPointerCapture={encerrarTraco}
-              className="bg-white border border-slate-300 rounded-2xl cursor-crosshair touch-none w-full"
+              className="bg-white border border-slate-300 rounded-[6px] cursor-crosshair touch-none w-full"
             />
 
             <div className="flex gap-3 pt-2">
               <button
+                type="button"
                 onClick={prepararQuadro}
-                className="flex-1 py-2 bg-slate-100 text-slate-600 font-bold text-button rounded-xl border border-slate-200 transition-colors hover:bg-slate-200"
+                className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
               >
+                <Eraser className="w-4 h-4" aria-hidden />
                 Limpar
               </button>
               <button
+                type="button"
                 onClick={saveSignature}
                 disabled={!!motivoAssinaturaIncompleta}
                 title={motivoAssinaturaIncompleta || undefined}
-                className="flex-1 py-2 bg-teal-500 text-white font-bold text-button rounded-xl disabled:opacity-50 transition-colors hover:bg-teal-600"
+                className="flex-1 h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors active:scale-[0.98] disabled:opacity-60"
               >
+                <Check className="w-4 h-4" aria-hidden />
                 Confirmar
               </button>
             </div>
@@ -836,9 +918,9 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       {/* Cobrança PIX - Copiar Código e QR Code (some depois de recebido) */}
       {!pagoEm && (
       <div className="space-y-3">
-        <h2 className="text-xs font-black text-slate-500">Cobrança PIX</h2>
-        <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
-          <span className="text-xs font-black uppercase tracking-widest text-teal-600">Receber Pagamento</span>
+        <h2 className="text-sm font-semibold text-slate-900">Cobrança Pix</h2>
+        <div className="bg-white border border-slate-200 rounded-[10px] p-4 flex flex-col items-center text-center gap-3">
+          <span className="text-xs font-semibold text-slate-600">Receber pagamento</span>
           {pix?.ok ? (
             <>
               <p className="w-full text-left text-xs text-slate-600">
@@ -849,36 +931,38 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 </span>
               </p>
               {qrPix ? (
-                <img src={qrPix} alt="QR Code do Pix para o cliente pagar" className="w-40 h-40 bg-white p-2 rounded-xl border border-slate-100" />
+                <img src={qrPix} alt="QR Code do Pix para o cliente pagar" className="w-40 h-40 bg-white p-2 rounded-[6px] border border-slate-200" />
               ) : (
-                <div className="w-40 h-40 rounded-xl bg-slate-100 animate-pulse" aria-label="Gerando QR Code" />
+                <div className="w-40 h-40 rounded-[6px] bg-slate-100 animate-pulse" aria-label="Gerando QR Code" />
               )}
               <div className="space-y-1 w-full px-2">
-                <span className="block text-[9px] font-black uppercase tracking-widest text-slate-400">Valor a Receber</span>
-                <span className="block font-black text-slate-800 text-base">
+                <span className="block text-xs font-semibold text-slate-600">Valor a receber</span>
+                <span className="block font-semibold text-slate-900 text-base tabular-nums">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)}
                 </span>
-                
+
                 <div className="pt-2">
-                  <span className="block text-[8px] font-black uppercase tracking-widest text-slate-400 text-left mb-1">Pix Copia e Cola</span>
-                  <div className="w-full bg-slate-50 border border-slate-200 rounded-lg p-2 text-[9px] font-mono text-slate-600 text-left break-all select-all max-h-12 overflow-y-auto">
+                  <span className="block text-xs font-semibold text-slate-600 text-left mb-1">Pix Copia e Cola</span>
+                  <div className="w-full bg-slate-50 border border-slate-200 rounded-[6px] p-2 text-xs font-mono text-slate-700 text-left break-all select-all max-h-16 overflow-y-auto">
                     {pix.payload}
                   </div>
                 </div>
               </div>
               <button
+                type="button"
                 onClick={() => copiarPix(pix.payload)}
-                className="w-full py-2.5 bg-teal-500 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-teal-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
+                className="w-full h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
               >
-                📋 Copiar Pix Copia e Cola
+                <Copy className="w-4 h-4" aria-hidden />
+                Copiar Pix Copia e Cola
               </button>
             </>
           ) : pix && !pix.ok ? (
-            <p className="text-xs text-red-600" role="alert">
+            <p className="text-sm text-red-700" role="alert">
               Não dá para gerar o Pix: {pix.motivo} Corrija a chave em Ajustes.
             </p>
           ) : (
-            <span className="text-xs text-slate-400 italic">Configure sua chave Pix nas configurações do perfil para gerar o código Copia e Cola e o QR Code.</span>
+            <span className="text-sm text-slate-600">Configure sua chave Pix nas configurações do perfil para gerar o código Copia e Cola e o QR Code.</span>
           )}
         </div>
       </div>
@@ -889,12 +973,13 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         {status !== 'CONCLUIDO' && (
           <>
             {/* Campo de Programar Recorrência */}
-            <div className="space-y-1 bg-white p-3.5 border border-slate-200/40 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-              <label className="block text-xs font-semibold text-slate-500">Programar Próxima Revisão / Limpeza</label>
+            <div className="space-y-1 bg-white border border-slate-200 rounded-[10px] p-4">
+              <label htmlFor="recorrencia-meses" className="block text-xs font-semibold text-slate-500">Programar próxima revisão / limpeza</label>
               <select
+                id="recorrencia-meses"
                 value={recorrenciaMeses}
                 onChange={(e) => setRecorrenciaMeses(e.target.value)}
-                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 mt-1"
+                className="w-full h-11 bg-white border border-slate-300 rounded-[6px] px-3 text-form-input text-slate-900 outline-none focus:border-blue-600 focus:ring-blue-600 mt-1"
               >
                 <option value="">Não programar recorrência</option>
                 <option value="1">Daqui a 1 mês (Mensal)</option>
@@ -902,7 +987,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <option value="6">Daqui a 6 meses (Semestral)</option>
                 <option value="12">Daqui a 12 meses (Anual)</option>
               </select>
-              <span className="block text-[8px] text-slate-400 mt-0.5">O sistema avisará no painel quando estiver na hora de refazer o serviço.</span>
+              <span className="block text-xs text-slate-600 mt-1">O sistema avisará no painel quando estiver na hora de refazer o serviço.</span>
             </div>
 
             <button
@@ -915,18 +1000,23 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
             </button>
             <div className="grid grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => handleUpdate(status === 'EM_ANDAMENTO' ? 'PENDENTE' : 'EM_ANDAMENTO')}
                 disabled={salvando}
-                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-button rounded-xl border border-slate-200 transition-colors"
+                className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors disabled:opacity-60"
               >
-                {status === 'EM_ANDAMENTO' ? '⏸ Pausar' : '▶ Iniciar Trabalho'}
+                {status === 'EM_ANDAMENTO'
+                  ? <><Pause className="w-4 h-4" aria-hidden />Pausar</>
+                  : <><Play className="w-4 h-4" aria-hidden />Iniciar trabalho</>}
               </button>
               <button
+                type="button"
                 onClick={() => handleUpdate('BLOQUEADO')}
                 disabled={salvando}
-                className="py-2.5 bg-red-50 hover:bg-red-100 text-red-500 font-bold text-button rounded-xl border border-red-200/50 transition-colors"
+                className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-red-50 border border-red-300 text-red-700 rounded-[6px] font-medium text-sm transition-colors disabled:opacity-60"
               >
-                ⚠️ Bloqueado / Parado
+                <AlertTriangle className="w-4 h-4" aria-hidden />
+                Bloqueado / parado
               </button>
             </div>
           </>

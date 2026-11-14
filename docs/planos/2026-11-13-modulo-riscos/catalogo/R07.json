@@ -1,0 +1,730 @@
+{
+  "categoria": "R07",
+  "nome": "Riscos orçamentários e de custos",
+  "itens": [
+    {
+      "codigo": "R07.01",
+      "evento": "Omissão de serviços na composição orçamentária",
+      "causas": [
+        "Orçamento elaborado sobre anteprojeto sem todas as disciplinas",
+        "Serviços preliminares, ligações definitivas e taxas de concessionárias esquecidos",
+        "Ausência de EAP padrão da empresa usada como checklist",
+        "Itens de entrega como limpeza final, paisagismo e comunicação visual ignorados"
+      ],
+      "consequencias": [
+        "Custo final acima do orçado sem fonte de recurso",
+        "Margem do empreendimento corroída",
+        "Pedidos emergenciais sem cotação adequada"
+      ],
+      "controles_preventivos": [
+        "Comparar a EAP do orçamento com EAP padrão da empresa e registrar exceções",
+        "Revisão cruzada do orçamento por segundo orçamentista com relatório",
+        "Checklist de itens frequentemente omitidos assinado antes da aprovação",
+        "Conferir cada disciplina de projeto com ao menos um grupo orçamentário correspondente"
+      ],
+      "controles_resposta": [
+        "Abrir revisão orçamentária com o item omitido e fonte de cobertura",
+        "Consumir contingência com registro formal de justificativa"
+      ],
+      "sinais_alerta": [
+        "Pedidos de compra lançados em itens sem previsão no orçamento",
+        "Grupos da EAP padrão ausentes no orçamento da obra",
+        "Despesas do financeiro classificadas em centro de custo genérico"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "orcamento",
+        "suprimentos",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 12721 – avaliação de custos unitários de construção para incorporação imobiliária"
+      ]
+    },
+    {
+      "codigo": "R07.02",
+      "evento": "Quantitativos de materiais incorretos",
+      "causas": [
+        "Levantamento manual sobre plantas com escala ou revisão errada",
+        "Critério de medição inconsistente entre orçamento e contrato do empreiteiro",
+        "Perdas e empolamentos não aplicados ou aplicados em duplicidade",
+        "Extração automática de modelo BIM sem conferência"
+      ],
+      "consequencias": [
+        "Compras insuficientes que param frentes ou sobras que imobilizam caixa",
+        "Contratos por empreitada com quantidade divergente do real",
+        "Desvio de custo atribuído erroneamente à produção"
+      ],
+      "controles_preventivos": [
+        "Memória de cálculo dos quantitativos arquivada por item principal",
+        "Conferência por índices como aço por metro cúbico e forma por metro quadrado",
+        "Revisão amostral dos quantitativos dos 20 itens de maior peso na curva ABC",
+        "Critério de medição único documentado para orçamento e contratos"
+      ],
+      "controles_resposta": [
+        "Recontar o quantitativo pelo projeto vigente e ajustar pedidos e saldo de contrato"
+      ],
+      "sinais_alerta": [
+        "Consumo real de material acima do orçado em percentual de avanço físico",
+        "Pedidos adicionais do mesmo insumo após a compra principal",
+        "Saldo de contrato por empreitada esgotado antes do fim do serviço"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "bim",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "orcamento",
+        "suprimentos",
+        "planta_bim",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.03",
+      "evento": "Preços unitários incompatíveis com o mercado",
+      "causas": [
+        "Uso de tabela de referência desatualizada ou de outra praça",
+        "Cotação única ou informal para insumos de alto peso",
+        "Composições de referência sem ajuste à realidade da obra",
+        "Frete, descarga e impostos não incluídos no preço do insumo"
+      ],
+      "consequencias": [
+        "Contratações sistematicamente acima do orçado",
+        "Proposta perdida em licitação por preço alto ou prejuízo por preço baixo",
+        "Fluxo de caixa planejado irreal"
+      ],
+      "controles_preventivos": [
+        "Exigir no mínimo três cotações para insumos da faixa A da curva ABC",
+        "Registrar data-base e fonte de cada preço unitário",
+        "Comparar preços orçados com histórico de pedidos recentes da empresa",
+        "Incluir frete e tributos explicitamente na composição do insumo"
+      ],
+      "controles_resposta": [
+        "Renegociar ou buscar fornecedor alternativo e revisar o orçamento meta"
+      ],
+      "sinais_alerta": [
+        "Diferença entre preço de pedido e preço orçado por insumo",
+        "Data-base do orçamento com mais de seis meses sem reajuste",
+        "Insumos da faixa A com cotação única registrada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "orcamento",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.04",
+      "evento": "Produtividade superestimada da mão de obra",
+      "causas": [
+        "Coeficientes de composições de referência aplicados sem ajuste à obra",
+        "Condições de acesso, altura e logística vertical não consideradas",
+        "Equipe própria com baixa qualificação ou alta rotatividade",
+        "Serviços repetitivos supostos onde há pouca repetição"
+      ],
+      "consequencias": [
+        "Custo de mão de obra acima do orçado em obras por administração",
+        "Atraso de cronograma e necessidade de horas extras",
+        "Empreiteiro em prejuízo abandona o contrato"
+      ],
+      "controles_preventivos": [
+        "Usar índices de produtividade apropriados em obras anteriores da empresa",
+        "Medição de produtividade nas primeiras semanas de cada serviço",
+        "Ajuste documentado dos coeficientes por condição de acesso e altura",
+        "Comparar homens-hora orçados com histograma de mão de obra planejado"
+      ],
+      "controles_resposta": [
+        "Revisar o cronograma e o custo a concluir com a produtividade medida",
+        "Reforçar equipes ou mudar o método executivo do serviço afetado"
+      ],
+      "sinais_alerta": [
+        "Horas apropriadas na folha por unidade produzida acima do orçado",
+        "Avanço físico semanal abaixo do planejado com efetivo completo",
+        "Horas extras crescentes na folha da obra"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "trabalho_em_altura",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "orcamento",
+        "planejamento",
+        "rh",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.05",
+      "evento": "Custos indiretos insuficientemente provisionados",
+      "causas": [
+        "Administração local calculada por percentual fixo sem dimensionar a equipe",
+        "Prazo de obra maior que o previsto sem ajuste de canteiro e equipe",
+        "Equipamentos de apoio como grua, elevador e andaimes subestimados",
+        "Consumos de água, energia, vigilância e seguros esquecidos"
+      ],
+      "consequencias": [
+        "Indiretos consomem a margem ao longo da obra",
+        "Cortes de equipe técnica que reduzem controle e segurança",
+        "Prejuízo agravado a cada mês de atraso"
+      ],
+      "controles_preventivos": [
+        "Orçar administração local por recurso e mês com base no cronograma",
+        "Planilha de locação de equipamentos vinculada às datas do cronograma",
+        "Revisão trimestral do custo indireto mensal realizado contra o orçado",
+        "Simular o impacto de cada mês adicional de prazo no custo indireto"
+      ],
+      "controles_resposta": [
+        "Replanejar desmobilização de equipamentos e equipe ociosos",
+        "Negociar com o contratante ressarcimento de indiretos por prorrogação justificada"
+      ],
+      "sinais_alerta": [
+        "Custo indireto mensal realizado acima do orçado",
+        "Contratos de locação de equipamentos com vigência além do cronograma",
+        "Prazo projetado superior ao orçado no planejamento"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao",
+        "inicio_obra",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "orcamento",
+        "planejamento",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.06",
+      "evento": "Erros na composição do BDI",
+      "causas": [
+        "Tributos sobre faturamento calculados com alíquotas ou regime errados",
+        "Administração central, seguros e garantias não incluídos",
+        "Itens de custo direto duplicados dentro do BDI",
+        "BDI único aplicado sobre materiais e serviços com tratamento distinto"
+      ],
+      "consequencias": [
+        "Lucro real inferior ao previsto ou prejuízo",
+        "Glosa ou questionamento do BDI por órgão de controle em obra pública",
+        "Preço de venda de serviços não competitivo"
+      ],
+      "controles_preventivos": [
+        "Memória de cálculo do BDI com fonte de cada parcela",
+        "Validação das alíquotas tributárias do BDI pela área fiscal",
+        "Verificação cruzada para evitar duplicidade entre custos diretos e BDI",
+        "BDI diferenciado para fornecimento de materiais e equipamentos quando aplicável"
+      ],
+      "controles_resposta": [
+        "Recalcular o BDI e avaliar pedido de reequilíbrio ou repactuação"
+      ],
+      "sinais_alerta": [
+        "Tributos efetivamente apurados no fiscal acima do percentual do BDI",
+        "BDI da proposta fora da faixa de referência usada pelo cliente público",
+        "Mudança de regime tributário sem revisão do BDI"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao"
+      ],
+      "tipologias": [
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "orcamento",
+        "fiscal",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.07",
+      "evento": "Aumento inesperado dos preços dos insumos",
+      "causas": [
+        "Alta de aço, cimento, cobre ou derivados de petróleo acima do índice de reajuste",
+        "Compras concentradas em períodos de escassez",
+        "Contratos de venda sem correção ou corrigidos por índice descolado do custo",
+        "Câmbio afetando insumos e componentes importados"
+      ],
+      "consequencias": [
+        "Custo a concluir maior que a receita remanescente corrigida",
+        "Necessidade de aporte ou de financiamento adicional",
+        "Pressão para trocar especificação por material inferior"
+      ],
+      "controles_preventivos": [
+        "Monitorar mensalmente a variação dos insumos da faixa A contra o INCC",
+        "Antecipar compras ou fechar contratos com preço fixo dos insumos críticos",
+        "Cláusula de reajuste contratual por índice aderente à composição de custos",
+        "Provisão de contingência específica para volatilidade de insumos"
+      ],
+      "controles_resposta": [
+        "Revisar o custo a concluir e avaliar engenharia de valor",
+        "Acionar cláusula de reequilíbrio quando o contrato permitir"
+      ],
+      "sinais_alerta": [
+        "Variação do preço médio dos pedidos dos insumos faixa A no trimestre",
+        "Diferença acumulada entre INCC e reajuste do custo realizado",
+        "Fornecedores recusando manter validade de proposta"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado",
+        "estrutura_metalica",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.08",
+      "evento": "Desperdício de materiais acima do previsto",
+      "causas": [
+        "Recebimento sem conferência de quantidade e qualidade",
+        "Estoque desorganizado e exposto ao tempo",
+        "Cortes e traços sem padronização no canteiro",
+        "Ausência de apropriação de consumo por serviço"
+      ],
+      "consequencias": [
+        "Compras adicionais e custo de material acima do orçado",
+        "Volume maior de resíduos e custo de destinação",
+        "Possível mascaramento de desvio ou furto de materiais"
+      ],
+      "controles_preventivos": [
+        "Requisição de material por serviço com baixa registrada no estoque",
+        "Comparar consumo real e consumo teórico dos materiais faixa A a cada mês",
+        "Inspeção de armazenamento com checklist fotográfico",
+        "Padrões de corte e traço afixados nas frentes de serviço"
+      ],
+      "controles_resposta": [
+        "Investigar a causa do desvio por material e frente e corrigir o processo"
+      ],
+      "sinais_alerta": [
+        "Índice de perda medido acima do adotado no orçamento",
+        "Volume de caçambas de resíduo por metro quadrado construído",
+        "Pedidos complementares do mesmo material na mesma etapa"
+      ],
+      "dimensoes": [
+        "financeira",
+        "ambiental",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.09",
+      "evento": "Retrabalhos não considerados no orçamento",
+      "causas": [
+        "Falhas de execução sem inspeção antes do serviço subsequente",
+        "Danos a serviços prontos por outras equipes",
+        "Personalizações e mudanças de cliente após a execução",
+        "Ausência de responsabilização contratual do empreiteiro pelo refazimento"
+      ],
+      "consequencias": [
+        "Custo duplo de material e mão de obra",
+        "Atraso de atividades sucessoras",
+        "Conflito com empreiteiros sobre quem paga o refazimento"
+      ],
+      "controles_preventivos": [
+        "Fichas de verificação de serviço assinadas antes de liberar a etapa seguinte",
+        "Cláusula de refazimento por conta do empreiteiro em caso de não conformidade",
+        "Proteção registrada de serviços acabados até a entrega",
+        "Apropriar custo de retrabalho em centro de custo próprio"
+      ],
+      "controles_resposta": [
+        "Abrir não conformidade com causa e responsável e glosar na medição quando cabível"
+      ],
+      "sinais_alerta": [
+        "Quantidade de não conformidades abertas por serviço",
+        "Lançamentos no centro de custo de retrabalho",
+        "Ordens de serviço repetidas para o mesmo local e serviço"
+      ],
+      "dimensoes": [
+        "financeira",
+        "qualidade",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "contratos",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.10",
+      "evento": "Ausência ou insuficiência de reservas de contingência",
+      "causas": [
+        "Contingência eliminada para viabilizar a taxa de retorno",
+        "Percentual fixo sem relação com os riscos identificados da obra",
+        "Contingência consumida sem controle para cobrir mudanças de escopo",
+        "Fundação e contenção orçadas sem sondagem suficiente"
+      ],
+      "consequencias": [
+        "Qualquer imprevisto vira estouro de orçamento e de caixa",
+        "Paralisação de frentes por falta de recurso",
+        "Perda de credibilidade junto a investidores e banco financiador"
+      ],
+      "controles_preventivos": [
+        "Contingência dimensionada a partir da matriz de riscos e registrada no orçamento",
+        "Regra de alçada para uso da contingência com justificativa documentada",
+        "Relatório mensal de saldo da contingência contra riscos ainda abertos",
+        "Separar contingência de risco de verba para mudanças de escopo"
+      ],
+      "controles_resposta": [
+        "Priorizar riscos remanescentes e buscar aporte ou corte de escopo aprovado"
+      ],
+      "sinais_alerta": [
+        "Saldo de contingência inferior ao percentual de obra a executar",
+        "Consumo de contingência no primeiro terço da obra",
+        "Orçamento aprovado sem linha de contingência"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "edificacao_antiga",
+        "financiamento_bancario",
+        "demolicao"
+      ],
+      "integracoes": [
+        "orcamento",
+        "financeiro",
+        "investidor",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R07.11",
+      "evento": "Aditivos sem controle de seus impactos financeiros",
+      "causas": [
+        "Serviços extras autorizados no canteiro antes do aditivo formal",
+        "Aditivos aprovados isoladamente sem visão do total acumulado",
+        "Preço de aditivo negociado sem composição de custo",
+        "Falta de registro do impacto do aditivo no orçamento meta"
+      ],
+      "consequencias": [
+        "Valor contratado cresce sem cobertura no orçamento",
+        "Disputas na medição final por serviços não formalizados",
+        "Limite legal de acréscimo ultrapassado em contrato público"
+      ],
+      "controles_preventivos": [
+        "Fluxo de aprovação de aditivo com impacto em custo e prazo antes da execução",
+        "Painel de aditivos acumulados por contrato em percentual do original",
+        "Composição de preço obrigatória para cada item aditivado",
+        "Vínculo de cada aditivo a uma revisão do orçamento meta"
+      ],
+      "controles_resposta": [
+        "Levantar os serviços extras executados e formalizar ou contestar antes da medição"
+      ],
+      "sinais_alerta": [
+        "Percentual de aditivos acumulados por contrato",
+        "Medições com itens fora da planilha contratual",
+        "Ordens de serviço sem contrato ou aditivo vinculado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "contratos",
+        "orcamento",
+        "ordens_servico",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021 – licitações e contratos administrativos"
+      ]
+    },
+    {
+      "codigo": "R07.12",
+      "evento": "Desvios entre o custo orçado, contratado, comprometido e realizado",
+      "causas": [
+        "Pedidos e contratos lançados sem vínculo com item do orçamento",
+        "Pagamentos classificados em centro de custo errado",
+        "Compromissos assumidos fora do sistema sem pedido",
+        "Ausência de projeção de custo a concluir"
+      ],
+      "consequencias": [
+        "Estouro de custo descoberto só no fim da obra",
+        "Decisões tomadas com relatório de custo distorcido",
+        "Informação inconsistente a investidores e banco"
+      ],
+      "controles_preventivos": [
+        "Obrigar vínculo de todo pedido e contrato a item do orçamento",
+        "Relatório mensal orçado, contratado, comprometido e realizado por grupo da EAP",
+        "Projeção de custo a concluir revisada pelo engenheiro a cada mês",
+        "Conciliação mensal entre financeiro e apropriação de custos da obra"
+      ],
+      "controles_resposta": [
+        "Revisar o orçamento meta e o fluxo de caixa com a nova projeção e comunicar stakeholders"
+      ],
+      "sinais_alerta": [
+        "Comprometido mais realizado acima do orçado em grupos da EAP",
+        "Lançamentos financeiros sem item de orçamento vinculado",
+        "Custo realizado percentual maior que avanço físico percentual"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional",
+        "reputacional"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "orcamento",
+        "suprimentos",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

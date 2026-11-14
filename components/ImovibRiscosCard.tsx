@@ -8,6 +8,7 @@ import StandardTable, { type StandardTableColumn } from './ui/StandardTable';
 import ActionIconButton from './ui/ActionIconButton';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { Sheet, SheetHeader, SheetTitle, SheetDescription, SheetPanel, SheetFooter } from './ui/sheet';
+import { MatrizCalor } from './riscos/MatrizCalor';
 
 interface ImovibRiscosCardProps {
     study: ImovibStudy;
@@ -139,28 +140,15 @@ const ImovibRiscosCard: React.FC<ImovibRiscosCardProps> = ({ study }) => {
                     }}
                 />
 
-                <div aria-label="Mapa de riscos: probabilidade × impacto">
-                    <p className="text-xs font-semibold text-slate-500 mb-2">Mapa (riscos não encerrados)</p>
-                    <div className="grid grid-cols-[auto_repeat(5,2.25rem)] gap-1 text-xs">
-                        {[5, 4, 3, 2, 1].map(i => (
-                            <React.Fragment key={i}>
-                                <span className="text-slate-500 pr-1 self-center text-right">{i === 5 ? 'Impacto 5' : i}</span>
-                                {[1, 2, 3, 4, 5].map(p => {
-                                    const n = contagem(p, i);
-                                    return (
-                                        <span key={p} title={`Probabilidade ${p}, impacto ${i}: ${n} risco(s)`}
-                                            className={`h-9 rounded-[6px] flex items-center justify-center font-semibold ${n ? corDaSeveridade(p * i) : 'bg-slate-50 text-slate-300'}`}>
-                                            {n || ''}
-                                        </span>
-                                    );
-                                })}
-                            </React.Fragment>
-                        ))}
-                        <span />
-                        {[1, 2, 3, 4, 5].map(p => <span key={p} className="text-center text-slate-500">{p}</span>)}
-                    </div>
-                    <p className="text-xs text-slate-500 mt-1 text-right">Probabilidade →</p>
-                </div>
+                {/* Mapa 5×5 compartilhado com o módulo Riscos (components/riscos/MatrizCalor.tsx, 14/11/2026):
+                    tamanho compacto = o desenho que estava aqui, sem mudança de HTML. */}
+                <MatrizCalor
+                    ariaLabel="Mapa de riscos: probabilidade × impacto"
+                    titulo={<p className="text-xs font-semibold text-slate-500 mb-2">Mapa (riscos não encerrados)</p>}
+                    contagem={contagem}
+                    corDaCelula={(p, i, n) => (n ? corDaSeveridade(p * i) : 'bg-slate-50 text-slate-300')}
+                    tituloDaCelula={(p, i, n) => `Probabilidade ${p}, impacto ${i}: ${n} risco(s)`}
+                />
             </div>
 
             <RiscoSheet

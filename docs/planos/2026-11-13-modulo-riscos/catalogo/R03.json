@@ -1,0 +1,692 @@
+{
+  "categoria": "R03",
+  "nome": "Riscos urbanísticos e de licenciamento",
+  "itens": [
+    {
+      "codigo": "R03.01",
+      "evento": "Incompatibilidade com o zoneamento municipal",
+      "causas": [
+        "Uso pretendido não permitido ou permitido só com estudo de impacto na zona",
+        "Consulta ao zoneamento feita em mapa desatualizado ou sem certidão oficial",
+        "Terreno em limite entre zonas com parâmetros diferentes",
+        "Atividade comercial ou industrial com porte acima do admitido na via"
+      ],
+      "consequencias": [
+        "Indeferimento do projeto e perda dos custos de desenvolvimento",
+        "Necessidade de mudar o produto ou o uso previsto",
+        "Exigência de estudo de impacto de vizinhança com prazo longo"
+      ],
+      "controles_preventivos": [
+        "Certidão de uso e ocupação do solo emitida pela prefeitura arquivada antes da compra",
+        "Parecer de arquiteto ou urbanista sobre enquadramento do uso anexado à viabilidade",
+        "Consulta prévia formal ao órgão de licenciamento com protocolo registrado no GED"
+      ],
+      "controles_resposta": [
+        "Readequar uso ou porte ao zoneamento e revisar a viabilidade",
+        "Avaliar instrumento urbanístico disponível, como outorga ou operação urbana"
+      ],
+      "sinais_alerta": [
+        "Viabilidade aprovada sem certidão de uso do solo anexada",
+        "Comunique-se do órgão de licenciamento questionando o uso"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 10.257/2001 – Estatuto da Cidade"
+      ]
+    },
+    {
+      "codigo": "R03.02",
+      "evento": "Descumprimento dos coeficientes de aproveitamento e taxas de ocupação",
+      "causas": [
+        "Cálculo de áreas computáveis com interpretação errada do que a lei exclui",
+        "Taxa de permeabilidade esquecida no estudo de massa",
+        "Alterações de projeto durante a obra que aumentam área construída",
+        "Área de terreno usada no cálculo diferente da área registrada"
+      ],
+      "consequencias": [
+        "Exigências e revisões sucessivas na aprovação",
+        "Perda de área vendável ou de unidades após correção",
+        "Multa ou necessidade de outorga onerosa não orçada"
+      ],
+      "controles_preventivos": [
+        "Quadro de áreas com memória de cálculo e índices urbanísticos revisado por segundo profissional",
+        "Estudo de massa validado contra a legislação vigente antes do anteprojeto",
+        "Controle de alterações de projeto com recálculo do quadro de áreas registrado em versão",
+        "Conferência da área de terreno do projeto com a matrícula antes do protocolo"
+      ],
+      "controles_resposta": [
+        "Ajustar projeto ou adquirir potencial construtivo adicional quando permitido",
+        "Regularizar acréscimo com processo de modificação de projeto"
+      ],
+      "sinais_alerta": [
+        "Quadro de áreas sem revisão registrada desde a última alteração de projeto",
+        "Área construída no modelo BIM maior que a do projeto aprovado"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "bim"
+      ],
+      "integracoes": [
+        "planta_bim",
+        "docs_ged",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R03.03",
+      "evento": "Descumprimento de recuos, gabaritos e limitações de altura",
+      "causas": [
+        "Cone de aproximação de aeródromo ou restrição de altura de órgão aeronáutico ignorados",
+        "Recuo progressivo por altura calculado de forma incorreta",
+        "Locação da obra deslocada em relação ao projeto aprovado",
+        "Restrição de gabarito de área tombada ou orla não consultada"
+      ],
+      "consequencias": [
+        "Redução de pavimentos e de unidades vendáveis",
+        "Embargo ou demolição parcial de elementos fora do recuo",
+        "Atraso na aprovação por consulta a órgão adicional"
+      ],
+      "controles_preventivos": [
+        "Consulta a restrições aeronáuticas e de patrimônio registrada antes do anteprojeto",
+        "Planta de implantação com cotas de recuo conferida por segundo profissional",
+        "Locação da obra conferida por topógrafo com relatório antes da fundação",
+        "Verificação de recuos no modelo BIM registrada a cada revisão de arquitetura"
+      ],
+      "controles_resposta": [
+        "Readequar projeto e protocolar modificação antes de executar o trecho afetado",
+        "Corrigir elemento executado fora do recuo com aprovação do órgão"
+      ],
+      "sinais_alerta": [
+        "Relatório de locação topográfica ausente antes do início das fundações",
+        "Exigência de órgão aeronáutico ou de patrimônio pendente no processo"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "planta_bim",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R03.04",
+      "evento": "Mudança na legislação urbanística durante o desenvolvimento",
+      "causas": [
+        "Revisão do plano diretor ou da lei de zoneamento em tramitação",
+        "Projeto protocolado tarde, sem direito de protocolo pela lei anterior",
+        "Novas exigências de vagas, permeabilidade ou habitação de interesse social"
+      ],
+      "consequencias": [
+        "Redução do potencial construtivo antes do protocolo",
+        "Reprojeto e nova análise com perda de meses",
+        "Custos adicionais de contrapartidas"
+      ],
+      "controles_preventivos": [
+        "Monitoramento de projetos de lei urbanística do município registrado em relatório mensal",
+        "Cronograma de projetos priorizando protocolo antes da vigência da nova lei",
+        "Estudo de impacto da minuta de lei sobre o empreendimento anexado à viabilidade",
+        "Comprovante de protocolo com data arquivado no GED para garantir direito adquirido"
+      ],
+      "controles_resposta": [
+        "Avaliar regras de transição e direito de protocolo com parecer jurídico",
+        "Readequar o produto à nova lei e revisar a viabilidade"
+      ],
+      "sinais_alerta": [
+        "Audiência pública de revisão do plano diretor em andamento",
+        "Projeto ainda não protocolado com prazo de vigência de nova lei próximo"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "imovib",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R03.05",
+      "evento": "Demora na aprovação dos projetos",
+      "causas": [
+        "Processo protocolado com documentos faltantes, gerando comunique-se sucessivos",
+        "Fila e falta de analistas no órgão municipal",
+        "Dependência de anuências de órgãos estaduais, ambientais ou de trânsito",
+        "Respostas às exigências demoradas pela equipe de projeto"
+      ],
+      "consequencias": [
+        "Lançamento adiado e custo de carregamento do terreno",
+        "Cronograma de obra comprimido após a aprovação",
+        "Perda da janela de mercado planejada"
+      ],
+      "controles_preventivos": [
+        "Checklist de documentos exigidos pelo órgão conferido antes do protocolo",
+        "Cronograma de aprovação com prazo médio do órgão cadastrado no planejamento",
+        "Prazo interno máximo para resposta a exigências acompanhado no sistema",
+        "Acompanhamento semanal do andamento do processo com registro no GED"
+      ],
+      "controles_resposta": [
+        "Reunião técnica com o órgão para destravar exigências pendentes",
+        "Replanejar lançamento e desembolsos conforme nova data provável"
+      ],
+      "sinais_alerta": [
+        "Processo de aprovação com prazo acima da média do órgão no planejamento",
+        "Comunique-se aberto sem resposta há mais de 15 dias"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "planejamento",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R03.06",
+      "evento": "Indeferimento de alvarás ou autorizações",
+      "causas": [
+        "Projeto em desacordo com parâmetros urbanísticos não corrigido nas exigências",
+        "Prazo de resposta a comunique-se perdido e processo arquivado",
+        "Documentação de responsabilidade técnica ou de propriedade inválida",
+        "Parecer negativo de órgão anuente, como trânsito ou patrimônio"
+      ],
+      "consequencias": [
+        "Necessidade de novo processo com nova taxa e novo prazo",
+        "Lançamento cancelado ou adiado",
+        "Perda de direito de protocolo sob a legislação anterior"
+      ],
+      "controles_preventivos": [
+        "Controle de prazos de comunique-se com alerta no sistema e responsável nomeado",
+        "Revisão técnica do projeto contra a legislação antes do protocolo, com parecer assinado",
+        "Consulta prévia a órgãos anuentes registrada antes do protocolo principal",
+        "Conferência de ARTs, RRTs e documentos de propriedade antes do protocolo"
+      ],
+      "controles_resposta": [
+        "Apresentar recurso administrativo com fundamentação técnica",
+        "Corrigir o projeto e protocolar novo pedido com prioridade"
+      ],
+      "sinais_alerta": [
+        "Prazo de resposta a exigência vencendo sem documento anexado no GED",
+        "Parecer de órgão anuente com ressalvas registrado no processo"
+      ],
+      "dimensoes": [
+        "prazo",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R03.07",
+      "evento": "Ausência de licenças exigíveis para determinadas atividades",
+      "causas": [
+        "Início de demolição, terraplenagem ou supressão sem licença específica",
+        "Uso de via pública para caçamba, tapume ou grua sem autorização",
+        "Rebaixamento de lençol ou captação de água sem outorga",
+        "Licença emitida vencida sem renovação durante a obra"
+      ],
+      "consequencias": [
+        "Embargo da obra ou da frente sem licença",
+        "Multas e autos de infração",
+        "Responsabilização do responsável técnico e da empresa"
+      ],
+      "controles_preventivos": [
+        "Matriz de licenças por atividade com órgão, validade e responsável cadastrada no GED",
+        "Liberação de frente de serviço no planejamento condicionada à licença vigente anexada",
+        "Alerta de vencimento de licenças configurado com antecedência mínima de 60 dias",
+        "Checklist de licenças conferido na reunião de início de obra e registrado em ata"
+      ],
+      "controles_resposta": [
+        "Paralisar a atividade sem licença e protocolar o pedido imediatamente",
+        "Defender autuações e cumprir exigências para levantar o embargo"
+      ],
+      "sinais_alerta": [
+        "Licença com validade vencida ou a vencer em 30 dias no GED",
+        "Atividade iniciada no cronograma sem licença associada"
+      ],
+      "dimensoes": [
+        "juridica",
+        "prazo",
+        "ambiental",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "grua_ou_guindaste",
+        "nivel_agua_alto",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planejamento",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atividade executada sem licença exigível pode gerar embargo da obra pelo poder público",
+      "referencias": []
+    },
+    {
+      "codigo": "R03.08",
+      "evento": "Descumprimento das exigências do Corpo de Bombeiros",
+      "causas": [
+        "Projeto de prevenção e combate a incêndio aprovado com versão diferente da arquitetura",
+        "Rotas de fuga, escadas ou portas corta-fogo executadas fora do projeto",
+        "Sistemas de hidrantes, alarme ou detecção incompletos na vistoria",
+        "Materiais de acabamento sem comprovação de reação ao fogo"
+      ],
+      "consequencias": [
+        "Negativa do certificado de vistoria e impossibilidade de obter o habite-se",
+        "Ocupação sem proteção adequada expondo usuários a risco de morte",
+        "Obras corretivas em áreas já acabadas"
+      ],
+      "controles_preventivos": [
+        "Projeto de incêndio aprovado e compatibilizado com a arquitetura vigente, com versão registrada",
+        "Inspeção de rotas de fuga e compartimentação registrada em checklist durante a execução",
+        "Laudos de reação ao fogo e certificados dos materiais arquivados no GED",
+        "Teste de funcionamento dos sistemas com relatório antes da vistoria"
+      ],
+      "controles_resposta": [
+        "Corrigir pendências do relatório de vistoria com plano e prazo definidos",
+        "Proibir ocupação até a emissão do certificado do Corpo de Bombeiros"
+      ],
+      "sinais_alerta": [
+        "Projeto de incêndio aprovado com revisão anterior à última revisão de arquitetura",
+        "Não conformidades abertas em sistemas de incêndio na garantia da qualidade"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada",
+        "subsolo"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "planta_bim"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Edificação ocupada sem atender às exigências de incêndio expõe usuários a risco de morte e pode ser interditada",
+      "referencias": [
+        "Lei 13.425/2017 – prevenção e combate a incêndio em estabelecimentos e edificações"
+      ]
+    },
+    {
+      "codigo": "R03.09",
+      "evento": "Pendências de acessibilidade",
+      "causas": [
+        "Rampas, sanitários e vagas acessíveis dimensionados fora da norma",
+        "Rota acessível interrompida por degraus ou desníveis executados em obra",
+        "Unidades adaptáveis exigidas por lei não previstas no projeto",
+        "Piso tátil e sinalização esquecidos no orçamento"
+      ],
+      "consequencias": [
+        "Negativa do habite-se até a correção",
+        "Obras corretivas em áreas acabadas",
+        "Ações judiciais ou do Ministério Público"
+      ],
+      "controles_preventivos": [
+        "Checklist de acessibilidade aplicado ao projeto e assinado pelo arquiteto antes do protocolo",
+        "Verificação das rotas acessíveis em obra registrada em ficha de inspeção",
+        "Itens de acessibilidade discriminados no orçamento e no memorial",
+        "Conferência das unidades adaptáveis exigidas em lei registrada no quadro de unidades"
+      ],
+      "controles_resposta": [
+        "Corrigir as pendências apontadas com prazo antes da vistoria final",
+        "Firmar termo de compromisso com o órgão quando aplicável"
+      ],
+      "sinais_alerta": [
+        "Itens de acessibilidade sem inspeção registrada na garantia da qualidade",
+        "Orçamento sem itens de piso tátil, corrimãos ou sinalização"
+      ],
+      "dimensoes": [
+        "juridica",
+        "qualidade",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "orcamento",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 9050 – acessibilidade a edificações",
+        "Lei 13.146/2015 – Estatuto da Pessoa com Deficiência"
+      ]
+    },
+    {
+      "codigo": "R03.10",
+      "evento": "Exigências imprevistas de concessionárias de serviços públicos",
+      "causas": [
+        "Rede de água, esgoto ou energia sem capacidade para a nova demanda",
+        "Exigência de subestação, cabine primária ou elevatória não orçada",
+        "Consulta de viabilidade técnica às concessionárias feita tarde",
+        "Mudança de padrão técnico da concessionária durante a obra"
+      ],
+      "consequencias": [
+        "Custo de extensão ou reforço de rede pago pelo empreendedor",
+        "Ligações definitivas atrasadas e entrega adiada",
+        "Reprojeto de áreas técnicas"
+      ],
+      "controles_preventivos": [
+        "Cartas de viabilidade técnica de água, esgoto e energia arquivadas antes do lançamento",
+        "Custos de infraestrutura externa incluídos no orçamento com base nas cartas",
+        "Cronograma de ligações definitivas cadastrado no planejamento com prazos das concessionárias",
+        "Projeto de entrada de energia aprovado pela concessionária antes da estrutura"
+      ],
+      "controles_resposta": [
+        "Negociar cronograma de obras de reforço com a concessionária",
+        "Prever solução provisória de abastecimento com custo aprovado"
+      ],
+      "sinais_alerta": [
+        "Carta de viabilidade vencida ou ausente no GED",
+        "Pedido de ligação definitiva sem resposta perto da data de entrega"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "orcamento",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R03.11",
+      "evento": "Embargo por execução divergente do projeto aprovado",
+      "causas": [
+        "Alterações de obra feitas sem processo de modificação de projeto",
+        "Equipe de campo trabalhando com projeto executivo diferente do legal",
+        "Acréscimo de área, pavimento ou mudança de uso durante a obra",
+        "Fiscalização motivada por denúncia de vizinhos"
+      ],
+      "consequencias": [
+        "Paralisação total da obra até regularização",
+        "Multas e eventual demolição do trecho irregular",
+        "Responsabilização do responsável técnico e risco reputacional"
+      ],
+      "controles_preventivos": [
+        "Comparação do executivo com o projeto legal registrada antes da liberação para obra",
+        "Alteração de obra condicionada a análise de impacto legal registrada no sistema",
+        "Vistoria periódica da obra contra o projeto aprovado com relatório assinado",
+        "Projeto aprovado e alvará disponíveis no canteiro e no GED"
+      ],
+      "controles_resposta": [
+        "Paralisar o trecho divergente e protocolar modificação de projeto",
+        "Atender exigências do órgão para levantar o embargo com prazo acordado"
+      ],
+      "sinais_alerta": [
+        "Alterações de projeto em obra sem processo de modificação no GED",
+        "Revisão do executivo divergente da última versão do projeto aprovado"
+      ],
+      "dimensoes": [
+        "juridica",
+        "prazo",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planta_bim",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Execução divergente do projeto aprovado leva a embargo da obra pela fiscalização municipal",
+      "referencias": []
+    },
+    {
+      "codigo": "R03.12",
+      "evento": "Impossibilidade ou atraso na obtenção do habite-se e demais autorizações de ocupação",
+      "causas": [
+        "Pendências de Corpo de Bombeiros, concessionárias ou acessibilidade acumuladas no fim da obra",
+        "Taxas, certidões ou baixas de responsabilidade técnica não providenciadas",
+        "Obra executada com diferenças em relação ao projeto aprovado",
+        "Condicionantes de licença ambiental ou de vizinhança não cumpridas"
+      ],
+      "consequencias": [
+        "Impossibilidade de entregar chaves e de averbar a construção",
+        "Multas contratuais por atraso na entrega aos compradores",
+        "Repasse do financiamento dos compradores travado"
+      ],
+      "controles_preventivos": [
+        "Checklist de documentos para habite-se iniciado seis meses antes da entrega no planejamento",
+        "Controle de condicionantes de todas as licenças com status atualizado no GED",
+        "Vistoria interna pré-habite-se registrada com pendências e responsáveis",
+        "Certidões fiscais e previdenciárias da obra acompanhadas com validade no sistema"
+      ],
+      "controles_resposta": [
+        "Força-tarefa para resolver pendências com responsáveis e prazos diários",
+        "Comunicar compradores sobre nova data conforme contrato"
+      ],
+      "sinais_alerta": [
+        "Itens do checklist de habite-se pendentes a menos de 90 dias da entrega",
+        "Certidões necessárias vencidas ou não emitidas no GED"
+      ],
+      "dimensoes": [
+        "prazo",
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planejamento",
+        "comercial",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

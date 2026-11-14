@@ -1,0 +1,740 @@
+{
+  "categoria": "R04",
+  "nome": "Riscos ambientais e socioambientais",
+  "itens": [
+    {
+      "codigo": "R04.01",
+      "evento": "Contaminação do solo ou do lençol freático",
+      "causas": [
+        "Vazamento de diesel ou óleo de máquinas e tanques de abastecimento no canteiro",
+        "Lavagem de betoneiras e bicas de concreto direto no solo",
+        "Contaminação preexistente mobilizada pela escavação",
+        "Armazenamento de tintas e solventes sem bacia de contenção"
+      ],
+      "consequencias": [
+        "Obrigação de investigação e remediação junto ao órgão ambiental",
+        "Paralisação de escavações em área contaminada",
+        "Exposição de trabalhadores a vapores e contato com solo contaminado",
+        "Multas e responsabilização ambiental"
+      ],
+      "controles_preventivos": [
+        "Área de abastecimento e armazenamento de combustíveis com bacia de contenção inspecionada e registrada",
+        "Kit de contenção de derrames no canteiro com inspeção mensal em checklist",
+        "Ponto de lavagem de betoneiras com caixa de decantação previsto no layout do canteiro",
+        "Investigação ambiental do terreno concluída antes da escavação quando houver uso anterior de risco"
+      ],
+      "controles_resposta": [
+        "Conter o derrame, remover solo afetado e destinar com manifesto de transporte",
+        "Comunicar o órgão ambiental e contratar investigação detalhada"
+      ],
+      "sinais_alerta": [
+        "Inspeção de bacias de contenção atrasada no checklist de SST",
+        "Registro de vazamento de máquina no diário de obra"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "financeira",
+        "seguranca"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "nivel_agua_alto",
+        "escavacao_profunda",
+        "area_ambiental_sensivel"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Resolução CONAMA 420/2009 – qualidade do solo e áreas contaminadas"
+      ]
+    },
+    {
+      "codigo": "R04.02",
+      "evento": "Intervenções não autorizadas em áreas de preservação",
+      "causas": [
+        "Faixa de APP de curso d'água, nascente ou encosta não demarcada no levantamento",
+        "Acesso, bota-fora ou canteiro instalado dentro da APP",
+        "Interpretação errada da largura de APP aplicável ao curso d'água",
+        "Terceirizado de terraplenagem sem orientação sobre limites"
+      ],
+      "consequencias": [
+        "Embargo da obra e autos de infração ambiental",
+        "Obrigação de recuperar a área degradada com projeto aprovado",
+        "Responsabilização criminal da empresa e dos responsáveis"
+      ],
+      "controles_preventivos": [
+        "Levantamento com demarcação de APP aprovado pelo órgão ambiental e arquivado no GED",
+        "Limites de APP sinalizados e cercados em campo com registro fotográfico antes da terraplenagem",
+        "Layout de canteiro e bota-fora aprovado com conferência das áreas protegidas",
+        "Integração ambiental dos terceirizados de terraplenagem com lista de presença"
+      ],
+      "controles_resposta": [
+        "Paralisar a intervenção e comunicar o órgão ambiental",
+        "Elaborar plano de recuperação de área degradada e executá-lo com registro"
+      ],
+      "sinais_alerta": [
+        "Terraplenagem iniciada sem registro de demarcação de APP no diário",
+        "Licença ambiental sem planta de áreas protegidas anexada no GED"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "reputacional",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "proximo_curso_dagua",
+        "area_ambiental_sensivel",
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Intervenção em APP sem autorização é infração que gera embargo e responsabilização criminal",
+      "referencias": [
+        "Lei 12.651/2012 – Código Florestal",
+        "Lei 9.605/1998 – crimes ambientais"
+      ]
+    },
+    {
+      "codigo": "R04.03",
+      "evento": "Supressão irregular de vegetação",
+      "causas": [
+        "Corte de árvores isoladas sem autorização municipal",
+        "Supressão além da área autorizada pelo órgão ambiental",
+        "Desconhecimento de espécies protegidas ou ameaçadas no terreno",
+        "Limpeza de terreno feita antes da emissão da autorização"
+      ],
+      "consequencias": [
+        "Embargo e multa por árvore ou hectare suprimido",
+        "Compensação ambiental maior que a prevista",
+        "Responsabilização criminal e repercussão negativa"
+      ],
+      "controles_preventivos": [
+        "Inventário florestal ou laudo arbóreo com ART arquivado antes do pedido de supressão",
+        "Autorização de supressão emitida e anexada no GED antes da limpeza do terreno",
+        "Árvores autorizadas marcadas em campo com conferência registrada pelo responsável",
+        "Plano de compensação ambiental com custo incluído no orçamento"
+      ],
+      "controles_resposta": [
+        "Interromper a limpeza e regularizar junto ao órgão ambiental",
+        "Executar compensação ambiental exigida com registro de plantio"
+      ],
+      "sinais_alerta": [
+        "Serviço de limpeza de terreno no cronograma sem autorização de supressão anexada",
+        "Autorização de supressão com prazo vencido no GED"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_ambiental_sensivel"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planejamento",
+        "orcamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Supressão de vegetação sem autorização gera embargo e responsabilização criminal ambiental",
+      "referencias": [
+        "Lei 9.605/1998 – crimes ambientais"
+      ]
+    },
+    {
+      "codigo": "R04.04",
+      "evento": "Erosão e assoreamento de cursos d'água",
+      "causas": [
+        "Solo exposto por terraplenagem durante período chuvoso",
+        "Ausência de drenagem provisória e bacias de sedimentação",
+        "Taludes sem proteção superficial por longo período",
+        "Lançamento de água de bombeamento com sedimentos na rede ou no córrego"
+      ],
+      "consequencias": [
+        "Assoreamento de córrego ou galeria e autuação ambiental",
+        "Perda de solo e retrabalho de terraplenagem",
+        "Danos a vias e imóveis vizinhos por lama"
+      ],
+      "controles_preventivos": [
+        "Plano de controle de erosão e drenagem provisória aprovado antes da terraplenagem",
+        "Inspeção de dispositivos de drenagem após cada chuva forte registrada no diário",
+        "Proteção vegetal ou manta em taludes executada no prazo definido no cronograma",
+        "Caixas de sedimentação na saída de água do canteiro com limpeza registrada"
+      ],
+      "controles_resposta": [
+        "Recuperar dispositivos danificados e limpar áreas assoreadas",
+        "Comunicar órgão ambiental e vizinhos afetados conforme o caso"
+      ],
+      "sinais_alerta": [
+        "Terraplenagem programada no período chuvoso sem plano de drenagem anexado",
+        "Registros de lama na via ou em vizinhos no diário de obra"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "proximo_curso_dagua",
+        "terreno_inclinado",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R04.05",
+      "evento": "Gestão inadequada de resíduos da construção",
+      "causas": [
+        "Ausência de segregação por classe no canteiro",
+        "Transportador de caçambas sem licença ou destino não comprovado",
+        "Plano de gerenciamento de resíduos elaborado só para aprovação, sem execução",
+        "Volume de resíduo acima do previsto por desperdício de materiais"
+      ],
+      "consequencias": [
+        "Autuação ambiental e corresponsabilidade pela destinação irregular",
+        "Pendência no habite-se onde a prefeitura exige comprovação de destinação",
+        "Custo de remoção maior que o orçado"
+      ],
+      "controles_preventivos": [
+        "Plano de gerenciamento de resíduos aprovado e anexado no GED",
+        "Contrato com transportador e destinatário licenciados, com licenças vigentes no sistema",
+        "Baias de segregação por classe no canteiro inspecionadas e registradas no checklist",
+        "Controle de transporte de resíduos com comprovante de destinação para cada caçamba"
+      ],
+      "controles_resposta": [
+        "Suspender transportador irregular e recolher comprovantes faltantes",
+        "Regularizar destinação junto ao órgão com relatório consolidado"
+      ],
+      "sinais_alerta": [
+        "Caçambas retiradas sem comprovante de destinação lançado no sistema",
+        "Licença do transportador ou do aterro vencida no GED",
+        "Gasto com caçambas acima do orçado para o avanço físico"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos",
+        "suprimentos",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Resolução CONAMA 307/2002 – gestão de resíduos da construção civil",
+        "Lei 12.305/2010 – Política Nacional de Resíduos Sólidos"
+      ]
+    },
+    {
+      "codigo": "R04.06",
+      "evento": "Destinação irregular de resíduos perigosos",
+      "causas": [
+        "Telhas e caixas com amianto removidas em reforma ou demolição sem procedimento",
+        "Latas de tinta, solventes e óleos misturados ao entulho comum",
+        "Lâmpadas, baterias e embalagens de impermeabilizante sem coleta específica",
+        "Empresa de coleta sem licença para resíduos perigosos"
+      ],
+      "consequencias": [
+        "Crime ambiental e autuação da empresa geradora",
+        "Exposição de trabalhadores a agentes tóxicos e fibras",
+        "Custo de recolhimento e remediação do local de descarte"
+      ],
+      "controles_preventivos": [
+        "Inventário de resíduos perigosos previstos no plano de resíduos, com classe e destino",
+        "Depósito de resíduos perigosos coberto e identificado, inspecionado em checklist",
+        "Contrato com empresa licenciada e manifesto de transporte para cada retirada",
+        "Procedimento de remoção de materiais com amianto com equipe treinada e registros"
+      ],
+      "controles_resposta": [
+        "Segregar e recolher o material com empresa licenciada",
+        "Comunicar órgão ambiental e avaliar exposição dos trabalhadores"
+      ],
+      "sinais_alerta": [
+        "Retirada de resíduo perigoso sem manifesto de transporte no GED",
+        "Compra de tintas e solventes sem retirada correspondente de embalagens"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "seguranca"
+      ],
+      "fases": [
+        "inicio_obra",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "sst",
+        "suprimentos",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Destinação irregular de resíduo perigoso é crime ambiental com responsabilização da empresa e dos gestores",
+      "referencias": [
+        "Lei 9.605/1998 – crimes ambientais",
+        "ABNT NBR 10004 – classificação de resíduos sólidos"
+      ]
+    },
+    {
+      "codigo": "R04.07",
+      "evento": "Poluição sonora e emissão excessiva de poeira",
+      "causas": [
+        "Uso de serra, martelete e bate-estaca fora do horário permitido",
+        "Corte de blocos e pisos a seco sem aspiração",
+        "Vias internas de terra sem umedecimento",
+        "Fachada sem tela de proteção em área densamente ocupada"
+      ],
+      "consequencias": [
+        "Reclamações, notificações e multas da prefeitura",
+        "Exposição de trabalhadores a ruído e poeira",
+        "Restrição de horário de trabalho imposta pela fiscalização"
+      ],
+      "controles_preventivos": [
+        "Medição de ruído no limite do terreno com laudo arquivado nas fases críticas",
+        "Horários de atividades ruidosas definidos em procedimento e divulgados aos vizinhos",
+        "Umedecimento de vias e corte com água registrado em checklist diário",
+        "Tela de fachada instalada conforme cronograma com registro fotográfico"
+      ],
+      "controles_resposta": [
+        "Ajustar horários e métodos após reclamação, com resposta formal ao reclamante",
+        "Instalar barreiras acústicas temporárias nas frentes críticas"
+      ],
+      "sinais_alerta": [
+        "Reclamações de vizinhos registradas no canal da obra",
+        "Notificação da prefeitura sobre ruído ou poeira no GED"
+      ],
+      "dimensoes": [
+        "reputacional",
+        "ambiental",
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "area_urbana_densa",
+        "edificacao_ocupada",
+        "demolicao"
+      ],
+      "integracoes": [
+        "diario",
+        "sst",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 10151 – medição de ruído em áreas habitadas"
+      ]
+    },
+    {
+      "codigo": "R04.08",
+      "evento": "Vibrações que provoquem danos em imóveis vizinhos",
+      "causas": [
+        "Cravação de estacas por percussão ao lado de edificações antigas",
+        "Compactação com rolo vibratório perto de muros e fundações rasas",
+        "Desmonte de rocha com explosivos sem plano de fogo adequado",
+        "Tráfego intenso de caminhões pesados em via estreita"
+      ],
+      "consequencias": [
+        "Fissuras e danos em imóveis vizinhos com pedidos de indenização",
+        "Ações judiciais e paralisação de frentes por liminar",
+        "Custos de reparos e laudos periciais"
+      ],
+      "controles_preventivos": [
+        "Vistoria cautelar de vizinhos com laudo fotográfico registrado em cartório antes do início",
+        "Escolha do tipo de estaca considerando vibração, registrada no projeto de fundações",
+        "Monitoramento de vibrações com sismógrafo e relatório nas atividades de risco",
+        "Plano de fogo assinado por profissional habilitado quando houver desmonte com explosivos"
+      ],
+      "controles_resposta": [
+        "Suspender a atividade, vistoriar o imóvel afetado e registrar os danos",
+        "Acionar seguro de responsabilidade civil e negociar reparo"
+      ],
+      "sinais_alerta": [
+        "Início de fundações no cronograma sem laudo de vistoria cautelar no GED",
+        "Reclamação de trincas por vizinhos registrada no diário"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "fundacao_profunda",
+        "edificacao_antiga",
+        "demolicao"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 9653 – efeitos de desmonte de rocha com explosivos em áreas urbanas"
+      ]
+    },
+    {
+      "codigo": "R04.09",
+      "evento": "Lançamento inadequado de efluentes",
+      "causas": [
+        "Água de rebaixamento de lençol lançada na rede sem autorização",
+        "Efluente sanitário do canteiro sem ligação à rede ou sem fossa adequada",
+        "Água de lavagem com cimento descartada em galeria pluvial",
+        "Efluente com óleo da área de manutenção sem separador"
+      ],
+      "consequencias": [
+        "Autuação ambiental e da concessionária de saneamento",
+        "Contaminação de córregos e reclamação da comunidade",
+        "Obrigação de tratar ou recolher efluentes por caminhão"
+      ],
+      "controles_preventivos": [
+        "Autorização da concessionária ou do órgão para lançamento de água de rebaixamento arquivada",
+        "Ligação do canteiro à rede de esgoto ou sistema aprovado registrado no layout",
+        "Caixa separadora de água e óleo inspecionada e limpa com registro",
+        "Caixa de decantação para lavagem de betoneiras com limpeza registrada"
+      ],
+      "controles_resposta": [
+        "Interromper o lançamento irregular e providenciar tratamento ou recolhimento",
+        "Comunicar o órgão competente e corrigir a instalação"
+      ],
+      "sinais_alerta": [
+        "Bombeamento de rebaixamento registrado no diário sem autorização no GED",
+        "Inspeção de caixas separadoras atrasada no checklist"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "nivel_agua_alto",
+        "subsolo",
+        "proximo_curso_dagua"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Resolução CONAMA 430/2011 – condições e padrões de lançamento de efluentes"
+      ]
+    },
+    {
+      "codigo": "R04.10",
+      "evento": "Uso irregular ou desperdício significativo de recursos hídricos",
+      "causas": [
+        "Captação de poço ou curso d'água sem outorga",
+        "Vazamentos em instalações provisórias não reparados",
+        "Cura de concreto e lavagens sem controle de consumo",
+        "Ligação provisória de água sem hidrômetro"
+      ],
+      "consequencias": [
+        "Autuação por uso sem outorga",
+        "Conta de água acima do orçado",
+        "Conflito com a comunidade em períodos de escassez"
+      ],
+      "controles_preventivos": [
+        "Outorga de uso de recursos hídricos arquivada antes de qualquer captação",
+        "Hidrômetro na ligação provisória com leitura mensal lançada no sistema",
+        "Inspeção de vazamentos em instalações provisórias registrada no checklist semanal",
+        "Meta de consumo de água por fase definida no planejamento ambiental da obra"
+      ],
+      "controles_resposta": [
+        "Suspender captação irregular e protocolar pedido de outorga",
+        "Reparar vazamentos e revisar procedimentos de consumo"
+      ],
+      "sinais_alerta": [
+        "Conta de água no financeiro acima da média das obras similares",
+        "Captação de poço registrada sem outorga no GED"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "nivel_agua_alto"
+      ],
+      "integracoes": [
+        "financeiro",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 9.433/1997 – Política Nacional de Recursos Hídricos"
+      ]
+    },
+    {
+      "codigo": "R04.11",
+      "evento": "Conflitos com moradores, comunidades e estabelecimentos vizinhos",
+      "causas": [
+        "Obstrução de calçadas, vagas e acessos por caminhões e caçambas",
+        "Falta de canal de comunicação com a vizinhança",
+        "Danos a imóveis vizinhos não atendidos com rapidez",
+        "Impacto em comércio local por tapumes e desvios"
+      ],
+      "consequencias": [
+        "Denúncias à prefeitura e fiscalizações frequentes",
+        "Ações judiciais e liminares restringindo atividades",
+        "Desgaste da marca e efeito nas vendas"
+      ],
+      "controles_preventivos": [
+        "Plano de comunicação com vizinhança com reunião inicial registrada em ata",
+        "Canal de atendimento de reclamações com prazo de resposta controlado no sistema",
+        "Plano logístico de cargas e descargas com horários autorizados e registrados",
+        "Vistoria cautelar dos imóveis lindeiros arquivada antes do início"
+      ],
+      "controles_resposta": [
+        "Atender o reclamante com visita técnica e resposta formal registrada",
+        "Negociar ajustes de horário e reparos com termo assinado"
+      ],
+      "sinais_alerta": [
+        "Reclamações de vizinhos em aberto além do prazo de resposta",
+        "Notificações municipais por denúncia registradas no GED"
+      ],
+      "dimensoes": [
+        "reputacional",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "area_urbana_densa",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "diario",
+        "docs_ged",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R04.12",
+      "evento": "Descumprimento de condicionantes ambientais",
+      "causas": [
+        "Condicionantes da licença não transformadas em tarefas com responsável",
+        "Relatórios de monitoramento entregues fora do prazo ao órgão",
+        "Compensações ambientais não executadas no cronograma",
+        "Troca de equipe sem passagem das obrigações da licença"
+      ],
+      "consequencias": [
+        "Suspensão ou cassação da licença e embargo da obra",
+        "Multas e responsabilização dos gestores",
+        "Bloqueio da licença de operação ou do habite-se"
+      ],
+      "controles_preventivos": [
+        "Matriz de condicionantes com prazo, responsável e evidência cadastrada no GED",
+        "Tarefas de condicionantes vinculadas ao cronograma da obra no planejamento",
+        "Protocolos de entrega de relatórios ao órgão arquivados com data",
+        "Auditoria interna semestral das condicionantes com relatório assinado"
+      ],
+      "controles_resposta": [
+        "Regularizar condicionantes vencidas e comunicar o órgão",
+        "Negociar novo prazo formalmente quando houver justificativa técnica"
+      ],
+      "sinais_alerta": [
+        "Condicionante com prazo vencido sem evidência anexada no GED",
+        "Licença ambiental a vencer em 120 dias sem pedido de renovação"
+      ],
+      "dimensoes": [
+        "ambiental",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "inicio_obra",
+        "estrutura",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_ambiental_sensivel",
+        "proximo_curso_dagua",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Descumprir condicionantes pode suspender a licença ambiental e embargar a obra",
+      "referencias": [
+        "Resolução CONAMA 237/1997 – licenciamento ambiental"
+      ]
+    }
+  ]
+}

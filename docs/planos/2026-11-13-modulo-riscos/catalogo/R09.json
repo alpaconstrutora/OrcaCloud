@@ -1,0 +1,714 @@
+{
+  "categoria": "R09",
+  "nome": "Riscos financeiros e de financiamento",
+  "itens": [
+    {
+      "codigo": "R09.01",
+      "evento": "Insuficiência de capital de giro",
+      "causas": [
+        "Prazo médio de pagamento a fornecedores menor que o de recebimento",
+        "Várias obras em fase de alto desembolso ao mesmo tempo",
+        "Retenções contratuais e medições glosadas imobilizando recursos",
+        "Estoques de material comprados muito antes do uso"
+      ],
+      "consequencias": [
+        "Atraso de pagamentos a fornecedores e empreiteiros",
+        "Perda de descontos e compras com preço maior",
+        "Uso de crédito caro de curto prazo"
+      ],
+      "controles_preventivos": [
+        "Projeção de caixa consolidada de todas as obras para 12 meses revisada mensalmente",
+        "Limite mínimo de caixa definido em política financeira",
+        "Negociação de prazos de pagamento alinhados ao ciclo de recebimento",
+        "Linha de crédito pré-aprovada antes do pico de desembolso"
+      ],
+      "controles_resposta": [
+        "Priorizar pagamentos críticos e renegociar prazos com fornecedores",
+        "Acionar linha de crédito ou aporte de sócios conforme plano"
+      ],
+      "sinais_alerta": [
+        "Saldo projetado abaixo do caixa mínimo nos próximos 90 dias",
+        "Títulos a pagar vencidos no financeiro",
+        "Prazo médio de pagamento crescendo mês a mês"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional",
+        "prazo"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "financeiro",
+        "dividas",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.02",
+      "evento": "Descumprimento do fluxo de caixa previsto",
+      "causas": [
+        "Fluxo de caixa construído sem vínculo com o cronograma físico",
+        "Recebimentos de vendas abaixo do previsto",
+        "Desembolsos antecipados por compras fora do planejado",
+        "Fluxo não atualizado após revisões de orçamento ou prazo"
+      ],
+      "consequencias": [
+        "Necessidade de recursos não planejados",
+        "Desconfiança de banco e investidores",
+        "Decisões de investimento baseadas em projeção falsa"
+      ],
+      "controles_preventivos": [
+        "Fluxo de caixa derivado do cronograma físico-financeiro atualizado",
+        "Análise mensal de desvio entre previsto e realizado por grupo",
+        "Revisão obrigatória do fluxo após cada revisão de orçamento ou prazo",
+        "Cenários de estresse de vendas e de custo documentados"
+      ],
+      "controles_resposta": [
+        "Replanejar desembolsos e acionar fontes alternativas de recurso"
+      ],
+      "sinais_alerta": [
+        "Desvio acumulado entre caixa previsto e realizado",
+        "Data da última revisão do fluxo anterior à última revisão de cronograma",
+        "Recebimentos do mês abaixo da previsão"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "financeiro",
+        "planejamento",
+        "orcamento",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.03",
+      "evento": "Descompasso entre desembolsos e recebimentos",
+      "causas": [
+        "Parcelas de compradores concentradas na entrega das chaves",
+        "Pico de custo na estrutura sem receita correspondente",
+        "Medições do contratante com ciclo longo de aprovação e pagamento",
+        "Pagamento antecipado de equipamentos e elevadores"
+      ],
+      "consequencias": [
+        "Exposição máxima de caixa acima da capacidade da empresa",
+        "Atraso de obra por falta de recurso no pico",
+        "Custo financeiro elevado"
+      ],
+      "controles_preventivos": [
+        "Curva de exposição de caixa calculada na viabilidade e acompanhada mensalmente",
+        "Tabela de vendas com fluxo de pagamento durante a obra",
+        "Cronograma de medições e pagamentos negociado no contrato",
+        "Negociar sinal e parcelas com fornecedores de equipamentos atrelados à entrega"
+      ],
+      "controles_resposta": [
+        "Antecipar recebíveis ou buscar financiamento de curto prazo planejado"
+      ],
+      "sinais_alerta": [
+        "Exposição de caixa realizada acima da curva prevista",
+        "Percentual de receita concentrado nas chaves acima do previsto",
+        "Prazo médio entre medição e recebimento"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "viabilidade",
+        "estrutura",
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "financeiro",
+        "comercial",
+        "planejamento",
+        "imovib"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.04",
+      "evento": "Negativa de financiamento bancário",
+      "causas": [
+        "Pré-vendas abaixo do percentual exigido pelo banco",
+        "Documentação do terreno, incorporação ou projetos com pendências",
+        "Avaliação do empreendimento inferior ao valor esperado",
+        "Rating de crédito da empresa ou dos sócios rebaixado"
+      ],
+      "consequencias": [
+        "Obra sem fonte de recurso para continuidade",
+        "Necessidade de aporte de capital próprio ou de investidores",
+        "Atraso ou suspensão do empreendimento"
+      ],
+      "controles_preventivos": [
+        "Checklist de exigências do banco acompanhado desde a viabilidade",
+        "Meta de vendas mínima para contratação do financiamento monitorada",
+        "Consulta prévia a mais de uma instituição financeira",
+        "Documentação de incorporação e projetos com validade conferida no GED"
+      ],
+      "controles_resposta": [
+        "Acionar plano alternativo de funding com sócios, investidores ou outro banco",
+        "Replanejar o ritmo de obra para o recurso disponível"
+      ],
+      "sinais_alerta": [
+        "Percentual de unidades vendidas abaixo da exigência do banco",
+        "Pendências documentais abertas no processo de crédito",
+        "Certidões da empresa vencidas ou positivas"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "financeiro",
+        "comercial",
+        "docs_ged",
+        "dividas"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.05",
+      "evento": "Liberação de recursos em prazo superior ao planejado",
+      "causas": [
+        "Vistoria do banco reprovando o avanço físico declarado",
+        "Pendências documentais como CND, seguros e ART em cada medição",
+        "Medição do agente financeiro em ciclo mensal fixo",
+        "Divergência entre cronograma da obra e cronograma do banco"
+      ],
+      "consequencias": [
+        "Caixa da obra coberto com recursos próprios ou crédito caro",
+        "Atraso de pagamentos a fornecedores",
+        "Desaceleração do ritmo de obra"
+      ],
+      "controles_preventivos": [
+        "Cronograma físico-financeiro único entre obra e agente financeiro",
+        "Checklist de documentos por medição bancária com validade controlada",
+        "Pré-vistoria interna do avanço antes da visita do engenheiro do banco",
+        "Folga de caixa para pelo menos um ciclo de liberação"
+      ],
+      "controles_resposta": [
+        "Sanar pendências apontadas e solicitar nova vistoria com prioridade"
+      ],
+      "sinais_alerta": [
+        "Dias entre solicitação e liberação da parcela do banco",
+        "Diferença entre avanço físico interno e avanço aceito pelo banco",
+        "Documentos exigidos pelo banco com vencimento nos próximos 30 dias"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "financeiro",
+        "planejamento",
+        "docs_ged",
+        "dividas"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.06",
+      "evento": "Aumento das taxas de juros",
+      "causas": [
+        "Dívidas indexadas ao CDI ou a taxa pós-fixada",
+        "Contratação de financiamento adiada para período de alta",
+        "Crédito do comprador encarecido reduzindo capacidade de pagamento"
+      ],
+      "consequencias": [
+        "Custo financeiro acima do previsto na viabilidade",
+        "Queda de vendas e de repasses por menor capacidade de crédito",
+        "Redução da taxa de retorno do empreendimento"
+      ],
+      "controles_preventivos": [
+        "Mapa de dívidas por indexador com sensibilidade a variação da taxa",
+        "Avaliar proteção ou prefixação de parcela relevante da dívida",
+        "Cenários de juros incluídos no estudo de viabilidade",
+        "Acompanhamento mensal da taxa média ponderada da dívida"
+      ],
+      "controles_resposta": [
+        "Renegociar ou trocar dívida por linha mais barata e revisar a viabilidade"
+      ],
+      "sinais_alerta": [
+        "Taxa média ponderada das dívidas em alta",
+        "Percentual de dívida pós-fixada sobre o total",
+        "Reprovação crescente de crédito de compradores no repasse"
+      ],
+      "dimensoes": [
+        "financeira"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao",
+        "estrutura",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "dividas",
+        "financeiro",
+        "imovib",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.07",
+      "evento": "Inadimplência de clientes e compradores",
+      "causas": [
+        "Análise de crédito fraca ou inexistente na venda",
+        "Parcelas incompatíveis com a renda comprovada do comprador",
+        "Contratante de obra com dificuldade financeira",
+        "Régua de cobrança inexistente ou lenta"
+      ],
+      "consequencias": [
+        "Receita prevista não realizada e furo de caixa",
+        "Custos de cobrança e de retomada de unidades",
+        "Distratos e unidades devolvidas ao estoque"
+      ],
+      "controles_preventivos": [
+        "Análise de crédito documentada antes da assinatura do contrato",
+        "Régua de cobrança automática com ações por dias de atraso",
+        "Limite de comprometimento de renda definido na política comercial",
+        "Garantias contratuais como alienação fiduciária ou retenção de chaves"
+      ],
+      "controles_resposta": [
+        "Negociar acordo com o devedor e registrar o novo plano de pagamento",
+        "Iniciar cobrança extrajudicial ou execução da garantia conforme contrato"
+      ],
+      "sinais_alerta": [
+        "Percentual de carteira com atraso acima de 30 dias",
+        "Clientes com parcelas renegociadas mais de uma vez",
+        "Atraso médio de pagamento do contratante nas medições"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "locacao"
+      ],
+      "integracoes": [
+        "financeiro",
+        "comercial",
+        "locacoes",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 9.514/1997 – alienação fiduciária de coisa imóvel"
+      ]
+    },
+    {
+      "codigo": "R09.08",
+      "evento": "Descumprimento de cláusulas financeiras e covenants",
+      "causas": [
+        "Índices de endividamento ou cobertura de dívida monitorados só anualmente",
+        "Atraso na entrega de demonstrações e relatórios ao credor",
+        "Vendas ou obras abaixo das metas pactuadas no contrato de crédito"
+      ],
+      "consequencias": [
+        "Vencimento antecipado da dívida",
+        "Aumento de taxa ou exigência de garantias adicionais",
+        "Bloqueio de novas liberações de recursos"
+      ],
+      "controles_preventivos": [
+        "Planilha de covenants com fórmula, limite e data de apuração",
+        "Apuração trimestral interna antes da data oficial",
+        "Calendário de obrigações de reporte ao credor com responsável",
+        "Simulação do efeito de novas dívidas nos índices antes de contratar"
+      ],
+      "controles_resposta": [
+        "Solicitar formalmente ao credor dispensa ou renegociação do covenant antes da quebra"
+      ],
+      "sinais_alerta": [
+        "Índice de covenant a menos de 10 por cento do limite",
+        "Obrigação de reporte vencida no calendário",
+        "Nova dívida contratada sem simulação de covenants"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "dividas",
+        "financeiro",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.09",
+      "evento": "Insuficiência ou desvalorização de garantias",
+      "causas": [
+        "Queda de preço de mercado das unidades dadas em garantia",
+        "Hipoteca ou alienação de terreno com avaliação superestimada",
+        "Recebíveis cedidos com inadimplência acima do esperado",
+        "Seguro-garantia ou fiança vencidos sem renovação"
+      ],
+      "consequencias": [
+        "Exigência de reforço de garantia pelo credor",
+        "Bloqueio de crédito ou vencimento antecipado",
+        "Impedimento de contratação em obras públicas"
+      ],
+      "controles_preventivos": [
+        "Controle de garantias com valor, vencimento e cobertura exigida",
+        "Reavaliação periódica dos imóveis em garantia por laudo",
+        "Monitoramento da carteira de recebíveis cedida",
+        "Renovação de apólices e fianças iniciada 60 dias antes do vencimento"
+      ],
+      "controles_resposta": [
+        "Oferecer garantia substituta ou complementar negociada com o credor"
+      ],
+      "sinais_alerta": [
+        "Garantias com vencimento nos próximos 60 dias",
+        "Relação dívida sobre valor de garantia acima do pactuado",
+        "Inadimplência da carteira cedida acima do limite"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "dividas",
+        "docs_ged",
+        "financeiro",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 14653 – avaliação de bens"
+      ]
+    },
+    {
+      "codigo": "R09.10",
+      "evento": "Falta de recursos para conclusão da obra",
+      "causas": [
+        "Custo a concluir maior que saldo de financiamento e recebíveis",
+        "Recursos de um empreendimento desviados para outro",
+        "Estouro de orçamento sem contingência",
+        "Vendas paralisadas ou distratos em massa"
+      ],
+      "consequencias": [
+        "Paralisação da obra e deterioração do que foi executado",
+        "Ações judiciais de compradores e credores",
+        "Intervenção de comissão de representantes ou do banco na obra"
+      ],
+      "controles_preventivos": [
+        "Patrimônio de afetação constituído e contas segregadas por empreendimento",
+        "Teste mensal de suficiência comparando custo a concluir e fontes disponíveis",
+        "Relatório de suficiência compartilhado com comissão de representantes e banco",
+        "Proibir transferência entre empreendimentos sem aprovação formal"
+      ],
+      "controles_resposta": [
+        "Plano de conclusão com aporte, venda de estoque ou entrada de sócio",
+        "Proteger e conservar a obra durante eventual paralisação"
+      ],
+      "sinais_alerta": [
+        "Custo a concluir superior às fontes disponíveis no relatório de suficiência",
+        "Transferências entre centros de custo de empreendimentos diferentes",
+        "Queda do ritmo de obra sem causa técnica registrada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "financeiro",
+        "orcamento",
+        "investidor",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 10.931/2004 – patrimônio de afetação de incorporações imobiliárias",
+        "Lei 4.591/1964 – condomínio em edificações e incorporações imobiliárias"
+      ]
+    },
+    {
+      "codigo": "R09.11",
+      "evento": "Exposição cambial em contratos ou insumos importados",
+      "causas": [
+        "Elevadores, esquadrias, cabos ou equipamentos cotados em moeda estrangeira",
+        "Pedido fechado com pagamento na data de embarque sem fixação do câmbio",
+        "Dívida em moeda estrangeira sem proteção"
+      ],
+      "consequencias": [
+        "Custo do item acima do orçado em reais",
+        "Necessidade de trocar especificação por nacional",
+        "Prejuízo financeiro na liquidação da dívida"
+      ],
+      "controles_preventivos": [
+        "Mapa de exposição cambial por pedido e contrato com data de liquidação",
+        "Fixação de câmbio ou contratação de proteção para itens relevantes",
+        "Cotação de alternativa nacional mantida para itens importados",
+        "Orçamento do item importado com câmbio de referência e margem documentados"
+      ],
+      "controles_resposta": [
+        "Renegociar com fornecedor, substituir por similar nacional aprovado ou absorver em contingência"
+      ],
+      "sinais_alerta": [
+        "Valor em moeda estrangeira de pedidos abertos sem proteção",
+        "Variação do câmbio desde a data-base do orçamento",
+        "Pedidos importados com pagamento previsto no próximo trimestre"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "contratacao",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "financeiro",
+        "dividas",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R09.12",
+      "evento": "Endividamento excessivo e impossibilidade de refinanciamento",
+      "causas": [
+        "Dívidas de curto prazo financiando ativos de longo prazo como estoque e terrenos",
+        "Lançamento de vários empreendimentos alavancados ao mesmo tempo",
+        "Concentração de vencimentos em um mesmo período",
+        "Restrição de crédito no mercado ou piora do perfil da empresa"
+      ],
+      "consequencias": [
+        "Inadimplência com bancos e execução de garantias",
+        "Venda forçada de ativos com desconto",
+        "Risco de recuperação judicial e paralisação de obras"
+      ],
+      "controles_preventivos": [
+        "Limite de alavancagem definido em política e reportado mensalmente",
+        "Cronograma de vencimentos de dívida com plano de refinanciamento antecipado",
+        "Aprovação de novo lançamento condicionada ao índice de endividamento",
+        "Relacionamento com mais de uma instituição financeira"
+      ],
+      "controles_resposta": [
+        "Reperfilar a dívida com credores e priorizar venda de ativos não estratégicos"
+      ],
+      "sinais_alerta": [
+        "Dívida líquida sobre patrimônio acima do limite da política",
+        "Vencimentos de dívida nos próximos 12 meses sobre caixa disponível",
+        "Recusas ou exigências crescentes em propostas de crédito"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional",
+        "juridica"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "estrutura",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "dividas",
+        "financeiro",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

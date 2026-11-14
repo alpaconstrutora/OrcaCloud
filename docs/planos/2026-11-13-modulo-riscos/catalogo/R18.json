@@ -1,0 +1,765 @@
+{
+  "categoria": "R18",
+  "nome": "Riscos de máquinas, equipamentos e canteiro",
+  "itens": [
+    {
+      "codigo": "R18.01",
+      "evento": "Falhas mecânicas de máquinas pesadas",
+      "causas": [
+        "Equipamento locado sem histórico de manutenção comprovado",
+        "Operação em terreno com inclinação acima da admissível",
+        "Falha hidráulica ou de freios por desgaste",
+        "Operador sem capacitação comprovada"
+      ],
+      "consequencias": [
+        "Tombamento ou atropelamento com vítima",
+        "Paralisação de terraplenagem e fundações",
+        "Custo de reparo e de equipamento substituto"
+      ],
+      "controles_preventivos": [
+        "Checklist diário pré-uso assinado pelo operador",
+        "Certificado de capacitação do operador arquivado antes da liberação",
+        "Plano de manutenção do locador exigido em contrato, com registros",
+        "Alarme sonoro de ré e sinalização luminosa verificados no checklist"
+      ],
+      "controles_resposta": [
+        "Parar e isolar o equipamento e acionar o locador",
+        "Investigar a causa e registrar a ocorrência em SST"
+      ],
+      "sinais_alerta": [
+        "Checklist pré-uso com item reprovado e equipamento em operação",
+        "Manutenção do equipamento vencida",
+        "Operador sem capacitação no cadastro"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "terreno_inclinado",
+        "escavacao_profunda"
+      ],
+      "integracoes": [
+        "sst",
+        "ordens_servico",
+        "contratos",
+        "rh"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Tombamento ou atropelamento por máquina pesada pode causar morte",
+      "referencias": [
+        "NR-12 – segurança no trabalho em máquinas e equipamentos",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R18.02",
+      "evento": "Acidentes com gruas e guindastes",
+      "causas": [
+        "Içamento acima da capacidade para o raio de operação",
+        "Cintas, cabos ou manilhas danificados",
+        "Operação com vento acima do limite do fabricante",
+        "Base ou ancoragem da grua sem projeto ou verificação"
+      ],
+      "consequencias": [
+        "Queda de carga ou tombamento do equipamento",
+        "Morte de trabalhadores ou terceiros",
+        "Embargo da obra e responsabilização criminal"
+      ],
+      "controles_preventivos": [
+        "Plano de rigging com ART para içamentos críticos",
+        "Projeto de base e ancoragem da grua com ART e laudo de montagem",
+        "Inspeção periódica de acessórios de içamento com registro e descarte identificado",
+        "Anemômetro com limite de vento e registro das paralisações",
+        "Capacitação de operador e sinaleiro arquivada"
+      ],
+      "controles_resposta": [
+        "Suspender a operação, isolar o raio de queda e prestar socorro",
+        "Comunicar o acidente e preservar o local para perícia"
+      ],
+      "sinais_alerta": [
+        "Inspeção de acessórios de içamento vencida",
+        "Laudo de montagem da grua ausente no GED",
+        "Içamento crítico executado sem plano de rigging"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo",
+        "reputacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "area_urbana_densa",
+        "vizinhanca_proxima",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "sst",
+        "docs_ged",
+        "contratos",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queda de carga ou tombamento de grua pode causar mortes e embargo",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "NR-11 – transporte, movimentação, armazenagem e manuseio de materiais",
+        "NR-12 – segurança no trabalho em máquinas e equipamentos"
+      ]
+    },
+    {
+      "codigo": "R18.03",
+      "evento": "Deficiências em elevadores e equipamentos de transporte de obras",
+      "causas": [
+        "Torre ancorada com espaçamento acima do especificado",
+        "Freio de segurança sem teste periódico",
+        "Intertravamento de portas de pavimento desativado",
+        "Sobrecarga de material ou transporte simultâneo de pessoas e carga"
+      ],
+      "consequencias": [
+        "Queda da cabine com vítimas",
+        "Queda de pessoas pelo vão da torre",
+        "Interdição do equipamento e atraso da obra"
+      ],
+      "controles_preventivos": [
+        "Teste do freio de segurança registrado na periodicidade do fabricante",
+        "Livro de inspeção diária preenchido pelo operador",
+        "Laudo de montagem e ancoragem com ART a cada ascensão da torre",
+        "Placa de capacidade e controle de carga por viagem"
+      ],
+      "controles_resposta": [
+        "Interditar o equipamento e acionar o fabricante ou locador",
+        "Plano alternativo de transporte vertical"
+      ],
+      "sinais_alerta": [
+        "Teste do freio de segurança vencido",
+        "Inspeção diária sem registro",
+        "Ascensão da torre sem laudo correspondente"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "sst",
+        "ordens_servico",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queda da cabine ou pelo vão do elevador de obra pode causar morte",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R18.04",
+      "evento": "Operação de equipamentos sem inspeção adequada",
+      "causas": [
+        "Equipamento chegando à obra sem vistoria de entrada",
+        "Pressa para iniciar o serviço sem checklist",
+        "Responsável pela inspeção não definido",
+        "Ferramentas elétricas portáteis sem verificação de cabos e proteções"
+      ],
+      "consequencias": [
+        "Esmagamento, cortes e amputações em partes móveis",
+        "Autuação e interdição de máquina pela fiscalização do trabalho",
+        "Dano ao equipamento e perda de produtividade"
+      ],
+      "controles_preventivos": [
+        "Vistoria de entrada com checklist e liberação registrada por equipamento",
+        "Etiqueta de liberação com data de validade afixada no equipamento",
+        "Inventário de máquinas com inspeções e responsáveis no sistema",
+        "Inspeção das proteções de serras circulares e betoneiras"
+      ],
+      "controles_resposta": [
+        "Retirar de uso o equipamento sem inspeção até a liberação",
+        "Registrar o incidente e corrigir o processo de entrada"
+      ],
+      "sinais_alerta": [
+        "Equipamento no diário sem vistoria de entrada registrada",
+        "Inspeções periódicas vencidas no inventário",
+        "Serra circular sem coifa apontada em inspeção de SST"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "sst",
+        "ordens_servico",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Máquina sem inspeção pode causar amputação ou morte e levar à interdição",
+      "referencias": [
+        "NR-12 – segurança no trabalho em máquinas e equipamentos"
+      ]
+    },
+    {
+      "codigo": "R18.05",
+      "evento": "Ausência de manutenção preventiva",
+      "causas": [
+        "Equipamentos próprios sem plano de manutenção",
+        "Horímetro não controlado",
+        "Verba de manutenção cortada para reduzir custo",
+        "Contrato de locação sem obrigação de manutenção do locador"
+      ],
+      "consequencias": [
+        "Quebra em momento crítico parando a frente",
+        "Falha com risco ao operador e a quem está próximo",
+        "Redução da vida útil e custo de reposição"
+      ],
+      "controles_preventivos": [
+        "Plano de manutenção por equipamento com periodicidade em horas ou dias",
+        "Ordens de serviço preventivas emitidas e baixadas no sistema",
+        "Cláusula de manutenção no contrato do locador com relatório mensal",
+        "Leitura de horímetro registrada semanalmente"
+      ],
+      "controles_resposta": [
+        "Manutenção corretiva com análise da causa da falha",
+        "Substituir por equipamento reserva ou locação emergencial"
+      ],
+      "sinais_alerta": [
+        "Ordem de serviço preventiva vencida",
+        "Corretivas repetidas no mesmo equipamento",
+        "Horímetro acima do intervalo de revisão"
+      ],
+      "dimensoes": [
+        "operacional",
+        "seguranca",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste"
+      ],
+      "integracoes": [
+        "ordens_servico",
+        "contratos",
+        "financeiro",
+        "sst"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falta de manutenção em grua, elevador de obra ou máquina pesada pode causar acidente fatal",
+      "referencias": [
+        "NR-12 – segurança no trabalho em máquinas e equipamentos"
+      ]
+    },
+    {
+      "codigo": "R18.06",
+      "evento": "Deficiência no isolamento das áreas operacionais",
+      "causas": [
+        "Raio de giro de escavadeira ou grua sem barreira física",
+        "Área de içamento cruzada pela circulação de pessoas",
+        "Demarcação provisória removida e não reposta",
+        "Visitantes e terceiros sem controle de acesso"
+      ],
+      "consequencias": [
+        "Trabalhador atingido por carga ou máquina",
+        "Queda de material sobre pessoas",
+        "Autuação e paralisação da frente"
+      ],
+      "controles_preventivos": [
+        "Plano de canteiro com áreas de exclusão demarcadas e revisado por fase",
+        "Inspeção diária dos isolamentos com checklist e foto",
+        "Permissão de trabalho para içamento definindo a área isolada",
+        "Integração de SST registrada para visitantes no controle de acesso"
+      ],
+      "controles_resposta": [
+        "Paralisar a operação e restabelecer o isolamento",
+        "Investigar o quase-acidente e reforçar a sinalização"
+      ],
+      "sinais_alerta": [
+        "Quase-acidentes registrados por invasão de área operacional",
+        "Checklist de isolamento não realizado no dia",
+        "Visitante sem integração no controle de acesso"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "vizinhanca_proxima",
+        "area_urbana_densa",
+        "demolicao"
+      ],
+      "integracoes": [
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Pessoa em área operacional pode ser atingida por carga ou máquina e morrer",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R18.07",
+      "evento": "Arranjos de canteiro com circulação insegura",
+      "causas": [
+        "Vias de pedestres e veículos sem separação",
+        "Rampas e passarelas improvisadas sem guarda-corpo",
+        "Material estocado obstruindo rotas de fuga",
+        "Caminhões manobrando em ré sem sinaleiro"
+      ],
+      "consequencias": [
+        "Atropelamentos e quedas de trabalhadores",
+        "Perda de produtividade por deslocamentos longos",
+        "Dificuldade de evacuação em emergência"
+      ],
+      "controles_preventivos": [
+        "Layout de canteiro com rotas de pedestres e veículos aprovado por fase",
+        "Sinaleiro designado para manobras registrado na escala",
+        "Inspeção semanal de passarelas, rampas e rotas de fuga com checklist",
+        "Pontos de descarga definidos e sinalizados no plano de canteiro"
+      ],
+      "controles_resposta": [
+        "Desobstruir as rotas e reorganizar o layout",
+        "Registrar a ocorrência e revisar o plano de canteiro"
+      ],
+      "sinais_alerta": [
+        "Inspeção de SST apontando rotas obstruídas",
+        "Quase-acidente de atropelamento registrado",
+        "Mudança de fase da obra sem revisão do layout de canteiro"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "prazo"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "terreno_inclinado",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "sst",
+        "planejamento",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atropelamento ou queda em circulação insegura pode causar morte",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R18.08",
+      "evento": "Instalações elétricas provisórias inadequadas",
+      "causas": [
+        "Extensões improvisadas e emendas sem isolamento",
+        "Quadros provisórios sem dispositivo DR e sem aterramento",
+        "Cabos passando por áreas alagadas ou de tráfego",
+        "Eletricista sem qualificação em segurança com eletricidade"
+      ],
+      "consequencias": [
+        "Eletrocussão de trabalhadores",
+        "Incêndio no canteiro e em alojamentos",
+        "Interdição da instalação elétrica pela fiscalização"
+      ],
+      "controles_preventivos": [
+        "Projeto da instalação provisória com responsável técnico",
+        "Teste mensal do dispositivo DR com registro",
+        "Inspeção semanal de quadros e cabos com checklist",
+        "Comprovante de capacitação em segurança com eletricidade dos eletricistas arquivado"
+      ],
+      "controles_resposta": [
+        "Desenergizar e isolar o ponto e prestar socorro",
+        "Refazer o trecho conforme projeto antes de religar"
+      ],
+      "sinais_alerta": [
+        "Checklist elétrico com emenda exposta ou quadro sem DR",
+        "Teste de DR não registrado no mês",
+        "Eletricista sem capacitação no cadastro"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "regiao_chuvosa",
+        "nivel_agua_alto"
+      ],
+      "integracoes": [
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Choque elétrico em instalação provisória pode ser fatal",
+      "referencias": [
+        "NR-10 – segurança em instalações e serviços em eletricidade",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "ABNT NBR 5410 – instalações elétricas de baixa tensão"
+      ]
+    },
+    {
+      "codigo": "R18.09",
+      "evento": "Falta de capacidade ou disponibilidade de equipamentos essenciais",
+      "causas": [
+        "Demanda de equipamentos não planejada com antecedência",
+        "Poucos locadores na região para equipamentos específicos",
+        "Equipamento compartilhado entre obras sem programação",
+        "Atraso na desmobilização em outra obra"
+      ],
+      "consequencias": [
+        "Frentes paradas aguardando equipamento",
+        "Locação emergencial com preço elevado",
+        "Replanejamento e perda de produtividade"
+      ],
+      "controles_preventivos": [
+        "Histograma de equipamentos vinculado ao cronograma",
+        "Reserva contratual com o locador antes do início da etapa",
+        "Alocação de equipamentos próprios entre obras controlada no sistema",
+        "Alternativa de equipamento avaliada e registrada no planejamento"
+      ],
+      "controles_resposta": [
+        "Locar em regime emergencial ou resequenciar as atividades",
+        "Turno estendido quando o equipamento chegar"
+      ],
+      "sinais_alerta": [
+        "Atividade a menos de 30 dias sem equipamento reservado",
+        "Pedido de locação aberto sem confirmação",
+        "Horas paradas por falta de equipamento no diário"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "fundacao_profunda",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "planejamento",
+        "suprimentos",
+        "contratos",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R18.10",
+      "evento": "Abastecimento e armazenamento inadequado de combustíveis",
+      "causas": [
+        "Tanque de diesel sem bacia de contenção",
+        "Abastecimento próximo a fontes de ignição",
+        "Solventes e gases armazenados em local fechado",
+        "Volume armazenado acima do permitido sem licença"
+      ],
+      "consequencias": [
+        "Incêndio ou explosão no canteiro",
+        "Contaminação de solo e água",
+        "Autuação ambiental e trabalhista"
+      ],
+      "controles_preventivos": [
+        "Área de armazenamento com bacia, sinalização e extintor verificada em checklist",
+        "Procedimento de abastecimento com kit de emergência ambiental no local",
+        "Inventário de inflamáveis com fichas de segurança (FDS) arquivadas",
+        "Inspeção mensal de vazamentos e do estado dos recipientes"
+      ],
+      "controles_resposta": [
+        "Conter o vazamento com o kit e acionar o plano de emergência",
+        "Remediar o solo e comunicar o órgão ambiental quando exigido"
+      ],
+      "sinais_alerta": [
+        "Checklist de armazenamento com bacia ausente ou danificada",
+        "Consumo de combustível sem controle de entrada e saída",
+        "Produto armazenado sem FDS"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "ambiental",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_ambiental_sensivel",
+        "proximo_curso_dagua"
+      ],
+      "integracoes": [
+        "sst",
+        "suprimentos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Incêndio ou explosão de inflamáveis pode causar morte",
+      "referencias": [
+        "NR-20 – segurança e saúde no trabalho com inflamáveis e combustíveis"
+      ]
+    },
+    {
+      "codigo": "R18.11",
+      "evento": "Furto, roubo ou vandalismo no canteiro",
+      "causas": [
+        "Tapume baixo ou danificado",
+        "Vigilância noturna ausente ou sem ronda",
+        "Cabos, metais e ferramentas de alto valor estocados sem controle",
+        "Almoxarifado sem controle de saída"
+      ],
+      "consequencias": [
+        "Perda de material e reposição urgente",
+        "Atraso por falta de insumo ou equipamento",
+        "Aumento do custo de seguro e de vigilância"
+      ],
+      "controles_preventivos": [
+        "CFTV com gravação e verificação semanal de funcionamento",
+        "Inventário periódico do almoxarifado com divergências registradas",
+        "Entrega de cabos e metais programada perto da aplicação",
+        "Controle de retirada e devolução de ferramentas por colaborador"
+      ],
+      "controles_resposta": [
+        "Registrar boletim de ocorrência e acionar a seguradora",
+        "Reforçar a vigilância e revisar os pontos vulneráveis"
+      ],
+      "sinais_alerta": [
+        "Divergência no inventário do almoxarifado",
+        "Ocorrências de furto registradas no diário",
+        "Falha do CFTV sem reparo"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "diario",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R18.12",
+      "evento": "Falhas na infraestrutura provisória de água, energia, iluminação e saneamento",
+      "causas": [
+        "Ligação provisória de energia ou água pedida tarde à concessionária",
+        "Áreas de vivência subdimensionadas para o pico de efetivo",
+        "Iluminação insuficiente em escadas e subsolos",
+        "Esgoto do canteiro sem destinação adequada"
+      ],
+      "consequencias": [
+        "Atraso no início da obra e dependência de geradores",
+        "Autuação e interdição por condições sanitárias inadequadas",
+        "Quedas e acidentes por baixa iluminação"
+      ],
+      "controles_preventivos": [
+        "Pedido de ligação provisória à concessionária no marco do cronograma",
+        "Áreas de vivência dimensionadas pelo histograma de mão de obra",
+        "Inspeção das áreas de vivência com checklist registrado",
+        "Medição de iluminamento em escadas e subsolos registrada"
+      ],
+      "controles_resposta": [
+        "Gerador e caminhão-pipa enquanto a ligação não ocorre",
+        "Ampliar as áreas de vivência com módulos locados"
+      ],
+      "sinais_alerta": [
+        "Ligação provisória sem protocolo perto do início da obra",
+        "Efetivo no RH acima da capacidade das áreas de vivência",
+        "Não conformidade aberta no checklist de áreas de vivência"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Áreas de vivência inadequadas podem gerar interdição pela fiscalização do trabalho",
+      "referencias": [
+        "NR-24 – condições sanitárias e de conforto nos locais de trabalho",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    }
+  ]
+}

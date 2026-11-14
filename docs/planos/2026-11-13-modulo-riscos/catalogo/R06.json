@@ -1,0 +1,757 @@
+{
+  "categoria": "R06",
+  "nome": "Riscos de projetos e engenharia",
+  "itens": [
+    {
+      "codigo": "R06.01",
+      "evento": "Projetos incompletos ou insuficientemente detalhados",
+      "causas": [
+        "Contratação de projetos pelo menor preço com escopo de entregáveis vago",
+        "Início da obra com projetos ainda em fase de anteprojeto ou legal",
+        "Ausência de projeto executivo de detalhes como esquadrias, impermeabilização e fachadas",
+        "Prazo de projeto comprimido para atender lançamento comercial"
+      ],
+      "consequencias": [
+        "Decisões tomadas no canteiro pelo mestre de obras sem respaldo técnico",
+        "Quantitativos do orçamento subestimados e aditivos com empreiteiros",
+        "Paradas de frente aguardando detalhe ou resposta do projetista",
+        "Divergência entre o executado e o memorial vendido ao cliente"
+      ],
+      "controles_preventivos": [
+        "Lista mestra de entregáveis por disciplina anexada ao contrato de projeto",
+        "Checklist de liberação para obra assinado antes de cada etapa",
+        "Exigir projeto executivo aprovado como pré-requisito da contratação do empreiteiro",
+        "Reunião de análise crítica de projeto registrada em ata por disciplina"
+      ],
+      "controles_resposta": [
+        "Abrir consulta formal ao projetista com prazo de resposta e registrar no diário",
+        "Suspender a frente afetada e realocar equipe até a definição técnica"
+      ],
+      "sinais_alerta": [
+        "Atividades do cronograma iniciando sem documento de projeto vinculado no GED",
+        "Número de consultas técnicas abertas ao projetista por semana",
+        "Registros de improviso ou solução de campo no diário de obra"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "inicio_obra",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planejamento",
+        "diario",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.02",
+      "evento": "Incompatibilidade entre arquitetura, estrutura e instalações",
+      "causas": [
+        "Disciplinas desenvolvidas por escritórios distintos sem coordenador de projetos",
+        "Furos e passagens de tubulações não previstos nas vigas e lajes",
+        "Pé-direito sem folga para forro, dutos de ar e sprinklers",
+        "Revisão de arquitetura não repassada às demais disciplinas"
+      ],
+      "consequencias": [
+        "Quebra de elementos concretados para passagem de instalações",
+        "Rebaixamento de forro não previsto e perda de pé-direito vendável",
+        "Retrabalho de alvenaria e instalações com custo não orçado",
+        "Risco estrutural por furação improvisada em viga"
+      ],
+      "controles_preventivos": [
+        "Contratar coordenação de projetos com relatório de interferências por revisão",
+        "Projeto de furação e passagens aprovado pelo calculista antes da concretagem",
+        "Sobreposição das disciplinas em reunião de compatibilização com ata",
+        "Checklist de shafts, forros e pé-direito livre por pavimento tipo"
+      ],
+      "controles_resposta": [
+        "Solicitar solução formal do calculista antes de qualquer furo em elemento estrutural",
+        "Registrar a interferência e a solução adotada para atualizar o as built"
+      ],
+      "sinais_alerta": [
+        "Interferências abertas no relatório de compatibilização sem responsável",
+        "Ordens de serviço de demolição ou quebra em elementos recém-executados",
+        "Diário de obra registrando passagens improvisadas em estrutura"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "prazo",
+        "seguranca"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "subsolo",
+        "bim"
+      ],
+      "integracoes": [
+        "planta_bim",
+        "docs_ged",
+        "diario",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.03",
+      "evento": "Erros de dimensionamento estrutural",
+      "causas": [
+        "Modelagem estrutural com vínculos, rigidezes ou combinações inadequadas",
+        "Erro de entrada de dados em software de cálculo sem conferência manual",
+        "Subestimação de efeitos de segunda ordem ou ação do vento em edifício esbelto",
+        "Detalhamento de armaduras divergente do memorial de cálculo"
+      ],
+      "consequencias": [
+        "Fissuração, flechas excessivas ou ruptura de elementos estruturais",
+        "Necessidade de reforço estrutural com obra parada",
+        "Risco de colapso com vítimas e responsabilização criminal",
+        "Perda de valor e de habitabilidade das unidades"
+      ],
+      "controles_preventivos": [
+        "Avaliação de conformidade do projeto estrutural por profissional independente",
+        "Memorial de cálculo e relatório de verificações arquivados com a revisão do projeto",
+        "Conferência de cargas e seções críticas por amostragem antes da liberação",
+        "Exigir do calculista ART específica e declaração de premissas adotadas"
+      ],
+      "controles_resposta": [
+        "Interditar a área, escorar e acionar o calculista para diagnóstico",
+        "Contratar perícia estrutural e projeto de reforço com ART própria"
+      ],
+      "sinais_alerta": [
+        "Projeto estrutural liberado para obra sem registro de verificação independente",
+        "Fissuras ou flechas registradas no diário após desforma",
+        "Revisões sucessivas do estrutural após o início da estrutura"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "estrutura_metalica",
+        "protensao",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Erro de dimensionamento pode levar a colapso estrutural com vítimas",
+      "referencias": [
+        "ABNT NBR 6118 – projeto de estruturas de concreto",
+        "ABNT NBR 8800 – projeto de estruturas de aço e mistas de aço e concreto",
+        "ABNT NBR 6123 – forças devidas ao vento em edificações"
+      ]
+    },
+    {
+      "codigo": "R06.04",
+      "evento": "Premissas inadequadas de carregamentos e utilização",
+      "causas": [
+        "Uso futuro não informado ao calculista, como academia, arquivo ou cobertura com piscina",
+        "Sobrecarga de equipamentos pesados em galpão ou casa de máquinas subestimada",
+        "Alteração de uso ou de layout pelo comprador sem revisão da estrutura",
+        "Carga de jardineiras, enchimentos e revestimentos pesados não considerada"
+      ],
+      "consequencias": [
+        "Deformações excessivas e fissuras em lajes e vigas",
+        "Restrição de uso do imóvel ou reforço após a entrega",
+        "Risco de ruptura de laje ou piso industrial sob carga concentrada",
+        "Disputa com cliente sobre capacidade de carga contratada"
+      ],
+      "controles_preventivos": [
+        "Documento de premissas de uso e cargas aprovado pelo incorporador antes do cálculo",
+        "Registrar cargas admissíveis no manual do proprietário e em placas nos pisos",
+        "Revisão estrutural obrigatória para qualquer mudança de uso solicitada",
+        "Planta de cargas de equipamentos fornecida pelo cliente em galpões"
+      ],
+      "controles_resposta": [
+        "Restringir o uso da área até verificação estrutural formal",
+        "Projetar reforço ou redistribuição de cargas com ART"
+      ],
+      "sinais_alerta": [
+        "Pedido de personalização ou mudança de uso de unidade registrado no comercial",
+        "Equipamento pesado incluído no orçamento sem revisão do estrutural",
+        "Projeto estrutural sem documento de premissas anexado no GED"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "juridica"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "estrutura",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "estrutura_metalica",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "comercial",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Carga real acima da prevista pode causar ruptura de elementos estruturais",
+      "referencias": [
+        "ABNT NBR 6120 – ações para o cálculo de estruturas de edificações"
+      ]
+    },
+    {
+      "codigo": "R06.05",
+      "evento": "Alterações de projeto sem análise técnica dos impactos",
+      "causas": [
+        "Mudança pedida pelo cliente ou pela equipe comercial aprovada só verbalmente",
+        "Substituição de material na obra por falta no mercado sem consulta ao projetista",
+        "Ajuste de layout em campo que afeta estrutura, instalações ou rota de fuga",
+        "Ausência de fluxo formal de solicitação de alteração"
+      ],
+      "consequencias": [
+        "Efeitos em cascata em outras disciplinas descobertos só na execução",
+        "Divergência do projeto aprovado na prefeitura e nos bombeiros",
+        "Custo e prazo adicionais sem aditivo correspondente",
+        "Perda de garantia de sistemas por instalação fora da especificação"
+      ],
+      "controles_preventivos": [
+        "Formulário de solicitação de alteração com análise de impacto por disciplina",
+        "Aprovação da alteração por responsável técnico antes da ordem de serviço",
+        "Estimativa de custo e prazo da alteração lançada antes da execução",
+        "Registro da revisão do projeto no GED com motivo da alteração"
+      ],
+      "controles_resposta": [
+        "Paralisar a execução da alteração até a análise técnica formal",
+        "Avaliar necessidade de reaprovação junto aos órgãos e atualizar o projeto legal"
+      ],
+      "sinais_alerta": [
+        "Ordens de serviço emitidas sem revisão de projeto correspondente",
+        "Pedidos de compra com especificação diferente da prevista no orçamento",
+        "Diário de obra citando mudança solicitada por cliente ou diretoria"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "ordens_servico",
+        "docs_ged",
+        "suprimentos",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.06",
+      "evento": "Falhas na compatibilização BIM",
+      "causas": [
+        "Modelos de disciplinas com nível de desenvolvimento diferente do contratado",
+        "Ausência de plano de execução BIM com regras de coordenadas e nomenclatura",
+        "Detecção de conflitos rodada sem tolerâncias ou com filtros que escondem colisões",
+        "Instalações modeladas só em 2D e fora do modelo federado"
+      ],
+      "consequencias": [
+        "Conflitos físicos descobertos na execução apesar do investimento em BIM",
+        "Quantitativos extraídos do modelo incorretos para orçamento e compras",
+        "Retrabalho de modelagem e atraso na liberação de projetos"
+      ],
+      "controles_preventivos": [
+        "Plano de execução BIM anexado aos contratos de projeto",
+        "Relatório de detecção de conflitos por revisão com status de cada colisão",
+        "Verificação de nível de desenvolvimento dos modelos em cada marco de entrega",
+        "Modelo federado único com coordenadas compartilhadas validado pelo coordenador"
+      ],
+      "controles_resposta": [
+        "Reunião extraordinária de coordenação para conflitos críticos com prazo de solução",
+        "Bloquear liberação para obra das áreas com colisões em aberto"
+      ],
+      "sinais_alerta": [
+        "Quantidade de colisões abertas no modelo por revisão",
+        "Data da última federação do modelo superior à da última revisão de disciplina",
+        "Itens do orçamento sem vínculo com elementos do modelo"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "bim",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "planta_bim",
+        "orcamento",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ISO 19650 – gestão da informação com modelagem da informação da construção"
+      ]
+    },
+    {
+      "codigo": "R06.07",
+      "evento": "Utilização de versões desatualizadas dos projetos",
+      "causas": [
+        "Cópias impressas antigas circulando no canteiro sem recolhimento",
+        "Projetos enviados por e-mail ou aplicativo de mensagem fora do controle de documentos",
+        "Empreiteiros trabalhando com arquivos baixados no início do contrato",
+        "Ausência de lista mestra de revisões vigentes"
+      ],
+      "consequencias": [
+        "Execução de elementos com dimensões ou posições superadas",
+        "Demolição e refazimento de serviços já medidos e pagos",
+        "Compras de materiais com especificação errada"
+      ],
+      "controles_preventivos": [
+        "Lista mestra de documentos com revisão vigente publicada no canteiro",
+        "Carimbo de obsoleto e recolhimento registrado das cópias substituídas",
+        "Acesso dos empreiteiros apenas pelo repositório oficial de projetos",
+        "Protocolo de distribuição assinado a cada nova revisão"
+      ],
+      "controles_resposta": [
+        "Inspecionar os serviços executados com a revisão antiga e decidir aceitação ou correção",
+        "Notificar todos os envolvidos e recolher a revisão superada"
+      ],
+      "sinais_alerta": [
+        "Revisão de projeto publicada no GED sem protocolo de distribuição",
+        "Pedidos de compra referenciando revisão de projeto anterior à vigente",
+        "Não conformidades de inspeção com causa em projeto desatualizado"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.08",
+      "evento": "Falta de definição dos materiais e sistemas construtivos",
+      "causas": [
+        "Memorial descritivo genérico com termos como similar ou de primeira linha",
+        "Escolha de acabamentos adiada para decisão do incorporador ou do cliente",
+        "Sistema de vedação ou fachada não definido na fase de projeto",
+        "Especificação sem desempenho mínimo exigido"
+      ],
+      "consequencias": [
+        "Orçamento sem base confiável e verba estimada estourada",
+        "Compras feitas em cima da hora com prazo de entrega incompatível",
+        "Discussão com compradores sobre padrão de acabamento prometido"
+      ],
+      "controles_preventivos": [
+        "Memorial descritivo com marca, linha e desempenho de cada item relevante",
+        "Cronograma de decisões com data limite para definição de cada material",
+        "Aprovação formal de amostras e painéis protótipo antes da compra",
+        "Bloquear contratação de sistema sem especificação técnica fechada"
+      ],
+      "controles_resposta": [
+        "Definir especificação provisória com aval técnico e registrar a decisão",
+        "Antecipar cotações das alternativas para não travar o cronograma"
+      ],
+      "sinais_alerta": [
+        "Itens do orçamento em verba ou sem especificação técnica",
+        "Pedidos de compra parados aguardando definição de especificação",
+        "Atividades do cronograma dependentes de material ainda indefinido"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "contratacao",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "orcamento",
+        "suprimentos",
+        "planejamento",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.09",
+      "evento": "Soluções técnicas inviáveis ou excessivamente caras",
+      "causas": [
+        "Projeto arquitetônico concebido sem análise de construtibilidade",
+        "Estrutura superdimensionada por excesso de conservadorismo ou falta de otimização",
+        "Sistema especificado sem fornecedor ou mão de obra disponível na região",
+        "Ausência de comparação de alternativas na fase de estudo preliminar"
+      ],
+      "consequencias": [
+        "Custo por metro quadrado acima do previsto na viabilidade",
+        "Necessidade de reprojeto após o início da obra",
+        "Prazo maior por dependência de equipe ou equipamento especializado"
+      ],
+      "controles_preventivos": [
+        "Análise de construtibilidade com a equipe de obra antes do projeto executivo",
+        "Estudo comparativo de alternativas com custo e prazo documentado",
+        "Comparar taxas de consumo de aço e concreto com referências de obras similares",
+        "Consulta prévia a fornecedores locais para sistemas não convencionais"
+      ],
+      "controles_resposta": [
+        "Rodada de engenharia de valor com projetistas e registro das alternativas aprovadas"
+      ],
+      "sinais_alerta": [
+        "Custo orçado por metro quadrado acima do CUB ou de obras similares da empresa",
+        "Taxa de aço por metro cúbico de concreto fora da faixa usual",
+        "Itens do orçamento com fornecedor único cotado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado",
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "orcamento",
+        "imovib",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.10",
+      "evento": "Não atendimento a requisitos de acessibilidade, incêndio ou desempenho",
+      "causas": [
+        "Projetista sem domínio das instruções técnicas do Corpo de Bombeiros do estado",
+        "Rotas acessíveis, rampas e sanitários adaptados dimensionados fora da norma",
+        "Ausência de definição dos níveis de desempenho acústico e térmico",
+        "Escada de emergência ou compartimentação eliminadas para ganho de área"
+      ],
+      "consequencias": [
+        "Indeferimento do projeto ou do auto de vistoria do Corpo de Bombeiros",
+        "Atraso ou impedimento do habite-se e da entrega",
+        "Risco à vida dos ocupantes em caso de incêndio",
+        "Ações de compradores por desempenho inferior ao normativo"
+      ],
+      "controles_preventivos": [
+        "Checklist normativo de acessibilidade, incêndio e desempenho por disciplina",
+        "Aprovação prévia do projeto de prevenção no Corpo de Bombeiros antes da execução",
+        "Definição documentada dos níveis de desempenho no memorial",
+        "Revisão de rotas acessíveis e de fuga em cada revisão de arquitetura"
+      ],
+      "controles_resposta": [
+        "Reprojetar e executar adequações antes da vistoria final",
+        "Negociar com o órgão cronograma de adequação registrado formalmente"
+      ],
+      "sinais_alerta": [
+        "Projeto de prevenção sem protocolo de aprovação no GED",
+        "Exigências emitidas pelo Corpo de Bombeiros ainda abertas",
+        "Alteração de arquitetura sem revisão do projeto de incêndio"
+      ],
+      "dimensoes": [
+        "juridica",
+        "seguranca",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "edificacao_antiga",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha em proteção contra incêndio expõe ocupantes a risco de morte e impede a ocupação",
+      "referencias": [
+        "ABNT NBR 9050 – acessibilidade a edificações, mobiliário, espaços e equipamentos urbanos",
+        "ABNT NBR 15575 – desempenho de edificações habitacionais"
+      ]
+    },
+    {
+      "codigo": "R06.11",
+      "evento": "Ausência ou insuficiência de revisão e verificação independente",
+      "causas": [
+        "Contratação de projeto sem verba ou prazo para verificação externa",
+        "Revisão feita pelo próprio autor ou pela mesma equipe",
+        "Pressão de cronograma para liberar projetos sem análise crítica",
+        "Falta de critério de quais projetos exigem verificação independente"
+      ],
+      "consequencias": [
+        "Erros de concepção ou de cálculo chegam à execução",
+        "Retrabalho e reforço caros detectados tarde",
+        "Fragilidade na defesa técnica em caso de sinistro ou litígio"
+      ],
+      "controles_preventivos": [
+        "Política escrita de verificação independente por porte e disciplina",
+        "Relatório de verificação com apontamentos e respostas arquivado no GED",
+        "Previsão de verba de verificação no orçamento de projetos",
+        "Marco do cronograma que bloqueia liberação sem verificação concluída"
+      ],
+      "controles_resposta": [
+        "Contratar verificação emergencial dos elementos já executados de maior risco"
+      ],
+      "sinais_alerta": [
+        "Projetos liberados para obra sem relatório de verificação anexado",
+        "Orçamento de projetos sem item de verificação independente",
+        "Apontamentos de verificação sem resposta do projetista"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "protensao",
+        "estrutura_metalica",
+        "contencao",
+        "fundacao_profunda"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "orcamento",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R06.12",
+      "evento": "Falhas na responsabilidade técnica, nas ARTs ou nos RRTs aplicáveis",
+      "causas": [
+        "Projetos ou execução sem ART ou RRT registrado antes do início",
+        "Responsável técnico desligado ou substituído sem baixa e nova anotação",
+        "ART de execução que não cobre todas as atividades realizadas",
+        "Empreiteiros especializados sem responsável técnico próprio"
+      ],
+      "consequencias": [
+        "Autuação pelo CREA ou CAU e multas",
+        "Embargo da obra ou impedimento de alvará e habite-se",
+        "Ausência de responsável legal identificável em caso de acidente ou colapso",
+        "Responsabilização pessoal de diretores e engenheiros"
+      ],
+      "controles_preventivos": [
+        "Matriz de responsabilidade técnica por disciplina com ART ou RRT anexada",
+        "Validação no GED do registro de ART antes de liberar a ordem de serviço",
+        "Exigir ART do empreiteiro especializado como condição de contrato",
+        "Revisão da matriz a cada troca de responsável técnico"
+      ],
+      "controles_resposta": [
+        "Registrar ART ou RRT complementar ou de substituição imediatamente",
+        "Paralisar a atividade sem responsável técnico até regularização"
+      ],
+      "sinais_alerta": [
+        "Disciplinas ou contratos sem ART ou RRT anexado no GED",
+        "Desligamento de engenheiro responsável registrado na folha",
+        "Atividade iniciada no cronograma sem responsável técnico vinculado"
+      ],
+      "dimensoes": [
+        "juridica",
+        "seguranca",
+        "operacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "inicio_obra",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "contratos",
+        "rh",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Obra sem responsável técnico anotado pode ser embargada e gera responsabilização pessoal",
+      "referencias": [
+        "Lei 6.496/1977 – anotação de responsabilidade técnica",
+        "Lei 12.378/2010 – exercício da arquitetura e urbanismo e RRT"
+      ]
+    }
+  ]
+}

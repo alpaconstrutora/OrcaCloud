@@ -21,6 +21,7 @@ import { usePersistedState } from './ui/TableUtils';
 import TabsBar from './ui/TabsBar';
 import StandardTable, { StandardTableColumn } from './ui/StandardTable';
 import { chavePorNome, chavePorRotulo } from '../utils/agruparLinhas';
+import { riskService } from '../services/riskService';
 
 // Colunas da tabela padrão (§6.10)
 const CHECKLIST_COLUMNS: StandardTableColumn[] = [
@@ -448,6 +449,16 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
         staleTime: STALE.normal, enabled: view === 'regulatory',
     });
 
+    // Módulo Riscos (F1.12, docs/planos/2026-11-13-modulo-riscos.md): quantos riscos do
+    // módulo apontam para cada documento. Só leitura e só contagem — o SST não ganha
+    // tela nem tabela. Falhou (ex.: tabela do módulo ainda não aplicada): sem contador.
+    const regDocIds = regDocs.map(d => d.id);
+    const { data: riscosVinculados = {} } = useQuery({
+        queryKey: [...laborKeys.all, 'sstRegDocsRiscos', orgId, regDocIds.join(',')],
+        queryFn: () => riskService.contarVinculosSst(regDocIds),
+        staleTime: STALE.normal, enabled: view === 'regulatory' && regDocIds.length > 0, retry: false,
+    });
+
     const invalidate = () => {
         qc.invalidateQueries({ queryKey: accidentsKey });
         qc.invalidateQueries({ queryKey: indicatorsKey });
@@ -751,6 +762,11 @@ const LaborSST: React.FC<LaborSSTProps> = ({ orgId, employees, projects = [], or
                                                         )}
                                                         {doc.data_revisao && (
                                                             <span className="text-xs text-slate-400">Revisão: {doc.data_revisao}</span>
+                                                        )}
+                                                        {(riscosVinculados[doc.id] ?? 0) > 0 && (
+                                                            <span className="text-xs text-slate-500 flex items-center gap-1" title="Riscos do módulo Riscos ligados a este documento">
+                                                                <ShieldAlert className="w-3 h-3" /> {riscosVinculados[doc.id]} risco{riscosVinculados[doc.id] === 1 ? ' vinculado' : 's vinculados'}
+                                                            </span>
                                                         )}
                                                     </div>
                                                     {doc.observacoes && (

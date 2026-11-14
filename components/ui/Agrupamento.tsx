@@ -110,9 +110,19 @@ export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlterna
     return (
         <tr>
             <td colSpan={colSpan} className="p-0">
+                {/* role=button + Enter/Espaço + aria-expanded: até 14/11/2026 o grupo só recolhia
+                    com o mouse (div sem foco). Fica div, não <button>, porque há um div dentro
+                    (o bloco sticky) e os testes leem o cabeçalho por closest('div'). */}
                 <div
+                    role="button"
+                    tabIndex={0}
+                    aria-expanded={!recolhido}
                     onClick={() => onAlternar(grupo.key)}
-                    className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
+                    onKeyDown={e => {
+                        if (e.target !== e.currentTarget) return;
+                        if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onAlternar(grupo.key); }
+                    }}
+                    className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-blue-500"
                 >
                     {/* Rótulo, contagem e total ficam à vista quando a tabela rola na horizontal
                         (`sticky left-0`; `-ml-6 pl-6` estende o fundo sobre o recuo, §6.13): numa tabela mais larga que a

@@ -1,0 +1,1554 @@
+{
+  "categoria": "R14",
+  "nome": "Riscos de segurança e saúde ocupacional",
+  "itens": [
+    {
+      "codigo": "R14.01",
+      "evento": "Queda de trabalhadores de altura",
+      "causas": [
+        "Periferia de laje sem guarda-corpo ou com proteção removida",
+        "Aberturas no piso, poços de elevador e shafts sem fechamento",
+        "Ponto de ancoragem inexistente ou sem dimensionamento",
+        "Trabalho sobre telhado frágil sem plataforma ou linha de vida"
+      ],
+      "consequencias": [
+        "Morte ou lesão incapacitante",
+        "Interdição da frente ou da obra pela fiscalização",
+        "Responsabilização criminal e indenização à família"
+      ],
+      "controles_preventivos": [
+        "Montagem e pré-fabricação ao nível do solo para eliminar tarefas em altura",
+        "Guarda-corpo de periferia e fechamento de aberturas instalados antes da liberação da laje, com checklist",
+        "Sistema de ancoragem projetado com responsável técnico e inspecionado",
+        "APR e permissão de trabalho em altura com trabalhador capacitado e ASO apto",
+        "Cinto paraquedista com talabarte duplo inspecionado e entrega registrada"
+      ],
+      "controles_resposta": [
+        "Plano de resgate em altura com equipe treinada e equipamento no local",
+        "Atendimento à vítima, emissão da CAT e preservação do local para investigação"
+      ],
+      "sinais_alerta": [
+        "Treinamento de NR-35 vencido",
+        "ASO sem aptidão para trabalho em altura",
+        "Checklist de proteção periférica reprovado ou quase-acidente de queda registrado"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura",
+        "estrutura_concreto",
+        "estrutura_metalica",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queda de altura é causa frequente de morte na construção civil",
+      "referencias": [
+        "NR-35 – trabalho em altura",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.02",
+      "evento": "Queda de objetos, materiais ou ferramentas",
+      "causas": [
+        "Material estocado junto à borda da laje",
+        "Falta de plataformas de proteção e de tela na fachada",
+        "Ferramentas sem amarração em trabalho em altura",
+        "Içamento de material solto ou mal amarrado"
+      ],
+      "consequencias": [
+        "Morte ou lesão grave de trabalhador ou pedestre",
+        "Dano a imóveis e veículos vizinhos",
+        "Interdição e ação de vizinhos"
+      ],
+      "controles_preventivos": [
+        "Plataformas de proteção e tela fachadeira instaladas e inspecionadas por pavimento",
+        "Rodapé em todos os guarda-corpos e proibição de estoque na borda",
+        "Isolamento e sinalização da área sob trabalho em altura e sob içamento",
+        "Ferramentas com cordão de retenção em trabalho em altura",
+        "Capacete com jugular de uso obrigatório nas áreas de risco"
+      ],
+      "controles_resposta": [
+        "Isolar a área e atender a vítima",
+        "Suspender içamentos e trabalho na vertical até a investigação"
+      ],
+      "sinais_alerta": [
+        "Checklist de plataformas de proteção reprovado",
+        "Quase-acidente de queda de material registrado",
+        "Reclamação de vizinho por objeto caído"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura",
+        "vizinhanca_proxima",
+        "area_urbana_densa",
+        "grua_ou_guindaste"
+      ],
+      "integracoes": [
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Objeto em queda livre pode matar trabalhador ou pedestre",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.03",
+      "evento": "Soterramento em escavações",
+      "causas": [
+        "Vala ou cava sem talude estável ou sem escoramento dimensionado",
+        "Material escavado e equipamentos junto à borda",
+        "Infiltração de chuva ou lençol freático na escavação",
+        "Vibração de tráfego ou máquinas próximas ao corte"
+      ],
+      "consequencias": [
+        "Morte por soterramento",
+        "Ruptura que atinge redes, vias ou imóveis vizinhos",
+        "Interdição da escavação e atraso das fundações"
+      ],
+      "controles_preventivos": [
+        "Métodos que dispensam entrada na vala, como escavação mecanizada e método não destrutivo",
+        "Projeto de contenção ou escoramento com responsável técnico antes de escavar",
+        "Faixa livre na borda sem material e sem máquinas, sinalizada",
+        "Inspeção da escavação antes de cada turno e após chuva, com registro",
+        "Escada de acesso e saída a cada trecho da vala"
+      ],
+      "controles_resposta": [
+        "Resgate sem entrada de pessoas na vala instável e acionamento dos bombeiros",
+        "Interromper a escavação e reforçar a contenção antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Escavação iniciada sem projeto de escoramento no GED",
+        "Previsão de chuva forte com valas abertas",
+        "Trincas na borda ou deformação do escoramento registradas"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "escavacao_profunda",
+        "subsolo",
+        "contencao",
+        "nivel_agua_alto"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Soterramento em vala costuma ser fatal em poucos minutos",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "ABNT NBR 9061 – segurança de escavação a céu aberto"
+      ]
+    },
+    {
+      "codigo": "R14.04",
+      "evento": "Choques elétricos e eletrocussão",
+      "causas": [
+        "Instalação provisória do canteiro sem projeto, com emendas e condutores expostos",
+        "Circuitos sem dispositivo diferencial residual e sem aterramento",
+        "Grua, betoneira ou andaime próximos à rede aérea da concessionária",
+        "Serviço em circuito energizado sem bloqueio"
+      ],
+      "consequencias": [
+        "Morte por eletrocussão",
+        "Queimaduras graves e queda de altura após o choque",
+        "Interdição da instalação elétrica e paralisação do canteiro"
+      ],
+      "controles_preventivos": [
+        "Desligamento, isolamento ou desvio da rede aérea pela concessionária antes de operar próximo",
+        "Projeto da instalação provisória com DR e aterramento, inspecionado mensalmente com registro",
+        "Bloqueio e etiquetagem com permissão de trabalho para serviços em circuitos",
+        "Serviços elétricos só por trabalhadores com NR-10 e autorização formal",
+        "Luvas isolantes e vestimenta adequada com entrega registrada"
+      ],
+      "controles_resposta": [
+        "Desenergizar o circuito antes de socorrer a vítima",
+        "Primeiros socorros com reanimação e remoção imediata ao hospital"
+      ],
+      "sinais_alerta": [
+        "Checklist da instalação elétrica provisória reprovado",
+        "Treinamento de NR-10 vencido",
+        "Quadro de distribuição sem DR identificado na inspeção"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "edificacao_antiga",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Contato com parte energizada pode causar morte imediata",
+      "referencias": [
+        "NR-10 – segurança em instalações e serviços em eletricidade",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "ABNT NBR 5410 – instalações elétricas de baixa tensão"
+      ]
+    },
+    {
+      "codigo": "R14.05",
+      "evento": "Esmagamento por cargas suspensas",
+      "causas": [
+        "Içamento de carga pesada sem plano de içamento",
+        "Cintas, cabos e manilhas danificados ou sem identificação de capacidade",
+        "Trabalhador sob a carga ou no raio de giro",
+        "Vento acima do limite ou comunicação falha com o sinaleiro"
+      ],
+      "consequencias": [
+        "Morte ou esmagamento de membros",
+        "Tombamento do equipamento atingindo vizinhos",
+        "Interdição do equipamento e atraso da montagem"
+      ],
+      "controles_preventivos": [
+        "Plano de içamento com responsável técnico para cargas críticas e pré-moldados",
+        "Inspeção de acessórios de içamento com registro e descarte dos reprovados",
+        "Isolamento do raio de giro e proibição de permanência sob a carga",
+        "Operador, sinaleiro e amarrador capacitados e autorizados",
+        "Anemômetro na grua e limite de vento definido no procedimento"
+      ],
+      "controles_resposta": [
+        "Interromper todos os içamentos e atender a vítima",
+        "Inspeção do equipamento por profissional habilitado antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Acessórios de içamento sem inspeção registrada",
+        "Operador de grua sem capacitação vigente",
+        "Quase-acidente em içamento registrado"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "pre_moldado",
+        "estrutura_metalica"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Carga suspensa em queda pode esmagar e matar trabalhadores",
+      "referencias": [
+        "NR-11 – transporte, movimentação, armazenagem e manuseio de materiais",
+        "NR-12 – segurança no trabalho em máquinas e equipamentos",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.06",
+      "evento": "Atropelamento por veículos e máquinas",
+      "causas": [
+        "Vias de pedestres e de máquinas sem separação física",
+        "Manobra de ré sem sinaleiro e sem alarme sonoro",
+        "Pontos cegos de escavadeiras, pás carregadeiras e caminhões",
+        "Entrada e saída de caminhões cruzando a calçada"
+      ],
+      "consequencias": [
+        "Morte ou lesão grave de trabalhador ou pedestre",
+        "Paralisação da terraplenagem e interdição de máquinas",
+        "Ação de terceiros atingidos na via pública"
+      ],
+      "controles_preventivos": [
+        "Layout de canteiro com vias de máquinas e de pedestres separadas por barreira",
+        "Alarme de ré, câmera e espelhos verificados no checklist diário da máquina",
+        "Sinaleiro obrigatório em manobras e na entrada de caminhões",
+        "Limite de velocidade sinalizado no canteiro",
+        "Colete refletivo para quem circula em área de máquinas"
+      ],
+      "controles_resposta": [
+        "Parar a máquina, atender a vítima e isolar o local",
+        "Revisar o plano de circulação antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Máquinas sem checklist diário registrado",
+        "Quase-acidente de atropelamento registrado",
+        "Operador sem habilitação cadastrada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "escavacao_profunda",
+        "area_urbana_densa",
+        "terreno_inclinado"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atropelamento por máquina pesada costuma ser fatal",
+      "referencias": [
+        "NR-11 – transporte, movimentação, armazenagem e manuseio de materiais",
+        "NR-12 – segurança no trabalho em máquinas e equipamentos",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.07",
+      "evento": "Aprisionamento em máquinas e equipamentos",
+      "causas": [
+        "Serra circular, policorte, betoneira ou dobradeira sem proteção das partes móveis",
+        "Manutenção e limpeza com o equipamento energizado",
+        "Equipamentos improvisados ou adaptados no canteiro",
+        "Roupa solta, luvas ou cabelo próximos a eixos e correias"
+      ],
+      "consequencias": [
+        "Amputação ou esmagamento de mãos e membros",
+        "Interdição do equipamento pela fiscalização",
+        "Afastamento longo e indenização"
+      ],
+      "controles_preventivos": [
+        "Substituir equipamentos sem proteção por modelos conformes",
+        "Proteções fixas e dispositivos de parada de emergência verificados no checklist",
+        "Bloqueio e etiquetagem antes de manutenção e limpeza",
+        "Operação só por trabalhador capacitado e autorizado no equipamento"
+      ],
+      "controles_resposta": [
+        "Desligar e bloquear o equipamento e liberar a vítima com ferramentas adequadas",
+        "Retirar o equipamento de uso até correção e nova inspeção"
+      ],
+      "sinais_alerta": [
+        "Checklist de máquinas reprovado",
+        "Equipamento sem manual ou sem registro de manutenção",
+        "Quase-acidente com máquina registrado"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Partes móveis sem proteção causam amputações e lesões incapacitantes",
+      "referencias": [
+        "NR-12 – segurança no trabalho em máquinas e equipamentos",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.08",
+      "evento": "Desabamento de estruturas provisórias",
+      "causas": [
+        "Escoramento, galerias e plataformas sem projeto ou montados em desacordo",
+        "Sobrecarga de material sobre plataformas e bandejas",
+        "Tapume e estruturas provisórias sem verificação a vento",
+        "Retirada de peças do escoramento durante a concretagem"
+      ],
+      "consequencias": [
+        "Morte de vários trabalhadores no colapso",
+        "Atingimento de pedestres e imóveis vizinhos",
+        "Interdição da obra e perícia criminal"
+      ],
+      "controles_preventivos": [
+        "Projeto com responsável técnico para escoramento, galerias, bandejas e tapumes",
+        "Liberação por escrito da estrutura provisória antes do primeiro uso",
+        "Carga máxima sinalizada em plataformas e controle de estoque sobre elas",
+        "Inspeção após ventos fortes e chuvas, com registro"
+      ],
+      "controles_resposta": [
+        "Evacuar a área e isolar o entorno",
+        "Avaliação de estabilidade por engenheiro antes de qualquer resgate ou retomada"
+      ],
+      "sinais_alerta": [
+        "Estrutura provisória montada sem projeto no GED",
+        "Inspeção pós-temporal não registrada",
+        "Deformação visível do escoramento registrada no diário"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "contencao",
+        "vizinhanca_proxima",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "sst",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Colapso de estrutura provisória pode matar várias pessoas",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "ABNT NBR 15696 – fôrmas e escoramentos para estruturas de concreto"
+      ]
+    },
+    {
+      "codigo": "R14.09",
+      "evento": "Acidentes em andaimes, plataformas e escadas",
+      "causas": [
+        "Andaime com guarda-corpo incompleto ou pisos soltos",
+        "Base do andaime sobre terreno instável ou calço improvisado",
+        "Escada de mão improvisada, emendada ou sem amarração",
+        "Plataforma elevatória operada sem capacitação"
+      ],
+      "consequencias": [
+        "Queda com morte ou fraturas graves",
+        "Tombamento do andaime sobre a via ou o vizinho",
+        "Interdição dos andaimes da obra"
+      ],
+      "controles_preventivos": [
+        "Substituir escadas de mão por plataformas ou andaimes com piso completo",
+        "Andaimes montados conforme projeto ou manual do fabricante por equipe capacitada",
+        "Liberação diária com etiqueta de liberado ou interditado e registro",
+        "Plataformas elevatórias só com operador capacitado e checklist pré-uso",
+        "Cinto paraquedista ancorado quando exigido pela análise de risco"
+      ],
+      "controles_resposta": [
+        "Interditar o andaime e atender a vítima",
+        "Inspeção de todos os andaimes da obra antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Andaime em uso sem liberação diária registrada",
+        "Quase-acidente em andaime ou escada registrado",
+        "Treinamento de montador de andaime vencido"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura",
+        "edificacao_antiga",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha de andaime ou escada provoca quedas fatais",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "NR-35 – trabalho em altura"
+      ]
+    },
+    {
+      "codigo": "R14.10",
+      "evento": "Acidentes em espaços confinados",
+      "causas": [
+        "Reservatórios, poços de visita, caixas, galerias e tubulões não identificados como confinados",
+        "Atmosfera pobre em oxigênio ou com gases de esgoto e de motores",
+        "Entrada sem medição de gases e sem vigia",
+        "Resgate improvisado por colegas sem proteção"
+      ],
+      "consequencias": [
+        "Morte por asfixia ou intoxicação, com vítimas múltiplas",
+        "Interdição da atividade",
+        "Responsabilização criminal dos responsáveis"
+      ],
+      "controles_preventivos": [
+        "Eliminar a entrada com inspeção por câmera ou execução pelo lado externo",
+        "Cadastro e sinalização de todos os espaços confinados da obra",
+        "Permissão de entrada com medição contínua de gases e vigia permanente",
+        "Ventilação mecânica e detector de gases calibrado com registro",
+        "Capacitação de trabalhadores, vigias e supervisor conforme NR-33"
+      ],
+      "controles_resposta": [
+        "Resgate só por equipe treinada com equipamento autônomo e tripé",
+        "Acionar os bombeiros e manter ventilação até a retirada"
+      ],
+      "sinais_alerta": [
+        "Permissão de entrada sem registro de medição",
+        "Treinamento de NR-33 vencido",
+        "Detector de gases sem calibração em dia"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "instalacoes",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "espaco_confinado",
+        "subsolo",
+        "fundacao_profunda"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atmosfera de espaço confinado mata em minutos, inclusive quem tenta socorrer",
+      "referencias": [
+        "NR-33 – segurança e saúde nos trabalhos em espaços confinados"
+      ]
+    },
+    {
+      "codigo": "R14.11",
+      "evento": "Incêndios e explosões",
+      "causas": [
+        "Solventes, combustíveis e gás armazenados sem ventilação ou segregação",
+        "Trabalho a quente próximo a isopor, madeira, mantas e espumas",
+        "Instalação elétrica provisória sobrecarregada",
+        "Cilindros de gás sem fixação e sem válvulas de segurança"
+      ],
+      "consequencias": [
+        "Mortes e queimaduras graves",
+        "Perda de parte da obra e de materiais estocados",
+        "Propagação para imóveis vizinhos e interdição"
+      ],
+      "controles_preventivos": [
+        "Substituir produtos à base de solvente por produtos à base de água",
+        "Depósito de inflamáveis ventilado, sinalizado e afastado das frentes",
+        "Extintores dimensionados, inspecionados e brigada treinada",
+        "Permissão de trabalho a quente com retirada de combustíveis do entorno",
+        "Plano de emergência com rotas de fuga sinalizadas"
+      ],
+      "controles_resposta": [
+        "Abandono da área e combate inicial pela brigada",
+        "Acionar bombeiros e cortar energia e gás"
+      ],
+      "sinais_alerta": [
+        "Extintores com inspeção vencida",
+        "Inspeção do depósito de inflamáveis reprovada",
+        "Trabalho a quente sem permissão registrada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada",
+        "area_urbana_densa",
+        "estrutura_metalica"
+      ],
+      "integracoes": [
+        "sst",
+        "suprimentos",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Incêndio ou explosão no canteiro pode causar mortes",
+      "referencias": [
+        "NR-20 – segurança e saúde no trabalho com inflamáveis e combustíveis",
+        "NR-23 – proteção contra incêndios",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.12",
+      "evento": "Queimaduras e acidentes em trabalhos a quente",
+      "causas": [
+        "Soldagem e corte com maçarico sem anteparos",
+        "Aplicação de manta asfáltica com chama aberta",
+        "Contato com asfalto quente ou com peças recém-soldadas",
+        "Mangueiras e cilindros de oxiacetileno sem válvula corta-chama"
+      ],
+      "consequencias": [
+        "Queimaduras graves e lesões oculares",
+        "Princípio de incêndio em materiais próximos",
+        "Afastamento prolongado do trabalhador"
+      ],
+      "controles_preventivos": [
+        "Impermeabilização a frio no lugar de manta a maçarico onde a técnica permitir",
+        "Biombos e mantas antichama no posto de solda",
+        "Permissão de trabalho a quente com vigia de fogo",
+        "Válvulas corta-chama nos conjuntos de oxiacetileno verificadas no checklist",
+        "Máscara de solda, avental e luvas de raspa com entrega registrada"
+      ],
+      "controles_resposta": [
+        "Resfriar a queimadura com água corrente e remover ao hospital",
+        "Inspeção do local por 30 minutos após o fim do serviço"
+      ],
+      "sinais_alerta": [
+        "Trabalho a quente sem permissão registrada",
+        "Checklist de equipamento de solda reprovado"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_metalica"
+      ],
+      "integracoes": [
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queimaduras extensas e lesões oculares são lesões graves",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "NR-6 – equipamento de proteção individual"
+      ]
+    },
+    {
+      "codigo": "R14.13",
+      "evento": "Exposição a poeira respirável e sílica cristalina",
+      "causas": [
+        "Corte a seco de blocos, porcelanato e concreto",
+        "Lixamento, apicoamento e escarificação sem captação de pó",
+        "Demolição e varrição a seco",
+        "Ambientes fechados sem ventilação"
+      ],
+      "consequencias": [
+        "Silicose irreversível e câncer de pulmão",
+        "Doença ocupacional reconhecida com indenização",
+        "Pagamento de adicional de insalubridade"
+      ],
+      "controles_preventivos": [
+        "Corte a úmido ou ferramentas com aspiração acoplada no lugar do corte a seco",
+        "Umectação na demolição e proibição de varrição a seco",
+        "Avaliação quantitativa da exposição a sílica registrada no PGR",
+        "Respirador PFF2 ou superior com ensaio de vedação e entrega registrada",
+        "Exames do PCMSO para expostos (raio-x de tórax e espirometria)"
+      ],
+      "controles_resposta": [
+        "Afastar da exposição o trabalhador com alteração nos exames",
+        "Reavaliar o método de corte na frente com exposição medida acima do limite"
+      ],
+      "sinais_alerta": [
+        "Entrega de respirador sem registro para funções expostas",
+        "Exames periódicos do PCMSO vencidos para expostos",
+        "Corte a seco observado em inspeção de SST"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "edificacao_antiga",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "suprimentos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Sílica cristalina causa silicose irreversível e câncer de pulmão",
+      "referencias": [
+        "NR-15 – atividades e operações insalubres (anexo 12, poeiras minerais)",
+        "NR-1 – disposições gerais e gerenciamento de riscos ocupacionais",
+        "NR-7 – programa de controle médico de saúde ocupacional"
+      ]
+    },
+    {
+      "codigo": "R14.14",
+      "evento": "Exposição excessiva a ruído e vibrações",
+      "causas": [
+        "Uso prolongado de marteletes, rompedores, serras e compactadores",
+        "Bate-estaca e vibração de máquinas pesadas",
+        "Exposição sem rodízio nem limite de tempo",
+        "Equipamentos sem manutenção, mais ruidosos e vibrantes"
+      ],
+      "consequencias": [
+        "Perda auditiva induzida por ruído",
+        "Distúrbios vasculares e articulares por vibração de mãos e braços",
+        "Adicional de insalubridade e ações por doença ocupacional",
+        "Reclamações de vizinhos e restrição de horário de trabalho"
+      ],
+      "controles_preventivos": [
+        "Métodos menos ruidosos, como estaca hélice contínua no lugar de bate-estaca",
+        "Ferramentas de baixa vibração e manutenção periódica registrada",
+        "Rodízio e limite de tempo de exposição definidos no PGR",
+        "Audiometrias do PCMSO para expostos",
+        "Protetor auditivo com CA e entrega registrada"
+      ],
+      "controles_resposta": [
+        "Remanejar o trabalhador com alteração audiométrica",
+        "Medir novamente a exposição após mudança de equipamento"
+      ],
+      "sinais_alerta": [
+        "Audiometria periódica vencida",
+        "Entrega de protetor auditivo sem registro",
+        "Reclamações de vizinhos por ruído"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "fundacao_profunda",
+        "demolicao",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-15 – atividades e operações insalubres (anexos 1 e 8, ruído e vibração)",
+        "NR-9 – avaliação e controle das exposições ocupacionais a agentes físicos, químicos e biológicos"
+      ]
+    },
+    {
+      "codigo": "R14.15",
+      "evento": "Exposição a produtos químicos perigosos",
+      "causas": [
+        "Solventes, resinas epóxi, desmoldantes e ácidos usados em ambientes fechados",
+        "Contato prolongado com cimento e argamassa úmidos",
+        "Ausência das fichas de segurança dos produtos no canteiro",
+        "Amianto em telhas e caixas d'água de edificações antigas"
+      ],
+      "consequencias": [
+        "Intoxicação aguda e queimaduras químicas na pele e nos olhos",
+        "Dermatites e doenças respiratórias ocupacionais",
+        "Contaminação do solo e de redes por descarte incorreto"
+      ],
+      "controles_preventivos": [
+        "Substituir por produtos de menor toxicidade, sem solvente",
+        "Ficha de segurança disponível e rotulagem em todos os recipientes",
+        "Ventilação forçada em ambientes fechados durante a aplicação",
+        "Treinamento sobre os produtos com lista de presença",
+        "Luvas, óculos e respirador indicados na ficha com entrega registrada"
+      ],
+      "controles_resposta": [
+        "Lavar a área atingida e encaminhar ao atendimento com a ficha do produto",
+        "Conter e recolher derramamentos com material absorvente"
+      ],
+      "sinais_alerta": [
+        "Produto químico no almoxarifado sem ficha de segurança",
+        "Entrega de EPI químico sem registro",
+        "Casos de dermatite nos atestados"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "ambiental",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "demolicao",
+        "espaco_confinado"
+      ],
+      "integracoes": [
+        "sst",
+        "suprimentos",
+        "rh"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Intoxicação aguda e queimadura química nos olhos podem causar lesão grave",
+      "referencias": [
+        "NR-26 – sinalização de segurança e rotulagem de produtos químicos",
+        "NR-9 – avaliação e controle das exposições ocupacionais a agentes físicos, químicos e biológicos",
+        "NR-15 – atividades e operações insalubres"
+      ]
+    },
+    {
+      "codigo": "R14.16",
+      "evento": "Lesões musculoesqueléticas e riscos ergonômicos",
+      "causas": [
+        "Transporte manual de sacos de cimento, blocos e vergalhões",
+        "Posturas forçadas na armação, no assentamento de piso e no forro",
+        "Tarefas repetitivas sem pausa",
+        "Ferramentas pesadas operadas acima da linha dos ombros"
+      ],
+      "consequencias": [
+        "Lombalgias, hérnias e tendinites com afastamento",
+        "Queda de produtividade",
+        "Reconhecimento de doença ocupacional e indenização"
+      ],
+      "controles_preventivos": [
+        "Mecanizar o transporte com grua, guincho, paleteira e carrinhos",
+        "Comprar materiais em embalagens menores ou paletizadas",
+        "Bancadas de corte e dobra na altura de trabalho adequada",
+        "Avaliação ergonômica preliminar das atividades registrada no PGR",
+        "Rodízio de tarefas e pausas programadas"
+      ],
+      "controles_resposta": [
+        "Encaminhar ao médico do trabalho e readaptar a função",
+        "Revisar o posto de trabalho após o afastamento"
+      ],
+      "sinais_alerta": [
+        "Atestados por dores osteomusculares acima da média",
+        "Avaliação ergonômica ausente para funções de carga manual"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "sst",
+        "rh",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-17 – ergonomia"
+      ]
+    },
+    {
+      "codigo": "R14.17",
+      "evento": "Estresse térmico e exposição a calor extremo",
+      "causas": [
+        "Trabalho em laje e cobertura expostas ao sol",
+        "Atividades pesadas nos horários mais quentes",
+        "Falta de água fresca e de áreas de sombra",
+        "Trabalho junto a fontes de calor, como asfalto e solda"
+      ],
+      "consequencias": [
+        "Insolação e intermação, potencialmente fatais",
+        "Desmaio seguido de queda de altura",
+        "Queda de produtividade e afastamentos"
+      ],
+      "controles_preventivos": [
+        "Tarefas pesadas reprogramadas para os horários mais frescos",
+        "Áreas de descanso sombreadas e água fresca em todas as frentes",
+        "Medição de IBUTG e regime de trabalho e descanso definido no PGR",
+        "Aclimatação de recém-admitidos e orientação sobre sinais de alerta",
+        "Uniforme de manga longa com proteção solar"
+      ],
+      "controles_resposta": [
+        "Levar a vítima à sombra, resfriar e remover ao hospital",
+        "Suspender a atividade exposta nos picos de calor"
+      ],
+      "sinais_alerta": [
+        "Alertas de onda de calor para a região da obra",
+        "Inspeção de SST sem água disponível na frente",
+        "Atendimentos por mal-estar no canteiro"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "sst",
+        "planejamento",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Intermação pode ser fatal e desmaio em altura provoca queda",
+      "referencias": [
+        "NR-15 – atividades e operações insalubres (anexo 3, calor)"
+      ]
+    },
+    {
+      "codigo": "R14.18",
+      "evento": "Exposição a agentes biológicos",
+      "causas": [
+        "Contato com esgoto em redes existentes e em reformas",
+        "Água parada no canteiro favorecendo mosquitos",
+        "Fezes de pombos e roedores em edificações antigas",
+        "Instalações sanitárias e refeitório precários"
+      ],
+      "consequencias": [
+        "Leptospirose, hepatites e dengue entre trabalhadores",
+        "Surtos com afastamento de várias pessoas",
+        "Autuação por condições sanitárias inadequadas"
+      ],
+      "controles_preventivos": [
+        "Inspeção semanal de criadouros com registro e eliminação de água parada",
+        "Limpeza e desratização antes de demolição ou reforma",
+        "Vacinação prevista no PCMSO para funções expostas",
+        "Instalações sanitárias e refeitório conformes, inspecionados com checklist",
+        "Luvas e botas impermeáveis para contato com esgoto, com entrega registrada"
+      ],
+      "controles_resposta": [
+        "Encaminhar trabalhador com febre após exposição ao atendimento médico",
+        "Interditar a área contaminada até a limpeza"
+      ],
+      "sinais_alerta": [
+        "Checklist de áreas de vivência reprovado",
+        "Focos de água parada registrados em inspeção",
+        "Vacinação dos expostos pendente no PCMSO"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "instalacoes",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "demolicao",
+        "proximo_curso_dagua",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-24 – condições sanitárias e de conforto nos locais de trabalho",
+        "NR-9 – avaliação e controle das exposições ocupacionais a agentes físicos, químicos e biológicos"
+      ]
+    },
+    {
+      "codigo": "R14.19",
+      "evento": "Insuficiência ou inadequação de EPCs e EPIs",
+      "causas": [
+        "Proteções coletivas não previstas para a etapa ou retiradas e não recolocadas",
+        "EPI sem certificado de aprovação válido ou em tamanho inadequado",
+        "Estoque de EPI insuficiente nas frentes",
+        "Terceiros que não fornecem EPI aos seus empregados"
+      ],
+      "consequencias": [
+        "Exposição direta a quedas, cortes e impactos",
+        "Autuação e interdição de frentes",
+        "Responsabilização da contratante em acidente com terceiro"
+      ],
+      "controles_preventivos": [
+        "Proteções coletivas dimensionadas por etapa e previstas no orçamento e no PGR",
+        "Inspeção semanal das proteções coletivas com checklist e fotos",
+        "Ficha de entrega de EPI por trabalhador com número do CA",
+        "Controle de validade dos CA e reposição programada no almoxarifado",
+        "Auditoria mensal de EPI dos terceiros"
+      ],
+      "controles_resposta": [
+        "Interditar a frente até recompor a proteção coletiva",
+        "Repor o EPI de imediato a partir do estoque de emergência"
+      ],
+      "sinais_alerta": [
+        "Entrega de EPI sem registro ou com CA vencido",
+        "Checklist de proteções coletivas reprovado",
+        "Estoque de EPI abaixo do mínimo"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "sst",
+        "suprimentos",
+        "rh",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Ausência de proteção coletiva ou individual expõe a lesões graves e leva à interdição",
+      "referencias": [
+        "NR-6 – equipamento de proteção individual",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.20",
+      "evento": "Falta de procedimentos de emergência, salvamento e primeiros socorros",
+      "causas": [
+        "Plano de emergência genérico, sem os cenários da obra",
+        "Sem equipe e equipamento de resgate para altura e espaço confinado",
+        "Material de primeiros socorros ausente ou incompleto",
+        "Hospital de referência e rota de remoção não definidos"
+      ],
+      "consequencias": [
+        "Agravamento da lesão ou morte por demora no atendimento",
+        "Vítimas secundárias em resgates improvisados",
+        "Autuação e responsabilização após o acidente"
+      ],
+      "controles_preventivos": [
+        "Plano de atendimento a emergências por cenário (altura, confinado, soterramento, incêndio)",
+        "Simulados periódicos com relatório e ações de melhoria",
+        "Socorristas e brigadistas treinados em todos os turnos",
+        "Kit de primeiros socorros, maca e equipamentos de resgate inspecionados",
+        "Contatos de emergência e rota ao hospital afixados no canteiro"
+      ],
+      "controles_resposta": [
+        "Acionar o plano, o socorro externo e isolar a área",
+        "Análise pós-emergência para corrigir falhas do plano"
+      ],
+      "sinais_alerta": [
+        "Simulado não realizado no período previsto",
+        "Turno sem socorrista treinado na escala",
+        "Kit de primeiros socorros reprovado na inspeção"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura",
+        "espaco_confinado",
+        "escavacao_profunda"
+      ],
+      "integracoes": [
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Resgate demorado ou improvisado transforma acidente em morte",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "NR-35 – trabalho em altura",
+        "NR-33 – segurança e saúde nos trabalhos em espaços confinados"
+      ]
+    },
+    {
+      "codigo": "R14.21",
+      "evento": "Falhas em inspeções e permissões de trabalho",
+      "causas": [
+        "Permissão de trabalho emitida sem verificação no local",
+        "Checklists preenchidos por rotina, sem inspeção real",
+        "Atividade crítica liberada sem responsável designado",
+        "Inspeção periódica de grua e elevador de obra vencida"
+      ],
+      "consequencias": [
+        "Atividade crítica executada com risco não controlado",
+        "Acidente grave apesar da documentação aparentemente em dia",
+        "Responsabilização do emitente da permissão"
+      ],
+      "controles_preventivos": [
+        "Lista de atividades que exigem permissão de trabalho no PGR",
+        "Permissão com verificação em campo, assinaturas e validade por turno",
+        "Auditoria amostral semanal de permissões e checklists com fotos",
+        "Laudos de inspeção de gruas e elevadores com alerta de vencimento",
+        "Permissões e checklists digitais com foto e horário"
+      ],
+      "controles_resposta": [
+        "Suspender a atividade com permissão irregular",
+        "Revisar todas as permissões do emitente envolvido"
+      ],
+      "sinais_alerta": [
+        "Permissões emitidas sem foto ou com horário incoerente",
+        "Laudo de inspeção de equipamento vencido",
+        "Checklist com aprovação total em frente com quase-acidente registrado"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "trabalho_em_altura",
+        "espaco_confinado",
+        "grua_ou_guindaste"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Permissão falha libera atividade de risco fatal sem controle",
+      "referencias": [
+        "NR-35 – trabalho em altura",
+        "NR-33 – segurança e saúde nos trabalhos em espaços confinados",
+        "NR-10 – segurança em instalações e serviços em eletricidade"
+      ]
+    },
+    {
+      "codigo": "R14.22",
+      "evento": "Incompatibilidade entre atividades simultâneas no canteiro",
+      "causas": [
+        "Trabalho em altura sobre outra equipe em atividade",
+        "Içamento passando sobre frentes ocupadas",
+        "Solda próxima à aplicação de produtos inflamáveis",
+        "Várias empreiteiras na mesma área sem coordenação"
+      ],
+      "consequencias": [
+        "Atingimento de trabalhadores por queda de material ou carga",
+        "Incêndio por incompatibilidade de serviços",
+        "Paralisação de frentes e acidentes graves"
+      ],
+      "controles_preventivos": [
+        "Planejamento semanal com matriz de atividades incompatíveis",
+        "Segregação no tempo ou no espaço das atividades incompatíveis",
+        "Reunião diária de coordenação com registro",
+        "APR conjunta quando duas equipes compartilham a área"
+      ],
+      "controles_resposta": [
+        "Paralisar uma das atividades e reprogramar",
+        "Investigar o conflito e atualizar a matriz de incompatibilidades"
+      ],
+      "sinais_alerta": [
+        "Frentes sobrepostas no planejamento semanal",
+        "Quase-acidentes envolvendo duas equipes",
+        "Trabalho a quente e inflamáveis programados na mesma área"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto",
+        "grua_ou_guindaste"
+      ],
+      "integracoes": [
+        "planejamento",
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atividades sobrepostas expõem trabalhadores a quedas de carga e incêndio",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R14.23",
+      "evento": "Riscos psicossociais relacionados à organização do trabalho",
+      "causas": [
+        "Pagamento por produção que incentiva pular etapas de segurança",
+        "Metas diárias incompatíveis com o prazo e o efetivo",
+        "Trabalhadores alojados longe da família por longos períodos",
+        "Tarefas e responsabilidades mal definidas entre equipes"
+      ],
+      "consequencias": [
+        "Ansiedade, depressão e abuso de álcool",
+        "Aumento de acidentes por pressa",
+        "Afastamentos e rotatividade"
+      ],
+      "controles_preventivos": [
+        "Fatores psicossociais identificados e avaliados no inventário de riscos do PGR",
+        "Metas de produção revisadas junto com indicadores de segurança",
+        "Pesquisa periódica de clima com plano de ação",
+        "Direito de recusa divulgado e registrado no DDS"
+      ],
+      "controles_resposta": [
+        "Encaminhamento a apoio psicológico",
+        "Revisão das metas e da escala da equipe afetada"
+      ],
+      "sinais_alerta": [
+        "Afastamentos por transtornos mentais",
+        "Recusas de trabalho registradas",
+        "Horas extras elevadas na mesma equipe"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "sst",
+        "rh",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-1 – disposições gerais e gerenciamento de riscos ocupacionais",
+        "NR-17 – ergonomia"
+      ]
+    },
+    {
+      "codigo": "R14.24",
+      "evento": "Ausência de revisão dos riscos após alterações nas condições de execução",
+      "causas": [
+        "Mudança de método executivo sem nova análise de risco",
+        "Entrada de novo subcontratado, equipamento ou frente",
+        "Alteração de projeto, como contenção ou sequência construtiva",
+        "Acidente ou quase-acidente que não realimenta o PGR"
+      ],
+      "consequencias": [
+        "Riscos novos sem controle definido",
+        "Acidente grave em atividade não analisada",
+        "PGR desatualizado e autuação"
+      ],
+      "controles_preventivos": [
+        "Gestão de mudanças em que método, equipamento ou equipe nova dispara revisão da APR e do PGR",
+        "Revisão do inventário de riscos a cada etapa da obra",
+        "Investigação de acidentes e quase-acidentes com atualização do PGR registrada",
+        "Aprovação do técnico de segurança antes de liberar frente nova"
+      ],
+      "controles_resposta": [
+        "Suspender a atividade até a análise de risco revisada",
+        "Comunicar a mudança às equipes em DDS com lista de presença"
+      ],
+      "sinais_alerta": [
+        "PGR sem revisão desde a última mudança de etapa",
+        "Aditivo ou ordem de serviço com novo método sem APR vinculada",
+        "Quase-acidente sem ação registrada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "sst",
+        "planejamento",
+        "ordens_servico",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Mudança sem análise de risco expõe a perigos fatais não controlados",
+      "referencias": [
+        "NR-1 – disposições gerais e gerenciamento de riscos ocupacionais",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    }
+  ]
+}

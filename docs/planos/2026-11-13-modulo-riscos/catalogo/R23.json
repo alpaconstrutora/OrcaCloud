@@ -1,0 +1,716 @@
+{
+  "categoria": "R23",
+  "nome": "Riscos de governança, fraude e integridade",
+  "itens": [
+    {
+      "codigo": "R23.01",
+      "evento": "Desvio de materiais e equipamentos",
+      "causas": [
+        "Almoxarifado sem registro de entrada e saída",
+        "Recebimento sem conferência contra nota e pedido",
+        "Acesso livre ao canteiro fora do expediente",
+        "Consumo apropriado por estimativa, sem requisição"
+      ],
+      "consequencias": [
+        "Consumo de material acima do orçado",
+        "Falta de material em frente de serviço e atraso",
+        "Perda patrimonial de ferramentas e equipamentos"
+      ],
+      "controles_preventivos": [
+        "Recebimento conferido por pessoa diferente do comprador, com registro no sistema",
+        "Requisição de saída por frente de serviço assinada pelo encarregado",
+        "Inventário periódico com conciliação entre estoque físico e sistema",
+        "Controle de acesso e CFTV no almoxarifado com gravação retida",
+        "Equipamentos etiquetados com termo de responsabilidade"
+      ],
+      "controles_resposta": [
+        "Apurar pelo inventário e pela trilha de movimentações",
+        "Registrar boletim de ocorrência e aplicar medidas disciplinares",
+        "Revisar acessos e responsáveis do almoxarifado"
+      ],
+      "sinais_alerta": [
+        "Consumo de material por unidade de serviço acima do orçado",
+        "Divergências recorrentes no inventário",
+        "Equipamentos sem localização registrada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.02",
+      "evento": "Pagamentos duplicados ou indevidos",
+      "causas": [
+        "Mesma nota lançada duas vezes por canais diferentes",
+        "Cadastro de fornecedor duplicado com CNPJ escrito de formas diferentes",
+        "Pagamento liberado sem vínculo com pedido e recebimento"
+      ],
+      "consequencias": [
+        "Saída de caixa sem contraprestação",
+        "Esforço de recuperação junto ao fornecedor",
+        "Saldo de fornecedor distorcido no contas a pagar"
+      ],
+      "controles_preventivos": [
+        "Bloqueio sistêmico de título com mesmo fornecedor, número de nota e valor",
+        "Conferência de três vias entre pedido, recebimento e nota antes de liberar",
+        "Conciliação bancária diária de todos os pagamentos",
+        "Revisão trimestral de cadastros de fornecedores duplicados",
+        "Dupla aprovação da remessa de pagamentos por pessoas distintas"
+      ],
+      "controles_resposta": [
+        "Solicitar estorno ou compensação ao fornecedor",
+        "Rastrear a origem do lançamento duplicado na trilha de auditoria"
+      ],
+      "sinais_alerta": [
+        "Títulos de mesmo valor e fornecedor em datas próximas",
+        "Pagamentos sem pedido de compra vinculado",
+        "Saldo credor de fornecedor no contas a pagar"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "financeiro",
+        "suprimentos",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.03",
+      "evento": "Notas fiscais fictícias ou adulteradas",
+      "causas": [
+        "Fornecedor de fachada cadastrado sem verificação",
+        "Nota lançada sem validação da chave na SEFAZ",
+        "Serviço faturado sem evidência de execução"
+      ],
+      "consequencias": [
+        "Saída de caixa sem entrega de material ou serviço",
+        "Glosa de créditos e autuação fiscal",
+        "Responsabilização criminal dos envolvidos"
+      ],
+      "controles_preventivos": [
+        "Validação automática da chave de acesso da NF-e na SEFAZ na entrada",
+        "Homologação cadastral do fornecedor por pessoa distinta do comprador",
+        "Evidência de entrega ou medição anexada ao título antes do pagamento",
+        "Trilha de auditoria de inclusão e alteração de documentos fiscais"
+      ],
+      "controles_resposta": [
+        "Bloquear o fornecedor e os pagamentos pendentes",
+        "Abrir investigação interna com o jurídico",
+        "Retificar obrigações fiscais e avaliar comunicação às autoridades"
+      ],
+      "sinais_alerta": [
+        "NF-e com situação cancelada ou denegada na SEFAZ",
+        "Fornecedor recém-cadastrado com faturamento alto",
+        "Notas de serviço sem medição vinculada"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "fiscal",
+        "financeiro",
+        "suprimentos",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Uso de nota fiscal falsa configura crime contra a ordem tributária com responsabilização criminal",
+      "referencias": [
+        "Lei 8.137/1990 – crimes contra a ordem tributária"
+      ]
+    },
+    {
+      "codigo": "R23.04",
+      "evento": "Superfaturamento de compras e contratos",
+      "causas": [
+        "Cotações direcionadas ou com fornecedores ligados entre si",
+        "Contratação emergencial sem concorrência",
+        "Aditivos aprovados sem análise de preço unitário"
+      ],
+      "consequencias": [
+        "Custo acima do mercado e margem reduzida",
+        "Saldo de orçamento consumido antes do fim da obra",
+        "Questionamento de investidores e auditores"
+      ],
+      "controles_preventivos": [
+        "Mínimo de três cotações de fornecedores independentes registradas no sistema",
+        "Comparação do preço contratado com SINAPI ou banco de preços próprio",
+        "Aprovação acima de limite por comitê, com comprador fora da decisão",
+        "Aditivos analisados por pessoa fora da equipe da obra"
+      ],
+      "controles_resposta": [
+        "Renegociar ou rescindir o contrato",
+        "Auditar as compras do comprador ou da obra envolvida"
+      ],
+      "sinais_alerta": [
+        "Preço unitário acima da referência de mercado",
+        "Mesmo fornecedor vencendo cotações seguidas",
+        "Aditivos acumulados acima do limite aprovado por contrato"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.05",
+      "evento": "Medições fraudulentas de serviços",
+      "causas": [
+        "Medição preparada pelo próprio empreiteiro sem conferência",
+        "Quantidades lançadas acima do executado",
+        "Serviço medido antes de concluído"
+      ],
+      "consequencias": [
+        "Pagamento antecipado sem lastro físico",
+        "Saldo contratual insuficiente para concluir o serviço",
+        "Abandono do empreiteiro com valor pago a maior"
+      ],
+      "controles_preventivos": [
+        "Medição lançada por um e conferida em campo por outro com fotos",
+        "Conciliação da medição acumulada com o avanço físico do planejamento",
+        "Bloqueio sistêmico de item medido acima de 100% do contratado",
+        "Aprovação da medição por usuário diferente de quem lançou"
+      ],
+      "controles_resposta": [
+        "Glosar o excedente na medição seguinte",
+        "Remedir em campo com testemunha",
+        "Apurar responsabilidade interna"
+      ],
+      "sinais_alerta": [
+        "Medição acumulada acima do avanço físico",
+        "Itens medidos acima do quantitativo contratado",
+        "Medições aprovadas pelo mesmo usuário que lançou"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "planejamento",
+        "diario",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.06",
+      "evento": "Conluio entre funcionários e fornecedores",
+      "causas": [
+        "Mesmo funcionário cota, aprova e recebe",
+        "Ausência de rodízio de compradores por categoria",
+        "Relação pessoal entre comprador e fornecedor não declarada"
+      ],
+      "consequencias": [
+        "Preços inflados e material de qualidade inferior",
+        "Perdas recorrentes difíceis de detectar",
+        "Ações cíveis e criminais contra os envolvidos"
+      ],
+      "controles_preventivos": [
+        "Cotação, aprovação, recebimento e pagamento feitos por pessoas distintas",
+        "Rodízio de compradores por categoria com registro",
+        "Canal de denúncia com tratamento documentado",
+        "Cruzamento de endereço, telefone e conta bancária de fornecedores com funcionários"
+      ],
+      "controles_resposta": [
+        "Investigação independente da área envolvida",
+        "Afastamento preventivo dos envolvidos",
+        "Ação cível e comunicação criminal quando cabível"
+      ],
+      "sinais_alerta": [
+        "Dados bancários de fornecedor coincidentes com os de funcionário",
+        "Concentração de compras de um comprador em um só fornecedor",
+        "Alteração de conta bancária do fornecedor pouco antes de pagamento"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "suprimentos",
+        "financeiro",
+        "rh",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.07",
+      "evento": "Conflitos de interesses não declarados",
+      "causas": [
+        "Parente ou sócio de funcionário no quadro de fornecedor",
+        "Ausência de declaração periódica de conflitos",
+        "Gestor com participação em imobiliária ou empreiteira parceira"
+      ],
+      "consequencias": [
+        "Decisões de compra e venda enviesadas",
+        "Questionamento de investidores e auditores",
+        "Anulação de contratos e perda de confiança"
+      ],
+      "controles_preventivos": [
+        "Declaração anual de conflitos assinada por gestores e compradores",
+        "Cruzamento do quadro societário de fornecedores com o cadastro de funcionários",
+        "Impedimento registrado do conflitado em decisões do fornecedor",
+        "Código de conduta com ciência assinada"
+      ],
+      "controles_resposta": [
+        "Afastar o conflitado das decisões envolvidas",
+        "Revisar os contratos firmados durante o conflito"
+      ],
+      "sinais_alerta": [
+        "Declarações de conflito vencidas",
+        "Sócio de fornecedor com sobrenome ou endereço de funcionário"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "aquisicao",
+        "contratacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "rh",
+        "suprimentos",
+        "contratos",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.08",
+      "evento": "Corrupção ou pagamento de vantagens indevidas",
+      "causas": [
+        "Pressão para obter alvará, habite-se ou vistoria no prazo",
+        "Despachantes e intermediários sem controle",
+        "Agente público solicitando vantagem em contrato ou fiscalização"
+      ],
+      "consequencias": [
+        "Responsabilização objetiva da empresa com multa e publicação da decisão",
+        "Proibição de contratar com o poder público",
+        "Processo criminal contra os envolvidos"
+      ],
+      "controles_preventivos": [
+        "Programa de integridade com treinamento anual registrado",
+        "Diligência prévia de despachantes e intermediários com dossiê",
+        "Pagamentos a órgãos públicos somente por guia oficial",
+        "Canal de denúncia independente com relatório periódico",
+        "Registro de reuniões com agentes públicos"
+      ],
+      "controles_resposta": [
+        "Investigação interna conduzida pelo jurídico",
+        "Avaliar acordo de leniência com assessoria especializada",
+        "Medidas disciplinares e desligamento"
+      ],
+      "sinais_alerta": [
+        "Despesas com despachantes sem documento de suporte",
+        "Saques ou pagamentos em espécie",
+        "Licença emitida logo após pagamento atípico"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "financeiro",
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Pagamento de vantagem a agente público gera responsabilização criminal e sanções à empresa",
+      "referencias": [
+        "Lei 12.846/2013 – anticorrupção, responsabilização de pessoas jurídicas",
+        "Decreto 11.129/2022 – regulamenta a Lei 12.846/2013"
+      ]
+    },
+    {
+      "codigo": "R23.09",
+      "evento": "Manipulação de indicadores de avanço ou desempenho",
+      "causas": [
+        "Bônus atrelado ao avanço físico informado",
+        "Avanço lançado por estimativa sem medição de campo",
+        "Pressão para apresentar resultado a banco ou investidores"
+      ],
+      "consequencias": [
+        "Decisões tomadas com base em dados falsos",
+        "Atraso descoberto tarde, sem tempo de recuperação",
+        "Perda de confiança do banco financiador e de investidores"
+      ],
+      "controles_preventivos": [
+        "Avanço físico validado com medição e fotos por pessoa distinta do gestor",
+        "Trilha de auditoria de alterações retroativas de avanço",
+        "Revisão independente do relatório enviado a investidores",
+        "Conciliação mensal do avanço físico com o financeiro"
+      ],
+      "controles_resposta": [
+        "Rebaseline do cronograma com comunicação formal",
+        "Revisar a política de remuneração variável"
+      ],
+      "sinais_alerta": [
+        "Avanço físico muito acima do avanço financeiro",
+        "Alterações retroativas de avanço já reportado",
+        "Saltos de avanço perto da data de relatório"
+      ],
+      "dimensoes": [
+        "reputacional",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "planejamento",
+        "investidor",
+        "diario",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.10",
+      "evento": "Aprovações financeiras sem segregação de funções",
+      "causas": [
+        "Equipe pequena acumulando lançamento e aprovação",
+        "Perfis de acesso amplos no sistema",
+        "Usuário cria fornecedor, lança título e aprova pagamento"
+      ],
+      "consequencias": [
+        "Fraudes executadas sem detecção",
+        "Pagamentos irregulares sem responsável identificável",
+        "Ressalva de auditoria e questionamento do financiador"
+      ],
+      "controles_preventivos": [
+        "Matriz de segregação de funções aplicada aos perfis do sistema e revisada semestralmente",
+        "Bloqueio sistêmico de aprovação pelo usuário que lançou",
+        "Dupla aprovação para pagamentos acima de limite",
+        "Relatório mensal de acessos privilegiados revisado pela diretoria"
+      ],
+      "controles_resposta": [
+        "Revogar acessos conflitantes",
+        "Revisar todos os pagamentos do período sem segregação"
+      ],
+      "sinais_alerta": [
+        "Títulos aprovados pelo mesmo usuário que os lançou",
+        "Usuários com permissão de cadastrar fornecedor e aprovar pagamento"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "financeiro",
+        "suprimentos",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.11",
+      "evento": "Descumprimento de políticas internas e limites de alçada",
+      "causas": [
+        "Fracionamento de compras para ficar abaixo do limite",
+        "Urgência usada como justificativa recorrente",
+        "Alçadas não parametrizadas no sistema"
+      ],
+      "consequencias": [
+        "Compromissos assumidos acima da autoridade do aprovador",
+        "Exposição financeira não autorizada",
+        "Enfraquecimento dos demais controles"
+      ],
+      "controles_preventivos": [
+        "Alçadas parametrizadas no sistema por valor e tipo de despesa",
+        "Detecção de fracionamento por fornecedor e item em curto período",
+        "Relatório mensal de exceções aprovadas com justificativa",
+        "Justificativa obrigatória registrada para compra emergencial"
+      ],
+      "controles_resposta": [
+        "Ratificar ou cancelar o compromisso pela alçada correta",
+        "Aplicar medida disciplinar conforme política"
+      ],
+      "sinais_alerta": [
+        "Aprovações fora de alçada",
+        "Pedidos fracionados do mesmo item e fornecedor",
+        "Compras emergenciais frequentes na mesma obra"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "suprimentos",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R23.12",
+      "evento": "Falta de auditoria, transparência e prestação de contas",
+      "causas": [
+        "Ausência de auditoria interna ou independente",
+        "Prestação de contas a investidores informal ou irregular",
+        "Documentos de suporte fora do sistema"
+      ],
+      "consequencias": [
+        "Fraudes persistentes por longos períodos",
+        "Perda de confiança de bancos e investidores",
+        "Dificuldade de defesa em fiscalizações e disputas"
+      ],
+      "controles_preventivos": [
+        "Plano anual de auditoria com relatório à diretoria",
+        "Prestação de contas periódica aos investidores com data definida",
+        "Documento de suporte obrigatório em cada lançamento financeiro",
+        "Fechamento mensal com conciliação bancária concluída"
+      ],
+      "controles_resposta": [
+        "Auditoria especial do período sem controle",
+        "Plano de ação com prazo para as falhas encontradas"
+      ],
+      "sinais_alerta": [
+        "Lançamentos sem documento anexo",
+        "Conciliações bancárias em atraso",
+        "Relatórios a investidores entregues fora do prazo"
+      ],
+      "dimensoes": [
+        "reputacional",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "viabilidade",
+        "estrutura",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "financeiro",
+        "investidor",
+        "docs_ged",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

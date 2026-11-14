@@ -95,7 +95,12 @@ export function InlineDisclosureMenu({
         <motion.button
           whileTap={{ scale: 0.92 }}
           onClick={(e) => { e.stopPropagation(); setOpen((v) => !v); }}
-          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#EEEEF2] bg-white text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors"
+          // Sem nome, o leitor de tela anunciava só "botão" (crítica 2026-11-14).
+          aria-label="Mais ações"
+          title="Mais ações"
+          aria-haspopup="menu"
+          aria-expanded={open}
+          className="flex h-8 w-8 items-center justify-center rounded-lg border border-[#EEEEF2] bg-white text-gray-400 hover:text-gray-600 hover:border-gray-300 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
         >
           <MoreVertical className="h-4 w-4" />
         </motion.button>

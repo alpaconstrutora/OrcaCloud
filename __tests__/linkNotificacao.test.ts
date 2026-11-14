@@ -9,6 +9,10 @@ describe('destinoDoLinkDeNotificacao', () => {
     it('pagamento em atraso: Contas a Pagar com a fonte que ContasPagarManager já consome', () => {
         expect(destinoDoLinkDeNotificacao('/contas-a-pagar?tx=x')?.foco).toEqual({ ref: 'x', source: 'CONTA_PAGAR' });
     });
+    it('aviso do módulo Riscos abre a ficha do risco', () => {
+        expect(destinoDoLinkDeNotificacao('/riscos?riskId=r-1')).toEqual({ view: 'riscos', foco: { ref: 'r-1', source: 'RISCO' } });
+        expect(destinoDoLinkDeNotificacao('/riscos')).toEqual({ view: 'riscos' });
+    });
     it('demais rotas continuam só trocando de tela (query ignorada, como antes)', () => {
         expect(destinoDoLinkDeNotificacao('/rentals?tab=renewals&contract=9')).toEqual({ view: 'rentals' });
         expect(destinoDoLinkDeNotificacao('/contas-a-receber')).toEqual({ view: 'contas-a-receber' });

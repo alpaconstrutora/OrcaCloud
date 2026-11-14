@@ -731,3 +731,35 @@ describe('Analítico — base de preço à vista e BDI zerado', () => {
         expect(screen.queryByText('BDI zerado: Preço Final = Custo Direto')).toBeNull();
     });
 });
+
+// ─── Teclado nos menus e na confirmação (2ª crítica, passo 4) ─────────────────
+
+describe('Analítico — menus e confirmação pelo teclado', () => {
+    it('Ferramentas: foco no 1º item ao abrir, ↓ avança, Esc fecha e devolve o foco ao botão', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        const gatilho = screen.getByRole('button', { name: /Ferramentas/ });
+        expect(gatilho.getAttribute('aria-haspopup')).toBe('menu');
+        fireEvent.click(gatilho);
+        expect(gatilho.getAttribute('aria-expanded')).toBe('true');
+        const menu = screen.getByRole('menu', { name: 'Ferramentas' });
+        const itens = within(menu).getAllByRole('menuitem');
+        expect(document.activeElement).toBe(itens[0]);
+        fireEvent.keyDown(menu, { key: 'ArrowDown' });
+        expect(document.activeElement).toBe(itens[1]);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        expect(screen.queryByRole('menu', { name: 'Ferramentas' })).toBeNull();
+        expect(document.activeElement).toBe(gatilho);
+    });
+
+    it('a pergunta de confirmação recebe o foco no botão seguro', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        fireEvent.click(screen.getByRole('button', { name: /Gerenciar EAP/ }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Limpar Toda EAP/ }));
+        const cancelar = await screen.findByRole('button', { name: 'Cancelar' });
+        expect(document.activeElement).toBe(cancelar);
+        fireEvent.click(cancelar);
+    });
+});

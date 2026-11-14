@@ -380,3 +380,12 @@ describe('CPU abaixo do item — rascunho e conta por unidade', () => {
         expect((within(container).getByLabelText('Coeficiente de Caminhão') as HTMLInputElement).value).toBe('0.5');
     });
 });
+
+describe('Campos do item com nome (2ª crítica, passo 4)', () => {
+    it('Quantidade, Custo unitário e BDI dizem de qual item são', () => {
+        const { container } = renderEditor([makeEntry('1')]);
+        expect(within(container).getByLabelText('Quantidade do item 01.01.01.01')).toBeTruthy();
+        expect(within(container).getByLabelText('Custo unitário do item 01.01.01.01')).toBeTruthy();
+        expect(within(container).getByLabelText(/BDI do item 01.01.01.01/)).toBeTruthy();
+    });
+});

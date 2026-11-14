@@ -56,6 +56,9 @@ const getTypeBadge = (type: SinapiType, onClick?: (e: React.MouseEvent) => void)
             <button
                 onClick={onClick}
                 type="button"
+                // Repete o botão da CPU da coluna Item: fica no mouse, sai do Tab e do leitor de tela.
+                tabIndex={-1}
+                aria-hidden="true"
                 className={`flex items-center justify-center bg-blue-100 text-blue-700 p-1 rounded-[6px] border border-blue-200 transition-all ${onClick ? 'hover:bg-blue-200 hover:border-blue-300 active:scale-95 cursor-pointer' : ''}`}
                 title={onClick ? "Ver detalhes da composição" : "Composição"}
             >
@@ -165,6 +168,8 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
         setIsExpanded(!isExpanded);
     };
 
+    const codigoDoItem = `${subIdDisplay}${(itemIndex + 1).toString().padStart(2, '0')}`;
+
     const handleToggleCPU = (e: React.MouseEvent) => {
         e.stopPropagation();
         if (viewMode === 'modal') {
@@ -211,8 +216,10 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                         void alternarCpuInline();
                                     }
                                 }}
-                                className="text-gray-500 hover:text-blue-600 focus:outline-none transition-colors shrink-0"
+                                className="text-gray-500 hover:text-blue-600 rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 transition-colors shrink-0"
                                 title={viewMode === 'modal' ? "Ver CPU em Janela" : (isExpanded ? "Recolher CPU" : "Expandir CPU")}
+                                aria-label={`${viewMode === 'modal' ? 'Ver composição em janela' : (isExpanded ? 'Recolher composição' : 'Expandir composição')} do item ${codigoDoItem}`}
+                                aria-expanded={viewMode === 'inline' ? isExpanded : undefined}
                             >
                                 {viewMode === 'modal' ? (
                                     <Maximize2 className="w-3 h-3" />
@@ -221,7 +228,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                 )}
                             </button>
                         )}
-                        {subIdDisplay}{(itemIndex + 1).toString().padStart(2, '0')}
+                        {codigoDoItem}
                     </div>
                 </td>
 
@@ -253,6 +260,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         type="number"
                         value={item.quantity}
                         onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
+                        aria-label={`Quantidade do item ${codigoDoItem}`}
                         disabled={isLocked}
                         className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-2 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
@@ -266,6 +274,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         <MoneyCentsInput
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
                             onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v))}
+                            aria-label={`Custo unitário do item ${codigoDoItem}`}
                             disabled={isLocked}
                             className={`w-full text-center text-sm outline-none bg-transparent py-0.5 ${isLocked ? 'cursor-not-allowed' : ''} ${item.sinapiItem?.isOverride ? 'text-amber-700' : 'text-gray-900'}`}
                         />
@@ -284,6 +293,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 <td className={TD}>
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <input
+                            aria-label={`BDI do item ${codigoDoItem} (%); vazio usa o BDI global`}
                             type="number"
                             step="0.1"
                             placeholder={globalBDI.toString()}

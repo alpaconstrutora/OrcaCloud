@@ -1,0 +1,783 @@
+{
+  "categoria": "R11",
+  "nome": "Riscos jurídicos, contratuais e securitários",
+  "itens": [
+    {
+      "codigo": "R11.01",
+      "evento": "Contratos com escopo incompleto ou ambíguo",
+      "causas": [
+        "Memorial descritivo genérico, sem projetos executivos e planilha anexados ao contrato",
+        "Contratação feita antes da compatibilização dos projetos",
+        "Serviços de interface (arremates, furos, ligações provisórias) sem responsável definido",
+        "Cláusulas de escopo com termos abertos como \"a definir\" ou \"conforme necessário\""
+      ],
+      "consequencias": [
+        "Aditivos de escopo e preço não previstos no orçamento da obra",
+        "Serviço de interface que ninguém executa e trava a sequência das frentes",
+        "Retenção de pagamento e discussão de medição com o contratado",
+        "Perda de margem em contrato fechado por preço global"
+      ],
+      "controles_preventivos": [
+        "Checklist de anexos obrigatórios (projeto, memorial, planilha, cronograma) aprovado antes da assinatura",
+        "Matriz de interfaces entre contratos revisada e assinada pela engenharia",
+        "Planilha de quantitativos do contrato vinculada aos itens do orçamento da obra",
+        "Cláusula de exclusões listando explicitamente o que não faz parte do escopo",
+        "Parecer técnico e jurídico registrado no fluxo de aprovação do contrato"
+      ],
+      "controles_resposta": [
+        "Notificar a divergência por escrito e registrar em ata a decisão sobre o item",
+        "Negociar aditivo com composição de preço aberta e quantitativo medido",
+        "Executar o item crítico por administração para não parar a frente"
+      ],
+      "sinais_alerta": [
+        "Aditivos de escopo acima de 5% do valor contratado",
+        "Contrato assinado sem anexos técnicos arquivados no GED",
+        "Pedidos de serviço extra registrados no diário de obra"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "contratos",
+        "orcamento",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R11.02",
+      "evento": "Responsabilidades mal definidas entre contratante e contratado",
+      "causas": [
+        "Contrato não define quem fornece material, equipamento, energia e água no canteiro",
+        "Obrigações de SST do terceiro (PGR, treinamentos, EPI) não atribuídas por escrito",
+        "Responsabilidade técnica do serviço sem ART ou RRT do contratado",
+        "Material fornecido pela contratante sem regra de perdas e consumo"
+      ],
+      "consequencias": [
+        "Material faltante sem ninguém assumir a compra, parando a frente",
+        "Responsabilização solidária da contratante em acidente ou passivo trabalhista do terceiro",
+        "Retrabalho sem definição de quem arca com o custo"
+      ],
+      "controles_preventivos": [
+        "Matriz de responsabilidades anexa ao contrato para material, equipamento, SST e licenças",
+        "ART ou RRT do contratado arquivada antes da mobilização",
+        "Regra contratual de perda admissível para material fornecido pela contratante",
+        "Documentação de SST do terceiro aprovada antes da liberação de acesso"
+      ],
+      "controles_resposta": [
+        "Reunião de alinhamento com ata assinada indicando o responsável por item",
+        "Reter pagamento conforme cláusula até a regularização da obrigação"
+      ],
+      "sinais_alerta": [
+        "Terceiro mobilizado sem ART ou RRT registrada no GED",
+        "Terceiro com documentação de SST pendente e acesso liberado",
+        "Ocorrências \"aguardando definição\" recorrentes no diário"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "seguranca",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "contratos",
+        "sst",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 6.496/1977 – anotação de responsabilidade técnica (ART)"
+      ]
+    },
+    {
+      "codigo": "R11.03",
+      "evento": "Ausência de matriz contratual de alocação de riscos",
+      "causas": [
+        "Contrato padrão sem tratar riscos geológicos, cambiais, de chuva ou de licenciamento",
+        "Edital de obra pública sem matriz de riscos nos casos em que a lei a exige",
+        "Preço global sem premissas declaradas (sondagem, índice pluviométrico, câmbio)"
+      ],
+      "consequencias": [
+        "Pleitos de reequilíbrio por eventos que ninguém assumiu",
+        "Contratado embute contingência elevada no preço",
+        "Litígio longo sobre quem absorve o custo do evento imprevisto"
+      ],
+      "controles_preventivos": [
+        "Matriz de riscos anexa ao contrato com evento, responsável e forma de compensação",
+        "Premissas técnicas do preço declaradas e anexadas ao contrato",
+        "Revisão da matriz pela engenharia e pelo jurídico registrada antes da assinatura",
+        "Riscos alocados no contrato vinculados ao registro de riscos da obra"
+      ],
+      "controles_resposta": [
+        "Tratar o evento não alocado por negociação documentada com laudo técnico",
+        "Registrar evento e impacto em ata para subsidiar pleito ou defesa"
+      ],
+      "sinais_alerta": [
+        "Contratos acima do valor de corte sem matriz de riscos anexada",
+        "Pleitos de reequilíbrio abertos sem cláusula aplicável",
+        "Evento de risco materializado sem responsável no registro de riscos"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "escavacao_profunda",
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021 – licitações e contratos administrativos"
+      ]
+    },
+    {
+      "codigo": "R11.04",
+      "evento": "Cláusulas de reajuste e reequilíbrio econômico-financeiro inadequadas",
+      "causas": [
+        "Índice de reajuste sem aderência ao custo da obra, como IPCA no lugar de INCC",
+        "Data-base e periodicidade do reajuste mal definidas",
+        "Contrato longo sem cláusula de reajuste",
+        "Falta de procedimento para reequilíbrio em alta extraordinária de aço, cimento ou cobre"
+      ],
+      "consequencias": [
+        "Contratado reduz o ritmo ou pede rescisão por defasagem de preço",
+        "Custo final acima do orçado por reajustes não provisionados",
+        "Contestação dos cálculos de reajuste e atraso nos pagamentos"
+      ],
+      "controles_preventivos": [
+        "Índice setorial e data-base explícitos no contrato, com fórmula e exemplo numérico",
+        "Procedimento escrito de pedido de reequilíbrio com prazo e documentos exigidos",
+        "Projeção de reajustes incluída no fluxo de caixa da obra e revisada mensalmente",
+        "Revisão jurídica da cláusula de reajuste em contratos acima de 12 meses"
+      ],
+      "controles_resposta": [
+        "Calcular o reajuste com memória de cálculo e índice oficial publicado",
+        "Analisar pedido de reequilíbrio com notas fiscais de insumo e comparativo de preços"
+      ],
+      "sinais_alerta": [
+        "INCC acumulado acima da premissa de inflação do orçamento",
+        "Contrato com prazo acima de 12 meses sem cláusula de reajuste",
+        "Pedidos de reequilíbrio protocolados pelo contratado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "contratos",
+        "orcamento",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021 – licitações e contratos administrativos",
+        "Lei 10.192/2001 – periodicidade anual de reajuste em contratos"
+      ]
+    },
+    {
+      "codigo": "R11.05",
+      "evento": "Litígios sobre medições, pagamentos ou aditivos",
+      "causas": [
+        "Critério de medição não descrito por item (m², etapa, percentual)",
+        "Medição sem fotos, sem diário anexado e sem assinatura das partes",
+        "Aditivo executado antes de aprovado formalmente",
+        "Glosas e retenções aplicadas sem fundamentação contratual"
+      ],
+      "consequencias": [
+        "Paralisação do terceiro por falta de pagamento",
+        "Ação de cobrança com juros, correção e honorários",
+        "Desgaste com fornecedores e dificuldade de contratar na região"
+      ],
+      "controles_preventivos": [
+        "Critério de medição por item definido no contrato",
+        "Boletim de medição assinado pelas partes com fotos e diário anexados",
+        "Aprovação do aditivo no sistema antes do início do serviço extra",
+        "Registro de cada glosa com a cláusula contratual que a fundamenta"
+      ],
+      "controles_resposta": [
+        "Reunião técnica de conciliação de medições com ata",
+        "Pagar o valor incontroverso para manter a frente ativa",
+        "Mediação ou câmara de conciliação antes da via judicial"
+      ],
+      "sinais_alerta": [
+        "Divergência recorrente entre valor medido e valor aprovado",
+        "Boletins de medição pendentes de aprovação há mais de 15 dias",
+        "Notificações extrajudiciais recebidas de contratados"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "prazo",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro",
+        "diario",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R11.06",
+      "evento": "Rescisão contratual antecipada",
+      "causas": [
+        "Incapacidade financeira do contratado para sustentar a mobilização",
+        "Desempenho abaixo do pactuado com multas acumuladas",
+        "Suspensão da obra pelo contratante por falta de recursos ou embargo",
+        "Impasse sobre aditivos que leva o contratado a abandonar a obra"
+      ],
+      "consequencias": [
+        "Frente parada até a nova contratação",
+        "Custo de remobilização e preço maior do substituto",
+        "Disputa sobre serviços executados e materiais deixados no canteiro",
+        "Passivo trabalhista do contratado com risco de responsabilização subsidiária"
+      ],
+      "controles_preventivos": [
+        "Cláusula de rescisão com procedimento de medição final e transferência de materiais",
+        "Análise econômico-financeira do contratado antes da assinatura",
+        "Relatório mensal de desempenho do contratado com metas de prazo e qualidade",
+        "Garantia de execução contratual vigente até o recebimento",
+        "Cadastro de substitutos qualificados para os serviços críticos"
+      ],
+      "controles_resposta": [
+        "Vistoria conjunta de encerramento com fotos e medição final",
+        "Acionar a garantia contratual no prazo da apólice ou fiança",
+        "Contratar substituto da lista qualificada com escopo remanescente definido"
+      ],
+      "sinais_alerta": [
+        "Atraso acumulado do terceiro no cronograma por três medições seguidas",
+        "Multas contratuais aplicadas em sequência",
+        "Pedidos de antecipação de pagamento pelo contratado"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "planejamento",
+        "financeiro",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R11.07",
+      "evento": "Execução de serviços sem formalização contratual",
+      "causas": [
+        "Urgência de obra resolvida por acordo verbal com o prestador",
+        "Serviços extras pedidos no canteiro pelo mestre ou pelo cliente",
+        "Contrato vencido com o serviço continuando normalmente",
+        "Autônomo contratado sem documento, nota ou cadastro"
+      ],
+      "consequencias": [
+        "Cobrança de valores sem base documental para contestar",
+        "Reconhecimento de vínculo empregatício em reclamação trabalhista",
+        "Prestador no canteiro sem seguro e sem documentação de SST",
+        "Despesa sem nota fiscal e sem as retenções tributárias devidas"
+      ],
+      "controles_preventivos": [
+        "Bloqueio de pagamento sem contrato ou ordem de serviço aprovada no sistema",
+        "Ordem de serviço formal para serviço extra com valor e assinatura",
+        "Alerta de vencimento de contrato com antecedência de 30 dias",
+        "Acesso ao canteiro liberado só para empresa com contrato ativo"
+      ],
+      "controles_resposta": [
+        "Formalizar por termo com medição do que já foi executado",
+        "Suspender o serviço até a regularização documental"
+      ],
+      "sinais_alerta": [
+        "Pagamentos sem contrato vinculado no financeiro",
+        "Contratos vencidos com medições em aberto",
+        "Trabalhadores no canteiro sem empresa cadastrada"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "seguranca"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro",
+        "ordens_servico",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R11.08",
+      "evento": "Ausência de garantias contratuais adequadas",
+      "causas": [
+        "Contrato sem retenção técnica, seguro-garantia ou fiança",
+        "Valor da garantia abaixo do custo de corrigir o serviço",
+        "Garantia vencida antes do término do contrato prorrogado",
+        "Adiantamento pago sem garantia correspondente"
+      ],
+      "consequencias": [
+        "Perda do adiantamento em caso de abandono do contratado",
+        "Correção de defeitos paga pela construtora sem ressarcimento",
+        "Ausência de instrumento para forçar o cumprimento das obrigações"
+      ],
+      "controles_preventivos": [
+        "Política de garantias por faixa de valor (retenção, seguro-garantia, fiança)",
+        "Adiantamento liberado somente contra apólice ou carta de fiança",
+        "Controle de vigência da garantia com endosso a cada aditivo de prazo",
+        "Liberação da retenção só após termo de recebimento definitivo"
+      ],
+      "controles_resposta": [
+        "Notificar seguradora ou fiador dentro do prazo da apólice",
+        "Compensar o prejuízo com retenções e medições pendentes"
+      ],
+      "sinais_alerta": [
+        "Adiantamentos sem garantia vinculada",
+        "Garantia com vencimento anterior ao fim do contrato",
+        "Contratos acima do valor de corte sem garantia cadastrada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021 – licitações e contratos administrativos"
+      ]
+    },
+    {
+      "codigo": "R11.09",
+      "evento": "Apólices de seguro insuficientes, vencidas ou com exclusões relevantes",
+      "causas": [
+        "Riscos de engenharia contratado por valor inferior ao custo atualizado da obra",
+        "Apólice não renovada após prorrogação do cronograma",
+        "Exclusões de fundações, desmoronamento ou danos a vizinhos não analisadas",
+        "Terceiro sem seguro de vida exigido por convenção coletiva"
+      ],
+      "consequencias": [
+        "Sinistro negado ou indenizado com rateio",
+        "Custo integral do sinistro absorvido pelo caixa da obra",
+        "Descumprimento de exigência do agente financiador"
+      ],
+      "controles_preventivos": [
+        "Alerta de vencimento de apólices 60 dias antes do fim da vigência",
+        "Importância segurada revisada a cada atualização do orçamento",
+        "Análise das exclusões por corretor e engenharia registrada no GED",
+        "Apólice do terceiro exigida antes da mobilização",
+        "Endosso de prorrogação vinculado a cada aditivo de prazo"
+      ],
+      "controles_resposta": [
+        "Comunicar o sinistro imediatamente com fotos e laudo técnico",
+        "Contratar cobertura emergencial para o período descoberto"
+      ],
+      "sinais_alerta": [
+        "Apólice com vencimento anterior ao fim do cronograma",
+        "Importância segurada menor que o orçamento atualizado",
+        "Terceiro mobilizado sem seguro vigente cadastrado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "vizinhanca_proxima",
+        "escavacao_profunda",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro",
+        "docs_ged",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R11.10",
+      "evento": "Falta de cobertura de responsabilidade civil por danos a terceiros",
+      "causas": [
+        "Obra sem seguro de responsabilidade civil geral ou cruzada",
+        "Limite de cobertura inferior ao valor dos imóveis lindeiros",
+        "Vistoria cautelar de vizinhança não realizada antes do início",
+        "Cobertura que exclui danos por fundações, vibração ou rebaixamento de lençol"
+      ],
+      "consequencias": [
+        "Indenização de danos a vizinhos paga com recursos da obra",
+        "Ação judicial de vizinhos com pedido de bloqueio de bens",
+        "Desgaste da marca no bairro e reclamações públicas"
+      ],
+      "controles_preventivos": [
+        "RC com limite proporcional aos imóveis vizinhos e cobertura cruzada para terceiros",
+        "Laudo cautelar de vizinhança com fotos arquivado antes da demolição ou escavação",
+        "Monitoramento de recalques e vibrações em vizinhos durante fundações e contenções",
+        "RC exigida dos locadores de equipamentos pesados (gruas, bombas, bate-estacas)"
+      ],
+      "controles_resposta": [
+        "Comunicar a seguradora e documentar o dano com laudo",
+        "Atender o vizinho de imediato com proposta de reparo registrada"
+      ],
+      "sinais_alerta": [
+        "Obra sem apólice de RC vigente cadastrada",
+        "Ausência de laudo cautelar de vizinhança no GED",
+        "Reclamações de vizinhos registradas no diário"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "area_urbana_densa",
+        "escavacao_profunda",
+        "demolicao"
+      ],
+      "integracoes": [
+        "contratos",
+        "docs_ged",
+        "financeiro",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R11.11",
+      "evento": "Responsabilização por vícios construtivos ou descumprimento contratual",
+      "causas": [
+        "Execução em desacordo com projeto ou com a norma de desempenho",
+        "Falta de registros de ensaios e inspeções que comprovem a conformidade",
+        "Manual de uso, operação e manutenção não entregue ao adquirente",
+        "Atraso de entrega além da tolerância contratual em venda na planta"
+      ],
+      "consequencias": [
+        "Indenização ao adquirente e custo de reparo após a entrega",
+        "Multa por atraso de entrega e lucros cessantes",
+        "Responsabilidade por solidez e segurança durante o prazo legal",
+        "Exposição da marca em ações coletivas e redes sociais"
+      ],
+      "controles_preventivos": [
+        "Plano de inspeção e ensaios com registros arquivados por unidade e sistema",
+        "Checklist de conformidade com a norma de desempenho por sistema construtivo",
+        "Entrega do manual do proprietário com protocolo assinado",
+        "Vistoria de entrega com termo e lista de pendências assinada"
+      ],
+      "controles_resposta": [
+        "Atender chamado de assistência técnica com prazo e laudo de causa",
+        "Perícia técnica própria para delimitar responsabilidades e fornecedores envolvidos"
+      ],
+      "sinais_alerta": [
+        "Chamados de assistência técnica por unidade acima da média histórica",
+        "Não conformidades abertas no momento da entrega",
+        "Ações judiciais de consumidores registradas"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "reputacional",
+        "qualidade"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "docs_ged",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 15575 – desempenho de edificações habitacionais",
+        "Lei 8.078/1990 – Código de Defesa do Consumidor",
+        "Lei 10.406/2002 – Código Civil (art. 618, solidez e segurança)"
+      ]
+    },
+    {
+      "codigo": "R11.12",
+      "evento": "Disputas judiciais, arbitrais ou administrativas que comprometam a continuidade do negócio",
+      "causas": [
+        "Acúmulo de ações trabalhistas e de consumidores sem provisão",
+        "Disputa societária ou com o permutante do terreno",
+        "Processo administrativo ambiental ou urbanístico com risco de embargo",
+        "Arbitragem de grande valor com o contratante principal"
+      ],
+      "consequencias": [
+        "Bloqueio de contas ou penhora de recebíveis",
+        "Perda de acesso a crédito por certidões positivas",
+        "Paralisação da obra por decisão liminar",
+        "Queda de vendas e de confiança de investidores"
+      ],
+      "controles_preventivos": [
+        "Controle de processos com valor, chance de perda e provisão revisados mensalmente",
+        "Emissão periódica de certidões negativas por empresa e SPE",
+        "Cláusula de mediação e arbitragem nos contratos de maior valor",
+        "Patrimônio de afetação constituído nas incorporações"
+      ],
+      "controles_resposta": [
+        "Reserva de caixa para depósitos judiciais e bloqueios",
+        "Acordo estratégico nos processos de maior impacto"
+      ],
+      "sinais_alerta": [
+        "Certidão positiva ou vencida no cadastro da empresa",
+        "Crescimento do valor provisionado em processos",
+        "Bloqueio judicial em conta bancária"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "estrutura",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "financeiro",
+        "dividas",
+        "docs_ged",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 10.931/2004 – patrimônio de afetação nas incorporações"
+      ]
+    }
+  ]
+}

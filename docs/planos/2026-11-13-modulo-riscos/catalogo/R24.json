@@ -1,0 +1,653 @@
+{
+  "categoria": "R24",
+  "nome": "Riscos específicos de obras e contratos públicos",
+  "itens": [
+    {
+      "codigo": "R24.01",
+      "evento": "Falhas na interpretação do edital e dos documentos licitatórios",
+      "causas": [
+        "Leitura apressada do edital e dos anexos",
+        "Projeto básico com lacunas não percebidas",
+        "Planilha orçamentária com quantitativos divergentes do projeto"
+      ],
+      "consequencias": [
+        "Proposta inexequível ou com itens não precificados",
+        "Exclusão do certame por descumprimento de exigência",
+        "Prejuízo na execução por escopo subestimado"
+      ],
+      "controles_preventivos": [
+        "Checklist de leitura do edital com responsável por anexo",
+        "Pedidos de esclarecimento protocolados dentro do prazo",
+        "Conferência dos quantitativos do orçamento-base com o projeto registrada",
+        "Comitê de decisão de participar com ata e premissas"
+      ],
+      "controles_resposta": [
+        "Impugnar o edital ou pedir esclarecimento no prazo legal",
+        "Ajustar a proposta às respostas publicadas"
+      ],
+      "sinais_alerta": [
+        "Divergências de quantitativo encontradas na conferência",
+        "Pedidos de esclarecimento sem resposta perto da abertura"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "orcamento",
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 164 – impugnação do edital e pedido de esclarecimento"
+      ]
+    },
+    {
+      "codigo": "R24.02",
+      "evento": "Desclassificação ou impedimento de contratação",
+      "causas": [
+        "Certidões vencidas na data da habilitação",
+        "Atestados técnicos incompatíveis com as parcelas relevantes",
+        "Preço abaixo do limite de exequibilidade",
+        "Composição de BDI ou encargos fora do exigido no edital"
+      ],
+      "consequencias": [
+        "Perda da licitação e do custo de preparo da proposta",
+        "Sanção se houver declaração falsa",
+        "Equipe técnica comprometida sem contrato"
+      ],
+      "controles_preventivos": [
+        "Controle de validade de certidões com alerta antecipado",
+        "Acervo técnico catalogado por tipo de serviço e quantidade",
+        "Revisão da composição de BDI e encargos por segunda pessoa",
+        "Conferência dupla dos documentos de habilitação antes do envio"
+      ],
+      "controles_resposta": [
+        "Interpor recurso administrativo no prazo",
+        "Sanear falhas formais quando o edital admitir"
+      ],
+      "sinais_alerta": [
+        "Certidões vencendo antes da sessão",
+        "Preço da proposta abaixo de 75% do valor orçado pela Administração"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 59 – desclassificação de propostas e inexequibilidade",
+        "Lei 14.133/2021, art. 62 – habilitação"
+      ]
+    },
+    {
+      "codigo": "R24.03",
+      "evento": "Questionamentos administrativos ou judiciais da licitação",
+      "causas": [
+        "Concorrentes recorrendo do resultado",
+        "Representação ao Tribunal de Contas",
+        "Edital com cláusulas restritivas à competição"
+      ],
+      "consequencias": [
+        "Suspensão da licitação ou do contrato",
+        "Mobilização ociosa e custo de espera",
+        "Validade da proposta vencida antes da assinatura"
+      ],
+      "controles_preventivos": [
+        "Proposta e habilitação com fundamentação documentada",
+        "Contrarrazões preparadas com antecedência",
+        "Mobilização somente após a ordem de serviço",
+        "Acompanhamento de processos no Tribunal de Contas com registro"
+      ],
+      "controles_resposta": [
+        "Apresentar contrarrazões e defesa no prazo",
+        "Renegociar prazos e validade da proposta com a Administração"
+      ],
+      "sinais_alerta": [
+        "Recursos interpostos contra a adjudicação",
+        "Representação protocolada no Tribunal de Contas"
+      ],
+      "dimensoes": [
+        "prazo",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "contratacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 165 – recursos administrativos"
+      ]
+    },
+    {
+      "codigo": "R24.04",
+      "evento": "Inconsistência na matriz contratual de alocação de riscos",
+      "causas": [
+        "Edital sem matriz de riscos ou com matriz genérica",
+        "Riscos de solo ou de desapropriação alocados ao contratado sem preço",
+        "Contratação integrada transferindo riscos de projeto sem compensação"
+      ],
+      "consequencias": [
+        "Custos de eventos previsíveis não remunerados",
+        "Disputas de reequilíbrio sem base contratual clara",
+        "Margem consumida por riscos assumidos sem precificação"
+      ],
+      "controles_preventivos": [
+        "Análise da matriz de riscos com quantificação registrada na proposta",
+        "Esclarecimento formal sobre riscos ambíguos antes da sessão",
+        "Riscos alocados ao contratado precificados no BDI com memória de cálculo",
+        "Registro das premissas de risco no contrato e no GED"
+      ],
+      "controles_resposta": [
+        "Pleitear com base na alocação prevista na matriz",
+        "Negociar termo aditivo para riscos não alocados"
+      ],
+      "sinais_alerta": [
+        "Riscos alocados ao contratado sem cobertura no BDI",
+        "Eventos ocorridos que a matriz não previu"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "orcamento",
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 22 – matriz de riscos no edital",
+        "Lei 14.133/2021, art. 103 – alocação de riscos no contrato"
+      ]
+    },
+    {
+      "codigo": "R24.05",
+      "evento": "Atraso na liberação de áreas ou frentes de trabalho pela Administração",
+      "causas": [
+        "Desapropriação não concluída",
+        "Licença ambiental pendente",
+        "Interferências de concessionárias sem remanejamento",
+        "Área ocupada por terceiros"
+      ],
+      "consequencias": [
+        "Equipes e equipamentos ociosos",
+        "Atraso no cronograma contratual",
+        "Custos de mobilização não remunerados"
+      ],
+      "controles_preventivos": [
+        "Termo de liberação de área por frente com data registrada",
+        "Vistoria inicial conjunta com o fiscal registrada em ata",
+        "Notificação formal à Administração a cada frente bloqueada",
+        "Cronograma com dependências de liberação explícitas"
+      ],
+      "controles_resposta": [
+        "Pleitear prorrogação de prazo e custo de ociosidade",
+        "Remanejar equipes para frentes liberadas"
+      ],
+      "sinais_alerta": [
+        "Frentes previstas no cronograma sem termo de liberação",
+        "Equipes ociosas registradas no diário"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R24.06",
+      "evento": "Demora na aprovação de medições",
+      "causas": [
+        "Fiscal sobrecarregado com vários contratos",
+        "Documentação da medição incompleta",
+        "Critérios de medição divergentes entre fiscal e contratado"
+      ],
+      "consequencias": [
+        "Faturamento atrasado e pressão no capital de giro",
+        "Fornecedores e empreiteiros pagos com atraso",
+        "Juros de capital de giro não remunerados"
+      ],
+      "controles_preventivos": [
+        "Medição com memória de cálculo e fotos em padrão acordado",
+        "Critérios de medição definidos em ata no início do contrato",
+        "Protocolo de entrega da medição com data registrada",
+        "Controle de prazo de aprovação com cobrança formal"
+      ],
+      "controles_resposta": [
+        "Notificar formalmente a Administração",
+        "Reunião com fiscal e gestor do contrato registrada em ata"
+      ],
+      "sinais_alerta": [
+        "Medição pública pendente de aprovação além do prazo contratual",
+        "Medições devolvidas com exigência"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro",
+        "diario",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 117 – fiscalização do contrato"
+      ]
+    },
+    {
+      "codigo": "R24.07",
+      "evento": "Atraso nos pagamentos públicos",
+      "causas": [
+        "Insuficiência de caixa do órgão contratante",
+        "Empenho com saldo inferior às medições",
+        "Liquidação travada por exigências documentais"
+      ],
+      "consequencias": [
+        "Caixa da construtora comprometido",
+        "Endividamento para manter a obra",
+        "Atraso a fornecedores e empregados"
+      ],
+      "controles_preventivos": [
+        "Verificação de saldo de empenho antes de executar cada etapa",
+        "Acompanhamento da posição na ordem cronológica de pagamentos",
+        "Fluxo de caixa com cenário de atraso público",
+        "Documentação de liquidação conferida antes do protocolo"
+      ],
+      "controles_resposta": [
+        "Cobrar formalmente com correção monetária prevista",
+        "Reduzir o ritmo da obra com comunicação formal",
+        "Avaliar pedido de extinção quando o atraso superar o limite legal"
+      ],
+      "sinais_alerta": [
+        "Notas fiscais emitidas sem pagamento após o prazo contratual",
+        "Saldo de empenho menor que a próxima medição"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "financeiro",
+        "contratos",
+        "dividas"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 141 – ordem cronológica de pagamentos",
+        "Lei 14.133/2021, art. 137 – hipóteses de extinção do contrato"
+      ]
+    },
+    {
+      "codigo": "R24.08",
+      "evento": "Glosas de serviços executados",
+      "causas": [
+        "Serviço executado fora da especificação",
+        "Falta de ensaios, ARTs ou registros exigidos",
+        "Serviço extra executado sem aditivo formal"
+      ],
+      "consequencias": [
+        "Receita perdida por serviço já executado",
+        "Retrabalho para adequar à especificação",
+        "Saldo contratual distorcido"
+      ],
+      "controles_preventivos": [
+        "Aditivo formal assinado antes de executar serviço não previsto",
+        "Ensaios e registros de qualidade anexados a cada medição",
+        "Conferência conjunta de quantitativos com o fiscal em campo",
+        "Diário de obra assinado pelo fiscal"
+      ],
+      "controles_resposta": [
+        "Recurso administrativo com evidências",
+        "Corrigir o serviço e reapresentar na medição seguinte"
+      ],
+      "sinais_alerta": [
+        "Valor glosado acumulado no contrato",
+        "Serviços executados sem cobertura contratual"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "qualidade"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "diario",
+        "garantia_qualidade",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R24.09",
+      "evento": "Divergências sobre reequilíbrio econômico-financeiro",
+      "causas": [
+        "Alta extraordinária de insumos como aço, asfalto ou cimento",
+        "Alteração unilateral de projeto pela Administração",
+        "Atrasos da Administração alongando o contrato"
+      ],
+      "consequencias": [
+        "Prejuízo na execução até a decisão do pleito",
+        "Disputa administrativa ou judicial prolongada"
+      ],
+      "controles_preventivos": [
+        "Notificação tempestiva de cada fato gerador com registro",
+        "Base de custos com notas de compra arquivada por insumo",
+        "Reajuste anual pelo índice contratual solicitado na data-base",
+        "Pleito com planilha comparativa e fundamentação documental"
+      ],
+      "controles_resposta": [
+        "Pedido administrativo de reequilíbrio",
+        "Via judicial quando esgotada a negociação"
+      ],
+      "sinais_alerta": [
+        "Variação dos insumos principais frente aos preços da proposta",
+        "Aditivos de valor pendentes de assinatura"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "orcamento",
+        "contratos",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 124 – alteração do contrato e equilíbrio econômico-financeiro"
+      ]
+    },
+    {
+      "codigo": "R24.10",
+      "evento": "Aplicação de multas e sanções administrativas",
+      "causas": [
+        "Atraso em etapas do cronograma contratual",
+        "Documentação trabalhista e de SST não entregue",
+        "Notificações do fiscal sem resposta no prazo"
+      ],
+      "consequencias": [
+        "Desconto de multa na medição",
+        "Registro de sanção que afeta futuras licitações",
+        "Execução da garantia contratual"
+      ],
+      "controles_preventivos": [
+        "Controle de prazos e notificações com resposta registrada",
+        "Marcos contratuais destacados no cronograma",
+        "Entrega mensal da documentação trabalhista e de SST com protocolo",
+        "Pedido de prorrogação fundamentado antes do vencimento"
+      ],
+      "controles_resposta": [
+        "Apresentar defesa prévia no prazo",
+        "Recorrer da decisão sancionatória"
+      ],
+      "sinais_alerta": [
+        "Notificações do fiscal em aberto",
+        "Marcos contratuais atrasados"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "planejamento",
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 156 – sanções administrativas",
+        "Lei 14.133/2021, art. 162 – multa de mora"
+      ]
+    },
+    {
+      "codigo": "R24.11",
+      "evento": "Paralisação por insuficiência orçamentária ou decisões administrativas",
+      "causas": [
+        "Contingenciamento do orçamento do órgão",
+        "Mudança de gestão com nova prioridade",
+        "Decisão de órgão de controle suspendendo a obra"
+      ],
+      "consequencias": [
+        "Desmobilização e custo de manutenção do canteiro",
+        "Deterioração de serviços expostos",
+        "Equipe ociosa e perda de produtividade na retomada"
+      ],
+      "controles_preventivos": [
+        "Acompanhamento da lei orçamentária e dos empenhos do contrato",
+        "Plano de desmobilização e proteção de serviços pronto",
+        "Ordem de paralisação exigida por escrito com data",
+        "Registro do estado da obra na paralisação com fotos e ata"
+      ],
+      "controles_resposta": [
+        "Pleitear indenização dos custos de paralisação",
+        "Avaliar pedido de extinção quando a suspensão superar o limite legal"
+      ],
+      "sinais_alerta": [
+        "Saldo de empenho para menos de duas medições",
+        "Ordem de redução de ritmo recebida"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "financeiro",
+        "planejamento",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 137 – hipóteses de extinção do contrato"
+      ]
+    },
+    {
+      "codigo": "R24.12",
+      "evento": "Inexecução contratual e impedimentos de participar de futuras contratações",
+      "causas": [
+        "Capacidade financeira insuficiente para o porte do contrato",
+        "Abandono de subcontratado em serviço crítico",
+        "Descumprimentos reiterados após notificação"
+      ],
+      "consequencias": [
+        "Extinção unilateral e execução da garantia",
+        "Impedimento de licitar e contratar ou declaração de inidoneidade",
+        "Perda de carteira de obras públicas"
+      ],
+      "controles_preventivos": [
+        "Análise de capacidade financeira e técnica registrada antes de licitar",
+        "Monitoramento mensal de avanço físico vs cronograma contratual",
+        "Subcontratados críticos com garantia e substituto homologado",
+        "Respostas formais a todas as notificações de inexecução"
+      ],
+      "controles_resposta": [
+        "Defesa no processo de responsabilização",
+        "Plano de recuperação apresentado à Administração"
+      ],
+      "sinais_alerta": [
+        "Avanço físico abaixo do cronograma contratual por meses seguidos",
+        "Notificações de inexecução recebidas"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "planejamento",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021, art. 155 – infrações administrativas",
+        "Lei 14.133/2021, art. 156 – sanções administrativas"
+      ]
+    }
+  ]
+}

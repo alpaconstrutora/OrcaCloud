@@ -1,0 +1,736 @@
+{
+  "categoria": "R10",
+  "nome": "Riscos tributários, fiscais e previdenciários",
+  "itens": [
+    {
+      "codigo": "R10.01",
+      "evento": "Enquadramento inadequado no regime tributário",
+      "causas": [
+        "Empreendimento sem patrimônio de afetação perdendo acesso ao RET",
+        "Escolha entre lucro real e presumido sem simulação por empreendimento",
+        "Opção pela desoneração da folha feita sem cálculo comparativo",
+        "Atividade de incorporação e de empreitada misturadas na mesma empresa"
+      ],
+      "consequencias": [
+        "Carga tributária acima da prevista na viabilidade",
+        "Autuação por uso indevido de regime especial",
+        "Margem do empreendimento reduzida"
+      ],
+      "controles_preventivos": [
+        "Parecer tributário com simulação de regimes antes do lançamento",
+        "Registro do patrimônio de afetação e opção pelo RET comprovados no GED",
+        "Revisão anual do enquadramento com o contador e ata de decisão",
+        "Segregação societária ou contábil entre incorporação e empreitada"
+      ],
+      "controles_resposta": [
+        "Corrigir o enquadramento no próximo período permitido e avaliar autorregularização"
+      ],
+      "sinais_alerta": [
+        "Carga tributária efetiva sobre receita acima da prevista na viabilidade",
+        "Empreendimento lançado sem termo de afetação anexado",
+        "Mudança de faturamento que altera limites do regime"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "aquisicao",
+        "viabilidade",
+        "projeto_aprovacao"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "fiscal",
+        "imovib",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 10.931/2004 – patrimônio de afetação e regime especial de tributação",
+        "Lei 12.546/2011 – contribuição previdenciária sobre a receita bruta"
+      ]
+    },
+    {
+      "codigo": "R10.02",
+      "evento": "Apuração incorreta dos tributos",
+      "causas": [
+        "Receita de vendas reconhecida em competência errada",
+        "Base de cálculo sem dedução correta de materiais ou subempreitadas",
+        "Créditos de PIS e Cofins tomados indevidamente ou não aproveitados",
+        "Parametrização errada de alíquotas no sistema fiscal"
+      ],
+      "consequencias": [
+        "Pagamento a maior que consome caixa",
+        "Pagamento a menor com multa e juros em autuação",
+        "Retrabalho de declarações retificadoras"
+      ],
+      "controles_preventivos": [
+        "Conciliação mensal entre receita contábil, notas emitidas e base declarada",
+        "Revisão da apuração por segundo responsável antes do pagamento",
+        "Auditoria anual de parametrização tributária do sistema",
+        "Memória de cálculo da apuração arquivada por competência"
+      ],
+      "controles_resposta": [
+        "Retificar declarações e recolher diferenças por denúncia espontânea",
+        "Pedir restituição ou compensação de valores pagos a maior"
+      ],
+      "sinais_alerta": [
+        "Diferença entre notas fiscais emitidas e receita declarada no mês",
+        "Variação da alíquota efetiva entre competências sem causa conhecida",
+        "Quantidade de declarações retificadoras no ano"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "locacao"
+      ],
+      "integracoes": [
+        "fiscal",
+        "financeiro",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R10.03",
+      "evento": "Retenções tributárias não realizadas quando exigidas",
+      "causas": [
+        "Notas de serviço pagas sem conferir retenção de INSS, ISS, IR e contribuições",
+        "Prestador alegando dispensa de retenção sem comprovação",
+        "Cadastro do fornecedor sem regime tributário e código de serviço",
+        "Pagamento feito por adiantamento antes da nota"
+      ],
+      "consequencias": [
+        "Construtora responde pelo tributo não retido com multa e juros",
+        "Responsabilidade solidária por contribuições previdenciárias do prestador",
+        "Glosa em fiscalização de obra"
+      ],
+      "controles_preventivos": [
+        "Checklist de retenções na entrada de cada nota de serviço",
+        "Cadastro de fornecedor com regime tributário e serviço validados",
+        "Bloqueio de pagamento de nota de serviço sem cálculo de retenção",
+        "Conferência mensal das retenções contra notas de serviço recebidas"
+      ],
+      "controles_resposta": [
+        "Recolher o valor devido e cobrar o prestador pelo ressarcimento"
+      ],
+      "sinais_alerta": [
+        "Notas de serviço pagas com retenção zerada",
+        "Fornecedores de serviço sem regime tributário no cadastro",
+        "Pagamentos a prestadores sem nota fiscal vinculada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "fiscal",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.212/1991 – custeio da seguridade social",
+        "LC 116/2003 – imposto sobre serviços de qualquer natureza"
+      ]
+    },
+    {
+      "codigo": "R10.04",
+      "evento": "Irregularidades no recolhimento de ISS e demais tributos aplicáveis",
+      "causas": [
+        "ISS recolhido ao município do estabelecimento quando devido no local da obra",
+        "Valores retidos de prestadores não repassados no prazo",
+        "Guias geradas com código ou competência errados",
+        "Dedução de materiais do ISS sem previsão na lei municipal"
+      ],
+      "consequencias": [
+        "Cobrança em dois municípios pelo mesmo serviço",
+        "Multa, juros e inscrição em dívida ativa",
+        "Responsabilização criminal por tributo retido e não recolhido"
+      ],
+      "controles_preventivos": [
+        "Matriz de local de incidência do ISS por obra e serviço",
+        "Agenda de vencimentos com conciliação de retido contra recolhido",
+        "Comprovante de cada guia vinculado ao título no financeiro",
+        "Consulta à legislação municipal da obra registrada antes do início"
+      ],
+      "controles_resposta": [
+        "Recolher valores em atraso e pedir restituição do pagamento indevido",
+        "Defender autuação com documentação de recolhimento"
+      ],
+      "sinais_alerta": [
+        "Saldo de tributos retidos a recolher após o vencimento",
+        "Guias pagas sem comprovante anexado no financeiro",
+        "Obra em município diferente da sede sem cadastro municipal"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "fiscal",
+        "financeiro",
+        "dividas"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Tributo retido e não recolhido configura crime contra a ordem tributária",
+      "referencias": [
+        "LC 116/2003 – imposto sobre serviços de qualquer natureza",
+        "Lei 8.137/1990 – crimes contra a ordem tributária"
+      ]
+    },
+    {
+      "codigo": "R10.05",
+      "evento": "Falhas na escrituração fiscal e contábil",
+      "causas": [
+        "Notas de entrada lançadas fora da competência ou sem centro de custo",
+        "Custos de obras diferentes misturados na contabilidade",
+        "Obrigações acessórias digitais entregues com dados inconsistentes",
+        "Documentos fiscais perdidos ou não arquivados"
+      ],
+      "consequencias": [
+        "Multas por obrigação acessória incorreta ou atrasada",
+        "Apuração por empreendimento distorcida",
+        "Arbitramento de lucro ou de base em fiscalização"
+      ],
+      "controles_preventivos": [
+        "Fechamento contábil mensal com checklist e data limite",
+        "Conciliação entre notas fiscais eletrônicas emitidas contra a empresa e lançadas",
+        "Centro de custo obrigatório por empreendimento em cada lançamento",
+        "Arquivo digital de documentos fiscais com indexação por obra"
+      ],
+      "controles_resposta": [
+        "Retificar escrituração e obrigações acessórias antes de fiscalização"
+      ],
+      "sinais_alerta": [
+        "Notas fiscais emitidas contra o CNPJ não lançadas no mês",
+        "Lançamentos sem centro de custo de empreendimento",
+        "Obrigações acessórias entregues após o prazo"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "fiscal",
+        "financeiro",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R10.06",
+      "evento": "Irregularidades no cadastro e nas obrigações relativas ao CNO",
+      "causas": [
+        "Obra iniciada sem inscrição no CNO no prazo legal",
+        "Área, responsável ou destinação cadastrados com divergência do alvará",
+        "Alterações de área ou responsável não atualizadas no cadastro",
+        "Obra encerrada sem baixa e sem regularização da matrícula"
+      ],
+      "consequencias": [
+        "Multa por descumprimento de obrigação acessória",
+        "Impedimento de emitir certidão negativa da obra",
+        "Atraso na averbação da construção e no repasse das unidades"
+      ],
+      "controles_preventivos": [
+        "Inscrição no CNO como item do checklist de mobilização",
+        "Conferência dos dados do CNO contra alvará e projeto aprovado",
+        "Revisão do cadastro a cada aditivo de área ou troca de responsável",
+        "Plano de encerramento com regularização previdenciária antes do habite-se"
+      ],
+      "controles_resposta": [
+        "Retificar o cadastro e regularizar a obra com acompanhamento do contador"
+      ],
+      "sinais_alerta": [
+        "Obra com cronograma iniciado e sem número de CNO cadastrado",
+        "Área do CNO diferente da área do projeto aprovado",
+        "Data prevista de habite-se sem regularização da obra iniciada"
+      ],
+      "dimensoes": [
+        "juridica",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "fiscal",
+        "docs_ged",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.212/1991 – custeio da seguridade social"
+      ]
+    },
+    {
+      "codigo": "R10.07",
+      "evento": "Divergências na aferição previdenciária da obra",
+      "causas": [
+        "Remuneração declarada em GFIP ou eSocial abaixo da mão de obra estimada pela área",
+        "Notas de subempreiteiros sem vinculação à obra no CNO",
+        "Pré-moldados e serviços com mão de obra não documentados corretamente",
+        "Área construída informada diferente da real"
+      ],
+      "consequencias": [
+        "Cobrança de contribuição complementar calculada por aferição indireta",
+        "Atraso na certidão da obra e na averbação",
+        "Custo previdenciário não orçado"
+      ],
+      "controles_preventivos": [
+        "Simulação da aferição durante a obra comparando remuneração declarada e estimada",
+        "Vincular toda folha e nota de subempreitada ao CNO da obra",
+        "Guarda organizada de documentos de mão de obra por obra",
+        "Revisão do enquadramento da área e do padrão antes do encerramento"
+      ],
+      "controles_resposta": [
+        "Reunir comprovação documental para contestar a aferição ou parcelar a diferença"
+      ],
+      "sinais_alerta": [
+        "Remuneração acumulada declarada sobre a estimada pela área em queda",
+        "Notas de subempreitada sem CNO informado",
+        "Avanço físico alto com folha da obra baixa"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "fiscal",
+        "rh",
+        "contratos",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "IN RFB 2.021/2021 – contribuições previdenciárias na construção civil"
+      ]
+    },
+    {
+      "codigo": "R10.08",
+      "evento": "Inconsistências nas informações enviadas ao eSocial",
+      "causas": [
+        "Admissões registradas após o início das atividades do trabalhador",
+        "Eventos de afastamento, desligamento e SST enviados fora do prazo",
+        "Rubricas da folha com incidências tributárias mal parametrizadas",
+        "Lotação tributária do trabalhador sem vínculo com o CNO da obra"
+      ],
+      "consequencias": [
+        "Multas trabalhistas e previdenciárias",
+        "Divergência entre contribuições declaradas e recolhidas",
+        "Passivo em fiscalização do trabalho com cruzamento de dados"
+      ],
+      "controles_preventivos": [
+        "Envio da admissão antes do primeiro dia de trabalho verificado na integração da obra",
+        "Painel de eventos rejeitados e pendentes no eSocial tratado semanalmente",
+        "Revisão anual das incidências das rubricas com o contador",
+        "Lotação tributária por obra conferida a cada transferência de empregado"
+      ],
+      "controles_resposta": [
+        "Retificar eventos e recolher diferenças apuradas"
+      ],
+      "sinais_alerta": [
+        "Eventos do eSocial rejeitados ou pendentes de envio",
+        "Trabalhadores no controle de acesso da obra sem admissão enviada",
+        "Empregados sem lotação vinculada a obra"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "rh",
+        "sst",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Decreto 8.373/2014 – sistema de escrituração digital das obrigações fiscais, previdenciárias e trabalhistas"
+      ]
+    },
+    {
+      "codigo": "R10.09",
+      "evento": "Passivos tributários e previdenciários de prestadores de serviços",
+      "causas": [
+        "Subempreiteiros sem recolhimento de INSS e FGTS de seus empregados",
+        "Contratação de prestadores com certidões positivas",
+        "Pejotização de trabalhadores sem estrutura empresarial",
+        "Falta de exigência de comprovantes mensais de recolhimento"
+      ],
+      "consequencias": [
+        "Responsabilidade solidária ou subsidiária da construtora",
+        "Bloqueio de pagamentos e de certidão da obra",
+        "Ações trabalhistas com condenação da tomadora"
+      ],
+      "controles_preventivos": [
+        "Exigir certidões negativas na contratação e a cada medição",
+        "Condicionar pagamento da medição à entrega de comprovantes de recolhimento",
+        "Retenção contratual para garantia de passivos do prestador",
+        "Cadastro do prestador com validade de certidões controlada"
+      ],
+      "controles_resposta": [
+        "Reter pagamentos pendentes e notificar o prestador para regularização",
+        "Recolher diretamente e descontar do saldo contratual quando previsto"
+      ],
+      "sinais_alerta": [
+        "Prestadores com certidões vencidas no cadastro",
+        "Medições pagas sem comprovantes de INSS e FGTS anexados",
+        "Prestadores com reclamações trabalhistas registradas"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "contratos",
+        "docs_ged",
+        "financeiro",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.212/1991 – custeio da seguridade social"
+      ]
+    },
+    {
+      "codigo": "R10.10",
+      "evento": "Impossibilidade ou atraso na emissão de certidões exigíveis",
+      "causas": [
+        "Débitos em aberto ou declarações não entregues em algum órgão",
+        "Divergências de cadastro entre Receita, município e estado",
+        "Pendências de obra no CNO impedindo certidão específica",
+        "Certidões renovadas só quando já exigidas"
+      ],
+      "consequencias": [
+        "Bloqueio de liberação de financiamento e de repasse de compradores",
+        "Inabilitação em licitação ou suspensão de pagamentos públicos",
+        "Atraso na averbação da construção e no registro das unidades"
+      ],
+      "controles_preventivos": [
+        "Controle de validade de todas as certidões com alerta 30 dias antes",
+        "Consulta mensal de situação fiscal nos portais dos órgãos",
+        "Tratamento imediato de pendências que impedem a certidão",
+        "Calendário de certidões exigidas por contrato, banco e cartório"
+      ],
+      "controles_resposta": [
+        "Regularizar ou parcelar o débito e obter certidão positiva com efeito de negativa"
+      ],
+      "sinais_alerta": [
+        "Certidões com vencimento nos próximos 30 dias",
+        "Pendências abertas na situação fiscal da empresa",
+        "Licitação ou medição bancária agendada com certidão vencida"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "aquisicao",
+        "contratacao",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "contrato_publico"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "fiscal",
+        "dividas",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 14.133/2021 – licitações e contratos administrativos"
+      ]
+    },
+    {
+      "codigo": "R10.11",
+      "evento": "Falta de documentação para comprovação de recolhimentos",
+      "causas": [
+        "Guias e comprovantes guardados só no banco ou no escritório contábil",
+        "Troca de contador sem transferência do arquivo",
+        "Comprovantes de prestadores não exigidos ou não arquivados",
+        "Prazo de guarda desconhecido pela equipe"
+      ],
+      "consequencias": [
+        "Cobrança de tributo já pago por falta de prova",
+        "Impossibilidade de afastar responsabilidade solidária",
+        "Atraso na regularização da obra e nas certidões"
+      ],
+      "controles_preventivos": [
+        "Repositório digital de guias e comprovantes vinculado a cada título pago",
+        "Política de guarda documental com prazos por tipo de documento",
+        "Checklist de documentos de prestadores anexados a cada medição",
+        "Cláusula de entrega do acervo no contrato com o escritório contábil"
+      ],
+      "controles_resposta": [
+        "Reconstituir comprovantes junto a bancos e órgãos antes de prazos de defesa"
+      ],
+      "sinais_alerta": [
+        "Títulos de tributos pagos sem comprovante anexado",
+        "Medições de prestadores sem documentos previdenciários anexados",
+        "Obras encerradas sem dossiê de regularização arquivado"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "financeiro",
+        "fiscal",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R10.12",
+      "evento": "Impactos não previstos de mudanças na legislação tributária",
+      "causas": [
+        "Transição para IBS e CBS alterando a carga sobre venda de imóveis e serviços",
+        "Fim ou alteração de regimes especiais e de desonerações",
+        "Mudança de alíquota de ISS ou ITBI no município da obra",
+        "Viabilidade e contratos de longo prazo sem cláusula de revisão tributária"
+      ],
+      "consequencias": [
+        "Margem do empreendimento reduzida durante a obra",
+        "Preço de venda ou de contrato defasado",
+        "Necessidade de readequar sistemas e processos fiscais"
+      ],
+      "controles_preventivos": [
+        "Monitoramento trimestral de alterações legislativas com parecer do contador",
+        "Simulação do efeito da transição tributária em cada viabilidade em andamento",
+        "Cláusula de reequilíbrio por alteração tributária em contratos de longo prazo",
+        "Plano de adequação do sistema fiscal com cronograma"
+      ],
+      "controles_resposta": [
+        "Revisar viabilidade e preços e pleitear reequilíbrio contratual quando cabível"
+      ],
+      "sinais_alerta": [
+        "Viabilidades sem cenário de transição tributária atualizado",
+        "Contratos vigentes sem cláusula de alteração tributária",
+        "Publicação de norma tributária aplicável ao setor no período"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "viabilidade",
+        "contratacao",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "contrato_publico",
+        "locacao"
+      ],
+      "integracoes": [
+        "fiscal",
+        "imovib",
+        "contratos",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "EC 132/2023 – reforma tributária do consumo",
+        "LC 214/2025 – institui IBS, CBS e imposto seletivo"
+      ]
+    }
+  ]
+}

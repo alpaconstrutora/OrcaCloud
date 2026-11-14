@@ -1,0 +1,736 @@
+{
+  "categoria": "R12",
+  "nome": "Riscos de suprimentos e fornecedores",
+  "itens": [
+    {
+      "codigo": "R12.01",
+      "evento": "Atraso na entrega de materiais",
+      "causas": [
+        "Pedido emitido sem considerar o prazo de fabricação (aço cortado e dobrado, esquadrias, elevadores)",
+        "Fornecedor com capacidade comprometida por outras obras",
+        "Aprovação de amostra ou de projeto de fabricação atrasada",
+        "Pagamentos atrasados que levam o fornecedor a segurar a entrega"
+      ],
+      "consequencias": [
+        "Frente parada com equipe ociosa e custo de mão de obra improdutiva",
+        "Deslocamento do caminho crítico do cronograma",
+        "Horas extras e remobilização para recuperar o atraso"
+      ],
+      "controles_preventivos": [
+        "Cronograma de suprimentos derivado do planejamento com data limite de pedido por item",
+        "Confirmação formal da data de fabricação e follow-up semanal dos pedidos críticos",
+        "Cláusula de multa por atraso no pedido de compra",
+        "Estoque mínimo definido para materiais de consumo contínuo"
+      ],
+      "controles_resposta": [
+        "Resequenciar frentes para ocupar a equipe enquanto o material não chega",
+        "Comprar entrega parcial de fornecedor alternativo homologado"
+      ],
+      "sinais_alerta": [
+        "Pedidos com data prevista vencida sem recebimento",
+        "Pedidos emitidos após a data limite do cronograma de suprimentos",
+        "Índice de pontualidade do fornecedor em queda"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "planejamento",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.02",
+      "evento": "Fornecimento de materiais fora das especificações",
+      "causas": [
+        "Pedido sem especificação completa (classe, fck, bitola, norma de referência)",
+        "Substituição por similar sem aprovação do projetista",
+        "Recebimento sem conferência contra a especificação e sem laudo do lote"
+      ],
+      "consequencias": [
+        "Demolição e refazimento de elementos já executados",
+        "Elemento estrutural com resistência abaixo do projeto",
+        "Devolução de material e atraso da frente"
+      ],
+      "controles_preventivos": [
+        "Especificação técnica e norma de referência obrigatórias no pedido de compra",
+        "Inspeção de recebimento com checklist por material (nota, lote, laudo, identificação)",
+        "Controle tecnológico com ensaios de concreto, aço e blocos registrados por lote",
+        "Aprovação formal do projetista para qualquer material similar"
+      ],
+      "controles_resposta": [
+        "Segregar e identificar o lote não conforme até a decisão técnica",
+        "Laudo do projetista definindo aceitar, reforçar ou demolir",
+        "Cobrar ressarcimento do fornecedor com base nos ensaios"
+      ],
+      "sinais_alerta": [
+        "Não conformidades de recebimento registradas por fornecedor",
+        "Resultados de ensaio de concreto abaixo do fck especificado",
+        "Pedidos com material similar sem aprovação registrada"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "seguranca",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "pre_moldado",
+        "estrutura_metalica"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "garantia_qualidade",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Concreto ou aço estrutural fora da especificação pode comprometer a estabilidade da estrutura",
+      "referencias": [
+        "ABNT NBR 12655 – concreto: preparo, controle, recebimento e aceitação",
+        "ABNT NBR 7480 – aço para armaduras de concreto armado"
+      ]
+    },
+    {
+      "codigo": "R12.03",
+      "evento": "Falência ou incapacidade operacional do fornecedor",
+      "causas": [
+        "Fornecedor com endividamento alto, protestos ou certidões positivas",
+        "Fornecedor pequeno dependente de um único cliente",
+        "Adiantamento elevado para fabricação sem garantia",
+        "Recuperação judicial do fornecedor não monitorada"
+      ],
+      "consequencias": [
+        "Perda do adiantamento pago",
+        "Interrupção de fornecimento sob encomenda já em fabricação",
+        "Nova contratação com preço e prazo piores"
+      ],
+      "controles_preventivos": [
+        "Análise cadastral e financeira na homologação com renovação anual",
+        "Adiantamento limitado por política e coberto por garantia",
+        "Pagamento por marcos de fabricação inspecionados na fábrica",
+        "Consulta periódica a protestos e pedidos de recuperação judicial dos fornecedores críticos"
+      ],
+      "controles_resposta": [
+        "Retirar o material já fabricado mediante termo e inventário",
+        "Acionar fornecedor alternativo homologado"
+      ],
+      "sinais_alerta": [
+        "Certidões vencidas ou positivas no cadastro do fornecedor",
+        "Atrasos sucessivos de entrega do mesmo fornecedor",
+        "Pedido de antecipação de pagamento pelo fornecedor"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "pre_moldado",
+        "estrutura_metalica",
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.04",
+      "evento": "Dependência excessiva de um único fornecedor",
+      "causas": [
+        "Projeto especifica marca ou sistema exclusivo (fachada, impermeabilização patenteada)",
+        "Região com uma única central de concreto ou usina de asfalto",
+        "Concentração de compras em um fornecedor para obter desconto"
+      ],
+      "consequencias": [
+        "Perda de poder de negociação de preço e prazo",
+        "Paralisação de frentes se o fornecedor falhar",
+        "Troca de sistema com revalidação de projeto"
+      ],
+      "controles_preventivos": [
+        "Especificação por desempenho admitindo equivalentes técnicos",
+        "Ao menos dois fornecedores homologados para cada item crítico",
+        "Relatório trimestral de concentração de compras por fornecedor e categoria",
+        "Plano alternativo documentado para itens sem substituto local"
+      ],
+      "controles_resposta": [
+        "Acionar o fornecedor alternativo homologado",
+        "Adaptar o projeto para sistema equivalente com aprovação do projetista"
+      ],
+      "sinais_alerta": [
+        "Fornecedor com mais de 50% das compras de uma categoria crítica",
+        "Itens críticos com um único fornecedor homologado"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "contratacao",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.05",
+      "evento": "Aumento de preços após a contratação",
+      "causas": [
+        "Proposta com validade curta e pedido emitido depois do vencimento",
+        "Alta de commodities como aço, cobre, PVC e asfalto",
+        "Contrato de fornecimento sem preço fixo ou teto de reajuste",
+        "Variação cambial em insumos importados"
+      ],
+      "consequencias": [
+        "Estouro do orçamento nos insumos de maior peso",
+        "Margem reduzida em contrato de venda ou empreitada a preço fechado",
+        "Necessidade de pleito de reequilíbrio com o cliente"
+      ],
+      "controles_preventivos": [
+        "Compra antecipada ou contrato de preço fixo para os itens da curva A",
+        "Acompanhamento mensal dos índices de preço dos insumos críticos",
+        "Cláusula de reajuste por índice definido nos contratos de fornecimento",
+        "Compra em moeda nacional ou proteção cambial para importados"
+      ],
+      "controles_resposta": [
+        "Renegociar volume e prazo de pagamento com o fornecedor",
+        "Substituir por especificação equivalente aprovada",
+        "Acionar a contingência do orçamento com registro da causa"
+      ],
+      "sinais_alerta": [
+        "Preço cotado acima do orçado em mais de 10%",
+        "Propostas vencidas sem pedido emitido",
+        "Alta acumulada do preço do aço ou do cobre no trimestre"
+      ],
+      "dimensoes": [
+        "financeira"
+      ],
+      "fases": [
+        "contratacao",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.06",
+      "evento": "Falta de materiais críticos no mercado",
+      "causas": [
+        "Demanda regional aquecida por muitas obras simultâneas",
+        "Parada de fábrica, greve de transporte ou restrição logística",
+        "Retenção aduaneira de insumos importados",
+        "Produto especificado descontinuado pelo fabricante"
+      ],
+      "consequencias": [
+        "Paralisação de frentes dependentes do material",
+        "Compra emergencial a preço elevado",
+        "Troca de especificação com revalidação de projeto e aprovação do cliente"
+      ],
+      "controles_preventivos": [
+        "Lista de itens críticos com prazo de fornecimento longo e reserva de capacidade",
+        "Compra antecipada com armazenamento protegido no canteiro ou no fornecedor",
+        "Especificação com alternativas técnicas já aprovadas pelo projetista",
+        "Consulta mensal aos fornecedores sobre prazos e estoques"
+      ],
+      "controles_resposta": [
+        "Aplicar a alternativa técnica aprovada",
+        "Redistribuir frentes e equipes para serviços sem dependência do item"
+      ],
+      "sinais_alerta": [
+        "Aumento do prazo de fornecimento cotado",
+        "Cotações sem resposta ou com prazo indefinido"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.07",
+      "evento": "Danos no transporte e na movimentação de materiais",
+      "causas": [
+        "Carga mal amarrada ou sem proteção (vidros, louças, peças pré-moldadas)",
+        "Descarga manual de peças pesadas sem equipamento adequado",
+        "Acesso ao canteiro inadequado para o caminhão",
+        "Movimentação interna com grua ou munck sem plano de içamento"
+      ],
+      "consequencias": [
+        "Perda de material e reposição com atraso",
+        "Lesão de trabalhador durante a descarga",
+        "Disputa com a transportadora sobre quem arca com a avaria"
+      ],
+      "controles_preventivos": [
+        "Contrato de frete com responsabilidade até a descarga e seguro de transporte",
+        "Plano de descarga com equipamento definido para cargas pesadas ou frágeis",
+        "Conferência na descarga com foto e anotação de avaria no canhoto",
+        "Área de descarga nivelada, sinalizada e liberada antes da chegada"
+      ],
+      "controles_resposta": [
+        "Registrar a avaria na nota e acionar fornecedor ou transportadora",
+        "Isolar a área se a peça danificada oferecer risco"
+      ],
+      "sinais_alerta": [
+        "Avarias registradas no recebimento por fornecedor",
+        "Peças pesadas recebidas sem plano de içamento registrado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "seguranca"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "pre_moldado",
+        "estrutura_metalica",
+        "grua_ou_guindaste",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "diario",
+        "sst"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.08",
+      "evento": "Armazenamento inadequado e deterioração dos produtos",
+      "causas": [
+        "Cimento e argamassa em local úmido ou com pilhas altas demais",
+        "Aço exposto ao tempo por longo período antes do uso",
+        "Tintas, selantes e aditivos usados após a validade",
+        "Canteiro sem espaço coberto para o volume comprado"
+      ],
+      "consequencias": [
+        "Perda de material e nova compra",
+        "Patologias por uso de material deteriorado",
+        "Risco de incêndio por inflamáveis mal armazenados"
+      ],
+      "controles_preventivos": [
+        "Layout de canteiro com almoxarifado coberto, baias e área de inflamáveis separada",
+        "Controle de estoque com validade e saída do lote mais antigo primeiro",
+        "Inspeção quinzenal do almoxarifado com checklist e fotos",
+        "Compras programadas para reduzir estoque parado no canteiro"
+      ],
+      "controles_resposta": [
+        "Inventário do material afetado e descarte controlado",
+        "Ensaio do material suspeito antes de qualquer aplicação"
+      ],
+      "sinais_alerta": [
+        "Itens com validade vencida no estoque",
+        "Checklist de almoxarifado reprovado",
+        "Diferença entre estoque físico e registrado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "qualidade",
+        "ambiental"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "regiao_chuvosa",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.09",
+      "evento": "Compras emergenciais com sobrepreço",
+      "causas": [
+        "Necessidade descoberta tarde por falta de programação de compras",
+        "Quebra do estoque mínimo de material de consumo",
+        "Compra feita direto na obra fora do fluxo de cotação"
+      ],
+      "consequencias": [
+        "Custo acima do orçado e da média histórica",
+        "Compra sem nota fiscal ou sem verificação de conformidade",
+        "Espaço para conluio entre comprador e fornecedor"
+      ],
+      "controles_preventivos": [
+        "Programação mensal de compras derivada do cronograma da obra",
+        "Alçada de aprovação e justificativa obrigatória para compra emergencial",
+        "Cotação mínima de três fornecedores fora dos casos de emergência registrada",
+        "Indicador mensal de compras emergenciais por obra"
+      ],
+      "controles_resposta": [
+        "Auditoria das compras emergenciais do mês com comparação de preço",
+        "Renegociar com o fornecedor ou devolver o excedente"
+      ],
+      "sinais_alerta": [
+        "Percentual de pedidos emergenciais sobre o total de compras",
+        "Preço pago acima do orçado ou da média histórica",
+        "Pedidos aprovados sem cotação registrada"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "orcamento",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.10",
+      "evento": "Materiais falsificados, sem procedência ou sem rastreabilidade",
+      "causas": [
+        "Compra em revenda não homologada com preço muito abaixo do mercado",
+        "Fios e cabos elétricos sem certificação compulsória",
+        "Aço sem identificação de lote e fabricante",
+        "EPI sem certificado de aprovação válido"
+      ],
+      "consequencias": [
+        "Incêndio por condutor com seção ou isolamento abaixo do declarado",
+        "Falha de elemento estrutural por aço fora de norma",
+        "Responsabilização civil e criminal da construtora",
+        "Substituição de material já embutido em paredes e lajes"
+      ],
+      "controles_preventivos": [
+        "Homologação de fornecedor com documentação e visita técnica",
+        "Certificação compulsória e certificado de aprovação conferidos na nota e no recebimento",
+        "Registro do lote aplicado por elemento ou pavimento",
+        "Ensaio por amostragem em itens críticos como cabos e aço"
+      ],
+      "controles_resposta": [
+        "Bloquear e substituir o lote suspeito",
+        "Rastrear os locais onde o lote foi aplicado",
+        "Comunicar o fabricante e os órgãos de fiscalização"
+      ],
+      "sinais_alerta": [
+        "Preço de compra muito abaixo da média do mercado",
+        "Recebimentos sem certificado ou lote registrado"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "estrutura_metalica"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "garantia_qualidade",
+        "docs_ged",
+        "fiscal"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Cabos ou aço falsificados podem causar incêndio fatal ou falha estrutural",
+      "referencias": [
+        "NR-6 – equipamento de proteção individual"
+      ]
+    },
+    {
+      "codigo": "R12.11",
+      "evento": "Falhas na logística de entregas e recebimentos",
+      "causas": [
+        "Entregas sem agendamento chegando ao mesmo tempo",
+        "Restrição municipal de horário para caminhões não considerada",
+        "Falta de responsável para receber e conferir a carga",
+        "Área de descarga ocupada por outra atividade"
+      ],
+      "consequencias": [
+        "Caminhão retorna e o fornecedor cobra nova viagem",
+        "Multa municipal por descarga em via pública",
+        "Material recebido sem conferência e divergências descobertas tarde"
+      ],
+      "controles_preventivos": [
+        "Agenda de entregas com janela de horário e responsável pelo recebimento",
+        "Conferência pela nota fiscal vinculada ao pedido de compra",
+        "Plano logístico do canteiro respeitando as restrições municipais de carga e descarga",
+        "Área de descarga reservada no planejamento semanal"
+      ],
+      "controles_resposta": [
+        "Reprogramar a entrega e registrar a causa da recusa",
+        "Abrir divergência com o fornecedor no próprio pedido"
+      ],
+      "sinais_alerta": [
+        "Entregas recusadas ou devolvidas no mês",
+        "Notas fiscais recebidas sem pedido vinculado",
+        "Multas de trânsito ou de posturas relacionadas à obra"
+      ],
+      "dimensoes": [
+        "operacional",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "fiscal",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R12.12",
+      "evento": "Contratos de fornecimento sem mecanismos adequados de garantia e substituição",
+      "causas": [
+        "Pedido simples sem cláusula de garantia do produto",
+        "Garantia do fabricante condicionada a instalador credenciado não exigido",
+        "Ausência de prazo para substituição de item defeituoso",
+        "Equipamentos como elevadores e bombas sem assistência técnica contratada"
+      ],
+      "consequencias": [
+        "Reposição de item defeituoso paga pela construtora",
+        "Garantia dada ao adquirente sem respaldo do fornecedor",
+        "Atraso na entrega por item defeituoso sem substituição rápida"
+      ],
+      "controles_preventivos": [
+        "Cláusula de garantia com prazo, prazo de substituição e penalidade",
+        "Termos de garantia e notas arquivados por item instalado",
+        "Instalador credenciado exigido quando a garantia do fabricante depender disso",
+        "Prazos de garantia do fornecedor compatíveis com os do manual do proprietário"
+      ],
+      "controles_resposta": [
+        "Acionar o fornecedor com laudo e fotos do defeito",
+        "Substituir o item e cobrar o fornecedor conforme contrato"
+      ],
+      "sinais_alerta": [
+        "Itens instalados sem termo de garantia no GED",
+        "Chamados pós-obra atribuídos a defeito de produto"
+      ],
+      "dimensoes": [
+        "financeira",
+        "qualidade",
+        "juridica"
+      ],
+      "fases": [
+        "contratacao",
+        "instalacoes",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "suprimentos",
+        "contratos",
+        "docs_ged",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

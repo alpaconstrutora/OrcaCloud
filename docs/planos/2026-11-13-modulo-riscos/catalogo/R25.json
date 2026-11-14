@@ -1,0 +1,702 @@
+{
+  "categoria": "R25",
+  "nome": "Riscos de reformas, demolições e intervenções em edificações existentes",
+  "itens": [
+    {
+      "codigo": "R25.01",
+      "evento": "Ausência de documentação estrutural confiável",
+      "causas": [
+        "Edificação antiga sem projeto estrutural arquivado",
+        "Reformas anteriores executadas sem registro",
+        "Projeto existente diferente do que foi construído"
+      ],
+      "consequencias": [
+        "Intervenção sem conhecimento de cargas e armaduras",
+        "Risco de colapso parcial durante a obra",
+        "Custos de investigação e reforço não previstos"
+      ],
+      "controles_preventivos": [
+        "Levantamento cadastral estrutural com ensaios e laudo com ART antes do projeto",
+        "Pesquisa documental na prefeitura e no condomínio registrada",
+        "Inspeção predial prévia com relatório",
+        "Projeto de intervenção baseado no laudo e aprovado pelo responsável técnico"
+      ],
+      "controles_resposta": [
+        "Suspender a intervenção na área sem informação",
+        "Escorar preventivamente até o diagnóstico"
+      ],
+      "sinais_alerta": [
+        "Obra iniciada sem laudo estrutural no GED",
+        "Divergências entre planta disponível e medidas de campo"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "planta_bim"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Intervir sem conhecer a estrutura pode levar ao colapso da edificação",
+      "referencias": [
+        "ABNT NBR 16280 – reformas em edificações",
+        "ABNT NBR 16747 – inspeção predial"
+      ]
+    },
+    {
+      "codigo": "R25.02",
+      "evento": "Identificação incorreta de elementos estruturais",
+      "causas": [
+        "Alvenaria estrutural confundida com vedação",
+        "Vigas embutidas em forro ou pilares revestidos",
+        "Equipe de demolição sem orientação técnica"
+      ],
+      "consequencias": [
+        "Remoção ou corte de elemento portante",
+        "Fissuras, deformações e colapso",
+        "Embargo e responsabilização técnica"
+      ],
+      "controles_preventivos": [
+        "Mapa de elementos estruturais em planta e marcação em campo",
+        "Prospecção pontual para confirmar elementos duvidosos com registro",
+        "Liberação de cada corte ou demolição assinada pelo engenheiro estrutural",
+        "Instrução da equipe antes do início com lista de presença"
+      ],
+      "controles_resposta": [
+        "Parar o serviço e escorar imediatamente",
+        "Avaliação estrutural e projeto de recomposição"
+      ],
+      "sinais_alerta": [
+        "Paredes a demolir sem liberação registrada",
+        "Fissuras novas após início da demolição"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "demolicao",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "diario",
+        "sst",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Remoção de elemento portante pode provocar colapso e morte",
+      "referencias": [
+        "ABNT NBR 16280 – reformas em edificações"
+      ]
+    },
+    {
+      "codigo": "R25.03",
+      "evento": "Demolição acidental de elementos essenciais à estabilidade",
+      "causas": [
+        "Demolição mecanizada sem plano de sequência",
+        "Equipe sem supervisão presencial",
+        "Pressão de prazo levando a remover elementos fora da ordem"
+      ],
+      "consequencias": [
+        "Colapso parcial ou total da edificação",
+        "Morte ou lesão grave de trabalhadores e terceiros",
+        "Embargo e responsabilização criminal"
+      ],
+      "controles_preventivos": [
+        "Plano de demolição com sequência executiva e ART",
+        "Supervisão técnica presencial registrada no diário",
+        "Permissão de trabalho diária para a frente de demolição",
+        "Isolamento da área e do entorno verificado em inspeção"
+      ],
+      "controles_resposta": [
+        "Evacuar e acionar bombeiros e defesa civil",
+        "Escoramento emergencial com responsável técnico"
+      ],
+      "sinais_alerta": [
+        "Demolição realizada sem permissão de trabalho do dia",
+        "Trincas ou estalos reportados pela equipe"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "edificacao_antiga",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Remoção de elemento essencial causa colapso com risco de morte",
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "ABNT NBR 5682 – contratação, execução e supervisão de demolições"
+      ]
+    },
+    {
+      "codigo": "R25.04",
+      "evento": "Presença de materiais perigosos não identificados",
+      "causas": [
+        "Telhas, caixas d'água ou isolamentos com amianto",
+        "Tintas antigas com chumbo",
+        "Solo ou resíduos contaminados por uso anterior"
+      ],
+      "consequencias": [
+        "Exposição de trabalhadores e moradores a agentes nocivos",
+        "Autuação e paralisação da obra",
+        "Custo de remoção e destinação especializada"
+      ],
+      "controles_preventivos": [
+        "Inventário de materiais perigosos com laudo antes da demolição",
+        "Remoção por empresa habilitada com plano aprovado",
+        "Destinação com manifesto de transporte de resíduos arquivado",
+        "EPIs específicos e monitoramento de exposição registrados"
+      ],
+      "controles_resposta": [
+        "Interromper o serviço e isolar a área",
+        "Contratar remoção especializada e descontaminação"
+      ],
+      "sinais_alerta": [
+        "Material suspeito encontrado sem laudo",
+        "Edificação de época com uso comum de amianto sem inventário"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "ambiental",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "viabilidade",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "reforma",
+        "galpao_industrial",
+        "comercial",
+        "residencial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "demolicao"
+      ],
+      "integracoes": [
+        "sst",
+        "docs_ged",
+        "suprimentos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Exposição a amianto e outros agentes causa doença grave e leva a interdição",
+      "referencias": [
+        "NR-15, anexo 12 – limites de tolerância para poeiras minerais, asbesto",
+        "Resolução CONAMA 307/2002 – gestão de resíduos da construção civil"
+      ]
+    },
+    {
+      "codigo": "R25.05",
+      "evento": "Interferências ocultas em instalações existentes",
+      "causas": [
+        "Eletrodutos e tubulações de gás embutidos sem cadastro",
+        "Prumadas e ramais não documentados",
+        "Circuitos energizados sem identificação no quadro"
+      ],
+      "consequencias": [
+        "Choque elétrico ou vazamento de gás",
+        "Inundação de unidades por tubulação rompida",
+        "Interrupção de serviços para outros usuários"
+      ],
+      "controles_preventivos": [
+        "Varredura com detector de cabos e tubulações registrada antes de rasgos e furos",
+        "Desenergização com bloqueio e etiquetagem registrada",
+        "Fechamento do gás com teste de ausência antes da intervenção",
+        "Permissão de trabalho para perfuração em área de risco"
+      ],
+      "controles_resposta": [
+        "Isolar a área e desligar a fonte",
+        "Acionar a concessionária e prestar socorro"
+      ],
+      "sinais_alerta": [
+        "Rasgos ou furos sem registro de varredura",
+        "Ausência de cadastro das instalações existentes"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "planta_bim"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Atingir circuito energizado ou tubulação de gás pode matar trabalhadores",
+      "referencias": [
+        "NR-10 – segurança em instalações e serviços em eletricidade"
+      ]
+    },
+    {
+      "codigo": "R25.06",
+      "evento": "Danos a unidades ocupadas ou edificações vizinhas",
+      "causas": [
+        "Vibração de demolição e perfuração",
+        "Remoção de impermeabilização causando infiltração em unidade inferior",
+        "Escavação junto a fundações vizinhas"
+      ],
+      "consequencias": [
+        "Fissuras e danos em unidades e imóveis vizinhos",
+        "Indenizações e paralisação por ordem judicial",
+        "Instabilidade de estrutura vizinha"
+      ],
+      "controles_preventivos": [
+        "Vistoria cautelar de vizinhança com laudo fotográfico antes do início",
+        "Monitoramento de fissuras e recalques com leituras registradas",
+        "Proteção provisória das unidades afetadas verificada em inspeção",
+        "Seguro de responsabilidade civil contratado"
+      ],
+      "controles_resposta": [
+        "Paralisar o serviço causador",
+        "Reparar danos com aceite registrado do afetado",
+        "Acionar o seguro de responsabilidade civil"
+      ],
+      "sinais_alerta": [
+        "Reclamações de vizinhos ou condôminos",
+        "Leituras de monitoramento acima do limite definido"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "vizinhanca_proxima",
+        "edificacao_ocupada",
+        "area_urbana_densa",
+        "demolicao"
+      ],
+      "integracoes": [
+        "diario",
+        "garantia_qualidade",
+        "docs_ged"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Dano à estrutura vizinha pode levar a colapso sobre os ocupantes",
+      "referencias": [
+        "ABNT NBR 16280 – reformas em edificações"
+      ]
+    },
+    {
+      "codigo": "R25.07",
+      "evento": "Alterações que provoquem sobrecarga estrutural",
+      "causas": [
+        "Novas paredes de alvenaria sobre laje sem verificação",
+        "Inclusão de piscina, jardim ou equipamento pesado",
+        "Mudança de uso para arquivo, academia ou depósito",
+        "Entulho acumulado sobre laje durante a obra"
+      ],
+      "consequencias": [
+        "Flechas excessivas e fissuras",
+        "Colapso de laje ou viga",
+        "Custo de reforço estrutural"
+      ],
+      "controles_preventivos": [
+        "Verificação estrutural com ART para todo acréscimo de carga",
+        "Limite de estocagem de entulho por pavimento sinalizado e inspecionado",
+        "Projeto de reforço aprovado antes da alteração",
+        "Plano de reforma aprovado pelo responsável da edificação"
+      ],
+      "controles_resposta": [
+        "Remover a carga e escorar a região",
+        "Avaliação estrutural com projeto de reforço"
+      ],
+      "sinais_alerta": [
+        "Acúmulo de entulho ou material sobre laje",
+        "Fissuras novas em lajes e vigas"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "estrutura_concreto",
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario",
+        "planta_bim"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Sobrecarga não verificada pode causar colapso de laje ou viga",
+      "referencias": [
+        "ABNT NBR 6120 – ações para o cálculo de estruturas de edificações",
+        "ABNT NBR 6118 – projeto de estruturas de concreto",
+        "ABNT NBR 16280 – reformas em edificações"
+      ]
+    },
+    {
+      "codigo": "R25.08",
+      "evento": "Incompatibilidade entre estruturas antigas e novos sistemas",
+      "causas": [
+        "Instalação elétrica antiga sem capacidade para novas cargas",
+        "Tubulações antigas incompatíveis com nova pressão ou material",
+        "Estrutura existente sem espaço para novos shafts e dutos"
+      ],
+      "consequencias": [
+        "Sobrecarga elétrica com risco de incêndio",
+        "Vazamentos nas interligações",
+        "Retrabalho e aumento de escopo"
+      ],
+      "controles_preventivos": [
+        "Diagnóstico de capacidade das instalações existentes com laudo",
+        "Compatibilização dos novos sistemas com a estrutura em projeto",
+        "Testes de carga e estanqueidade após cada interligação",
+        "Verificação da demanda elétrica disponível junto à concessionária"
+      ],
+      "controles_resposta": [
+        "Readequar a instalação existente",
+        "Revisar o projeto e o orçamento"
+      ],
+      "sinais_alerta": [
+        "Demanda elétrica prevista acima da disponível",
+        "Disjuntores desarmando após novas ligações"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "seguranca"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "reforma",
+        "comercial",
+        "residencial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_antiga",
+        "bim"
+      ],
+      "integracoes": [
+        "planta_bim",
+        "orcamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 5410 – instalações elétricas de baixa tensão"
+      ]
+    },
+    {
+      "codigo": "R25.09",
+      "evento": "Interrupção não planejada de água, energia e outros serviços",
+      "causas": [
+        "Manobra de registro ou quadro sem comunicação",
+        "Corte acidental de prumada ou alimentador",
+        "Desconhecimento de quais unidades cada registro atende"
+      ],
+      "consequencias": [
+        "Moradores ou usuários sem água ou energia",
+        "Reclamações e pedidos de indenização",
+        "Danos a equipamentos sensíveis"
+      ],
+      "controles_preventivos": [
+        "Plano de manobras com aviso prévio aos usuários registrado",
+        "Identificação em campo de registros e quadros com unidades atendidas",
+        "Abastecimento e geração provisórios planejados",
+        "Janela de intervenção acordada com o responsável da edificação"
+      ],
+      "controles_resposta": [
+        "Restabelecer o serviço com prioridade",
+        "Comunicar os afetados e registrar a ocorrência"
+      ],
+      "sinais_alerta": [
+        "Manobras executadas sem aviso registrado",
+        "Reclamações de usuários durante a obra"
+      ],
+      "dimensoes": [
+        "operacional",
+        "reputacional",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "instalacoes"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "ordens_servico",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R25.10",
+      "evento": "Restrições de acesso, circulação e horários de trabalho",
+      "causas": [
+        "Regulamento do condomínio limitando horários de ruído",
+        "Elevador compartilhado com moradores",
+        "Rua estreita ou zona de restrição de carga e descarga"
+      ],
+      "consequencias": [
+        "Produtividade abaixo do previsto",
+        "Atraso no cronograma",
+        "Custo extra com transporte vertical manual"
+      ],
+      "controles_preventivos": [
+        "Plano logístico aprovado pelo condomínio por escrito",
+        "Cronograma considerando horários permitidos",
+        "Proteção de áreas comuns e elevadores verificada em inspeção",
+        "Agendamento de entregas registrado"
+      ],
+      "controles_resposta": [
+        "Replanejar a sequência de serviços",
+        "Negociar janelas adicionais com o condomínio"
+      ],
+      "sinais_alerta": [
+        "Horas produtivas abaixo das planejadas",
+        "Entregas recusadas ou remarcadas"
+      ],
+      "dimensoes": [
+        "prazo",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada",
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "planejamento",
+        "suprimentos",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R25.11",
+      "evento": "Falhas no escoramento provisório durante demolições e reforços",
+      "causas": [
+        "Escoramento sem projeto ou dimensionamento",
+        "Escoras apoiadas em piso sem capacidade",
+        "Retirada antecipada das escoras"
+      ],
+      "consequencias": [
+        "Colapso do trecho escorado",
+        "Morte ou lesão grave de trabalhadores",
+        "Embargo da obra"
+      ],
+      "controles_preventivos": [
+        "Projeto de escoramento com ART",
+        "Inspeção e liberação do escoramento antes de demolir ou reforçar",
+        "Retirada de escoras somente com autorização registrada",
+        "Escoras e peças com certificado e inspeção visual"
+      ],
+      "controles_resposta": [
+        "Evacuar e reforçar o escoramento",
+        "Avaliação estrutural antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Deformação visível em escoras ou cunhas soltas",
+        "Escoramento em uso sem registro de inspeção"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "demolicao",
+        "edificacao_antiga",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falha de escoramento provoca colapso com risco de morte",
+      "referencias": [
+        "ABNT NBR 15696 – fôrmas e escoramentos para estruturas de concreto",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R25.12",
+      "evento": "Não atendimento aos procedimentos técnicos e autorizações aplicáveis às reformas",
+      "causas": [
+        "Plano de reforma não submetido ao responsável da edificação",
+        "Ausência de ART ou RRT do responsável técnico",
+        "Alvará municipal não obtido"
+      ],
+      "consequencias": [
+        "Embargo da obra",
+        "Responsabilização civil e criminal dos envolvidos",
+        "Desfazimento de serviços executados"
+      ],
+      "controles_preventivos": [
+        "Plano de reforma com ART ou RRT protocolado antes do início",
+        "Alvará ou dispensa municipal arquivado no GED",
+        "Checklist de autorizações por tipo de intervenção",
+        "Aprovação do síndico ou responsável registrada"
+      ],
+      "controles_resposta": [
+        "Paralisar e regularizar a documentação",
+        "Responder à fiscalização com responsável técnico"
+      ],
+      "sinais_alerta": [
+        "Obra iniciada sem ART no GED",
+        "Notificação do condomínio ou da prefeitura"
+      ],
+      "dimensoes": [
+        "juridica",
+        "seguranca",
+        "prazo"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "inicio_obra"
+      ],
+      "tipologias": [
+        "reforma",
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Reforma sem responsável técnico e autorização pode ser embargada e gerar responsabilização criminal",
+      "referencias": [
+        "ABNT NBR 16280 – reformas em edificações"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,742 @@
+{
+  "categoria": "R13",
+  "nome": "Riscos de recursos humanos e terceirização",
+  "itens": [
+    {
+      "codigo": "R13.01",
+      "evento": "Escassez de profissionais qualificados",
+      "causas": [
+        "Mercado regional aquecido com muitas obras disputando a mesma mão de obra",
+        "Funções especializadas escassas (armador, eletricista, operador de grua, encarregado)",
+        "Remuneração abaixo da praticada na região",
+        "Obra afastada de centros urbanos sem alojamento adequado"
+      ],
+      "consequencias": [
+        "Efetivo abaixo do previsto e atraso das frentes",
+        "Contratação de pessoal sem a qualificação necessária",
+        "Aumento do custo de mão de obra por disputa salarial"
+      ],
+      "controles_preventivos": [
+        "Plano de mobilização de mão de obra derivado do histograma do planejamento",
+        "Banco de profissionais e parceria com escolas técnicas da região",
+        "Pesquisa salarial semestral por função",
+        "Contratação antecipada das funções críticas com base no cronograma"
+      ],
+      "controles_resposta": [
+        "Subcontratar empreiteira especializada para a frente descoberta",
+        "Reprogramar a sequência de serviços conforme o efetivo disponível"
+      ],
+      "sinais_alerta": [
+        "Vagas abertas há mais de 30 dias",
+        "Efetivo real abaixo do histograma previsto por duas semanas"
+      ],
+      "dimensoes": [
+        "prazo",
+        "financeira",
+        "qualidade"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "rh",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R13.02",
+      "evento": "Alta rotatividade de mão de obra",
+      "causas": [
+        "Salário ou benefícios abaixo da concorrência",
+        "Áreas de vivência, refeição ou alojamento precários",
+        "Liderança abusiva ou injusta na distribuição de tarefas",
+        "Empreiteiro que atrasa o pagamento por produção"
+      ],
+      "consequencias": [
+        "Custo recorrente de admissão, integração e rescisão",
+        "Perda de produtividade e de qualidade com equipes sempre novas",
+        "Mais acidentes entre trabalhadores recém-admitidos"
+      ],
+      "controles_preventivos": [
+        "Indicador mensal de rotatividade por função e por encarregado",
+        "Entrevista de desligamento registrada com motivo codificado",
+        "Inspeção periódica das áreas de vivência com checklist",
+        "Política de bonificação por produção e permanência"
+      ],
+      "controles_resposta": [
+        "Plano de ação com o encarregado da equipe de maior rotatividade",
+        "Reforço de integração e acompanhamento dos recém-admitidos"
+      ],
+      "sinais_alerta": [
+        "Rotatividade mensal acima da média histórica da empresa",
+        "Desligamentos a pedido concentrados em uma equipe"
+      ],
+      "dimensoes": [
+        "operacional",
+        "financeira",
+        "qualidade",
+        "seguranca"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "sst"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-18 – segurança e saúde no trabalho na indústria da construção",
+        "NR-24 – condições sanitárias e de conforto nos locais de trabalho"
+      ]
+    },
+    {
+      "codigo": "R13.03",
+      "evento": "Absenteísmo excessivo",
+      "causas": [
+        "Doenças relacionadas ao trabalho, como lombalgias e dermatites",
+        "Dificuldade de transporte até o canteiro",
+        "Faltas concentradas após dias de pagamento e feriados",
+        "Clima ruim na equipe ou conflito com a liderança"
+      ],
+      "consequencias": [
+        "Equipes incompletas e frentes atrasadas",
+        "Sobrecarga dos presentes com horas extras",
+        "Custo de substituição e de improdutividade"
+      ],
+      "controles_preventivos": [
+        "Ponto eletrônico com indicador semanal de absenteísmo",
+        "Análise dos atestados por causa junto ao médico do trabalho",
+        "Transporte fretado ou auxílio para canteiros de difícil acesso",
+        "Programa de saúde integrado ao PCMSO"
+      ],
+      "controles_resposta": [
+        "Remanejar equipes entre frentes para cobrir as faltas",
+        "Conversa individual e encaminhamento médico nos casos repetidos"
+      ],
+      "sinais_alerta": [
+        "Taxa de absenteísmo semanal acima da meta",
+        "Atestados repetidos do mesmo trabalhador no trimestre"
+      ],
+      "dimensoes": [
+        "prazo",
+        "operacional",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "rh",
+        "sst",
+        "diario",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-7 – programa de controle médico de saúde ocupacional"
+      ]
+    },
+    {
+      "codigo": "R13.04",
+      "evento": "Deficiência no treinamento das equipes",
+      "causas": [
+        "Treinamentos de NR com carga horária ou conteúdo abaixo do exigido",
+        "Integração de terceiros não realizada antes do início",
+        "Método construtivo novo sem capacitação da equipe",
+        "Reciclagens periódicas vencidas"
+      ],
+      "consequencias": [
+        "Acidente grave por desconhecimento do risco ou do procedimento",
+        "Retrabalho por erro de execução",
+        "Autuação pela fiscalização do trabalho"
+      ],
+      "controles_preventivos": [
+        "Matriz de treinamentos por função com as NRs obrigatórias e validade",
+        "Bloqueio de acesso à frente para trabalhador com treinamento vencido",
+        "Capacitação no método construtivo antes da liberação da frente com lista de presença",
+        "Avaliação de eficácia do treinamento registrada"
+      ],
+      "controles_resposta": [
+        "Afastar o trabalhador da atividade até concluir o treinamento",
+        "Treinamento corretivo da equipe após não conformidade ou incidente"
+      ],
+      "sinais_alerta": [
+        "Treinamentos de NR vencidos no cadastro do trabalhador",
+        "Integrações de terceiros pendentes",
+        "Não conformidades por erro de execução na mesma equipe"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "trabalho_em_altura",
+        "espaco_confinado"
+      ],
+      "integracoes": [
+        "rh",
+        "sst",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Trabalhador sem capacitação em atividade crítica pode sofrer acidente fatal",
+      "referencias": [
+        "NR-1 – disposições gerais e gerenciamento de riscos ocupacionais",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R13.05",
+      "evento": "Utilização de trabalhadores sem habilitação exigida",
+      "causas": [
+        "Operador de grua, guindaste ou máquina sem capacitação e autorização",
+        "Eletricista sem qualificação e sem treinamento de NR-10",
+        "Motorista ou operador sem habilitação da categoria",
+        "Trabalhador sem ASO apto para altura ou espaço confinado"
+      ],
+      "consequencias": [
+        "Acidente grave ou fatal na operação",
+        "Autuação e interdição da atividade pela fiscalização",
+        "Responsabilização criminal do responsável pela liberação"
+      ],
+      "controles_preventivos": [
+        "Cadastro de habilitações por trabalhador com validade e alerta de vencimento",
+        "Autorização formal por escrito para operar equipamentos e serviços elétricos",
+        "Conferência de habilitação e aptidão no ASO antes da alocação na frente",
+        "Exigência da documentação de habilitação dos terceiros antes da mobilização"
+      ],
+      "controles_resposta": [
+        "Afastar imediatamente o trabalhador da atividade",
+        "Substituir por profissional habilitado e revisar as liberações recentes"
+      ],
+      "sinais_alerta": [
+        "Operador alocado sem autorização registrada",
+        "ASO vencido ou sem aptidão para a atividade",
+        "Habilitação vencida no cadastro"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "grua_ou_guindaste",
+        "trabalho_em_altura",
+        "espaco_confinado",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "sst",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Operação por pessoa não habilitada pode causar morte e gera responsabilização criminal",
+      "referencias": [
+        "NR-10 – segurança em instalações e serviços em eletricidade",
+        "NR-11 – transporte, movimentação, armazenagem e manuseio de materiais",
+        "NR-12 – segurança no trabalho em máquinas e equipamentos"
+      ]
+    },
+    {
+      "codigo": "R13.06",
+      "evento": "Falhas na supervisão e liderança operacional",
+      "causas": [
+        "Encarregado responsável por frentes demais ao mesmo tempo",
+        "Mestre de obras promovido sem formação em liderança",
+        "Engenheiro residente ausente do canteiro por longos períodos"
+      ],
+      "consequencias": [
+        "Execução fora do projeto descoberta tarde",
+        "Desvios de segurança não corrigidos no turno",
+        "Baixa produtividade e retrabalho"
+      ],
+      "controles_preventivos": [
+        "Número máximo de frentes e trabalhadores por encarregado definido no plano da obra",
+        "Rotina diária de inspeção da liderança registrada no diário",
+        "DDS conduzido pela liderança com lista de presença",
+        "Programa de capacitação de encarregados e mestres"
+      ],
+      "controles_resposta": [
+        "Reforçar a supervisão na frente com não conformidades recorrentes",
+        "Plano de ação individual com o líder"
+      ],
+      "sinais_alerta": [
+        "Dias sem registro do responsável técnico no diário",
+        "Não conformidades repetidas na mesma frente",
+        "DDS não realizados na semana"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "seguranca",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "diario",
+        "garantia_qualidade",
+        "sst",
+        "rh"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R13.07",
+      "evento": "Conflitos entre equipes e subcontratados",
+      "causas": [
+        "Frentes sobrepostas sem sequenciamento entre empreiteiras",
+        "Equipe que danifica o serviço de outra, como quebra de reboco para instalações",
+        "Disputa por equipamento compartilhado (grua, elevador de carga)",
+        "Medição que penaliza atraso causado por outra equipe"
+      ],
+      "consequencias": [
+        "Retrabalho e discussão sobre quem paga",
+        "Atrasos encadeados entre frentes",
+        "Agressões e ameaças no canteiro"
+      ],
+      "controles_preventivos": [
+        "Planejamento semanal com todas as empreiteiras e ata de compromissos",
+        "Termo de entrega de frente entre equipes com fotos",
+        "Agenda de uso dos equipamentos compartilhados",
+        "Regra contratual de responsabilidade por danos ao serviço de terceiros"
+      ],
+      "controles_resposta": [
+        "Mediação pela engenharia com decisão registrada em ata",
+        "Afastar envolvidos em agressão e apurar o ocorrido"
+      ],
+      "sinais_alerta": [
+        "Ocorrências de dano entre equipes registradas no diário",
+        "Reclamações formais entre empreiteiras"
+      ],
+      "dimensoes": [
+        "operacional",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R13.08",
+      "evento": "Irregularidades trabalhistas na contratação de terceiros",
+      "causas": [
+        "Terceiro com empregados sem registro em carteira",
+        "Contratação de pessoas físicas como empresa para mascarar vínculo",
+        "Quarteirização não autorizada pelo contrato",
+        "Terceiro sem recolhimento de FGTS e INSS dos alocados"
+      ],
+      "consequencias": [
+        "Responsabilidade subsidiária da contratante por verbas trabalhistas",
+        "Autuação fiscal e previdenciária",
+        "Exposição pública se houver condições degradantes no alojamento"
+      ],
+      "controles_preventivos": [
+        "Exigência mensal de folha, eSocial, FGTS e INSS dos empregados alocados",
+        "Conciliação da lista de acesso ao canteiro com os registros do terceiro",
+        "Retenção previdenciária na nota de cessão de mão de obra",
+        "Bloqueio de pagamento sem a documentação trabalhista do mês"
+      ],
+      "controles_resposta": [
+        "Reter o pagamento e quitar diretamente as verbas devidas aos trabalhadores",
+        "Rescindir o contrato com o terceiro reincidente"
+      ],
+      "sinais_alerta": [
+        "Documentação trabalhista mensal do terceiro pendente",
+        "Trabalhadores no controle de acesso sem vínculo comprovado",
+        "Nota fiscal de serviço sem retenção previdenciária"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "contratos",
+        "financeiro",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 6.019/1974 – trabalho temporário e terceirização"
+      ]
+    },
+    {
+      "codigo": "R13.09",
+      "evento": "Jornadas excessivas e fadiga",
+      "causas": [
+        "Horas extras sistemáticas para recuperar atraso",
+        "Concretagens e turnos noturnos emendados sem descanso",
+        "Trabalho aos domingos sem folga compensatória",
+        "Deslocamento longo entre alojamento e canteiro"
+      ],
+      "consequencias": [
+        "Acidentes por desatenção e lentidão de reação",
+        "Passivo de horas extras e de intervalos não concedidos",
+        "Erros de execução no fim do turno"
+      ],
+      "controles_preventivos": [
+        "Limite de horas extras no ponto eletrônico com alerta ao gestor",
+        "Concretagens longas planejadas com revezamento de equipes",
+        "Controle do intervalo de 11 horas entre jornadas",
+        "Folga semanal programada na escala"
+      ],
+      "controles_resposta": [
+        "Afastar da atividade crítica o trabalhador com sinais de fadiga",
+        "Replanejar o cronograma de recuperação com turnos adicionais"
+      ],
+      "sinais_alerta": [
+        "Horas extras acima de 2 horas por dia no ponto",
+        "Trabalhadores sem folga semanal na escala",
+        "Quase-acidentes registrados no fim do turno"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "rh",
+        "planejamento",
+        "sst"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Decreto-Lei 5.452/1943 – Consolidação das Leis do Trabalho"
+      ]
+    },
+    {
+      "codigo": "R13.10",
+      "evento": "Assédio, violência e fatores psicossociais relacionados ao trabalho",
+      "causas": [
+        "Liderança autoritária e uso de humilhação como forma de cobrança",
+        "Ausência de canal de denúncia confiável",
+        "Convivência em alojamento sem regras e com consumo de álcool"
+      ],
+      "consequencias": [
+        "Afastamentos por adoecimento mental",
+        "Ações por dano moral e autuações",
+        "Violência física entre trabalhadores"
+      ],
+      "controles_preventivos": [
+        "Canal de denúncia com anonimato e tratamento registrado",
+        "Treinamento periódico de prevenção ao assédio com lista de presença",
+        "Fatores psicossociais incluídos no inventário de riscos do PGR",
+        "Código de conduta assinado também pelos terceiros"
+      ],
+      "controles_resposta": [
+        "Apuração com afastamento cautelar do denunciado",
+        "Acolhimento e encaminhamento da vítima"
+      ],
+      "sinais_alerta": [
+        "Denúncias registradas no canal",
+        "Afastamentos por transtornos mentais no período"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "sst"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "NR-1 – disposições gerais e gerenciamento de riscos ocupacionais",
+        "Lei 14.457/2022 – medidas de prevenção e combate ao assédio no trabalho"
+      ]
+    },
+    {
+      "codigo": "R13.11",
+      "evento": "Descumprimento de obrigações salariais e trabalhistas",
+      "causas": [
+        "Caixa da obra insuficiente na data da folha",
+        "Terceiro que recebe a medição e não repassa os salários",
+        "Erro de folha em adicionais, horas extras ou rescisões",
+        "Verbas rescisórias não pagas no prazo"
+      ],
+      "consequencias": [
+        "Paralisação e greve no canteiro",
+        "Ações trabalhistas com multas e responsabilidade subsidiária",
+        "Certidões positivas que bloqueiam crédito e medições"
+      ],
+      "controles_preventivos": [
+        "Folha priorizada no fluxo de caixa com reserva antecipada",
+        "Conferência da folha antes do fechamento com relatório de divergências",
+        "Comprovante de pagamento dos empregados do terceiro exigido antes da medição",
+        "Controle de prazos de rescisão com alerta"
+      ],
+      "controles_resposta": [
+        "Pagamento direto aos trabalhadores do terceiro com dedução na medição",
+        "Negociação com o sindicato e cronograma de quitação"
+      ],
+      "sinais_alerta": [
+        "Folha paga após a data legal",
+        "Terceiro sem comprovante de pagamento do mês",
+        "Reclamações registradas no sindicato"
+      ],
+      "dimensoes": [
+        "juridica",
+        "financeira",
+        "prazo",
+        "reputacional"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "rh",
+        "financeiro",
+        "contratos",
+        "dividas"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R13.12",
+      "evento": "Dependência de profissionais essenciais sem plano de substituição",
+      "causas": [
+        "Um único engenheiro concentra o conhecimento técnico e as decisões da obra",
+        "Responsável técnico com ART sem substituto designado",
+        "Operador de grua ou planejador sem reserva",
+        "Informações de compras e planejamento fora do sistema"
+      ],
+      "consequencias": [
+        "Paralisação ou decisões erradas na saída do profissional",
+        "ART sem baixa ou substituição, deixando a obra irregular",
+        "Perda de histórico e de compromissos com fornecedores"
+      ],
+      "controles_preventivos": [
+        "Mapa de funções críticas com sucessor indicado",
+        "Decisões e procedimentos registrados no diário e no GED",
+        "Substituição de responsável técnico formalizada no conselho profissional",
+        "Férias das funções críticas planejadas com cobertura"
+      ],
+      "controles_resposta": [
+        "Designar substituto interino e transferir pendências por termo",
+        "Contratar consultoria técnica temporária"
+      ],
+      "sinais_alerta": [
+        "Funções críticas sem substituto no cadastro",
+        "Afastamento ou aviso prévio de profissional essencial"
+      ],
+      "dimensoes": [
+        "operacional",
+        "prazo",
+        "juridica"
+      ],
+      "fases": [
+        "inicio_obra",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "rh",
+        "docs_ged",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

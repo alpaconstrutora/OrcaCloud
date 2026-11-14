@@ -410,6 +410,9 @@ export interface UserPermissions {
     canEditQuality?: boolean;
     canViewWarranty?: boolean;
     canEditWarranty?: boolean;
+    /** Módulo Riscos (14/11/2026). Sem valor gravado, herda de Obras — ver utils/permissaoRiscos.ts. */
+    canViewRisks?: boolean;
+    canEditRisks?: boolean;
 
     // --- Treinamentos (gestão da Academia) ---
     // Saiu de dentro do RH em 16/10/2026: quem gerencia treinamento não é só o RH

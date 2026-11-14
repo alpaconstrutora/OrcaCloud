@@ -1,0 +1,702 @@
+{
+  "categoria": "R20",
+  "nome": "Riscos comerciais e imobiliários",
+  "itens": [
+    {
+      "codigo": "R20.01",
+      "evento": "Vendas abaixo da velocidade planejada",
+      "causas": [
+        "Preço de tabela acima dos comparáveis da região",
+        "Tipologia ou metragem desalinhada à demanda local",
+        "Lançamento em período de juros altos ou crédito restrito",
+        "Poucos corretores ativos ou canal de vendas único"
+      ],
+      "consequencias": [
+        "Fluxo de caixa negativo e necessidade de aporte ou dívida adicional",
+        "Demanda mínima exigida pelo banco para liberar o financiamento à produção não atingida",
+        "Ritmo da obra reduzido ou início adiado",
+        "TIR do empreendimento abaixo da viabilidade aprovada"
+      ],
+      "controles_preventivos": [
+        "Pesquisa de mercado com comparáveis registrada antes de aprovar a tabela de preços",
+        "Curva de vendas mensal aprovada no estudo de viabilidade",
+        "Pré-lançamento com cadastro de interessados e meta mínima de conversão documentada",
+        "Comitê mensal de vendas realizado vs plano com ata"
+      ],
+      "controles_resposta": [
+        "Revisar tabela, condições de pagamento ou mix de unidades com nova simulação de viabilidade",
+        "Ampliar canais com imobiliárias parceiras e campanha de orçamento aprovado",
+        "Reprogramar o cronograma físico-financeiro conforme a receita efetiva"
+      ],
+      "sinais_alerta": [
+        "Vendas acumuladas abaixo da curva planejada por dois meses seguidos",
+        "Queda da conversão de leads e visitas em propostas",
+        "Tempo médio de negociação por unidade crescendo"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo",
+        "operacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "inicio_obra",
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib",
+        "financeiro",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R20.02",
+      "evento": "Necessidade de descontos superiores aos previstos",
+      "causas": [
+        "Tabela inicial sem margem de negociação calibrada",
+        "Concorrente lançando produto similar com preço menor",
+        "Pressão por meta de vendas no fechamento do período",
+        "Corretores com autonomia de desconto sem limite definido"
+      ],
+      "consequencias": [
+        "VGV realizado abaixo do previsto na viabilidade",
+        "Margem reduzida em todas as unidades seguintes por efeito de precedente",
+        "Preço médio por m² vendido em queda afetando avaliação bancária"
+      ],
+      "controles_preventivos": [
+        "Política de descontos por faixa com alçada de aprovação registrada no sistema",
+        "Margem de negociação por unidade prevista na viabilidade",
+        "Relatório mensal de desconto médio concedido vs previsto",
+        "Monitoramento trimestral de preços de concorrentes com registro"
+      ],
+      "controles_resposta": [
+        "Recalcular a viabilidade com o desconto real e decidir revisão de tabela",
+        "Centralizar a aprovação de descontos na diretoria comercial",
+        "Trocar desconto nominal por condição de pagamento com valor presente equivalente"
+      ],
+      "sinais_alerta": [
+        "Desconto médio por venda acima do previsto na viabilidade",
+        "Propostas aprovadas fora da alçada de desconto",
+        "Preço médio por m² vendido caindo mês a mês"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R20.03",
+      "evento": "Inadimplência de compradores",
+      "causas": [
+        "Venda direta sem análise de crédito e de comprometimento de renda",
+        "Parcelas intermediárias acima da capacidade de pagamento do comprador",
+        "Correção monetária elevando a parcela acima da renda",
+        "Perda de emprego ou de renda do comprador durante a obra"
+      ],
+      "consequencias": [
+        "Receita prevista não realizada e pressão sobre o caixa da obra",
+        "Custos de cobrança, notificação e retomada da unidade",
+        "Necessidade de distrato ou leilão da unidade com alienação fiduciária"
+      ],
+      "controles_preventivos": [
+        "Análise de crédito e de comprometimento de renda documentada antes da assinatura",
+        "Limite de concentração de parcelas intermediárias por contrato",
+        "Régua de cobrança automática com aviso antes do vencimento",
+        "Conciliação diária dos recebimentos de boletos e PIX"
+      ],
+      "controles_resposta": [
+        "Negociar acordo formalizado dentro da régua de cobrança",
+        "Notificar extrajudicialmente e seguir o rito contratual de rescisão ou execução",
+        "Revender a unidade retomada com análise de crédito reforçada"
+      ],
+      "sinais_alerta": [
+        "Percentual de parcelas vencidas há mais de 30 dias crescendo",
+        "Aumento de pedidos de renegociação ou prorrogação",
+        "Concentração de vencimentos de parcelas intermediárias no mesmo mês"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "financeiro",
+        "dividas"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 9.514/1997 – alienação fiduciária de coisa imóvel"
+      ]
+    },
+    {
+      "codigo": "R20.04",
+      "evento": "Distratos e cancelamentos de vendas",
+      "causas": [
+        "Comprador sem condição de financiar o saldo na entrega das chaves",
+        "Valor de mercado do imóvel abaixo do saldo devedor corrigido",
+        "Atraso da obra motivando rescisão pelo comprador",
+        "Expectativa comercial não atendida no produto entregue"
+      ],
+      "consequencias": [
+        "Devolução de valores pagos com retenção limitada por lei e contrato",
+        "Unidade volta ao estoque no fim da obra com custo de nova venda",
+        "Comissões já pagas sem estorno garantido",
+        "Litígio sobre percentual de retenção e prazo de devolução"
+      ],
+      "controles_preventivos": [
+        "Quadro-resumo e cláusulas de distrato conforme Lei 13.786/2018 assinados e arquivados",
+        "Pré-análise de crédito bancário do comprador antes da entrega",
+        "Contato periódico registrado com compradores para acompanhar capacidade de pagamento",
+        "Taxa de distratos prevista na viabilidade e acompanhada"
+      ],
+      "controles_resposta": [
+        "Calcular a devolução conforme contrato e lei e formalizar termo de distrato",
+        "Recolocar a unidade no estoque com preço revisado",
+        "Oferecer cessão de direitos a terceiro como alternativa ao distrato"
+      ],
+      "sinais_alerta": [
+        "Pedidos de distrato por mês acima da média histórica",
+        "Compradores com parcelas em atraso há mais de 60 dias",
+        "Diferença entre preço atual de tabela e preço contratado"
+      ],
+      "dimensoes": [
+        "financeira",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "comercial",
+        "financeiro",
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 13.786/2018 – distratos de contratos imobiliários"
+      ]
+    },
+    {
+      "codigo": "R20.05",
+      "evento": "Reprovação do financiamento do comprador",
+      "causas": [
+        "Renda comprovada insuficiente para a parcela na data do repasse",
+        "Restrição cadastral surgida entre a venda e a entrega",
+        "Avaliação bancária do imóvel abaixo do valor contratado",
+        "Mudança nas regras de crédito ou no enquadramento em programa habitacional"
+      ],
+      "consequencias": [
+        "Saldo devedor não recebido no repasse",
+        "Financiamento à produção quitado mais tarde, com juros adicionais",
+        "Distrato ou financiamento direto assumido pela incorporadora"
+      ],
+      "controles_preventivos": [
+        "Pré-aprovação de crédito junto ao banco registrada no ato da venda",
+        "Reanálise de crédito dos compradores seis meses antes da entrega",
+        "Dossiê documental do comprador conferido e arquivado antes do repasse",
+        "Laudo de avaliação bancária comparado ao preço contratado"
+      ],
+      "controles_resposta": [
+        "Buscar outro banco ou composição de renda com coobrigado",
+        "Negociar parcelamento direto com garantia fiduciária",
+        "Revender a unidade quando não houver solução de crédito"
+      ],
+      "sinais_alerta": [
+        "Compradores sem pré-aprovação de crédito vigente",
+        "Repasses pendentes após a emissão do habite-se",
+        "Restrições cadastrais encontradas em reconsulta periódica"
+      ],
+      "dimensoes": [
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "financiamento_bancario",
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "financeiro",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R20.06",
+      "evento": "Promessas comerciais incompatíveis com o memorial e o contrato",
+      "causas": [
+        "Material de vendas produzido sem revisão da engenharia",
+        "Corretor promete vaga, acabamento ou lazer fora do memorial",
+        "Alteração de projeto após o lançamento não comunicada à equipe de vendas"
+      ],
+      "consequencias": [
+        "Ações por descumprimento de oferta e indenizações",
+        "Custo extra para entregar o que foi prometido",
+        "Distratos e recusa de recebimento na entrega"
+      ],
+      "controles_preventivos": [
+        "Aprovação registrada da engenharia e do jurídico em todo material comercial",
+        "Memorial descritivo anexado e rubricado em cada contrato",
+        "Treinamento de corretores com roteiro e termo de ciência assinado",
+        "Controle de versões do memorial com comunicação formal à equipe de vendas"
+      ],
+      "controles_resposta": [
+        "Levantar compradores afetados e propor aditivo ou compensação formal",
+        "Recolher o material divergente e registrar a versão vigente",
+        "Comparar custo de cumprir a promessa com o risco judicial"
+      ],
+      "sinais_alerta": [
+        "Reclamações de compradores citando itens fora do memorial",
+        "Peças comerciais sem registro de aprovação técnica",
+        "Revisão de projeto após o lançamento sem atualização do material de vendas"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.078/1990 – Código de Defesa do Consumidor",
+        "Lei 4.591/1964 – condomínio em edificações e incorporações imobiliárias"
+      ]
+    },
+    {
+      "codigo": "R20.07",
+      "evento": "Publicidade inadequada ou informações comerciais incorretas",
+      "causas": [
+        "Imagens ilustrativas sem aviso ou divergentes do projeto aprovado",
+        "Anúncio veiculado antes do registro da incorporação",
+        "Metragem, prazo ou preço desatualizados em portais e redes sociais"
+      ],
+      "consequencias": [
+        "Autuação e multa do Procon",
+        "Obrigação de cumprir a oferta veiculada",
+        "Suspensão da campanha e desgaste da marca"
+      ],
+      "controles_preventivos": [
+        "Checklist de publicidade assinado antes de veicular, com número do registro da incorporação",
+        "Conferência de áreas e prazos anunciados com o quadro de áreas e o memorial",
+        "Inventário de anúncios ativos em portais revisado mensalmente"
+      ],
+      "controles_resposta": [
+        "Retirar ou corrigir os anúncios e registrar a data da correção",
+        "Responder Procon e compradores com posição jurídica documentada",
+        "Comunicar a correção aos compradores impactados"
+      ],
+      "sinais_alerta": [
+        "Anúncio publicado sem número de registro da incorporação",
+        "Área privativa anunciada diferente do quadro de áreas",
+        "Notificações do Procon ou reclamações em sites de consumidor"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "projeto_aprovacao",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.078/1990 – Código de Defesa do Consumidor",
+        "Lei 4.591/1964 – condomínio em edificações e incorporações imobiliárias"
+      ]
+    },
+    {
+      "codigo": "R20.08",
+      "evento": "Comissões e despesas comerciais superiores ao orçamento",
+      "causas": [
+        "Percentual de comissão elevado para acelerar vendas",
+        "Estande, decorado e mídia com custos não orçados",
+        "Comissões pagas sobre vendas depois distratadas sem estorno",
+        "Premiações de campanha concedidas sem aprovação"
+      ],
+      "consequencias": [
+        "Despesa comercial consumindo a margem prevista",
+        "Desembolso antecipado em relação à receita recebida",
+        "Disputa com corretores e imobiliárias sobre estornos"
+      ],
+      "controles_preventivos": [
+        "Orçamento comercial por empreendimento com realizado vs previsto mensal",
+        "Tabela de comissões aprovada e vinculada ao contrato de corretagem",
+        "Pagamento de comissão condicionado a percentual mínimo recebido do comprador",
+        "Cláusula de estorno de comissão em caso de distrato"
+      ],
+      "controles_resposta": [
+        "Revisar a política de comissões e de campanhas",
+        "Cobrar os estornos previstos em contrato",
+        "Realocar verba de mídia para os canais com melhor conversão"
+      ],
+      "sinais_alerta": [
+        "Despesa comercial acumulada em percentual do VGV vendido acima do orçado",
+        "Comissões pagas de vendas que tiveram distrato",
+        "Custo por lead ou por venda crescendo"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "inicio_obra",
+        "estrutura",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "financeiro",
+        "orcamento",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R20.09",
+      "evento": "Estoque elevado de unidades não vendidas",
+      "causas": [
+        "Unidades de posição pouco atrativa, como andar baixo ou vista bloqueada",
+        "Vendas abaixo do plano ao longo da obra",
+        "Distratos devolvendo unidades perto da entrega"
+      ],
+      "consequencias": [
+        "Condomínio, IPTU e manutenção das unidades pagos pela incorporadora",
+        "Capital imobilizado e juros da dívida de produção",
+        "Pressão por descontos que rebaixa o preço das demais unidades"
+      ],
+      "controles_preventivos": [
+        "Análise de absorção por tipologia e posição registrada na viabilidade",
+        "Meta de estoque máximo na entrega aprovada pela diretoria",
+        "Relatório mensal de estoque por tipologia com idade de cada unidade",
+        "Plano de vendas específico para unidades de menor liquidez"
+      ],
+      "controles_resposta": [
+        "Campanha dirigida, permuta ou venda em bloco a investidor",
+        "Converter unidades para locação com análise de rentabilidade",
+        "Renegociar a dívida de produção conforme o novo prazo de venda"
+      ],
+      "sinais_alerta": [
+        "Percentual de unidades em estoque na conclusão da estrutura",
+        "Unidades sem proposta há mais de seis meses",
+        "Custo mensal de carregamento do estoque crescente"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "comercial",
+        "imovib",
+        "financeiro",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R20.10",
+      "evento": "Vacância de imóveis destinados à locação",
+      "causas": [
+        "Aluguel pedido acima do mercado da região",
+        "Imóvel sem manutenção ou sem adequação ao uso do locatário",
+        "Saída do locatário sem negociação antecipada de renovação",
+        "Excesso de oferta de imóveis similares na região"
+      ],
+      "consequencias": [
+        "Receita de aluguel interrompida",
+        "Condomínio, IPTU e manutenção arcados pelo proprietário",
+        "Reforma ou carência necessária para atrair novo locatário"
+      ],
+      "controles_preventivos": [
+        "Contato de renovação registrado seis meses antes do vencimento de cada contrato",
+        "Pesquisa anual de aluguel de mercado por imóvel",
+        "Vistoria periódica do imóvel com laudo e fotos",
+        "Cadastro ativo de interessados e imobiliárias parceiras"
+      ],
+      "controles_resposta": [
+        "Ajustar o aluguel ou oferecer carência negociada",
+        "Executar reparos e nova vistoria de entrada",
+        "Ampliar a divulgação em portais e imobiliárias"
+      ],
+      "sinais_alerta": [
+        "Taxa de vacância da carteira em unidades ou m²",
+        "Contratos vencendo em seis meses sem intenção de renovação registrada",
+        "Tempo médio para relocar uma unidade"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "locacao"
+      ],
+      "integracoes": [
+        "locacoes",
+        "financeiro",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.245/1991 – locação de imóveis urbanos"
+      ]
+    },
+    {
+      "codigo": "R20.11",
+      "evento": "Redução dos valores de aluguel ou da rentabilidade imobiliária",
+      "causas": [
+        "Índice de reajuste contratual abaixo da inflação de custos ou negativo",
+        "Ação revisional de aluguel proposta pelo locatário",
+        "Queda de demanda regional ou saída de empresa âncora",
+        "Custos de manutenção crescentes não repassáveis ao locatário"
+      ],
+      "consequencias": [
+        "Yield abaixo do previsto na tese de investimento",
+        "Desvalorização do ativo para venda futura",
+        "Retorno aos investidores inferior ao projetado"
+      ],
+      "controles_preventivos": [
+        "Contratos com índice de reajuste e regras de revisão definidos e revisados pelo jurídico",
+        "Comparação anual do aluguel contratado com o mercado",
+        "Orçamento de manutenção preventiva por imóvel acompanhado",
+        "Cálculo trimestral de yield por ativo"
+      ],
+      "controles_resposta": [
+        "Negociar prazo contratual maior em troca de redução temporária",
+        "Avaliar retrofit ou mudança de uso para reposicionar o imóvel",
+        "Revisar as projeções aos investidores com comunicação formal"
+      ],
+      "sinais_alerta": [
+        "Aluguel médio por m² da carteira em queda",
+        "Pedidos de redução ou ações revisionais registrados",
+        "Yield anualizado abaixo da meta"
+      ],
+      "dimensoes": [
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "locacao"
+      ],
+      "integracoes": [
+        "locacoes",
+        "imovib",
+        "investidor",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "Lei 8.245/1991 – locação de imóveis urbanos"
+      ]
+    },
+    {
+      "codigo": "R20.12",
+      "evento": "Concentração excessiva de receitas em poucos locatários ou compradores",
+      "causas": [
+        "Galpão ou edifício locado a um único locatário",
+        "Venda em bloco para poucos investidores",
+        "Ausência de política de limite de exposição por cliente"
+      ],
+      "consequencias": [
+        "Perda abrupta de grande parte da receita se um cliente sair ou atrasar",
+        "Cliente com poder de barganha sobre preço e condições",
+        "Risco de crédito concentrado em uma única contraparte"
+      ],
+      "controles_preventivos": [
+        "Limite de concentração de receita por cliente aprovado pela diretoria",
+        "Garantias proporcionais ao porte, como fiança bancária ou seguro-fiança",
+        "Relatório trimestral de receita por cliente",
+        "Multa rescisória relevante nos contratos dos maiores clientes"
+      ],
+      "controles_resposta": [
+        "Antecipar plano de recolocação do espaço ou das unidades",
+        "Executar as garantias contratuais",
+        "Direcionar novos contratos para diversificar a carteira"
+      ],
+      "sinais_alerta": [
+        "Maior cliente acima do limite de concentração aprovado",
+        "Atraso de pagamento de um dos principais clientes",
+        "Notícias de dificuldade financeira ou recuperação judicial do cliente principal"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "viabilidade",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "comercial",
+        "galpao_industrial",
+        "residencial"
+      ],
+      "condicoes_sugestao": [
+        "locacao"
+      ],
+      "integracoes": [
+        "locacoes",
+        "comercial",
+        "financeiro",
+        "investidor"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

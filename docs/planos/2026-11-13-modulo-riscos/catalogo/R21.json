@@ -1,0 +1,681 @@
+{
+  "categoria": "R21",
+  "nome": "Riscos de entrega, garantias e pós-obra",
+  "itens": [
+    {
+      "codigo": "R21.01",
+      "evento": "Entrega da obra com serviços pendentes",
+      "causas": [
+        "Cronograma comprimido no final sem folga para arremates",
+        "Equipes de acabamento desmobilizadas antes da conclusão",
+        "Ausência de verificação por unidade antes da vistoria do cliente"
+      ],
+      "consequencias": [
+        "Recusa de recebimento e reclamações dos compradores",
+        "Retrabalho com unidade ocupada, mais caro e lento",
+        "Multas contratuais por entrega incompleta"
+      ],
+      "controles_preventivos": [
+        "Checklist de conclusão por unidade e área comum assinado pelo engenheiro",
+        "Pré-entrega interna com registro de pendências, prazo e responsável",
+        "Marco de arremates no cronograma com folga mínima antes da entrega",
+        "Desmobilização de empreiteiros condicionada a pendências zeradas"
+      ],
+      "controles_resposta": [
+        "Mutirão de pendências com prazo e responsável por item",
+        "Nova vistoria com o comprador e termo de aceite registrado",
+        "Comunicação formal dos prazos de conclusão aos compradores"
+      ],
+      "sinais_alerta": [
+        "Pendências abertas por unidade na pré-entrega",
+        "Avanço físico de acabamentos abaixo do planejado nas últimas oito semanas",
+        "Ordens de serviço de arremate em aberto"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "reputacional",
+        "prazo"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "prazo_curto",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "planejamento",
+        "ordens_servico",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R21.02",
+      "evento": "Não aprovação nas vistorias de entrega",
+      "causas": [
+        "Execução divergente do projeto aprovado na prefeitura ou no corpo de bombeiros",
+        "Sistemas de incêndio sem teste ou sem laudo",
+        "Exigências das concessionárias de água e energia não atendidas",
+        "Rotas e banheiros acessíveis fora da norma"
+      ],
+      "consequencias": [
+        "Habite-se e AVCB atrasados, travando repasses e entrega das chaves",
+        "Custos de adequação e retrabalho",
+        "Multas contratuais por atraso na entrega"
+      ],
+      "controles_preventivos": [
+        "Checklist de exigências por órgão acompanhado desde a aprovação do projeto",
+        "Vistoria técnica interna registrada antes de protocolar cada pedido",
+        "Laudos e ARTs dos sistemas reunidos no GED antes do protocolo",
+        "Conferência do executado contra o projeto aprovado com relatório"
+      ],
+      "controles_resposta": [
+        "Plano de ação por exigência com prazo e responsável",
+        "Reagendamento da vistoria após correções documentadas",
+        "Negociação de prazo com compradores com comunicação formal"
+      ],
+      "sinais_alerta": [
+        "Exigências de vistoria em aberto",
+        "Pedido de habite-se não protocolado a 60 dias da data contratual de entrega",
+        "Laudos de sistemas pendentes no GED"
+      ],
+      "dimensoes": [
+        "prazo",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "garantia_qualidade",
+        "planejamento"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 9050 – acessibilidade a edificações, mobiliário, espaços e equipamentos urbanos"
+      ]
+    },
+    {
+      "codigo": "R21.03",
+      "evento": "Falta de documentação técnica e as built",
+      "causas": [
+        "Alterações de campo não registradas nos projetos",
+        "Projetistas e empreiteiros sem obrigação contratual de entregar as built",
+        "Documentos dispersos em e-mails e pastas locais"
+      ],
+      "consequencias": [
+        "Manutenções e reformas futuras sem referência confiável",
+        "Defesa técnica fragilizada em ações por vícios",
+        "Manual do proprietário sem os dados das instalações"
+      ],
+      "controles_preventivos": [
+        "Cláusula de entrega de as built por disciplina com retenção de pagamento",
+        "Alteração de campo registrada no diário com revisão do projeto correspondente",
+        "Lista de documentos obrigatórios por obra com status no GED",
+        "Conferência do as built por amostragem em campo antes de fechar forros"
+      ],
+      "controles_resposta": [
+        "Levantamento cadastral das instalações ainda visíveis",
+        "Contratação da atualização dos projetos faltantes",
+        "Entrega da documentação complementar ao condomínio com protocolo"
+      ],
+      "sinais_alerta": [
+        "Percentual de disciplinas com as built entregue",
+        "Alterações registradas no diário sem revisão de projeto vinculada",
+        "Retenções contratuais de as built ainda não liberadas"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "bim",
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "docs_ged",
+        "diario",
+        "planta_bim",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R21.04",
+      "evento": "Ausência de manuais de uso, operação e manutenção",
+      "causas": [
+        "Manual elaborado na última hora sem dados dos fornecedores",
+        "Fichas técnicas e termos de garantia não coletados na compra",
+        "Desconhecimento do conteúdo mínimo exigido por norma"
+      ],
+      "consequencias": [
+        "Uso inadequado pelos moradores sem orientação",
+        "Construtora responsabilizada por danos que seriam de manutenção",
+        "Condomínio sem plano de manutenção desde o primeiro dia"
+      ],
+      "controles_preventivos": [
+        "Manual do proprietário e das áreas comuns elaborado conforme NBR 14037 com cronograma próprio",
+        "Fichas técnicas e termos de garantia anexados ao pedido de compra",
+        "Plano de manutenção inicial conforme NBR 5674 entregue ao síndico",
+        "Protocolo de entrega dos manuais assinado e arquivado"
+      ],
+      "controles_resposta": [
+        "Entrega do manual com protocolo e reunião de apresentação ao condomínio",
+        "Revisão do manual após os primeiros chamados recorrentes"
+      ],
+      "sinais_alerta": [
+        "Manual sem versão aprovada a 90 dias da entrega",
+        "Pedidos de compra de equipamentos sem termo de garantia anexado"
+      ],
+      "dimensoes": [
+        "juridica",
+        "qualidade"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "docs_ged",
+        "suprimentos",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 14037 – manual de uso, operação e manutenção das edificações",
+        "ABNT NBR 5674 – manutenção de edificações"
+      ]
+    },
+    {
+      "codigo": "R21.05",
+      "evento": "Entrega incompleta dos sistemas e equipamentos",
+      "causas": [
+        "Elevadores, bombas, geradores ou sistema de incêndio entregues com atraso pelo fornecedor",
+        "Comissionamento não planejado no cronograma",
+        "Sistemas instalados sem testes de desempenho"
+      ],
+      "consequencias": [
+        "Edificação ocupada sem sistemas de segurança operantes",
+        "AVCB ou habite-se impedidos",
+        "Operação provisória cara e reclamações dos usuários"
+      ],
+      "controles_preventivos": [
+        "Plano de comissionamento com teste registrado por sistema",
+        "Acompanhamento de prazo de fabricação dos equipamentos críticos",
+        "Laudos de teste de alarme, pressurização e hidrantes arquivados",
+        "Termo de recebimento de cada sistema assinado pelo responsável técnico"
+      ],
+      "controles_resposta": [
+        "Interditar o uso das áreas sem sistemas operantes",
+        "Solução provisória com responsável técnico e ART",
+        "Aplicar multa contratual ao fornecedor em atraso"
+      ],
+      "sinais_alerta": [
+        "Pedidos de equipamentos críticos com entrega posterior à data de comissionamento",
+        "Testes de sistemas pendentes ou reprovados"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "instalacoes",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "garantia_qualidade",
+        "docs_ged",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Ocupação sem sistema de combate a incêndio operante expõe usuários a morte e leva à interdição",
+      "referencias": []
+    },
+    {
+      "codigo": "R21.06",
+      "evento": "Falta de treinamento dos responsáveis pela operação",
+      "causas": [
+        "Síndico e zelador definidos tarde ou trocados após a entrega",
+        "Treinamento não previsto nos contratos de fornecimento",
+        "Orientação apenas verbal, sem registro"
+      ],
+      "consequencias": [
+        "Operação incorreta de bombas, geradores e sistema de incêndio",
+        "Perda de garantia de equipamentos",
+        "Chamados de assistência técnica evitáveis"
+      ],
+      "controles_preventivos": [
+        "Treinamento por sistema com lista de presença e material entregue",
+        "Cláusula de treinamento nos contratos de fornecimento de equipamentos",
+        "Roteiros operacionais e vídeos anexados ao manual",
+        "Teste prático do operador registrado ao final do treinamento"
+      ],
+      "controles_resposta": [
+        "Treinamento de reforço após falha operacional",
+        "Visita técnica de acompanhamento nos primeiros meses de operação"
+      ],
+      "sinais_alerta": [
+        "Chamados de garantia causados por operação incorreta",
+        "Sistemas entregues sem lista de presença de treinamento"
+      ],
+      "dimensoes": [
+        "operacional",
+        "qualidade"
+      ],
+      "fases": [
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R21.07",
+      "evento": "Manifestação de vícios e defeitos após a entrega",
+      "causas": [
+        "Impermeabilização executada sem teste de estanqueidade",
+        "Fissuras por retração ou movimentação estrutural não tratadas",
+        "Controle tecnológico de concreto e argamassa insuficiente",
+        "Vazamentos em tubulações embutidas sem teste de pressão"
+      ],
+      "consequencias": [
+        "Reparos em unidades ocupadas com custo elevado",
+        "Ações judiciais e perícias",
+        "Danos a móveis e bens dos moradores"
+      ],
+      "controles_preventivos": [
+        "Testes de estanqueidade e de pressão hidráulica registrados por pavimento",
+        "Fichas de verificação de serviço assinadas antes de cobrir cada etapa",
+        "Laudos de controle tecnológico de concreto e argamassa arquivados",
+        "Análise dos chamados de obras anteriores para ajustar especificações"
+      ],
+      "controles_resposta": [
+        "Vistoria e diagnóstico técnico com prazo definido",
+        "Reparo com registro fotográfico e aceite do cliente",
+        "Acionamento do fornecedor ou empreiteiro responsável"
+      ],
+      "sinais_alerta": [
+        "Chamados de garantia por unidade nos primeiros 12 meses",
+        "Mesmo tipo de vício repetido em várias unidades",
+        "Etapas cobertas sem registro de teste"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "reputacional",
+        "juridica"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "diario"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 15575 – desempenho de edificações habitacionais",
+        "Código Civil, art. 618 – responsabilidade do empreiteiro pela solidez e segurança"
+      ]
+    },
+    {
+      "codigo": "R21.08",
+      "evento": "Crescimento inesperado dos custos de assistência técnica",
+      "causas": [
+        "Provisão de garantia calculada sem histórico de obras anteriores",
+        "Atendimentos sem triagem entre vício construtivo e mau uso",
+        "Empreiteiros sem retenção ou garantia contratual",
+        "Reparos ineficazes que geram reabertura do chamado"
+      ],
+      "consequencias": [
+        "Custo pós-obra consumindo a margem do empreendimento",
+        "Equipe técnica desviada de obras em andamento",
+        "Provisão insuficiente afetando o resultado contábil"
+      ],
+      "controles_preventivos": [
+        "Provisão de assistência técnica por percentual do custo baseada em histórico",
+        "Laudo de triagem obrigatório antes de executar reparo",
+        "Retenção contratual e termo de garantia dos empreiteiros",
+        "Custo de cada chamado apropriado no centro de custo da obra"
+      ],
+      "controles_resposta": [
+        "Cobrar o empreiteiro responsável com base na retenção ou garantia",
+        "Revisar a provisão de garantia",
+        "Atacar a causa raiz dos vícios mais caros"
+      ],
+      "sinais_alerta": [
+        "Custo de assistência acumulado acima da provisão",
+        "Chamados reabertos após reparo",
+        "Custo médio por chamado subindo"
+      ],
+      "dimensoes": [
+        "financeira",
+        "operacional"
+      ],
+      "fases": [
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "financeiro",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R21.09",
+      "evento": "Descumprimento de obrigações de garantia aplicáveis",
+      "causas": [
+        "Prazos de garantia por sistema desconhecidos pela equipe de atendimento",
+        "Chamados sem prazo de atendimento controlado",
+        "Negativa de atendimento sem laudo técnico"
+      ],
+      "consequencias": [
+        "Condenações por descumprimento contratual e do CDC",
+        "Reparos feitos por terceiros cobrados da construtora",
+        "Perda de confiança e indicação negativa"
+      ],
+      "controles_preventivos": [
+        "Tabela de prazos de garantia por sistema publicada no manual",
+        "Prazo de atendimento por criticidade controlado no sistema",
+        "Negativa de garantia sempre fundamentada em laudo arquivado",
+        "Auditoria trimestral de chamados vencidos"
+      ],
+      "controles_resposta": [
+        "Priorizar chamados vencidos com prazo comunicado ao cliente",
+        "Formalizar acordo com o cliente",
+        "Preparar defesa técnica documentada quando houver disputa"
+      ],
+      "sinais_alerta": [
+        "Chamados com prazo de atendimento estourado",
+        "Notificações extrajudiciais recebidas",
+        "Chamados negados sem laudo"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "qualidade"
+      ],
+      "fases": [
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 17170 – garantias em edificações",
+        "Lei 8.078/1990 – Código de Defesa do Consumidor"
+      ]
+    },
+    {
+      "codigo": "R21.10",
+      "evento": "Disputas com compradores ou condomínios",
+      "causas": [
+        "Diferenças entre o entregue e o memorial descritivo",
+        "Laudo de inspeção contratado pelo condomínio apontando vícios em lote",
+        "Atendimento lento ou sem registro das tratativas"
+      ],
+      "consequencias": [
+        "Ação coletiva do condomínio",
+        "Custos de perícia, honorários e acordos",
+        "Desgaste com compradores de novos lançamentos"
+      ],
+      "controles_preventivos": [
+        "Canal único de atendimento com protocolo e histórico",
+        "Vistoria conjunta das áreas comuns com termo de recebimento pelo síndico",
+        "Reuniões periódicas com a comissão de representantes registradas em ata",
+        "Análise jurídica de notificações dentro de prazo definido"
+      ],
+      "controles_resposta": [
+        "Proposta de acordo com cronograma de reparos",
+        "Perícia técnica própria para contraditório",
+        "Mediação antes da via judicial"
+      ],
+      "sinais_alerta": [
+        "Notificações extrajudiciais recebidas",
+        "Assembleia do condomínio com pauta de vícios construtivos",
+        "Chamados de áreas comuns pendentes"
+      ],
+      "dimensoes": [
+        "juridica",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "contratos",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R21.11",
+      "evento": "Deterioração acelerada por falhas de manutenção ou uso inadequado",
+      "causas": [
+        "Condomínio sem plano de manutenção executado",
+        "Reformas nas unidades sem plano aprovado pelo síndico",
+        "Limpeza de fachada e pisos com produtos inadequados",
+        "Equipamentos sem contrato de manutenção"
+      ],
+      "consequencias": [
+        "Perda de garantia por falta de manutenção",
+        "Disputa sobre quem responde pelo dano",
+        "Acidentes com elementos deteriorados, como revestimento de fachada"
+      ],
+      "controles_preventivos": [
+        "Plano de manutenção com cronograma e checklist entregue ao síndico com protocolo",
+        "Recomendações de uso registradas no manual do proprietário",
+        "Inspeção pós-entrega anual com relatório ao condomínio",
+        "Orientação formal sobre reformas em unidades conforme NBR 16280"
+      ],
+      "controles_resposta": [
+        "Notificar o condomínio sobre manutenção não realizada com laudo",
+        "Registrar a excludente de garantia no chamado"
+      ],
+      "sinais_alerta": [
+        "Inspeções anuais sem registros de manutenção do condomínio",
+        "Chamados originados de reformas não comunicadas"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial"
+      ],
+      "condicoes_sugestao": [
+        "edificacao_ocupada"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "ordens_servico",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 5674 – manutenção de edificações",
+        "ABNT NBR 16280 – reformas em edificações"
+      ]
+    },
+    {
+      "codigo": "R21.12",
+      "evento": "Danos reputacionais decorrentes de falhas recorrentes",
+      "causas": [
+        "Mesmo vício repetido em vários empreendimentos sem correção de causa",
+        "Atendimento pós-obra lento",
+        "Exposição em redes sociais e sites de reclamação"
+      ],
+      "consequencias": [
+        "Vendas mais lentas em novos lançamentos",
+        "Necessidade de descontos maiores",
+        "Condições de crédito piores com bancos e investidores"
+      ],
+      "controles_preventivos": [
+        "Indicadores de pós-obra apresentados trimestralmente à diretoria",
+        "Lições aprendidas incorporadas às especificações de novos projetos",
+        "Monitoramento de sites de reclamação com prazo de resposta",
+        "Pesquisa de satisfação na entrega e após 12 meses"
+      ],
+      "controles_resposta": [
+        "Atendimento prioritário e plano de comunicação",
+        "Ação corretiva em lote nas unidades afetadas"
+      ],
+      "sinais_alerta": [
+        "Nota em sites de reclamação em queda",
+        "Mesma causa de chamado em mais de um empreendimento",
+        "Satisfação na entrega abaixo da meta"
+      ],
+      "dimensoes": [
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "loteamento"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "garantia_qualidade",
+        "comercial",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    }
+  ]
+}

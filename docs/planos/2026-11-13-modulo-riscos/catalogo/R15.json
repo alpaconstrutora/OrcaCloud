@@ -1,0 +1,756 @@
+{
+  "categoria": "R15",
+  "nome": "Riscos da execução e estabilidade estrutural",
+  "itens": [
+    {
+      "codigo": "R15.01",
+      "evento": "Falhas na execução das fundações",
+      "causas": [
+        "Sondagem SPT insuficiente ou distante da posição das estacas",
+        "Comprimento ou nega de estaca não atingidos e não comunicados ao projetista",
+        "Subida rápida do trado na hélice contínua, seccionando o fuste",
+        "Locação de estacas fora da tolerância sem conferência topográfica"
+      ],
+      "consequencias": [
+        "Recalque diferencial com fissuras e desaprumo da edificação",
+        "Reforço com estacas adicionais e ampliação de blocos",
+        "Paralisação da estrutura até nova verificação do projetista"
+      ],
+      "controles_preventivos": [
+        "Boletim de cravação ou relatório de monitoramento da hélice arquivado por estaca",
+        "Prova de carga estática ou ensaio dinâmico na quantidade exigida pela norma, com laudo",
+        "Locação topográfica conferida antes da execução e após o arrasamento",
+        "Ensaio de integridade (PIT) em amostra de estacas com laudo no GED",
+        "FVS de fundação assinada pelo engenheiro antes da execução dos blocos"
+      ],
+      "controles_resposta": [
+        "Paralisar os blocos afetados e acionar o projetista de fundações para recálculo",
+        "Executar reforço conforme projeto revisado com ART",
+        "Instalar marcos de recalque e acompanhar leituras periódicas"
+      ],
+      "sinais_alerta": [
+        "Boletim de estaca com comprimento ou nega fora do especificado",
+        "Prova de carga ou ensaio de integridade não conforme",
+        "Estaca com excentricidade medida acima da tolerância de projeto"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "financeira",
+        "prazo",
+        "qualidade"
+      ],
+      "fases": [
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "fundacao_profunda",
+        "nivel_agua_alto",
+        "terreno_inclinado",
+        "vizinhanca_proxima"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "diario",
+        "docs_ged",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Fundação deficiente pode gerar recalques e instabilidade global da edificação",
+      "referencias": [
+        "ABNT NBR 6122 – projeto e execução de fundações"
+      ]
+    },
+    {
+      "codigo": "R15.02",
+      "evento": "Desvio de posicionamento ou geometria de elementos estruturais",
+      "causas": [
+        "Eixos transferidos a cada pavimento sem conferência topográfica",
+        "Fôrma de pilar travada sem verificação de prumo antes da concretagem",
+        "Gabarito ou marcos de nível danificados ao longo da obra"
+      ],
+      "consequencias": [
+        "Excentricidade em pilares exigindo verificação e reforço",
+        "Interferência com alvenarias, esquadrias e shafts, gerando retrabalho",
+        "Perda de área útil ou divergência com o memorial vendido"
+      ],
+      "controles_preventivos": [
+        "Conferência topográfica de eixos e níveis registrada por pavimento",
+        "Item de prumo e esquadro de fôrmas na FVS liberando a concretagem",
+        "Tolerâncias dimensionais escritas na ordem de serviço do empreiteiro de estrutura",
+        "Medição de desaprumo de pilares após a desforma com registro fotográfico"
+      ],
+      "controles_resposta": [
+        "Levantar os desvios e submeter ao projetista estrutural",
+        "Aprovar a solução de correção (reforço, demolição parcial) com registro em diário"
+      ],
+      "sinais_alerta": [
+        "FVS de fôrmas com item de prumo ou locação reprovado",
+        "Não conformidade de desaprumo aberta em pavimento anterior",
+        "Pavimento concretado sem levantamento topográfico no GED"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "prazo",
+        "seguranca"
+      ],
+      "fases": [
+        "estrutura",
+        "fundacoes"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "estrutura_metalica",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "diario",
+        "ordens_servico",
+        "planta_bim"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 14931 – execução de estruturas de concreto"
+      ]
+    },
+    {
+      "codigo": "R15.03",
+      "evento": "Armaduras executadas em desacordo com o projeto",
+      "causas": [
+        "Projeto de armação desatualizado no canteiro após revisão do calculista",
+        "Corte e dobra terceirizado recebido sem conferência de bitolas e quantidades",
+        "Espaçadores insuficientes, reduzindo o cobrimento",
+        "Armador improvisando traspasse ou ancoragem por falta de barra"
+      ],
+      "consequencias": [
+        "Redução da capacidade resistente da peça",
+        "Reforço com chapas ou fibra de carbono, ou demolição da peça",
+        "Corrosão precoce de armaduras por cobrimento deficiente"
+      ],
+      "controles_preventivos": [
+        "Conferência de armação por peça com FVS assinada antes de liberar a concretagem",
+        "Controle de revisão de projeto no GED com recolhimento das cópias obsoletas",
+        "Certificado de qualidade do aço por lote vinculado ao recebimento",
+        "Verificação de cobrimento com espaçador padronizado e registro fotográfico"
+      ],
+      "controles_resposta": [
+        "Suspender a concretagem da peça e corrigir a armação antes do lançamento",
+        "Se já concretada, pacometria e avaliação do projetista estrutural"
+      ],
+      "sinais_alerta": [
+        "Concretagem liberada sem FVS de armação aprovada",
+        "Revisão de projeto estrutural publicada após a emissão da ordem de serviço",
+        "Lote de aço recebido sem certificado de qualidade"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "pre_moldado"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "suprimentos",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Armadura insuficiente ou mal posicionada pode levar à ruptura de elementos estruturais",
+      "referencias": [
+        "ABNT NBR 6118 – projeto de estruturas de concreto",
+        "ABNT NBR 14931 – execução de estruturas de concreto",
+        "ABNT NBR 7480 – aço destinado a armaduras para estruturas de concreto armado"
+      ]
+    },
+    {
+      "codigo": "R15.04",
+      "evento": "Concreto com resistência ou características inadequadas",
+      "causas": [
+        "Adição de água no caminhão-betoneira para ganhar trabalhabilidade",
+        "Concreteira com controle de dosagem deficiente ou troca de insumo sem aviso",
+        "Fck ou classe de agressividade errados no pedido de concreto",
+        "Corpos de prova moldados ou curados fora do procedimento"
+      ],
+      "consequencias": [
+        "Peças com resistência abaixo do projeto, exigindo extração de testemunhos",
+        "Reforço ou demolição de lajes e pilares já concretados",
+        "Atraso do ciclo de pavimentos e disputa com a concreteira"
+      ],
+      "controles_preventivos": [
+        "Rompimento de corpos de prova aos 7 e 28 dias com rastreio por betonada e peça",
+        "Ensaio de abatimento registrado por caminhão antes da descarga",
+        "Conferência do documento de entrega (fck, relação água/cimento, horário de saída) por caminhão",
+        "Contrato com a concreteira prevendo laudo de dosagem e responsabilidade por não conformidade",
+        "Mapa de concretagem vinculando cada betonada à peça concretada"
+      ],
+      "controles_resposta": [
+        "Extrair testemunhos e submeter a reavaliação estrutural ao projetista",
+        "Bloquear o carregamento da peça até o laudo",
+        "Acionar a concreteira contratualmente pelos custos de reforço"
+      ],
+      "sinais_alerta": [
+        "Rompimento aos 7 dias abaixo da curva esperada para o traço",
+        "Caminhão recusado ou abatimento fora da faixa registrado no diário",
+        "Concreteira com não conformidades recorrentes na avaliação de fornecedores"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "fundacao_profunda",
+        "protensao"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos",
+        "contratos",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Concreto abaixo da resistência de projeto pode comprometer a segurança estrutural",
+      "referencias": [
+        "ABNT NBR 12655 – preparo, controle, recebimento e aceitação de concreto",
+        "ABNT NBR 7212 – concreto dosado em central",
+        "ABNT NBR 5739 – ensaio de compressão de corpos de prova cilíndricos de concreto"
+      ]
+    },
+    {
+      "codigo": "R15.05",
+      "evento": "Falhas no lançamento, adensamento ou cura do concreto",
+      "causas": [
+        "Lançamento de altura excessiva em pilares, segregando o concreto",
+        "Vibradores insuficientes ou operador sem treinamento",
+        "Cura interrompida em fins de semana ou em dias de calor e vento",
+        "Juntas de concretagem não previstas por atraso na entrega de caminhões"
+      ],
+      "consequencias": [
+        "Ninhos e brocas expondo armaduras",
+        "Fissuração por retração plástica em lajes",
+        "Reparo estrutural com graute e perda de durabilidade"
+      ],
+      "controles_preventivos": [
+        "Plano de concretagem com sequência, juntas e equipe aprovado antes do pedido",
+        "Checklist de vibradores reserva e operador treinado no dia da concretagem",
+        "Registro de cura em diário por no mínimo 7 dias, com foto diária",
+        "Inspeção pós-desforma de falhas de concretagem com FVS"
+      ],
+      "controles_resposta": [
+        "Mapear as falhas e definir o tratamento com o projetista",
+        "Corrigir a cura imediatamente com manta úmida ou aspersão"
+      ],
+      "sinais_alerta": [
+        "Não conformidade de ninho de concretagem em pavimento anterior",
+        "Intervalo entre caminhões acima do limite registrado no diário",
+        "Concretagem programada sem plano de concretagem anexado"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "seguranca",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "diario",
+        "garantia_qualidade",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Falhas de adensamento em pilares e vigas podem reduzir a seção resistente até a ruptura",
+      "referencias": [
+        "ABNT NBR 14931 – execução de estruturas de concreto"
+      ]
+    },
+    {
+      "codigo": "R15.06",
+      "evento": "Desforma ou retirada prematura de escoramentos",
+      "causas": [
+        "Pressão de prazo para reaproveitar fôrmas e escoras no pavimento seguinte",
+        "Ausência de plano de reescoramento definido pelo projetista",
+        "Desforma liberada sem resultado de resistência do concreto"
+      ],
+      "consequencias": [
+        "Flechas excessivas e fissuras em lajes e vigas",
+        "Colapso de laje com risco a trabalhadores",
+        "Reforço estrutural e retrabalho de acabamentos"
+      ],
+      "controles_preventivos": [
+        "Plano de desforma e reescoramento com prazos mínimos assinado pelo projetista",
+        "Liberação de desforma condicionada a rompimento de corpo de prova de controle",
+        "Data de desforma registrada por peça no diário e na FVS",
+        "Jogos de fôrmas e escoras dimensionados no planejamento para o ciclo real"
+      ],
+      "controles_resposta": [
+        "Reescorar imediatamente a peça e isolar a área abaixo",
+        "Medir flechas e acionar o projetista estrutural"
+      ],
+      "sinais_alerta": [
+        "Desforma registrada antes do prazo do plano",
+        "Ciclo de pavimento planejado menor que o prazo mínimo de desforma",
+        "Ausência de corpo de prova de controle de desforma"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "protensao",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "planejamento",
+        "diario",
+        "garantia_qualidade",
+        "sst"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Retirada prematura de escoras pode provocar colapso de laje sobre trabalhadores",
+      "referencias": [
+        "ABNT NBR 14931 – execução de estruturas de concreto",
+        "ABNT NBR 15696 – fôrmas e escoramentos para estruturas de concreto"
+      ]
+    },
+    {
+      "codigo": "R15.07",
+      "evento": "Instabilidade de fôrmas e escoramentos",
+      "causas": [
+        "Escoramento sem projeto ou com espaçamento alterado em campo",
+        "Escoras apoiadas em solo não compactado ou em laje sem capacidade",
+        "Peças metálicas empenadas ou madeira deteriorada reutilizada",
+        "Torres de escoramento sem contraventamento"
+      ],
+      "consequencias": [
+        "Colapso durante a concretagem com vítimas",
+        "Perda do concreto lançado e refação da laje",
+        "Interdição da obra pela fiscalização do trabalho"
+      ],
+      "controles_preventivos": [
+        "Projeto de fôrmas e escoramento com ART arquivado no GED",
+        "Checklist de escoramento assinado antes de liberar a concretagem",
+        "Vistoria de recebimento das peças locadas com descarte das danificadas",
+        "Base de apoio verificada (pranchões, sapatas) com registro fotográfico"
+      ],
+      "controles_resposta": [
+        "Evacuar a área ao primeiro sinal de deformação e interromper o lançamento",
+        "Investigar a causa e revisar o projeto de escoramento antes de retomar"
+      ],
+      "sinais_alerta": [
+        "Concretagem liberada sem checklist de escoramento",
+        "Escoramento locado sem vistoria de recebimento",
+        "Deformação de fôrma registrada em concretagem anterior"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "financeira",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "sst",
+        "garantia_qualidade",
+        "docs_ged",
+        "suprimentos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Colapso de escoramento durante a concretagem pode causar mortes e interdição",
+      "referencias": [
+        "ABNT NBR 15696 – fôrmas e escoramentos para estruturas de concreto",
+        "NR-18 – segurança e saúde no trabalho na indústria da construção"
+      ]
+    },
+    {
+      "codigo": "R15.08",
+      "evento": "Deficiências em ligações e soldas de estruturas metálicas",
+      "causas": [
+        "Soldador sem qualificação para o processo e a posição de soldagem",
+        "Parafusos de alta resistência sem torque ou protensão controlados",
+        "Ligação modificada em campo por interferência, sem revisão de projeto",
+        "Eletrodos armazenados fora de estufa, absorvendo umidade"
+      ],
+      "consequencias": [
+        "Ruptura de ligação com queda de vigas ou da cobertura",
+        "Reparo de soldas com ensaios adicionais e atraso da montagem",
+        "Perda da garantia do fabricante da estrutura"
+      ],
+      "controles_preventivos": [
+        "Qualificação de soldadores e procedimento de soldagem arquivados",
+        "Ensaio de líquido penetrante ou ultrassom em amostra de soldas com laudo",
+        "Registro de torque por ligação com torquímetro calibrado",
+        "Inspeção dimensional e visual na fábrica antes do embarque"
+      ],
+      "controles_resposta": [
+        "Travar ou escorar a estrutura afetada e reparar a ligação com procedimento aprovado",
+        "Reensaiar as soldas reparadas"
+      ],
+      "sinais_alerta": [
+        "Laudo de ensaio de solda reprovado",
+        "Torquímetro com calibração vencida",
+        "Alteração de ligação sem revisão de projeto no GED"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "prazo",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura"
+      ],
+      "tipologias": [
+        "comercial",
+        "galpao_industrial",
+        "obra_publica",
+        "residencial"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_metalica",
+        "grua_ou_guindaste",
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "contratos"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Ligação deficiente pode romper e derrubar vigas ou a cobertura",
+      "referencias": [
+        "ABNT NBR 8800 – projeto de estruturas de aço e mistas de aço e concreto"
+      ]
+    },
+    {
+      "codigo": "R15.09",
+      "evento": "Falhas na montagem de estruturas pré-moldadas",
+      "causas": [
+        "Içamento sem plano de rigging ou com guindaste subdimensionado",
+        "Consolos e chumbadores fora de posição no recebimento",
+        "Travamento provisório retirado antes da solidarização definitiva",
+        "Peça trincada no transporte montada sem avaliação"
+      ],
+      "consequencias": [
+        "Queda de peça durante o içamento ou após a montagem",
+        "Instabilidade do conjunto antes do travamento definitivo",
+        "Substituição de peças e atraso do cronograma"
+      ],
+      "controles_preventivos": [
+        "Plano de içamento com ART e verificação da capacidade do guindaste por peça",
+        "Inspeção de recebimento de cada peça com registro de trincas e dimensões",
+        "Sequência de montagem e travamentos provisórios definidos pelo fabricante",
+        "FVS de grauteamento e solidarização liberando a retirada dos travamentos"
+      ],
+      "controles_resposta": [
+        "Isolar a área e escorar as peças instáveis",
+        "Submeter peças danificadas ao fabricante para laudo antes do uso"
+      ],
+      "sinais_alerta": [
+        "Peça recebida com não conformidade de trinca ou dimensão",
+        "Montagem programada sem plano de içamento da peça",
+        "Grauteamento atrasado em relação à montagem no planejamento"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "prazo",
+        "qualidade",
+        "financeira"
+      ],
+      "fases": [
+        "estrutura"
+      ],
+      "tipologias": [
+        "galpao_industrial",
+        "comercial",
+        "obra_publica",
+        "residencial"
+      ],
+      "condicoes_sugestao": [
+        "pre_moldado",
+        "grua_ou_guindaste",
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos",
+        "sst",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queda ou instabilidade de peças pré-moldadas pode causar mortes e colapso parcial",
+      "referencias": [
+        "ABNT NBR 9062 – projeto e execução de estruturas de concreto pré-moldado"
+      ]
+    },
+    {
+      "codigo": "R15.10",
+      "evento": "Execução incorreta de protensão",
+      "causas": [
+        "Protensão aplicada antes de o concreto atingir a resistência especificada",
+        "Macaco hidráulico e manômetro sem aferição",
+        "Cabos com traçado fora do projeto ou bainha danificada na concretagem",
+        "Alongamento medido diferente do teórico sem análise do projetista"
+      ],
+      "consequencias": [
+        "Ruptura de cordoalha com risco grave ao operador",
+        "Perda de protensão e flechas excessivas na laje",
+        "Reprotensão ou reforço com custo e atraso"
+      ],
+      "controles_preventivos": [
+        "Planilha de protensão com pressão e alongamento por cabo conferida pelo projetista",
+        "Certificado de aferição de macaco e manômetro dentro da validade",
+        "Liberação da protensão condicionada a rompimento de corpo de prova",
+        "Conferência de traçado e perfil dos cabos na FVS antes da concretagem",
+        "Área atrás dos macacos isolada durante a operação"
+      ],
+      "controles_resposta": [
+        "Suspender a operação e submeter os desvios de alongamento ao projetista",
+        "Substituir cordoalhas rompidas e reprotender conforme orientação"
+      ],
+      "sinais_alerta": [
+        "Alongamento fora da tolerância na planilha de protensão",
+        "Aferição do equipamento de protensão vencida",
+        "Protensão programada antes do resultado de resistência"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "prazo"
+      ],
+      "fases": [
+        "estrutura"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "protensao",
+        "estrutura_concreto"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "sst",
+        "diario"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Ruptura de cordoalha ou perda de protensão pode ferir gravemente e instabilizar lajes",
+      "referencias": [
+        "ABNT NBR 6118 – projeto de estruturas de concreto",
+        "ABNT NBR 7483 – cordoalhas de aço para estruturas de concreto protendido"
+      ]
+    },
+    {
+      "codigo": "R15.11",
+      "evento": "Carregamento excessivo da estrutura durante a construção",
+      "causas": [
+        "Paletes de blocos, argamassa ou aço concentrados sobre laje recém-desformada",
+        "Apoio de grua, elevador de obra ou caçamba não previsto no projeto estrutural",
+        "Entulho acumulado em pavimentos sem retirada programada"
+      ],
+      "consequencias": [
+        "Flechas e fissuras permanentes em lajes",
+        "Colapso local com risco a trabalhadores",
+        "Reforço estrutural e atraso das frentes"
+      ],
+      "controles_preventivos": [
+        "Mapa de cargas admissíveis por pavimento afixado e incluído no plano de canteiro",
+        "Verificação dos apoios de equipamentos pelo projetista estrutural com ART",
+        "Inspeção semanal de estocagem em lajes com checklist do técnico de segurança",
+        "Retirada de entulho programada no planejamento"
+      ],
+      "controles_resposta": [
+        "Redistribuir ou remover a carga e reescorar o trecho",
+        "Acionar o projetista para avaliar flechas e fissuras"
+      ],
+      "sinais_alerta": [
+        "Checklist de estocagem com excesso de material sobre laje",
+        "Entrega de grande volume programada sem área de descarga definida",
+        "Fissura nova registrada em laje recém-carregada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "operacional"
+      ],
+      "fases": [
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "grua_ou_guindaste",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "sst",
+        "diario",
+        "suprimentos",
+        "planejamento"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Sobrecarga em laje jovem pode levar ao colapso local",
+      "referencias": [
+        "ABNT NBR 6120 – ações para o cálculo de estruturas de edificações"
+      ]
+    },
+    {
+      "codigo": "R15.12",
+      "evento": "Rupturas, fissuração excessiva ou instabilidade estrutural",
+      "causas": [
+        "Combinação de falhas de projeto, material e execução não detectadas a tempo",
+        "Recalque de fundação ou escavação vizinha",
+        "Furo ou corte não autorizado em viga, pilar ou laje"
+      ],
+      "consequencias": [
+        "Evacuação e interdição da edificação",
+        "Risco de morte e responsabilização civil e criminal",
+        "Perícia, reforço de grande porte e perda de valor do empreendimento"
+      ],
+      "controles_preventivos": [
+        "Monitoramento de fissuras com selos ou fissurômetro e leituras registradas",
+        "Marcos de recalque com leituras periódicas e limites de alerta definidos",
+        "Proibição formal de furos em estrutura sem aprovação do projetista, com registro",
+        "Inspeção estrutural periódica do engenheiro residente com relatório no GED"
+      ],
+      "controles_resposta": [
+        "Evacuar, escorar e isolar imediatamente a área",
+        "Contratar perícia e projeto de reforço com ART",
+        "Comunicar órgãos competentes e a seguradora"
+      ],
+      "sinais_alerta": [
+        "Abertura de fissura crescente entre leituras",
+        "Recalque acima do limite de alerta",
+        "Não conformidades estruturais abertas sem tratamento"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "juridica",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "escavacao_profunda",
+        "vizinhanca_proxima",
+        "edificacao_antiga"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "diario",
+        "sst"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Instabilidade estrutural pode causar colapso, mortes e interdição",
+      "referencias": [
+        "ABNT NBR 6118 – projeto de estruturas de concreto"
+      ]
+    }
+  ]
+}

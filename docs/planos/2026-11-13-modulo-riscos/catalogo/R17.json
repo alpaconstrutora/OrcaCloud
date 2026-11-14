@@ -1,0 +1,724 @@
+{
+  "categoria": "R17",
+  "nome": "Riscos de qualidade e desempenho construtivo",
+  "itens": [
+    {
+      "codigo": "R17.01",
+      "evento": "Não conformidade de serviços executados",
+      "causas": [
+        "Procedimento de execução inexistente ou não repassado à equipe",
+        "Medição do empreiteiro liberada sem inspeção do serviço",
+        "Alta rotatividade da mão de obra terceirizada"
+      ],
+      "consequencias": [
+        "Retrabalho e consumo extra de material",
+        "Atraso das frentes que dependem do serviço",
+        "Patologias futuras e chamados de garantia"
+      ],
+      "controles_preventivos": [
+        "FVS por serviço com critério de aceitação e assinatura do responsável",
+        "Medição do empreiteiro condicionada a FVS aprovada no sistema",
+        "Treinamento no procedimento registrado antes de abrir a frente",
+        "Auditoria interna de qualidade mensal com relatório"
+      ],
+      "controles_resposta": [
+        "Abrir não conformidade com causa, ação corretiva e prazo",
+        "Reter o pagamento até a correção pelo empreiteiro"
+      ],
+      "sinais_alerta": [
+        "Taxa de FVS reprovadas por empreiteiro acima da meta",
+        "Não conformidades abertas além do prazo de tratamento",
+        "Medição paga sem FVS correspondente"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "prazo"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "contratos",
+        "ordens_servico",
+        "financeiro"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R17.02",
+      "evento": "Falhas em impermeabilizações",
+      "causas": [
+        "Projeto de impermeabilização ausente ou não compatibilizado com instalações",
+        "Aplicação sobre substrato úmido, sem regularização ou arredondamento de cantos",
+        "Manta perfurada por serviços posteriores antes da proteção mecânica",
+        "Teste de estanqueidade dispensado"
+      ],
+      "consequencias": [
+        "Infiltração em unidades inferiores e garagens",
+        "Demolição de pisos e revestimentos para refazer o sistema",
+        "Corrosão de armaduras de lajes e reservatórios"
+      ],
+      "controles_preventivos": [
+        "Projeto de impermeabilização compatibilizado com arquitetura e instalações",
+        "Teste de lâmina d'água de 72 horas registrado com foto antes da proteção",
+        "FVS de substrato liberando a aplicação",
+        "Controle de lote e validade de mantas e membranas no recebimento"
+      ],
+      "controles_resposta": [
+        "Localizar o ponto de falha e refazer o sistema no trecho",
+        "Proteger as áreas afetadas e reparar os acabamentos"
+      ],
+      "sinais_alerta": [
+        "Área impermeabilizada sem teste de estanqueidade registrado",
+        "Chamado de garantia por infiltração em laje ou reservatório",
+        "Serviço executado sobre a manta antes da proteção mecânica"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "subsolo",
+        "nivel_agua_alto",
+        "regiao_chuvosa"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 9575 – impermeabilização: seleção e projeto",
+        "ABNT NBR 9574 – execução de impermeabilização"
+      ]
+    },
+    {
+      "codigo": "R17.03",
+      "evento": "Infiltrações e umidade",
+      "causas": [
+        "Esquadrias sem vedação adequada ou contramarco mal assentado",
+        "Umidade ascendente por falta de impermeabilização do baldrame",
+        "Peitoris e platibandas sem pingadeira",
+        "Juntas de dilatação da fachada sem selante"
+      ],
+      "consequencias": [
+        "Mofo, descolamento de pintura e insalubridade",
+        "Reparos recorrentes em unidades entregues",
+        "Desvalorização e conflito com o condomínio"
+      ],
+      "controles_preventivos": [
+        "Teste de estanqueidade de esquadrias com jato d'água por amostragem, registrado",
+        "FVS de impermeabilização do baldrame antes da elevação da alvenaria",
+        "Inspeção de peitoris, pingadeiras e selantes na FVS de fachada",
+        "Vistoria após a primeira chuva forte registrada no diário"
+      ],
+      "controles_resposta": [
+        "Identificar a origem com ensaio e corrigir a causa antes do acabamento",
+        "Tratar o mofo e repintar"
+      ],
+      "sinais_alerta": [
+        "Chamados de garantia por umidade repetidos na mesma prumada ou bloco",
+        "Manchas de umidade registradas no diário após chuva",
+        "Esquadria aprovada sem teste de estanqueidade"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "fundacoes",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "regiao_chuvosa",
+        "nivel_agua_alto",
+        "proximo_curso_dagua"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "diario",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R17.04",
+      "evento": "Fissuras e manifestações patológicas recorrentes",
+      "causas": [
+        "Alvenaria encunhada cedo, antes da deformação da estrutura",
+        "Falta de tela de ligação entre alvenaria e estrutura",
+        "Revestimento aplicado sobre base sem tempo de cura",
+        "Ausência de juntas de movimentação em grandes panos"
+      ],
+      "consequencias": [
+        "Retrabalhos sucessivos de pintura e revestimento",
+        "Insegurança dos clientes quanto à estrutura",
+        "Custo de garantia acima do provisionado"
+      ],
+      "controles_preventivos": [
+        "Prazo mínimo entre elevação da alvenaria e encunhamento no planejamento",
+        "Tela de ligação alvenaria-estrutura conferida na FVS",
+        "Mapeamento de fissuras com foto e classificação por tipo",
+        "Juntas de movimentação detalhadas no projeto de revestimento"
+      ],
+      "controles_resposta": [
+        "Diagnóstico da causa por engenheiro antes do reparo",
+        "Tratamento com tela e material flexível conforme o tipo de fissura"
+      ],
+      "sinais_alerta": [
+        "Chamados de garantia por fissura na mesma tipologia de unidade",
+        "Encunhamento registrado antes do prazo mínimo",
+        "Não conformidade recorrente de fissura na FVS de revestimento"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "estrutura",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "estrutura_concreto",
+        "prazo_curto"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "planejamento",
+        "ordens_servico"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 15575 – edificações habitacionais: desempenho"
+      ]
+    },
+    {
+      "codigo": "R17.05",
+      "evento": "Desplacamento de revestimentos e fachadas",
+      "causas": [
+        "Argamassa colante inadequada para fachada ou tempo em aberto excedido",
+        "Placas grandes assentadas sem dupla colagem",
+        "Juntas de movimentação omitidas ou sem selante",
+        "Base com baixa aderência por chapisco deficiente"
+      ],
+      "consequencias": [
+        "Queda de placas sobre pedestres e veículos",
+        "Interdição de calçada e de áreas comuns",
+        "Refação da fachada com balancim e custo elevado"
+      ],
+      "controles_preventivos": [
+        "Ensaio de resistência de aderência à tração na fachada com laudo",
+        "FVS de assentamento verificando dupla colagem e tempo em aberto",
+        "Projeto de revestimento de fachada com juntas especificadas",
+        "Inspeção por percussão após a cura com mapa de som cavo"
+      ],
+      "controles_resposta": [
+        "Isolar a área abaixo e instalar tela de proteção",
+        "Remover as placas soltas e reassentar o trecho com laudo"
+      ],
+      "sinais_alerta": [
+        "Ensaio de aderência abaixo do mínimo",
+        "Som cavo registrado na inspeção por percussão",
+        "Chamado de garantia por placa solta na fachada"
+      ],
+      "dimensoes": [
+        "seguranca",
+        "qualidade",
+        "financeira",
+        "reputacional"
+      ],
+      "fases": [
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa",
+        "vizinhanca_proxima",
+        "trabalho_em_altura"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "sst",
+        "ordens_servico"
+      ],
+      "gatilho_critico": true,
+      "gatilho_motivo": "Queda de placa de fachada pode atingir e matar pedestres",
+      "referencias": [
+        "ABNT NBR 13755 – revestimento cerâmico de fachadas com argamassa colante"
+      ]
+    },
+    {
+      "codigo": "R17.06",
+      "evento": "Desempenho acústico insuficiente",
+      "causas": [
+        "Laje sem contrapiso flutuante ou manta acústica",
+        "Parede de geminação com material ou espessura diferente do projeto",
+        "Tubulação de esgoto sem isolamento em shafts de dormitórios",
+        "Esquadrias com vedação acústica inferior à especificada"
+      ],
+      "consequencias": [
+        "Reclamações de ruído entre unidades",
+        "Ação judicial por descumprimento da norma de desempenho",
+        "Correção em unidades já ocupadas"
+      ],
+      "controles_preventivos": [
+        "Atendimento documentado aos níveis acústicos da norma de desempenho no projeto",
+        "Ensaio de campo de ruído aéreo e de impacto em unidades amostrais com laudo",
+        "Conferência da manta acústica na FVS antes do contrapiso",
+        "Ficha técnica com desempenho acústico das esquadrias no recebimento"
+      ],
+      "controles_resposta": [
+        "Avaliar soluções de correção com consultor de acústica",
+        "Negociar com os clientes afetados com registro formal"
+      ],
+      "sinais_alerta": [
+        "Ensaio acústico abaixo do nível mínimo",
+        "Troca de material de vedação aprovada sem análise acústica",
+        "Chamado de garantia por ruído entre unidades"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial"
+      ],
+      "condicoes_sugestao": [
+        "area_urbana_densa"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 15575 – edificações habitacionais: desempenho",
+        "ABNT NBR 10152 – níveis de pressão sonora em ambientes internos"
+      ]
+    },
+    {
+      "codigo": "R17.07",
+      "evento": "Desempenho térmico inadequado",
+      "causas": [
+        "Cobertura sem o isolamento térmico especificado",
+        "Vidros e esquadrias trocados por opção mais barata",
+        "Zona bioclimática ou orientação solar desconsideradas no projeto"
+      ],
+      "consequencias": [
+        "Temperatura interna acima do aceitável no verão",
+        "Consumo elevado de energia com climatização",
+        "Questionamento judicial por descumprimento de desempenho"
+      ],
+      "controles_preventivos": [
+        "Avaliação de desempenho térmico (simplificada ou simulação) arquivada",
+        "Substituição de material de envoltória condicionada a análise registrada",
+        "Ficha técnica de telhas, isolantes e vidros conferida no recebimento"
+      ],
+      "controles_resposta": [
+        "Aplicar isolamento complementar ou sombreamento",
+        "Revisar a especificação para as fases seguintes do empreendimento"
+      ],
+      "sinais_alerta": [
+        "Alteração de cobertura ou vidro sem parecer técnico",
+        "Chamado de garantia por calor excessivo no último pavimento"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "reputacional"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "acabamentos",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [],
+      "integracoes": [
+        "garantia_qualidade",
+        "suprimentos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 15575 – edificações habitacionais: desempenho",
+        "ABNT NBR 15220 – desempenho térmico de edificações"
+      ]
+    },
+    {
+      "codigo": "R17.08",
+      "evento": "Acabamentos fora dos padrões definidos",
+      "causas": [
+        "Memorial descritivo vago ou divergente do material de vendas",
+        "Substituição de marca ou modelo sem aprovação",
+        "Base com planicidade e prumo fora da tolerância",
+        "Ausência de unidade protótipo aprovada"
+      ],
+      "consequencias": [
+        "Recusa de recebimento pelo cliente na vistoria",
+        "Troca de materiais e retrabalho de acabamento",
+        "Reclamação em órgão de defesa do consumidor e desgaste reputacional"
+      ],
+      "controles_preventivos": [
+        "Unidade protótipo aprovada com registro fotográfico como padrão de aceitação",
+        "Matriz de acabamentos vinculada ao memorial e conferida no pedido de compra",
+        "FVS de acabamento com tolerâncias medidas (planicidade, juntas, prumo)",
+        "Aprovação formal registrada para qualquer substituição de material"
+      ],
+      "controles_resposta": [
+        "Lista de pendências por unidade com prazo de correção",
+        "Negociar compensação quando a correção for inviável"
+      ],
+      "sinais_alerta": [
+        "Pendências por unidade na vistoria do cliente acima da média",
+        "Pedido de compra com material diferente do memorial",
+        "FVS de acabamento reprovada"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "reputacional",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "reforma"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta"
+      ],
+      "integracoes": [
+        "comercial",
+        "suprimentos",
+        "garantia_qualidade"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R17.09",
+      "evento": "Materiais não conformes com os requisitos técnicos",
+      "causas": [
+        "Fornecedor escolhido apenas por preço, sem qualificação",
+        "Recebimento sem inspeção ou ensaio do lote",
+        "Produto sem certificação ou fora da norma técnica",
+        "Armazenamento inadequado deteriorando o material no canteiro"
+      ],
+      "consequencias": [
+        "Falhas prematuras e retrabalho",
+        "Responsabilização da construtora pelo vício do produto",
+        "Atraso por devolução e nova compra"
+      ],
+      "controles_preventivos": [
+        "Cadastro de fornecedores qualificados com avaliação periódica de desempenho",
+        "Inspeção de recebimento por lote registrada junto à nota fiscal",
+        "Certificado de ensaio ou de conformidade exigido nos materiais controlados",
+        "Consulta à qualificação do fabricante no PBQP-H (SiMaC) quando houver programa setorial"
+      ],
+      "controles_resposta": [
+        "Segregar e devolver o lote, rastreando onde já foi aplicado",
+        "Avaliar com o projetista a substituição do material aplicado"
+      ],
+      "sinais_alerta": [
+        "Recebimentos recusados ou com ressalva do mesmo fornecedor",
+        "Fornecedor com nota baixa na avaliação de desempenho",
+        "Compra emergencial fora do cadastro de fornecedores"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "financeira",
+        "prazo",
+        "juridica"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "insumo_importado"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "garantia_qualidade",
+        "contratos"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R17.10",
+      "evento": "Ausência de ensaios e inspeções obrigatórios ou contratualmente exigidos",
+      "causas": [
+        "Plano de ensaios não elaborado no início da obra",
+        "Custo de ensaios tecnológicos não previsto no orçamento",
+        "Laboratório contratado tarde ou sem capacidade de atendimento"
+      ],
+      "consequencias": [
+        "Impossibilidade de comprovar conformidade na entrega ou em perícia",
+        "Glosa de medição em obra pública ou financiada",
+        "Ensaios destrutivos posteriores com custo elevado"
+      ],
+      "controles_preventivos": [
+        "Plano de inspeção e ensaios com frequência por serviço aprovado no início",
+        "Rubrica de ensaios tecnológicos no orçamento com acompanhamento do realizado",
+        "Contrato com laboratório acreditado antes da primeira concretagem",
+        "Conferência mensal de ensaios previstos versus realizados"
+      ],
+      "controles_resposta": [
+        "Realizar ensaios substitutivos (testemunhos, ensaios não destrutivos)",
+        "Registrar justificativa técnica e aceite do contratante"
+      ],
+      "sinais_alerta": [
+        "Ensaio previsto sem resultado lançado no prazo",
+        "Rubrica de ensaios sem contratação no orçamento",
+        "Medição de etapa sem o laudo exigido em contrato"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "financeira"
+      ],
+      "fases": [
+        "inicio_obra",
+        "fundacoes",
+        "estrutura",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "loteamento",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "contrato_publico",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "orcamento",
+        "contratos",
+        "docs_ged"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 12655 – preparo, controle, recebimento e aceitação de concreto"
+      ]
+    },
+    {
+      "codigo": "R17.11",
+      "evento": "Falta de rastreabilidade de materiais e processos",
+      "causas": [
+        "Lote e nota fiscal não vinculados ao local de aplicação",
+        "Mapa de concretagem não preenchido",
+        "Registros em papel perdidos ou dispersos entre equipes",
+        "Subempreiteiro comprando material por conta própria"
+      ],
+      "consequencias": [
+        "Impossibilidade de delimitar a área afetada por um lote defeituoso",
+        "Defesa técnica frágil em perícias",
+        "Correção ampla e mais cara do que o necessário"
+      ],
+      "controles_preventivos": [
+        "Registro de lote e local de aplicação para materiais críticos (concreto, aço, impermeabilizante)",
+        "Mapa de concretagem digital vinculado a corpos de prova e notas fiscais",
+        "Documentos da obra centralizados no GED com indexação por pavimento",
+        "Proibição contratual de material sem passagem pelo recebimento da obra"
+      ],
+      "controles_resposta": [
+        "Reconstituir a rastreabilidade por diário, fotos e notas fiscais",
+        "Ampliar ensaios onde a rastreabilidade não puder ser restabelecida"
+      ],
+      "sinais_alerta": [
+        "Concretagem sem mapa vinculado no sistema",
+        "Nota fiscal de material crítico sem lote registrado",
+        "Entrega de material direto ao empreiteiro sem recebimento"
+      ],
+      "dimensoes": [
+        "qualidade",
+        "juridica",
+        "operacional"
+      ],
+      "fases": [
+        "fundacoes",
+        "estrutura",
+        "instalacoes",
+        "acabamentos",
+        "entrega"
+      ],
+      "tipologias": [
+        "residencial",
+        "comercial",
+        "galpao_industrial",
+        "reforma",
+        "obra_publica"
+      ],
+      "condicoes_sugestao": [
+        "muitos_terceirizados"
+      ],
+      "integracoes": [
+        "suprimentos",
+        "garantia_qualidade",
+        "docs_ged",
+        "fiscal"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": []
+    },
+    {
+      "codigo": "R17.12",
+      "evento": "Descumprimento dos requisitos de desempenho aplicáveis à edificação",
+      "causas": [
+        "Requisitos de desempenho não traduzidos em especificação de projeto",
+        "Nível de desempenho prometido na venda acima do projetado",
+        "Sistema construtivo inovador sem avaliação técnica documentada",
+        "Manual de uso, operação e manutenção incompleto"
+      ],
+      "consequencias": [
+        "Responsabilidade civil por vício construtivo",
+        "Ações coletivas e perícias judiciais",
+        "Custos de adequação após a entrega"
+      ],
+      "controles_preventivos": [
+        "Matriz de atendimento à norma de desempenho por sistema, revisada a cada etapa de projeto",
+        "Laudos de ensaio de fornecedores e de campo arquivados por requisito",
+        "Manual de uso, operação e manutenção entregue com protocolo",
+        "Conferência do material de vendas contra o desempenho projetado"
+      ],
+      "controles_resposta": [
+        "Avaliar tecnicamente o requisito descumprido e montar plano de adequação",
+        "Assessoria jurídica e negociação com os proprietários"
+      ],
+      "sinais_alerta": [
+        "Requisitos da matriz de desempenho sem evidência anexada",
+        "Manual do proprietário pendente perto da entrega",
+        "Chamados de garantia concentrados em um mesmo sistema"
+      ],
+      "dimensoes": [
+        "juridica",
+        "qualidade",
+        "reputacional",
+        "financeira"
+      ],
+      "fases": [
+        "projeto_aprovacao",
+        "acabamentos",
+        "entrega",
+        "pos_obra"
+      ],
+      "tipologias": [
+        "residencial"
+      ],
+      "condicoes_sugestao": [
+        "venda_na_planta",
+        "financiamento_bancario"
+      ],
+      "integracoes": [
+        "garantia_qualidade",
+        "docs_ged",
+        "comercial"
+      ],
+      "gatilho_critico": false,
+      "gatilho_motivo": null,
+      "referencias": [
+        "ABNT NBR 15575 – edificações habitacionais: desempenho",
+        "ABNT NBR 14037 – manual de uso, operação e manutenção das edificações"
+      ]
+    }
+  ]
+}

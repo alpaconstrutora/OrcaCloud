@@ -1,0 +1,338 @@
+codigo	evento
+#R01	Riscos estratégicos e de viabilidade
+R01.01	Superestimação da demanda imobiliária
+R01.02	Precificação de venda ou locação incompatível com o mercado
+R01.03	Estimativa incorreta da velocidade de vendas
+R01.04	Escolha inadequada da localização do empreendimento
+R01.05	Tipologia ou padrão construtivo incompatível com o público-alvo
+R01.06	Estudo de viabilidade econômico-financeira inconsistente
+R01.07	Taxa de retorno inferior ao custo de capital
+R01.08	Subestimação do investimento necessário
+R01.09	Mudanças nas preferências dos consumidores
+R01.10	Entrada de novos concorrentes ou excesso de oferta
+R01.11	Concentração excessiva de investimentos em uma região ou segmento
+R01.12	Falta de capacidade técnica, financeira ou gerencial para executar o empreendimento
+#R02	Riscos fundiários e de aquisição de terrenos
+R02.01	Irregularidades na matrícula do imóvel
+R02.02	Existência de penhoras, hipotecas, indisponibilidades ou outros ônus
+R02.03	Disputas judiciais sobre a propriedade
+R02.04	Divergências entre área registrada e área efetiva
+R02.05	Erros de levantamento topográfico ou georreferenciamento
+R02.06	Servidões administrativas ou particulares não identificadas
+R02.07	Ocupações irregulares, invasões ou conflitos possessórios
+R02.08	Restrições à utilização ou ao parcelamento do terreno
+R02.09	Passivos ambientais ou obrigações anteriores à aquisição
+R02.10	Dificuldade de acesso legal ou físico ao imóvel
+R02.11	Desapropriação ou interferência de obras públicas
+R02.12	Compra de terreno sem diligência jurídica, técnica e urbanística adequada
+#R03	Riscos urbanísticos e de licenciamento
+R03.01	Incompatibilidade com o zoneamento municipal
+R03.02	Descumprimento dos coeficientes de aproveitamento e taxas de ocupação
+R03.03	Descumprimento de recuos, gabaritos e limitações de altura
+R03.04	Mudança na legislação urbanística durante o desenvolvimento
+R03.05	Demora na aprovação dos projetos
+R03.06	Indeferimento de alvarás ou autorizações
+R03.07	Ausência de licenças exigíveis para determinadas atividades
+R03.08	Descumprimento das exigências do Corpo de Bombeiros
+R03.09	Pendências de acessibilidade
+R03.10	Exigências imprevistas de concessionárias de serviços públicos
+R03.11	Embargo por execução divergente do projeto aprovado
+R03.12	Impossibilidade ou atraso na obtenção do habite-se e demais autorizações de ocupação
+#R04	Riscos ambientais e socioambientais
+R04.01	Contaminação do solo ou do lençol freático
+R04.02	Intervenções não autorizadas em áreas de preservação
+R04.03	Supressão irregular de vegetação
+R04.04	Erosão e assoreamento de cursos d'água
+R04.05	Gestão inadequada de resíduos da construção
+R04.06	Destinação irregular de resíduos perigosos
+R04.07	Poluição sonora e emissão excessiva de poeira
+R04.08	Vibrações que provoquem danos em imóveis vizinhos
+R04.09	Lançamento inadequado de efluentes
+R04.10	Uso irregular ou desperdício significativo de recursos hídricos
+R04.11	Conflitos com moradores, comunidades e estabelecimentos vizinhos
+R04.12	Descumprimento de condicionantes ambientais
+#R05	Riscos geológicos, geotécnicos e topográficos
+R05.01	Sondagem insuficiente ou não representativa
+R05.02	Capacidade de suporte do solo inferior à prevista
+R05.03	Presença inesperada de rochas ou matacões
+R05.04	Nível de água subterrânea diferente do estimado
+R05.05	Solos colapsíveis, expansivos ou muito compressíveis
+R05.06	Recalques diferenciais
+R05.07	Instabilidade de encostas ou taludes
+R05.08	Ruptura de contenções e escoramentos
+R05.09	Surgimento de cavidades, vazios ou estruturas enterradas
+R05.10	Interferências subterrâneas não cadastradas
+R05.11	Erros de cotas, níveis ou locação da obra
+R05.12	Danos a fundações vizinhas durante escavações ou cravação de estacas
+#R06	Riscos de projetos e engenharia
+R06.01	Projetos incompletos ou insuficientemente detalhados
+R06.02	Incompatibilidade entre arquitetura, estrutura e instalações
+R06.03	Erros de dimensionamento estrutural
+R06.04	Premissas inadequadas de carregamentos e utilização
+R06.05	Alterações de projeto sem análise técnica dos impactos
+R06.06	Falhas na compatibilização BIM
+R06.07	Utilização de versões desatualizadas dos projetos
+R06.08	Falta de definição dos materiais e sistemas construtivos
+R06.09	Soluções técnicas inviáveis ou excessivamente caras
+R06.10	Não atendimento a requisitos de acessibilidade, incêndio ou desempenho
+R06.11	Ausência ou insuficiência de revisão e verificação independente
+R06.12	Falhas na responsabilidade técnica, nas ARTs ou nos RRTs aplicáveis
+#R07	Riscos orçamentários e de custos
+R07.01	Omissão de serviços na composição orçamentária
+R07.02	Quantitativos de materiais incorretos
+R07.03	Preços unitários incompatíveis com o mercado
+R07.04	Produtividade superestimada da mão de obra
+R07.05	Custos indiretos insuficientemente provisionados
+R07.06	Erros na composição do BDI
+R07.07	Aumento inesperado dos preços dos insumos
+R07.08	Desperdício de materiais acima do previsto
+R07.09	Retrabalhos não considerados no orçamento
+R07.10	Ausência ou insuficiência de reservas de contingência
+R07.11	Aditivos sem controle de seus impactos financeiros
+R07.12	Desvios entre o custo orçado, contratado, comprometido e realizado
+#R08	Riscos de planejamento e cronograma
+R08.01	Cronograma físico irrealista
+R08.02	Sequenciamento inadequado das atividades
+R08.03	Identificação incorreta do caminho crítico
+R08.04	Atraso na mobilização do canteiro
+R08.05	Atrasos no fornecimento de materiais e equipamentos
+R08.06	Baixa produtividade das equipes
+R08.07	Dependências não identificadas entre atividades
+R08.08	Decisões tardias do cliente, incorporador ou projetista
+R08.09	Interferência entre equipes e serviços simultâneos
+R08.10	Atrasos provocados por reprojetos e retrabalhos
+R08.11	Falta de atualização confiável do avanço físico
+R08.12	Descumprimento dos marcos contratuais e da data final de entrega
+#R09	Riscos financeiros e de financiamento
+R09.01	Insuficiência de capital de giro
+R09.02	Descumprimento do fluxo de caixa previsto
+R09.03	Descompasso entre desembolsos e recebimentos
+R09.04	Negativa de financiamento bancário
+R09.05	Liberação de recursos em prazo superior ao planejado
+R09.06	Aumento das taxas de juros
+R09.07	Inadimplência de clientes e compradores
+R09.08	Descumprimento de cláusulas financeiras e covenants
+R09.09	Insuficiência ou desvalorização de garantias
+R09.10	Falta de recursos para conclusão da obra
+R09.11	Exposição cambial em contratos ou insumos importados
+R09.12	Endividamento excessivo e impossibilidade de refinanciamento
+#R10	Riscos tributários, fiscais e previdenciários
+R10.01	Enquadramento inadequado no regime tributário
+R10.02	Apuração incorreta dos tributos
+R10.03	Retenções tributárias não realizadas quando exigidas
+R10.04	Irregularidades no recolhimento de ISS e demais tributos aplicáveis
+R10.05	Falhas na escrituração fiscal e contábil
+R10.06	Irregularidades no cadastro e nas obrigações relativas ao CNO
+R10.07	Divergências na aferição previdenciária da obra
+R10.08	Inconsistências nas informações enviadas ao eSocial
+R10.09	Passivos tributários e previdenciários de prestadores de serviços
+R10.10	Impossibilidade ou atraso na emissão de certidões exigíveis
+R10.11	Falta de documentação para comprovação de recolhimentos
+R10.12	Impactos não previstos de mudanças na legislação tributária
+#R11	Riscos jurídicos, contratuais e securitários
+R11.01	Contratos com escopo incompleto ou ambíguo
+R11.02	Responsabilidades mal definidas entre contratante e contratado
+R11.03	Ausência de matriz contratual de alocação de riscos
+R11.04	Cláusulas de reajuste e reequilíbrio econômico-financeiro inadequadas
+R11.05	Litígios sobre medições, pagamentos ou aditivos
+R11.06	Rescisão contratual antecipada
+R11.07	Execução de serviços sem formalização contratual
+R11.08	Ausência de garantias contratuais adequadas
+R11.09	Apólices de seguro insuficientes, vencidas ou com exclusões relevantes
+R11.10	Falta de cobertura de responsabilidade civil por danos a terceiros
+R11.11	Responsabilização por vícios construtivos ou descumprimento contratual
+R11.12	Disputas judiciais, arbitrais ou administrativas que comprometam a continuidade do negócio
+#R12	Riscos de suprimentos e fornecedores
+R12.01	Atraso na entrega de materiais
+R12.02	Fornecimento de materiais fora das especificações
+R12.03	Falência ou incapacidade operacional do fornecedor
+R12.04	Dependência excessiva de um único fornecedor
+R12.05	Aumento de preços após a contratação
+R12.06	Falta de materiais críticos no mercado
+R12.07	Danos no transporte e na movimentação de materiais
+R12.08	Armazenamento inadequado e deterioração dos produtos
+R12.09	Compras emergenciais com sobrepreço
+R12.10	Materiais falsificados, sem procedência ou sem rastreabilidade
+R12.11	Falhas na logística de entregas e recebimentos
+R12.12	Contratos de fornecimento sem mecanismos adequados de garantia e substituição
+#R13	Riscos de recursos humanos e terceirização
+R13.01	Escassez de profissionais qualificados
+R13.02	Alta rotatividade de mão de obra
+R13.03	Absenteísmo excessivo
+R13.04	Deficiência no treinamento das equipes
+R13.05	Utilização de trabalhadores sem habilitação exigida
+R13.06	Falhas na supervisão e liderança operacional
+R13.07	Conflitos entre equipes e subcontratados
+R13.08	Irregularidades trabalhistas na contratação de terceiros
+R13.09	Jornadas excessivas e fadiga
+R13.10	Assédio, violência e fatores psicossociais relacionados ao trabalho
+R13.11	Descumprimento de obrigações salariais e trabalhistas
+R13.12	Dependência de profissionais essenciais sem plano de substituição
+#R14	Riscos de segurança e saúde ocupacional
+R14.01	Queda de trabalhadores de altura
+R14.02	Queda de objetos, materiais ou ferramentas
+R14.03	Soterramento em escavações
+R14.04	Choques elétricos e eletrocussão
+R14.05	Esmagamento por cargas suspensas
+R14.06	Atropelamento por veículos e máquinas
+R14.07	Aprisionamento em máquinas e equipamentos
+R14.08	Desabamento de estruturas provisórias
+R14.09	Acidentes em andaimes, plataformas e escadas
+R14.10	Acidentes em espaços confinados
+R14.11	Incêndios e explosões
+R14.12	Queimaduras e acidentes em trabalhos a quente
+R14.13	Exposição a poeira respirável e sílica cristalina
+R14.14	Exposição excessiva a ruído e vibrações
+R14.15	Exposição a produtos químicos perigosos
+R14.16	Lesões musculoesqueléticas e riscos ergonômicos
+R14.17	Estresse térmico e exposição a calor extremo
+R14.18	Exposição a agentes biológicos
+R14.19	Insuficiência ou inadequação de EPCs e EPIs
+R14.20	Falta de procedimentos de emergência, salvamento e primeiros socorros
+R14.21	Falhas em inspeções e permissões de trabalho
+R14.22	Incompatibilidade entre atividades simultâneas no canteiro
+R14.23	Riscos psicossociais relacionados à organização do trabalho
+R14.24	Ausência de revisão dos riscos após alterações nas condições de execução
+#R15	Riscos da execução e estabilidade estrutural
+R15.01	Falhas na execução das fundações
+R15.02	Desvio de posicionamento ou geometria de elementos estruturais
+R15.03	Armaduras executadas em desacordo com o projeto
+R15.04	Concreto com resistência ou características inadequadas
+R15.05	Falhas no lançamento, adensamento ou cura do concreto
+R15.06	Desforma ou retirada prematura de escoramentos
+R15.07	Instabilidade de fôrmas e escoramentos
+R15.08	Deficiências em ligações e soldas de estruturas metálicas
+R15.09	Falhas na montagem de estruturas pré-moldadas
+R15.10	Execução incorreta de protensão
+R15.11	Carregamento excessivo da estrutura durante a construção
+R15.12	Rupturas, fissuração excessiva ou instabilidade estrutural
+#R16	Riscos das instalações e dos sistemas prediais
+R16.01	Instalações elétricas mal dimensionadas ou executadas
+R16.02	Falhas de aterramento e proteção contra descargas atmosféricas
+R16.03	Sobrecargas e falhas em quadros de distribuição
+R16.04	Deficiências nos sistemas de detecção e combate a incêndio
+R16.05	Vazamentos nas instalações hidrossanitárias
+R16.06	Capacidade insuficiente dos sistemas de abastecimento e reservação
+R16.07	Falhas nos sistemas de drenagem pluvial
+R16.08	Defeitos em bombas e sistemas de pressurização
+R16.09	Falhas na climatização e ventilação
+R16.10	Deficiências na instalação de elevadores e sistemas de transporte vertical
+R16.11	Falhas em instalações de gás e sistemas de exaustão
+R16.12	Ausência ou insuficiência de testes integrados e comissionamento
+#R17	Riscos de qualidade e desempenho construtivo
+R17.01	Não conformidade de serviços executados
+R17.02	Falhas em impermeabilizações
+R17.03	Infiltrações e umidade
+R17.04	Fissuras e manifestações patológicas recorrentes
+R17.05	Desplacamento de revestimentos e fachadas
+R17.06	Desempenho acústico insuficiente
+R17.07	Desempenho térmico inadequado
+R17.08	Acabamentos fora dos padrões definidos
+R17.09	Materiais não conformes com os requisitos técnicos
+R17.10	Ausência de ensaios e inspeções obrigatórios ou contratualmente exigidos
+R17.11	Falta de rastreabilidade de materiais e processos
+R17.12	Descumprimento dos requisitos de desempenho aplicáveis à edificação
+#R18	Riscos de máquinas, equipamentos e canteiro
+R18.01	Falhas mecânicas de máquinas pesadas
+R18.02	Acidentes com gruas e guindastes
+R18.03	Deficiências em elevadores e equipamentos de transporte de obras
+R18.04	Operação de equipamentos sem inspeção adequada
+R18.05	Ausência de manutenção preventiva
+R18.06	Deficiência no isolamento das áreas operacionais
+R18.07	Arranjos de canteiro com circulação insegura
+R18.08	Instalações elétricas provisórias inadequadas
+R18.09	Falta de capacidade ou disponibilidade de equipamentos essenciais
+R18.10	Abastecimento e armazenamento inadequado de combustíveis
+R18.11	Furto, roubo ou vandalismo no canteiro
+R18.12	Falhas na infraestrutura provisória de água, energia, iluminação e saneamento
+#R19	Riscos tecnológicos e de informação
+R19.01	Perda ou corrupção de documentos e projetos
+R19.02	Ataques cibernéticos e ransomware
+R19.03	Acesso indevido a informações confidenciais
+R19.04	Descumprimento da legislação de proteção de dados pessoais
+R19.05	Indisponibilidade de sistemas críticos
+R19.06	Falhas de sincronização entre sistemas
+R19.07	Informações incorretas em modelos BIM
+R19.08	Divergência entre a documentação digital e a obra executada
+R19.09	Falhas em sensores, dispositivos IoT e telemetria
+R19.10	Uso de dados incompletos ou desatualizados para tomada de decisões
+R19.11	Ausência de trilhas de auditoria e controle de versões
+R19.12	Dependência excessiva de fornecedores tecnológicos
+#R20	Riscos comerciais e imobiliários
+R20.01	Vendas abaixo da velocidade planejada
+R20.02	Necessidade de descontos superiores aos previstos
+R20.03	Inadimplência de compradores
+R20.04	Distratos e cancelamentos de vendas
+R20.05	Reprovação do financiamento do comprador
+R20.06	Promessas comerciais incompatíveis com o memorial e o contrato
+R20.07	Publicidade inadequada ou informações comerciais incorretas
+R20.08	Comissões e despesas comerciais superiores ao orçamento
+R20.09	Estoque elevado de unidades não vendidas
+R20.10	Vacância de imóveis destinados à locação
+R20.11	Redução dos valores de aluguel ou da rentabilidade imobiliária
+R20.12	Concentração excessiva de receitas em poucos locatários ou compradores
+#R21	Riscos de entrega, garantias e pós-obra
+R21.01	Entrega da obra com serviços pendentes
+R21.02	Não aprovação nas vistorias de entrega
+R21.03	Falta de documentação técnica e as built
+R21.04	Ausência de manuais de uso, operação e manutenção
+R21.05	Entrega incompleta dos sistemas e equipamentos
+R21.06	Falta de treinamento dos responsáveis pela operação
+R21.07	Manifestação de vícios e defeitos após a entrega
+R21.08	Crescimento inesperado dos custos de assistência técnica
+R21.09	Descumprimento de obrigações de garantia aplicáveis
+R21.10	Disputas com compradores ou condomínios
+R21.11	Deterioração acelerada por falhas de manutenção ou uso inadequado
+R21.12	Danos reputacionais decorrentes de falhas recorrentes
+#R22	Riscos climáticos, naturais e externos
+R22.01	Chuvas intensas e prolongadas
+R22.02	Enchentes e alagamentos
+R22.03	Deslizamentos e movimentos de massa
+R22.04	Ventos fortes e tempestades
+R22.05	Descargas atmosféricas
+R22.06	Ondas de calor ou frio extremo
+R22.07	Secas e indisponibilidade de água
+R22.08	Incêndios florestais e queimadas próximas
+R22.09	Greves e interrupções de serviços essenciais
+R22.10	Bloqueios rodoviários ou interrupções logísticas
+R22.11	Epidemias e crises sanitárias
+R22.12	Mudanças econômicas, regulatórias ou políticas que afetem o empreendimento
+#R23	Riscos de governança, fraude e integridade
+R23.01	Desvio de materiais e equipamentos
+R23.02	Pagamentos duplicados ou indevidos
+R23.03	Notas fiscais fictícias ou adulteradas
+R23.04	Superfaturamento de compras e contratos
+R23.05	Medições fraudulentas de serviços
+R23.06	Conluio entre funcionários e fornecedores
+R23.07	Conflitos de interesses não declarados
+R23.08	Corrupção ou pagamento de vantagens indevidas
+R23.09	Manipulação de indicadores de avanço ou desempenho
+R23.10	Aprovações financeiras sem segregação de funções
+R23.11	Descumprimento de políticas internas e limites de alçada
+R23.12	Falta de auditoria, transparência e prestação de contas
+#R24	Riscos específicos de obras e contratos públicos
+R24.01	Falhas na interpretação do edital e dos documentos licitatórios
+R24.02	Desclassificação ou impedimento de contratação
+R24.03	Questionamentos administrativos ou judiciais da licitação
+R24.04	Inconsistência na matriz contratual de alocação de riscos
+R24.05	Atraso na liberação de áreas ou frentes de trabalho pela Administração
+R24.06	Demora na aprovação de medições
+R24.07	Atraso nos pagamentos públicos
+R24.08	Glosas de serviços executados
+R24.09	Divergências sobre reequilíbrio econômico-financeiro
+R24.10	Aplicação de multas e sanções administrativas
+R24.11	Paralisação por insuficiência orçamentária ou decisões administrativas
+R24.12	Inexecução contratual e impedimentos de participar de futuras contratações
+#R25	Riscos de reformas, demolições e intervenções em edificações existentes
+R25.01	Ausência de documentação estrutural confiável
+R25.02	Identificação incorreta de elementos estruturais
+R25.03	Demolição acidental de elementos essenciais à estabilidade
+R25.04	Presença de materiais perigosos não identificados
+R25.05	Interferências ocultas em instalações existentes
+R25.06	Danos a unidades ocupadas ou edificações vizinhas
+R25.07	Alterações que provoquem sobrecarga estrutural
+R25.08	Incompatibilidade entre estruturas antigas e novos sistemas
+R25.09	Interrupção não planejada de água, energia e outros serviços
+R25.10	Restrições de acesso, circulação e horários de trabalho
+R25.11	Falhas no escoramento provisório durante demolições e reforços
+R25.12	Não atendimento aos procedimentos técnicos e autorizações aplicáveis às reformas

@@ -41,4 +41,19 @@ export interface DiaryEntry {
     impediments?: string;
     temperature?: string;
     status?: 'Rascunho' | 'Em Análise' | 'Aprovado' | 'Recusado';
+    /**
+     * Autoria, carimbada pelo BANCO (`_diary_upsert_core`,
+     * aplicar_20271113300000) — o que o cliente mandar nestes campos é
+     * descartado. `registradoPor` só na criação (registro antigo pode não ter);
+     * `editadoPor` a cada edição. Interno: o Portal do Cliente não recebe.
+     */
+    registradoPor?: DiaryAutor;
+    editadoPor?: DiaryAutor;
+}
+
+/** Quem gravou: `id` = usuário, `nome` = nome exibido, `em` = ISO (UTC). */
+export interface DiaryAutor {
+    id: string;
+    nome: string | null;
+    em: string;
 }

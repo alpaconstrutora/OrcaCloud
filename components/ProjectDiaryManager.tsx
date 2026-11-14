@@ -50,6 +50,7 @@ import { vincularAtividade, temAtividadeVinculada } from '../utils/diaryPlanning
 import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
 import { useDiaryAprovacao } from '../hooks/useDiaryAprovacao';
 import { podeEscolherStatus, registroTravado } from '../utils/diaryAprovacao';
+import { linhasAutoria } from '../utils/diaryAutoria';
 
 
 type DiaryEditorTab = 'clima' | 'atividades' | 'comentarios' | 'arquivos';
@@ -75,15 +76,18 @@ const LABOR_DATALIST_ID = 'diario-efetivo-sugestoes';
 
 // §6.10 — só colunas de DADO; "Ações" entra por `actions`.
 const DIARY_COLUMNS: StandardTableColumn[] = [
-    // soma (1170) + Ações (110) cabe na largura útil de 1290px sem rolagem horizontal.
+    // soma (1180) + Ações (110) cabe na largura útil de 1290px sem rolagem horizontal.
     // Atividades leva "2/3 · 1 não prevista" (2026-10-10): os 70px vieram do Relato, que já trunca.
+    // Autor (2026-11-13, "registrado por"): os 130px vieram de Relato, Impedimentos e Clima, que
+    // truncam com `title`, e de Atividades (170 ainda cabe "2/3 · 1 não prevista").
     { key: 'date', label: 'Data', sortable: true, width: 115 },
-    { key: 'description', label: 'Relato', sortable: true, width: 220 },
-    { key: 'activities', label: 'Atividades', sortable: true, width: 180, align: 'center' },
+    { key: 'description', label: 'Relato', sortable: true, width: 165 },
+    { key: 'activities', label: 'Atividades', sortable: true, width: 170, align: 'center' },
     { key: 'labor', label: 'Efetivo', sortable: true, width: 95, align: 'center' },
-    { key: 'weather', label: 'Clima', sortable: true, width: 125 },
+    { key: 'weather', label: 'Clima', sortable: true, width: 110 },
     { key: 'media', label: 'Mídia', sortable: true, width: 125, align: 'center' },
-    { key: 'impediments', label: 'Impedimentos', sortable: true, width: 190 },
+    { key: 'impediments', label: 'Impedimentos', sortable: true, width: 150 },
+    { key: 'autor', label: 'Autor', sortable: true, width: 130 },
     { key: 'status', label: 'Situação', sortable: true, width: 120 },
 ];
 
@@ -258,6 +262,10 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
         return e ? (e.status || 'Rascunho') : null;
     };
     const travaEdicao = registroTravado(statusNoBanco(editingId), aprovacao);
+    const autoriaEmEdicao = useMemo(
+        () => (editingId ? linhasAutoria((settings.diaryEntries || []).find(x => x.id === editingId)) : []),
+        [editingId, settings.diaryEntries],
+    );
 
     // Cronograma do Planejamento ligado ao diário — mesma peça do app mobile.
     const {
@@ -1177,6 +1185,12 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                                     className="w-full h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                                 />
                             </div>
+                            {/* Autoria do registro como está no banco — carimbo do servidor; antigo sem carimbo não mostra nada. */}
+                            {autoriaEmEdicao.length > 0 && (
+                                <div className="space-y-0.5" data-testid="diario-autoria">
+                                    {autoriaEmEdicao.map(l => <p key={l} className="text-xs text-gray-700">{l}</p>)}
+                                </div>
+                            )}
                             <div className="space-y-3">
                             <div>
                                 <h3 className="text-sm font-semibold text-gray-900">Status do relatório</h3>
@@ -1224,12 +1238,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                 rows={entries}
                 rowKey={e => e.id}
                 searchScope={settings.name}
-                searchPlaceholder="Buscar por data, relato ou atividade..."
+                searchPlaceholder="Buscar por data, relato, atividade ou autor..."
                 searchText={e => [
                     e.date,
                     formatEntryDate(e.date),
                     e.description || '',
                     e.impediments || '',
+                    e.registradoPor?.nome || '',
+                    e.editadoPor?.nome || '',
                     ...(e.activities || []).map(a => a.description),
                     countUnplanned(e.activities) > 0 ? 'não prevista' : '',
                 ].join(' ')}
@@ -1242,6 +1258,7 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                         case 'weather': return e.weather || '';
                         case 'media': return mediaCount(e);
                         case 'impediments': return e.impediments || '';
+                        case 'autor': return e.registradoPor?.nome || '';
                         case 'status': return e.status || 'Rascunho';
                         default: return null;
                     }
@@ -1294,6 +1311,14 @@ const ProjectDiaryManager: React.FC<ProjectDiaryManagerProps> = ({ settings, pro
                             return e.impediments?.trim()
                                 ? <span className="text-sm font-normal text-amber-600 truncate block" title={e.impediments}>{e.impediments}</span>
                                 : <span className="text-sm font-normal text-gray-400">-</span>;
+                        case 'autor': {
+                            // Quem registrou (carimbo do banco); o `title` diz também quem editou e quando.
+                            const linhas = linhasAutoria(e);
+                            if (!e.registradoPor?.nome?.trim()) {
+                                return <span className="text-sm font-normal text-gray-400" title={linhas.join(' · ') || undefined}>-</span>;
+                            }
+                            return <span className="text-sm font-normal text-gray-700 truncate block" title={linhas.join(' · ')}>{e.registradoPor.nome}</span>;
+                        }
                         case 'status': {
                             const st = e.status || 'Rascunho';
                             return <span className={`text-sm font-normal ${STATUS_COLOR[st]}`}>{st}</span>;

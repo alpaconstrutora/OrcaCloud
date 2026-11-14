@@ -241,6 +241,54 @@ membro/dono do espaço, reaplicar `aplicar_20271112997000` inteiro, recriar `_ce
 public.is_org_gestor_de(UUID, UUID)` e `public.minhas_orgs_gestor()`. O "Rollback (Parte 1)" abaixo apaga
 `_celular_tarefa_visivel`; `is_org_gestor_de` sobra e pode ser apagada junto.
 
+### Ajustes — Diário: registrado por (2026-11-13)
+
+Conversa literal (2026-11-13):
+
+> pergunta: o diario de obra que esta sendo preenchido pelo usuario iago marcos não é visto pelos demais usuários?
+
+Resposta: **é visto** — os registros moram em `projects.settings.diaryEntries`, que todo membro da organização do
+diário lê (app logado e link do celular). Mas o registro **não guarda quem o fez**. Oferecido mostrar "registrado
+por" em cada registro; o usuário respondeu:
+
+> sim
+
+Desenho apresentado (abaixo) e aprovado:
+
+> sim
+
+Decisões:
+
+| Pergunta | Decisão |
+|---|---|
+| Quem carimba? | **O banco**, no núcleo `_diary_upsert_core(p_ator, …)` — app logado (`diary_upsert_entry`, ator = `auth.uid()`) e link (`celular_diario_salvar`, ator = dono do link) passam por ele: ninguém carimba em nome de outro |
+| Campos | `registradoPor` = `{id, nome, em}` só na **criação** (sem `anterior`); nas edições é preservado do anterior — registro antigo sem carimbo segue sem (não se inventa autor). `editadoPor` = `{id, nome, em}` a cada edição de registro existente |
+| O que o cliente manda nesses campos | descartado (tira primeiro, depois carimba) |
+| `nome` | `profiles.name` → `organization_members.name` na org do diário → parte local do e-mail (`auth.users`) |
+| `em` | `now()` em ISO UTC; a tela mostra DD/MM HH:MM na hora local |
+| Onde aparece | desktop (`ProjectDiaryManager`): coluna "Autor" na tabela (nome de quem registrou; o `title` traz a linha inteira) e, no editor, "Registrado por …" / "editado por … em …" no painel lateral; celular (`DiaryMobileApp`, logado e link): no cartão e no cabeçalho da folha do registro |
+| Portal do Cliente | **não mostra** (interno): `client_portal_get_data` passa a devolver os registros sem os dois campos; a tela do portal não os lê |
+
+Itens:
+
+- [x] Migration `aplicar_20271113300000_diario_registrado_por.sql` (núcleo copiado do ARQUIVO
+  `aplicar_20271112950000` + `client_portal_get_data` copiada do ARQUIVO `20270725000001`, idêntica ao banco em
+  13/11) — pronto: ensaios abaixo `TUDO OK`.
+- [x] Prova nova `scripts/teste-diario-registrado-por.sql` — RED no banco de hoje ("criar: registradoPor = membro …":
+  o registro guardava os carimbos FORJADOS do payload), GREEN com a migration; sem a parte do portal, falha em
+  "portal: registros sem registradoPor/editadoPor".
+- [x] `scripts/teste-link-celular-diario.sql` adaptada: as comparações de registro passam por `pg_temp.sa()` (tira o
+  carimbo, que agora leva o ator e `now()`) — `TUDO OK` hoje e com a migration.
+- [x] Front + testes: `utils/diaryAutoria.ts` (`__tests__/diaryAutoria.test.ts`),
+  `__tests__/components/DiaryMobileAppFonte.test.tsx` (cartão e folha), `__tests__/components/ProjectDiaryManagerAutoria.test.tsx`
+  (coluna e editor), `__tests__/diarioAutoriaPortal.test.ts` (portal não lê; a migration tira do retorno).
+- [ ] Aplicar a migration em produção (aval do usuário) e rodar as duas provas no banco real → `TUDO OK`.
+- [ ] Publicar o front (push em `main`) e conferir de fora.
+
+Rollback: reaplicar a seção 2 (`_diary_upsert_core`) de `aplicar_20271112950000_diario_nucleo_com_ator.sql` e o
+`client_portal_get_data` de `20270725000001_client_portal_tabs_on_client.sql` (só o `CREATE FUNCTION`). Os carimbos já
+gravados ficam nos registros, inofensivos — o front antigo os ignora.
+
 ## Design
 
 ### Contexto medido (origin/main e banco, 2026-11-11)

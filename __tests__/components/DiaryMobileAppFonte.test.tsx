@@ -324,3 +324,41 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     aviso.mockRestore()
   })
 })
+
+// "Registrado por" (2026-11-13): a autoria vem carimbada pelo banco no registro;
+// o cartão e a folha só exibem. Registro antigo, sem carimbo, não mostra nada.
+describe('DiaryMobileApp — autoria do registro', () => {
+  const emLocal = (h: number, min: number) => new Date(2026, 10, 13, h, min).toISOString()
+  const CARIMBADO: DiaryEntry = {
+    ...APROVADO, id: 'e2', status: 'Rascunho', description: 'Forma dos pilares', images: [],
+    registradoPor: { id: 'u-iago', nome: 'Iago Marcos', em: emLocal(8, 0) },
+    editadoPor: { id: 'u-ana', nome: 'Ana Souza', em: emLocal(17, 45) },
+  }
+  const ANTIGO: DiaryEntry = { ...APROVADO, id: 'e3', status: 'Rascunho', description: 'Registro antigo', images: [] }
+
+  it('cartão e folha mostram quem registrou e quem editou; o antigo não mostra nada', async () => {
+    const fonte = criarFonte()
+    fonte.carregarDiario.mockResolvedValue({ ...DIARIO, settings: { ...DIARIO.settings, diaryEntries: [CARIMBADO, ANTIGO] } })
+    montar(fonte)
+    fireEvent.click(await screen.findByRole('button', { name: /Diário Torre A/ }))
+    await screen.findByText('Forma dos pilares')
+    const linhas = screen.getAllByTestId('diario-autoria')
+    expect(linhas).toHaveLength(1)
+    expect(linhas[0]).toHaveTextContent('Registrado por Iago Marcos · editado por Ana Souza em 13/11 17:45')
+
+    fireEvent.click(screen.getByText('Forma dos pilares'))
+    expect(await screen.findByText('Editar registro')).toBeInTheDocument()
+    expect(screen.getByText('Registrado por Iago Marcos', { selector: '[data-testid="diario-autoria"]' })).toBeInTheDocument()
+    expect(screen.getByText('editado por Ana Souza em 13/11 17:45', { selector: '[data-testid="diario-autoria"]' })).toBeInTheDocument()
+  })
+
+  it('folha do registro antigo (sem carimbo) não tem linha de autoria', async () => {
+    const fonte = criarFonte()
+    fonte.carregarDiario.mockResolvedValue({ ...DIARIO, settings: { ...DIARIO.settings, diaryEntries: [ANTIGO] } })
+    montar(fonte)
+    fireEvent.click(await screen.findByRole('button', { name: /Diário Torre A/ }))
+    fireEvent.click(await screen.findByText('Registro antigo'))
+    expect(await screen.findByText('Editar registro')).toBeInTheDocument()
+    expect(screen.queryAllByTestId('diario-autoria')).toHaveLength(0)
+  })
+})

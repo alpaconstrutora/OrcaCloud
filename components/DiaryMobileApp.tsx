@@ -20,6 +20,7 @@ import { salvarRascunho, lerRascunho, apagarRascunho, listarRascunhos, rascunhoD
 import { isUnplannedActivity, setUnplanned } from '../utils/diaryActivities';
 import { vincularAtividade, temAtividadeVinculada, ItemVinculavel } from '../utils/diaryPlanningLink';
 import { useDiaryLinkedPlanning } from '../hooks/useDiaryLinkedPlanning';
+import { linhasAutoria } from '../utils/diaryAutoria';
 
 /**
  * Diário de Obras — aplicativo mobile.
@@ -231,6 +232,8 @@ const EntryCard = React.memo<{ entry: DiaryEntry; naoSalvo?: boolean; onPress: (
     const fotos = entry.images?.length || 0;
     const atividades = entry.activities?.length || 0;
     const efetivo = (entry.labor || []).reduce((s, l) => s + (Number(l.quantity) || 0), 0);
+    // Autoria carimbada pelo banco; registro antigo sem carimbo não mostra nada.
+    const autoria = linhasAutoria(entry);
 
     return (
         <div
@@ -276,6 +279,11 @@ const EntryCard = React.memo<{ entry: DiaryEntry; naoSalvo?: boolean; onPress: (
                             <span className="flex items-center gap-1 text-amber-600"><AlertTriangle className="w-3 h-3" />Impedimento</span>
                         )}
                     </div>
+                    {autoria.length > 0 && (
+                        <p className="mt-1.5 text-[11px] font-medium text-slate-600 leading-snug" data-testid="diario-autoria">
+                            {autoria.join(' · ')}
+                        </p>
+                    )}
                 </div>
             </div>
         </div>
@@ -629,6 +637,10 @@ const EntrySheet: React.FC<{
                         {isNew ? 'Novo registro' : 'Editar registro'}
                     </h1>
                     <p className="text-[11px] font-medium text-slate-400 truncate">{fmtLong(form.date)}</p>
+                    {/* Autoria do registro como está no banco (o rascunho não muda quem gravou). */}
+                    {!isNew && linhasAutoria(entry).map(l => (
+                        <p key={l} className="text-[11px] font-medium text-slate-600 truncate" data-testid="diario-autoria">{l}</p>
+                    ))}
                 </div>
                 {!isNew && (
                     <button

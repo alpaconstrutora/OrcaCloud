@@ -138,7 +138,7 @@ Pedido (mesma sessão): "autorizado".
 - Celular (iframe 390px da mesma origem): barra visível sem rolar; último conteúdo
   acima da barra na Agenda e no serviço (tela mais longa).
 
-**Estado (14/11/2026): implementado e conferido; falta publicar.**
+**Estado (14/11/2026): publicado** — PR #430, `2806395` no `main`; `conferir-producao.sh "Novo orçamento"` ✅.
 - `tsc` exit 0; `check-ui-standard` limpo no `ProModule`; nos outros 4 arquivos
   sobra só §8 preexistente (passo 4); travas e testes do Pro verdes (50/50).
 - Navegador com dados fictícios (`pro_*` simulado na aba, escritas recusadas — 0):
@@ -169,7 +169,10 @@ coordenador revisou, conferiu na tela e corrigiu o que escapou.
 - Navegador, computador e celular (390px), com dados fictícios: painel, serviço (3
   alturas), orçamento, clientes (cartão aberto) e ajustes.
 
-**Estado (14/11/2026): implementado e conferido; falta publicar** (depende do #430).
+**Estado (14/11/2026): publicado** — PR #434, `8f2a95b` no `main`; produção ✅ (domínio serviu `8f2a95b`).
+A CI falhou 2× no mesmo teste lento da Planta; o usuário escolheu "subir o limite do teste" — o
+PR #437 (300 s → 600 s) ficou redundante porque o #433 (PA6) subiu o mesmo limite no `main`
+enquanto rodava; #437 fechado, e o #434 passou de primeira com o `main` novo.
 - 6 telas sem ❌; busca vazia; `tsc` exit 0; 12 arquivos de trava/teste, 89 testes verdes.
 - Achado na conferência e corrigido: dois azuis sólidos na tela do serviço ("Copiar Pix"
   virou secundário — o primário é "Finalizar serviço"); Title Case que sobrou no
@@ -216,7 +219,7 @@ Pedido (mesma sessão): "Autorizado". ("A receber" já tinha sido corrigido no p
   ver todos; erro e recuperação no painel e no serviço; Pix com a cidade; foto
   comprimida; rótulos ligados; total aprovado.
 
-**Estado (14/11/2026): implementado e conferido; PR depois do merge do #434.**
+**Estado (14/11/2026): merge feito** — PR #438, `54e8de5` no `main` (CI verde de primeira).
 - 16 arquivos de teste, 145 testes verdes (inclui `comprimirFoto` e `diarioFonte`, que
   usam o utilitário de foto); `tsc` exit 0; 6 telas sem ❌.
 - Navegador: "Atrasado · 12/11" no topo de Hoje; "Sem data marcada" no fim de Próximos;
@@ -266,7 +269,7 @@ Pedido (mesma sessão): "passos 6 (textos) e 7 (polimento final) autorizados". F
 - Navegador: celular 390px vazio (painel, clientes, ajustes) e com dados (painel, serviço
   concluído com Recebi); computador; console sem erro.
 
-**Estado (14/11/2026): implementado e conferido; PRs em fila** (#434 → passo 5 → este).
+**Estado (14/11/2026): implementado e conferido; PR aberto** (último da fila).
 - `tsc` exit 0; 14 arquivos de trava/teste, 99 testes verdes; 6 telas sem ❌; detector 2
   avisos intencionais; 0 erro de console; 0 escrita.
 - A crítica de 14/11 (17/40) fica encerrada pelo próprio helper: o alvo mudou desde ela.

@@ -112,6 +112,12 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(within(resumo).getByText(`${PLANO.resumo.agua!.unidadesMedidas} hidrômetro(s)`)).toBeTruthy();
     expect(within(resumo).getByText(`${PLANO.resumo.esgoto!.tubosDeQueda} tubo(s) de queda por andar`)).toBeTruthy();
     expect(within(resumo).getByText(`${PLANO.resumo.pluvial!.condutores} condutor(es)`)).toBeTruthy();
+    // PA9a: a aba PPCI — a ocupação e a rota de cada andar.
+    fireEvent.click(screen.getByRole('tab', { name: 'PPCI' }));
+    const ppci = screen.getByTestId('ppci-do-predio');
+    expect(within(ppci).getByText('A-2')).toBeTruthy();
+    expect(within(screen.getByTestId('rota-por-andar')).getAllByRole('listitem')).toHaveLength(PLANO.resumo.incendio!.andares.length);
+    fireEvent.click(screen.getByRole('tab', { name: 'Resultado' }));
     const pavimento = screen.getByLabelText('Pavimento da prévia') as HTMLSelectElement;
     expect(pavimento.value).toBe(PLANO.tipoLevelId);
     const opcoes = Array.from(pavimento.options).map((o) => o.textContent);

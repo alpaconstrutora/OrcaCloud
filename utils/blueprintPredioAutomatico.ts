@@ -12,3 +12,4 @@ export * from './predioAutomatico/climatizacaoERede';
 export * from './predioAutomatico/agua';
 export * from './predioAutomatico/esgoto';
 export * from './predioAutomatico/pluvial';
+export * from './predioAutomatico/ppci';

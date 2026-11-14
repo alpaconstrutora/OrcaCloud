@@ -297,6 +297,35 @@ drenagem + caixa separadora, bombas quando abaixo da rede; subsolos de R8 (1) e 
 **O que muda.** `gerarPpci` no modelo final, casa de bombas e hidrantes conciliados com o reservatório; aba PPCI.
 **Pronto quando.** R8 classificado A-2 com rota em todos os andares.
 
+**Dividida em três (14/11/2026), a pedido de iniciar a PA9 antes da PA8 (garagem):** o gerador de PPCI da planta
+(`gerarPpci`) recusa no prédio — põe peças em todo pavimento e edita portas (a barra antipânico), e as cópias vivas
+recusam instalação e arquitetura próprias; e os ids que ele prevê só batem se nada mais numerar no meio.
+- **PA9a (esta):** a classificação, as exigências e a ROTA DE FUGA de todos os andares, no modelo final — o "pronto quando".
+- **PA9b:** os equipamentos de cada andar no tipo (extintores, sinalização, iluminação de emergência, alarme).
+- **PA9c:** os hidrantes, a rede e a casa de bombas conciliados com o reservatório (a RTI já está no superior — PA6).
+Quando a PA8 entrar (garagem, subsolos), a classificação e a rota passam a contá-los.
+
+**Execução da PA9a (`utils/predioAutomatico/ppci.ts`).** Etapa INCÊNDIO depois da marca (só confere, `CALCULOU`):
+`classificarEdificacao` com as premissas de incêndio do estudo (o editor passa as mesmas da tarefa de incêndio), a divisão
+delas ou A-2, o piso de descarga = o térreo do prédio e a ALTURA declarada = o piso do último andar com unidades (sem ela,
+a classificação tomava a cobertura técnica: 24 m no R8 em vez de 21); `exigenciasDaEdificacao`; e `percursoDeFuga` de
+todos os ambientes, resumido por andar (ambientes, sem rota, acima do limite, a pior distância) — ambiente sem rota ou
+acima do limite vira VERIFICAÇÃO com o local. Aba PPCI na tela (ocupação, altura, área, medidas exigidas, a rota por andar).
+
+**Achado: a escada parava no 3º andar.** A escada do tipo nasce sem `ateLevelId` — vai só ao pavimento de cima: no R8,
+do 4º ao 8º andar e a cobertura não tinham escada, e a rota de 241 ambientes não chegava à saída. A montagem do pavimento
+tipo (a do prédio automático e a do botão do painel do bloco) leva agora a escada até a última cópia, e com a cobertura
+até ela (a PA3 dizia que ela chegava lá). Com isso, todo ambiente de todo andar tem caminho até a saída no R8, no R4 e
+no R12 (no RL, 1 por andar fica sem caminho — asas).
+
+**Marco (14/11):** R4 A-2 9 m · R8 A-2 21 m · R12 A-2 33 m · RL A-2 21 m. **O R8 sai limpo** (nenhum ambiente sem rota nem
+acima do limite — o "pronto quando"; o marco o exige). Os outros ficam gravados como estão, com estes achados para a PA10:
+- **Caminhamento até a escada nos andares de cima:** a rota (`percursoDeFuga`) põe a boca do lance multiandares no início
+  dele só no pavimento de partida; nos de cima, na outra ponta — numa escada reta, uns 4 m adiante. No R4 o 3º andar passa
+  do limite de 25 m em 2 ambientes e o tipo, igual a ele, não. A escada real tem patamar no mesmo lugar em cada andar.
+- **Térreo comprido** (R12, RL): salas comuns a mais de 25 m da porta de entrada — o térreo pede outra saída.
+- **RL (asas):** um ambiente por andar sem caminho até a escada.
+
 ### PA10 — Fechamento
 **O que muda.** Relatório consolidado, furos no shaft, conflitos multinível, envio ao Empreendimento
 (`services/sync/massaAdapter.ts`) conferido, tempo do R12 no worker medido e fixado aqui.
@@ -326,5 +355,5 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA6 | feito (ver a Execução) — R8: 5 hidrômetros por andar × 7 (35 = as 35 unidades), coluna DN 85, recalque DN 50 (1,5 cv), RTI 12 m³, pressurizador no superior, nenhum ponto fora da faixa (dinâmica mín. 77 kPa, estática máx. 332 kPa). **R12 pede VRP** (estática máx. 207 kPa depois dela); R4 e RL fecham sem ponto fora da faixa. O volume dos reservatórios conferido à mão no teste. Kernel 0.108.0 (`Terminal.unidadeId` no hidrômetro). Marco com `trechosDeAgua` e o resumo da água; a casa idêntica. PR #433 |
 | PA7 | **PA7a feita** (ver a Execução) — R8: 5 tubos de queda por andar (DN 100), 120 UHC por andar, ventilação DN 75, coletor DN 150; toda louça de todo andar chega à ligação (315 de 315; R12 836 de 836). **No R12, os tubos de queda dão DN 100 pela Tabela 6** (o marco confere cada um). Conflitos por grade (44,8 s → 54 ms, mesmo resultado). **PA7b feita** (pluvial da cobertura: R8 2 condutores DN 100 para 1.200 L/min) |
 | PA8 | a fazer |
-| PA9 | a fazer |
+| PA9 | **PA9a feita** — R8 classificado A-2 (21 m, até o último andar com unidades) com rota de fuga em todos os andares (a escada do tipo vai agora até a cobertura); aba PPCI. PA9b (equipamentos por andar) e PA9c (hidrantes e casa de bombas) a fazer |
 | PA10 | a fazer |

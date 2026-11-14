@@ -59,7 +59,7 @@ function predio(c: Caso) {
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
   const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
   const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
-  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, pavimentos: plano.resumo.pavimentos };
+  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pluvial: plano.resumo.pluvial, incendio: plano.resumo.incendio, pavimentos: plano.resumo.pavimentos };
 }
 
 /** O que o marco guarda de um prédio. */
@@ -90,6 +90,8 @@ function marcoDoPredio(c: Caso) {
     // PA7b: o pluvial da cobertura.
     trechosPluviais: (m.trechos ?? []).filter((t) => t.disciplina === 'PLUVIAL').length,
     pluvial: p.pluvial,
+    // PA9a: a classificação de incêndio e a rota de fuga de cada andar.
+    incendio: p.incendio,
   };
 }
 
@@ -115,6 +117,13 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
         const n = agora.andaresComUnidade;
         for (const t of agora.esgoto!.tubos) expect(t.dnMm).toBe(Math.max(dnDoTuboDeQueda(t.uhcPorAndar * n, t.uhcPorAndar, n), t.comBacia ? 100 : 0));
+        // PA9a, "pronto quando": o R8 classificado A-2 com rota de fuga em todos os andares. Nos outros a rota fica GRAVADA
+        // como está (térreo comprido no R12 e no RL, e o caminhamento até a boca da escada nos andares de cima — a rota põe a
+        // boca do lance multiandares na outra ponta dele): o marco acusa qualquer mudança.
+        if (nome === 'R8') {
+          expect(agora.incendio!.divisao).toBe('A-2');
+          expect(agora.incendio!.andares.filter((a) => a.semRota > 0 || a.naoAtendem > 0)).toEqual([]);
+        }
         if (nome === 'R12') {
           expect(n).toBe(11);
           expect(agora.esgoto!.tubos.map((t) => t.dnMm)).toEqual(agora.esgoto!.tubos.map(() => 100));

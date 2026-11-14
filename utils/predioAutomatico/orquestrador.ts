@@ -34,6 +34,8 @@ import { lancarClimatizacao, lancarEletrodutosEPrumada, type ClimatizacaoDoPedid
 import { conferirPressaoDaAgua, lancarAguaFria, lancarLoucasEPontos } from './agua';
 import { lancarEsgoto } from './esgoto';
 import { lancarPluvial } from './pluvial';
+import { conferirIncendioDoPredio } from './ppci';
+import type { HipotesesIncendio } from '../blueprintIncendioClassificacao';
 import type { HipotesesPluviais } from '../blueprintPluvial';
 import { HIPOTESES_PRESSAO_PADRAO } from '../blueprintPressaoDaRede';
 
@@ -48,6 +50,8 @@ export interface EntradaDoPredio {
   climatizacao?: ClimatizacaoDoPedido | null;
   /** PA7b: as premissas pluviais do estudo (a cidade, a intensidade, a declividade); ausente = as padrão. */
   pluvial?: Partial<HipotesesPluviais> | null;
+  /** PA9a: as premissas de incêndio do estudo (o preset, a ocupação, as saídas); ausente = as padrão, com A-2. */
+  incendio?: Partial<HipotesesIncendio> | null;
 }
 
 /** Por que não dá para gerar o prédio deste bloco; `null` = dá. Os mesmos motivos do painel do bloco. */
@@ -306,6 +310,21 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     );
   }
 
+  // ── Incêndio (PA9a): no modelo FINAL — a classificação, as exigências e a rota de fuga de todos os andares.
+  let incendio: ReturnType<typeof conferirIncendioDoPredio> | null = null;
+  if (!hip.incendio) etapa('INCENDIO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses.');
+  else {
+    incendio = conferirIncendioDoPredio(m, terreo?.levelId ?? mont.tipoLevelId, base.ultimoLevelId, entrada.incendio ?? null);
+    pendencias.push(...incendio.pendencias);
+    const semRota = incendio.rota.andares.reduce((s, a) => s + a.semRota, 0);
+    etapa(
+      'INCENDIO',
+      'CALCULOU',
+      0,
+      `${incendio.divisao ?? '?'}, ${incendio.alturaM.toLocaleString('pt-BR')} m, ${Math.round(incendio.areaM2).toLocaleString('pt-BR')} m² · ${incendio.exigidas.length} medida(s) exigida(s) · rota ${semRota ? `faltando em ${semRota} ambiente(s)` : `em todos os ${incendio.rota.andares.length} pavimento(s)`}`,
+    );
+  }
+
   // ── Conferência: o que a divisão, a montagem e as plantas não resolveram vira pendência.
   for (const a of avisosDoTipo) pendencias.push({ grupo: 'CONFERIR', texto: `Pavimento tipo: ${a}` });
   for (const a of avisosDasPlantas) pendencias.push({ grupo: 'CONFERIR', texto: `Plantas: ${a}` });
@@ -402,6 +421,19 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
       agua: resumoDaAgua,
+      incendio: incendio
+        ? {
+            divisao: incendio.divisao,
+            grupo: incendio.grupo,
+            alturaM: incendio.alturaM,
+            areaM2: incendio.areaM2,
+            exigidas: incendio.exigidas,
+            condicionais: incendio.condicionais,
+            dispensadas: incendio.dispensadas,
+            limiteM: incendio.rota.limiteM,
+            andares: incendio.rota.andares.map(({ nome, ambientes, semRota, naoAtendem, piorM }) => ({ nome, ambientes, semRota, naoAtendem, piorM })),
+          }
+        : null,
       pluvial: pluvial
         ? {
             areaM2: Math.round(pluvial.areaM2 * 10) / 10,

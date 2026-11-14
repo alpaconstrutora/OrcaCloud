@@ -1,4 +1,4 @@
-import { NumberingConfig, SlotToken, VariableToken } from './types';
+import { NumberingConfig, SlotToken, VariableToken } from './types.ts';
 
 /**
  * Aplica a máscara. Função pura — reusada pelo preview em Configurações do

@@ -523,9 +523,10 @@ const App: React.FC = () => {
       // título (deep-link do store); o resto só troca de tela, como antes.
       const destino = destinoDoLinkDeNotificacao(link);
       if (destino?.foco) useStore.getState().navigateToFocus(destino.view, destino.foco.ref, destino.foco.source);
+      else if (destino?.pedidoId) { setSelectedOrderId(destino.pedidoId); setActiveView(destino.view); }
       else if (destino) setActiveView(destino.view);
     }
-  }, [setActiveView, setIsNotificationOpen]);
+  }, [setActiveView, setIsNotificationOpen, setSelectedOrderId]);
 
   React.useEffect(() => {
     if (session?.user?.id) {

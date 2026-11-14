@@ -53,4 +53,9 @@ describe('destinoDoLinkDeNotificacao', () => {
         expect(destinoDoLinkDeNotificacao('#/documentos?docId=d-4&pending=true'))
             .toEqual({ view: 'opura-docs', foco: { ref: 'd-4', source: 'GED_DOCUMENTO_PENDENTE' } });
     });
+    it('Pedido Fast: /supplies-orders?pedido= abre o detalhe do pedido', () => {
+        expect(destinoDoLinkDeNotificacao('/supplies-orders?pedido=ped-1'))
+            .toEqual({ view: 'supplies-orders', pedidoId: 'ped-1' });
+        expect(destinoDoLinkDeNotificacao('/supplies-orders')).toEqual({ view: 'supplies-orders' });
+    });
 });

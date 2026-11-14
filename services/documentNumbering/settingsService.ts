@@ -1,36 +1,10 @@
 import { supabase } from '../../lib/supabase';
-import { getDocTypeDefault } from './catalog';
+import { configDaLinha as toConfig, lerConfigDeNumeracao, type LinhaDeConfig as Row } from './motor';
 import { DocType, NumberingConfig } from './types';
 
-interface Row {
-    organization_id: string;
-    doc_type: DocType;
-    slots: NumberingConfig['slots'];
-    prefix: string;
-    separator: NumberingConfig['separator'];
-    seq_padding: number;
-    year_suffix?: boolean | null;
-}
-
-const toConfig = (row: Row): NumberingConfig => ({
-    slots: row.slots ?? [],
-    prefix: row.prefix ?? '',
-    separator: row.separator ?? '-',
-    seqPadding: row.seq_padding ?? 4,
-    yearSuffix: !!row.year_suffix,
-});
-
-/** Config de um único doc_type. Sem linha no banco → default do catálogo. */
+/** Config de um único doc_type. Sem linha no banco → default do catálogo (regra em `motor.ts`). */
 export async function getNumberingConfig(organizationId: string, docType: DocType): Promise<NumberingConfig> {
-    const { data, error } = await supabase
-        .from('document_numbering_settings')
-        .select('organization_id, doc_type, slots, prefix, separator, seq_padding, year_suffix')
-        .eq('organization_id', organizationId)
-        .eq('doc_type', docType)
-        .maybeSingle();
-    if (error) throw error;
-
-    return data ? toConfig(data as Row) : getDocTypeDefault(docType);
+    return lerConfigDeNumeracao(supabase, organizationId, docType);
 }
 
 /** Todas as configs de uma organização, para a tela de Configurações — 1 ida ao banco. */

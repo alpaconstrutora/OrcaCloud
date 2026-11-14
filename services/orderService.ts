@@ -15,7 +15,7 @@ import { generateOrderNumber } from './orderNumberingService';
 import { processService } from './processService';
 import { valorEfetivoDoItem, aplicarCotadoNosItens } from '../utils/pedidoItemValor';
 
-type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
+type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; origem?: string | null; criado_por?: string | null; leitura_ia?: PurchaseOrder['leituraIa']; };
 
 /**
  * Traduz a violação do índice único de `purchase_orders.number` (23505) para uma
@@ -118,7 +118,7 @@ export const orderService = {
                 .order('created_at', { ascending: false })
             : supabase
                 .from('purchase_orders')
-                .select('id, number, project_id, supplier_id, empresa_id, organization_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
+                .select('id, number, project_id, supplier_id, empresa_id, organization_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at, origem, criado_por, leitura_ia')
                 .order('created_at', { ascending: false });
 
         if (projectId) {
@@ -196,7 +196,7 @@ export const orderService = {
             });
         }
 
-        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; };
+        type DbOrderRow = { id: string; number: string; project_id: string; supplier_id: string; organization_id?: string | null; delivery_date: string; separation_date?: string; shipped_date?: string; actual_delivery_date?: string; status: PurchaseOrder['status']; payment_method?: string; payment_term_type?: PurchaseOrder['paymentTermType']; payment_days?: number; payment_installments?: number; is_financial_approved?: boolean; delivery_method?: string; delivery_location?: string; received_at?: string; receipt_photo_path?: string; receipt_notes?: string; discrepancy_report?: PurchaseOrder['discrepancyReport']; bank_account?: string; cost_center?: string; cost_center_id?: string; chart_of_accounts?: string; plano_de_contas_id?: string; notes?: string; notes_visible_to_supplier?: boolean; items: PurchaseOrderItem[]; version?: number; created_at: string; status_updated_at?: string; origem?: string | null; criado_por?: string | null; leitura_ia?: PurchaseOrder['leituraIa']; };
         // Map database columns to type
         return (orders || []).map((item: DbOrderRow) => {
             const project = projectMap[item.project_id];
@@ -241,7 +241,10 @@ export const orderService = {
                 items: item.items,
                 version: item.version,
                 created_at: item.created_at,
-                status_updated_at: item.status_updated_at
+                status_updated_at: item.status_updated_at,
+                origem: item.origem === 'FAST' ? 'FAST' : null,
+                criadoPor: item.criado_por ?? null,
+                leituraIa: item.leitura_ia ?? null,
             };
         }) as PurchaseOrder[];
     },
@@ -249,7 +252,7 @@ export const orderService = {
     async getOrderById(id: string): Promise<PurchaseOrder | null> {
         const { data, error } = await supabase
             .from('purchase_orders')
-            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at')
+            .select('id, number, project_id, supplier_id, empresa_id, delivery_date, separation_date, shipped_date, actual_delivery_date, status, payment_method, payment_term_type, payment_days, payment_installments, is_financial_approved, delivery_method, delivery_location, received_at, receipt_photo_path, receipt_notes, discrepancy_report, bank_account, cost_center, cost_center_id, chart_of_accounts, plano_de_contas_id, notes, notes_visible_to_supplier, items, version, created_at, updated_at, status_updated_at, origem, criado_por, leitura_ia')
             .eq('id', id)
             .maybeSingle();
         if (data) return this.mapDbOrderToType(data, {});
@@ -536,7 +539,10 @@ export const orderService = {
             items: item.items,
             version: item.version,
             created_at: item.created_at,
-            status_updated_at: item.status_updated_at
+            status_updated_at: item.status_updated_at,
+            origem: item.origem === 'FAST' ? 'FAST' : null,
+            criadoPor: item.criado_por ?? null,
+            leituraIa: item.leitura_ia ?? null,
         };
     },
 

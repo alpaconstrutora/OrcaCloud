@@ -3,6 +3,7 @@ import { moverEntreAbas } from './ui/abasPeloTeclado';
 import { Package, Truck, Printer, ArrowLeft, Building2, HandCoins, Search, ChevronRight, FileText, Download, CheckCircle2, X, ExternalLink, Gavel, Clock, Plus, Loader2, MessageCircle, Zap, AlertCircle, AlertTriangle, RefreshCw, MoveHorizontal, ClipboardCheck, Scale, Paperclip } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { TabsBar, type TabsBarItem } from './ui/TabsBar';
+import AvisoPedidoFast from './suprimentos/AvisoPedidoFast';
 import { useConfirm } from './ui/confirm';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedScopedSearch, useResizableColumns } from './ui/TableUtils';
 import { PurchaseOrder, PurchaseOrderComprador, PurchaseOrderItem, PedidoFinanceiro } from '../types';
@@ -1241,6 +1242,12 @@ const SupplyChainOrderDetails: React.FC<SupplyChainOrderDetailsProps> = ({ order
                     )}
                 </div>
             </div>
+
+            {/* Pedido Fast (docs/planos/2026-11-14-pedido-fast.md): quem comprou e o que
+                conferir. Só o comprador — o fornecedor não recebe `leitura_ia`. */}
+            {ehComprador && order.origem === 'FAST' && (
+                <AvisoPedidoFast order={order} onVerFotos={() => { setAbaDetalhe('recebimento'); setSubAbaRecebimento('documentos'); }} />
+            )}
 
             {/* Abas — §19.1: trilho cinza dentro de card branco, abas h-7, ativa =
                 bg-white + cor do acento (estado de navegação, não ação). O acento

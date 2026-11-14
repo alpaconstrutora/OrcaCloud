@@ -21,6 +21,7 @@ import PagarPixSheet from './financeiro/PagarPixSheet';
 import HistoricoPagamentoAsaasSheet from './financeiro/HistoricoPagamentoAsaasSheet';
 import PagarBoletoAsaasModal from './PagarBoletoAsaasModal';
 import { asaasContaService } from '../services/asaasContaService';
+import { envioSemConfirmacao } from '../utils/asaasEnvioSemResposta';
 import { supplierPaymentService, type SupplierPayment } from '../services/supplierPaymentService';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
 import { MOTIVO_ALCADA_PENDENTE } from '../services/alcadaDaBaixa';
@@ -527,12 +528,17 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
     const [historicoAsaas, setHistoricoAsaas] = useState<Payable | null>(null);
     const cancelarPagamentoAsaas = async (row: Payable, sp: SupplierPayment) => {
         const agendado = sp.status === 'SCHEDULED';
+        // Envio sem confirmação: sem número da Asaas, o cancelamento é só no OrçaCloud — se a
+        // Asaas criou o pagamento, ele seguiria lá, e pagar de novo pagaria duas vezes.
+        const semConfirmacao = envioSemConfirmacao(sp, Date.now());
         const ok = await confirm({
-            title: agendado ? 'Cancelar o pagamento agendado?' : 'Cancelar o pagamento enviado?',
+            title: semConfirmacao ? 'Cancelar o envio sem confirmação?' : agendado ? 'Cancelar o pagamento agendado?' : 'Cancelar o pagamento enviado?',
             message: `${sp.payment_type === 'BILL' ? 'Boleto' : 'PIX'} de ${formatMoney(sp.value)}`
                 + `${sp.beneficiary_name ? ` para ${sp.beneficiary_name}` : ''}`
                 + `${agendado && sp.scheduled_date ? `, agendado para ${formatDateBR(sp.scheduled_date)}` : ''}. `
-                + 'A Asaas só cancela o que ainda não foi concluído; o título continua em aberto para pagar de novo.',
+                + (semConfirmacao
+                    ? 'A Asaas não confirmou este envio. ANTES de cancelar, confira no painel da Asaas se o pagamento foi criado — se foi, cancele lá; cancelar aqui só libera o título no OrçaCloud e pagar de novo pagaria duas vezes.'
+                    : 'A Asaas só cancela o que ainda não foi concluído; o título continua em aberto para pagar de novo.'),
             variant: 'danger',
             confirmLabel: 'Cancelar pagamento',
         });
@@ -973,7 +979,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
        título, então entra aqui como segunda linha; Ações fica só com ações. */
     function renderStatusCell(row: ParcelaRow): React.ReactNode {
         const sp = pagamentoAsaasEmCurso(row);
-        const asaas = sp && (sp.cancelled_at ? 'Cancelamento pedido — autorize na Asaas'
+        const semConfirmacao = !!sp && envioSemConfirmacao(sp, Date.now());
+        const asaas = sp && (semConfirmacao ? 'Envio sem confirmação — confira na Asaas'
+            : sp.cancelled_at ? 'Cancelamento pedido — autorize na Asaas'
             : sp.asaas_authorized === false ? 'Aguardando token'
             : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
             : 'Pagamento enviado');
@@ -990,7 +998,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         const dica = [
             [STATUS_PT[situacao.chave] ?? situacao.chave, ...situacao.detalhes, asaas].filter(Boolean).join(' · '),
             situacao.motivoRejeicao ? `Rejeitado: ${situacao.motivoRejeicao}` : null,
-            asaas ? (sp?.cancelled_at
+            asaas ? (semConfirmacao
+                ? 'A Asaas não respondeu ao envio: o pagamento pode ter sido criado. O OrçaCloud liga e atualiza sozinho quando a Asaas avisar. Não envie de novo antes de conferir no painel da Asaas.'
+                : sp?.cancelled_at
                 ? 'O cancelamento foi pedido, mas a Asaas exige autorização por SMS ou pelo app da Asaas. Até autorizar, o pagamento continua valendo na Asaas.'
                 : sp?.asaas_authorized === false
                 ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'

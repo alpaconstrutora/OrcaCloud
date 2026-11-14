@@ -1546,6 +1546,8 @@ Em 13/11/2026 para Minha Organização › **Contas de Pagamento** (`FinancialRe
 
 Em 14/11/2026 para Engenharia › **Orçamentos** (a lista, `ProjectList.tsx`; pedido "filtro grupo + classificador do grupo + botão expandir / recolher"). Só no contexto Orçamentos e no modo lista — Obras, Planejamento e Diário usam o mesmo componente e não ganharam o controle. Opções: Status, Status Obra (na ordem do fluxo de `OBRA_STATUSES`), Bloqueio (Bloqueado antes de Livre, com a mesma contagem em cascata da célula) e Tipo de Obra. Só contagem (`semTotal`). Função pura em `utils/orcamentoGrupos.ts`; a tela passa o `leitor` com o texto de cada célula.
 
+Em 14/11/2026 para Comercial › Venda de Ativos › **Unidades do edifício** (`SalesModule.tsx`; mesmo pedido "filtro grupo + botão classificação + botão expandir / recolher"). Só com um edifício aberto e no modo lista — na visão mestre as linhas são edifícios, e grade/torres não têm linha. Opções: Bloco, Andar (ordem numérica, subsolo antes do térreo, rótulo igual à célula: "Térreo", "3º") e Status (o texto da célula — a etapa da negociação que ocupa a unidade — na ordem do fluxo: Disponível → Proposta … Concluído → rótulos do cadastro). Total do grupo = soma do Preço. Função pura em `utils/unidadeVendaGrupos.ts`; Shift+clique sobre as linhas da tela sem os grupos recolhidos.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

@@ -11,6 +11,7 @@ import {
   SESSAO_EXPIRADA, useTarefasFonte,
 } from '../services/celular/tarefasFonte'
 import { statusesOfOrg, doneStatusOfOrg } from '../utils/taskStatusByName'
+import { mensagemAoGravarTarefa } from '../utils/tarefaPermissoes'
 import {
   startOfDay, addDays, isoDate, dayOf, isOverdue, isNewTask, groupBySection, onDay,
   dueLabel, shortDate, longDayLabel, chipDayLabel, weekStartOf, weekDays, weekMonthLabel,
@@ -550,7 +551,8 @@ const TaskEditSheet: React.FC<{
       onSaved(salva)
     } catch (e) {
       console.error('[tarefas mobile] salvar', e)
-      setSaving(false); setError(falha('salvar a tarefa'))
+      // Recusa do banco (ex.: responsável trocando o responsável) sai explicada; rede, a de conexão.
+      setSaving(false); setError(mensagemAoGravarTarefa(e, falha('salvar a tarefa')))
     }
   }
 
@@ -852,7 +854,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
     } catch (error) {
       console.error('[tarefas mobile] desfazer', error)
       setTasks(prev => prev.filter(t => t.id !== task.id))
-      showToast({ message: falha('desfazer'), tone: 'error' })
+      showToast({ message: mensagemAoGravarTarefa(error, falha('desfazer')), tone: 'error' })
     }
   }, [fonte, statuses, hideToast, showToast])
 
@@ -868,7 +870,7 @@ const TasksMobileApp: React.FC<Props> = ({ orgId, previa = false }) => {
     setCompleting(prev => { const n = new Set(prev); n.delete(task.id); return n })
     if (!gravou.ok) {
       console.error('[tarefas mobile] concluir', gravou.error)
-      showToast({ message: falha('concluir a tarefa'), tone: 'error' })
+      showToast({ message: mensagemAoGravarTarefa(gravou.error, falha('concluir a tarefa')), tone: 'error' })
       return
     }
     setTasks(prev => prev.filter(t => t.id !== task.id))

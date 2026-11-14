@@ -8,7 +8,7 @@ import MyAccountSheet from './MyAccountSheet';
 import MeuLinkCelularSheet from './celular/MeuLinkCelularSheet';
 import ContextSelector from './ContextSelector';
 import { notificationService } from '../services/notificationService';
-import { taskService } from '../services/taskService';
+import { taskService, filtroMinhasTarefas, minhaIdentidadeDeTarefas } from '../services/taskService';
 import { academyService } from '../services/academyService';
 import { viewUrl } from '../lib/tabRouter';
 import { podeAcessarMarket } from '../utils/acessoAoMarket';
@@ -682,8 +682,11 @@ const Layout: React.FC<LayoutProps> = ({
         // anônima e responde 401 desde que o GRANT de `anon` saiu da tabela
         // (aplicar_20270916000003). Antes devolvia lista vazia e o alerta
         // simplesmente não disparava — o defeito existia igual, calado.
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return;
+        // Alerta é pessoal: só das MINHAS tarefas (criei ou sou o responsável). A RLS deixa
+        // o proprietário/admin VER as tarefas da org com responsável ou em espaço
+        // (aplicar_20271112998000) — sem este recorte, ele recebia o alerta de todo mundo.
+        const eu = await minhaIdentidadeDeTarefas();
+        if (!eu) return;
 
         const now = new Date().toISOString();
         const { data } = await supabase
@@ -692,6 +695,7 @@ const Layout: React.FC<LayoutProps> = ({
           .lte('alert_at', now)
           .is('alert_sent_at', null)
           .neq('status', 'done')
+          .or(filtroMinhasTarefas(eu.userId, eu.employeeIds))
           .limit(10);
 
         if (!data) return;

@@ -189,22 +189,30 @@ Superadmin: sem perna própria — os gatilhos de membership o põem como owner/
 8 de 8 orgs, para os dois superadmins), e uma regra só mantém o link igual ao app. `tasks_select_superadmin` e
 `tasks_update_superadmin` (aplicar_20271112997000) saem; entram `tasks_select_gestor` / `tasks_update_gestor`.
 
-Impacto medido (ensaio BEGIN/ROLLBACK com a migration, contando como cada conta pela RLS; tarefas abertas de raiz):
+Impacto medido — **todas as organizações** (revisão de 13/11: a 1ª medida olhou só a org 926cf626). Ensaio
+BEGIN/ROLLBACK com a migration (versão revisada) inlinada, contando pela RLS como cada conta, sem filtro de org: as
+contas são **todas** as de `organization_members` com `user_id` (são 6) mais os dois superadmins (já entre elas). A
+medida termina em `RAISE EXCEPTION` com a tabela — a transação aborta, nada é gravado. Medido em 13/11/2026:
 
-| Conta (org 926cf626) | Papel | Abertas antes → depois | Todas as tarefas antes → depois |
-|---|---|---|---|
-| agente-leitura@ | member | 2 → 2 | 2 → 2 |
-| alpaconstrutora@gmail.com | member | 2 → 2 | 2 → 2 |
-| bruna.pereira@ | member | 2 → 2 | 2 → 2 |
-| iago.marques@ | member | 6 → 6 | 8 → 8 |
-| altair.rosa@ (superadmin) | admin | 19 → 10 | 70 → 61 |
-| desenvolvedor@ (superadmin) | owner | 19 → 10 | 70 → 40 |
+| Conta | Papéis (todas as orgs) | Superadmin | Abertas de raiz antes → depois | Todas as tarefas antes → depois |
+|---|---|---|---|---|
+| agente-leitura@ | admin, member | não | 2 → 2 | 2 → 2 |
+| alpaconstrutora@ | member | não | 2 → 2 | 2 → 2 |
+| bruna.pereira@ | member | não | 2 → 2 | 2 → 2 |
+| iago.marques@ | member | não | 6 → 6 | 8 → 8 |
+| altair.rosa@ | admin, owner | sim | 19 → 10 | 70 → 61 |
+| desenvolvedor@ | owner | sim | 19 → 10 | 70 → 40 |
 
-As 19 abertas da org: 5 em espaço (todas com responsável), 4 com responsável fora de espaço, 10 agenda pessoal — as
-10 são as cópias por membro de "Renovar contrato: 001/010" (`source_module = suprimentos`). Os superadmins deixam de
-ver as 9 cópias alheias (ficam com a própria). Os membros comuns não mudam hoje: as tarefas de espaço já tinham
-responsável, e eles não eram membros desses espaços. No total (todas as situações), 33 tarefas estão em espaço e 8
-delas sem responsável — essas passam a ser vistas só por quem criou, owner/admin e Envolvidos.
+Contexto da medida: as 70 tarefas do banco estão todas na org 926cf626 (das 8 orgs, só ela tem tarefa); 33 em espaço
+(8 sem responsável), 31 agenda pessoal; 6 espaços, e os únicos membros de espaço são os dois superadmins (owner dos
+6). As 19 abertas: 5 em espaço (todas com responsável), 4 com responsável fora de espaço, 10 agenda pessoal — as 10
+são as cópias por membro de "Renovar contrato: 001/010" (`source_module = suprimentos`). Os superadmins deixam de ver
+as 9 cópias alheias (ficam com a própria).
+
+**O que a regra tira, em geral** (não só as 8 sem responsável): o membro comum de um espaço deixa de ver **toda**
+tarefa do espaço que ele não criou, de que não é o responsável nem Envolvido — com ou sem responsável. Hoje isso não
+tira nada de ninguém, porque nenhum membro comum é membro de espaço; quem passar a ser membro de espaço depois já
+nasce na regra nova (o espaço só organiza).
 
 Front:
 
@@ -235,11 +243,39 @@ Ponto aberto (não pedido, registrado): `taskSpaceService.moveFolder` move a pas
 space_id` pelo `folder_id` — pela RLS nova, só as tarefas que quem move pode editar acompanham; as demais ficam com
 `space_id` antigo e `folder_id` da pasta que mudou de espaço. Antes, todo membro do espaço editava todas.
 
-Rollback: ver o cabeçalho da migration — recriar `tasks_select`/`tasks_update`/`tasks_delete` com as pernas de
-membro/dono do espaço, reaplicar `aplicar_20271112997000` inteiro, recriar `_celular_tarefa_visivel` e
-`celular_tarefa_atualizar` do arquivo `aplicar_20271111995000` e, por último, `DROP FUNCTION
-public.is_org_gestor_de(UUID, UUID)` e `public.minhas_orgs_gestor()`. O "Rollback (Parte 1)" abaixo apaga
-`_celular_tarefa_visivel`; `is_org_gestor_de` sobra e pode ser apagada junto.
+Rollback: **`scripts/rollback-tarefas-visibilidade.sql`** (pronto para rodar, `BEGIN … COMMIT`): recria
+`_tasks_responsavel_so_conteudo` / `pode_gerir_envolvidos_da_tarefa` (do arquivo `aplicar_20271112997000`) e
+`_celular_tarefa_visivel` / `celular_tarefa_atualizar` (do arquivo `aplicar_20271111995000`, seção 3) **antes** de
+mexer nas policies; volta `tasks_select`/`tasks_update`/`tasks_delete` (de `20260605000001`, = `pg_policies` de hoje)
+e `tasks_*_superadmin`; repõe os privilégios de hoje; por último `DROP FUNCTION` de `is_org_gestor_de` e
+`minhas_orgs_gestor` (sem CASCADE — se algo ainda depender, falha e a transação volta inteira). Ensaio:
+`scripts/teste-rollback-tarefas-visibilidade.sql` fotografa policies (tasks e task_collaborators), gatilhos e
+funções antes, roda migration + volta, e exige a mesma fotografia → `TUDO OK`. O corpo das duas funções do celular é
+comparado sem CR: em produção ele tem CRLF (o arquivo 995000 é CRLF) e a volta o recria com LF. O "Rollback
+(Parte 1)" abaixo apaga `_celular_tarefa_visivel`; `is_org_gestor_de` sobra e pode ser apagada junto.
+
+#### Revisão (2026-11-13) — achados da revisão de código, corrigidos
+
+| # | Achado | Correção | Como sei que terminou |
+|---|---|---|---|
+| 1 | owner/admin tomava a autoria (`UPDATE tasks SET user_id = ele`; a WITH CHECK de `tasks_update_gestor` não olha `user_id`) e depois apagava | gatilho `_tasks_responsavel_so_conteudo`: para anon/authenticated, **nenhuma** troca de `user_id`, `id`, `created_at`, qualquer papel. Nenhuma tela grava `user_id` num UPDATE (TaskForm, TaskBulkPatch, tarefasFonte; a lista branca do `celular_tarefa_atualizar` não tem a chave) | `teste-tarefas-visibilidade.sql`: RED com a migration de antes ("admin não troca a autoria para si (veio ok:1)"), GREEN com a revisada; asserções novas: admin (para si e para terceiro), id, created_at, superadmin, criador, e o link recusa `user_id` (22023) |
+| 2 | a recusa explicada só chegava ao TaskForm: arrastar no Kanban voltava calado; edição em lote mostrava a mensagem crua; o celular dizia "Verifique a conexão" | `TasksModule`: `moveCard`/`makeSubtask` avisam (`useConfirm`, `hideCancel`) com `explicarErroTarefa`; `bulkUpdate` lança a frase explicada; `bulkDone` avisa. Celular: `mensagemAoGravarTarefa` (recusa com SQLSTATE → explicada; rede → frase de conexão) em salvar, concluir e desfazer; `PGRST116` (UPDATE sem linha) vira "Sem permissão para alterar…" | `__tests__/tarefaPermissoes.test.ts` (RED no TasksModule antigo), `__tests__/components/TasksMobileAppRecusaExplicada.test.tsx` (RED 2 de 3 no celular antigo) |
+| 3a | impacto medido só na org 926cf626 | tabela acima, todas as orgs | — |
+| 3b | `Layout.checkAlerts` disparava toast + Notification de qualquer tarefa visível com `alert_at` (owner/admin recebia o de todo mundo) | só as **minhas**: `user_id = eu` OU responsável = colaborador meu (`taskService.minhaIdentidadeDeTarefas` + `filtroMinhasTarefas`, espelho de `is_employee_do_usuario_de`) | `__tests__/taskServiceMinhasTarefas.test.ts` (RED 8 de 8 no código antigo) |
+| 3c | badge `openCount` contava tudo o que a RLS deixa ver, e `.not('parent_task_id','is',null)` contava **só subtarefas** | `.is('parent_task_id', null)` + o mesmo recorte de "minhas" | idem |
+| 4 | migration sem transação/lock_timeout | `BEGIN; SET LOCAL lock_timeout = '2s'; … COMMIT;` (o #382 usou `SET lock_timeout = '2s'`); **`scripts/montar-ensaio.sh`** monta o ensaio tirando o `BEGIN;`/`COMMIT;` da migration (senão o COMMIT dela gravaria o ensaio) e recusa montar se sobrar `COMMIT` | as 5 provas montadas por ele, `TUDO OK` |
+| 5 | frase do Responsável fixa | sem responsável e fora de espaço → "Agenda pessoal: só quem criou e os Envolvidos veem esta tarefa." | `TaskFormVisibilidade.test.tsx` |
+| 6 | Excluir ligado para quem não criou | desligado com o motivo no `title` (num `<span>`: botão desligado não recebe hover); recusa de 0 linhas: "Não foi possível excluir: só quem criou a tarefa pode excluí-la (ou ela já foi excluída)."; o aviso de erro rola para a vista | `TaskFormVisibilidade.test.tsx` (RED 4 de 6 no TaskForm antigo) |
+| 7 | rollback só descrito em comentário | `scripts/rollback-tarefas-visibilidade.sql` + `scripts/teste-rollback-tarefas-visibilidade.sql` | ensaio `TUDO OK`; contraprova: volta sem o DROP de `is_org_gestor_de` → "sobrou: function is_org_gestor_de" |
+| 8 | sumiu a checagem "quem não gere nem é envolvido não lê os envolvidos" | de volta em `teste-tarefas-visibilidade.sql` (sm em t_s/t_e e r em t_e leem 0) | GREEN |
+
+`teste-tarefas-responsavel.sql` (tem de passar hoje e com a migration): a posse por `user_id` e a troca de
+`id`/`created_at` pelo responsável aceitam as duas recusas; "dono muda id/created_at" vira "dono NÃO muda" quando a
+migration está no banco (a prova reconhece pela existência de `minhas_orgs_gestor()`).
+
+Ponto aberto (não pedido, registrado): `MyTasksWidget` ("Minhas Tarefas" do painel) lê `tasks` pela RLS sem recorte
+de "minhas" — com a regra nova, o owner/admin passa a ver nele tarefas alheias com responsável/espaço. A Central "Bom
+dia" (`meu_dia`) já filtra `user_id = auth.uid()` e não muda. Não mexido nesta revisão.
 
 ### Ajustes — Diário: registrado por (2026-11-13)
 

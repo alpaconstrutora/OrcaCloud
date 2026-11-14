@@ -20,7 +20,7 @@ import TaskSpaceManager from './TaskSpaceManager'
 import TaskSpacesSheet from './TaskSpacesSheet'
 import TaskBulkEditSheet, { type TaskBulkPatch } from './TaskBulkEditSheet'
 import { useConfirm } from './ui/confirm'
-import { resumirExclusao } from '../utils/tarefaPermissoes'
+import { explicarErroTarefa, resumirExclusao } from '../utils/tarefaPermissoes'
 import { FilterPopover } from './ui/FilterPopover'
 import { usePersistedState } from './ui/TableUtils'
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext'
@@ -347,13 +347,20 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     if (!Object.keys(patch).length) return
     setTasks(prev => prev.map(t => t.id === taskId ? { ...t, ...patch } : t))
     const { error } = await supabase.from('tasks').update(patch).eq('id', taskId)
-    if (error) { console.error(error); load() }
+    if (error) { console.error(error); load(); await avisarRecusa('A tarefa não foi movida', error) }
   }
 
   const makeSubtask = async (taskId: string, newParentId: string | null) => {
     setTasks(prev => prev.map(x => x.id === taskId ? { ...x, parent_task_id: newParentId } : x))
     const { error } = await supabase.from('tasks').update({ parent_task_id: newParentId }).eq('id', taskId)
-    if (error) { console.error(error); load() }
+    if (error) { console.error(error); load(); await avisarRecusa('A tarefa não foi movida', error) }
+  }
+
+  // Recusa do banco ao arrastar (ex.: responsável mudando o responsável; owner/admin
+  // deixando a tarefa como agenda pessoal de outro): o cartão volta e o aviso diz por quê,
+  // em vez de voltar calado.
+  const avisarRecusa = async (title: string, error: { code?: string; message?: string; details?: string }) => {
+    await confirm({ title, message: explicarErroTarefa(error), variant: 'warning', confirmLabel: 'Entendi', hideCancel: true })
   }
 
   // ── Ações em lote (§10 / §22) ──────────────────────────────────────────────
@@ -366,7 +373,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
 
   const bulkUpdate = async (ids: string[], patch: TaskBulkPatch) => {
     const { data, error } = await supabase.from('tasks').update(patch).in('id', ids).select('id')
-    if (error) throw new Error(error.message)
+    if (error) throw new Error(explicarErroTarefa(error))
     const okIds = new Set((data ?? []).map((r: { id: string }) => r.id))
     setTasks(prev => prev.map(t => okIds.has(t.id) ? { ...t, ...patch } : t))
     if (okIds.size < ids.length) {
@@ -419,7 +426,15 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
       }
       return true
     }
-    catch (e) { console.error('[tasks] bulkDone', e); load(); return false }
+    catch (e) {
+      console.error('[tasks] bulkDone', e); load()
+      await confirm({
+        title: 'Nem todas as tarefas foram concluídas',
+        message: e instanceof Error ? e.message : explicarErroTarefa(e as { message?: string }),
+        variant: 'warning', confirmLabel: 'Entendi', hideCancel: true,
+      })
+      return false
+    }
   }
 
   const bulkDelete = async (ids: string[]) => {

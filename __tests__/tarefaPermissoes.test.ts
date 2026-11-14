@@ -9,7 +9,9 @@ import { describe, expect, it } from 'vitest'
 import { readFileSync } from 'node:fs'
 import path from 'node:path'
 import {
-  DICA_VISIBILIDADE_TAREFA, MSG_SO_QUEM_CRIOU_EXCLUI, explicarErroTarefa, resumirExclusao,
+  DICA_AGENDA_PESSOAL, DICA_VISIBILIDADE_TAREFA, MSG_EXCLUSAO_RECUSADA, MSG_SEM_PERMISSAO_EDITAR,
+  MSG_SO_QUEM_CRIOU_EXCLUI, dicaVisibilidade, ehRecusaDoBanco, explicarErroTarefa, mensagemAoGravarTarefa,
+  motivoParaNaoExcluirTarefa, resumirExclusao,
 } from '../utils/tarefaPermissoes'
 
 describe('tarefaPermissoes', () => {
@@ -47,5 +49,48 @@ describe('tarefaPermissoes', () => {
     expect(corpo).toMatch(/\.delete\(\)\.in\('id', ids\)\.select\('id'\)/)
     expect(corpo).toMatch(/resumirExclusao\(ids,/)
     expect(corpo).toMatch(/hideCancel: true/)
+  })
+
+  // ── revisão de 13/11 ──────────────────────────────────────────────────────
+  it('frase de quem vê: agenda pessoal sem responsável e fora de espaço', () => {
+    expect(DICA_AGENDA_PESSOAL).toBe('Agenda pessoal: só quem criou e os Envolvidos veem esta tarefa.')
+    expect(dicaVisibilidade(null, null)).toBe(DICA_AGENDA_PESSOAL)
+    expect(dicaVisibilidade('', '')).toBe(DICA_AGENDA_PESSOAL)
+    expect(dicaVisibilidade('e1', null)).toBe(DICA_VISIBILIDADE_TAREFA)
+    expect(dicaVisibilidade(null, 's1')).toBe(DICA_VISIBILIDADE_TAREFA)
+  })
+
+  it('Excluir: motivo para quem não criou; sessão desconhecida não desliga', () => {
+    expect(motivoParaNaoExcluirTarefa('u1', 'u1')).toBeNull()
+    expect(motivoParaNaoExcluirTarefa(null, 'u1')).toBeNull()
+    expect(motivoParaNaoExcluirTarefa('u2', 'u1')).toMatch(/^Só quem criou a tarefa pode excluí-la\. /)
+    expect(MSG_EXCLUSAO_RECUSADA).toBe('Não foi possível excluir: só quem criou a tarefa pode excluí-la (ou ela já foi excluída).')
+  })
+
+  it('recusa do banco × falha de rede', () => {
+    expect(ehRecusaDoBanco({ code: '42501', message: 'x' })).toBe(true)
+    expect(ehRecusaDoBanco({ code: '22023', message: 'x' })).toBe(true)
+    expect(ehRecusaDoBanco({ code: 'PGRST116', message: 'x' })).toBe(true)
+    expect(ehRecusaDoBanco({ code: '', message: 'TypeError: Failed to fetch' })).toBe(false)
+    expect(ehRecusaDoBanco(new TypeError('Failed to fetch'))).toBe(false)
+    expect(ehRecusaDoBanco(null)).toBe(false)
+    expect(explicarErroTarefa({ code: 'PGRST116', message: 'JSON object requested, multiple (or no) rows returned' }))
+      .toBe(MSG_SEM_PERMISSAO_EDITAR)
+    expect(mensagemAoGravarTarefa({ code: '42501', message: 'tarefa não encontrada ou sem permissão para editar' }, 'conexão'))
+      .toBe('Tarefa não encontrada ou sem permissão para editar')
+    expect(mensagemAoGravarTarefa(new TypeError('Failed to fetch'), 'conexão')).toBe('conexão')
+    expect(explicarErroTarefa({ code: '42501', message: 'a autoria da tarefa não muda: quem a criou, o id e a data de criação ficam como estão' }))
+      .toBe('A autoria da tarefa não muda: quem a criou, o id e a data de criação ficam como estão')
+  })
+
+  it('TasksModule: arrastar recusado avisa o porquê; edição em lote explica a recusa', () => {
+    const src = readFileSync(path.resolve(__dirname, '../components/TasksModule.tsx'), 'utf8')
+    const fim = src.includes('\r\n') ? '\r\n  }\r\n' : '\n  }\n'
+    const corpo = (inicio: string) => { const i = src.indexOf(inicio); return src.slice(i, src.indexOf(fim, i)) }
+    expect(corpo('const moveCard = async')).toMatch(/if \(error\) \{ console\.error\(error\); load\(\); await avisarRecusa\(/)
+    expect(corpo('const makeSubtask = async')).toMatch(/await avisarRecusa\(/)
+    expect(corpo('const avisarRecusa = async')).toMatch(/message: explicarErroTarefa\(error\)[\s\S]*hideCancel: true/)
+    expect(corpo('const bulkUpdate = async')).toMatch(/if \(error\) throw new Error\(explicarErroTarefa\(error\)\)/)
+    expect(corpo('const bulkDone = async')).toMatch(/hideCancel: true/)
   })
 })

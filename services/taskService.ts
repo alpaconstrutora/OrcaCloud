@@ -72,6 +72,57 @@ export const taskStatusService = {
 
 export type NewTask = Omit<Task, 'id' | 'created_at' | 'completed_at'>;
 
+// ── "Minhas tarefas": criei OU sou o responsável ─────────────────────────────
+// A RLS (aplicar_20271112998000) mostra ao proprietário/admin as tarefas da org com
+// responsável ou em espaço — VER não é o mesmo que SER DELE. Badge e alerta são pessoais:
+// só contam/disparam para o que eu criei ou de que sou o responsável (colaborador meu).
+// "Colaborador meu" espelha public.is_employee_do_usuario_de: employees.user_id = eu, ou,
+// sem vínculo, o e-mail igual ao da conta.
+
+/** Escapa curinga de ILIKE (`%`, `_`, `\`): e-mail com `_` não pode casar outro e-mail. */
+export function escaparIlike(v: string): string {
+    return v.replace(/[\\%_]/g, c => `\\${c}`);
+}
+
+/** Corpo do `.or(...)` de "minhas tarefas". Sem colaborador vinculado, só as que criei. */
+export function filtroMinhasTarefas(userId: string, employeeIds: string[]): string {
+    const ids = [...new Set(employeeIds.filter(Boolean))];
+    return ids.length > 0
+        ? `user_id.eq.${userId},assignee_employee_id.in.(${ids.join(',')})`
+        : `user_id.eq.${userId}`;
+}
+
+export interface MinhaIdentidadeDeTarefas { userId: string; employeeIds: string[] }
+
+let identidadeCache: { userId: string; em: number; valor: Promise<MinhaIdentidadeDeTarefas> } | null = null;
+const IDENTIDADE_TTL_MS = 5 * 60_000;
+
+/** Eu + os colaboradores que são eu. Null sem sessão. Cache de 5 min por conta. */
+export async function minhaIdentidadeDeTarefas(): Promise<MinhaIdentidadeDeTarefas | null> {
+    const { data: { session } } = await supabase.auth.getSession();
+    const user = session?.user;
+    if (!user?.id) return null;
+    if (identidadeCache && identidadeCache.userId === user.id && Date.now() - identidadeCache.em < IDENTIDADE_TTL_MS) {
+        return identidadeCache.valor;
+    }
+    const valor = (async () => {
+        const ids: string[] = [];
+        const porVinculo = await supabase.from('employees').select('id').eq('user_id', user.id);
+        for (const r of (porVinculo.data ?? []) as { id: string }[]) ids.push(r.id);
+        const email = user.email?.trim();
+        if (email) {
+            const porEmail = await supabase.from('employees').select('id').is('user_id', null).ilike('email', escaparIlike(email));
+            for (const r of (porEmail.data ?? []) as { id: string }[]) ids.push(r.id);
+        }
+        return { userId: user.id, employeeIds: [...new Set(ids)] };
+    })();
+    identidadeCache = { userId: user.id, em: Date.now(), valor };
+    return valor;
+}
+
+/** Só para teste: esquece a identidade em cache. */
+export function _esquecerIdentidadeDeTarefas(): void { identidadeCache = null; }
+
 export const taskService = {
     // ── CRUD ─────────────────────────────────────────────────
 
@@ -112,7 +163,10 @@ export const taskService = {
     },
 
     // ── Contagem para badge ───────────────────────────────────
-    /** Retorna total de tarefas abertas (Hoje + Atrasadas) do usuário logado. */
+    /**
+     * Total de tarefas abertas de raiz (Hoje + Atrasadas) do usuário logado — as MINHAS
+     * (criei ou sou o responsável), não todas as que a RLS deixa ver (owner/admin vê as da org).
+     */
     async openCount(): Promise<number> {
         // "do usuário logado" — então sem sessão não há o que contar. A guarda
         // existe porque o badge é montado no boot, antes do login: a consulta
@@ -120,8 +174,8 @@ export const taskService = {
         // tabela (aplicar_20270916000003), responde 401. O `if (error) return 0`
         // abaixo já devolvia zero, então o badge nunca mentiu — mas fazia uma
         // ida ao servidor por render e sujava o console.
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session) return 0;
+        const eu = await minhaIdentidadeDeTarefas();
+        if (!eu) return 0;
 
         const today = new Date();
         today.setHours(23, 59, 59, 999);
@@ -129,8 +183,9 @@ export const taskService = {
             .from('tasks')
             .select('id', { count: 'exact', head: true })
             .eq('status', 'open')
-            .not('parent_task_id', 'is', null) // conta apenas tarefas raiz — não subtarefas
-            .or(`due_date.is.null,due_date.lte.${today.toISOString()}`);
+            .is('parent_task_id', null) // só tarefas raiz — antes `.not(…, 'is', null)` contava só as subtarefas
+            .or(`due_date.is.null,due_date.lte.${today.toISOString()}`)
+            .or(filtroMinhasTarefas(eu.userId, eu.employeeIds));
         if (error) return 0;
         return count ?? 0;
     },

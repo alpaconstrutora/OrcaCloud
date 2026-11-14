@@ -5,7 +5,7 @@ import type { TaskStatus } from '../services/taskService'
 import { statusNameKey } from '../utils/taskStatusByName'
 import { useConfirm } from './ui/confirm'
 import { notificationService } from '../services/notificationService'
-import { DICA_VISIBILIDADE_TAREFA, MSG_SO_QUEM_CRIOU_EXCLUI, explicarErroTarefa } from '../utils/tarefaPermissoes'
+import { MSG_EXCLUSAO_RECUSADA, dicaVisibilidade, explicarErroTarefa, motivoParaNaoExcluirTarefa } from '../utils/tarefaPermissoes'
 import Button from './ui/Button';
 
 export type TaskRecord = {
@@ -110,6 +110,23 @@ const TaskForm: React.FC<Props> = ({
   const collabRef = useRef<HTMLDivElement>(null)
   const [saving, setSaving]           = useState(false)
   const [error, setError]             = useState<string | null>(null)
+  const errorRef = useRef<HTMLDivElement>(null)
+  // Quem está logado: só quem criou a tarefa exclui (tasks_delete). Sessão local, sem ida
+  // ao servidor; enquanto não chega, o botão fica ligado e o banco decide.
+  const [meuId, setMeuId] = useState<string | null>(null)
+  useEffect(() => {
+    let vivo = true
+    supabase.auth.getSession()
+      .then(({ data }) => { if (vivo) setMeuId(data.session?.user?.id ?? null) })
+      .catch(() => {})
+    return () => { vivo = false }
+  }, [])
+  const motivoNaoExclui = task?.id ? motivoParaNaoExcluirTarefa(meuId, task.user_id) : null
+
+  // O aviso de erro fica no fim do formulário, que rola: ao aparecer, rola até ele.
+  useEffect(() => {
+    if (error) errorRef.current?.scrollIntoView?.({ block: 'nearest', behavior: 'smooth' })
+  }, [error])
 
   // Pastas do espaço selecionado
   const spaceFolders = useMemo(
@@ -262,7 +279,7 @@ const TaskForm: React.FC<Props> = ({
     const { data, error: e } = await supabase.from('tasks').delete().eq('id', task.id).select('id')
     setSaving(false)
     if (e) { setError(explicarErroTarefa(e)); return }
-    if (!data || data.length === 0) { setError(MSG_SO_QUEM_CRIOU_EXCLUI); return }
+    if (!data || data.length === 0) { setError(MSG_EXCLUSAO_RECUSADA); return }
     onSaved()
   }
 
@@ -336,7 +353,7 @@ const TaskForm: React.FC<Props> = ({
                 <option value="">Nenhum</option>
                 {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}{emp.role ? ` — ${emp.role}` : ''}</option>)}
               </select>
-              <p className="mt-1 text-xs text-slate-500">{DICA_VISIBILIDADE_TAREFA}</p>
+              <p className="mt-1 text-xs text-slate-500">{dicaVisibilidade(assigneeId, spaceId)}</p>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-500">Obra / Projeto</label>
@@ -526,15 +543,21 @@ const TaskForm: React.FC<Props> = ({
             </div>
           )}
 
-          {error && <div className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-[6px] px-3 py-2">{error}</div>}
+          {error && <div ref={errorRef} role="alert" className="text-xs font-medium text-red-700 bg-red-50 border border-red-200 rounded-[6px] px-3 py-2">{error}</div>}
         </div>
 
         <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-100 flex-shrink-0">
           <div>
             {task?.id && (
-              <button onClick={remove} disabled={saving} className="flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700">
-                <Trash2 className="w-3.5 h-3.5" /> Excluir
-              </button>
+              // Desligado diz o motivo: o title fica no <span>, porque botão desligado não recebe o hover.
+              <span className="inline-flex" title={motivoNaoExclui ?? undefined}>
+                <button onClick={remove} disabled={saving || !!motivoNaoExclui}
+                  aria-describedby={motivoNaoExclui ? 'tarefa-motivo-nao-exclui' : undefined}
+                  className="flex items-center gap-1.5 text-sm font-medium text-red-600 hover:text-red-700 disabled:text-slate-400 disabled:cursor-not-allowed">
+                  <Trash2 className="w-3.5 h-3.5" /> Excluir
+                </button>
+                {motivoNaoExclui && <span id="tarefa-motivo-nao-exclui" className="sr-only">{motivoNaoExclui}</span>}
+              </span>
             )}
           </div>
           <div className="flex items-center gap-2">

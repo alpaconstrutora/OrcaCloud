@@ -102,6 +102,34 @@ painel do bloco ("Montar neste estudo" e "Gerar a planta das unidades"), numa pr
 cobertura (laje ou telhado, reservatório superior, casa de máquinas, área de condensadoras); núcleo do térreo à cobertura.
 **Pronto quando.** Marco grava os níveis; no app escada e shaft contínuos no 3D.
 
+**Execução (14/11/2026).** Lido no código: o térreo do bloco é hoje o pavimento do lote, e a montagem do tipo deixa o 1º
+pavimento "para o projetista"; o núcleo nasce no tipo e cada cópia ganha o seu, todos subindo até o pavimento mais alto
+(`pavimentosDoNucleo`), com poço e casa de máquinas em cada um. O kernel modela o núcleo como UMA peça com partida e
+chegada (`Nucleo.levelId`/`ateLevelId`) — a PA3 passa a usar assim. Etapas novas no orquestrador
+(`utils/predioAutomatico/terreoECobertura.ts`), na ordem Pavimento tipo → **Térreo** → Plantas → **Cobertura** →
+**Reservatórios** → Instalações no tipo → Conferência:
+- **Térreo** (só com o tipo no 2º pavimento): pavimento próprio `<bloco> · 1º pav (térreo)` (uid determinístico, como o
+  tipo), com o esqueleto do tipo colado por `DuplicateEntities` (paredes da montagem e as portas hospedadas — antes das
+  plantas, sem o interior das unidades). Cada fatia de unidade vira sala do condomínio, na ordem: a da FRENTE mais perto do
+  núcleo = **Hall de entrada e portaria**, depois **Centro de medição**, **Casa de bombas e reservatório inferior**, e as
+  demais **Área comum**; com 2 fatias, medição e bombas dividem a segunda. Os demais nomes (circulação, núcleo) repetem os
+  do tipo. **Acesso:** porta de `larguraDoAcessoMm` (1.200) na parede externa do hall mais voltada para a rua.
+- **Núcleo vertical:** elevadores e shaft do tipo passam a partir do térreo (um núcleo por peça; os do tipo e das cópias
+  saem): o ELEVADOR vai até o último andar com unidades (poço embaixo do térreo, casa de máquinas sobre a laje de
+  cobertura), o SHAFT até o mais alto (a cobertura). A escada do tipo ganha o lance do térreo (`AddEscada` igual).
+- **Cobertura:** pavimento `<bloco> · cobertura` sobre o último andar (pé-direito `peDireitoDaCoberturaMm`, 3.000), laje de
+  cobertura no contorno do bloco (base no piso, `espessuraDaLajeMm` 120), platibanda de `alturaDaPlatibandaMm` (1.100) no
+  contorno, e o espaço nomeado "Cobertura — área técnica (condensadoras e reservatório superior)". A escada do último
+  andar chega nela.
+- **Reservatórios** (depois das plantas, que dão a população): `dimensionarReservacao` com as hipóteses padrão da
+  reservação (pessoas pelos dormitórios de todos os andares, 200 L/hab·dia, 60 % embaixo) — o **inferior** na casa de
+  bombas do térreo, o **superior** sobre o núcleo na cobertura (cota `cotaDoReservatorioSuperiorMm`, 3.000). Volume
+  declarado (moldado in loco), `sugerida`; a PA6 liga a água.
+- Hipóteses novas: `terreo`, `cobertura` (ligadas) e as medidas acima; tela com as duas marcas e as medidas, resumo com o
+  térreo, a cobertura e a reservação; "Lançar os N pavimentos" conta térreo e cobertura.
+- Marco do prédio regravado (pavimentos +2, paredes, núcleos): justificado no PR. O teste de equivalência da PA2 passa a
+  rodar com `terreo`/`cobertura` desligados.
+
 ### PA4 — Estrutura
 **O que muda.** Pilares/vigas/lajes no tipo (propagam pela cópia), mesma malha no térreo e na cobertura; fundação com
 pendência "pré-dimensionamento, exige cálculo" (a hipótese de carga da casa não serve).
@@ -158,7 +186,7 @@ PA1 e PA2 podem correr em frentes paralelas.
 | PA0 | feito — marco com R4 (4 pav · 2 un/andar · 72 paredes), R8 (8 · 5 · 357), R12 (12 · 8 · 891), RL em L (8 · 13 · 910); grava em ~4 s e repete idêntico; tsc limpo. As unidades por andar saem do produto médio na largura de cada bloco (o plano previa 2/2/4 — fica a variedade medida) |
 | PA1 | feito — `Level.copiaInstalacoes?` (0.106.0): quadros, terminais, trechos e componentes do tipo vão para as cópias com uid determinístico, circuitos pelo mapa quadro do tipo → quadro da cópia, e os vínculos (`circuitoId(s)`, `quadroId`, `quadroPaiId`, `drs`, `alvoId`, `condensadoraId`, `centralAlarmeId`, `bombaPrincipalId`, `paiUid`) remapeados; pai fora do tipo (QGBT do térreo) fica. `unidadesAtendidas` conta a unidade de cada andar (`unidadeNoPavimento`: 101 no tipo, 201/301 nas cópias). Testes em `__tests__/blueprintCopiaDeInstalacoes.test.ts`. **Desvios do plano:** (1) em vez do comando `SetCopiaInstalacoes`, é uma opção do `SetLevelProps` (mesmo lugar onde o vínculo `tipoDeId` já é feito); (2) a recusa de editar instalação da cópia varre os campos do comando (como `recusarEdicaoEmPavimentoVinculado`), não o diff; (3) `Terminal.unidadeLevelUid` fica para a PA5, que é quem cria o medidor por unidade no térreo; (4) o dirty-check foi feito: as instalações só ressincronizam quando o comando é de pavimento ou o diff toca instalação do tipo. **Benchmark:** no R4 com instalação, `AddWall` no térreo leva ~40 ms com a flag × ~36 ms sem; mover um ponto do tipo, ~79 ms (teste fixa < 1.500 ms). Prova do bump: com a string em 0.105.0, goldens, os dois marcos e 1.073 testes passaram; depois, só hashes mudaram (marcos regravados: casa `resultado` ×8, prédio `modelo` ×4, nenhuma contagem). **Conferência no app (12/11, `c:/tmp/pwtest/conferencia-predio-pa1.cjs`, estudo descartável arquivado):** térreo + tipo + 2 cópias com QGBT no térreo e QD/circuito/tomada/trecho no tipo — as cópias mostram a instalação do tipo; Ctrl+A e Shift+→ no tipo levaram tomada e QD das duas cópias juntos (+2.000 mm) e o QGBT ficou; Ctrl+Z voltou os três andares. A faixa azul da cópia dizia "Instalações … são próprias" — passou a dizer que as instalações também vêm do tipo quando ele as copia |
 | PA2 | feito — motor em `utils/predioAutomatico/` (etapas Pavimento tipo · Plantas · Instalações no tipo · Conferência), worker, `usePredioAutomatico`, `TelaPredioAutomatico` (Programa · Hipóteses · Resultado · Relatório), botão "Prédio automático" no painel do bloco, "· cópia do tipo" no seletor da prévia. O lote dá exatamente o desenho dos dois botões de antes + a marca do tipo (`__tests__/predioAutomatico.test.ts`); marco do prédio regravado pelo orquestrador — só os 4 hashes de `modelo` mudaram, e sem a marca o R4 tem o hash antigo (provado). **Conferência no app (13/11, `c:/tmp/pwtest/conferencia-predio-pa2.cjs`, estudo descartável arquivado):** R4 com o produto médio — painel do bloco → Prédio automático → prévia (6 unidades, 2 por andar × 3, tipo + 2 cópias seladas) → Lançar os 3 pavimentos (226 elementos, um lote) → rascunho com 2 cópias e a marca → "Gerar de novo" desligado (tipo já montado) → Ctrl+Z volta ao bloco sozinho. Desvio: `instalacoes(..., opcoes?)` da casa vai para a PA5 |
-| PA3 | a fazer |
+| PA3 | feito — `utils/predioAutomatico/terreoECobertura.ts`: térreo próprio do bloco (esqueleto do tipo, salas do condomínio, porta de entrada no TRECHO de fachada do hall voltado para a rua), núcleo único desde o térreo (elevador até o último andar com unidades, shaft até a cobertura; os do tipo saem), lance da escada no térreo, cobertura (laje, platibanda pelas paredes de fachada do tipo, área técnica nomeada) e reservatórios pela população de todos os andares (60 % inferior na casa de bombas, o resto superior sobre o núcleo). Hipóteses novas na tela; seletor da prévia pela cota. Marco regravado: pavimentos +2, paredes +11/+14/+17/+27 (R4/R8/R12/RL), contagens de núcleo iguais (as cópias nunca tiveram núcleo próprio). **Achados no caminho:** a porta não cabia no R8 (a parede de fachada corre o lado inteiro — passou a medir o trecho que faz divisa com o hall); o rótulo da laje caía sobre o nome da área técnica (a prancha escreve os dois no centro) — a laje de cobertura sai sem rótulo, a numeração é da PA4. **Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa3.cjs`, estudo descartável arquivado):** R8 — prévia com 5 salas no térreo, cobertura a +24 m e 33.600 L; "Lançar os 9 pavimentos"; rascunho com térreo, cobertura, elevador térreo→8º pav, shaft térreo→cobertura, reservatórios de 20.160 e 13.440 L; 3D com o núcleo contínuo do poço à casa de máquinas; Ctrl+Z volta ao bloco sozinho |
 | PA4 | a fazer |
 | PA5 | a fazer |
 | PA6 | a fazer |

@@ -12,6 +12,7 @@ import Button from '../ui/Button';
 import { SecaoTitulo } from '../ui/SecaoTitulo';
 import { TabsBar, type TabsBarItem } from '../ui/TabsBar';
 import PlantaDaPrevia, { type DisciplinaDaPrevia, type MarcaNaPrevia } from './PlantaDaPrevia';
+import { Numero } from './TelaCasaAutomatica';
 import { disciplinaDoLocal } from '../../utils/blueprintLocalDaPendencia';
 import { ROTULO_DA_PENDENCIA, type GrupoDaPendencia, type PendenciaDoPpci, type SituacaoDaEtapa } from '../../utils/blueprintGeradorPpci';
 import { ROTULO_DO_ESQUEMA } from '../../utils/blueprintPavimentoTipoDaMassa';
@@ -180,7 +181,7 @@ export default function TelaPredioAutomatico(props: Props) {
                 {ocupado === 'criar' ? 'Criando…' : 'Criar alternativa'}
               </Button>
               <Button onClick={() => agir('lancar', props.onLancar)} disabled={!!motivoDeLancar} title={motivoDeLancar} data-testid="lancar-predio">
-                {ocupado === 'lancar' ? 'Lançando…' : `Lançar os ${plano.resumo.pavimentos} pavimentos`}
+                {ocupado === 'lancar' ? 'Lançando…' : `Lançar os ${plano.resumo.pavimentosLancados} pavimentos`}
               </Button>
             </>
           )}
@@ -259,9 +260,36 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">Desligado, cada unidade sai só com o perímetro — para desenhar à mão.</span>
             </span>
           </label>
-          <p className="text-sm text-slate-600">
-            O térreo fica com o projetista nesta fase; os andares acima do tipo entram como cópias vivas — o que se edita no tipo, inclusive as instalações, vai para eles.
-          </p>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.terreo} onChange={(e) => props.onHipoteses({ ...props.hipoteses, terreo: e.target.checked })} data-testid="hipotese-terreo" />
+            <span>
+              Montar o térreo (hall e portaria, centro de medição, casa de bombas e áreas comuns) e o núcleo desde ele
+              <span className="block text-xs text-slate-500">As fatias das unidades viram as salas do condomínio; a porta de entrada vai na fachada do hall voltada para a rua.</span>
+            </span>
+          </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.cobertura} onChange={(e) => props.onHipoteses({ ...props.hipoteses, cobertura: e.target.checked })} data-testid="hipotese-cobertura" />
+            <span>
+              Montar a cobertura (laje, platibanda e área técnica) e os reservatórios
+              <span className="block text-xs text-slate-500">O inferior na casa de bombas, o superior sobre o núcleo — pela população contada nos dormitórios de todos os andares.</span>
+            </span>
+          </label>
+          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
+            <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
+            <Numero rotulo="Laje de cobertura (mm)" valor={props.hipoteses.espessuraDaLajeMm} min={80} max={400} passo={10} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, espessuraDaLajeMm: v })} />
+            <Numero rotulo="Platibanda (mm)" valor={props.hipoteses.alturaDaPlatibandaMm} min={300} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, alturaDaPlatibandaMm: v })} />
+            <Numero
+              rotulo="Reservatório superior acima da laje (mm)"
+              valor={props.hipoteses.cotaDoReservatorioSuperiorMm}
+              min={0}
+              max={8000}
+              passo={100}
+              title="Sobre a casa de máquinas e a caixa de escada"
+              onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, cotaDoReservatorioSuperiorMm: v })}
+            />
+          </div>
+          <p className="text-sm text-slate-600">Os andares acima do tipo entram como cópias vivas — o que se edita no tipo, inclusive as instalações, vai para eles.</p>
         </div>
       )}
 
@@ -277,6 +305,21 @@ export default function TelaPredioAutomatico(props: Props) {
               rotulo="Plantas das unidades"
               valor={plano.resumo.plantas ? `${plano.resumo.plantas.comodos} cômodo(s)` : 'só o perímetro'}
               nota={plano.resumo.plantas ? `${plano.resumo.plantas.unidades} unidade(s)${plano.resumo.plantas.grupos ? ` · ${plano.resumo.plantas.grupos} grupo(s) de iguais` : ''}` : undefined}
+            />
+            <Dado
+              rotulo="Térreo"
+              valor={plano.resumo.terreo ? `${plano.resumo.terreo.salas.length} sala(s)` : 'com o projetista'}
+              nota={plano.resumo.terreo ? `${plano.resumo.terreo.salas.join(' · ')}${plano.resumo.terreo.acesso ? '' : ' · sem porta de entrada'}` : undefined}
+            />
+            <Dado rotulo="Cobertura" valor={plano.resumo.cobertura ? `+${f2(plano.resumo.cobertura.cotaM)} m` : '—'} nota={plano.resumo.cobertura ? 'laje, platibanda e área técnica' : undefined} />
+            <Dado
+              rotulo="Reservação"
+              valor={plano.resumo.reservacao ? `${plano.resumo.reservacao.totalL.toLocaleString('pt-BR')} L` : '—'}
+              nota={
+                plano.resumo.reservacao
+                  ? `${plano.resumo.reservacao.pessoas} pessoa(s)${plano.resumo.reservacao.inferiorL != null ? ` · inferior ${plano.resumo.reservacao.inferiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.reservacao.superiorL != null ? ` · superior ${plano.resumo.reservacao.superiorL.toLocaleString('pt-BR')} L` : ''}`
+                  : undefined
+              }
             />
           </dl>
 

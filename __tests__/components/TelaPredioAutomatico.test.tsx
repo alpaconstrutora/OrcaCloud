@@ -80,7 +80,9 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(screen.getByTestId('motivo-gerar-predio').textContent).toMatch(/já montado/);
     fireEvent.click(screen.getByRole('tab', { name: 'Hipóteses' }));
     fireEvent.click(screen.getByTestId('hipotese-plantas'));
-    expect(p.onHipoteses).toHaveBeenCalledWith({ plantas: false });
+    expect(p.onHipoteses).toHaveBeenCalledWith({ ...HIPOTESES_DO_PREDIO_PADRAO, plantas: false });
+    fireEvent.click(screen.getByTestId('hipotese-terreo'));
+    expect(p.onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_DO_PREDIO_PADRAO, terreo: false });
   });
 
   it('gerando: o progresso por etapa e o Parar', () => {
@@ -99,9 +101,9 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(pavimento.value).toBe(PLANO.tipoLevelId);
     const opcoes = Array.from(pavimento.options).map((o) => o.textContent);
     expect(opcoes.filter((o) => o?.endsWith('· cópia do tipo'))).toHaveLength(PLANO.resumo.copias);
-    expect(within(screen.getByTestId('etapas-do-predio')).getAllByRole('listitem')).toHaveLength(4);
+    expect(within(screen.getByTestId('etapas-do-predio')).getAllByRole('listitem')).toHaveLength(7);
     const lancar = screen.getByTestId('lancar-predio') as HTMLButtonElement;
-    expect(lancar.textContent).toBe(`Lançar os ${PLANO.resumo.pavimentos} pavimentos`);
+    expect(lancar.textContent).toBe(`Lançar os ${PLANO.resumo.pavimentosLancados} pavimentos`);
     fireEvent.click(lancar);
     await waitFor(() => expect(p.onLancar).toHaveBeenCalledTimes(1));
   });

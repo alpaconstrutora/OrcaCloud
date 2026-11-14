@@ -158,7 +158,8 @@ function Campo({ rotulo, title, children }: { rotulo: string; title?: string; ch
  * Número com faixa: o TEXTO é livre enquanto se digita (limitar a cada tecla transformava o "5" de "5500" em 2000);
  * o valor sobe quando já cabe na faixa, e ao sair do campo ele volta para dentro dela. `anulavel`: vazio = `null`.
  */
-function Numero({ rotulo, valor, onValor, min, max, passo = 1, anulavel = false, placeholder, title }: { rotulo: string; valor: number | null; onValor: (v: number | null) => void; min: number; max: number; passo?: number; anulavel?: boolean; placeholder?: string; title?: string }) {
+// Exportado para a tela do prédio automático (PA3, 14/11/2026) — as mesmas regras de digitação nas duas telas.
+export function Numero({ rotulo, valor, onValor, min, max, passo = 1, anulavel = false, placeholder, title }: { rotulo: string; valor: number | null; onValor: (v: number | null) => void; min: number; max: number; passo?: number; anulavel?: boolean; placeholder?: string; title?: string }) {
   const [texto, setTexto] = useState(valor == null ? '' : String(valor));
   useEffect(() => setTexto(valor == null ? '' : String(valor)), [valor]);
   const cabe = (v: number) => Number.isFinite(v) && v >= min && v <= max;

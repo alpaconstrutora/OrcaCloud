@@ -4,11 +4,14 @@
  * interna de cada unidade, e o tipo marcado para levar as instalações aos andares (`copiaInstalacoes`, PA1) — numa
  * PRÉVIA e num lote só (um Ctrl+Z). Encadeia o que antes eram dois botões soltos do painel do bloco ("Montar neste
  * estudo" e "Gerar a planta das unidades"), com os mesmos motores. Molde: `utils/casaAutomatica/orquestrador.ts`.
+ *
+ * PA3 (14/11/2026): o térreo (salas do condomínio, acesso e o núcleo desde ele), a cobertura e os reservatórios — ver
+ * `terreoECobertura.ts`.
  */
 import { applyBatch } from '../blueprintKernel';
 import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
-import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado } from '../blueprintPavimentoTipoDaMassa';
+import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pisosAcimaDoSolo } from '../blueprintPavimentoTipoDaMassa';
 import { dividirPavimentoDoBloco, montarPavimentoTipoDoBloco } from '../blueprintPavimentoOrtogonal';
 import { plantasDasUnidades } from '../blueprintPlantaDaUnidade';
 import type { Produto, ProdutoDoBloco } from '../blueprintProduto';
@@ -22,6 +25,7 @@ import {
   type OpcoesDoPlanoDoPredio,
   type PlanoDoPredio,
 } from './hipoteses';
+import { lancarReservatorios, montarCobertura, montarTerreo, SALA_BOMBAS, SALA_MEDICAO_E_BOMBAS, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
 export interface EntradaDoPredio {
@@ -79,7 +83,28 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   const mont = montarPavimentoTipoDoBloco(original, b, dv);
   decisoes.push(...dv.decisoes);
   etapa('PAVIMENTO_TIPO', 'LANCOU', aplicar(mont.comandos), `${dv.unidades.length} unidade(s) por andar · ${mont.copias} cópia(s) do tipo${dv.elevadores ? ` · núcleo com ${dv.elevadores} elevador(es)` : ''}`);
-  const avisosDoTipo = [...dv.avisos, ...mont.avisos];
+  // Com o térreo do prédio, o aviso de que o 1º pavimento "ficou para o projetista" deixa de valer.
+  const avisosDoTipo = [...dv.avisos, ...mont.avisos.filter((a) => !(hip.terreo && /ficou para o projetista: portaria/.test(a)))];
+  const ctx: ContextoDoPredio = {
+    get m() {
+      return m;
+    },
+    aplicar,
+  };
+  const pisos = pisosAcimaDoSolo(original, b);
+  const copias = m.levels.filter((l) => l.tipoDeId === mont.tipoLevelId).sort((x, y) => x.elevationMm - y.elevationMm);
+  const base: BaseDoPredio = { bloco: b, divisao: dv, tipoLevelId: mont.tipoLevelId, ultimoLevelId: copias.length ? copias[copias.length - 1].id : mont.tipoLevelId, pisos, rua: direcaoDaRua(original) };
+  const avisosDoPredio: string[] = [];
+
+  // ── Térreo: só quando o tipo é o 2º pavimento (há um piso abaixo dele). Roda antes das plantas — leva o esqueleto.
+  let terreo: ReturnType<typeof montarTerreo> | null = null;
+  if (!hip.terreo) etapa('TERREO', 'NAO_EXIGIDA', 0, 'Desligado nas hipóteses: o térreo fica para o projetista.');
+  else if (dv.ordinalDoTipo < 2 || pisos.length < 2) etapa('TERREO', 'NAO_EXIGIDA', 0, 'O bloco tem um pavimento só: o tipo é o térreo.');
+  else {
+    terreo = montarTerreo(ctx, base, hip);
+    avisosDoPredio.push(...terreo.avisos);
+    etapa('TERREO', 'LANCOU', terreo.comandos, `${terreo.salas.map((x) => x.nome).join(' · ')}${terreo.acesso ? ' · porta de entrada para a rua' : ''}`);
+  }
 
   // ── Plantas internas: o gerador da E6.2 em cada unidade do tipo (as cópias recebem pela cópia viva).
   let plantas: PlanoDoPredio['resumo']['plantas'] = null;
@@ -96,12 +121,38 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapa('PLANTAS', 'LANCOU', n, n ? `${plantas.unidades} unidade(s), ${comodos} cômodo(s), ${pl.geracoes} tentativa(s) do gerador` : pl.avisos.join(' ') || null);
   } else etapa('PLANTAS', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses: as unidades saem só com o perímetro.');
 
+  // ── Cobertura: sobre o último andar. Sem o térreo, o elevador do tipo passa a parar no último andar com unidades (a
+  // casa de máquinas assenta na laje da cobertura); com ele, o núcleo do térreo já para lá.
+  let cobertura: ReturnType<typeof montarCobertura> | null = null;
+  if (!hip.cobertura) etapa('COBERTURA', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
+  else {
+    cobertura = montarCobertura(ctx, base, hip);
+    if (!terreo) cobertura.comandos += aplicar((m.nucleos ?? []).filter((x) => x.levelId === mont.tipoLevelId && x.tipo === 'ELEVADOR').map((x): Command => ({ type: 'SetNucleoProps', nucleoId: x.id, ateLevelId: base.ultimoLevelId })));
+    avisosDoPredio.push(...cobertura.avisos);
+    etapa('COBERTURA', 'LANCOU', cobertura.comandos, `Piso a ${(cobertura.cotaMm / 1000).toLocaleString('pt-BR')} m, laje de ${hip.espessuraDaLajeMm} mm e platibanda de ${hip.alturaDaPlatibandaMm} mm`);
+  }
+
+  // ── Reservatórios: depois das plantas (a população vem dos dormitórios de todos os andares).
+  let reservacao: PlanoDoPredio['resumo']['reservacao'] = null;
+  if (!terreo && !cobertura) etapa('RESERVATORIOS', 'NAO_EXIGIDA', 0, 'Sem térreo nem cobertura, os reservatórios ficam para o projetista.');
+  else {
+    const bombas = terreo?.salas.find((x) => x.nome === SALA_BOMBAS || x.nome === SALA_MEDICAO_E_BOMBAS)?.ponto ?? null;
+    const r = lancarReservatorios(ctx, base, hip, terreo ? { levelId: terreo.levelId, bombas } : null, cobertura ? { levelId: cobertura.levelId } : null);
+    avisosDoPredio.push(...r.avisos);
+    if (r.totalL > 0) {
+      reservacao = { pessoas: r.pessoas, totalL: r.totalL, inferiorL: r.inferiorL, superiorL: r.superiorL };
+      decisoes.push(`Reservação: ${r.texto} Volumes declarados (moldados in loco); a ligação da água é da fase da água fria.`);
+    }
+    etapa('RESERVATORIOS', r.totalL > 0 ? 'LANCOU' : 'NAO_RODOU', r.comandos, r.totalL > 0 ? r.texto : 'Sem população contada.');
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
   // ── Conferência: o que a divisão, a montagem e as plantas não resolveram vira pendência.
   for (const a of avisosDoTipo) pendencias.push({ grupo: 'CONFERIR', texto: `Pavimento tipo: ${a}` });
   for (const a of avisosDasPlantas) pendencias.push({ grupo: 'CONFERIR', texto: `Plantas: ${a}` });
+  for (const a of avisosDoPredio) pendencias.push({ grupo: /população/.test(a) ? 'PREMISSA' : 'CONFERIR', texto: a });
   for (const s of semFachada) {
     const u = (m.unidades ?? []).find((x) => x.numero === s.numero);
     const etiquetas = u ? m.labels.filter((l) => l.levelId === mont.tipoLevelId && u.etiquetaUids.includes(l.uid)) : [];
@@ -114,6 +165,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   etapa('CONFERENCIA', 'CALCULOU', 0, pendencias.length ? `${pendencias.length} pendência(s)` : 'Nada pendente.');
 
   const pavimentos = 1 + mont.copias;
+  const pavimentosLancados = pavimentos + (terreo ? 1 : 0) + (cobertura ? 1 : 0);
   return {
     blocoId: b.id,
     comandos,
@@ -126,12 +178,16 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     resumo: {
       esquema: dv.esquema,
       pavimentos,
+      pavimentosLancados,
       copias: mont.copias,
       unidadesPorAndar: dv.unidades.length,
       unidades: dv.unidades.length * pavimentos,
       elevadores: dv.elevadores,
       eficienciaDesenhadaPct: mont.eficienciaDesenhadaPct,
       plantas,
+      terreo: terreo ? { salas: terreo.salas.map((x) => x.nome), acesso: terreo.acesso } : null,
+      cobertura: cobertura ? { cotaM: cobertura.cotaMm / 1000 } : null,
+      reservacao,
     },
   };
 }

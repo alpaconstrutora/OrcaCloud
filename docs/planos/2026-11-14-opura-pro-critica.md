@@ -149,9 +149,41 @@ Pedido (mesma sessão): "autorizado".
   junto o "+ Cadastrar" no computador.
 - Não verificado: Safari/iPhone real (área segura conferida só por código).
 
-### 4. Linguagem visual do app (`/impeccable quieter` + `typeset`) — pendente
-Sem degradê/emoji/caixa alta; §16/§17; texto ≥ 12px; `useConfirm`/toast (§14);
-classes de cor inexistentes corrigidas.
+### 4. Linguagem visual do app (`/impeccable quieter` + `typeset`) — frente `pro-linguagem-visual`
+
+Pedido (mesma sessão): "autorizado". Direção já decidida no passo 0: "Seguir o app (§16/§17)".
+
+**O que muda** — as 5 telas (painel, orçamento, serviço, clientes, ajustes), por um mapa
+único de tradução (cartão `rounded-[10px]` sem sombra difusa; primário §17 azul, um por
+tela; secundários com borda; rótulo §21; status em texto colorido traduzido §8; emoji →
+lucide; teal/ciano → azul/slate; `alert`/`window.confirm` → toast/`useConfirm`; textos de
+8–10px → ≥ 12px; slate-400 em conteúdo → slate-600; classes inexistentes corrigidas;
+campos `h-11` brancos com valor escuro §32; cartões e etapas acessíveis por teclado).
+Feito por 3 agentes em paralelo (um por grupo de telas) com a mesma especificação; o
+coordenador revisou, conferiu na tela e corrigiu o que escapou.
+
+**Como sei que terminou**
+- `check-ui-standard.sh` sem ❌ nas 6 telas do Pro; busca por degradê/8–10px/teal/ciano/
+  classes inexistentes/`alert`/`window.confirm` vazia (fora do jsPDF).
+- `tsc` exit 0; as 10 travas `*Guard*` + testes do Pro verdes.
+- Navegador, computador e celular (390px), com dados fictícios: painel, serviço (3
+  alturas), orçamento, clientes (cartão aberto) e ajustes.
+
+**Estado (14/11/2026): implementado e conferido; falta publicar** (depende do #430).
+- 6 telas sem ❌; busca vazia; `tsc` exit 0; 12 arquivos de trava/teste, 89 testes verdes.
+- Achado na conferência e corrigido: dois azuis sólidos na tela do serviço ("Copiar Pix"
+  virou secundário — o primário é "Finalizar serviço"); Title Case que sobrou no
+  orçamento e em clientes ("Novo Orçamento Rápido", "Valor Cobrado", "Salvar e Enviar
+  via WhatsApp", "Meus Clientes"…) → capitalização normal, como nas outras telas.
+- Ajuste à especificação: `<label>` fica `text-slate-500` (a trava `rotuloPadraoGuard`
+  só aceita esse; 4,8:1 passa o contraste); rótulos `<span>` em slate-600.
+- Decisões dos agentes aceitas: "Colher assinatura" sem "Touch"; "×" das fotos com alvo
+  de 44px e quadrado visível de 32px; "Adicionar modelo" secundário (primário da tela é
+  "Salvar configurações"); emoji dentro de `<option>` virou `<optgroup>`; `ClientSelect`
+  alinhado por `triggerClassName` (sem tocar no componente); `BLOQUEADO` passa a
+  aparecer "Bloqueado" no painel (antes caía em "Pendente").
+- Fica para o passo 5: `htmlFor` nos rótulos de Ajustes; texto "QR Code Dinâmico" e
+  opções do select de profissão (passo 6).
 
 ### 5. Números, acessibilidade e menores (`/impeccable harden`) — pendente
 "A Receber", "Total Acumulado", "Hoje/Próximos", erro de rede com "tentar de novo";

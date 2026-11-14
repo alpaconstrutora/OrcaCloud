@@ -1,7 +1,7 @@
 import React from 'react';
 import { proService } from '../services/proService';
 import { ProOrcamento, ProServico } from '../types';
-import { HandCoins, MessageCircle } from 'lucide-react';
+import { HandCoins, MessageCircle, RefreshCw, Clock, MapPin, Plus } from 'lucide-react';
 import { resumirPainelPro, diasDesde, mensagemDeCobranca, linkWhatsApp } from '../utils/proPainelResumo';
 import { montarPixCopiaECola } from '../utils/pixCopiaECola';
 
@@ -17,7 +17,29 @@ interface ProDashboardProps {
 const CIDADE_RECEBEDOR_PADRAO = 'BRASILIA';
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
-const textoDiasAguardando = (dias: number | null) =>
+// Status na voz do usuário (§8: texto colorido simples, sem pílula). Fallback = valor cru.
+const ROTULO_STATUS_SERVICO: Record<string, { rotulo: string; cor: string }> = {
+  PENDENTE: { rotulo: 'Agendado', cor: 'text-slate-700' },
+  EM_ANDAMENTO: { rotulo: 'Em andamento', cor: 'text-blue-700' },
+  BLOQUEADO: { rotulo: 'Bloqueado', cor: 'text-red-700' },
+  CONCLUIDO: { rotulo: 'Concluído', cor: 'text-emerald-700' },
+};
+const ROTULO_STATUS_ORCAMENTO: Record<string, { rotulo: string; cor: string }> = {
+  RASCUNHO: { rotulo: 'Rascunho', cor: 'text-slate-700' },
+  ENVIADO: { rotulo: 'Enviado', cor: 'text-blue-700' },
+  APROVADO: { rotulo: 'Aprovado', cor: 'text-emerald-700' },
+  RECUSADO: { rotulo: 'Recusado', cor: 'text-red-700' },
+};
+const statusDe = (mapa: Record<string, { rotulo: string; cor: string }>, status: string) =>
+  mapa[status] || { rotulo: status, cor: 'text-slate-700' };
+
+// Linguagem visual do app (§16/§17): cartão, botão secundário e foco visível.
+const CARTAO = 'bg-white border border-slate-200 rounded-[10px] p-4';
+const AREA_CLICAVEL = 'w-full flex items-start justify-between gap-3 text-left rounded-[6px] hover:bg-slate-50 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600';
+const BOTAO_SECUNDARIO = 'h-11 px-3 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors';
+const VAZIO = 'text-center py-8 px-4 bg-white border border-dashed border-slate-300 rounded-[10px] text-sm text-slate-600';
+
+const textoDiasAguardando =(dias: number | null) =>
   dias === null ? 'Concluído' : dias === 0 ? 'Concluído hoje' : dias === 1 ? 'Concluído ontem' : `Concluído há ${dias} dias`;
 
 const ProDashboard: React.FC<ProDashboardProps> = ({
@@ -148,8 +170,8 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   if (loading) {
     return (
       <div className="flex-1 flex flex-col items-center justify-center p-8">
-        <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
-        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Agenda...</span>
+        <div className="w-8 h-8 border-4 border-blue-600 border-t-transparent rounded-full animate-spin mb-3" />
+        <span className="text-sm text-slate-600">Carregando agenda…</span>
       </div>
     );
   }
@@ -159,15 +181,17 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       {/* Header — no computador quem mostra é a casca (ProModule) */}
       <div className="flex items-center justify-between md:hidden">
         <div>
-          <h1 className="text-xl font-black text-slate-800 tracking-tight">ÒPURA Pro</h1>
-          <p className="text-xs font-semibold text-slate-500">Seu controle diário de campo</p>
+          <h1 className="text-xl font-black text-slate-900">ÒPURA Pro</h1>
+          <p className="text-xs font-semibold text-slate-600">Seu controle diário de campo</p>
         </div>
         <button
+          type="button"
           onClick={fetchData}
-          className="w-8 h-8 rounded-xl bg-white border border-slate-200/60 shadow-sm flex items-center justify-center text-button active:scale-95 transition-transform hover:bg-slate-50"
+          aria-label="Recarregar"
           title="Recarregar"
+          className="w-11 h-11 flex items-center justify-center bg-white hover:bg-slate-50 border border-slate-300 text-slate-700 rounded-[6px] transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
         >
-          🔄
+          <RefreshCw className="w-4 h-4" aria-hidden />
         </button>
       </div>
 
@@ -232,113 +256,113 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       )}
 
       {/* Serviços de Hoje (Agenda) */}
-      <div className="space-y-3">
-        <h2 className="text-xs font-black text-slate-500">Serviços para Hoje</h2>
+      <section aria-labelledby="titulo-hoje" className="space-y-3">
+        <h2 id="titulo-hoje" className="text-sm font-semibold text-slate-900">Serviços para hoje</h2>
         {servicosHoje.length === 0 ? (
-          <div className="text-center py-8 px-4 bg-white border border-dashed border-slate-200 rounded-[24px] text-xs text-slate-400">
+          <div className={VAZIO}>
             Nenhum serviço agendado para hoje.
           </div>
         ) : (
           <div className="space-y-3">
-            {servicosHoje.map(s => (
-              <div
-                key={s.id}
-                onClick={() => onViewServico(s.id)}
-                className="bg-white hover:bg-slate-50/50 border border-slate-200/30 p-4 rounded-[24px] flex flex-col gap-2.5 cursor-pointer transition-all shadow-[0_8px_30px_rgb(0,0,0,0.03)] active:scale-[0.99] duration-150"
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="space-y-1 max-w-[70%]">
-                    <span className="block font-black text-sm text-slate-800 truncate">
-                      {s.pro_orcamentos?.pro_clientes?.nome || 'Cliente sem nome'}
-                    </span>
-                    {s.data_agendamento && (
-                      <span className="block text-xs font-black uppercase text-teal-600 flex items-center gap-1">
-                        🕒 {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+            {servicosHoje.map(s => {
+              const st = statusDe(ROTULO_STATUS_SERVICO, s.status);
+              return (
+                <div key={s.id} className={`${CARTAO} space-y-3`}>
+                  <button type="button" onClick={() => onViewServico(s.id)} className={AREA_CLICAVEL}>
+                    <span className="min-w-0 space-y-1">
+                      <span className="block font-semibold text-sm text-slate-900 truncate">
+                        {s.pro_orcamentos?.pro_clientes?.nome || 'Cliente sem nome'}
                       </span>
-                    )}
-                    <span className="block text-xs text-slate-500 truncate font-medium">
-                      {s.pro_orcamentos?.descricao}
+                      {s.data_agendamento && (
+                        <span className="flex items-center gap-1 text-xs font-medium text-slate-700">
+                          <Clock className="w-4 h-4 shrink-0" aria-hidden />
+                          {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                        </span>
+                      )}
+                      <span className="block text-xs text-slate-600 truncate">
+                        {s.pro_orcamentos?.descricao}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-slate-600 min-w-0">
+                        <MapPin className="w-4 h-4 shrink-0" aria-hidden />
+                        <span className="truncate">{s.pro_orcamentos?.pro_clientes?.endereco || 'Sem endereço'}</span>
+                      </span>
                     </span>
-                    <span className="block text-[9px] font-black uppercase tracking-wider text-teal-600">
-                      📍 {s.pro_orcamentos?.pro_clientes?.endereco || 'Sem endereço'}
+                    <span className="text-right space-y-1 shrink-0">
+                      <span className="block font-semibold text-slate-900 text-sm tabular-nums">
+                        {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.pro_orcamentos?.valor || 0)}
+                      </span>
+                      <span className={`block text-sm font-medium ${st.cor}`}>{st.rotulo}</span>
                     </span>
-                  </div>
-                  <div className="text-right space-y-1">
-                    <span className="block font-black text-slate-800 text-sm">
-                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.pro_orcamentos?.valor || 0)}
-                    </span>
-                    <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
-                      s.status === 'EM_ANDAMENTO' ? 'bg-cyan-50 text-cyan-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      {s.status === 'EM_ANDAMENTO' ? 'Em Andamento' : 'Pendente'}
-                    </span>
-                  </div>
-                </div>
-                <div className="border-t border-slate-100 pt-2 flex justify-start">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleWhatsAppConfirmarServico(s);
-                    }}
-                    className="text-[9px] font-black uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100/70 text-emerald-600 border border-emerald-200/50 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 active:scale-95"
-                  >
-                    💬 Confirmar via WhatsApp
                   </button>
+                  <div className="border-t border-slate-100 pt-3 flex justify-start">
+                    <button
+                      type="button"
+                      onClick={() => handleWhatsAppConfirmarServico(s)}
+                      className={BOTAO_SECUNDARIO}
+                    >
+                      <MessageCircle className="w-4 h-4" aria-hidden />
+                      Confirmar no WhatsApp
+                    </button>
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Serviços para Oferecer de Novo (Recorrência) */}
       {recorrentes.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-xs font-black text-teal-600 flex items-center gap-1.5">
-            🔔 Serviços para Oferecer de Novo
+        <section aria-labelledby="titulo-recorrentes" className="space-y-3">
+          <h2 id="titulo-recorrentes" className="text-sm font-semibold text-slate-900">
+            Serviços para oferecer de novo
           </h2>
           <div className="space-y-3">
             {recorrentes.map(s => (
               <div
                 key={s.id}
-                className="bg-white border border-slate-200/30 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex items-center justify-between transition-all hover:bg-slate-50/50"
+                className={`${CARTAO} flex items-center justify-between gap-3`}
               >
-                <div className="space-y-1 max-w-[65%]">
-                  <span className="block font-black text-sm text-slate-800 truncate">
+                <div className="space-y-1 min-w-0">
+                  <span className="block font-semibold text-sm text-slate-900 truncate">
                     {s.pro_orcamentos?.pro_clientes?.nome}
                   </span>
-                  <span className="block text-xs text-teal-600 font-semibold truncate">
+                  <span className="block text-xs text-slate-700 font-medium truncate">
                     Revisão em: {new Date(s.proximo_agendamento).toLocaleDateString('pt-BR')}
                   </span>
-                  <span className="block text-xs text-slate-400 truncate">
+                  <span className="block text-xs text-slate-600 truncate">
                     Serviço anterior: {s.pro_orcamentos?.descricao}
                   </span>
                 </div>
                 <button
+                  type="button"
                   onClick={() => handleWhatsAppRecorrencia(s)}
-                  className="bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white px-3.5 py-2 rounded-xl text-button font-black uppercase tracking-widest transition-all shadow-md shadow-teal-500/10 active:scale-95"
+                  className={`${BOTAO_SECUNDARIO} shrink-0`}
                 >
-                  💬 Oferecer
+                  <MessageCircle className="w-4 h-4" aria-hidden />
+                  Oferecer
                 </button>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
 
       {/* Orçamentos Recentes */}
-      <div className="space-y-3">
+      <section aria-labelledby="titulo-orcamentos" className="space-y-3">
         <div className="flex items-center justify-between">
-          <h2 className="text-xs font-black text-slate-500">Orçamentos Enviados</h2>
+          <h2 id="titulo-orcamentos" className="text-sm font-semibold text-slate-900">Orçamentos enviados</h2>
           <button
+            type="button"
             onClick={onNewOrcamento}
-            className="text-xs font-black uppercase tracking-widest text-teal-600 hover:text-teal-500"
+            className="inline-flex items-center gap-1 min-h-11 px-2 text-sm font-medium text-blue-700 hover:text-blue-800"
           >
-            + Criar
+            <Plus className="w-4 h-4" aria-hidden />
+            Criar
           </button>
         </div>
         {orcamentos.length === 0 ? (
-          <div className="text-center py-8 px-4 bg-white border border-dashed border-slate-200 rounded-[24px] text-xs text-slate-400">
+          <div className={VAZIO}>
             Nenhum orçamento criado ainda.
           </div>
         ) : (
@@ -346,47 +370,41 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
             {orcamentos.slice(0, 3).map(o => {
               // Verifica se já tem OS correspondente
               const hasOS = servicos.find(s => s.orcamento_id === o.id);
+              const st = statusDe(ROTULO_STATUS_ORCAMENTO, o.status);
               return (
-                <div
-                  key={o.id}
-                  onClick={() => hasOS ? onViewServico(hasOS.id) : onEditOrcamento(o.id)}
-                  className="bg-white hover:bg-slate-50/50 border border-slate-200/30 p-4 rounded-[24px] flex flex-col gap-2.5 cursor-pointer transition-all shadow-[0_8px_30px_rgb(0,0,0,0.03)] active:scale-[0.99] duration-150"
-                >
-                  <div className="flex items-center justify-between w-full">
-                    <div className="space-y-1 max-w-[70%]">
-                      <span className="block font-black text-sm text-slate-800 truncate">
+                <div key={o.id} className={`${CARTAO} space-y-3`}>
+                  <button
+                    type="button"
+                    onClick={() => hasOS ? onViewServico(hasOS.id) : onEditOrcamento(o.id)}
+                    className={AREA_CLICAVEL}
+                  >
+                    <span className="min-w-0 space-y-1">
+                      <span className="block font-semibold text-sm text-slate-900 truncate">
                         {o.pro_clientes?.nome || 'Cliente sem nome'}
                       </span>
-                      <span className="block text-xs text-slate-500 truncate font-medium">
+                      <span className="block text-xs text-slate-600 truncate">
                         {o.descricao}
                       </span>
-                      <span className="block text-[9px] text-slate-400">
+                      <span className="block text-xs text-slate-600">
                         Garantia: {o.garantia_dias ? `${o.garantia_dias} dias` : 'Não informada'}
                       </span>
-                    </div>
-                    <div className="text-right space-y-1">
-                      <span className="block font-black text-slate-800 text-sm">
+                    </span>
+                    <span className="text-right space-y-1 shrink-0">
+                      <span className="block font-semibold text-slate-900 text-sm tabular-nums">
                         {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(o.valor)}
                       </span>
-                      <span className={`inline-block text-[9px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full ${
-                        o.status === 'APROVADO' ? 'bg-emerald-50 text-emerald-600' :
-                        o.status === 'ENVIADO' ? 'bg-teal-50 text-teal-600' :
-                        o.status === 'RECUSADO' ? 'bg-red-50 text-red-600' : 'bg-slate-100 text-slate-600'
-                      }`}>
-                        {o.status}
-                      </span>
-                    </div>
-                  </div>
+                      <span className={`block text-sm font-medium ${st.cor}`}>{st.rotulo}</span>
+                    </span>
+                  </button>
                   {o.status === 'ENVIADO' && (
-                    <div className="border-t border-slate-100 pt-2 flex justify-start">
+                    <div className="border-t border-slate-100 pt-3 flex justify-start">
                       <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          handleWhatsAppLembrarOrcamento(o);
-                        }}
-                        className="text-[9px] font-black uppercase tracking-widest bg-teal-50 hover:bg-teal-100/70 text-teal-600 border border-teal-200/50 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 active:scale-95"
+                        type="button"
+                        onClick={() => handleWhatsAppLembrarOrcamento(o)}
+                        className={BOTAO_SECUNDARIO}
                       >
-                        💬 Cobrar Resposta via WhatsApp
+                        <MessageCircle className="w-4 h-4" aria-hidden />
+                        Cobrar resposta
                       </button>
                     </div>
                   )}
@@ -395,54 +413,50 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
             })}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Próximos Serviços */}
       {proximosServicos.length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-xs font-black text-slate-500">Próximos Serviços</h2>
+        <section aria-labelledby="titulo-proximos" className="space-y-3">
+          <h2 id="titulo-proximos" className="text-sm font-semibold text-slate-900">Próximos serviços</h2>
           <div className="space-y-3">
             {proximosServicos.slice(0, 3).map(s => (
-              <div
-                key={s.id}
-                onClick={() => onViewServico(s.id)}
-                className="bg-white hover:bg-slate-50/50 border border-slate-200/30 p-4 rounded-[24px] flex flex-col gap-2.5 cursor-pointer transition-all shadow-[0_8px_30px_rgb(0,0,0,0.03)] active:scale-[0.99] duration-150"
-              >
-                <div className="flex items-center justify-between w-full">
-                  <div className="space-y-1 max-w-[70%]">
-                    <span className="block font-black text-sm text-slate-800 truncate">
+              <div key={s.id} className={`${CARTAO} space-y-3`}>
+                <button type="button" onClick={() => onViewServico(s.id)} className={AREA_CLICAVEL}>
+                  <span className="min-w-0 space-y-1">
+                    <span className="block font-semibold text-sm text-slate-900 truncate">
                       {s.pro_orcamentos?.pro_clientes?.nome}
                     </span>
                     {s.data_agendamento && (
-                      <span className="block text-xs font-black uppercase text-teal-600 flex items-center gap-1">
-                        🕒 {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
+                      <span className="flex items-center gap-1 text-xs font-medium text-slate-700">
+                        <Clock className="w-4 h-4 shrink-0" aria-hidden />
+                        {new Date(s.data_agendamento).toLocaleString('pt-BR', { dateStyle: 'short', timeStyle: 'short' })}
                       </span>
                     )}
-                    <span className="block text-xs text-slate-500 truncate font-medium">
+                    <span className="block text-xs text-slate-600 truncate">
                       {s.pro_orcamentos?.descricao}
                     </span>
-                  </div>
-                  <div className="text-right">
-                    <span className="block font-black text-slate-800 text-sm">
+                  </span>
+                  <span className="text-right shrink-0">
+                    <span className="block font-semibold text-slate-900 text-sm tabular-nums">
                       {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(s.pro_orcamentos?.valor || 0)}
                     </span>
-                  </div>
-                </div>
-                <div className="border-t border-slate-100 pt-2 flex justify-start">
+                  </span>
+                </button>
+                <div className="border-t border-slate-100 pt-3 flex justify-start">
                   <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      handleWhatsAppConfirmarServico(s);
-                    }}
-                    className="text-[9px] font-black uppercase tracking-widest bg-emerald-50 hover:bg-emerald-100/70 text-emerald-600 border border-emerald-200/50 px-3 py-1.5 rounded-xl transition-all flex items-center gap-1 active:scale-95"
+                    type="button"
+                    onClick={() => handleWhatsAppConfirmarServico(s)}
+                    className={BOTAO_SECUNDARIO}
                   >
-                    💬 Confirmar via WhatsApp
+                    <MessageCircle className="w-4 h-4" aria-hidden />
+                    Confirmar no WhatsApp
                   </button>
                 </div>
               </div>
             ))}
           </div>
-        </div>
+        </section>
       )}
     </div>
   );

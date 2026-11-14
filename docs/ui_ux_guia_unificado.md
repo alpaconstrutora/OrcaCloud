@@ -1525,6 +1525,8 @@ mesma aba mostra outra tabela, "Todos os usuários" (`OrganizationList.tsx`, uma
 por Organização ou Função (a chave da organização é o id — duas com o mesmo nome não se fundem). A coluna Função dessa
 tabela passou a mostrar o rótulo ("Membro"), não o código do banco (`member`), para casar com o grupo.
 
+Em 13/11/2026 para Minha Organização › **Contas de Pagamento** (`FinancialRegistryManager.tsx` com a prop `agrupar`, só nessa aba — o Plano de Contas continua árvore por código, com o próprio expandir/recolher; `docs/planos/2026-11-13-contas-pagamento-agrupar.md`). Opções: Organização (só em "Todas"), Banco e Situação (Ativa antes de Inativa, a ordem do interruptor da coluna Ações). Só contagem (`semTotal`). Agrupar achata a árvore de códigos e o expandir/recolher da árvore sai de cena. Função pura em `utils/contasPagamentoGrupos.ts`.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

@@ -799,6 +799,7 @@ const OrganizationList: React.FC<OrganizationListProps> = ({
                         defaultOrganizationId={activeTab === 'accounts' ? (registryOrgId || undefined) : undefined}
                         showOrganization={activeTab === 'accounts' && !registryOrgId}
                         organizationNameById={registryOrgNameById}
+                        agrupar={activeTab === 'accounts'}
                         title={activeTab === 'accounts' ? 'Contas de Pagamento' : 'Plano de Contas'}
                         description={
                             activeTab === 'accounts' ? 'Gerencie as contas bancárias para alocação de gastos' :

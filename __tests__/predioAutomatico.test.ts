@@ -7,6 +7,11 @@
 import { describe, expect, it } from 'vitest';
 import { applyBatch, applyCommand, emptyModel, ModelHistory, pavimentosDoNucleo, pointInPolygon, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
 import { entradaDoQuadro } from '../utils/blueprintEntradaDeEnergia';
+import { fazerChave } from '../utils/blueprintGrafoDeRede';
+import { HIPOTESES_PRESSAO_PADRAO, pressoesDaOrigem } from '../utils/blueprintPressaoDaRede';
+import { diametroDeForchheimerMm } from '../utils/blueprintRecalque';
+import { FICHA_DO_MATERIAL } from '../utils/blueprintHidraulicaPressao';
+import { unidadeNoPavimento } from '../utils/blueprintUnidadesDoPredio';
 import { modelosDoCatalogo } from '../utils/blueprintSelecaoClimatizacao';
 import { SEMENTES_DE_TIPOS } from '../utils/blueprintCatalogoDeTipos';
 import { HIPOTESES_CLIMATIZACAO_PADRAO } from '../utils/blueprintClimatizacao';
@@ -60,7 +65,7 @@ const pedidoDoR4 = (uso: 'RESIDENCIAL' | 'GARAGEM' = 'RESIDENCIAL') => pedidoDo(
 /** O R8 do marco (lote 40 × 60, bloco 30 × 16, 8 pavimentos: 5 unidades por andar, um elevador). */
 const pedidoDoR8 = () => pedidoDo([40000, 60000], [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], 8);
 /** O caminho da PA2 (sem térreo nem cobertura) — o que o teste de equivalência compara com os botões de antes. */
-const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false, eletrica: false };
+const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false, eletrica: false, agua: false };
 
 /** O caminho de antes: "Montar neste estudo" e depois "Gerar a planta das unidades", dois lotes. */
 function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
@@ -84,7 +89,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'CLIMATIZACAO:NAO_EXIGIDA', 'ELETRODUTOS:NAO_EXIGIDA', 'LOUCAS:NAO_EXIGIDA', 'AGUA_FRIA:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:NAO_EXIGIDA', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -217,7 +222,9 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     expect(res.inferiorL! + res.superiorL!).toBe(res.totalL);
     const caixas = r.terminais.filter((t) => t.tipoHidraulico === 'RESERVATORIO');
     const nivel = (id: string) => r.levels.find((l) => l.id === id)!.name;
-    expect(caixas.map((t) => `${t.papelReservatorio}@${nivel(t.levelId)}:${t.volumeL}`).sort()).toEqual([`INFERIOR@Torre · 1º pav (térreo):${res.inferiorL}`, `SUPERIOR@Torre · cobertura:${res.superiorL}`]);
+    // PA6: o superior leva também a reserva técnica de incêndio (por gravidade).
+    const rti = plano.resumo.agua!.rtiL ?? 0;
+    expect(caixas.map((t) => `${t.papelReservatorio}@${nivel(t.levelId)}:${t.volumeL}/${t.volumeRtiL ?? 0}`).sort()).toEqual([`INFERIOR@Torre · 1º pav (térreo):${res.inferiorL}/0`, `SUPERIOR@Torre · cobertura:${res.superiorL! + rti}/${rti}`]);
     // Com 2 fatias, medição e bombas dividem a segunda sala — e o inferior vai nela.
     expect(plano.resumo.terreo!.salas).toEqual([SALA_HALL, SALA_MEDICAO_E_BOMBAS]);
   });
@@ -431,5 +438,130 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     expect(plano.etapas.find((x) => x.id === 'CLIMATIZACAO')!.situacao).toBe('NAO_RODOU');
     expect(plano.resumo.eletrica!.splits).toBe(0);
     expect(plano.pendencias.some((x) => x.grupo === 'PREMISSA' && /catálogo de evaporadoras/.test(x.texto))).toBe(true);
+  });
+});
+
+// PA6: o R8 com a água fria leva uns 13 s — um plano só para o bloco inteiro.
+describe('prédio automático — a água fria (PA6)', { timeout: 120_000 }, () => {
+  let cache: ReturnType<typeof planejarPredioDoPedido> | null = null;
+  const r8 = () => (cache ??= planejarPredioDoPedido(pedidoDoR8()));
+
+  it('um hidrômetro por unidade no tipo, cada um com a sua unidade; as cópias repetem — e cada unidade do prédio tem o seu', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const agua = plano.resumo.agua!;
+    expect(plano.etapas.filter((e) => ['LOUCAS', 'AGUA_FRIA', 'INSTALACOES_NO_TIPO', 'PRESSAO_DA_AGUA'].includes(e.id)).map((e) => `${e.id}:${e.situacao}`)).toEqual(['LOUCAS:LANCOU', 'AGUA_FRIA:LANCOU', 'INSTALACOES_NO_TIPO:LANCOU', 'PRESSAO_DA_AGUA:LANCOU']);
+    expect(agua.hidrometros).toBe(plano.resumo.unidadesPorAndar);
+    expect(agua.unidadesMedidas).toBe(plano.resumo.unidades);
+    const hidrometros = m.terminais.filter((t) => t.tipoHidraulico === 'HIDROMETRO' && t.unidadeId);
+    const doTipo = hidrometros.filter((t) => t.levelId === plano.tipoLevelId);
+    expect(new Set(doTipo.map((t) => t.unidadeId)).size).toBe(agua.hidrometros);
+    // Cada andar com unidades tem os seus, e cada hidrômetro mede uma unidade DIFERENTE do prédio (a derivada do andar).
+    const andares = m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId);
+    for (const l of andares) expect(hidrometros.filter((t) => t.levelId === l.id)).toHaveLength(agua.hidrometros);
+    const chaves = hidrometros.map((t) => unidadeNoPavimento(m, t.unidadeId!, t.levelId)?.chave);
+    expect(chaves.every(Boolean)).toBe(true);
+    expect(new Set(chaves).size).toBe(plano.resumo.unidades);
+    // O hidrômetro geral fica na frente do lote (o cavalete), sem unidade.
+    expect(m.terminais.filter((t) => t.tipoHidraulico === 'HIDROMETRO' && !t.unidadeId)).toHaveLength(1);
+  });
+
+  it('a água de cada unidade só passa pelo hidrômetro dela: sem os ramais dos hidrômetros, cada rede tem os pontos de UMA unidade', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const tipo = plano.tipoLevelId;
+    const chave = fazerChave(m.levels);
+    const hidrometros = m.terminais.filter((t) => t.levelId === tipo && t.tipoHidraulico === 'HIDROMETRO' && t.unidadeId);
+    const af = m.trechos.filter((t) => t.levelId === tipo && t.disciplina === 'AGUA_FRIA' && !t.rotulo?.startsWith('Re'));
+    // O ramal do hidrômetro: o trecho horizontal sob ele.
+    const sob = (h: (typeof hidrometros)[number]) => af.find((t) => t.cotaAMm === h.cotaMm && t.cotaBMm === h.cotaMm && Math.abs((t.b.x - t.a.x) * (h.at.y - t.a.y) - (t.b.y - t.a.y) * (h.at.x - t.a.x)) / Math.hypot(t.b.x - t.a.x, t.b.y - t.a.y) <= 1.5)!;
+    const ramais = new Set(hidrometros.map((h) => sob(h).id));
+    expect(ramais.size).toBe(hidrometros.length);
+    const pai = new Map<string, string>();
+    const raiz = (a: string): string => (pai.get(a) === a ? a : raiz(pai.get(a)!));
+    const une = (a: string, b: string) => {
+      for (const x of [a, b]) if (!pai.has(x)) pai.set(x, x);
+      pai.set(raiz(a), raiz(b));
+    };
+    for (const t of af.filter((t) => !ramais.has(t.id))) une(chave(tipo, t.a.x, t.a.y, t.cotaAMm), chave(tipo, t.b.x, t.b.y, t.cotaBMm));
+    const unidadeDe = new Map<string, Set<string>>();
+    let pontos = 0;
+    for (const t of m.terminais.filter((t) => t.levelId === tipo && t.disciplina === 'AGUA_FRIA' && t.tipoHidraulico && !['HIDROMETRO', 'VRP'].includes(t.tipoHidraulico))) {
+      const no = chave(tipo, t.at.x, t.at.y, t.cotaMm);
+      if (!pai.has(no)) continue;
+      pontos++;
+      // A unidade do ponto: a da etiqueta do cômodo dele.
+      const label = m.labels.filter((l) => l.levelId === tipo).sort((a, b) => Math.hypot(a.at.x - t.at.x, a.at.y - t.at.y) - Math.hypot(b.at.x - t.at.x, b.at.y - t.at.y))[0];
+      const u = m.unidades.find((x) => x.etiquetaUids.includes(label.uid));
+      const r0 = raiz(no);
+      unidadeDe.set(r0, (unidadeDe.get(r0) ?? new Set()).add(u?.numero ?? '?'));
+    }
+    expect(pontos).toBeGreaterThan(plano.resumo.unidadesPorAndar * 4);
+    for (const s of unidadeDe.values()) expect(s.size).toBe(1);
+    expect(unidadeDe.size).toBe(plano.resumo.unidadesPorAndar);
+  });
+
+  it('a pressão do prédio inteiro: nenhum ponto abaixo da mínima nem acima de 400 kPa; o último andar pede o pressurizador', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const agua = plano.resumo.agua!;
+    expect(agua.pressurizador).toBe(true);
+    expect(agua.vrp).toBe(false);
+    expect([agua.insuficientes, agua.excessivas, agua.naoAvaliados]).toEqual([0, 0, 0]);
+    const superior = m.terminais.find((t) => t.papelReservatorio === 'SUPERIOR')!;
+    const hidrometro = plano.pendencias.find((x) => /^Hidrômetros das unidades: vazão máxima de (\d+)/.test(x.texto))!;
+    const qMax = Number(/vazão máxima de (\d+)/.exec(hidrometro.texto)![1]);
+    const r = pressoesDaOrigem(m, superior, { ...HIPOTESES_PRESSAO_PADRAO, qMaxDoHidrometroM3h: qMax });
+    expect(r.trechosDoAnel).toEqual([]);
+    // Os pontos de todos os andares (o tipo e as cópias) estão na rede do superior.
+    const doTipo = r.pontos.filter((p) => p.levelId === plano.tipoLevelId).length;
+    expect(doTipo).toBeGreaterThan(0);
+    expect(r.pontos.length).toBe(doTipo * plano.resumo.pavimentos);
+    expect(r.pontos.every((p) => p.estado === 'OK')).toBe(true);
+    expect(Math.round(Math.min(...r.pontos.map((p) => p.disponivelKpa!)))).toBe(agua.dinamicaMinKpa);
+    expect(Math.round(Math.max(...r.pontos.map((p) => p.estaticaKpa!)))).toBe(agua.estaticaMaxKpa);
+    expect(new Set(r.pontos.map((p) => p.levelId)).size).toBe(plano.resumo.pavimentos);
+  });
+
+  it('o volume dos reservatórios bate com a conta à mão: 2 pessoas por dormitório × 200 L × 1 dia, 60 % no inferior, e a reserva de incêndio da IT 17 no superior', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    // À mão: os dormitórios (e suítes) de TODOS os andares — o tipo e as cópias.
+    const andares = new Set(m.levels.filter((l) => l.id === plano.tipoLevelId || l.tipoDeId === plano.tipoLevelId).map((l) => l.id));
+    const dormitorios = m.spaces.filter((s) => andares.has(s.levelId) && /^(dormit|su[ií]te)/i.test(s.name ?? '') && !/banheiro/i.test(s.name ?? '')).length;
+    const total = dormitorios * 2 * 200;
+    expect(plano.resumo.reservacao!.totalL).toBe(total);
+    const inferior = Math.round(total * 0.6);
+    // A reserva de incêndio: A-2 (coluna 1 da Tabela 4 da IT 17), pela área total — o bloco de 30 × 16 m em 8 andares
+    // (o tipo, as 6 cópias e o térreo) dá 3.840 m², na faixa de 3.001 a 6.000 m²: 12 m³ (tipo 2, hidrante).
+    expect(plano.resumo.agua!.rtiL).toBe(12_000);
+    const caixa = (papel: string) => m.terminais.find((t) => t.papelReservatorio === papel)!;
+    expect(caixa('INFERIOR').volumeL).toBe(inferior);
+    expect(caixa('SUPERIOR').volumeL).toBe(total - inferior + 12_000);
+    expect(caixa('SUPERIOR').volumeRtiL).toBe(12_000);
+    // O recalque: o consumo diário em 6 h, DN pela fórmula de Forchheimer (o primeiro de PVC com diâmetro interno ≥ D).
+    const q = total / (6 * 3600);
+    const d = diametroDeForchheimerMm(q, 6);
+    expect(d).toBeCloseTo(1.3 * Math.sqrt(q / 1000) * Math.pow(6 / 24, 0.25) * 1000, 6);
+    const dn = FICHA_DO_MATERIAL.PVC_SOLDAVEL.diametros.find((x) => x.internoMm >= d)!.dn;
+    expect(plano.resumo.agua!.recalque!.dnMm).toBe(dn);
+    const recalque = m.trechos.filter((t) => t.rotulo === 'Recalque');
+    expect(recalque.every((t) => t.bitolaMm === dn)).toBe(true);
+    // A prumada do recalque sobe por todos os pavimentos, do térreo à cobertura (o tipo leva, as cópias repetem).
+    expect(new Set(recalque.map((t) => t.levelId)).size).toBe(plano.resumo.pavimentosLancados);
+  });
+
+  it('a coluna no shaft passa por todos os andares e o barrilete a liga ao superior; a trava confere o plano', () => {
+    const plano = r8();
+    const m = plano.resultado;
+    const coluna = m.trechos.filter((t) => t.rotulo === 'Coluna de água fria');
+    // Dois trechos por andar com unidades (até o ramal do andar e até o teto) — no tipo e em cada cópia.
+    expect(coluna).toHaveLength(2 * plano.resumo.pavimentos);
+    expect(new Set(coluna.map((t) => `${t.a.x},${t.a.y}`)).size).toBe(1);
+    const shaft = m.nucleos.find((n) => n.tipo === 'SHAFT')!;
+    expect(pointInPolygon(shaft.ring as Point[], coluna[0].a as Point)).toBe(true);
+    expect(m.trechos.filter((t) => t.rotulo === 'Barrilete').length).toBeGreaterThan(0);
+    const p = pedidoDoR8();
+    expect(conferirPlanoDoPredio(p.original, plano, p.entrada)).toEqual({ ok: true });
   });
 });

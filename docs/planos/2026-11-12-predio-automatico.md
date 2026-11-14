@@ -169,6 +169,49 @@ unidade no hall (sincronizado; `Terminal.unidadeId` passa a valer para hidrômet
 embaixo); reserva técnica de incêndio.
 **Pronto quando.** R12 pede VRP; o volume do reservatório bate com a conta manual no teste.
 
+**Execução (14/11/2026, `utils/predioAutomatico/agua.ts`).** Três etapas novas — LOUÇAS e ÁGUA FRIA antes da marca
+`copiaInstalacoes` (como a elétrica: o que se desenha no tipo vai aos andares numa sincronização só) e PRESSÃO DA ÁGUA
+depois dela (só então a rede do superior chega a todos os andares). Hipótese `agua` (ligada por padrão; pede as plantas).
+- **Louças e pontos no tipo:** o kit de cada ambiente, os pontos de cada louça e os do kit da casa; sem aquecedor
+  (chuveiro elétrico — premissa). As pendências do mobiliário saem agrupadas (uma por peça davam dezenas).
+- **Rua → inferior:** o alimentador da casa (`planejarAlimentador`), rodado ANTES dos hidrômetros das unidades (ele toma
+  o primeiro hidrômetro do desenho como entrada; sem nenhum, propõe o cavalete na frente). Só até o inferior.
+- **Recalque:** bomba ao lado do inferior, sucção, e o recalque pelo canto do shaft — um trecho no térreo, um no tipo
+  (as cópias repetem) e um na cobertura até o alto do superior. DN por Forchheimer (consumo diário em 6 h), altura
+  manométrica pelo desnível + perdas, motor pela série comercial.
+- **Barrilete e coluna:** do fundo do superior ao canto do shaft (o centro é da prumada elétrica) e a coluna nele, dois
+  trechos por andar. O DN é o do trecho mais carregado (o do último andar leva o prédio inteiro — com a cópia viva todos
+  os andares têm o mesmo tubo).
+- **Hidrômetro por unidade (kernel 0.108.0: `Terminal.unidadeId` vale no HIDRÔMETRO):** no nicho da parede entre a
+  unidade e o hall, longe de vãos e pilares. A rede do andar (a coluna → os hidrômetros) corre no forro pelo EIXO do
+  corredor, com uma derivação a cada hidrômetro; no bloco em asas (L, U, T, H), pelo motor da casa só na circulação. O
+  hidrômetro é escolhido pela vazão de projeto da maior unidade (≤ ½ Qmáx: perda até 25 kPa).
+- **Rede de cada unidade:** o motor da casa (`planejarAgua`) no forro, numa VISTA só com o pavimento tipo, os cômodos e os
+  pontos da unidade e nenhum tubo de água — e o trecho que fecha anel sai do lote.
+- **Pressão:** `pressoesDaOrigem` do superior no prédio inteiro; ponto abaixo da mínima → pressurizador na saída do
+  superior (+100 kPa); estática acima de 400 kPa → VRP no ramal de cada unidade, depois do hidrômetro (no tipo: todos os
+  andares levam, e nos de cima, abaixo do ajuste, ela não atua — fica para conferir se o projeto prefere estação
+  redutora na coluna).
+- **Reserva de incêndio:** pela Tabela 4 da IT 17 do CBMMG (A-2, coluna 1, faixa da área total = bloco × pavimentos),
+  como `volumeRtiL` do superior (o volume dele cresce dela). Sem exigência (≤ 750 m² e ≤ 12 m), premissa. O PPCI (PA9)
+  confere com a rede de hidrantes.
+
+**Achados no caminho (spike de 14/11):**
+1. Com a vista inteira, a origem da unidade já estava ligada (pelo ramal do hidrômetro) à rede do hall, e o motor
+   pendurava colunas da unidade direto nela — 4 das 5 unidades do R8 numa componente só, a água passando por fora do
+   hidrômetro. Cada rede passou a ser traçada só com o que é dela; o teste confere que, sem os ramais dos hidrômetros,
+   cada componente tem os pontos de UMA unidade.
+2. "Pelas paredes", os ramais de unidades vizinhas corriam no mesmo eixo da parede comum e se ligavam — no forro (os anéis
+   de cada cômodo) não. E as descidas do forro até o hall e até a unidade entravam na parede pelo mesmo ponto do eixo:
+   o ramal da unidade sai 400 mm ao lado.
+3. No forro o motor só anda pelo anel do cômodo: para chegar ao lado de lá do corredor dava a volta pela ponta (13 m
+   para um lado e 18 m de volta) — daí o barrilete do andar pelo eixo do corredor.
+4. A 2 m/s (a da casa) o último andar ficava com −89 kPa: o hidrômetro de 3 m³/h perdia 65 kPa e o ramal da unidade, no
+   forro, tem dezenas de curvas de contorno. A rede do prédio é dimensionada a 1 m/s e o hidrômetro pela vazão.
+5. Desempenho: a coluna de cada grupo de pontos procurava lugar fugindo dos pilares e vãos de TODOS os pavimentos (na casa
+   ela atravessa os andares) — 8,7 s no R8; e o ponto de entrada do hall dentro de um pilar fazia a busca varrer a
+   parede inteira milímetro a milímetro. Vista só com o tipo e o ramal longe dos pilares: a etapa caiu de 10 s para ~2 s.
+
 ### PA7 — Esgoto, ventilação e pluvial (grande)
 **O que muda.** Tubo de queda e ventilação no shaft por UHC acumulado (NBR 8160), desvio no térreo, subcoletor e CI no
 lote, pluvial da cobertura.

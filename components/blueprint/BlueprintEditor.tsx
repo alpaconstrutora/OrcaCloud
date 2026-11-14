@@ -12788,7 +12788,8 @@ export default function BlueprintEditor({ study, branchId, onBack, onTrocarRamo,
               if (!plano) return;
               const prova = conferirPlanoDoPredio(editor.model, plano, entradaDoPredio);
               if (!prova.ok) throw new Error(prova.motivo);
-              const criados = editor.runBatch(plano.comandos);
+              // PA5: o lote já aplicado no worker entra como UM passo, sem reaplicar (o R8 passa de mil comandos).
+              const criados = editor.runBatchPrevisto(plano.comandos, plano.hashDoOriginal, { model: plano.resultado, diff: { created: plano.criados }, hash: plano.hashDoResultado });
               if (criados.length === 0 && plano.criados.length > 0) throw new Error('O editor recusou o lote — nada foi lançado (veja o aviso no editor).');
               setLancadoPredio(`${criados.length} elemento(s) lançados num lote só: o pavimento tipo e ${plano.resumo.copias} cópia(s), ${plano.resumo.unidades} unidade(s) no prédio — Ctrl+Z desfaz tudo. Volte ao editor para ver o prédio.`);
             }}

@@ -8,7 +8,7 @@ import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'ELETRICA' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
@@ -19,6 +19,7 @@ export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   PLANTAS: 'Planta interna das unidades (cômodos, portas e janelas)',
   COBERTURA: 'Cobertura (laje, platibanda, área técnica; a escada e o shaft chegam nela)',
   RESERVATORIOS: 'Reservatórios inferior (casa de bombas) e superior (sobre o núcleo)',
+  ELETRICA: 'Elétrica coletiva (pontos, QD por unidade, QGBT e medidores, quadro de serviço, DR)',
   INSTALACOES_NO_TIPO: 'Instalações desenhadas no tipo vão aos andares (cópia viva)',
   CONFERENCIA: 'Conferência (avisos da divisão, da montagem e das plantas)',
 };
@@ -42,6 +43,8 @@ export interface HipotesesDoPredio {
   cobertura: boolean;
   /** PA4: pilares, vigas, lajes, eixos e fundações (os planejadores da casa, com as hipóteses padrão das gavetas). */
   estrutura: boolean;
+  /** PA5: a elétrica coletiva — pontos, QD por unidade, QGBT, medição, quadro de serviço. */
+  eletrica: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -59,6 +62,7 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   terreo: true,
   cobertura: true,
   estrutura: true,
+  eletrica: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -78,6 +82,13 @@ export interface PlanoDoPredio {
   resultado: BlueprintModel;
   /** O pavimento tipo criado — onde a prévia abre. */
   tipoLevelId: ObjectId;
+  /**
+   * PA5: o `snapshotHash` do desenho de onde o plano saiu. O motor é determinístico: o mesmo desenho (e a mesma
+   * assinatura do pedido) dá o mesmo lote — a trava compara o hash em vez de reaplicar centenas de comandos.
+   */
+  hashDoOriginal: string;
+  /** O `snapshotHash` do `resultado` — o editor o leva aos colaboradores sem recalcular (o lançamento não reaplica). */
+  hashDoResultado: string;
   decisoes: string[];
   resumo: {
     esquema: EsquemaDoPavimento;
@@ -102,6 +113,24 @@ export interface PlanoDoPredio {
      * estrutura desligada.
      */
     estrutura: { pilares: number; vigas: number; lajes: number; noTerreo: number; eixos: number; blocos: number; estacas: number } | null;
+    /**
+     * PA5: a elétrica coletiva — por andar (QDs, circuitos), o serviço, a medição e a entrada do QGBT (a demanda pela
+     * diversidade, a categoria do padrão, as unidades atendidas × medidas); `null` desligada.
+     */
+    eletrica: {
+      pontos: number;
+      quadros: number;
+      circuitos: number;
+      servico: number;
+      medidores: number;
+      drs: number;
+      demandaKva: number | null;
+      categoria: string | null;
+      unidadesAtendidas: number;
+      unidadesMedidas: number;
+      faltas: number;
+      avisos: number;
+    } | null;
     /** PA3: a reservação — pessoas contadas e o volume de cada reservatório lançado (`null` = não lançado). */
     reservacao: { pessoas: number; totalL: number; inferiorL: number | null; superiorL: number | null } | null;
   };

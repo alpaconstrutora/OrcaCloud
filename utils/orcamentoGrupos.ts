@@ -16,7 +16,7 @@ export type CampoAgruparOrcamento = 'status' | 'status-obra' | 'bloqueio' | 'tip
 export const OPCOES_AGRUPAR_ORCAMENTO: { value: CampoAgruparOrcamento; label: string }[] = [
     { value: 'status', label: 'Status' },
     { value: 'status-obra', label: 'Status Obra' },
-    { value: 'bloqueio', label: 'Bloqueio' },
+    { value: 'bloqueio', label: 'Pedidos' },
     { value: 'tipo-obra', label: 'Tipo de Obra' },
 ];
 
@@ -26,7 +26,7 @@ export interface LeitorDoOrcamento<T> {
     status: (p: T) => string | null | undefined;
     /** Texto da coluna Status Obra (um de OBRA_STATUSES). */
     statusObra: (p: T) => string | null | undefined;
-    /** Coluna Bloqueio: tem pedido vinculado (exclusão bloqueada). */
+    /** Coluna Pedidos: tem pedido vinculado (por isso não pode ser excluído). */
     bloqueado: (p: T) => boolean;
     /** Rótulo da coluna Tipo de Obra ("Residencial"…). */
     tipoObra: (p: T) => string | null | undefined;
@@ -35,20 +35,21 @@ export interface LeitorDoOrcamento<T> {
 const SEM: Record<CampoAgruparOrcamento, string> = {
     status: 'Sem status',
     'status-obra': 'Sem status da obra',
-    bloqueio: 'Sem bloqueio',
+    bloqueio: 'Sem pedidos',
     'tipo-obra': 'Sem tipo de obra',
 };
 
 /** Status da obra na ordem do fluxo (Não Iniciado → … → Concluída), não alfabética. */
 const ORDEM_STATUS_OBRA = OBRA_STATUSES.map(s => s.toLowerCase());
-/** Bloqueado primeiro (é o que pede atenção); Decrescente inverte. */
+/** "Com pedidos" primeiro (é o que pede atenção); Decrescente inverte. A chave segue 'bloqueado'/'livre'
+ *  (é o que fica gravado no navegador); só o rótulo mudou, para o texto da célula (14/11/2026). */
 const ORDEM_BLOQUEIO = ['bloqueado', 'livre'];
 
 export function chaveDoGrupoOrcamento<T>(campo: CampoAgruparOrcamento, p: T, leitor: LeitorDoOrcamento<T>): ChaveDeGrupo {
     switch (campo) {
         case 'status': return chavePorNome(leitor.status(p));
         case 'status-obra': return chavePorNome(leitor.statusObra(p));
-        case 'bloqueio': return leitor.bloqueado(p) ? { key: 'bloqueado', label: 'Bloqueado' } : { key: 'livre', label: 'Livre' };
+        case 'bloqueio': return leitor.bloqueado(p) ? { key: 'bloqueado', label: 'Com pedidos' } : { key: 'livre', label: 'Sem pedidos' };
         case 'tipo-obra': return chavePorNome(leitor.tipoObra(p));
     }
 }

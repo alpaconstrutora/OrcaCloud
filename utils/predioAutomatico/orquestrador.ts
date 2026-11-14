@@ -8,7 +8,9 @@
  * PA3 (14/11/2026): o térreo (salas do condomínio, acesso e o núcleo desde ele), a cobertura e os reservatórios — ver
  * `terreoECobertura.ts`.
  */
-import { applyBatch } from '../blueprintKernel';
+import { applyBatch, snapshotHash } from '../blueprintKernel';
+import { localDoElemento } from '../blueprintLocalDaPendencia';
+import type { LocalDaPendencia } from '../blueprintGeradorPpci';
 import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import { direcaoDaRua, ordinalDoTipo, pavimentoTipoMontado, pisosAcimaDoSolo } from '../blueprintPavimentoTipoDaMassa';
@@ -25,8 +27,9 @@ import {
   type OpcoesDoPlanoDoPredio,
   type PlanoDoPredio,
 } from './hipoteses';
-import { lancarReservatorios, montarCobertura, montarTerreo, SALA_BOMBAS, SALA_MEDICAO_E_BOMBAS, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
+import { lancarReservatorios, montarCobertura, montarTerreo, SALA_BOMBAS, SALA_MEDICAO, SALA_MEDICAO_E_BOMBAS, type BaseDoPredio, type ContextoDoPredio } from './terreoECobertura';
 import { lancarEstrutura, lancarFundacao, pendenciaDaFundacao } from './estrutura';
+import { conferirEletricaDoPredio, lancarEletrica } from './eletrica';
 
 /** O que o prédio lê além do desenho: o bloco, o produto do estudo e a distribuição dele NESTE bloco, e o norte. */
 export interface EntradaDoPredio {
@@ -180,6 +183,23 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     etapa('RESERVATORIOS', r.totalL > 0 ? 'LANCOU' : 'NAO_RODOU', r.comandos, r.totalL > 0 ? r.texto : 'Sem população contada.');
   }
 
+  // ── Elétrica coletiva (PA5): ANTES da marca do tipo — sem ela cada comando no tipo custa ~13 ms, com ela ~21 ms (re-deriva
+  // as cópias); a marca, depois, copia tudo numa sincronização só.
+  let eletrica: ReturnType<typeof lancarEletrica> | null = null;
+  if (!hip.eletrica) etapa('ELETRICA', 'NAO_EXIGIDA', 0, 'Desligada nas hipóteses.');
+  else {
+    const medicao = terreo?.salas.find((x) => x.nome === SALA_MEDICAO || x.nome === SALA_MEDICAO_E_BOMBAS)?.ponto ?? null;
+    const bombasNoTerreo = terreo?.salas.find((x) => x.nome === SALA_BOMBAS || x.nome === SALA_MEDICAO_E_BOMBAS)?.ponto ?? null;
+    eletrica = lancarEletrica(ctx, base, terreo ? { levelId: terreo.levelId, medicao, bombas: bombasNoTerreo } : null, cobertura ? { levelId: cobertura.levelId } : null);
+    for (const a of eletrica.avisos) pendencias.push({ grupo: 'CONFERIR', texto: `Elétrica: ${a}` });
+    etapa(
+      'ELETRICA',
+      'LANCOU',
+      eletrica.comandos,
+      `${eletrica.quadros} QD(s) e ${eletrica.circuitos} circuito(s) por andar · ${eletrica.servico.circuitos} circuito(s) de serviço · ${eletrica.medidores} medidor(es) · ${eletrica.drs} DR(s)`,
+    );
+  }
+
   // ── O tipo leva as instalações aos andares (PA1): as fases seguintes desenham no tipo e os andares acompanham.
   etapa('INSTALACOES_NO_TIPO', 'LANCOU', aplicar([{ type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }]), 'Pontos, trechos, quadros e circuitos desenhados no tipo vão às cópias.');
 
@@ -187,6 +207,37 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
   for (const a of avisosDoTipo) pendencias.push({ grupo: 'CONFERIR', texto: `Pavimento tipo: ${a}` });
   for (const a of avisosDasPlantas) pendencias.push({ grupo: 'CONFERIR', texto: `Plantas: ${a}` });
   for (const a of avisosDoPredio) pendencias.push({ grupo: /população/.test(a) ? 'PREMISSA' : 'CONFERIR', texto: a });
+  // PA5: a elétrica conferida DEPOIS da cópia viva — a entrada do QGBT soma os QDs de todos os andares.
+  let resumoDaEletrica: PlanoDoPredio['resumo']['eletrica'] = null;
+  if (eletrica?.qgbtId) {
+    const { entrada, nbr } = conferirEletricaDoPredio(m, eletrica.qgbtId);
+    for (const a of entrada?.achados ?? []) pendencias.push({ grupo: a.nivel === 'FALTA' ? 'VERIFICACAO' : 'CONFERIR', texto: `Entrada de energia (QGBT): ${a.mensagem}` });
+    // A demanda acima da maior categoria do padrão de BAIXA tensão não é defeito do desenho: o prédio pede entrada em média
+    // tensão — a decisão é do projeto com a concessionária.
+    if (entrada && !entrada.categoria) pendencias.push({ grupo: 'NAO_DECIDIDO', texto: `Entrada de energia: ${entrada.demandaKva.toLocaleString('pt-BR', { maximumFractionDigits: 1 })} kVA de demanda passam do padrão de baixa tensão — um prédio deste porte pede entrada em MÉDIA tensão (cabine/subestação): projeto com a concessionária.` });
+    for (const r of nbr.regras) {
+      for (const nivel of ['FALTA', 'AVISO'] as const) {
+        const lista = r.achados.filter((a) => a.nivel === nivel);
+        if (!lista.length) continue;
+        const locais = lista.flatMap((a) => (a.ids.length ? [localDoElemento(m, a.ids)].filter((l): l is LocalDaPendencia => !!l) : []));
+        pendencias.push({ grupo: nivel === 'FALTA' ? 'VERIFICACAO' : 'CONFERIR', texto: `Elétrica (${r.codigo} — ${r.titulo}): ${lista.length} ${nivel === 'FALTA' ? 'falta(s)' : 'aviso(s)'} — ${lista[0].mensagem}`, ...(locais.length ? { locais } : {}) });
+      }
+    }
+    resumoDaEletrica = {
+      pontos: eletrica.pontos.tomadas + eletrica.pontos.luzes + eletrica.pontos.interruptores,
+      quadros: eletrica.quadros,
+      circuitos: eletrica.circuitos,
+      servico: eletrica.servico.circuitos,
+      medidores: eletrica.medidores,
+      drs: eletrica.drs,
+      demandaKva: entrada ? Math.round(entrada.demandaKva * 10) / 10 : null,
+      categoria: entrada?.categoria?.id ?? null,
+      unidadesAtendidas: entrada?.unidadesAtendidas.length ?? 0,
+      unidadesMedidas: entrada?.unidadesMedidas.length ?? 0,
+      faltas: nbr.faltas,
+      avisos: nbr.avisos,
+    };
+  }
   for (const s of semFachada) {
     const u = (m.unidades ?? []).find((x) => x.numero === s.numero);
     const etiquetas = u ? m.labels.filter((l) => l.levelId === mont.tipoLevelId && u.etiquetaUids.includes(l.uid)) : [];
@@ -208,6 +259,8 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
     pendencias,
     resultado: m,
     tipoLevelId: mont.tipoLevelId,
+    hashDoOriginal: snapshotHash(original),
+    hashDoResultado: snapshotHash(m),
     decisoes,
     resumo: {
       esquema: dv.esquema,
@@ -221,6 +274,7 @@ export function planejarPredio(original: BlueprintModel, entrada: EntradaDoPredi
       plantas,
       terreo: terreo ? { salas: terreo.salas.map((x) => x.nome), acesso: terreo.acesso } : null,
       cobertura: cobertura ? { cotaM: cobertura.cotaMm / 1000 } : null,
+      eletrica: resumoDaEletrica,
       estrutura: estrutura ? { pilares: estrutura.pilares, vigas: estrutura.vigas, lajes: estrutura.lajes, noTerreo: estrutura.noTerreo, eixos: estrutura.eixos, blocos: fundacao?.blocos ?? 0, estacas: fundacao?.estacas ?? 0 } : null,
       reservacao,
     },

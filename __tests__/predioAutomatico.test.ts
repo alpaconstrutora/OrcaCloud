@@ -5,7 +5,8 @@
  * das unidades") mais a marca do tipo.
  */
 import { describe, expect, it } from 'vitest';
-import { applyBatch, applyCommand, emptyModel, pavimentosDoNucleo, pointInPolygon, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { applyBatch, applyCommand, emptyModel, ModelHistory, pavimentosDoNucleo, pointInPolygon, point, snapshotHash, type BlueprintModel, type Command, type Point } from '../utils/blueprintKernel';
+import { entradaDoQuadro } from '../utils/blueprintEntradaDeEnergia';
 import { divisasDoLote, medirTerreno, RECUOS_ZERO } from '../utils/blueprintTerreno';
 import { medirMassa, ZONA_DA_MASSA_VAZIA } from '../utils/blueprintMassa';
 import { distribuirProduto, produtoSemente } from '../utils/blueprintProduto';
@@ -48,7 +49,7 @@ const pedidoDoR4 = (uso: 'RESIDENCIAL' | 'GARAGEM' = 'RESIDENCIAL') => pedidoDo(
 /** O R8 do marco (lote 40 × 60, bloco 30 × 16, 8 pavimentos: 5 unidades por andar, um elevador). */
 const pedidoDoR8 = () => pedidoDo([40000, 60000], [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], 8);
 /** O caminho da PA2 (sem térreo nem cobertura) — o que o teste de equivalência compara com os botões de antes. */
-const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false };
+const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false, eletrica: false };
 
 /** O caminho de antes: "Montar neste estudo" e depois "Gerar a planta das unidades", dois lotes. */
 function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
@@ -72,7 +73,7 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'ELETRICA:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -281,5 +282,84 @@ describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
     expect(plano.etapas.find((x) => x.id === 'ESTRUTURA')!.situacao).toBe('NAO_EXIGIDA');
     expect(plano.resumo.estrutura).toBeNull();
     expect(plano.resultado.structures.filter((s) => s.kind !== 'LAJE')).toHaveLength(0);
+  });
+
+  // ── PA5a (14/11/2026): a elétrica coletiva ───────────────────────────────────────────────────────────────────────
+
+  it('a elétrica: um QD por unidade em cada andar (filho do QGBT do térreo), um medidor por unidade de cada andar — as unidades medidas são as atendidas', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR8());
+    const r = plano.resultado;
+    const e = plano.resumo.eletrica!;
+    const andares = [plano.tipoLevelId, ...r.levels.filter((l) => l.tipoDeId === plano.tipoLevelId).map((l) => l.id)];
+    const qgbt = r.quadros.find((q) => q.tipo === 'QGBT')!;
+    expect(r.levels.find((l) => l.id === qgbt.levelId)!.name).toBe('Torre · 1º pav (térreo)');
+    const qs = r.quadros.find((q) => q.nome === 'QS — serviço')!;
+    for (const L of andares) {
+      const qds = r.quadros.filter((q) => q.levelId === L && q.unidadeId);
+      expect(qds).toHaveLength(plano.resumo.unidadesPorAndar);
+      expect(qds.every((q) => q.quadroPaiId === qgbt.id)).toBe(true);
+      // E o quadro de serviço DO ANDAR (circulações), filho do QS — cada andar com os seus circuitos.
+      expect(r.quadros.filter((q) => q.levelId === L && !q.unidadeId && q.quadroPaiId === qs.id)).toHaveLength(1);
+    }
+    expect(e.unidadesAtendidas).toBe(plano.resumo.unidades);
+    expect(e.unidadesMedidas).toBe(plano.resumo.unidades);
+    // Um por unidade de cada andar e o do condomínio.
+    expect(e.medidores).toBe(plano.resumo.unidades + 1);
+    const entrada = entradaDoQuadro(r, qgbt.id)!;
+    expect([...entrada.unidadesMedidas].sort()).toEqual([...entrada.unidadesAtendidas].sort());
+    // A NBR 5410 sem falta NA INSTALAÇÃO; a da ENTRADA (o padrão de entrada é hipótese, sem fonte normativa) fica: 35
+    // unidades passam do padrão de baixa tensão — vira a pendência da média tensão (não é defeito do desenho).
+    expect(entrada.categoria).toBeNull();
+    expect(plano.pendencias.some((x) => x.grupo === 'NAO_DECIDIDO' && /MÉDIA tensão/.test(x.texto))).toBe(true);
+    expect(plano.pendencias.filter((x) => x.grupo === 'VERIFICACAO' && /^Elétrica \((?!ENTRADA)/.test(x.texto))).toEqual([]);
+  });
+
+  it('no R4 (6 unidades) a elétrica sai sem falta da NBR 5410 na instalação, e numa categoria do padrão de baixa tensão', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR4());
+    expect(plano.resumo.eletrica!.categoria).not.toBeNull();
+    expect(plano.pendencias.filter((x) => x.grupo === 'VERIFICACAO' && /^Elétrica \((?!ENTRADA)/.test(x.texto))).toEqual([]);
+  });
+
+  it('os circuitos de cada QD só levam pontos da unidade dele (dentro da fatia dela na divisão do pavimento)', () => {
+    const p = pedidoDoR8();
+    const plano = planejarPredioDoPedido(p);
+    const r = plano.resultado;
+    const b = p.original.blocos![0];
+    const pb = p.entrada.doBloco!;
+    const ord = ordinalDoTipo(p.original, b);
+    const piso = pb.pisos.find((x) => x.ordinal === ord)!;
+    const d = dividirPavimentoDoBloco({ bloco: b, produto: MEDIO, porTipologia: piso.porTipologia, nucleoM2: pb.nucleo.m2, elevadores: pb.nucleo.elevadores, ordinalDoTipo: ord, rotacaoNorteDeg: null, direcaoDaRua: direcaoDaRua(p.original) });
+    if (!d.ok) throw new Error(d.motivo);
+    let conferidos = 0;
+    for (const u of d.divisao.unidades) {
+      const q = r.quadros.find((x) => x.levelId === plano.tipoLevelId && x.nome === `QD ${u.numero}`)!;
+      const circuitos = new Set(r.circuitos.filter((c) => c.quadroId === q.id).map((c) => c.id));
+      const pontos = r.terminais.filter((t) => t.levelId === plano.tipoLevelId && t.circuitoId && circuitos.has(t.circuitoId));
+      expect(pontos.length).toBeGreaterThan(0);
+      expect(pontos.filter((t) => !pointInPolygon(u.anel as Point[], t.at)).map((t) => t.id)).toEqual([]);
+      conferidos += pontos.length;
+    }
+    expect(conferidos).toBeGreaterThan(50);
+  });
+
+  it('pular a re-derivação das cópias quando o comando não toca o tipo não muda nada: uma sincronização forçada no fim deixa o mesmo modelo', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR4());
+    const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
+    const forcado = applyCommand(plano.resultado, { type: 'SetLevelProps', levelId: tipo.id, name: tipo.name }).model;
+    expect(snapshotHash(forcado)).toBe(snapshotHash(plano.resultado));
+    expect(plano.hashDoResultado).toBe(snapshotHash(plano.resultado));
+  });
+
+  it('o lançamento sem reaplicar: o histórico empilha o resultado previsto só sobre a base de onde ele saiu', () => {
+    const p = pedidoDoR4();
+    const plano = planejarPredioDoPedido(p);
+    const h = new ModelHistory(p.original);
+    const r = h.applyPrecomputed(plano.hashDoOriginal, { model: plano.resultado, diff: { created: plano.criados, updated: [], deleted: [], ancestry: {} }, hash: plano.hashDoResultado });
+    expect(r.diff.created).toEqual(plano.criados);
+    expect(snapshotHash(h.current)).toBe(plano.hashDoResultado);
+    h.undo();
+    expect(snapshotHash(h.current)).toBe(plano.hashDoOriginal);
+    const mexido = new ModelHistory(applyCommand(p.original, { type: 'AddWall', levelId: p.original.levels[0].id, a: point(1000, 1000), b: point(3000, 1000), thicknessMm: 140, heightMm: 2800 }).model);
+    expect(() => mexido.applyPrecomputed(plano.hashDoOriginal, { model: plano.resultado, diff: { created: plano.criados, updated: [], deleted: [], ancestry: {} }, hash: plano.hashDoResultado })).toThrow(/mudou desde a prévia/);
   });
 });

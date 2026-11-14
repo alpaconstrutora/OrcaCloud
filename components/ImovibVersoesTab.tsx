@@ -166,8 +166,8 @@ const ImovibVersoesTab: React.FC<Props> = ({ study }) => {
                                         {diferenca.indicadores.map(i => (
                                             <tr key={i.chave}>
                                                 <td className="py-2 pr-3 text-gray-700">{i.rotulo}</td>
-                                                <td className="py-2 pr-3 text-right text-gray-700">{fmt(i.a, i.unidade)}</td>
-                                                <td className={`py-2 text-right ${i.a !== i.b ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>{fmt(i.b, i.unidade)}</td>
+                                                <td className="py-2 pr-3 text-right text-gray-700">{i.textoA ?? fmt(i.a, i.unidade)}</td>
+                                                <td className={`py-2 text-right ${i.a !== i.b ? 'text-gray-900 font-medium' : 'text-gray-700'}`}>{i.textoB ?? fmt(i.b, i.unidade)}</td>
                                             </tr>
                                         ))}
                                     </tbody>

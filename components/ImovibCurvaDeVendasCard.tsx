@@ -74,8 +74,9 @@ const ImovibCurvaDeVendasCard: React.FC<ImovibCurvaDeVendasCardProps> = ({ study
 
     // Gráfico sem vendas: a causa certa, na ordem em que o motor desconta (VGV → permutas → curva).
     // Antes, sem vendas a culpa era sempre da VSO, mesmo com permuta de 100%.
-    const vendavelPct = (1 - Math.min(100, Math.max(0, study.swap_physical_percent ?? D.swap_physical_percent)) / 100)
-        * (1 - Math.min(100, Math.max(0, study.swap_financial_percent ?? D.swap_financial_percent)) / 100);
+    // Mesma conta do motor, sem limitar as permutas a 0–100% (o motor não limita).
+    const vendavelPct = (1 - (study.swap_physical_percent ?? D.swap_physical_percent) / 100)
+        * (1 - (study.swap_financial_percent ?? D.swap_financial_percent) / 100);
     const motivoSemVendas = !(math.vgvTotal > 0)
         ? 'Sem VGV para distribuir: informe o preço de venda em Orçamento › Por torre.'
         : vendavelPct <= 0

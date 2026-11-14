@@ -46,6 +46,21 @@ describe('cenários padrão pelo tipo, não pelo nome', () => {
         const criados = svc.criarCenariosPadrao.mock.calls[0][1] as { kind: string }[];
         expect(criados.map(c => c.kind)).toEqual(['otimista']);
     });
+    it('personalizado com o nome de um padrão: não oferece criar o que não sairia, e diz por quê', () => {
+        render(comEdicao(<ImovibCenariosCard study={estudo} cenarios={[cenario('a', 'Pessimista', 'personalizado'), cenario('b', 'Otimista', 'otimista')]} carregando={false} erro={null} onCenarios={vi.fn()} />));
+        const botao = screen.getByRole('button', { name: /cenários padrão/i }) as HTMLButtonElement;
+        expect(botao.disabled).toBe(true);
+        expect(botao.title).toMatch(/Já existe um cenário chamado "Pessimista"/);
+    });
+
+    it('nome tomado só para um deles: cria o outro', async () => {
+        const user = userEvent.setup();
+        svc.criarCenariosPadrao.mockResolvedValue(undefined);
+        svc.listarCenarios.mockResolvedValue([]);
+        render(comEdicao(<ImovibCenariosCard study={estudo} cenarios={[cenario('a', 'Pessimista', 'personalizado')]} carregando={false} erro={null} onCenarios={vi.fn()} />));
+        await user.click(screen.getByRole('button', { name: /cenários padrão/i }));
+        expect((svc.criarCenariosPadrao.mock.calls[0][1] as { kind: string }[]).map(c => c.kind)).toEqual(['otimista']);
+    });
 });
 
 describe('riscos', () => {

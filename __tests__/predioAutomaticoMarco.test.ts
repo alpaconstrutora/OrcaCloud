@@ -66,6 +66,9 @@ function marcoDoPredio(c: Caso) {
     nucleos: (m.nucleos ?? []).length,
     // PA4: pilares, vigas, lajes e fundação de todos os pavimentos.
     estruturas: m.structures.length,
+    // PA5: quadros e pontos (elétricos, hidráulicos) de todos os pavimentos.
+    quadros: (m.quadros ?? []).length,
+    terminais: (m.terminais ?? []).length,
   };
 }
 

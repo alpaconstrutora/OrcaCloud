@@ -474,7 +474,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <div className="flex flex-col">
                         <div className="text-sm font-normal text-gray-900 truncate max-w-[150px]">
                             {(project.settings?.diaryEntries && project.settings.diaryEntries.length > 0)
-                                ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString()
+                                ? new Date(project.settings.diaryEntries[project.settings.diaryEntries.length - 1].date).toLocaleDateString('pt-BR')
                                 : '-'}
                         </div>
                         <span className="text-xs text-gray-400 font-normal lowercase italic">Visto por último</span>
@@ -566,7 +566,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 );
             }
             case 'created':
-                return <span className="text-sm font-normal text-gray-600">{new Date(project.created_at || 0).toLocaleDateString()}</span>;
+                return <span className="text-sm font-normal text-gray-600">{new Date(project.created_at || 0).toLocaleDateString('pt-BR')}</span>;
             case 'updated':
                 return isDiaryContext ? (
                     <div className="flex items-center gap-2 text-sm font-normal text-gray-600">
@@ -585,8 +585,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 ) : (
                     <div className="flex items-center gap-1.5 text-sm font-normal text-gray-600 whitespace-nowrap">
                         <Calendar className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                        <span>{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</span>
-                        <span className="text-xs text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                        <span>{new Date(project.updated_at || project.created_at || 0).toLocaleDateString('pt-BR')}</span>
+                        <span className="text-xs text-gray-500">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</span>
                     </div>
                 );
             case 'status-budget':
@@ -1115,7 +1115,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         placeholder="Buscar por nome ou cliente…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
-                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
+                        // placeholder:text-gray-500 — sem ele o navegador usava o cinza padrão (3,0:1, abaixo do AA).
+                        className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium placeholder:text-gray-500 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
                     />
                 </div>
 
@@ -1393,7 +1394,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                     {project.settings?.tipoObra && (
                                         <div className="mb-3">
-                                            <span className={`px-2 py-0.5 rounded border text-[9px] font-semibold tracking-wide ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
+                                            <span className={`px-2 py-0.5 rounded border text-xs font-semibold ${TIPO_OBRA_COLORS[project.settings.tipoObra as TipoObra] || 'bg-gray-100 text-gray-600 border-gray-200'}`}>
                                                 {TIPO_OBRA_LABELS[project.settings.tipoObra as TipoObra] || project.settings.tipoObra}
                                             </span>
                                         </div>
@@ -1419,14 +1420,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
 
                                     <div className="space-y-2 pt-4 border-t border-gray-50">
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-400">Criado em:</span>
-                                            <span className="text-gray-600 font-medium">{new Date(project.created_at || 0).toLocaleDateString()}</span>
+                                            <span className="text-gray-500">Criado em:</span>
+                                            <span className="text-gray-600 font-medium">{new Date(project.created_at || 0).toLocaleDateString('pt-BR')}</span>
                                         </div>
                                         <div className="flex items-center justify-between text-xs">
-                                            <span className="text-gray-400">Atualizado em:</span>
+                                            <span className="text-gray-500">Atualizado em:</span>
                                             <div className="text-right">
-                                                <div className="text-gray-600 font-medium">{new Date(project.updated_at || project.created_at || 0).toLocaleDateString()}</div>
-                                                <div className="text-xs text-gray-400">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</div>
+                                                <div className="text-gray-600 font-medium">{new Date(project.updated_at || project.created_at || 0).toLocaleDateString('pt-BR')}</div>
+                                                <div className="text-xs text-gray-500">{new Date(project.updated_at || project.created_at || 0).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}</div>
                                             </div>
                                         </div>
                                     </div>
@@ -1473,7 +1474,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 }}
             />
             {notification && (
-                <div className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
+                // role/aria-live: o leitor de tela anuncia o resultado (sucesso ou erro) sem tirar o foco.
+                <div role={notification.type === 'error' ? 'alert' : 'status'} aria-live={notification.type === 'error' ? 'assertive' : 'polite'} className={`fixed bottom-6 right-6 z-[300] flex items-center gap-3 px-5 py-4 rounded-2xl shadow-xl text-sm font-medium animate-in slide-in-from-bottom-4 duration-300 ${
                     notification.type === 'success' ? 'bg-emerald-600 text-white' : 'bg-red-600 text-white'
                 }`}>
                     <AlertCircle className="w-4 h-4 shrink-0" />

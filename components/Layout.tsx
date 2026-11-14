@@ -443,7 +443,7 @@ const Layout: React.FC<LayoutProps> = ({
       { id: 'labor-portal', label: 'Portal do Colaborador', group: 'Portais', icon: Smartphone },
       { id: 'notifications-center', label: 'Notificações', group: 'Geral', icon: Bell },
       { id: 'eng-obras', label: 'Obras', group: 'Engenharia', icon: Building2 },
-      { id: 'eng-orcamentos', label: 'Orcamentos', group: 'Engenharia', icon: FolderOpen },
+      { id: 'eng-orcamentos', label: 'Orçamentos', group: 'Engenharia', icon: FolderOpen },
       { id: 'eng-planejamento', label: 'Planejamento', group: 'Engenharia', icon: Calendar },
       { id: 'supplies-solicitacoes', label: 'Solicitações de compra', group: 'Suprimentos', icon: ClipboardPen },
       { id: 'supplies-contracts', label: 'Contratos', group: 'Suprimentos', icon: FileText },

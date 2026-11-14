@@ -127,7 +127,7 @@ export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlterna
                         {/* Nome muito longo (contraparte do extrato) empurrava contagem e total para fora da tela. */}
                         <span className="font-semibold text-sm text-slate-800 truncate max-w-[22rem]" title={grupo.label}>{grupo.label}</span>
                         {continua && <span className="text-xs font-normal text-slate-500">(continua)</span>}
-                        <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
+                        <span className="text-xs font-normal text-slate-600 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
                         {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
                         {!semTotal && <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title={tituloTotal}>{formatMoney(grupo.total)}</span>}
                     </div>

@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { estruturaDoTipo } from '../utils/empreendimentoTipos';
-import { camposDoLote, ehUnidadeUnica, foraDoMolde, nomeDaTorreImplicita } from '../utils/empreendimentoUnidadeUnica';
+import { camposDoLote, ehUnidadeUnica, foraDoMolde, nomeDaTorreImplicita, temTerrenoProprio } from '../utils/empreendimentoUnidadeUnica';
 
 const t = (slug: string, organization_id: string | null, estrutura?: string) => ({ slug, organization_id, estrutura });
 
@@ -32,10 +32,23 @@ describe('estruturaDoTipo', () => {
 });
 
 describe('unidade única', () => {
-  it('LOTE e IMOVEL_UNICO são unidade única; TORRES não', () => {
+  it('LOTE, IMOVEL_UNICO e UNIDADE_AUTONOMA são unidade única; TORRES não', () => {
     expect(ehUnidadeUnica('LOTE')).toBe(true);
     expect(ehUnidadeUnica('IMOVEL_UNICO')).toBe(true);
+    expect(ehUnidadeUnica('UNIDADE_AUTONOMA')).toBe(true);
     expect(ehUnidadeUnica('TORRES')).toBe(false);
+  });
+
+  it('só a UNIDADE_AUTONOMA (apartamento) não tem terreno próprio', () => {
+    expect(temTerrenoProprio('LOTE')).toBe(true);
+    expect(temTerrenoProprio('IMOVEL_UNICO')).toBe(true);
+    expect(temTerrenoProprio('UNIDADE_AUTONOMA')).toBe(false);
+  });
+
+  it('a estrutura UNIDADE_AUTONOMA gravada no banco é reconhecida (não cai em TORRES)', () => {
+    const tipos = [{ slug: 'apartamento_residencial', organization_id: 'org-a', estrutura: 'UNIDADE_AUTONOMA' }];
+    expect(estruturaDoTipo(tipos, 'apartamento_residencial', 'org-a')).toBe('UNIDADE_AUTONOMA');
+    expect(nomeDaTorreImplicita('UNIDADE_AUTONOMA', undefined)).toBe('Unidade');
   });
 
   it('fora do molde = mais de uma torre ou de uma unidade', () => {

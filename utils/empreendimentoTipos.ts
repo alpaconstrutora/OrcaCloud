@@ -25,16 +25,19 @@ export function tiposUnicosPorSlug<T extends TipoComOrg>(tipos: T[], orgId?: str
  * Como a aba de unidades do empreendimento se monta (09/11/2026) — `empreendimento_types.estrutura`.
  * TORRES = torres → pavimentos → unidades; LOTE = a unidade é o próprio terreno; IMOVEL_UNICO = uma
  * unidade sobre o terreno (casa, chácara). Plano: docs/planos/2026-11-09-empreendimento-unidade-unica.md.
+ * UNIDADE_AUTONOMA (13/11/2026) = uma unidade dentro de um prédio que não é do empreendimento
+ * (apartamento, sala): aba "Unidade" sem a seção Terreno. Plano: docs/planos/2026-11-13-empreendimento-apartamento-unidade.md.
  */
-export type EstruturaDoTipo = 'TORRES' | 'LOTE' | 'IMOVEL_UNICO';
+export type EstruturaDoTipo = 'TORRES' | 'LOTE' | 'IMOVEL_UNICO' | 'UNIDADE_AUTONOMA';
 
 export const ESTRUTURAS_DO_TIPO: { value: EstruturaDoTipo; label: string }[] = [
   { value: 'TORRES', label: 'Torres e unidades' },
   { value: 'LOTE', label: 'Lote (a unidade é o próprio terreno)' },
   { value: 'IMOVEL_UNICO', label: 'Imóvel único (casa, chácara)' },
+  { value: 'UNIDADE_AUTONOMA', label: 'Unidade sem terreno (apartamento, sala)' },
 ];
 
-const ehEstrutura = (v: unknown): v is EstruturaDoTipo => v === 'TORRES' || v === 'LOTE' || v === 'IMOVEL_UNICO';
+const ehEstrutura = (v: unknown): v is EstruturaDoTipo => ESTRUTURAS_DO_TIPO.some(e => e.value === v);
 
 /**
  * A estrutura do tipo do empreendimento. O slug se repete entre orgs, então vale o registro da org do

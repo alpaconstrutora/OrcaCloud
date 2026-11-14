@@ -1542,10 +1542,18 @@ clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGru
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num
 grupo de fornecedores lê como dado errado.
 
-**Fora das opções de propósito:** coluna com vários valores por linha (ex.:
-"Empreendimento Vinculado" em Clientes — um cliente pode ter vários) e coluna que é
-relatório agregado (Custos & Rateio, Fechamento por CC). O grupo precisa de UM valor
-por linha.
+**Fora das opções de propósito:** coluna que é relatório agregado (Custos & Rateio,
+Fechamento por CC). O grupo precisa de UM valor por linha.
+
+**Coluna com vários valores por linha** (ex.: "Empreendimento Vinculado" em Meus
+Clientes — um cliente pode ter vários) ficou fora até 13/11/2026, quando o usuário
+pediu ("Filtro grupo falta empreendimento"). Desde então agrupa pela **COMBINAÇÃO**
+— `chavePorCombinacao` em `utils/agruparLinhas.ts`: quem tem só X cai em "X"; quem
+tem X e Y cai em "X, Y" (o mesmo texto que a célula lista), em ordem alfabética para
+"X, Y" e "Y, X" caírem juntos, chave pelos ids. A linha **nunca** é duplicada em
+dois grupos — contagem, seleção, Shift+clique e paginação seguem contando cada
+registro uma vez. Sem nenhum valor → "Sem …". Use o mesmo caminho em outra coluna
+multivalorada antes de inventar outro.
 
 **Peças compartilhadas — tela nova usa estas, não copia o markup:**
 
@@ -3283,7 +3291,9 @@ explicitamente — nunca um único `setIsModalOpen(false)` incondicional.
 > `form="<id do form>"`. A mensagem de erro de validação desce para logo abaixo
 > do subtítulo (não há mais rodapé para abrigá-la). Regras de dirty/rótulo
 > ("Voltar" em edição, salvar desligado sem pendência) seguem iguais. Outras
-> telas migram ao serem tocadas, não em varredura.
+> telas migram ao serem tocadas, não em varredura. Já migradas: `SupplierForm.tsx`
+> (28/10/2026) e `ClientForm.tsx` (13/11/2026, Meus Clientes — o erro de
+> organização continua ao lado do campo, então não desce para o subtítulo).
 
 ### Pendência de propagação
 

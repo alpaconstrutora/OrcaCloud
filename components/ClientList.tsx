@@ -26,9 +26,11 @@ import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
 import { isObra } from '../utils/projectClassification';
-import { agruparLinhas, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparLinhas, chavePorCombinacao, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { clientPropagacaoService, contagemDoPlano, type PlanoDePropagacao } from '../services/clientPropagacaoService';
+import { camposAlterados, descreverCampos, linhasDoResumo } from '../utils/clientPropagacao';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -201,18 +203,25 @@ const CategoryLabel: React.FC<{ category?: string }> = ({ category }) => (
 );
 
 // "Agrupar" — guia de UI §6.12. Chave = o MESMO texto que a coluna mostra.
-// "Empreendimento Vinculado" fica fora: um cliente pode ter vários, e o grupo
-// precisa de UM valor por linha.
-type CampoAgrupar = 'tipo' | 'status' | 'organizacao' | 'portal';
+// "Empreendimento" entrou em 13/11/2026, a pedido do usuário ("Filtro grupo
+// falta empreendimento"). Um cliente pode ter vários, e o grupo precisa de UM
+// valor por linha — então a chave é a COMBINAÇÃO, igual à célula da coluna
+// "Empreendimento Vinculado": quem tem só o Residencial X cai em "Residencial X";
+// quem tem X e Y cai em "Residencial X, Residencial Y" (molde ClickUp para
+// campo de vários valores). Não duplica a linha em dois grupos: contagem,
+// seleção e paginação continuam contando cada cliente uma vez.
+type CampoAgrupar = 'tipo' | 'status' | 'organizacao' | 'portal' | 'empreendimento';
 const OPCOES_AGRUPAR: { value: CampoAgrupar; label: string }[] = [
     { value: 'tipo', label: 'Tipo' },
     { value: 'status', label: 'Status' },
     { value: 'organizacao', label: 'Organização' },
+    { value: 'empreendimento', label: 'Empreendimento' },
     { value: 'portal', label: 'Portal do Cliente' },
 ];
-const SEM_GRUPO: Record<CampoAgrupar, string> = { tipo: 'Não definido', status: 'Sem status', organizacao: 'Sem organização', portal: 'Sem portal' };
-function chaveDoGrupo(campo: CampoAgrupar, c: Client): ChaveDeGrupo {
+const SEM_GRUPO: Record<CampoAgrupar, string> = { tipo: 'Não definido', status: 'Sem status', organizacao: 'Sem organização', portal: 'Sem portal', empreendimento: 'Sem empreendimento' };
+function chaveDoGrupo(campo: CampoAgrupar, c: Client, emps: (clientId: string) => { id: string; name: string }[]): ChaveDeGrupo {
     switch (campo) {
+        case 'empreendimento': return chavePorCombinacao(emps(c.id));
         case 'tipo': return chavePorNome(c.category);
         // Mesmo critério do interruptor da coluna: só "Inativo" é inativo.
         case 'status': return c.status === 'Inativo' ? { key: 'inativo', label: 'Inativo' } : { key: 'ativo', label: 'Ativo' };
@@ -512,7 +521,52 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
      * 25: quem decide fechar e o formulario (so na criacao) -- este handler
      * nunca fecha nada, so sincroniza a lista local (22).
      */
+    /**
+     * Depois de salvar uma EDIÇÃO: se mudou um campo que tem cópia em outras
+     * tabelas (nome, e-mail), pergunta se propaga — e só pergunta se houver
+     * cópia para corrigir. Pedido de 13/11/2026; mapa dos destinos em
+     * `utils/clientPropagacao.ts`. Roda DEPOIS do `return saved` (não é
+     * aguardada), para o formulário sair do "Salvando..." antes da pergunta.
+     */
+    const oferecerPropagacao = async (anterior: Client | undefined, saved: Client) => {
+        const campos = camposAlterados(anterior, saved);
+        if (!campos) return;
+        let plano: PlanoDePropagacao;
+        try {
+            plano = await clientPropagacaoService.planejar(saved.id, campos);
+        } catch (err) {
+            console.error('Erro ao procurar cópias do cliente para propagar:', err);
+            return;
+        }
+        const linhas = linhasDoResumo(contagemDoPlano(plano));
+        if (!linhas.length) return;
+        const ok = await confirm({
+            title: `Propagar ${descreverCampos(campos)} pelo app?`,
+            message: `O cadastro foi salvo. Estes registros guardam uma cópia de ${descreverCampos(campos)} do cliente e ainda mostram o valor antigo:\n\n${linhas.map(l => `• ${l}`).join('\n')}\n\nRecibos, notas fiscais e o histórico de cobrança já emitidos não mudam.`,
+            confirmLabel: 'Propagar',
+            cancelLabel: 'Só no cadastro',
+        });
+        if (!ok) return;
+        try {
+            const r = await clientPropagacaoService.aplicar(plano);
+            if (r.obrasAlteradas) void useStore.getState().fetchProjects();
+            if (r.recusados > 0) {
+                showToast(
+                    `${r.atualizados} registro(s) atualizado(s); ${r.recusados} não puderam ser alterados${r.motivo ? ` — ${r.motivo}` : ' (sem permissão de edição)'}.`,
+                    'error',
+                );
+            } else {
+                showToast(`Propagado: ${r.atualizados} registro(s) atualizado(s).`, 'success');
+            }
+        } catch (err) {
+            console.error('Erro ao propagar alteração do cliente:', err);
+            showToast('O cadastro foi salvo, mas não foi possível propagar a alteração.', 'error');
+        }
+    };
+
     const handleSubmit = async (data: Partial<Client>, empreendimentoIds: string[]): Promise<Client | null> => {
+        // Valores ANTES deste salvamento, para saber o que mudou (propagação).
+        const anterior = data.id ? clients.find(c => c.id === data.id) : undefined;
         try {
             const saved = await clientService.saveClient(data);
 
@@ -537,6 +591,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
             if (onClientsChange) onClientsChange();
             showToast('Cliente salvo com sucesso!', 'success');
+            if (anterior) void oferecerPropagacao(anterior, saved);
             return saved;
         } catch (error) {
             console.error("Erro ao salvar cliente:", error);
@@ -639,15 +694,53 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
             });
     }, [clients, portalContext, searchTerm, categoryFilter, advancedFilters.rules, advancedFilterFields, tableColumns.sortColumn, tableColumns.sortDirection]);
 
+    const getClientProjects = React.useCallback(
+        (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && isObra(p)),
+        [projects]
+    );
+
+    /**
+     * Empreendimento(s) vinculado(s) ao cliente -- a soma dos DOIS caminhos:
+     *
+     *  1. Vinculo EXPLICITO escolhido no cadastro (`client_empreendimentos`);
+     *  2. Vinculo DERIVADO: obra do cliente (`settings.clientId`) resolvida ate
+     *     o empreendimento-pai.
+     *
+     * Deduplicado por id: duas obras/torres do mesmo empreendimento -- ou o
+     * mesmo empreendimento chegando pelos dois caminhos -- nao podem virar dois
+     * vinculos distintos.
+     */
+    const getClientEmpreendimentos = React.useCallback(
+        (clientId: string) => {
+            const seen = new Set<string>();
+            const result: { id: string; name: string }[] = [];
+
+            for (const emp of directEmpreendimentos[clientId] ?? []) {
+                if (seen.has(emp.id)) continue;
+                seen.add(emp.id);
+                result.push(emp);
+            }
+            for (const p of getClientProjects(clientId)) {
+                const emp = obraToEmpreendimento[p.id];
+                if (emp && !seen.has(emp.id)) {
+                    seen.add(emp.id);
+                    result.push({ id: emp.id, name: emp.name });
+                }
+            }
+            return result;
+        },
+        [directEmpreendimentos, getClientProjects, obraToEmpreendimento]
+    );
+
     // Agrupamento só no modo lista (a grade não tem linha de grupo).
     const groupBy = agrupamento.campo;
     const agrupando = viewMode === 'list' && groupBy !== 'none';
     const grupos = React.useMemo(() => (groupBy === 'none' ? [] : agruparLinhas(filteredClients, {
-        chave: c => chaveDoGrupo(groupBy, c),
+        chave: c => chaveDoGrupo(groupBy, c, getClientEmpreendimentos),
         semRotulo: SEM_GRUPO[groupBy],
         ordem: groupBy === 'status' || groupBy === 'portal' ? ['ativo', 'inativo'] : 'aparicao',
         direcao: agrupamento.direcao,
-    })), [filteredClients, groupBy, agrupamento.direcao]);
+    })), [filteredClients, groupBy, agrupamento.direcao, getClientEmpreendimentos]);
     const entradas: EntradaDaTela<Client>[] = React.useMemo(
         () => (agrupando ? entradasDaPagina(grupos, agrupamento.recolhidos) : filteredClients.map((item, indice) => ({ tipo: 'linha' as const, item, indice }))),
         [agrupando, grupos, agrupamento.recolhidos, filteredClients],
@@ -696,43 +789,6 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
     const totalClients = clientesNoEscopo.length;
 
 
-    const getClientProjects = React.useCallback(
-        (clientId: string) => projects.filter(p => p.settings?.clientId === clientId && isObra(p)),
-        [projects]
-    );
-
-    /**
-     * Empreendimento(s) vinculado(s) ao cliente -- a soma dos DOIS caminhos:
-     *
-     *  1. Vinculo EXPLICITO escolhido no cadastro (`client_empreendimentos`);
-     *  2. Vinculo DERIVADO: obra do cliente (`settings.clientId`) resolvida ate
-     *     o empreendimento-pai.
-     *
-     * Deduplicado por id: duas obras/torres do mesmo empreendimento -- ou o
-     * mesmo empreendimento chegando pelos dois caminhos -- nao podem virar dois
-     * vinculos distintos.
-     */
-    const getClientEmpreendimentos = React.useCallback(
-        (clientId: string) => {
-            const seen = new Set<string>();
-            const result: { id: string; name: string }[] = [];
-
-            for (const emp of directEmpreendimentos[clientId] ?? []) {
-                if (seen.has(emp.id)) continue;
-                seen.add(emp.id);
-                result.push(emp);
-            }
-            for (const p of getClientProjects(clientId)) {
-                const emp = obraToEmpreendimento[p.id];
-                if (emp && !seen.has(emp.id)) {
-                    seen.add(emp.id);
-                    result.push({ id: emp.id, name: emp.name });
-                }
-            }
-            return result;
-        },
-        [directEmpreendimentos, getClientProjects, obraToEmpreendimento]
-    );
 
     // ── Dashboard ───────────────────────────────────────────────────────────
     // Tudo derivado do que a tela JÁ carregou, mais os tokens em lote. Nenhuma

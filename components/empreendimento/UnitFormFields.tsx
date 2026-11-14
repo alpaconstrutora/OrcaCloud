@@ -143,13 +143,18 @@ interface UnitFormFieldsProps {
    * Posição (frente/lateral/fundos do prédio) não têm o que dizer e somem.
    */
   semPavimento?: boolean;
+  /**
+   * Com `semPavimento`: mostra só "Andar" (número, grava em `floor`) — o apartamento de um prédio
+   * que não é do empreendimento (UNIDADE_AUTONOMA, 13/11/2026). Tipo de pavimento e Posição seguem fora.
+   */
+  comAndar?: boolean;
   /** Rótulo do campo do nome; padrão "Unidade (ex: 101) *". */
   rotuloDoNome?: string;
 }
 
 export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
   value, onChange, towers, towerId, onTowerChange, erroNome, idPrefix = 'unidade', pavimentos = [],
-  semPavimento = false, rotuloDoNome = 'Unidade (ex: 101) *',
+  semPavimento = false, comAndar = false, rotuloDoNome = 'Unidade (ex: 101) *',
 }) => {
   const id = (k: string) => `${idPrefix}-${k}`;
   const numero = (k: keyof UnitFormValues, rotulo: string, step?: string) => (
@@ -177,7 +182,13 @@ export const UnitFormFields: React.FC<UnitFormFieldsProps> = ({
         {erroNome && <p id={id('name-erro')} className="text-xs text-red-600">{erroNome}</p>}
       </Campo>
 
-      {semPavimento ? null : pavimentos.length > 0 ? (
+      {semPavimento ? (comAndar ? (
+        <Campo rotulo="Andar" htmlFor={id('floor')}>
+          {/* 0 = térreo; negativo = subsolo (mesma convenção do pavimento das torres). */}
+          <input id={id('floor')} type="number" step="1" className={campoCls} value={value.floor} placeholder="ex: 3"
+            onChange={e => onChange({ floor: e.target.value, floor_id: '' })} />
+        </Campo>
+      ) : null) : pavimentos.length > 0 ? (
         <Campo rotulo="Pavimento" htmlFor={id('floor')}>
           <select id={id('floor')} className={campoCls} value={value.floor}
             onChange={e => {

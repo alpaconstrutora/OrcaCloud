@@ -9,7 +9,8 @@
 //              leva os dois à unidade)
 //   Unidade  — IMOVEL_UNICO: os campos da unidade sem pavimento/posição (UnitFormFields semPavimento)
 //   Só a Unidade — UNIDADE_AUTONOMA (13/11/2026, Apartamento Residencial): o mesmo formulário do
-//              IMOVEL_UNICO, SEM a seção Terreno (o terreno é do prédio, não do empreendimento).
+//              IMOVEL_UNICO, SEM a seção Terreno (o terreno é do prédio, não do empreendimento), e COM
+//              o campo "Andar" (pedido de 14/11/2026).
 //
 // Por baixo continua uma torre (implícita) com uma unidade — Espelho de Vendas, Comercial, Condomínio
 // e Portal leem unidade dentro de torre. Preço e status ficam no Espelho de Vendas/Locações, como em
@@ -226,6 +227,7 @@ export const UnidadeUnicaEditor: React.FC<Props> = ({
               onChange={patch => { setImovelForm(p => ({ ...p, ...patch })); if ('name' in patch) setErroNome(undefined); }}
               erroNome={erroNome}
               semPavimento
+              comAndar={!temTerrenoProprio(estrutura)}
               rotuloDoNome="Identificação *"
             />
           )}

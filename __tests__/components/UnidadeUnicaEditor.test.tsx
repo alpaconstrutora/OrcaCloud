@@ -72,6 +72,7 @@ describe('UnidadeUnicaEditor', () => {
     expect(screen.queryByLabelText('Pavimento')).toBeNull();
     expect(screen.queryByLabelText('Tipo de pavimento')).toBeNull();
     expect(screen.queryByLabelText('Posição')).toBeNull();
+    expect(screen.queryByLabelText('Andar')).toBeNull(); // casa não tem andar
     expect((screen.getByLabelText('Tipologia') as HTMLInputElement).value).toBe('Casa Residencial');
     fireEvent.change(screen.getByLabelText('Área privativa (m²)'), { target: { value: '90' } });
     fireEvent.change(screen.getByLabelText('Dormitórios'), { target: { value: '3' } });
@@ -93,11 +94,15 @@ describe('UnidadeUnicaEditor', () => {
     expect(screen.queryByRole('button', { name: /Salvar terreno/ })).toBeNull();
     expect(screen.queryByText(/Terreno/)).toBeNull();
     expect((screen.getByLabelText('Tipologia') as HTMLInputElement).value).toBe('Apartamento Residencial');
+    // Andar (14/11/2026) — só ele; Tipo de pavimento e Posição continuam fora.
+    expect(screen.queryByLabelText('Tipo de pavimento')).toBeNull();
+    expect(screen.queryByLabelText('Posição')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Andar'), { target: { value: '3' } });
     fireEvent.change(screen.getByLabelText('Área privativa (m²)'), { target: { value: '72' } });
     fireEvent.click(screen.getByRole('button', { name: /Cadastrar unidade/ }));
     await waitFor(() => expect(svc.salvarUnidadeUnica).toHaveBeenCalledTimes(1));
     expect(svc.salvarUnidadeUnica.mock.calls[0][1]).toEqual({ nomeDaTorre: 'Apartamento Residencial', nomeDaUnidade: 'Lote Vale do Sol', tipologia: 'Apartamento Residencial' });
-    expect(svc.salvarUnidadeUnica.mock.calls[0][2]).toEqual(expect.objectContaining({ private_area: 72 }));
+    expect(svc.salvarUnidadeUnica.mock.calls[0][2]).toEqual(expect.objectContaining({ private_area: 72, floor: 3 }));
     expect(svc.update).not.toHaveBeenCalled();
   });
 

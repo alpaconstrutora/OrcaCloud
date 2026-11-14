@@ -50,3 +50,15 @@ Os demais (`EspelhoVendas/LocacoesTab`, `BrokerDevelopments`, `empreendimentoSer
 2. `tsc --noEmit` limpo; `check-ui-standard.sh` limpo nos `.tsx` tocados.
 3. No app (só leitura), num empreendimento Apartamento Residencial: aba **"Unidade"** (não "Torres & Unidades"), com o formulário da unidade e sem "Terreno"; abrir não grava.
 4. Publicação: push em `main`, depois `conferir-producao.sh`.
+
+## Pedido de 14/11/2026 (mesmo PR #407)
+
+> 1. Corrigir Defeito real encontrado no caminho […] na Negociação […] — **frente/PR separado** (`negociacao-lancamento-sem-data`).
+> 2. Esconder o card "Terreno" da Visão Geral.
+> 3. Incluir o andar do apartamento
+
+- [x] **2.** `EmpreendimentoDetail.tsx`: o card Terreno da Visão Geral só aparece quando o tipo tem terreno próprio (`temTerrenoProprio`), a mesma regra da seção Terreno da aba Unidade.
+  **Pronto:** some no apartamento e continua na casa (verificado no app).
+- [x] **3.** `UnitFormFields.tsx`: prop `comAndar`. Com `semPavimento`, mostra só o campo **"Andar"** (número, grava em `floor`; 0 = térreo). Tipo de pavimento e Posição continuam fora. `UnidadeUnicaEditor` liga `comAndar` quando não há terreno próprio, ou seja, no apartamento.
+  O Espelho de Vendas, a Tabela de Preços e o Portal do Corretor já mostram a coluna Pavimento para tudo que não é Lote (`tabelaDePrecosColunas`), então o andar aparece lá sem mudança.
+  **Pronto:** o teste do editor confere "Andar" no apartamento, `floor: 3` no que é gravado, e nenhum "Andar" na casa.

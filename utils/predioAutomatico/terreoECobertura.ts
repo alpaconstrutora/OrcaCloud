@@ -207,7 +207,7 @@ export interface CoberturaMontada {
 }
 
 /** A cobertura: o pavimento sobre o último andar, a laje, a platibanda (pelas paredes de fachada do tipo) e o nome. */
-export function montarCobertura(ctx: ContextoDoPredio, base: BaseDoPredio, hip: HipotesesDoPredio): CoberturaMontada {
+export function montarCobertura(ctx: ContextoDoPredio, base: BaseDoPredio, hip: HipotesesDoPredio, comLaje = true): CoberturaMontada {
   const { bloco: b, tipoLevelId: tipo } = base;
   const avisos: string[] = [];
   let n = 0;
@@ -216,7 +216,8 @@ export function montarCobertura(ctx: ContextoDoPredio, base: BaseDoPredio, hip: 
   const cob = ctx.m.levels.find((l) => l.uid === uidDaCobertura(b))!.id;
   // Sem rótulo: a prancha escreve o da estrutura no centro da peça e o nome do ambiente no centro do espaço — aqui a laje
   // É o espaço, e os dois textos caíam um sobre o outro. A numeração das lajes (L1, L2…) vem com a estrutura (PA4).
-  n += ctx.aplicar([{ type: 'AddStructural', levelId: cob, kind: 'LAJE', pontos: b.pontos.map((p) => ({ ...p })), alturaMm: hip.espessuraDaLajeMm, baseMm: 0, rotulo: null }]);
+  // PA4: com a estrutura lançada, a laje do último andar (o teto dele) JÁ é a da cobertura — outra aqui dobraria.
+  if (comLaje) n += ctx.aplicar([{ type: 'AddStructural', levelId: cob, kind: 'LAJE', pontos: b.pontos.map((p) => ({ ...p })), alturaMm: hip.espessuraDaLajeMm, baseMm: 0, rotulo: null }]);
   // A platibanda segue as paredes de fachada do tipo (a mesma linha da fachada), na altura dela.
   const fachada = ctx.m.walls.filter((w) => w.levelId === tipo && naFachada(w, b.pontos));
   n += ctx.aplicar(fachada.map((w): Command => ({ type: 'AddWall', levelId: cob, a: { ...w.a }, b: { ...w.b }, thicknessMm: w.thicknessMm, heightMm: hip.alturaDaPlatibandaMm })));

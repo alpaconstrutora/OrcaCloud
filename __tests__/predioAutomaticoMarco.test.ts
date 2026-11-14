@@ -64,6 +64,8 @@ function marcoDoPredio(c: Caso) {
     plantas: p.plantas,
     paredes: m.walls.length,
     nucleos: (m.nucleos ?? []).length,
+    // PA4: pilares, vigas, lajes e fundação de todos os pavimentos.
+    estruturas: m.structures.length,
   };
 }
 

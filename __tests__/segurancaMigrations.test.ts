@@ -111,29 +111,94 @@ function policiesPermissivas(sql: string): number {
   }).length;
 }
 
-/** P3: CREATE FUNCTION SECURITY DEFINER sem REVOKE de PUBLIC no mesmo arquivo. */
+/** `"public"."fn"`, `public.fn`, `fn` → { schema, nome } (sem aspas, minúsculo). */
+const NOME_DE_FUNCAO = String.raw`(?:"?([A-Za-z_][\w$]*)"?\s*\.\s*)?"?([A-Za-z_][\w$]*)"?`;
+
+/**
+ * Cada definição de função do arquivo — `CREATE [OR REPLACE] FUNCTION` e
+ * `ALTER FUNCTION` — com os ATRIBUTOS: o cabeçalho antes do corpo e o que vem
+ * depois dele até o `;`. O corpo fica de fora, para texto citado lá dentro não
+ * contar. O corpo abre depois de `AS` com qualquer `$tag$` ou aspas simples (ou é
+ * `BEGIN ATOMIC ... END`); sem corpo, a definição vai até o primeiro `;`.
+ * Antes a trava só via `$$`/`$function$`, só olhava antes do corpo e só `public.fn`.
+ */
+function definicoesDeFuncao(corpo: string): { schema: string; nome: string; atributos: string }[] {
+  const definicoes: { schema: string; nome: string; atributos: string }[] = [];
+  const inicioRe = new RegExp(String.raw`\b(CREATE\s+(?:OR\s+REPLACE\s+)?|ALTER\s+)FUNCTION\s+${NOME_DE_FUNCAO}\s*\(`, 'gi');
+  let m: RegExpExecArray | null;
+  while ((m = inicioRe.exec(corpo))) {
+    const resto = corpo.slice(m.index);
+    const schema = (m[2] ?? 'public').toLowerCase();
+    const nome = m[3].toLowerCase();
+    if (/^ALTER/i.test(m[1])) {
+      const fim = resto.indexOf(';');
+      definicoes.push({ schema, nome, atributos: fim < 0 ? resto : resto.slice(0, fim) });
+      inicioRe.lastIndex = m.index + (fim < 0 ? resto.length : fim);
+      continue;
+    }
+    const abertura = /\bAS\s+(\$[A-Za-z0-9_]*\$|')|\bBEGIN\s+ATOMIC\b/i.exec(resto);
+    const primeiroPontoEVirgula = resto.indexOf(';');
+    // Sem corpo antes do primeiro `;` (ou nenhum): a definição termina nele.
+    if (!abertura || (primeiroPontoEVirgula >= 0 && primeiroPontoEVirgula < abertura.index)) {
+      const fim = primeiroPontoEVirgula < 0 ? resto.length : primeiroPontoEVirgula;
+      definicoes.push({ schema, nome, atributos: resto.slice(0, fim) });
+      inicioRe.lastIndex = m.index + fim;
+      continue;
+    }
+    const cabecalho = resto.slice(0, abertura.index);
+    let fimDoCorpo: number;
+    if (abertura[1]?.startsWith('$')) {
+      const inicioDoCorpo = abertura.index + abertura[0].length;
+      const fecha = resto.indexOf(abertura[1], inicioDoCorpo);
+      fimDoCorpo = fecha < 0 ? resto.length : fecha + abertura[1].length;
+    } else if (abertura[1] === "'") {
+      // Corpo entre aspas simples: '' é uma aspa escapada.
+      let i = abertura.index + abertura[0].length;
+      while (i < resto.length && !(resto[i] === "'" && resto[i + 1] !== "'")) i += resto[i] === "'" ? 2 : 1;
+      fimDoCorpo = Math.min(resto.length, i + 1);
+    } else {
+      const fim = /\bEND\s*;/i.exec(resto.slice(abertura.index));
+      fimDoCorpo = fim ? abertura.index + fim.index + fim[0].length - 1 : resto.length;
+    }
+    const pontoEVirgula = resto.indexOf(';', fimDoCorpo);
+    const fim = pontoEVirgula < 0 ? resto.length : pontoEVirgula;
+    definicoes.push({ schema, nome, atributos: `${cabecalho} ${resto.slice(fimDoCorpo, fim)}` });
+    inicioRe.lastIndex = m.index + fim;
+  }
+  return definicoes;
+}
+
+/** O SQL sem os corpos de função (`$tag$...$tag$`), para REVOKE citado lá dentro não contar. */
+const semCorposDeFuncao = (sql: string) => sql.replace(/(\$[A-Za-z0-9_]*\$)[\s\S]*?\1/g, ' ');
+
+/**
+ * REVOKE que de fato protege a função: um COMANDO `REVOKE ... ON FUNCTION <nome>(`
+ * com o mesmo nome (e schema, quando escrito) e `FROM ... PUBLIC`; ou
+ * `REVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA <o schema da função> FROM PUBLIC`.
+ * Antes valia qualquer REVOKE a até 200 caracteres que CONTIVESSE o nome
+ * (o de outra função, o de `admin_fn_x`, um só `FROM anon`).
+ */
+function temRevokeDePublic(comandos: string[], schema: string, nome: string): boolean {
+  const alvo = new RegExp(String.raw`ON\s+FUNCTION\s+${NOME_DE_FUNCAO}\s*\(`, 'gi');
+  return comandos.some((c) => {
+    if (!/^\s*REVOKE\b/i.test(c) || !/\bFROM\b[\s\S]*\bPUBLIC\b/i.test(c)) return false;
+    const todas = /ON\s+ALL\s+FUNCTIONS\s+IN\s+SCHEMA\s+"?(\w+)"?/i.exec(c);
+    if (todas) return todas[1].toLowerCase() === schema;
+    for (const r of c.matchAll(alvo)) {
+      if (r[2].toLowerCase() === nome && (r[1] ?? schema).toLowerCase() === schema) return true;
+    }
+    return false;
+  });
+}
+
+/** P3: função SECURITY DEFINER (criada ou alterada) sem REVOKE de PUBLIC no mesmo arquivo. */
 function secdefSemRevoke(sql: string): number {
   const corpo = semComentarios(sql);
-  const nomes = [...corpo.matchAll(
-    /CREATE\s+(?:OR\s+REPLACE\s+)?FUNCTION\s+(?:public\.)?["]?(\w+)["]?\s*\(/gi,
-  )].map((m) => m[1]);
-  if (nomes.length === 0) return 0;
-
-  // Só conta as que declaram SECURITY DEFINER.
-  const definer = nomes.filter((nome) => {
-    const re = new RegExp(
-      `CREATE\\s+(?:OR\\s+REPLACE\\s+)?FUNCTION\\s+(?:public\\.)?"?${nome}"?\\s*\\([\\s\\S]*?\\$(?:function|)\\$`,
-      'i',
-    );
-    const trecho = re.exec(corpo)?.[0] ?? '';
-    return /SECURITY\s+DEFINER/i.test(trecho);
-  });
-
-  const temRevoke = (nome: string) =>
-    new RegExp(`REVOKE[\\s\\S]{0,200}?${nome}\\s*\\(`, 'i').test(corpo) ||
-    new RegExp(`REVOKE\\s+EXECUTE\\s+ON\\s+ALL\\s+FUNCTIONS`, 'i').test(corpo);
-
-  return definer.filter((nome) => !temRevoke(nome)).length;
+  // Só conta as que declaram SECURITY DEFINER (antes ou depois do corpo).
+  const definer = definicoesDeFuncao(corpo).filter((d) => /SECURITY\s+DEFINER/i.test(d.atributos));
+  if (definer.length === 0) return 0;
+  const comandos = semCorposDeFuncao(corpo).split(';');
+  return definer.filter((d) => !temRevokeDePublic(comandos, d.schema, d.nome)).length;
 }
 
 function migrations(): string[] {
@@ -216,5 +281,76 @@ describe('segurança · migrations não podem repetir os padrões da auditoria',
         ? `\n\nPlaceholder de segredo em migration:\n\n${ofensores.join('\n')}\n`
         : '',
     ).toBeLessThanOrEqual(ESPERADOS_HISTORICOS);
+  });
+});
+
+describe('segurança · a trava enxerga toda função SECURITY DEFINER (pendência da Fase 0 do plano Imovib)', () => {
+  const comRevoke = (sql: string) => `${sql}
+REVOKE EXECUTE ON FUNCTION public.fn_x() FROM PUBLIC;`;
+
+  it('corpo delimitado por $$ ou $function$ (já pegava)', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;')).toBe(1);
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $function$ SELECT 1 $function$;')).toBe(1);
+  });
+
+  it('corpo com outro delimitador ($fn$, $body$, $x$)', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $fn$ SELECT 1 $fn$;')).toBe(1);
+    expect(secdefSemRevoke('CREATE OR REPLACE FUNCTION fn_x() RETURNS int SECURITY DEFINER AS $body$ BEGIN RETURN 1; END $body$ LANGUAGE plpgsql;')).toBe(1);
+  });
+
+  it('SECURITY DEFINER escrito DEPOIS do corpo', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int AS $$ SELECT 1 $$ LANGUAGE sql SECURITY DEFINER;')).toBe(1);
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int AS $q$ SELECT 1 $q$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public;')).toBe(1);
+  });
+
+  it("corpo entre aspas simples (AS '...')", () => {
+    expect(secdefSemRevoke("CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS 'SELECT 1';")).toBe(1);
+  });
+
+  it('com REVOKE de PUBLIC no arquivo, passa; SECURITY INVOKER e corpo que só CITA "security definer" não contam', () => {
+    expect(secdefSemRevoke(comRevoke('CREATE FUNCTION public.fn_x() RETURNS int AS $fn$ SELECT 1 $fn$ LANGUAGE sql SECURITY DEFINER;'))).toBe(0);
+    expect(secdefSemRevoke('CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY INVOKER AS $$ SELECT 1 $$;')).toBe(0);
+    expect(secdefSemRevoke("CREATE FUNCTION public.fn_x() RETURNS text LANGUAGE sql AS $$ SELECT 'SECURITY DEFINER' $$;")).toBe(0);
+  });
+
+  // Revisão: o REVOKE era aceito por proximidade de texto.
+  it('REVOKE de OUTRA função, de nome que só contém o nome, ou sem PUBLIC não protege', () => {
+    const fn = 'CREATE FUNCTION public.fn_x() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;';
+    expect(secdefSemRevoke(`${fn}\nREVOKE EXECUTE ON FUNCTION public.fn_y() FROM PUBLIC;\nGRANT EXECUTE ON FUNCTION public.fn_x() TO anon, authenticated;`)).toBe(1);
+    expect(secdefSemRevoke(`${fn}\nREVOKE EXECUTE ON FUNCTION public.admin_fn_x() FROM PUBLIC;`)).toBe(1);
+    expect(secdefSemRevoke(`${fn}\nREVOKE EXECUTE ON FUNCTION public.fn_x() FROM anon;`)).toBe(1);
+    expect(secdefSemRevoke(`${fn}\nREVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA private FROM PUBLIC;`)).toBe(1);
+    expect(secdefSemRevoke(`CREATE FUNCTION public.fn_x() RETURNS text LANGUAGE sql SECURITY DEFINER AS $$ SELECT 'REVOKE EXECUTE ON FUNCTION fn_x() FROM PUBLIC' $$;`)).toBe(1);
+  });
+
+  it('REVOKE certo continua valendo (com aspas, schema, quebra de linha, ALL FUNCTIONS IN SCHEMA public)', () => {
+    const fn = 'CREATE FUNCTION public.fn_x(p int) RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;';
+    expect(secdefSemRevoke(`${fn}\nREVOKE ALL ON FUNCTION "public"."fn_x"(int)\n  FROM PUBLIC, anon;`)).toBe(0);
+    expect(secdefSemRevoke(`${fn}\nREVOKE EXECUTE ON FUNCTION fn_x(int) FROM public;`)).toBe(0);
+    expect(secdefSemRevoke(`${fn}\nREVOKE EXECUTE ON ALL FUNCTIONS IN SCHEMA public FROM PUBLIC;`)).toBe(0);
+  });
+
+  it('nome com aspas e schema ("public"."fn_x", formato do db dump) e ALTER FUNCTION ... SECURITY DEFINER', () => {
+    expect(secdefSemRevoke('CREATE FUNCTION "public"."fn_x"() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;')).toBe(1);
+    expect(secdefSemRevoke('ALTER FUNCTION public.fn_x() SECURITY DEFINER;')).toBe(1);
+    expect(secdefSemRevoke('ALTER FUNCTION public.fn_x() SECURITY DEFINER;\nREVOKE EXECUTE ON FUNCTION public.fn_x() FROM PUBLIC;')).toBe(0);
+  });
+
+  it('$tag$ dentro de valor padrão não confunde o cabeçalho; função sem corpo não engole as seguintes', () => {
+    expect(secdefSemRevoke("CREATE FUNCTION public.fn_x(p text DEFAULT '$a$') RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 1 $$;")).toBe(1);
+    const sql = [
+      'CREATE FUNCTION public.fn_c() RETURNS int LANGUAGE sql;',
+      'CREATE FUNCTION public.fn_d() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 2 $$;',
+    ].join('\n');
+    expect(secdefSemRevoke(sql)).toBe(1);
+  });
+
+  it('a função seguinte não empresta o SECURITY DEFINER para a anterior', () => {
+    const sql = [
+      'CREATE FUNCTION public.fn_a() RETURNS int LANGUAGE sql AS $$ SELECT 1 $$;',
+      'CREATE FUNCTION public.fn_b() RETURNS int LANGUAGE sql SECURITY DEFINER AS $$ SELECT 2 $$;',
+      'REVOKE EXECUTE ON FUNCTION public.fn_b() FROM PUBLIC;',
+    ].join('\n');
+    expect(secdefSemRevoke(sql)).toBe(0);
   });
 });

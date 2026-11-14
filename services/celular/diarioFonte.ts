@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase'
 import type { BudgetEntry, DiaryEntry } from '../../types'
 import type { ProjectSchedule } from '../../types/project'
 import {
-  salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, type DiaryWriteResult,
+  salvarRegistroDiario, excluirRegistroDiario, sincronizarEvolucaoNoPlanejamento, carregarPlanejamentoPorProjeto, toResult,
+  type DiaryWriteResult,
 } from '../diaryEntryService'
 import {
   uploadDiaryMedia, removeDiaryMedia, signDiaryMediaUrls, isDiaryStoragePath, diaryMediaExtension, DIARY_MEDIA_BUCKET,
@@ -12,7 +13,6 @@ import { projectService } from '../projectService'
 import { laborService } from '../laborService'
 import { comprimirFoto } from '../../utils/comprimirFoto'
 import { aplicarEvolucaoNoCronograma } from '../../utils/diaryPlanningLink'
-import { carregarPlanejamentoPorProjeto } from '../../hooks/useDiaryLinkedPlanning'
 import { ehRecusaDoLink } from './tarefasFonte'
 
 /**
@@ -73,6 +73,12 @@ export interface DiarioFonte {
   gravarEvolucao(diarioId: string, planejamentoId: string, entries: DiaryEntry[]): Promise<ProjectSchedule | null>
   /** Devolve o PATH no bucket (o que se grava no registro). */
   subirFoto(args: { orgId: string; projectId: string; file: File }): Promise<string>
+  /**
+   * Assina PATHS do bucket do Diário (`isDiaryStoragePath`) → `{ path: url }`.
+   * Só trata path: refs que não são path (`data:`, `http(s):`, `blob:`) já são
+   * resolvidas por `useDiaryMediaUrls` antes de chegar aqui, e o que não for
+   * path fica de fora do resultado.
+   */
   assinarFotos(paths: readonly string[]): Promise<Record<string, string>>
   /** Best-effort: falha só vira `console.warn`. */
   removerFotos(projectId: string, paths: readonly string[]): Promise<void>
@@ -135,11 +141,6 @@ export interface OpcoesFonteDiarioDoLink {
   podeAprovar: boolean
 }
 
-function comoResultado(data: unknown): DiaryWriteResult {
-  const d = (data || {}) as { entries?: DiaryEntry[] | null; anterior?: DiaryEntry | null }
-  return { entries: d.entries || [], anterior: d.anterior || null }
-}
-
 /** Só path de bucket, sem repetir e dentro do teto da Edge (um path inválido derrubaria o lote inteiro). */
 function pathsParaEdge(refs: readonly string[]): string[] {
   const out: string[] = []
@@ -156,10 +157,22 @@ function emLotes<T>(lista: T[], tamanho: number): T[][] {
 }
 
 /**
+ * Limite de uso do link (banco: `_celular_cota`, ERRCODE 54000; Edge: 429).
+ * NÃO é recusa do link: o token segue válido, é só esperar. A mensagem do erro
+ * é a do banco ("Limite de uso do link atingido — tente de novo na próxima hora.").
+ */
+export function ehLimiteDeUsoDoLink(erro: unknown): boolean {
+  if (!erro || typeof erro !== 'object') return false
+  const { status, code } = erro as { status?: unknown; code?: unknown }
+  return status === 429 || code === '54000'
+}
+
+/**
  * Erro HTTP da Edge (supabase-js: `FunctionsHttpError`, com a Response em
  * `context`) → erro com a mensagem do corpo `{ error }`. 403 é o 42501 do banco
  * repassado pela Edge: ganha `code: '42501'`, e assim `ehRecusaDoLink` reconhece
- * a recusa do token pelo mesmo critério das RPCs.
+ * a recusa do token pelo mesmo critério das RPCs. 429 é o 54000 (limite de uso):
+ * ganha `code: '54000'` — nunca vira recusa do link.
  */
 async function erroDaEdge(error: unknown): Promise<unknown> {
   const ctx = (error as { context?: unknown } | null)?.context as
@@ -171,7 +184,8 @@ async function erroDaEdge(error: unknown): Promise<unknown> {
     if (corpo && typeof corpo.error === 'string' && corpo.error.trim() !== '') mensagem = corpo.error
   } catch { /* corpo não é JSON: fica a mensagem genérica */ }
   const falha = new Error(mensagem ?? `Falha ao tratar a foto pelo link do celular (HTTP ${ctx.status}).`)
-  return Object.assign(falha, { status: ctx.status, ...(ctx.status === 403 ? { code: '42501' } : {}) })
+  const code = ctx.status === 403 ? '42501' : ctx.status === 429 ? '54000' : undefined
+  return Object.assign(falha, { status: ctx.status, ...(code ? { code } : {}) })
 }
 
 export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink): DiarioFonteDoLink {
@@ -185,15 +199,21 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
     return data as T
   }
 
+  /** Chama a Edge de mídia e lança o erro já traduzido (`erroDaEdge`), sem avisar ninguém. */
+  async function invocarMidia<T>(body: Record<string, unknown>): Promise<T> {
+    const { data, error } = await supabase.functions.invoke(EDGE_MIDIA, { body: { ...body, token } })
+    if (error) throw await erroDaEdge(error)
+    return data as T
+  }
+
   /** Chama a Edge de mídia; mesma regra de recusa do token. */
   async function midia<T>(body: Record<string, unknown>): Promise<T> {
-    const { data, error } = await supabase.functions.invoke(EDGE_MIDIA, { body: { ...body, token } })
-    if (error) {
-      const falha = await erroDaEdge(error)
+    try {
+      return await invocarMidia<T>(body)
+    } catch (falha) {
       if (ehRecusaDoLink(falha)) opts.aoRecusar?.()
       throw falha
     }
-    return data as T
   }
 
   async function carregarPlanejamento(diarioId: string, planejamentoId: string) {
@@ -212,10 +232,10 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
     carregarDiario: projectId => chamar<DiarioCarregado>('celular_diario_abrir', { p_project_id: projectId }),
 
     salvarRegistro: async (projectId, entry) =>
-      comoResultado(await chamar('celular_diario_salvar', { p_project_id: projectId, p_entry: entry })),
+      toResult(await chamar('celular_diario_salvar', { p_project_id: projectId, p_entry: entry })),
 
     excluirRegistro: async (projectId, entryId) =>
-      comoResultado(await chamar('celular_diario_excluir', { p_project_id: projectId, p_entry_id: entryId })),
+      toResult(await chamar('celular_diario_excluir', { p_project_id: projectId, p_entry_id: entryId })),
 
     // `orgId` não entra: o efetivo é o da organização do token.
     listarColaboradores: async () => (await chamar<ColaboradorRh[] | null>('celular_efetivo_listar')) ?? [],
@@ -267,15 +287,22 @@ export function fonteDiarioDoLink(token: string, opts: OpcoesFonteDiarioDoLink):
       return out
     },
 
+    /**
+     * Lotes em paralelo. A recusa do token avisa `aoRecusar` UMA vez só, mesmo
+     * que vários lotes sejam recusados; o resto das falhas é best-effort.
+     */
     async removerFotos(projectId, refs) {
-      const paths = pathsParaEdge(refs)
-      for (const lote of emLotes(paths, MAX_PATHS_POR_PEDIDO)) {
-        try {
-          await midia({ acao: 'remover', project_id: projectId, paths: lote })
-        } catch (err) {
-          console.warn('[diaryMedia] falha ao remover objetos pelo link do celular:', (err as { message?: string })?.message ?? err)
-        }
+      const lotes = emLotes(pathsParaEdge(refs), MAX_PATHS_POR_PEDIDO)
+      const resultados = await Promise.allSettled(
+        lotes.map(lote => invocarMidia({ acao: 'remover', project_id: projectId, paths: lote })),
+      )
+      let recusado = false
+      for (const r of resultados) {
+        if (r.status === 'fulfilled') continue
+        if (ehRecusaDoLink(r.reason)) recusado = true
+        console.warn('[diaryMedia] falha ao remover objetos pelo link do celular:', (r.reason as { message?: string })?.message ?? r.reason)
       }
+      if (recusado) opts.aoRecusar?.()
     },
   }
 }

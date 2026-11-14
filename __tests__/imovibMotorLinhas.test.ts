@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { computeImovibMath } from '../utils/imovibMotor';
 import type { LinhasDoMes } from '../utils/imovibMotor';
-import { ESTUDOS_DE_REGRESSAO, baseStudy } from './fixtures/imovibEstudos';
+import { ESTUDOS_DE_REGRESSAO, baseStudy, withCost } from './fixtures/imovibEstudos';
 
 /**
  * Fluxo aberto por linha e visão do projeto (item 0.3 do plano
@@ -101,5 +101,31 @@ describe('0.3 — linhas do fluxo', () => {
         for (const estudo of Object.values(ESTUDOS_DE_REGRESSAO)) {
             expect(computeImovibMath(estudo()).avisos.map(a => a.codigo)).not.toContain('receita_liquida_negativa');
         }
+    });
+});
+
+describe('0.3 (pendência) — linhas do fluxo nos casos que o teste não cobria', () => {
+    const fecha = (r: ReturnType<typeof computeImovibMath>) => {
+        for (const f of r.monthlyFlows) {
+            expect(somaLinhas(f.linhas)).toBeCloseTo(f.net, 4);
+            expect(sum(RECEITAS.map(k => f.linhas[k]))).toBeCloseTo(f.rev, 4);
+            expect(-sum(CUSTOS.map(k => f.linhas[k]))).toBeCloseTo(f.cost, 4);
+        }
+    };
+
+    it('dívida quitada no fim: o caixa do último mês é a soma das linhas, com a quitação na linha da dívida', () => {
+        const r = computeImovibMath(withCost(14_000, { funding_debt_percent: 100, financing_rate_annual: 14 }));
+        expect(r.debtPayoffAtEnd).toBeGreaterThan(0);
+        fecha(r);
+        const ultimo = r.monthlyFlows[r.monthlyFlows.length - 1];
+        expect(-ultimo.linhas.pagamentoDaDivida).toBeGreaterThanOrEqual(r.debtPayoffAtEnd - 1e-6);
+        expect(-total(r, 'pagamentoDaDivida')).toBeCloseTo(total(r, 'liberacaoDivida') + sum(r.monthlyFlows.map(f => f.jurosDoMes)), 2);
+    });
+
+    it('CAPEX simplificado: a linha da obra é o custo do simplificado e o caixa fecha', () => {
+        const r = computeImovibMath(baseStudy({ capex_mode: 'simplified', capex_simplified_cost_sqm: 4_000, capex_simplified_area_sqm: 5_000 }));
+        fecha(r);
+        expect(-total(r, 'obra')).toBeCloseTo(5_000 * 4_000, 2);
+        expect(r.constCostTotal).toBeCloseTo(5_000 * 4_000, 2);
     });
 });

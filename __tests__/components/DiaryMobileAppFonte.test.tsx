@@ -8,22 +8,47 @@
  *  - salvar chama `salvarRegistro` uma vez;
  *  - registro Aprovado sem permissão de aprovar no link: lixeira e Salvar travados com o motivo;
  *  - a foto sobe por `subirFoto` com a org do diário e o id do diário;
+ *  - limite de uso do link (429) na foto: a tela mostra a mensagem da Edge e
+ *    não tenta as fotos seguintes;
  *  - os carregadores passados aos hooks são estáveis (sem recarregar em laço);
  *  - sugestões de efetivo no link = só colaboradores do RH (D5): equipes/cargos de
- *    `organizations` do store (navegador logado como outra pessoa) não entram.
+ *    `organizations` do store (navegador logado como outra pessoa) não entram;
+ *  - link que APROVA: registro Aprovado fica livre (lixeira e Salvar habilitados);
+ *  - recusa de APROVAÇÃO do banco (42501 com a frase da permissão) aparece na folha
+ *    e NÃO é a recusa do link (o `aoRecusar` do gate não é chamado);
+ *  - sem Provider (contexto padrão = `fonteDiarioLogado`) a tela usa os serviços
+ *    logados de sempre (`projectService`, `laborService`, `diaryEntryService`).
  */
 import React from 'react'
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
-vi.mock('../../lib/supabase', () => ({ supabase: {} }))
+// Só `rpc` aparece, e só no teste que monta a fonte do link de verdade.
+const sondas = vi.hoisted(() => ({ supabase: {} as { rpc?: (...a: unknown[]) => unknown } }))
+vi.mock('../../lib/supabase', () => ({ supabase: sondas.supabase }))
+// Serviços da sessão logada: só a fonte padrão (`fonteDiarioLogado`) chega a eles.
+const logado = vi.hoisted(() => ({
+  loadProject: vi.fn(),
+  listEmployees: vi.fn(),
+  salvarRegistroDiario: vi.fn(),
+  excluirRegistroDiario: vi.fn(),
+}))
+vi.mock('../../services/projectService', () => ({ projectService: { loadProject: logado.loadProject } }))
+vi.mock('../../services/laborService', () => ({ laborService: { listEmployees: logado.listEmployees } }))
+vi.mock('../../services/diaryEntryService', async importOriginal => ({
+  ...(await importOriginal<typeof import('../../services/diaryEntryService')>()),
+  salvarRegistroDiario: logado.salvarRegistroDiario,
+  excluirRegistroDiario: logado.excluirRegistroDiario,
+}))
 vi.mock('../../hooks/useOrgContext', () => ({
   useOrgContext: () => ({ orgId: 'org1' }),
 }))
 
 import DiaryMobileApp from '../../components/DiaryMobileApp'
 import { useStore } from '../../store/useStore'
-import { DiarioFonteContext, type DiarioFonte, type DiarioCarregado } from '../../services/celular/diarioFonte'
+import {
+  DiarioFonteContext, fonteDiarioDoLink, type DiarioFonte, type DiarioCarregado,
+} from '../../services/celular/diarioFonte'
 import { MOTIVO_REGISTRO_APROVADO } from '../../utils/diaryAprovacao'
 import type { DiaryEntry } from '../../types'
 
@@ -69,7 +94,12 @@ async function abrirDiario() {
   return screen.findByText('Concretagem da laje')
 }
 
-beforeEach(() => { window.localStorage.clear(); useStore.setState({ organizations: [] }) })
+beforeEach(() => {
+  window.localStorage.clear()
+  useStore.setState({ organizations: [] })
+  delete sondas.supabase.rpc
+  vi.clearAllMocks()
+})
 
 describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
   it('abrir o diário chama carregarDiario e mostra os registros', async () => {
@@ -120,6 +150,53 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     expect(fonte.subirFoto).toHaveBeenCalledWith({ orgId: 'org1', projectId: 'd1', file: arquivo })
     // A foto nova é assinada pela fonte (via useDiaryMediaUrls), nunca pelo storage direto.
     await waitFor(() => expect(fonte.assinarFotos).toHaveBeenCalledWith(['org1/d1/nova.jpg']))
+  })
+
+  it('limite de uso do link na foto: mostra a mensagem da Edge e para de tentar as seguintes', async () => {
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
+    const fonte = criarFonte()
+    fonte.subirFoto
+      .mockResolvedValueOnce('org1/d1/primeira.jpg')
+      .mockRejectedValueOnce(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = montar(fonte)
+    await abrirDiario()
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    const fotos = ['a', 'b', 'c'].map(n => new File(['x'], `${n}.jpg`, { type: 'image/jpeg' }))
+    fireEvent.change(input, { target: { files: fotos } })
+    expect(await screen.findByText(`2 de 3 fotos não subiram (${LIMITE}). A outra já está no registro.`)).toBeInTheDocument()
+    expect(fonte.subirFoto).toHaveBeenCalledTimes(2)
+    erro.mockRestore()
+  })
+
+  it('limite de uso do link na única foto: a mensagem da Edge, sem o texto genérico', async () => {
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
+    const fonte = criarFonte()
+    fonte.subirFoto.mockRejectedValueOnce(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { container } = montar(fonte)
+    await abrirDiario()
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    const input = container.querySelector('input[type="file"]') as HTMLInputElement
+    fireEvent.change(input, { target: { files: [new File(['x'], 'a.jpg', { type: 'image/jpeg' })] } })
+    expect(await screen.findByText(LIMITE)).toBeInTheDocument()
+    expect(screen.queryByText('A foto não subiu. Tente novamente.')).toBeNull()
+    erro.mockRestore()
+  })
+
+  it('limite de uso do link ao assinar as fotos: a tela mostra o aviso com a mensagem do servidor', async () => {
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
+    const fonte = criarFonte()
+    fonte.assinarFotos.mockRejectedValue(Object.assign(new Error(LIMITE), { status: 429, code: '54000' }))
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    montar(fonte)
+    // Folha do registro (tem a foto antiga): o cartão de Fotos avisa.
+    fireEvent.click(await abrirDiario())
+    expect(await screen.findByText(LIMITE)).toBeInTheDocument()
+    expect(fonte.assinarFotos).toHaveBeenCalledWith(['org1/d1/foto-antiga.jpg'])
+    expect(screen.queryByText('A foto não subiu. Tente novamente.')).toBeNull()
+    erro.mockRestore()
   })
 
   it('cancelar depois da foto remove pela fonte, com o id do diário', async () => {
@@ -193,5 +270,57 @@ describe('DiaryMobileApp — lê e grava pela DiarioFonte', () => {
     expect(fonte.listarColaboradores.mock.calls.length).toBe(antes.colab)
     expect(antes.diario).toBe(1)
     expect(antes.plan).toBe(1)
+  })
+
+  it('link que aprova: registro Aprovado fica livre — lixeira e Salvar habilitados', async () => {
+    const fonte = { ...criarFonte(), podeAprovarNoLink: true }
+    montar(fonte)
+    fireEvent.click(await abrirDiario())
+    const salvar = await screen.findByRole('button', { name: /Salvar registro/ })
+    expect(salvar).toBeEnabled()
+    const lixo = screen.getByTitle('Excluir registro')
+    expect(lixo.tagName).toBe('BUTTON')
+    expect(lixo).toBeEnabled()
+    expect(screen.queryAllByTitle(MOTIVO_REGISTRO_APROVADO)).toHaveLength(0)
+  })
+
+  it('recusa de aprovação do banco (42501): a frase do banco na folha, sem a recusa do link', async () => {
+    const APROVACAO = 'Registro aprovado: só quem aprova o Diário de Obra pode alterá-lo (Usuários › Permissões Detalhadas › Operação de Obra).'
+    const rpc = vi.fn(async () => ({ data: null, error: { code: '42501', message: APROVACAO } }))
+    sondas.supabase.rpc = rpc
+    const aoRecusar = vi.fn()
+    // salvarRegistro é o da fonte do link de verdade, com o mesmo critério de recusa do gate.
+    const doLink = fonteDiarioDoLink('tok', { aoRecusar, podeAprovar: false })
+    const fonte = { ...criarFonte(), salvarRegistro: vi.fn(doLink.salvarRegistro) }
+    const erro = vi.spyOn(console, 'error').mockImplementation(() => {})
+    montar(fonte)
+    await abrirDiario()
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    fireEvent.change(screen.getByPlaceholderText('O que aconteceu na obra hoje'), { target: { value: 'Alvenaria' } })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar registro/ }))
+    expect(await screen.findByText(APROVACAO, {}, { timeout: 5000 })).toBeInTheDocument()
+    expect(rpc).toHaveBeenCalledWith('celular_diario_salvar', expect.objectContaining({ p_token: 'tok', p_project_id: 'd1' }))
+    expect(aoRecusar).not.toHaveBeenCalled()
+    // A folha continua aberta (o rascunho segue na tela).
+    expect(screen.getByPlaceholderText('O que aconteceu na obra hoje')).toHaveValue('Alvenaria')
+    erro.mockRestore()
+  })
+
+  it('sem Provider (fonteDiarioLogado): abre, lista efetivo e salva pelos serviços logados', async () => {
+    logado.loadProject.mockResolvedValue(DIARIO)
+    logado.listEmployees.mockResolvedValue([])
+    logado.salvarRegistroDiario.mockImplementation(async (_id: string, entry: DiaryEntry) => ({ entries: [APROVADO, entry], anterior: null }))
+    const aviso = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    render(<DiaryMobileApp projects={PROJETOS} />)
+    await abrirDiario()
+    expect(logado.loadProject).toHaveBeenCalledWith('d1')
+    expect(logado.listEmployees).toHaveBeenCalledWith('org1')
+    fireEvent.click(screen.getByRole('button', { name: 'Novo registro' }))
+    fireEvent.change(screen.getByPlaceholderText('O que aconteceu na obra hoje'), { target: { value: 'Reboco externo' } })
+    fireEvent.click(screen.getByRole('button', { name: /Salvar registro/ }))
+    await waitFor(() => expect(logado.salvarRegistroDiario).toHaveBeenCalledTimes(1))
+    expect(logado.salvarRegistroDiario).toHaveBeenCalledWith('d1', expect.objectContaining({ description: 'Reboco externo' }))
+    expect(await screen.findByText('Reboco externo', {}, { timeout: 5000 })).toBeInTheDocument()
+    aviso.mockRestore()
   })
 })

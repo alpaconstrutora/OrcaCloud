@@ -5,7 +5,7 @@ const rpc = vi.hoisted(() => vi.fn())
 vi.mock('../lib/supabase', () => ({ supabase: { rpc } }))
 
 import {
-  celularSessao, gerarLinkCelular, tokenDoCelularDaUrl, urlDoLinkCelular,
+  celularSessao, gerarLinkCelular, tokenDoCelularDaUrl, urlDoLinkCelular, type SessaoCelular,
 } from '../services/celular/celularLinkService'
 
 // Token real tem 43 caracteres (32 bytes em base64url); o mínimo aceito é 20.
@@ -66,7 +66,7 @@ describe('urlDoLinkCelular', () => {
 
 describe('celularSessao', () => {
   it('chama só celular_sessao com o token e devolve a sessão', async () => {
-    const sessao = { user_id: 'u1', nome: 'Ana', org_id: 'o1', org_nome: 'Alpa' }
+    const sessao: SessaoCelular = { user_id: 'u1', nome: 'Ana', org_id: 'o1', org_nome: 'Alpa', pode_aprovar_diario: false }
     rpc.mockResolvedValueOnce({ data: sessao, error: null })
     await expect(celularSessao(TOKEN)).resolves.toEqual(sessao)
     expect(rpc).toHaveBeenCalledWith('celular_sessao', { p_token: TOKEN })

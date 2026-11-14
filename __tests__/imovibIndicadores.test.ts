@@ -105,3 +105,29 @@ describe('revisão — estudo vazio não é "Sem exposição"', () => {
         expect(textoDoPayback(ind)).toBe('—');
     });
 });
+
+describe('2.1 (pendência) — a TMA entra nos indicadores que dependem dela', () => {
+    const fluxo = [-100, -100, 0, 0, 0, 60, 60, 60, 60];
+
+    it('com TMA 0 o payback descontado é o simples; com TMA alta ele vem depois (ou some)', () => {
+        const zero = calcularIndicadores(resultado(fluxo), 0);
+        const alta = calcularIndicadores(resultado(fluxo), 60);
+        expect(zero.paybackDescontadoMes).toBe(zero.paybackSimplesMes);
+        expect(alta.paybackDescontadoMes == null || alta.paybackDescontadoMes > zero.paybackDescontadoMes!).toBe(true);
+    });
+
+    it('a TIR modificada muda com a TMA (saídas financiadas e entradas reinvestidas a ela)', () => {
+        const a = calcularIndicadores(resultado(fluxo), 0).tirModificadaAnual!;
+        const b = calcularIndicadores(resultado(fluxo), 30).tirModificadaAnual!;
+        expect(Number.isFinite(a) && Number.isFinite(b)).toBe(true);
+        expect(b).not.toBeCloseTo(a, 2);
+    });
+
+    it('o que não depende da TMA não muda com ela', () => {
+        const a = calcularIndicadores(resultado(fluxo), 0);
+        const b = calcularIndicadores(resultado(fluxo), 30);
+        expect(b.paybackSimplesMes).toBe(a.paybackSimplesMes);
+        expect(b.multiploDoCapital).toBe(a.multiploDoCapital);
+        expect(b.lucroLiquido).toBe(a.lucroLiquido);
+    });
+});

@@ -8,7 +8,7 @@
  *  - falha de carga: mensagem + "Tentar de novo".
  */
 import React from 'react'
-import { render, screen, waitFor, fireEvent } from '@testing-library/react'
+import { render, screen, fireEvent, act } from '@testing-library/react'
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 
 const sondas = vi.hoisted(() => ({
@@ -92,7 +92,14 @@ describe('DiarioDoLink', () => {
     const { rerender } = render(<DiarioDoLink fonte={fonteCom(a)} />)
     rerender(<DiarioDoLink fonte={fonteCom(b)} />)
     await screen.findByText('1 diários')
-    soltarA(LISTA)
-    await waitFor(() => expect(screen.getByText('1 diários')).toBeInTheDocument())
+    // A resposta velha chega e as promessas/efeitos terminam de rodar ANTES de conferir.
+    await act(async () => {
+      soltarA(LISTA)
+      await new Promise(r => setTimeout(r, 0))
+    })
+    expect(screen.getByTestId('tela-do-diario')).toHaveTextContent('1 diários')
+    expect(screen.queryByText('2 diários')).toBeNull()
+    // Nenhum render levou a lista da fonte velha ao DiaryMobileApp.
+    expect(sondas.projetos.every(p => p !== LISTA)).toBe(true)
   })
 })

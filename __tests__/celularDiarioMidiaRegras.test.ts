@@ -7,6 +7,7 @@ import { describe, it, expect } from 'vitest';
 import {
     validarPedido,
     montarPath,
+    respostaDoErroDaRpc,
     EXTENSOES_PERMITIDAS,
     MAX_PATHS,
     MAX_TAMANHO_PATH,
@@ -123,5 +124,34 @@ describe('validarPedido — pedido válido', () => {
 describe('montarPath', () => {
     it('junta org/projeto/uuid.ext', () => {
         expect(montarPath('o', 'p', 'u', 'jpg')).toBe('o/p/u.jpg');
+    });
+});
+
+describe('respostaDoErroDaRpc — erro da RPC vira resposta HTTP', () => {
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.';
+
+    it('54000 (limite de uso do link) → 429 com a mensagem do banco, sem log', () => {
+        expect(respostaDoErroDaRpc({ code: '54000', message: LIMITE }))
+            .toEqual({ status: 429, corpo: { error: LIMITE }, logar: false });
+    });
+
+    it('54000 sem mensagem → 429 com texto padrão', () => {
+        expect(respostaDoErroDaRpc({ code: '54000' }).status).toBe(429);
+        expect(respostaDoErroDaRpc({ code: '54000', message: '' }).corpo.error).toBe('Limite de uso do link atingido — tente de novo na próxima hora.');
+    });
+
+    it('42501 → 403 e 22023 → 400, com a mensagem do banco', () => {
+        expect(respostaDoErroDaRpc({ code: '42501', message: 'link inválido ou vencido' }))
+            .toEqual({ status: 403, corpo: { error: 'link inválido ou vencido' }, logar: false });
+        expect(respostaDoErroDaRpc({ code: '22023', message: 'no máximo 100 arquivos por pedido' }))
+            .toEqual({ status: 400, corpo: { error: 'no máximo 100 arquivos por pedido' }, logar: false });
+        expect(respostaDoErroDaRpc({ code: '42501' }).corpo.error).toBe('Acesso negado');
+        expect(respostaDoErroDaRpc({ code: '22023' }).corpo.error).toBe('Pedido inválido');
+    });
+
+    it('qualquer outro erro → 500 genérico (a mensagem do banco não vaza) e logar', () => {
+        for (const erro of [{ code: 'XX000', message: 'detalhe interno' }, { message: 'sem código' }, {}]) {
+            expect(respostaDoErroDaRpc(erro)).toEqual({ status: 500, corpo: { error: 'Erro ao processar o pedido' }, logar: true });
+        }
     });
 });

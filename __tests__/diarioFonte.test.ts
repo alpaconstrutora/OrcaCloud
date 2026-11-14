@@ -47,7 +47,7 @@ import React from 'react'
 import { renderToString } from 'react-dom/server'
 import { renderHook, waitFor } from '@testing-library/react'
 import {
-  DiarioFonteContext, fonteDiarioDoLink, fonteDiarioLogado, useDiarioFonte, type DiarioFonte,
+  DiarioFonteContext, fonteDiarioDoLink, fonteDiarioLogado, useDiarioFonte, ehLimiteDeUsoDoLink, type DiarioFonte,
 } from '../services/celular/diarioFonte'
 import { MENSAGEM_LINK_RECUSADO } from '../services/celular/tarefasFonte'
 import { useDiaryMediaUrls } from '../hooks/useDiaryMediaUrls'
@@ -274,6 +274,41 @@ describe('fonteDiarioDoLink · mídia pela Edge', () => {
     esperarSoCaminhoDoLink()
   })
 
+  it('assinarFotos: path acima de 300 caracteres fica fora (derrubaria o lote na Edge)', async () => {
+    mocks.invoke.mockResolvedValue(ok({ urls: { 'o/p/a.jpg': 'https://assinada/a' } }))
+    const r = await fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['x'.repeat(301), 'o/p/a.jpg'])
+    expect(mocks.invoke).toHaveBeenCalledTimes(1)
+    expect(mocks.invoke.mock.calls[0][1].body.paths).toEqual(['o/p/a.jpg'])
+    expect(r).toEqual({ 'o/p/a.jpg': 'https://assinada/a' })
+  })
+
+  it('removerFotos: 230 paths → 3 pedidos (100/100/30), disparados juntos', async () => {
+    const paths = Array.from({ length: 230 }, (_, i) => `o/p/${i}.jpg`)
+    const soltar: (() => void)[] = []
+    mocks.invoke.mockImplementation(() => new Promise(res => { soltar.push(() => res(ok({ removidos: [] }))) }))
+    const pronto = fonteDiarioDoLink('tk', { podeAprovar: false }).removerFotos(PROJ, paths)
+    // Em paralelo: os 3 lotes já saíram antes de qualquer resposta chegar.
+    await waitFor(() => expect(mocks.invoke).toHaveBeenCalledTimes(3))
+    expect(mocks.invoke.mock.calls.map(c => c[1].body.paths.length)).toEqual([100, 100, 30])
+    expect(new Set(mocks.invoke.mock.calls.flatMap(c => c[1].body.paths)).size).toBe(230)
+    soltar.forEach(f => f())
+    await expect(pronto).resolves.toBeUndefined()
+  })
+
+  it('removerFotos: recusa do token em dois lotes → aoRecusar uma vez só; nada é lançado', async () => {
+    const aoRecusar = vi.fn()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const paths = Array.from({ length: 230 }, (_, i) => `o/p/${i}.jpg`)
+    mocks.invoke
+      .mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
+      .mockResolvedValueOnce(ok({ removidos: [] }))
+      .mockResolvedValueOnce(erroDaEdge(403, { error: MENSAGEM_LINK_RECUSADO }))
+    await expect(fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false }).removerFotos(PROJ, paths)).resolves.toBeUndefined()
+    expect(mocks.invoke).toHaveBeenCalledTimes(3)
+    expect(aoRecusar).toHaveBeenCalledTimes(1)
+    warn.mockRestore()
+  })
+
   it('erro 400 da Edge vira Error com a mensagem do corpo', async () => {
     mocks.invoke.mockResolvedValue(erroDaEdge(400, { error: 'paths deve ter de 1 a 100 caminhos' }))
     await expect(fonteDiarioDoLink('tk', { podeAprovar: false }).assinarFotos(['o/p/a.jpg']))
@@ -316,6 +351,31 @@ describe('fonteDiarioDoLink · recusa do token', () => {
     await f.removerFotos(PROJ, ['o/p/a.jpg'])
     expect(aoRecusar).toHaveBeenCalledTimes(2)
     warn.mockRestore()
+  })
+
+  it('Edge: 429 (limite de uso do link) → erro com a mensagem da Edge e code 54000; NÃO é recusa do link', async () => {
+    const LIMITE = 'Limite de uso do link atingido — tente de novo na próxima hora.'
+    const aoRecusar = vi.fn()
+    const f = fonteDiarioDoLink('tk', { aoRecusar, podeAprovar: false })
+    mocks.invoke.mockResolvedValueOnce(erroDaEdge(429, { error: LIMITE }))
+    const falha = await f.subirFoto({ orgId: 'o', projectId: PROJ, file: new File(['x'], 'a.jpg', { type: 'image/jpeg' }) })
+      .catch((e: unknown) => e)
+    expect(falha).toBeInstanceOf(Error)
+    expect(falha).toMatchObject({ message: LIMITE, status: 429, code: '54000' })
+    expect(ehLimiteDeUsoDoLink(falha)).toBe(true)
+    expect(mocks.uploadToSignedUrl).not.toHaveBeenCalled()
+
+    mocks.invoke.mockResolvedValueOnce(erroDaEdge(429, { error: LIMITE }))
+    await expect(f.assinarFotos(['o/p/a.jpg'])).rejects.toMatchObject({ message: LIMITE, code: '54000' })
+    expect(aoRecusar).not.toHaveBeenCalled()
+  })
+
+  it('ehLimiteDeUsoDoLink: só o 429/54000', () => {
+    expect(ehLimiteDeUsoDoLink({ status: 429 })).toBe(true)
+    expect(ehLimiteDeUsoDoLink({ code: '54000' })).toBe(true)
+    expect(ehLimiteDeUsoDoLink({ status: 403, code: '42501' })).toBe(false)
+    expect(ehLimiteDeUsoDoLink(new Error('qualquer'))).toBe(false)
+    expect(ehLimiteDeUsoDoLink(null)).toBe(false)
   })
 })
 

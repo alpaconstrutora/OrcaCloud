@@ -71,6 +71,26 @@ export function validarPedido(body: unknown): ResultadoValidacao {
     return { ok: true, pedido: { acao, token, project_id, paths: b.paths } };
 }
 
+export interface RespostaDeErro {
+    status: number;
+    corpo: { error: string };
+    /** Só o erro inesperado (500) vai para o log; os previstos não. */
+    logar: boolean;
+}
+
+// Erro de RPC → resposta. 42501 (token recusado / fora da org) é 403 com a
+// mensagem do banco; 22023 é pedido inválido (400); 54000 é o limite de uso do
+// link (`_celular_cota`, 120 envios e 600 assinaturas por hora) → 429 com a
+// mensagem do banco, que a tela mostra. O resto é 500 sem detalhe.
+export function respostaDoErroDaRpc(erro: { code?: string; message?: string }): RespostaDeErro {
+    const previsto = (status: number, padrao: string): RespostaDeErro =>
+        ({ status, corpo: { error: erro.message || padrao }, logar: false });
+    if (erro.code === '42501') return previsto(403, 'Acesso negado');
+    if (erro.code === '22023') return previsto(400, 'Pedido inválido');
+    if (erro.code === '54000') return previsto(429, 'Limite de uso do link atingido — tente de novo na próxima hora.');
+    return { status: 500, corpo: { error: 'Erro ao processar o pedido' }, logar: true };
+}
+
 // Formato que `_celular_midia_path_ok` (banco) aceita: {org}/{projeto}/{arquivo}.
 export function montarPath(org: string, projeto: string, uuid: string, ext: string): string {
     return `${org}/${projeto}/${uuid}.${ext}`;

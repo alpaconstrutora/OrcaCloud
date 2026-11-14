@@ -6,11 +6,16 @@
 --             _diary_delete_core, fn_pode_aprovar_diario_de) e regressão do app
 --             logado: diary_upsert_entry / diary_delete_entry mantêm o que o
 --             membro grava, a recusa ao não membro, o diário de organization_id
---             NULL, a trava de aprovação e o gatilho de settings.diaryEntries.
+--             NULL, a trava de aprovação e o gatilho de settings.diaryEntries;
+--             os dois núcleos chamados direto (5b/5c) decidem pelo p_ator, não
+--             pelas claims da sessão.
 --   Seção B — RPCs do Diário pelo link (celular_*), chamadas como anon só com o
 --             token: lista e abertura presas à org do link, gravação pelo
 --             núcleo com o dono do link como ator, efetivo, planejamento (D4,
 --             evolução só em manualRealPct) e mídia (D7).
+--   Seção C — limite de uso por link (aplicar_20271112990000): subir 120/hora,
+--             assinar 600/hora, estouro 54000, um link não afeta o outro; e o
+--             IS NOT TRUE das checagens de planejamento.
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';
 -- sucesso = a linha final 'TUDO OK' (`db query` só devolve o último resultado).
@@ -25,6 +30,12 @@
 -- prova falha em "function public.fn_pode_aprovar_diario_de(uuid, uuid) does not
 -- exist". Só com a primeira, a seção A passa e a B falha em
 -- "function public.celular_diarios_listar(unknown) does not exist".
+--
+-- Com as duas acima JÁ APLICADAS (2026-11-12), o ensaio do limite de uso põe
+-- no lugar da linha MIGRATION só:
+--   aplicar_20271112990000_link_celular_limite_de_uso.sql
+-- Sem ela, as seções A e B passam e a C falha em
+-- relation "public.user_mobile_link_uso" does not exist (42P01).
 
 BEGIN;
 -- MIGRATION
@@ -101,6 +112,7 @@ DECLARE
     salvar  CONSTANT TEXT := 'SELECT public.diary_upsert_entry(%L::uuid, %L::jsonb)::text';
     excluir CONSTANT TEXT := 'SELECT public.diary_delete_entry(%L::uuid, %L::text)::text';
     nucleo  CONSTANT TEXT := 'SELECT public._diary_upsert_core(%L::uuid, %L::uuid, %L::jsonb)::text';
+    nucleo_excluir CONSTANT TEXT := 'SELECT public._diary_delete_core(%L::uuid, %L::uuid, %L::text)::text';
     e3 JSONB := '{"id": "tv-r3", "date": "2026-11-10", "status": "Rascunho"}';
     e4_aprovado JSONB := '{"id": "tv-r4", "date": "2026-11-09", "status": "Aprovado"}';
     m UUID; g UUID; x UUID; d1 UUID; d2 UUID;
@@ -231,6 +243,29 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'claims de m, p_ator = admin g aprovando → ok (veio ' || v || ')');
     PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
         'diário ficou com o Rascunho do membro e o aprovado pelo ator admin');
+
+    -- ── 5c. o núcleo de EXCLUSÃO também decide pelo p_ator ───────────────────
+    -- Membro: sem claims, p_ator = não membro é recusado; com as claims de um
+    -- membro (m), p_ator = não membro segue recusado (pega núcleo que usasse
+    -- is_org_member(v_org), que leria a sessão de m e deixaria passar).
+    v := pg_temp.como_postgres(NULL, format(nucleo_excluir, x, d1, 'tv-r3'));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'excluir pelo núcleo sem claims, p_ator = não membro → 42501 (veio ' || v || ')');
+    v := pg_temp.como_postgres(m, format(nucleo_excluir, x, d1, 'tv-r3'));
+    PERFORM pg_temp.confere(v = nao_encontrado, 'excluir pelo núcleo com claims de m, p_ator = não membro → 42501 (veio ' || v || ')');
+    -- Aprovação: claims do admin g, p_ator = m (sem a chave) excluindo o Aprovado
+    -- → a frase da aprovação (pega núcleo que usasse fn_pode_aprovar_diario(v_org)).
+    v := pg_temp.como_postgres(g, format(nucleo_excluir, m, d1, 'tv-r4'));
+    PERFORM pg_temp.confere(v = msg_excluir, 'excluir pelo núcleo com claims do admin g, p_ator = m, registro Aprovado → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
+        'recusas do núcleo de exclusão não mexeram no diário');
+    -- Lados que passam: sem claims, o ator membro exclui o Rascunho; com as
+    -- claims de m, o ator admin g exclui o Aprovado.
+    v := pg_temp.como_postgres(NULL, format(nucleo_excluir, m, d1, 'tv-r3'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = jsonb_build_array(e4_aprovado),
+        'excluir pelo núcleo sem claims, p_ator = membro, Rascunho → ok (veio ' || v || ')');
+    v := pg_temp.como_postgres(m, format(nucleo_excluir, g, d1, 'tv-r4'));
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = '[]'::jsonb,
+        'excluir pelo núcleo com claims de m, p_ator = admin g, Aprovado → ok (veio ' || v || ')');
 
     -- ── 6. equivalência fn_pode_aprovar_diario_de × fn_pode_aprovar_diario ───
     -- O lado "aprova = true" inclui a fixture g (admin inserido nesta transação).
@@ -786,6 +821,174 @@ BEGIN
         AND (SELECT p.prosrc LIKE '%public._diary_delete_core(v_user,%' FROM pg_proc p
               WHERE p.oid = 'public.celular_diario_excluir(text, uuid, text)'::regprocedure),
         'celular_diario_salvar/excluir chamam o núcleo com o dono do link');
+END $$;
+
+-- ═════════════════════════════════════════════════════════════════════════════
+-- Seção C — limite de uso por link (aplicar_20271112990000)
+-- ═════════════════════════════════════════════════════════════════════════════
+-- subir (celular_diario_autoriza) 120/hora e assinar (celular_diario_midia_permitida)
+-- 600/hora, contados por link em user_mobile_link_uso; estouro → 54000. Mais o
+-- IS NOT TRUE das checagens de planejamento.
+DO $$
+DECLARE
+    ctx RECORD;
+    org UUID; m UUID; g UUID;
+    tk TEXT; tk_g TEXT; link_m UUID; link_g UUID; dc UUID;
+    v TEXT; i INT; p_a TEXT;
+    hora     CONSTANT TIMESTAMPTZ := date_trunc('hour', now(), 'UTC');
+    limite   CONSTANT TEXT := '54000:Limite de uso do link atingido — tente de novo na próxima hora.';
+    recusa   CONSTANT TEXT := '42501:link inválido ou vencido';
+    autoriza CONSTANT TEXT := 'SELECT public.celular_diario_autoriza(%L, %L::uuid)::text';
+    permite  CONSTANT TEXT := 'SELECT public.celular_diario_midia_permitida(%L, %L::text[])::text';
+    cota     CONSTANT TEXT := 'SELECT public._celular_cota(%L, %L, %s)::text';
+BEGIN
+    SELECT * INTO ctx FROM dc_ctx;
+    org := ctx.org; m := ctx.m; g := ctx.g;
+    SELECT l.id INTO link_m FROM public.user_mobile_links l WHERE l.org_id = org AND l.user_id = m;
+    SELECT l.id INTO link_g FROM public.user_mobile_links l WHERE l.org_id = org AND l.user_id = g;
+    PERFORM pg_temp.confere(link_m IS NOT NULL AND link_g IS NOT NULL, 'fixture C: links de m e g da seção B');
+
+    -- ── o que a seção B já contou: só as chamadas que passaram ───────────────
+    -- Link de m na seção B: autoriza ok em 2 (diário e obra) e recusada em 2
+    -- (planejamento, outra org); midia_permitida ok em 3 e 22023 em 1. A recusa
+    -- desfaz o incremento junto com a chamada.
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'subir' AND janela = hora) = 2
+        AND (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'assinar' AND janela = hora) = 3
+        AND NOT EXISTS (SELECT 1 FROM public.user_mobile_link_uso WHERE link_id = link_g),
+        'seção B contou só as chamadas que passaram (veio '
+        || coalesce((SELECT string_agg(acao || '=' || n, ',' ORDER BY acao) FROM public.user_mobile_link_uso
+                      WHERE link_id = link_m), '<nada>') || ')');
+
+    -- ── fixtures ─────────────────────────────────────────────────────────────
+    -- Tokens novos para m e g (gerar de novo = mesma linha de user_mobile_links:
+    -- a conta continua). Zera a de m e planta uma hora anterior estourada e uma
+    -- linha de 3 dias atrás (faxina).
+    v := pg_temp.como(m, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', m, org));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'fixture C: link de m (veio ' || v || ')');
+    tk := substr(v, 4);
+    v := pg_temp.como(g, 'authenticated', format('SELECT public.mobile_link_generate(%L, %L)', g, org));
+    PERFORM pg_temp.confere(v LIKE 'ok:%', 'fixture C: link de g (veio ' || v || ')');
+    tk_g := substr(v, 4);
+    PERFORM pg_temp.confere((SELECT l.id FROM public.user_mobile_links l WHERE l.token_hash = public._mobile_link_hash(tk)) = link_m,
+        'gerar de novo mantém a linha do link (a conta não zera)');
+    DELETE FROM public.user_mobile_link_uso WHERE link_id = link_m;
+    INSERT INTO public.user_mobile_link_uso (link_id, acao, janela, n) VALUES
+        (link_m, 'subir', hora - interval '1 hour', 1000),
+        (link_m, 'subir', hora - interval '3 days', 5);
+    INSERT INTO public.projects (name, user_id, organization_id, settings)
+    VALUES ('TVC diário', g, org, jsonb_build_object('classification', 'DIARIO', 'organizationId', org))
+    RETURNING id INTO dc;
+
+    -- ── subir: 120 por hora ──────────────────────────────────────────────────
+    FOR i IN 1..120 LOOP
+        v := pg_temp.cel(format(autoriza, tk, dc));
+        PERFORM pg_temp.confere(v = 'ok:' || org, format('autoriza nº %s de 120 → a org (veio %s)', i, v));
+    END LOOP;
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'subir' AND janela = hora) = 120,
+        'autoriza: 120 usos contados na hora cheia corrente (a hora anterior estourada não conta)');
+    v := pg_temp.cel(format(autoriza, tk, dc));
+    PERFORM pg_temp.confere(v = limite, 'autoriza nº 121 → ' || limite || ' (veio ' || v || ')');
+    v := pg_temp.cel(format(autoriza, tk, dc));
+    PERFORM pg_temp.confere(v = limite, 'autoriza nº 122 → a mesma recusa (veio ' || v || ')');
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'subir' AND janela = hora) = 120,
+        'a recusa por limite desfaz o próprio incremento (n fica 120)');
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'subir' AND janela = hora - interval '1 hour') = 1000
+        AND NOT EXISTS (SELECT 1 FROM public.user_mobile_link_uso WHERE link_id = link_m AND janela < hora - interval '2 days'),
+        'hora anterior intacta; linha de mais de 2 dias apagada pela faxina');
+
+    -- Outro link (outra pessoa) não é afetado; e assinar do mesmo link conta à parte.
+    v := pg_temp.cel(format(autoriza, tk_g, dc));
+    PERFORM pg_temp.confere(v = 'ok:' || org, 'link de g segue subindo com o de m no limite (veio ' || v || ')');
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_g AND acao = 'subir' AND janela = hora) = 1,
+        'link de g: 1 uso de subir, na conta dele');
+    p_a := org || '/' || dc || '/a.jpg';
+    v := pg_temp.cel(format(permite, tk, ARRAY[p_a]));
+    PERFORM pg_temp.confere(v = 'ok:{}', 'link de m no limite de subir ainda assina (veio ' || v || ')');
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'assinar' AND janela = hora) = 1,
+        'midia_permitida conta 1 uso de assinar');
+
+    -- ── assinar: 600 por hora (pela própria midia_permitida, com a conta adiantada) ─
+    UPDATE public.user_mobile_link_uso SET n = 599 WHERE link_id = link_m AND acao = 'assinar' AND janela = hora;
+    v := pg_temp.cel(format(permite, tk, ARRAY[p_a]));
+    PERFORM pg_temp.confere(v = 'ok:{}', 'midia_permitida nº 600 → ok (veio ' || v || ')');
+    v := pg_temp.cel(format(permite, tk, ARRAY[p_a]));
+    PERFORM pg_temp.confere(v = limite, 'midia_permitida nº 601 → ' || limite || ' (veio ' || v || ')');
+    PERFORM pg_temp.confere(
+        (SELECT n FROM public.user_mobile_link_uso WHERE link_id = link_m AND acao = 'assinar' AND janela = hora) = 600,
+        'assinar: n fica 600 depois da recusa');
+    v := pg_temp.cel(format(permite, tk_g, ARRAY[p_a]));
+    PERFORM pg_temp.confere(v = 'ok:{}', 'link de g segue assinando com o de m no limite (veio ' || v || ')');
+
+    -- ── _celular_cota direto (como postgres), com limite baixo ───────────────
+    DELETE FROM public.user_mobile_link_uso WHERE link_id = link_g AND acao = 'assinar';
+    FOR i IN 1..3 LOOP
+        v := pg_temp.como_postgres(NULL, format(cota, tk_g, 'assinar', 3));
+        PERFORM pg_temp.confere(v LIKE 'ok:%', format('_celular_cota nº %s de 3 → ok (veio %s)', i, v));
+    END LOOP;
+    v := pg_temp.como_postgres(NULL, format(cota, tk_g, 'assinar', 3));
+    PERFORM pg_temp.confere(v = limite, '_celular_cota nº 4 de 3 → ' || limite || ' (veio ' || v || ')');
+    v := pg_temp.como_postgres(NULL, format(cota, 'nao-existe', 'subir', 10));
+    PERFORM pg_temp.confere(v = recusa, '_celular_cota com token que não existe → ' || recusa || ' (veio ' || v || ')');
+    v := pg_temp.como_postgres(NULL, format(cota, tk_g, 'outra', 10));
+    PERFORM pg_temp.confere(v LIKE '23514:%', '_celular_cota com ação fora de subir/assinar → 23514 (veio ' || v || ')');
+
+    -- Token inválido: a recusa do resolver vem antes da cota.
+    v := pg_temp.cel(format(autoriza, 'nao-existe', dc));
+    PERFORM pg_temp.confere(v = recusa, 'autoriza com token inválido → ' || recusa || ' (veio ' || v || ')');
+    v := pg_temp.cel(format(permite, 'nao-existe', ARRAY[p_a]));
+    PERFORM pg_temp.confere(v = recusa, 'midia_permitida com token inválido → ' || recusa || ' (veio ' || v || ')');
+
+    -- ── a API não chega na tabela nem na cota ────────────────────────────────
+    v := pg_temp.cel(format(cota, tk, 'subir', 1000000));
+    PERFORM pg_temp.confere(v LIKE '42501:permission denied for function%', 'anon não chama _celular_cota (veio ' || v || ')');
+    v := pg_temp.como(m, 'authenticated', format(cota, tk, 'subir', 1000000));
+    PERFORM pg_temp.confere(v LIKE '42501:permission denied for function%', 'authenticated não chama _celular_cota (veio ' || v || ')');
+    v := pg_temp.cel('SELECT count(*)::text FROM public.user_mobile_link_uso');
+    PERFORM pg_temp.confere(v LIKE '42501:permission denied for table%', 'anon não lê user_mobile_link_uso (veio ' || v || ')');
+    v := pg_temp.como(m, 'authenticated', format('DELETE FROM public.user_mobile_link_uso WHERE link_id = %L RETURNING 1', link_m));
+    PERFORM pg_temp.confere(v LIKE '42501:permission denied for table%', 'authenticated não apaga a própria conta (veio ' || v || ')');
+
+    -- ── forma ────────────────────────────────────────────────────────────────
+    PERFORM pg_temp.confere(
+        (SELECT c.relrowsecurity FROM pg_class c WHERE c.oid = 'public.user_mobile_link_uso'::regclass)
+        AND NOT EXISTS (SELECT 1 FROM pg_policies p WHERE p.schemaname = 'public' AND p.tablename = 'user_mobile_link_uso')
+        AND NOT EXISTS (SELECT 1 FROM unnest(ARRAY['anon', 'authenticated']) papel,
+                                      unnest(ARRAY['SELECT', 'INSERT', 'UPDATE', 'DELETE', 'TRUNCATE', 'REFERENCES', 'TRIGGER']) priv
+                         WHERE has_table_privilege(papel, 'public.user_mobile_link_uso', priv)),
+        'user_mobile_link_uso: RLS ligada, 0 policy, nenhum privilégio para anon nem authenticated');
+    PERFORM pg_temp.confere(
+        (SELECT p.prosecdef AND p.provolatile = 'v' AND 'search_path=public, pg_temp' = ANY (p.proconfig)
+                AND p.proacl IS NOT NULL
+                AND NOT has_function_privilege('anon', p.oid, 'EXECUTE')
+                AND NOT has_function_privilege('authenticated', p.oid, 'EXECUTE')
+                AND NOT EXISTS (SELECT 1 FROM aclexplode(p.proacl) a WHERE a.grantee = 0)
+           FROM pg_proc p WHERE p.oid = 'public._celular_cota(text, text, integer)'::regprocedure),
+        '_celular_cota: DEFINER, VOLATILE, search_path fixo, sem EXECUTE para PUBLIC, anon nem authenticated');
+    PERFORM pg_temp.confere(
+        (SELECT p.prosrc LIKE '%PERFORM public._celular_cota(p_token, ''subir'', 120);%' FROM pg_proc p
+          WHERE p.oid = 'public.celular_diario_autoriza(text, uuid)'::regprocedure)
+        AND (SELECT p.prosrc LIKE '%PERFORM public._celular_cota(p_token, ''assinar'', 600);%' FROM pg_proc p
+              WHERE p.oid = 'public.celular_diario_midia_permitida(text, text[])'::regprocedure),
+        'autoriza chama a cota de subir (120) e midia_permitida a de assinar (600)');
+    PERFORM pg_temp.confere(
+        (SELECT bool_and(p.prosrc LIKE '%public._celular_planejamento_aceito(%) IS NOT TRUE THEN%'
+                         AND p.prosrc NOT LIKE '%NOT public._celular_planejamento_aceito(%')
+              AND count(*) = 2
+           FROM pg_proc p
+          WHERE p.oid IN ('public.celular_planejamento_ler(text, uuid, uuid)'::regprocedure,
+                          'public.celular_planejamento_gravar_evolucao(text, uuid, uuid, jsonb)'::regprocedure)),
+        'planejamento_ler e gravar_evolucao: _celular_planejamento_aceito(...) IS NOT TRUE');
+
+    -- Link apagado leva a conta junto (ON DELETE CASCADE).
+    DELETE FROM public.user_mobile_links WHERE id = link_g;
+    PERFORM pg_temp.confere(NOT EXISTS (SELECT 1 FROM public.user_mobile_link_uso WHERE link_id = link_g),
+        'apagar o link apaga a conta dele');
 END $$;
 
 ROLLBACK;

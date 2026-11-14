@@ -685,3 +685,33 @@ describe('Analítico — teclado', () => {
         expect(document.activeElement).toBe(abrir);
     });
 });
+
+// ─── Base de preço e BDI zerado (2ª crítica do Analítico, 2026-11-14, passo 1) ─
+
+describe('Analítico — base de preço à vista e BDI zerado', () => {
+    const abrir = async (over: Partial<ProjectSettings> = {}) => {
+        renderEditor([makeEntry('e1')], over);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    };
+
+    it('o subtítulo diz qual orçamento e com que base (competência, UF, encargos)', async () => {
+        await abrir({ name: 'Garden', referenceMonth: '12/2025', location: 'SP', socialChargesMode: 'COM_DESONERACAO' });
+        expect(screen.getByText('Garden')).toBeTruthy();
+        expect(screen.getByText('SINAPI 12/2025 · SP · com desoneração')).toBeTruthy();
+    });
+
+    it('base própria aparece pelo tipo, sem competência SINAPI', async () => {
+        await abrir({ database: 'GENERAL' });
+        expect(screen.getByText('Base geral (itens avulsos)')).toBeTruthy();
+    });
+
+    it('BDI global 0% avisa no card; com BDI o aviso some', async () => {
+        await abrir({ bdi: 0 });
+        expect(screen.getByText('BDI zerado: Preço Final = Custo Direto')).toBeTruthy();
+    });
+
+    it('com BDI 25% não há aviso', async () => {
+        await abrir({ bdi: 25 });
+        expect(screen.queryByText('BDI zerado: Preço Final = Custo Direto')).toBeNull();
+    });
+});

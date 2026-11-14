@@ -1949,6 +1949,25 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   // Contador do ícone no título: ITENS com pendência (um item pode ter as duas),
   // para bater com o "Todas" do Painel de pendências técnicas.
   const itemsComPendenciaTecnica = budget.filter(item => !hasCalculationMemory(item) || !item.precisionClass).length;
+
+  // Base de preço à vista (2ª crítica, 2026-11-14): "SINAPI de quando, de onde, com ou sem
+  // desoneração?" é a 1ª pergunta de quem audita um orçamento, e só existia dentro da janela
+  // de adicionar item. É a base do ORÇAMENTO (busca e atualização de competência); a coluna
+  // Base de cada item continua dizendo de onde aquele item veio.
+  const rotuloBasePreco = (() => {
+    const db = settings.database || 'SINAPI';
+    if (db === 'SINAPI') {
+      const ref = resolveReferenceDate(settings.referenceMonth, references);
+      const competencia = references.find(r => r.referenceDate === ref)?.label || settings.referenceMonth || 'competência não definida';
+      const encargos = (settings.socialChargesMode || 'SEM_DESONERACAO') === 'COM_DESONERACAO' ? 'com desoneração' : 'sem desoneração';
+      return `SINAPI ${competencia} · ${settings.location || 'MG'} · ${encargos}`;
+    }
+    if (db === 'GENERAL') return 'Base geral (itens avulsos)';
+    return `Base própria: ${customDatabases.find(d => d.id === db)?.name || db}`;
+  })();
+  // BDI global zerado: o Preço Final sai igual ao Custo Direto. Pode ser intencional, mas
+  // não pode passar calado (2ª crítica).
+  const bdiZerado = !settings.bdi && budget.length > 0;
   const totalWithBDI = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0) * (1 + (item.bdi ?? settings.bdi) / 100)), 0);
 
   const calculateSubPhaseTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
@@ -2235,12 +2254,27 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-          <p className="text-gray-500 text-sm mt-1.5 font-medium">Composição detalhada pela EAP (estrutura analítica do projeto).</p>
+          {/* Qual orçamento e com que base de preço (2ª crítica): o título genérico não dizia
+              nem o nome — "Garden" só aparecia truncado no seletor de contexto. */}
+          <p className="text-gray-500 text-sm mt-1.5 font-medium">
+            {settings.name && <span className="text-gray-900">{settings.name}</span>}
+            {settings.name && <span aria-hidden="true"> · </span>}
+            <span title="Base de preço do orçamento: competência, UF e encargos usados na busca de itens e na atualização de competência SINAPI">{rotuloBasePreco}</span>
+          </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
           <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
           <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
-          <KpiCard size="sm" className="shrink-0" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
+          <KpiCard
+            size="sm"
+            className="shrink-0"
+            label={`BDI (${settings.bdi}%)`}
+            value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            sub={bdiZerado ? 'BDI zerado: Preço Final = Custo Direto' : undefined}
+            title={bdiZerado ? 'O BDI global está em 0%. Itens sem BDI próprio entram sem lucro, impostos e despesas indiretas. Confira se é intencional.' : undefined}
+            icon={bdiZerado ? <AlertTriangle className="w-4 h-4" /> : <Percent className="w-4 h-4" />}
+            color={bdiZerado ? 'amber' : 'blue'}
+          />
           {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
             <div className="relative shrink-0">
               <ActionIconButton
@@ -2275,7 +2309,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </div>
           )}
 
-          <label className="flex items-center gap-2 h-9 pl-3 pr-1 rounded-[6px] border border-gray-200 bg-white" title="BDI global: vale para todo item sem BDI próprio e define o Preço Final">
+          <label
+            className={`flex items-center gap-2 h-9 pl-3 pr-1 rounded-[6px] border bg-white ${bdiZerado ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}
+            title={bdiZerado ? 'BDI global em 0%: o Preço Final sai igual ao Custo Direto. Confira se é intencional.' : 'BDI global: vale para todo item sem BDI próprio e define o Preço Final'}
+          >
             <span className="text-sm font-medium text-gray-700 whitespace-nowrap">BDI global (%)</span>
             <input
               type="number"

@@ -9,6 +9,7 @@
 
 import { contaDoRegistro, cabecalhosAsaas } from "./asaasConta.ts";
 import { eventoDoStatus, ramoDoEvento, type PayloadAsaas } from "../../../utils/asaasEventos.ts";
+import { candidatoDaReferencia } from "../../../utils/asaasEnvioSemResposta.ts";
 
 // deno-lint-ignore no-explicit-any
 type Admin = any;
@@ -36,7 +37,13 @@ export async function confirmarNaAsaas(admin: Admin, aviso: PayloadAsaas): Promi
 
     const { data: reg, error } = await admin.from(alvo.tabela).select('payment_account_id').eq(alvo.coluna, id).maybeSingle();
     if (error) return { tipo: 'nao_confirmado', motivo: `leitura do registro: ${error.message}`, transitorio: true };
-    if (!reg) return { tipo: 'desconhecido' };
+    if (!reg) {
+        // Envio que ficou sem resposta (o OrçaCloud não gravou o id): liga pelo
+        // externalReference e confere de novo, agora com o registro (plano
+        // 2026-11-13-asaas-boleto-data-e-cancelamento, item 6).
+        if (ramo !== 'payment' && await ligarEnvioSemResposta(admin, ramo, id)) return confirmarNaAsaas(admin, aviso);
+        return { tipo: 'desconhecido' };
+    }
 
     let conta;
     try { conta = await contaDoRegistro(admin, reg.payment_account_id); }
@@ -60,4 +67,51 @@ export async function confirmarNaAsaas(admin: Admin, aviso: PayloadAsaas): Promi
     const evento = eventoDoStatus(ramo, obj.status as string | undefined, ramo === 'payment' && obj.deleted === true);
     if (!evento) return { tipo: 'sem_mudanca', status: (obj.status as string | undefined) ?? null };
     return { tipo: 'confirmado', payload: { event: evento, [ramo]: { ...obj, id } } as PayloadAsaas };
+}
+
+/**
+ * Aviso de saída (boleto/PIX) com id que o OrçaCloud não conhece: procura entre os pagamentos
+ * "aprovados sem número" dos últimos 7 dias qual é o dono — busca o objeto na Asaas, com a conta
+ * de cada candidato, e compara a `externalReference` (boleto → id do boleto; PIX/saque → id do
+ * pagamento). Achou um só: grava o id e passa o registro para "enviado"/"agendado" (o processador
+ * cuida dos estados finais). Doc "Boas práticas gerais": em timeout, "verifique se o pagamento já
+ * foi criado por meio dos eventos recebidos".
+ */
+async function ligarEnvioSemResposta(admin: Admin, ramo: 'bill' | 'transfer', asaasId: string): Promise<boolean> {
+    const coluna = ramo === 'bill' ? 'asaas_bill_id' : 'asaas_transfer_id';
+    const desde = new Date(Date.now() - 7 * 24 * 3600_000).toISOString();
+    let q = admin.from('supplier_payments').select('id,boleto_id,payment_account_id')
+        .eq('status', 'APPROVED').is('asaas_bill_id', null).is('asaas_transfer_id', null)
+        .not('payment_account_id', 'is', null).gte('created_at', desde).limit(50);
+    q = ramo === 'bill' ? q.eq('payment_type', 'BILL') : q.neq('payment_type', 'BILL');
+    const { data: candidatos } = await q;
+    if (!candidatos?.length) return false;
+
+    const contas = [...new Set((candidatos as { payment_account_id: string }[]).map(c => c.payment_account_id))];
+    for (const contaId of contas) {
+        let conta;
+        try { conta = await contaDoRegistro(admin, contaId); } catch { continue; }
+        if (!conta) continue;
+        const r = await fetch(`${conta.base}${ramo === 'bill' ? '/bill/' : '/transfers/'}${asaasId}`, { headers: cabecalhosAsaas(conta.apiKey) }).catch(() => null);
+        if (!r?.ok) continue;
+        const obj = await r.json().catch(() => null) as { externalReference?: string; scheduleDate?: string } | null;
+        const dono = candidatoDaReferencia(candidatos as { id: string; boleto_id: string | null; payment_account_id: string }[], contaId, obj?.externalReference);
+        if (!dono) continue;
+        const hoje = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+        const agendado = !!obj?.scheduleDate && obj.scheduleDate > hoje;
+        const { data: ligado } = await admin.from('supplier_payments').update({
+            [coluna]: asaasId,
+            status: agendado ? 'SCHEDULED' : 'PENDING',
+            scheduled_date: agendado ? obj!.scheduleDate : null,
+            failure_reason: null,
+            raw_response: obj,
+            updated_at: new Date().toISOString(),
+        }).eq('id', dono.id).eq('status', 'APPROVED').is(coluna, null).select('id');
+        if (!ligado?.length) return false;
+        if (ramo === 'bill' && dono.boleto_id) {
+            await admin.from('boletos').update({ status: 'programado' }).eq('id', dono.boleto_id).eq('status', 'aprovado');
+        }
+        return true;
+    }
+    return false;
 }

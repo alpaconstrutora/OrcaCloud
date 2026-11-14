@@ -11,6 +11,7 @@ import { validarChavePix, tipoParaAsaas, type TipoChavePix } from "../../../util
 import { validateCpfCnpj } from "../../../lib/validators.ts"
 import { quarentenaDaChave, HORAS_QUARENTENA, bloqueiosDoSaqueProprio, type DestinoDoSaque } from "../../../utils/asaasGovernanca.ts"
 import { dataDoPagamentoDeBoleto, cancelamentoConfirmado, decisaoDoCancelamento } from "../../../utils/asaasBoletoPagamento.ts"
+import { resultadoDoEnvio, MOTIVO_SEM_CONFIRMACAO } from "../../../utils/asaasEnvioSemResposta.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -210,6 +211,26 @@ serve(async (req: Request) => {
         error: 'Nenhuma conta Asaas configurada para esta organização. Cadastre em Minha Organização › Contas.',
     }, 503);
 
+    // Envio sem resposta conclusiva (sem resposta, 408, 5xx, 2xx sem id): o pagamento PODE ter
+    // sido criado. Não vira FAILED — liberaria um segundo envio. Fica "aprovado" com o motivo, e
+    // o aviso da Asaas (asaasConfirmar, pela externalReference) liga e atualiza. Doc "Boas
+    // práticas gerais": em timeout "não reenvie a mesma conta imediatamente".
+    const envioSemConfirmacao = async (supplierPaymentId: string, corpo: unknown) => {
+        await admin.from('supplier_payments').update({
+            failure_reason: MOTIVO_SEM_CONFIRMACAO,
+            raw_response: corpo ?? null,
+            updated_at: new Date().toISOString(),
+        }).eq('id', supplierPaymentId);
+        return json({
+            error: 'A Asaas não confirmou o envio. O pagamento PODE ter sido criado — não tente de novo agora: '
+                + 'quando a Asaas avisar, o OrçaCloud liga e atualiza sozinho. Se em alguns minutos a linha '
+                + 'continuar "Envio sem confirmação", confira no painel da Asaas.',
+        }, 504);
+    };
+    const postar = async (url: string, init: RequestInit): Promise<Response | null> => {
+        try { return await fetch(url, init); } catch { return null; }
+    };
+
     if (body.schedule_date && (!/^\d{4}-\d{2}-\d{2}$/.test(body.schedule_date) || body.schedule_date < hojeBRT())) {
         return json({ error: 'Data de agendamento inválida (use uma data de hoje em diante).' }, 400);
     }
@@ -376,7 +397,7 @@ serve(async (req: Request) => {
         }).select('id').single();
         if (spErr) return json({ error: 'Falha ao registrar o saque', detail: spErr.message }, 500);
 
-        const res = await fetch(`${contaSaque.base}/transfers`, {
+        const res = await postar(`${contaSaque.base}/transfers`, {
             method: 'POST',
             headers: cabecalhosAsaas(contaSaque.apiKey),
             body: JSON.stringify({
@@ -388,9 +409,11 @@ serve(async (req: Request) => {
                 externalReference: spRow.id,
             }),
         });
-        const t = await res.json().catch(() => ({})) as TransferResponse;
-        if (!res.ok || !t.id) {
-            const msg = (t as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${res.status}`;
+        const t = (res ? await res.json().catch(() => ({})) : {}) as TransferResponse;
+        const envioSaque = resultadoDoEnvio(res?.status ?? null, !!t.id);
+        if (envioSaque === 'sem_confirmacao') return await envioSemConfirmacao(spRow.id, t);
+        if (envioSaque === 'recusado') {
+            const msg = (t as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${res?.status}`;
             await admin.from('supplier_payments').update({
                 status: 'FAILED', failure_reason: msg, raw_response: t, updated_at: new Date().toISOString(),
             }).eq('id', spRow.id);
@@ -565,12 +588,14 @@ serve(async (req: Request) => {
         };
         if (agendado) pedido.scheduleDate = body.schedule_date;
 
-        const res = await fetch(`${conta.base}/transfers`, {
+        const res = await postar(`${conta.base}/transfers`, {
             method: 'POST', headers: cabecalhosAsaas(conta.apiKey), body: JSON.stringify(pedido),
         });
-        const t = await res.json().catch(() => ({})) as TransferResponse;
-        if (!res.ok || !t.id) {
-            const msg = (t as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${res.status}`;
+        const t = (res ? await res.json().catch(() => ({})) : {}) as TransferResponse;
+        const envioPix = resultadoDoEnvio(res?.status ?? null, !!t.id);
+        if (envioPix === 'sem_confirmacao') return await envioSemConfirmacao(spRow.id, t);
+        if (envioPix === 'recusado') {
+            const msg = (t as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${res?.status}`;
             await admin.from('supplier_payments').update({
                 status: 'FAILED', failure_reason: msg, raw_response: t, updated_at: new Date().toISOString(),
             }).eq('id', spRow.id);
@@ -784,15 +809,17 @@ serve(async (req: Request) => {
     // agendadas" — vencido é pagamento imediato): `dataPagamento.scheduleDate` é null.
     if (dataPagamento.scheduleDate) payBody.scheduleDate = dataPagamento.scheduleDate;
 
-    const payRes = await fetch(`${asaasBase}/bill`, {
+    const payRes = await postar(`${asaasBase}/bill`, {
         method: 'POST',
         headers: asaasHeaders,
         body: JSON.stringify(payBody),
     });
-    const payData = await payRes.json().catch(() => ({})) as BillResponse;
+    const payData = (payRes ? await payRes.json().catch(() => ({})) : {}) as BillResponse;
+    const envioBoleto = resultadoDoEnvio(payRes?.status ?? null, !!payData.id);
+    if (envioBoleto === 'sem_confirmacao') return await envioSemConfirmacao(spRow.id, payData);
 
-    if (!payRes.ok) {
-        let msg = (payData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${payRes.status}`;
+    if (envioBoleto === 'recusado') {
+        let msg = (payData as { errors?: { description?: string }[] })?.errors?.[0]?.description ?? `HTTP ${payRes?.status}`;
         // Janelas do mesmo dia (doc "Regras importantes" da Asaas, conferida em
         // 19/10/2026): boleto de cobrança até 23h, conta de consumo até 20h, boleto
         // acima de R$ 250 mil até 16h — sempre em dia útil. A doc pede para não fixar

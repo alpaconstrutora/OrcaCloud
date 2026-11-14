@@ -809,8 +809,10 @@ toolbar de busca, porque muda o escopo — não o recorte.
 > dos KPIs (ANATOMIA): o dado não pode aparecer antes do controle que o
 > determina. Caso concreto: Engenharia › Orçamento Analítico
 > (`BudgetEditor.tsx`, 2026-09-21, a pedido do usuário) — o campo BDI (%) da
-> toolbar de botões é o que calcula "Preço Venda" e "BDI" dos cards, então a
-> ordem ali é título → toolbar de botões → KPIs → toolbar acoplada. Não vale
+> toolbar de botões é o que calcula "Preço Final" e "BDI" dos cards, então a
+> ordem ali era título → toolbar de botões → KPIs → toolbar acoplada. Desde
+> 2026-11-13 os KPIs foram para a linha do título (§20.4), então o cartão fica
+> acima da barra que o define, sem faixa própria. Não vale
 > para barra de escopo que só **recorta** (conta, competência, período): essa
 > continua depois dos KPIs, como no Extrato.
 > ⚠️ **Aviso persistente não vira banner acima do `<h1>`.** Um banner de
@@ -2743,6 +2745,34 @@ abre com "Bom dia, {nome}" em vez do par `h1 font-black` + subtítulo:
 
 > ❌ Não copiar para outras telas: a exceção é da tela de entrada. Lista, cadastro e
 > painel analítico seguem o §20.
+
+### 20.4 Exceção — KPIs na linha do título, à direita (13/11/2026)
+
+**Onde:** Engenharia › Orçamento Analítico (`BudgetEditor.tsx`), por pedido
+explícito do usuário. Os três cards (Preço Final, Custo Direto, BDI) deixaram a
+faixa própria abaixo da toolbar de botões e passaram a ocupar a linha do
+`<h1>`, alinhados à direita. Antes era "Preço Venda"; o nome agora é **Preço Final**.
+
+```tsx
+<div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
+  <div>{/* h1 + p — §20, intactos */}</div>
+  <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
+    <KpiCard size="lg" className="shrink-0" label="Preço Final" ... />
+    <KpiCard size="sm" className="shrink-0" label="Custo Direto" ... />
+    <KpiCard size="sm" className="shrink-0" label="BDI (25%)" ... />
+    {/* indicador de pendências (ícone + contador), se houver, fecha a fila */}
+  </div>
+</div>
+```
+
+> ✅ Os KPIs continuam sendo `KpiCard` (§4) com quebra de simetria (§4.2): o
+> principal em `size="lg"`, os outros em `sm`. Só mudou **onde** moram.
+> ✅ `flex-wrap` + `ml-auto`: sem largura para os quatro lado a lado, o grupo da
+> direita quebra para baixo do título, ainda à direita — nunca espreme o card
+> nem corta o valor (`shrink-0` em cada um).
+> ❌ Não é regra geral: telas de lista/cadastro seguem o §20 (KPIs em grade
+> abaixo do título). Esta forma só vale onde o pedido for explícito e a tela
+> tiver poucos KPIs (≤ 3 + um indicador).
 
 ---
 

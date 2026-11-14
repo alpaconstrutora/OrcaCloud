@@ -365,8 +365,9 @@ describe('Correção 4 — loadAuxiliaryItems: cancelled flag evita setState ap�
 //    (título + banner + KPIs + toolbar tomavam metade da tela). Virou um ícone
 //    com contador na linha do título, à direita, que abre o Painel de
 //    pendências técnicas.
-// 2. A toolbar de botões (BDI %, Inline/Janela, Ferramentas, Novo Grupo) vem
-//    ANTES dos KPI cards — o BDI dali é o que define o Preço Venda dos cards.
+// 2. (pedido de 2026-11-13) Os KPI cards (Preço Final, Custo Direto, BDI) saíram
+//    da faixa própria abaixo da toolbar e foram para a linha do título, à
+//    direita. "Preço Venda" passou a se chamar "Preço Final".
 
 describe('Cromo — aviso de memória técnica no título e toolbar antes dos KPIs', () => {
     it('não renderiza mais o banner; mostra o ícone com o contador na linha do título', async () => {
@@ -383,10 +384,11 @@ describe('Cromo — aviso de memória técnica no título e toolbar antes dos KP
         // 1 item com as duas pendências = contador 1 (itens, não pendências — bate com o painel)
         expect(icone.parentElement?.textContent).toBe('1');
 
-        // Ícone na MESMA linha do título: irmão do bloco h1+p dentro do flex.
+        // Ícone na MESMA linha do título (a que também guarda os KPIs, à direita).
         const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico' });
-        expect(icone.parentElement?.parentElement).toBe(h1.parentElement?.parentElement);
-        expect(icone.parentElement?.parentElement?.className).toContain('justify-between');
+        const linhaDoTitulo = h1.parentElement?.parentElement;
+        expect(linhaDoTitulo?.contains(icone)).toBe(true);
+        expect(linhaDoTitulo?.className).toContain('justify-between');
 
         fireEvent.click(icone);
         expect(await screen.findByText('Painel de pendências técnicas')).toBeTruthy();
@@ -398,15 +400,103 @@ describe('Cromo — aviso de memória técnica no título e toolbar antes dos KP
         expect(screen.queryByRole('button', { name: 'Abrir painel de pendências técnicas' })).toBeNull();
     });
 
-    it('toolbar de botões vem antes dos KPI cards no DOM', async () => {
+    it('KPI cards ficam na linha do título, à direita, antes da toolbar de botões', async () => {
         renderEditor([makeEntry('e1')]);
         await act(async () => { await new Promise(r => setTimeout(r, 50)); });
 
-        const novoGrupo = screen.getByRole('button', { name: /Novo Grupo/ });
-        const kpi = screen.getByText('Preço Venda');
         const h1 = screen.getByRole('heading', { level: 1, name: 'Orçamento Analítico' });
-        const antes = (a: Element, b: Element) => !!(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
-        expect(antes(h1, novoGrupo)).toBe(true);
-        expect(antes(novoGrupo, kpi)).toBe(true);
+        const linhaDoTitulo = h1.parentElement?.parentElement as HTMLElement;
+        const novoGrupo = screen.getByRole('button', { name: /Novo Grupo/ });
+
+        // Renomeado: "Preço Venda" não existe mais.
+        expect(screen.queryByText('Preço Venda')).toBeNull();
+        for (const rotulo of ['Preço Final', 'Custo Direto', 'BDI (25%)']) {
+            const kpi = screen.getByText(rotulo);
+            expect(linhaDoTitulo.contains(kpi)).toBe(true);
+            // à direita do bloco h1+p, não antes dele
+            expect(h1.compareDocumentPosition(kpi) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+            // e acima da toolbar de botões
+            expect(kpi.compareDocumentPosition(novoGrupo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+        }
+        // Item de 100 + 25% de BDI: Preço Final 125, Custo Direto 100, BDI +25.
+        expect(linhaDoTitulo.textContent).toContain('125,00');
+        expect(linhaDoTitulo.textContent).toContain('100,00');
+    });
+});
+
+// ─── Filtro de grupo + ordem dos grupos (pedido de 2026-11-13) ─────────────────
+
+describe('Filtro de grupo e ordem dos grupos', () => {
+    const wbs3 = [
+        { id: '01', name: '01. Zeta', phases: [{ id: '01.01', name: '01.01. Fase Z', subPhases: [] }] },
+        { id: '02', name: '02. Alfa', phases: [{ id: '02.01', name: '02.01. Fase A', subPhases: [] }] },
+        { id: '03', name: '03. Mike', phases: [{ id: '03.01', name: '03.01. Fase M', subPhases: [] }] },
+    ];
+    // Totais com BDI de 25%: Zeta 100 → 125, Alfa 300 → 375, Mike 500 → 625.
+    const entry = (id: string, group: string, price: number): BudgetEntry => ({
+        ...makeEntry(id), group, phase: '', subPhase: '',
+        sinapiItem: { ...makeEntry(id).sinapiItem, price },
+    });
+    const budget3 = [entry('z', '01. Zeta', 100), entry('a', '02. Alfa', 300), entry('m', '03. Mike', 500)];
+
+    const nomesDosGrupos = (container: HTMLElement) =>
+        Array.from(container.querySelectorAll('tr.bg-gray-800'))
+            .map(tr => tr.querySelector('[title]')?.getAttribute('title'));
+
+    const montar = async () => {
+        try { window.localStorage.clear(); } catch { /* jsdom sem storage: o estado padrão já é o certo */ }
+        const r = renderEditor(budget3, { wbs: wbs3 as ProjectSettings['wbs'] });
+        await act(async () => { await new Promise(res => setTimeout(res, 50)); });
+        return r;
+    };
+
+    it('por padrão mostra todos os grupos na ordem da EAP', async () => {
+        const { container } = await montar();
+        expect(nomesDosGrupos(container)).toEqual(['Zeta', 'Alfa', 'Mike']);
+    });
+
+    it('classifica os grupos por nome, maior valor e menor valor — sem mexer na EAP gravada', async () => {
+        const { container, onUpdateSettings } = await montar();
+        const ordem = screen.getByLabelText('Ordem dos grupos');
+
+        fireEvent.change(ordem, { target: { value: 'name' } });
+        expect(nomesDosGrupos(container)).toEqual(['Alfa', 'Mike', 'Zeta']);
+
+        fireEvent.change(ordem, { target: { value: 'value-desc' } });
+        expect(nomesDosGrupos(container)).toEqual(['Mike', 'Alfa', 'Zeta']);
+
+        fireEvent.change(ordem, { target: { value: 'value-asc' } });
+        expect(nomesDosGrupos(container)).toEqual(['Zeta', 'Alfa', 'Mike']);
+
+        fireEvent.change(ordem, { target: { value: 'eap' } });
+        expect(nomesDosGrupos(container)).toEqual(['Zeta', 'Alfa', 'Mike']);
+        // Ordem é só de exibição: nada foi gravado.
+        expect(onUpdateSettings).not.toHaveBeenCalled();
+    });
+
+    it('filtrar por um grupo mostra só ele, já aberto, e "Todos os grupos" volta tudo', async () => {
+        const { container } = await montar();
+        const filtro = screen.getByLabelText('Filtrar por grupo');
+
+        fireEvent.change(filtro, { target: { value: '02' } });
+        expect(nomesDosGrupos(container)).toEqual(['Alfa']);
+        // aberto: a etapa do grupo aparece
+        expect(screen.getByText('Fase A')).toBeTruthy();
+        expect(screen.queryByText('Fase Z')).toBeNull();
+
+        fireEvent.change(filtro, { target: { value: '' } });
+        expect(nomesDosGrupos(container)).toEqual(['Zeta', 'Alfa', 'Mike']);
+    });
+
+    it('com filtro ou ordem ativos, as setas de mover grupo ficam desligadas e dizem o motivo', async () => {
+        const { container } = await montar();
+        // EAP + todos: há seta ativa (Zeta desce).
+        expect(screen.getAllByRole('button', { name: /Mover para Baixo/ }).some(b => !(b as HTMLButtonElement).disabled)).toBe(true);
+
+        fireEvent.change(screen.getByLabelText('Ordem dos grupos'), { target: { value: 'name' } });
+        const baixo = screen.getAllByRole('button', { name: 'Mover para Baixo' }) as HTMLButtonElement[];
+        expect(baixo.length).toBe(nomesDosGrupos(container).length);
+        expect(baixo.every(b => b.disabled)).toBe(true);
+        expect(baixo[0].parentElement?.getAttribute('title')).toContain('Ordem da EAP');
     });
 });

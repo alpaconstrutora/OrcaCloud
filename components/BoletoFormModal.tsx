@@ -486,8 +486,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         setJurosDiaTipo(b.juros_dia_tipo ?? 'valor');
     }
 
-    async function handleUploadAndSave(closeAfter = true) {
-        if (!pendingFile || !organizationId) return;
+    /** Grava o boleto capturado. Devolve o boleto salvo (null se falhou ou era duplicado). */
+    async function handleUploadAndSave(closeAfter = true): Promise<Boleto | null> {
+        if (!pendingFile || !organizationId) return null;
         setBusy(true);
         setError(null);
         try {
@@ -510,7 +511,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 carregarCampos(result.boleto);
                 setInfo('Este boleto já havia sido capturado anteriormente — abrimos o registro existente, sem alterar nada nele.');
                 setBusy(false);
-                return;
+                return null;
             }
 
             // Aplica associações do formulário
@@ -539,10 +540,44 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 onClose();
             } else {
                 setBoleto(updated);
+                setBusy(false);
             }
+            return updated;
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao salvar boleto');
+            setBusy(false);
+            return null;
+        }
+    }
+
+    /**
+     * Renomear na CAPTURA (14/11/2026, "o campo com o código foi ocultado. Manter exibição"): a
+     * captura não mostrava o nome do documento nem o Renomear — o código da Nomenclatura só
+     * aparecia depois de salvar e reabrir. Grava o boleto (fica aberto, já em edição) e renomeia.
+     * Se a gravação já renomeou sozinha (máscara salva), não gasta outro número.
+     */
+    async function handleSalvarERenomearCaptura() {
+        if (!supplierId) { setError(MOTIVO_RENOMEAR.sem_fornecedor); return; }
+        const nomeEnviado = pendingFile?.name;
+        const salvo = await handleUploadAndSave(false);
+        if (!salvo) return;
+        if (salvo.documento_nome !== nomeEnviado) {
+            setInfo(`Boleto salvo. Documento renomeado para ${salvo.documento_nome}.`);
+            return;
+        }
+        setBusy(true);
+        try {
+            const r = await renomearDocumentoDeNovo(salvo.id);
+            if (!r.ok) {
+                setError('Boleto salvo, mas não renomeado: ' + MOTIVO_RENOMEAR[r.motivo] + (r.detalhe ? ` (${r.detalhe})` : ''));
+                return;
+            }
+            const atualizado = (await boletoService.getById(salvo.id)) ?? { ...salvo, documento_nome: r.nome };
+            setBoleto(atualizado);
+            onSaved(atualizado);
+            setInfo(`Boleto salvo. Documento renomeado para ${r.nome}.`);
+        } finally {
             setBusy(false);
         }
     }
@@ -1482,6 +1517,26 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         />
                                     </FormField>
 
+                                </Secao>
+
+                                {/* Documento na captura (14/11/2026): o nome que o arquivo tem e o Renomear
+                                    pela Nomenclatura — antes só existiam depois de salvar. */}
+                                <Secao titulo="Documento" icone={FileText}>
+                                    <ReadOnlyField icon={FileText} label="Nome atual" value={pendingFile.name || '—'} />
+                                    <div className="flex flex-wrap items-center gap-3">
+                                        <button
+                                            type="button"
+                                            onClick={handleSalvarERenomearCaptura}
+                                            disabled={busy || !organizationId || !supplierId}
+                                            title={!organizationId ? 'Selecione a organização antes de salvar' : !supplierId ? MOTIVO_RENOMEAR.sem_fornecedor : 'Salva o boleto e renomeia o documento pela Nomenclatura'}
+                                            className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
+                                        >
+                                            <Pencil className="w-[15px] h-[15px]" /> Renomear
+                                        </button>
+                                        <p className="text-xs text-gray-500">
+                                            Segue a Nomenclatura de Boletos, com o fornecedor e a obra desta tela — salva o boleto junto.
+                                        </p>
+                                    </div>
                                 </Secao>
 
                                 <Secao titulo="Observações" icone={StickyNote}>

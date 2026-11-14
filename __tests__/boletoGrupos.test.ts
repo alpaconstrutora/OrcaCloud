@@ -64,4 +64,14 @@ describe('agruparBoletos', () => {
         expect(rotuloMes('2026-01')).toBe('Janeiro/2026');
         expect(rotuloMes('xx')).toBe('xx');
     });
+
+    it('organização (14/11/2026): agrupa pelo nome da organização dona, com total; "Sem organização" por último', () => {
+        const orgs: Record<string, string> = { o1: 'ALPA Construtora', o2: 'Condomínio Garden' };
+        const comOrg: ResolvedoresGrupo = { ...r, organizacao: x => orgs[x.organization_id] ?? null };
+        const lista = [b('1', { organization_id: 'o2', valor: 4 }), b('2', { organization_id: 'o1' }), b('3', { organization_id: 'o2', valor: 6 }), b('4', { organization_id: 'x' })];
+        const g = agruparBoletos(lista, 'organizacao', comOrg);
+        expect(g.map(x => x.label)).toEqual(['ALPA Construtora', 'Condomínio Garden', 'Sem organização']);
+        expect(g[1].total).toBe(10);
+    });
 });
+

@@ -222,14 +222,14 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         value={item.quantity}
                         onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
                         disabled={isLocked}
-                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
+                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-2 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
                 </td>
 
                 <td className={`${TD} text-center text-sm text-gray-500`}>{item.sinapiItem?.unit || '---'}</td>
 
                 <td className={TD}>
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <span className="text-xs text-gray-400 shrink-0">R$</span>
                         <MoneyCentsInput
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
@@ -250,7 +250,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 <td className={TD}>
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <input
                             type="number"
                             step="0.1"

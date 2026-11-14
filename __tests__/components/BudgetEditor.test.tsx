@@ -649,3 +649,37 @@ describe('Analítico — a EAP abre mostrando os itens', () => {
         expect(screen.queryByText('Sub vazia C')).toBeNull();
     });
 });
+
+// ─── Teclado na EAP (crítica do Analítico, 2026-11-14, passo 5) ───────────────
+
+describe('Analítico — teclado', () => {
+    it('grupo e etapa abrem/recolhem por botão com aria-expanded', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        const grupo = screen.getByRole('button', { name: /grupo 01 Grupo Geral/ });
+        expect(grupo.getAttribute('aria-expanded')).toBe('true'); // tem item: abre sozinho
+        fireEvent.click(grupo);
+        expect(grupo.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByTestId('budget-row-e1')).toBeNull();
+    });
+
+    it('a janela da CPU é um diálogo: o foco entra ao abrir e volta a quem abriu ao fechar', async () => {
+        const item = {
+            ...makeEntry('x'),
+            sinapiItem: { ...makeEntry('x').sinapiItem, type: SinapiType.COMPOSITION,
+                composition: [{ code: 'INS-1', description: 'Areia', unit: 'm3', quantity: 2, price: 10, type: SinapiType.INPUT }] },
+        } as BudgetEntry;
+        renderEditor([item]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        const abrir = screen.getByRole('button', { name: 'cpu x' });
+        abrir.focus();
+        fireEvent.click(abrir);
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        const dialogo = screen.getByRole('dialog', { name: 'Composição de Preço Unitário (CPU)' });
+        expect(dialogo.contains(document.activeElement)).toBe(true);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(document.activeElement).toBe(abrir);
+    });
+});

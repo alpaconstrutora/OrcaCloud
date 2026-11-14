@@ -319,6 +319,31 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   // Trava do Esc enquanto a pergunta "descartar alterações?" está aberta (o modal de
   // confirmação tem o próprio Esc; sem isto o nosso reabriria a pergunta).
   const confirmandoDescarteRef = React.useRef(false);
+  // Janela da CPU acessível pelo teclado (PRODUCT.md: AA com teclado completo): ao abrir, o foco
+  // entra (1º campo, ou o fechar); o Tab fica preso dentro; ao fechar, volta para quem abriu.
+  const janelaCpuRef = React.useRef<HTMLDivElement>(null);
+  const quemAbriuCpuRef = React.useRef<HTMLElement | null>(null);
+  const cpuAberta = !!selectedCPUItem;
+  React.useEffect(() => {
+    if (cpuAberta) {
+      quemAbriuCpuRef.current = document.activeElement as HTMLElement | null;
+      const raiz = janelaCpuRef.current;
+      const primeiro = raiz?.querySelector<HTMLElement>('input:not([disabled])') ?? raiz?.querySelector<HTMLElement>('button');
+      primeiro?.focus();
+    } else if (quemAbriuCpuRef.current) {
+      quemAbriuCpuRef.current.focus?.();
+      quemAbriuCpuRef.current = null;
+    }
+  }, [cpuAberta]);
+  const prenderTabNaJanela = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab' || !janelaCpuRef.current) return;
+    const focaveis = [...janelaCpuRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    if (focaveis.length === 0) return;
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -2974,7 +2999,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Unid.<cols.ResizeHandle colKey="unid" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Custo unit.<cols.ResizeHandle colKey="custo-unit" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Custo total<cols.ResizeHandle colKey="custo-total" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center text-red-500 relative overflow-hidden">BDI<cols.ResizeHandle colKey="bdi" /></th>
+                <th title="BDI do item (%). Vazio = usa o BDI global da barra acima." className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">BDI (%)<cols.ResizeHandle colKey="bdi" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Preço unit.<cols.ResizeHandle colKey="preco-unit" /></th>
                 <th aria-hidden="true" className="border-r border-gray-100"></th>
                 <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right relative overflow-hidden">Preço total<cols.ResizeHandle colKey="preco-total" /></th>
@@ -3003,10 +3028,11 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <tr className="bg-gray-800 hover:bg-gray-700 transition-colors text-white group">
                   <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700"></td>
                   <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700">
-                    <div className="flex items-center gap-1 cursor-pointer font-semibold text-sm" onClick={() => toggleGroup(group.id)}>
+                    {/* Botão de verdade (teclado + leitor de tela): até 14/11/2026 era div sem foco. */}
+                    <button type="button" aria-expanded={isGroupExpanded} aria-label={`${isGroupExpanded ? 'Recolher' : 'Abrir'} grupo ${group.id} ${groupNameDisplay}`} onClick={() => toggleGroup(group.id)} className="flex items-center gap-1 cursor-pointer font-semibold text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-white">
                       {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
                       {group.id}
-                    </div>
+                    </button>
                   </td>
                   <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-700 bg-gray-800 group-hover:bg-gray-700">
                     {/* Contagem e total logo depois do nome (§6.12): a coluna Preço total cai fora
@@ -3067,10 +3093,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <tr className="bg-gray-100 hover:bg-gray-200 border-b border-gray-200 group">
                         <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200"></td>
                         <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200">
-                          <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-800 text-sm" onClick={() => togglePhase(phase.id)}>
+                          <button type="button" aria-expanded={isPhaseExpanded} aria-label={`${isPhaseExpanded ? 'Recolher' : 'Abrir'} etapa ${phaseIdDisplay} ${phaseNameDisplay}`} onClick={() => togglePhase(phase.id)} className="flex items-center gap-1 cursor-pointer font-semibold text-gray-800 text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                             {isPhaseExpanded ? <ChevronDown className="w-4 h-4 text-gray-600 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />}
                             {phaseIdDisplay}
-                          </div>
+                          </button>
                         </td>
                         <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200">
                           <div className="flex items-baseline gap-2 min-w-0">
@@ -3125,10 +3151,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             <tr className="bg-gray-50 hover:bg-gray-100 border-b border-gray-100 group">
                               <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100"></td>
                               <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100">
-                                <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm" onClick={() => toggleSubPhase(subPhaseName)}>
+                                <button type="button" aria-expanded={isSubExpanded} aria-label={`${isSubExpanded ? 'Recolher' : 'Abrir'} subetapa ${subIdDisplay} ${subNameDisplay}`} onClick={() => toggleSubPhase(subPhaseName)} className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                                   {isSubExpanded ? <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" /> : <Folder className="w-3 h-3 text-blue-500 shrink-0" />}
                                   {subIdDisplay}
-                                </div>
+                                </button>
                               </td>
                               <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100">
                                 <div className="font-semibold text-gray-700 text-sm leading-tight truncate" title={subNameDisplay}>
@@ -3922,13 +3948,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         selectedCPUItem && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+            <div
+              ref={janelaCpuRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cpu-janela-titulo"
+              onKeyDown={prenderTabNaJanela}
+              className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200"
+            >
               <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 items-center">
                   <div className="bg-blue-600 p-2.5 rounded-[6px] text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                     <Layers className="w-6 h-6" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Composição de Preço Unitário (CPU)</h3>
+                  <h3 id="cpu-janela-titulo" className="text-xl font-extrabold text-gray-900 tracking-tight">Composição de Preço Unitário (CPU)</h3>
 
                   <div className="flex items-center gap-2">
                     <button

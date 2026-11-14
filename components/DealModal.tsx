@@ -1433,6 +1433,10 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
             notifyError('Salve a negociação antes de lançar — a cobrança sai do contrato dela.');
             return;
         }
+        if (motivoContratoNaoConferido) {
+            notifyError(motivoContratoNaoConferido);
+            return;
+        }
         // Com alterações pendentes, salva ANTES: o lançamento lê o plano da tela
         // e grava no contrato — sem isso, Contas a Receber divergia da negociação
         // gravada, e "Voltar" ainda podia descartar o resto (crítica 10/11/2026).
@@ -1683,16 +1687,32 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     // Quem tem ponte para contrato formal: Venda e Locação (Serviço não).
     const canGenerateContract = formData.type === 'SALE' || formData.type === 'RENTAL';
 
-    // Ao abrir uma negociação de venda/locação já salva, verifica se já há contrato gerado
+    // Ao abrir uma negociação de venda/locação já salva, verifica se já há contrato gerado.
+    // Até a resposta chegar, "sem contrato" não quer dizer que não existe: "Lançar no
+    // Financeiro" e "Gerar Contrato" esperam (`motivoContratoNaoConferido`) — antes, um clique
+    // nessa janela tentava CRIAR outro contrato para a negociação (14/11: era a falha
+    // intermitente de dealModalAvisoReceitaFinanceira no CI; reproduzida com o contrato
+    // chegando 150 ms depois).
+    const [contratoConferido, setContratoConferido] = useState<'sim' | 'conferindo' | 'falhou'>('sim');
     useEffect(() => {
         setLinkedContract(null);
         setContractError(null);
-        if (isOpen && formData.id && canGenerateContract) {
-            contractService.getContractByDealId(formData.id)
-                .then(setLinkedContract)
-                .catch(err => console.error('[DealModal] Erro ao buscar contrato da negociação:', err));
-        }
+        if (!(isOpen && formData.id && canGenerateContract)) { setContratoConferido('sim'); return; }
+        let vivo = true;
+        setContratoConferido('conferindo');
+        contractService.getContractByDealId(formData.id)
+            .then(c => { if (vivo) { setLinkedContract(c); setContratoConferido('sim'); } })
+            .catch(err => {
+                console.error('[DealModal] Erro ao buscar contrato da negociação:', err);
+                if (vivo) setContratoConferido('falhou');
+            });
+        return () => { vivo = false; };
     }, [isOpen, formData.id, formData.type]);
+    const motivoContratoNaoConferido = contratoConferido === 'conferindo'
+        ? 'Conferindo o contrato desta negociação…'
+        : contratoConferido === 'falhou'
+            ? 'Não foi possível conferir o contrato desta negociação — feche e abra de novo antes de lançar ou gerar (gerar outro duplicaria a cobrança).'
+            : null;
 
     // Trava de "Regerar número" — mesma consulta que ContractModal.tsx faz para
     // Suprimentos/Serviços, aqui reaproveitada porque o contrato de Venda/Locação
@@ -2935,9 +2955,9 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
     const botaoLancar = () => (
         <button
             type="button"
-            disabled={lancandoNoFinanceiro || !formData.id}
+            disabled={lancandoNoFinanceiro || !formData.id || !!motivoContratoNaoConferido}
             onClick={handleLancarNoFinanceiro}
-            title={!formData.id ? 'Salve a negociação para lançar — a cobrança sai do contrato dela.' : undefined}
+            title={!formData.id ? 'Salve a negociação para lançar — a cobrança sai do contrato dela.' : motivoContratoNaoConferido ?? undefined}
             className={BOTAO_SECUNDARIO}
         >
             {lancandoNoFinanceiro
@@ -5342,7 +5362,8 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                 <button
                                                     type="button"
                                                     onClick={handleGenerateContract}
-                                                    disabled={generatingContract}
+                                                    disabled={generatingContract || !!motivoContratoNaoConferido}
+                                                    title={motivoContratoNaoConferido ?? undefined}
                                                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-60 disabled:cursor-not-allowed"
                                                 >
                                                     <FileText className="w-5 h-5" />

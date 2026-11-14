@@ -97,7 +97,11 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         expect(gravado[nome], `sem marco gravado para ${nome} — grave com GRAVAR_MARCO_PREDIO=1`).toBeDefined();
         expect(agora).toEqual(gravado[nome]);
       },
-      300_000,
+      // 600 s desde 14/11/2026: depois do PA5b (#427) o caso "RL" passou a rodar perto dos
+      // 300 s na CI e estourou em ~7 de 8 rodadas, deixando o `main` e todo PR vermelhos.
+      // Isto só destrava a fila — a LENTIDÃO segue para a frente do Prédio automático
+      // (docs/planos/2026-11-12-predio-automatico.md) medir e reduzir.
+      600_000,
     );
   }
 });

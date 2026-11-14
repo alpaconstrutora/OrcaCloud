@@ -162,12 +162,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors group ${isExpanded ? 'bg-blue-50/20' : ''} ${isDragging ? 'relative z-50 bg-white shadow-xl' : ''}`}
             >
                 <td style={fixa(esquerdaFixa?.drag)} className={`${TD} text-center ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
-                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500" title="Arrastar para reordenar">
+                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-700" title="Arrastar para reordenar">
                         <GripVertical className="w-3.5 h-3.5" />
                     </button>
                 </td>
 
-                <td style={fixa(esquerdaFixa?.item)} className={`${TD} text-sm font-normal text-gray-400 whitespace-nowrap ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
+                <td style={fixa(esquerdaFixa?.item)} className={`${TD} text-sm font-normal text-gray-600 whitespace-nowrap ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
                     <div className="flex items-center gap-1.5">
                         {canOpenCPU && (
                             <button
@@ -230,7 +230,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
                 <td className={TD}>
                     <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
-                        <span className="text-xs text-gray-400 shrink-0">R$</span>
+                        <span className="text-xs text-gray-500 shrink-0">R$</span>
                         <MoneyCentsInput
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
                             onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v))}
@@ -268,7 +268,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 <td className={`${TD} text-right text-sm font-medium text-blue-600 whitespace-nowrap`}>
-                    R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
 
                 {/* Espaçador (§6.1.1) — casa com o <col /> sem largura do colgroup */}
@@ -314,9 +314,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
                 {showNatureBreakdown && natureBreakdown && (
                     <>
-                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </>
                 )}
             </tr>
@@ -369,7 +369,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                         <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
                                         <div className="col-span-1 text-center">
                                             <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
-                                                <span className="text-[9px] text-gray-400">R$</span>
+                                                <span className="text-xs text-gray-500">R$</span>
                                                 <MoneyCentsInput
                                                     value={displayPrice}
                                                     onChange={(v) => onUpdateComposition(item.id, idx, { price: v === '' ? 0 : Number(v) })}
@@ -380,7 +380,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                         </div>
                                         <div className="col-span-1"></div>
                                         <div className="col-span-2 text-right font-medium text-gray-800 text-sm">
-                                            R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
                                     </div>
                                 );

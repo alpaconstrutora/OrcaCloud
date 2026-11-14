@@ -2235,12 +2235,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-          <p className="text-gray-500 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
+          <p className="text-gray-500 text-sm mt-1.5 font-medium">Composição detalhada pela EAP (estrutura analítica do projeto).</p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
-          <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
-          <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
-          <KpiCard size="sm" className="shrink-0" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
+          <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
+          <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
+          <KpiCard size="sm" className="shrink-0" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
           {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
             <div className="relative shrink-0">
               <ActionIconButton
@@ -2250,7 +2250,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 aria-label="Abrir painel de pendências técnicas"
                 onClick={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
               />
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
                 {itemsComPendenciaTecnica}
               </span>
             </div>
@@ -3112,9 +3112,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     const nat = calculateGroupNatureTotal(group.name);
                     return (
                       <>
-                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2.5 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </>
                     );
                   })()}
@@ -3170,9 +3170,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           const nat = calculatePhaseNatureTotal(group.name, phase.name);
                           return (
                             <>
-                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </>
                           );
                         })()}
@@ -3227,9 +3227,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                 const nat = calculateSubPhaseNatureTotal(group.name, phase.name, subPhaseName);
                                 return (
                                   <>
-                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                   </>
                                 );
                               })()}
@@ -3238,7 +3238,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             {isSubExpanded && (
                               items.length === 0 ? (
                                 <tr className="border-b border-gray-100">
-                                  <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
+                                  <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-500 italic">
                                     <span className="sticky left-16">Nenhum item nesta subetapa. Use o botão + (Adicionar item) à direita.</span>
                                   </td>
                                 </tr>
@@ -4064,8 +4064,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       <div key={`${selectedCPUItem.id}-modal-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-sm text-gray-600 hover:bg-blue-50/50 py-2.5 px-4 rounded-[6px] border border-transparent hover:border-blue-100 transition-all">
                         <div className="col-span-1 font-mono text-xs text-center text-gray-500">{comp.code}</div>
                         <div className="col-span-1 flex justify-center">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                            {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
+                          <span className={`text-sm font-normal ${comp.type === SinapiType.COMPOSITION ? 'text-blue-700' : 'text-amber-700'}`}>
+                            {comp.type === SinapiType.COMPOSITION ? 'Composição' : 'Insumo'}
                           </span>
                         </div>
                         <div className="col-span-3 flex flex-col">
@@ -4084,7 +4084,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         </div>
                         <div className="col-span-2">
                           <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                            <span className="text-xs text-gray-400">R$</span>
+                            <span className="text-xs text-gray-500">R$</span>
                             <MoneyCentsInput
                               value={displayPrice.toFixed(2)}
                               onChange={(v) => handleUpdateCompositionRascunho(idx, { price: v === '' ? 0 : Number(v) })}
@@ -4112,7 +4112,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="text-gray-900 not-italic font-bold text-base flex items-center gap-4">
                     <span className="text-gray-500 font-medium text-xs uppercase tracking-wider">Custo Total do Item:</span>
                     <span className="bg-white px-4 py-2 rounded-[6px] border border-gray-200 shadow-sm text-blue-600">
-                      R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
                   <div className="flex items-center gap-2 not-italic">

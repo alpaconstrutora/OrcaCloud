@@ -121,7 +121,7 @@ const ImovibMonteCarloCard: React.FC<ImovibMonteCarloCardProps> = ({ study, cena
                     >
                         <div className="h-full bg-blue-600 transition-[width]" style={{ width: `${n > 0 ? (feitos / n) * 100 : 0}%` }} />
                     </div>
-                    <p className="text-xs text-slate-600">{feitos.toLocaleString('pt-BR')} de {n.toLocaleString('pt-BR')} sorteios</p>
+                    <p className="text-xs text-slate-600" aria-live="polite">{feitos.toLocaleString('pt-BR')} de {n.toLocaleString('pt-BR')} sorteios</p>
                 </div>
             )}
 

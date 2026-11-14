@@ -208,13 +208,16 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
     };
 
     // Campos do estudo gravados pelos cartões de desembolso e pós-obra (Fase 5).
-    const salvarEstudo = async (campos: ImovibStudyUpdate) => {
+    /** `false` = não gravou (o toast já disse por quê). */
+    const salvarEstudo = async (campos: ImovibStudyUpdate): Promise<boolean> => {
         try {
             await imovibService.updateStudy(study.id, campos);
             onDataChanged();
+            return true;
         } catch (e) {
             console.error('Falha ao salvar o estudo', campos, e);
             showToast(`Erro ao salvar: ${(e as Error).message}`, 'error');
+            return false;
         }
     };
 
@@ -260,7 +263,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
 
     // Erro ao gravar uma rubrica: os campos não controlados (nome, valor, meses de
     // pós-obra) remontam com o gravado — antes, o digitado ficava como se tivesse gravado.
-    const [revisaoDosItens, setRevisaoDosItens] = useState(0);
+    // Por rubrica: remontar todas derrubava o foco e o texto de outra rubrica sendo digitada.
+    const [revisaoDosItens, setRevisaoDosItens] = useState<Record<string, number>>({});
     const handleUpdateItem = async (id: string, updates: Partial<ImovibCapexItem>) => {
         const origItems = [...items];
         setItems(items.map(i => i.id === id ? { ...i, ...updates } : i));
@@ -272,7 +276,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
             console.error('Failed to update item', e);
             showToast(`Erro ao salvar a rubrica de CAPEX: ${(e as Error).message}`, 'error');
             setItems(origItems);
-            setRevisaoDosItens(r => r + 1);
+            setRevisaoDosItens(r => ({ ...r, [id]: (r[id] ?? 0) + 1 }));
         } finally {
             setIsSaving(false);
         }
@@ -657,7 +661,7 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                             <td className="px-6 py-2.5 border-r border-gray-100">
                                                                 <input
                                                                     type="text"
-                                                                    key={`${item.id}-name-${revisaoDosItens}`}
+                                                                    key={`${item.id}-name-${revisaoDosItens[item.id] ?? 0}`}
                                                                     defaultValue={item.name}
                                                                     onBlur={(e) => {
                                                                         if (e.target.value !== item.name && e.target.value.trim()) {
@@ -704,8 +708,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                                 type="number" min="1" step="1"
                                                                                 aria-label={`Meses de pós-obra: ${item.name}`}
                                                                                 title="Em quantos meses depois do fim da obra (vazio = 12)"
-                                                                                key={`${item.id}-timing_months-${revisaoDosItens}`}
-                                                                    defaultValue={item.timing_months ?? ''}
+                                                                                key={`${item.id}-timing_months-${revisaoDosItens[item.id] ?? 0}`}
+                                                                                defaultValue={item.timing_months ?? ''}
                                                                                 placeholder="12"
                                                                                 onBlur={(e) => {
                                                                                     const n = e.target.value === '' ? null : Math.max(1, Math.round(Number(e.target.value)));
@@ -724,8 +728,8 @@ const ImovibCapexForm: React.FC<ImovibCapexFormProps> = ({ study, onDataChanged 
                                                                     )}
                                                                     <input
                                                                         type="number"
-                                                                        key={`${item.id}-value-${revisaoDosItens}`}
-                                                                    defaultValue={item.value}
+                                                                        key={`${item.id}-value-${revisaoDosItens[item.id] ?? 0}`}
+                                                                        defaultValue={item.value}
                                                                         disabled={foraPeloRegime(item)}
                                                                         title={foraPeloRegime(item) ? motivoImpostoPeloRegime : undefined}
                                                                         step={item.value_type === 'percent' ? '0.01' : '1'}

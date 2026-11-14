@@ -171,3 +171,33 @@ describe('alíquotas do regime', () => {
         expect(svc.updateStudy).not.toHaveBeenCalledWith('estudo-teste', expect.objectContaining({ tax_regime: expect.anything() }));
     });
 });
+
+describe('revisão do grupo C — alíquotas', () => {
+    it('gravação que falha não fica na memória para a próxima', async () => {
+        const user = userEvent.setup();
+        svc.updateStudy.mockReset();
+        svc.updateStudy.mockRejectedValueOnce(new Error('falhou')).mockResolvedValue({});
+        tela({ tax_regime: 'real' });
+        const pis = await screen.findByLabelText('Lucro real: PIS e Cofins');
+        await user.clear(pis);
+        await user.type(pis, '5');
+        await user.tab();
+        await screen.findByText(/Erro ao salvar/);
+        const ir = screen.getByLabelText('Lucro real: IRPJ e CSLL');
+        await user.clear(ir);
+        await user.type(ir, '30');
+        await user.tab();
+        expect(svc.updateStudy).toHaveBeenLastCalledWith('estudo-teste', { tax_hypotheses: { realIrCsPct: 30 } });
+    });
+
+    it('negativa recusada: o campo volta ao valor de antes', async () => {
+        const user = userEvent.setup();
+        tela({ tax_regime: 'ret' });
+        const ret = await screen.findByLabelText('RET') as HTMLInputElement;
+        const antes = ret.value;
+        await user.clear(ret);
+        await user.type(ret, '-2');
+        await user.tab();
+        expect(ret.value).toBe(antes);
+    });
+});

@@ -206,6 +206,29 @@ describe('erro ao gravar volta o campo ao que está gravado', () => {
     });
 });
 
+describe('revisão do grupo C — erro numa rubrica não mexe nas outras', () => {
+    it('falha ao gravar A não apaga o que está sendo digitado em B', async () => {
+        const user = userEvent.setup();
+        svc.seedCapexTemplate.mockResolvedValue([
+            { id: 'p1', study_id: 'estudo-teste', category: '10. Pós-obra', name: 'Assistência técnica', value_type: 'currency', value: 1000, base: 'obra', timing: 'pos_obra', timing_months: 12 },
+            { id: 'p2', study_id: 'estudo-teste', category: '10. Pós-obra', name: 'Manutenção', value_type: 'currency', value: 1000, base: 'obra', timing: 'pos_obra', timing_months: 12 },
+        ]);
+        let falhar!: (e: Error) => void;
+        svc.updateCapexItem.mockImplementation(() => new Promise((_, rej) => { falhar = rej; }));
+        envolver(<ImovibCapexForm study={estudo() as never} onDataChanged={vi.fn()} />);
+        const a = await screen.findByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement;
+        await user.clear(a);
+        await user.type(a, '24');
+        const b = screen.getByLabelText('Meses de pós-obra: Manutenção') as HTMLInputElement;
+        await user.click(b);
+        await user.clear(b);
+        await user.type(b, '30');
+        falhar(new Error('falhou'));
+        await waitFor(() => expect((screen.getByLabelText('Meses de pós-obra: Assistência técnica') as HTMLInputElement).value).toBe('12'));
+        expect((screen.getByLabelText('Meses de pós-obra: Manutenção') as HTMLInputElement).value).toBe('30');
+    });
+});
+
 describe('Orçamento › "No cálculo" (pendência da Fase 5)', () => {
     it('o cabeçalho e a célula de rubrica com momento dizem que o valor leva o índice dos meses em que sai', async () => {
         svc.seedCapexTemplate.mockResolvedValue([

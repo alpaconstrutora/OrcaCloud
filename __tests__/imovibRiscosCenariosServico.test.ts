@@ -19,14 +19,14 @@ import { imovibService } from '../services/imovibService';
 beforeEach(() => { resposta.data = null; resposta.error = null; });
 
 describe('riscos e cenários — exclusão confere a RLS', () => {
-    it('excluir risco que a RLS recusou (0 linhas) diz que não tem permissão', async () => {
+    it('excluir risco que a RLS recusou ou que já foi excluído (0 linhas) diz as duas causas', async () => {
         resposta.data = [];
-        await expect(imovibService.excluirRisco('r1')).rejects.toThrow('Sem permissão para excluir riscos deste estudo.');
+        await expect(imovibService.excluirRisco('r1')).rejects.toThrow('O risco não foi excluído: sem permissão neste estudo, ou ele já tinha sido excluído. Recarregue a aba.');
     });
 
-    it('excluir cenário que a RLS recusou (0 linhas) diz que não tem permissão', async () => {
+    it('excluir cenário que a RLS recusou ou que já foi excluído (0 linhas) diz as duas causas', async () => {
         resposta.data = [];
-        await expect(imovibService.excluirCenario('c1')).rejects.toThrow('Sem permissão para excluir cenários deste estudo.');
+        await expect(imovibService.excluirCenario('c1')).rejects.toThrow('O cenário não foi excluído: sem permissão neste estudo, ou ele já tinha sido excluído. Recarregue a aba.');
     });
 
     it('excluir com sucesso não reclama', async () => {

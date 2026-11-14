@@ -77,10 +77,18 @@ const ImovibDetailView: React.FC<ImovibDetailViewProps> = ({ studyId, onBack }) 
     // Sub-aba de Premissas pedida por um aviso; `n` muda a cada pedido para reabrir
     // a mesma sub-aba depois de o usuário ter trocado (pendência da Fase 5).
     const [premissasSubAba, setPremissasSubAba] = useState<{ sub: ImovibSubAbaDePremissas; n: number } | null>(null);
+    // Só vale se a navegação acontece; ir a Premissas sem pedido (aba, recarga) volta
+    // ao comportamento normal (Identificação), sem reabrir um pedido antigo.
+    const pedirSubAba = (subAba?: ImovibSubAbaDePremissas) =>
+        setPremissasSubAba(p => (subAba ? { sub: subAba, n: (p?.n ?? 0) + 1 } : null));
     const irPara = async (aba: AbaDoEstudo, subAba?: ImovibSubAbaDePremissas) => {
-        if (aba === 'premises' && subAba) setPremissasSubAba(p => ({ sub: subAba, n: (p?.n ?? 0) + 1 }));
-        if (aba === activeTab) return;
-        if (await podeSair()) setActiveTab(aba);
+        if (aba === activeTab) {
+            if (aba === 'premises' && subAba) pedirSubAba(subAba);
+            return;
+        }
+        if (!(await podeSair())) return;
+        pedirSubAba(aba === 'premises' ? subAba : undefined);
+        setActiveTab(aba);
     };
     const voltar = async () => {
         if (await podeSair()) onBack();

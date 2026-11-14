@@ -62,7 +62,7 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
 
     // Erro ao gravar: a observação (campo não controlado) remonta com o valor gravado —
     // sem isso, o texto digitado ficava no campo como se tivesse gravado (pendência da Fase 5).
-    const [revisao, setRevisao] = useState(0);
+    const [revisao, setRevisao] = useState<Record<string, number>>({});
     const salvar = async (item: ImovibLandChecklistItem, campos: Partial<Pick<ImovibLandChecklistItem, 'status' | 'notes'>>) => {
         const antes = item;
         // Só o campo que mudou: a observação não mexe em quem conferiu nem quando.
@@ -75,7 +75,7 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
             setItens(prev => prev.map(x => (x.id === salvo.id ? salvo : x)));
         } catch (e) {
             setItens(prev => prev.map(x => (x.id === antes.id ? antes : x)));
-            setRevisao(r => r + 1);
+            setRevisao(r => ({ ...r, [item.id]: (r[item.id] ?? 0) + 1 }));
             showToast((e as Error).message, 'error');
         }
     };
@@ -142,7 +142,7 @@ const ImovibDueDiligenceCard: React.FC<{ study: ImovibStudy }> = ({ study }) => 
                             );
                             case 'notes': return (
                                 <input
-                                    key={`${i.id}-${revisao}`}
+                                    key={`${i.id}-${revisao[i.id] ?? 0}`}
                                     aria-label={`Observação de ${i.label}`}
                                     defaultValue={i.notes ?? ''}
                                     onBlur={e => { if ((e.target.value.trim() || null) !== (i.notes ?? null)) void salvar(i, { notes: e.target.value }); }}

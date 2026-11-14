@@ -737,7 +737,7 @@ export const imovibService = {
         // `.select()` confere que a RLS deixou apagar (0 linhas = sem permissão).
         const { data, error } = await supabase.from('imovib_scenarios').delete().eq('id', id).select('id');
         if (error) throw new Error(semPermissao(error) ? 'Sem permissão para excluir cenários deste estudo.' : `Falha ao excluir o cenário: ${error.message}`);
-        if (!data?.length) throw new Error('Sem permissão para excluir cenários deste estudo.');
+        if (!data?.length) throw new Error('O cenário não foi excluído: sem permissão neste estudo, ou ele já tinha sido excluído. Recarregue a aba.');
     },
 
     async listarRiscos(studyId: string): Promise<ImovibRisk[]> {
@@ -766,7 +766,7 @@ export const imovibService = {
     async excluirRisco(id: string): Promise<void> {
         const { data, error } = await supabase.from('imovib_risks').delete().eq('id', id).select('id');
         if (error) throw new Error(semPermissao(error) ? 'Sem permissão para excluir riscos deste estudo.' : `Falha ao excluir o risco: ${error.message}`);
-        if (!data?.length) throw new Error('Sem permissão para excluir riscos deste estudo.');
+        if (!data?.length) throw new Error('O risco não foi excluído: sem permissão neste estudo, ou ele já tinha sido excluído. Recarregue a aba.');
     },
 
     // ── Outras fontes de capital (item 4.4 do plano 2026-11-11) ──────────────

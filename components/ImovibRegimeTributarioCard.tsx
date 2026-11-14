@@ -14,7 +14,8 @@ import ImovibInputRow from './ImovibInputRow';
 
 interface ImovibRegimeTributarioCardProps {
     study: ImovibStudy;
-    onSalvar: (campos: ImovibStudyUpdate) => Promise<void>;
+    /** `false` = não gravou (o erro já foi mostrado). */
+    onSalvar: (campos: ImovibStudyUpdate) => Promise<boolean | void>;
 }
 
 type ChaveDaHipotese = keyof typeof HIPOTESES_TRIBUTARIAS;
@@ -89,21 +90,33 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
 
     // Alíquotas já mandadas e ainda não recarregadas: duas edições seguidas antes da
     // recarga não podem montar o jsonb a partir do estudo velho (a 2ª apagava a 1ª —
-    // pendência da Fase 6 do plano 2026-11-11). A recarga do estudo volta a mandar.
+    // pendência da Fase 6 do plano 2026-11-11). A ref vai à frente (otimista); a recarga
+    // do estudo só a substitui quando nenhuma gravação está em voo, e uma gravação que
+    // falha a devolve ao que está gravado (revisão do grupo C).
     const { showToast } = useToast();
     const hipoteses = useRef<Partial<Record<ChaveDaHipotese, number>>>({ ...(study.tax_hypotheses ?? {}) });
-    useEffect(() => { hipoteses.current = { ...(study.tax_hypotheses ?? {}) }; }, [study.tax_hypotheses]);
-    const salvarHipotese = (k: ChaveDaHipotese, v: number | null) => {
+    const gravacoesEmVoo = useRef(0);
+    const gravadas = useRef(study.tax_hypotheses);
+    gravadas.current = study.tax_hypotheses;
+    useEffect(() => {
+        if (gravacoesEmVoo.current === 0) hipoteses.current = { ...(study.tax_hypotheses ?? {}) };
+    }, [study.tax_hypotheses]);
+    /** `false` = recusada (o campo volta ao valor anterior). */
+    const salvarHipotese = (k: ChaveDaHipotese, v: number | null): boolean => {
         // Negativa não vira 0 calada: não grava e diz por quê.
         if (v != null && v < 0) {
             showToast(`${ROTULO_DA_HIPOTESE[k][0]}: a alíquota não pode ser negativa. Não foi gravada.`, 'error');
-            return;
+            return false;
         }
         const atual = { ...hipoteses.current };
         if (v == null) delete atual[k];
         else atual[k] = v;
         hipoteses.current = atual;
-        void onSalvar({ tax_hypotheses: Object.keys(atual).length ? atual : null });
+        gravacoesEmVoo.current += 1;
+        void onSalvar({ tax_hypotheses: Object.keys(atual).length ? atual : null })
+            .then(ok => { if (ok === false) hipoteses.current = { ...(gravadas.current ?? {}) }; })
+            .finally(() => { gravacoesEmVoo.current -= 1; });
+        return true;
     };
     // As alíquotas do regime escolhido (no manual, nenhuma); "Ajustar as alíquotas dos
     // outros regimes" mostra as demais, que entram na tabela de comparação, sem trocar o regime.
@@ -148,6 +161,15 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
                 </div>
             )}
 
+            {/* Fora do fieldset: no só leitura dá para ver as alíquotas dos outros regimes. */}
+            <button
+                type="button"
+                aria-expanded={todasAsAliquotas}
+                onClick={() => setTodasAsAliquotas(v => !v)}
+                className="h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50"
+            >
+                {todasAsAliquotas ? 'Mostrar só as do regime escolhido' : 'Ajustar as alíquotas dos outros regimes'}
+            </button>
             <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 space-y-3">
                 <div className="max-w-md">
                     <label htmlFor="imovib-regime" className="block text-xs font-semibold text-slate-500 mb-1.5">Regime</label>
@@ -160,14 +182,6 @@ const ImovibRegimeTributarioCard: React.FC<ImovibRegimeTributarioCardProps> = ({
                         {(Object.keys(ROTULO_DO_REGIME) as RegimeTributarioDoEstudo[]).map(r => <option key={r} value={r}>{ROTULO_DO_REGIME[r]}</option>)}
                     </select>
                 </div>
-                <button
-                    type="button"
-                    aria-expanded={todasAsAliquotas}
-                    onClick={() => setTodasAsAliquotas(v => !v)}
-                    className="h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50"
-                >
-                    {todasAsAliquotas ? 'Mostrar só as do regime escolhido' : 'Ajustar as alíquotas dos outros regimes'}
-                </button>
                 {visiveis.length > 0 && (
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
                         {visiveis.map(k => (

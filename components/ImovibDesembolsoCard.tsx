@@ -13,7 +13,7 @@ import { ChartCard, Legend, GRID, TICK, TOOLTIP_STYLE, TOOLTIP_CURSOR, INITIAL_D
 interface ImovibDesembolsoCardProps {
     study: ImovibStudy;
     resultado: ImovibMathResult;
-    onSalvar: (campos: ImovibStudyUpdate) => Promise<void>;
+    onSalvar: (campos: ImovibStudyUpdate) => Promise<unknown>;
 }
 
 const ROTULO_DA_CURVA: Record<TipoCurvaDeDesembolso, string> = {

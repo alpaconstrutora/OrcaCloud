@@ -365,7 +365,9 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                                 step="0.0001"
                                                 value={comp.quantity || 0}
                                                 onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                                className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400"
+                                                // Orçamento fechado: a CPU Inline ficava editável (medido 14/11/2026).
+                                                disabled={isLocked}
+                                                className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
@@ -375,7 +377,8 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                                 <MoneyCentsInput
                                                     value={displayPrice}
                                                     onChange={(v) => onUpdateComposition(item.id, idx, { price: v === '' ? 0 : Number(v) })}
-                                                    className="w-full text-center outline-none bg-transparent py-0.5 text-sm"
+                                                    disabled={isLocked}
+                                                    className="w-full text-center outline-none bg-transparent py-0.5 text-sm disabled:cursor-not-allowed"
                                                 />
                                             </div>
                                         </div>

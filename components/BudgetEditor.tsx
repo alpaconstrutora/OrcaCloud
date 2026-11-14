@@ -217,7 +217,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [budgetControlError, setBudgetControlError] = React.useState<string | null>(null);
   const [isTechnicalDashboardOpen, setIsTechnicalDashboardOpen] = React.useState(false);
   const [technicalDashboardFilter, setTechnicalDashboardFilter] = React.useState<TechnicalDashboardFilter>('ALL');
-  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error'; acao?: { label: string; onClick: () => void } } | null>(null);
   const [isVersionModalOpen, setIsVersionModalOpen] = React.useState(false);
   const [versionDescription, setVersionDescription] = React.useState('');
   const [showHistory, setShowHistory] = React.useState(false);
@@ -264,6 +264,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
   const [hasCPUChanges, setHasCPUChanges] = React.useState(false);
+  // Inline/Janela é preferência de quem usa, não dado do orçamento: até 14/11/2026 gravava em
+  // settings.cpuViewMode (todo mundo herdava a escolha do último, e cada troca regravava o
+  // projeto inteiro). O valor antigo do orçamento só vale como ponto de partida.
+  const [cpuViewMode, setCpuViewMode] = usePersistedState<'inline' | 'modal'>(
+    'budgetEditor:cpuViewMode',
+    settings.cpuViewMode === 'inline' ? 'inline' : 'modal',
+  );
+  // Trava do Esc enquanto a pergunta "descartar alterações?" está aberta (o modal de
+  // confirmação tem o próprio Esc; sem isto o nosso reabriria a pergunta).
+  const confirmandoDescarteRef = React.useRef(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -305,6 +315,18 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     setSelectedCPUItem(null);
     setHasCPUChanges(false);
   };
+
+  React.useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || confirmandoDescarteRef.current) return;
+      if (toolsMenuOpen) { setToolsMenuOpen(false); return; }
+      if (manageEapMenuOpen) { setManageEapMenuOpen(false); return; }
+      if (selectedCPUItem) { void fecharCPU(); return; }
+      if (isTechnicalDashboardOpen) { setIsTechnicalDashboardOpen(false); return; }
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  });
 
   const hasCalculationMemory = (item: BudgetEntry) => !!(
     item.calculationMemory?.formula?.trim() ||
@@ -1702,40 +1724,63 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     onUpdateBudget(updated);
   };
 
+  /** Item com o componente `compIndex` da composição alterado e o preço da composição pai
+   *  recalculado (fallback de auxiliaryItems). Puro: quem decide onde aplicar é o chamador. */
+  const aplicarNaComposicao = (item: BudgetEntry, compIndex: number, updates: Partial<CompositionComponent>): BudgetEntry => {
+    const newComposition = [...(item.sinapiItem?.composition || [])];
+    newComposition[compIndex] = { ...newComposition[compIndex], ...updates };
+    const newPrice = newComposition.reduce((acc, comp) => {
+      const fallbackPrice = auxiliaryItems.get(comp.code)?.price || 0;
+      const price = comp.price || fallbackPrice;
+      return acc + (comp.quantity || 0) * price;
+    }, 0);
+    return {
+      ...item,
+      sinapiItem: item.sinapiItem ? { ...item.sinapiItem, composition: newComposition, price: newPrice, isOverride: true } : item.sinapiItem,
+    } as BudgetEntry;
+  };
+
+  /** Janela da CPU: edita só o RASCUNHO (selectedCPUItem). O orçamento muda no "Salvar";
+   *  "Cancelar", X e Esc descartam. Até 14/11/2026 cada tecla já ia para o orçamento (e para
+   *  o banco), e o "Salvar Alterações" só mostrava "salvas com sucesso" e fechava. */
+  const handleUpdateCompositionRascunho = (compIndex: number, updates: Partial<CompositionComponent>) => {
+    if (!selectedCPUItem || isLocked) return;
+    setSelectedCPUItem(aplicarNaComposicao(selectedCPUItem, compIndex, updates));
+    setHasCPUChanges(true);
+  };
+
+  const salvarCPU = () => {
+    if (!selectedCPUItem || !hasCPUChanges) return;
+    const rascunho = selectedCPUItem;
+    onUpdateBudget(budget.map(item => (item.id === rascunho.id ? rascunho : item)));
+    setNotification({ message: 'Composição salva no orçamento.', type: 'success' });
+    setTimeout(() => setNotification(null), 3000);
+    handleCloseCPU();
+  };
+
+  /** Fechar a janela (Cancelar, X, Esc): com alteração no rascunho, pergunta antes de descartar. */
+  const fecharCPU = async () => {
+    if (!selectedCPUItem) return;
+    if (hasCPUChanges) {
+      if (confirmandoDescarteRef.current) return;
+      confirmandoDescarteRef.current = true;
+      const descartar = await confirm({
+        title: 'Descartar as alterações da composição?',
+        message: 'As quantidades e preços alterados nesta janela não vão para o orçamento.',
+        variant: 'warning',
+        confirmLabel: 'Descartar',
+        cancelLabel: 'Continuar editando',
+      });
+      confirmandoDescarteRef.current = false;
+      if (!descartar) return;
+    }
+    handleCloseCPU();
+  };
+
+  /** CPU no modo Inline: edição ao vivo no orçamento (a janela usa o rascunho acima). */
   const handleUpdateComposition = (itemId: string, compIndex: number, updates: Partial<CompositionComponent>) => {
-    const updated = budget.map(item => {
-      if (item.id === itemId) {
-        const newComposition = [...(item.sinapiItem?.composition || [])];
-        newComposition[compIndex] = { ...newComposition[compIndex], ...updates };
-
-        // Recalcular preço total da composição pai usando fallback de auxiliaryItems
-        const newPrice = newComposition.reduce((acc, comp) => {
-          const fallbackPrice = auxiliaryItems.get(comp.code)?.price || 0;
-          const price = comp.price || fallbackPrice;
-          return acc + (comp.quantity || 0) * price;
-        }, 0);
-
-        const updatedEntry = {
-          ...item,
-          sinapiItem: item.sinapiItem ? {
-            ...item.sinapiItem,
-            composition: newComposition,
-            price: newPrice,
-            isOverride: true
-          } : item.sinapiItem
-        } as BudgetEntry;
-
-        // Sincroniza com o modal se estiver aberto
-        if (selectedCPUItem?.id === itemId) {
-          setSelectedCPUItem(updatedEntry);
-          setHasCPUChanges(true);
-        }
-
-        return updatedEntry;
-      }
-      return item;
-    });
-    onUpdateBudget(updated as BudgetEntry[]);
+    if (isLocked) return;
+    onUpdateBudget(budget.map(item => (item.id === itemId ? aplicarNaComposicao(item, compIndex, updates) : item)));
   };
 
   const handleSaveToCustomDB = (item: SinapiItem) => {
@@ -1777,9 +1822,33 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     }
   };
 
+  /** Excluir item: sai na hora, com "Desfazer" no aviso (8 s). Até 14/11/2026 sumia sem
+   *  confirmação nem volta — e a lixeira fica colada em "Salvar na Base Própria". */
   const handleDeleteItem = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    const posicao = budget.findIndex(item => item.id === id);
+    if (posicao === -1) return;
+    const removido = budget[posicao];
     onUpdateBudget(budget.filter(item => item.id !== id));
+    const nome = removido.sinapiItem?.description || removido.sinapiItem?.code || 'Item';
+    setNotification({
+      message: `"${nome.length > 60 ? nome.slice(0, 57) + '…' : nome}" excluído do orçamento.`,
+      type: 'success',
+      acao: {
+        label: 'Desfazer',
+        onClick: () => {
+          // budgetRef (declarado acima) = orçamento mais recente: entre excluir e desfazer o
+          // usuário pode ter editado outra coisa, e voltar a um retrato antigo apagaria a edição.
+          const atual = budgetRef.current;
+          if (atual.some(item => item.id === removido.id)) return;
+          const volta = [...atual];
+          volta.splice(Math.min(posicao, volta.length), 0, removido);
+          onUpdateBudget(volta);
+          setNotification(null);
+        },
+      },
+    });
+    setTimeout(() => setNotification(prev => (prev?.acao ? null : prev)), 8000);
   };
 
   // --- Calculations ---
@@ -2104,16 +2173,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
             <div className="flex bg-gray-200/50 rounded-[6px] p-0.5">
               <button
-                onClick={() => onUpdateSettings({ ...settings, cpuViewMode: 'inline' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${settings.cpuViewMode === 'inline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setCpuViewMode('inline')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${cpuViewMode === 'inline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 title="Ver CPU abaixo do item"
               >
                 <Layers className="w-3.5 h-3.5" />
                 Inline
               </button>
               <button
-                onClick={() => onUpdateSettings({ ...settings, cpuViewMode: 'modal' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${(!settings.cpuViewMode || settings.cpuViewMode === 'modal') ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
+                onClick={() => setCpuViewMode('modal')}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${cpuViewMode === 'modal' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
                 title="Ver CPU em janela flutuante"
               >
                 <Monitor className="w-3.5 h-3.5" />
@@ -3052,7 +3121,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       isFirst={itemIndex === 0}
                                       isLast={itemIndex === items.length - 1}
                                       globalBDI={settings.bdi}
-                                      viewMode={settings.cpuViewMode}
+                                      viewMode={cpuViewMode}
                                       onOpenModal={handleOpenCPU}
                                       onDuplicateItem={handleDuplicateItem}
                                       onOpenDetails={handleOpenDetails}
@@ -3801,7 +3870,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </p>
                   </div>
                   <button
-                    onClick={handleCloseCPU}
+                    onClick={fecharCPU}
                     className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
                     title="Fechar (Esc)"
                   >
@@ -3845,7 +3914,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             type="number"
                             step="0.0001"
                             value={comp.quantity || 0}
-                            onChange={(e) => handleUpdateComposition(selectedCPUItem.id, idx, { quantity: Number(e.target.value) })}
+                            onChange={(e) => handleUpdateCompositionRascunho(idx, { quantity: Number(e.target.value) })}
+                            disabled={isLocked}
                             className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-1 text-sm focus:ring-2 focus:ring-blue-500 font-medium"
                           />
                         </div>
@@ -3854,7 +3924,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             <span className="text-xs text-gray-400">R$</span>
                             <MoneyCentsInput
                               value={displayPrice.toFixed(2)}
-                              onChange={(v) => handleUpdateComposition(selectedCPUItem.id, idx, { price: v === '' ? 0 : Number(v) })}
+                              onChange={(v) => handleUpdateCompositionRascunho(idx, { price: v === '' ? 0 : Number(v) })}
+                                disabled={isLocked}
                               className="w-full text-center outline-none bg-transparent py-1 text-sm font-medium"
                             />
                           </div>
@@ -3871,7 +3942,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs font-medium text-gray-500 italic">
                 <div className="flex flex-col gap-1">
                   <div>* Os valores mostrados referem-se à quantidade total de {selectedCPUItem.quantity} {selectedCPUItem.sinapiItem?.unit || 'un'} no projeto.</div>
-                  {hasCPUChanges && <div className="text-amber-600 font-bold not-italic flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Alterações pendentes</div>}
+                  {hasCPUChanges && <div className="text-amber-700 font-bold not-italic flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Alterações ainda não salvas no orçamento</div>}
+                  {isLocked && <div className="text-gray-600 not-italic">Orçamento fechado: a composição só pode ser consultada.</div>}
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-gray-900 not-italic font-bold text-base flex items-center gap-4">
@@ -3880,19 +3952,27 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (hasCPUChanges) {
-                        setNotification({ message: 'Alterações na composição salvas com sucesso!', type: 'success' });
-                        setTimeout(() => setNotification(null), 3000);
-                      }
-                      handleCloseCPU();
-                    }}
-                    className={`px-6 py-2.5 rounded-[6px] font-bold text-sm transition-all shadow-sm flex items-center gap-2 ${hasCPUChanges ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100' : 'bg-gray-200 text-gray-500 cursor-default'}`}
-                  >
-                    <Save className="w-4 h-4" />
-                    Salvar Alterações
-                  </button>
+                  <div className="flex items-center gap-2 not-italic">
+                    <button
+                      type="button"
+                      onClick={fecharCPU}
+                      className="px-4 py-2.5 rounded-[6px] font-bold text-sm text-gray-600 hover:bg-gray-100 transition-all"
+                    >
+                      {hasCPUChanges ? 'Cancelar' : 'Fechar'}
+                    </button>
+                    {/* Botão desligado diz o porquê (title no invólucro: nem todo navegador mostra em disabled). */}
+                    <span title={hasCPUChanges ? undefined : (isLocked ? 'Orçamento fechado: não pode ser alterado' : 'Altere uma quantidade ou um preço para salvar')}>
+                      <button
+                        type="button"
+                        onClick={salvarCPU}
+                        disabled={!hasCPUChanges}
+                        className="px-6 py-2.5 rounded-[6px] font-bold text-sm transition-all shadow-sm flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-600 disabled:cursor-not-allowed disabled:shadow-none"
+                      >
+                        <Save className="w-4 h-4" />
+                        Salvar no orçamento
+                      </button>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3904,7 +3984,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         notification && (
           <div className="fixed bottom-6 right-6 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className={`px-4 py-3 rounded-[10px] shadow-2xl flex items-center gap-3 min-w-[300px] text-white ${notification.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+            <div role={notification.type === 'error' ? 'alert' : 'status'} className={`px-4 py-3 rounded-[10px] shadow-2xl flex items-center gap-3 min-w-[300px] text-white ${notification.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
               {notification.type === 'error' ? (
                 <AlertCircle className="w-4 h-4 shrink-0" />
               ) : (
@@ -3913,7 +3993,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div>
                 <p className="text-sm font-medium">{notification.message}</p>
               </div>
-              <button onClick={() => setNotification(null)} className="ml-auto text-white/70 hover:text-white">
+              {notification.acao && (
+                <button
+                  type="button"
+                  onClick={notification.acao.onClick}
+                  className="ml-2 px-2.5 py-1 rounded-[6px] text-sm font-bold bg-white/15 hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  {notification.acao.label}
+                </button>
+              )}
+              <button onClick={() => setNotification(null)} aria-label="Fechar aviso" className="ml-auto text-white/70 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>

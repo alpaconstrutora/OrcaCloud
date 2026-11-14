@@ -65,8 +65,14 @@ vi.mock('../../services/parametricService', () => ({
 // o BudgetRow é renderizado dentro de <tbody>. Um <div> aqui geraria warning de
 // validateDOMNesting e mascararia problemas reais de estrutura.
 vi.mock('../../components/BudgetRow', () => ({
-    BudgetRow: ({ item }: { item: BudgetEntry }) => (
-        <tr data-testid={`budget-row-${item.id}`}><td>{item.sinapiItem?.description}</td></tr>
+    // Botões que chamam as funções REAIS do editor (excluir, abrir a CPU) — passo 2 da
+    // crítica de 2026-11-14 testa excluir com "Desfazer" e a janela da CPU com rascunho.
+    BudgetRow: ({ item, onDeleteItem, onOpenModal }: { item: BudgetEntry; onDeleteItem: (e: React.MouseEvent, id: string) => void; onOpenModal?: (i: BudgetEntry) => void }) => (
+        <tr data-testid={`budget-row-${item.id}`}><td>
+            {item.sinapiItem?.description}
+            <button type="button" aria-label={`excluir ${item.id}`} onClick={(e) => onDeleteItem(e, item.id)} />
+            <button type="button" aria-label={`cpu ${item.id}`} onClick={() => onOpenModal?.(item)} />
+        </td></tr>
     ),
 }));
 vi.mock('../../components/WBSImportModal', () => ({
@@ -498,5 +504,102 @@ describe('Filtro de grupo e ordem dos grupos', () => {
         expect(baixo.length).toBe(nomesDosGrupos(container).length);
         expect(baixo.every(b => b.disabled)).toBe(true);
         expect(baixo[0].parentElement?.getAttribute('title')).toContain('Ordem da EAP');
+    });
+});
+
+// ─── Excluir e salvar seguros (crítica do Analítico, 2026-11-14, passo 2) ─────
+
+describe('Analítico — excluir e salvar seguros', () => {
+    const comCPU = (id: string): BudgetEntry => ({
+        ...makeEntry(id),
+        sinapiItem: {
+            ...makeEntry(id).sinapiItem,
+            type: SinapiType.COMPOSITION,
+            composition: [{ code: 'INS-1', description: 'Areia', unit: 'm3', quantity: 2, price: 10, type: SinapiType.INPUT }],
+        } as BudgetEntry['sinapiItem'],
+    } as BudgetEntry);
+
+    const montar = (budget: BudgetEntry[], settingsOverride: Partial<ProjectSettings> = {}) => {
+        const onUpdateBudget = vi.fn();
+        const onUpdateSettings = vi.fn();
+        const el = (b: BudgetEntry[]) => (
+            <ConfirmProvider>
+                <BudgetEditor budget={b} settings={makeSettings(settingsOverride)} favorites={[]} onToggleFavorite={vi.fn()}
+                    onUpdateBudget={onUpdateBudget} onUpdateSettings={onUpdateSettings} />
+            </ConfirmProvider>
+        );
+        const utils = render(el(budget));
+        return { ...utils, onUpdateBudget, onUpdateSettings, rerenderCom: (b: BudgetEntry[]) => utils.rerender(el(b)) };
+    };
+    const esperar = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    const janela = () => screen.queryByRole('button', { name: /Salvar no orçamento/ });
+
+    beforeEach(() => { try { window.localStorage.clear(); } catch { /* sem storage */ } });
+
+    it('excluir item tira na hora e o "Desfazer" devolve na MESMA posição', async () => {
+        const [a, b, c] = [makeEntry('a'), makeEntry('b'), makeEntry('c')];
+        const r = montar([a, b, c]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'excluir b' }));
+        expect(r.onUpdateBudget).toHaveBeenLastCalledWith([a, c]);
+        r.rerenderCom([a, c]); // o pai aplicou a exclusão
+        fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
+        expect(r.onUpdateBudget).toHaveBeenLastCalledWith([a, b, c]);
+    });
+
+    it('a janela da CPU edita um rascunho: o orçamento só muda no "Salvar no orçamento"', async () => {
+        const item = comCPU('x');
+        const r = montar([item]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        expect((janela() as HTMLButtonElement).disabled).toBe(true); // sem alteração, nada a salvar
+        const qtd = screen.getByDisplayValue('2');
+        fireEvent.change(qtd, { target: { value: '5' } });
+        expect(r.onUpdateBudget).not.toHaveBeenCalled();
+        expect(screen.getByText('Alterações ainda não salvas no orçamento')).toBeTruthy();
+        fireEvent.click(janela()!);
+        const salvo = r.onUpdateBudget.mock.calls.at(-1)![0] as BudgetEntry[];
+        expect(salvo[0].sinapiItem?.composition?.[0].quantity).toBe(5);
+        expect(salvo[0].sinapiItem?.price).toBe(50); // 5 × 10, recalculado
+        expect(janela()).toBeNull();
+    });
+
+    it('"Cancelar" com alteração pergunta; "Descartar" fecha sem tocar no orçamento', async () => {
+        const r = montar([comCPU('x')]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        fireEvent.change(screen.getByDisplayValue('2'), { target: { value: '7' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+        expect(await screen.findByText('Descartar as alterações da composição?')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Descartar' }));
+        await esperar();
+        expect(janela()).toBeNull();
+        expect(r.onUpdateBudget).not.toHaveBeenCalled();
+    });
+
+    it('Esc fecha a janela da CPU (sem alteração, sem pergunta)', async () => {
+        montar([comCPU('x')]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        expect(janela()).toBeTruthy();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await esperar();
+        expect(janela()).toBeNull();
+    });
+
+    it('orçamento fechado: a composição na janela só pode ser consultada', async () => {
+        montar([comCPU('x')], { budgetStatus: 'Fechado' });
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        expect((screen.getByDisplayValue('2') as HTMLInputElement).disabled).toBe(true);
+        expect(screen.getByText('Orçamento fechado: a composição só pode ser consultada.')).toBeTruthy();
+    });
+
+    it('Inline/Janela é preferência de quem usa: não grava no orçamento', async () => {
+        const r = montar([makeEntry('a')]);
+        await esperar();
+        fireEvent.click(screen.getByTitle('Ver CPU abaixo do item'));
+        expect(r.onUpdateSettings).not.toHaveBeenCalled();
+        expect(window.localStorage.getItem('budgetEditor:cpuViewMode')).toContain('inline');
     });
 });

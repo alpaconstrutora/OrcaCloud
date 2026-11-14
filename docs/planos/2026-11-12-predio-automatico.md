@@ -217,6 +217,12 @@ depois dela (só então a rede do superior chega a todos os andares). Hipótese 
    4,9 → 2,8 s, com os marcos idênticos. O que sobra é o kernel: as invariantes rodam a cada comando do lote, e o RL tem o
    modelo maior. O tempo-limite do marco por caso foi para 600 s; o tempo do RL no worker fica para a PA10.
 
+**Conferência no app (14/11, `c:/tmp/pwtest/conferencia-predio-pa6.cjs`, estudo descartável arquivado):** R8 — os 20
+portões: hipótese "água" ligada por padrão, resultado com os hidrômetros e a pressão, 5 hidrômetros em cada um dos 7
+andares, coluna em 7 andares, barrilete, recalque do térreo à cobertura, 2.480 trechos de água, RTI de 12 m³ no superior
+(25.440 L = 13.440 + 12.000); Ctrl+Z volta ao bloco sozinho. **Para a PA10:** o clique em "Lançar" levou 53 s para voltar
+(aplicar o resultado e redesenhar ~6 mil trechos no mesmo passo, com a máquina carregada).
+
 ### PA7 — Esgoto, ventilação e pluvial (grande)
 **O que muda.** Tubo de queda e ventilação no shaft por UHC acumulado (NBR 8160), desvio no térreo, subcoletor e CI no
 lote, pluvial da cobertura.

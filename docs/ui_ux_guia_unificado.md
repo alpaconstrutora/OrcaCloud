@@ -4044,23 +4044,23 @@ cartões/lista (§5.1, `LayoutGrid`/`List`, `usePersistedState` com padrão `'li
 só** para os dois modos (`StandardTable` com `search`/`onSearchChange` **e** `searchText`; a grade
 filtra com a mesma função).
 
-**Anatomia (já embutida — não reescrever):**
+**Anatomia (já embutida — não reescrever).** Desde 14/11/2026 o desenho é o da ilustração de
+nota fiscal enviada pelo usuário (*"substituir é esse desenho de recibo do cartão"*): o antigo
+papel creme com picote e serrilha saiu. Cores todas em `COR` dentro do componente, por `style`.
 
 | Peça | Como |
 |---|---|
-| Papel | creme `#FFFDF7`, `rounded-t-[6px]`, `px-5 pt-5` |
-| Sombra | `filter: drop-shadow(...)` no invólucro — acompanha a serrilha; `box-shadow` desenharia um retângulo |
-| Cabeçalho | ícone + título `text-sm font-semibold uppercase tracking-[0.25em]` centralizado; "Nº" curto `font-mono` com o id inteiro no `title` (§27) |
-| Picote | linha tracejada + meia-lua nas laterais pintada com `fundo` (a cor ATRÁS do cartão — `bg-gray-50` da grade) |
-| Linhas | `<dl>` "rótulo ··· valor": rótulo `text-xs text-gray-500`, pontilhado `flex-1`, valor `text-sm text-gray-900` à direita, cortado com `title`; `numerico` → `font-mono tabular-nums` |
-| Observação | itálico entre aspas, `text-sm text-gray-700` |
-| Código de barras | DECORATIVO (`aria-hidden`), larguras determinísticas pelo id (`barrasDoCodigo`) |
-| Serrilha | faixa `h-1.5` com dois `linear-gradient` 135°/225° de 12px, por `style` |
+| Maço | duas folhas cinza atrás (`-rotate-[3deg]` / `rotate-[2deg]`), folha principal `#FAFAFA` com sombra; o cartão ocupa a altura da linha da grade (`h-full`) e o rodapé desce (`mt-auto`) |
+| Título | laranja `text-xl font-extrabold uppercase` + sublinhado salmão; abaixo, duas faixas cinza decorativas |
+| Cupom | canto superior direito, `rotate-[3deg]`, preso por clipe (SVG): "Nº" curto `font-mono` com o id inteiro no `title` (§27), data, código de barras e serrilha escura |
+| Linhas | tabela `<dl>` de células: rótulo `text-xs text-gray-600` em cinza-claro, valor escuro (`#2D3A4E`, §32) em cinza-médio à direita, cortado com `title`; `numerico` → `font-mono tabular-nums` |
+| Observação | itálico entre aspas, `text-sm text-gray-700`, filete salmão à esquerda |
+| Decoração | faixas salmão no pé do papel, código de barras — tudo `aria-hidden`; barras determinísticas pelo id (`barrasDoCodigo`) |
 
 ```tsx
 <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6 p-6 bg-gray-50">
   <CartaoRecibo
-    titulo="Recibo" icone={<Receipt className="w-5 h-5" />}
+    titulo="Recibo"
     numero={codigoCurto(id)} numeroTitulo={id} subtitulo={formatDateTimeBR(criadoEm)}
     linhas={[{ rotulo: 'Arquivo', valor: nome, titulo: nome }, { rotulo: 'Tamanho', valor: '120 KB', numerico: true }]}
     observacao={descricao} barras={barrasDoCodigo(id)}

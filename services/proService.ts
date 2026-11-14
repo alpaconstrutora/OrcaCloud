@@ -190,6 +190,8 @@ export const proService = {
           assinatura_data: servico.assinatura_data,
           assinatura_imagem: servico.assinatura_imagem,
           status: servico.status,
+          // Gravado uma vez, ao concluir; quem chama manda o valor que já tinha.
+          concluido_em: servico.status === 'CONCLUIDO' ? (servico.concluido_em || new Date().toISOString()) : null,
           recorrencia_meses: servico.recorrencia_meses || null,
           proximo_agendamento: proximoAgendamento || null,
           data_agendamento: servico.data_agendamento || null
@@ -212,6 +214,8 @@ export const proService = {
           assinatura_data: servico.assinatura_data,
           assinatura_imagem: servico.assinatura_imagem,
           status: servico.status,
+          // Gravado uma vez, ao concluir; quem chama manda o valor que já tinha.
+          concluido_em: servico.status === 'CONCLUIDO' ? (servico.concluido_em || new Date().toISOString()) : null,
           recorrencia_meses: servico.recorrencia_meses || null,
           proximo_agendamento: proximoAgendamento || null,
           data_agendamento: servico.data_agendamento || null
@@ -222,6 +226,32 @@ export const proService = {
       if (error) throw error;
       return data;
     }
+  },
+
+  /**
+   * "Recebi": grava SÓ o recebimento (data + forma), sem reenviar fotos/assinatura
+   * do serviço. O CHECK do banco exige as duas juntas.
+   */
+  async registrarRecebimento(servicoId: string, pagoEm: string, forma: NonNullable<ProServico['forma_pagamento']>): Promise<ProServico> {
+    const { data, error } = await supabase
+      .from('pro_servicos')
+      .update({ pago_em: pagoEm, forma_pagamento: forma })
+      .eq('id', servicoId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
+  },
+
+  async desfazerRecebimento(servicoId: string): Promise<ProServico> {
+    const { data, error } = await supabase
+      .from('pro_servicos')
+      .update({ pago_em: null, forma_pagamento: null })
+      .eq('id', servicoId)
+      .select()
+      .single();
+    if (error) throw error;
+    return data;
   },
 
   // ==========================================

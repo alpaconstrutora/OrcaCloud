@@ -47,6 +47,11 @@ export interface ProServico {
   recorrencia_meses?: number;
   proximo_agendamento?: string;
   data_agendamento?: string;
+  /** Quando passou a CONCLUIDO (migration 20271114600000). */
+  concluido_em?: string | null;
+  /** Recebimento marcado à mão pelo profissional ("Recebi"); independe de status. */
+  pago_em?: string | null;
+  forma_pagamento?: 'PIX' | 'DINHEIRO' | 'CARTAO' | 'TRANSFERENCIA' | null;
   created_at: string;
 }
 

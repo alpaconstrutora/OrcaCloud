@@ -49,7 +49,10 @@ Crítica de origem: `.impeccable/critique/2026-11-14T14-04-14Z__components-promo
 - `tsc` e `check-ui-standard.sh` nos arquivos tocados sem achado novo.
 - Assinatura conferida no navegador: o traço aparece preto na prévia e no PDF.
 
-**Estado (14/11/2026): feito, conferido.**
+**Estado (14/11/2026): publicado** — PR #423, `1e4bd0b` no `main`;
+`conferir-producao.sh "Você vai receber na chave"` ✅ (domínio serve `1e4bd0b`).
+A CI falhou 2× em `DiaryMobileAppFonte.test.tsx` (intermitente, fora do Pro);
+passou depois de trazer o `main` com o #420, que corrige essas intermitências.
 - 24 testes de `pixCopiaECola` verdes (inclui o CRC `1D3D` do exemplo do manual do
   BR Code); `tsc` exit 0 (heap 12 GB); travas de rótulo/cor de valor verdes.
 - Navegador (servidor local da frente, leituras `pro_*` simuladas na aba e escritas
@@ -66,10 +69,50 @@ Crítica de origem: `.impeccable/critique/2026-11-14T14-04-14Z__components-promo
 payload (tag 60 é obrigatória e o cadastro não tem cidade — exige coluna nova;
 entra no passo 5).
 
-### 2. Fechamento do serviço (`/impeccable shape`) — pendente
-Confirmação do "Finalizar" com resumo; estado Concluído na própria tela com
-"Cobrar PIX" e "Enviar comprovante"; estado Pago; lista "aguardando pagamento";
-toast no lugar de `alert`.
+### 2. Fechamento do serviço (`/impeccable shape`) — frente `pro-fechamento-recebimento`
+
+Pedido (mesma sessão): "passo 2 autorizado". Decisões do usuário no shape:
+recebimento = **data + forma, marcado à mão** (colunas próprias, não status);
+"Finalizar" com pendência **avisa e deixa concluir**; topo com **três números:
+Recebido · A receber · Em execução**. Desenho confirmado: "confirmado".
+
+**O que muda**
+- Migration `aplicar_20271114600000_pro_servicos_recebimento.sql`: `concluido_em`,
+  `pago_em`, `forma_pagamento` (CHECK PIX/DINHEIRO/CARTAO/TRANSFERENCIA) e CHECK
+  "data e forma juntas"; status segue com 4 valores. Sem policy nova.
+- `utils/proPainelResumo.ts`: números do topo, lista "Aguardando pagamento",
+  dias desde a conclusão, mensagem de cobrança (valor + Pix Copia e Cola) e link
+  do WhatsApp.
+- Tela do serviço: "Finalizar" abre resumo (etapas x/y, assinatura, valor) com
+  "Concluir mesmo assim"; concluir NÃO sai da tela; estado Concluído com "Cobrar
+  no WhatsApp", "Recebi" (forma + data) e "Comprovante"; Recebido mostra data e
+  forma, esconde o PIX e oferece "Desfazer recebimento" (com confirmação);
+  `alert` → toast; gravar não esconde a tela; mensagem do comprovante só diz
+  "assinado" se houve assinatura. Elementos novos no padrão do app (§17, lucide).
+- Painel: Recebido no mês · A receber · Em execução; lista "Aguardando pagamento"
+  sem corte, do mais antigo, com "Cobrar" e "Recebi" (abre o serviço já no
+  formulário de recebimento).
+
+**Como sei que terminou**
+- `__tests__/proPainelResumo.test.ts` verde (também com `TZ=America/Cuiaba`).
+- Migration aplicada e conferida no banco (colunas + 2 CHECKs).
+- Navegador com o fluxo inteiro (dados fictícios, gravações `pro_*` só na memória
+  da aba): Cobrar → Recebi (Dinheiro) → Desfazer → Finalizar com pendência.
+- PR com CI verde, merge, `conferir-producao.sh` ✅.
+
+**Estado (14/11/2026): implementado e conferido; falta publicar.**
+- Migration aplicada (os 2 serviços existentes eram PENDENTE: backfill não tocou
+  nenhuma linha). Conferido: 3 colunas, `pro_servicos_forma_pagamento_check`,
+  `pro_servicos_recebimento_completo_check`; `status_check` intacto.
+- 10 testes do resumo verdes; `tsc` exit 0; travas de UI verdes.
+- Navegador: números 200 / 480 / 350 batem com os dados; "Cobrar" abre
+  `wa.me/5565999990000` com valor e Pix Copia e Cola; "Recebi" do painel abre o
+  serviço rolado até o formulário; recebimento grava só `pago_em` (12h local) +
+  `forma_pagamento`; desfazer grava `null` nas duas; "Finalizar" mostra "1 de 3
+  (faltam etapas)" / "não colhida" / valor, conclui sem sair da tela e grava
+  `concluido_em`; painel lista o novo concluído como "Concluído hoje".
+- `check-ui-standard.sh`: sobra §8 nas pílulas de status do painel — preexistente,
+  passo 4. O botão "Finalizar" (deste fluxo) já foi para o §17.
 
 ### 3. Casca (`/impeccable adapt`) — pendente
 Barra inferior fixa com área segura e "+" central; ícones lucide; rótulos ≥ 11px;

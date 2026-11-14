@@ -3,6 +3,16 @@ import { proService } from '../services/proService';
 import { ProServico, ProOSChecklistItem } from '../types';
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
+import { CheckCircle2, FileText, HandCoins, Loader2, MessageCircle } from 'lucide-react';
+import { useConfirm } from './ui/confirm';
+import { useToast } from '../hooks/useToast';
+import {
+  FORMAS_DE_PAGAMENTO,
+  type FormaDePagamento,
+  rotuloDaForma,
+  mensagemDeCobranca,
+  linkWhatsApp,
+} from '../utils/proPainelResumo';
 import {
   montarPixCopiaECola,
   formatarChavePixParaExibir,
@@ -23,6 +33,8 @@ const COR_TINTA_ASSINATURA = '#1E293B';
 interface ProServicoViewProps {
   userId: string;
   servicoId: string | null;
+  /** Vindo do "Recebi" do painel: abre o formulário de recebimento ao carregar. */
+  abrirRecebimento?: boolean;
   onBack: () => void;
   onSave: () => void;
 }
@@ -30,6 +42,7 @@ interface ProServicoViewProps {
 const ProServicoView: React.FC<ProServicoViewProps> = ({
   userId,
   servicoId,
+  abrirRecebimento = false,
   onBack,
   onSave
 }) => {
@@ -40,6 +53,24 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   // Estados locais da execução
   const [checklist, setChecklist] = React.useState<ProOSChecklistItem[]>([]);
   const [status, setStatus] = React.useState<any>('PENDENTE');
+  const confirm = useConfirm();
+  const { showToast } = useToast();
+  // Gravação em andamento NÃO esconde a tela (antes, `loading` trocava tudo pelo spinner).
+  const [salvando, setSalvando] = React.useState(false);
+  const [concluidoEm, setConcluidoEm] = React.useState<string | null>(null);
+  const [pagoEm, setPagoEm] = React.useState<string | null>(null);
+  const [formaPagamento, setFormaPagamento] = React.useState<string | null>(null);
+  // Formulário "Recebi": aberto na própria tela, forma + data (hoje por padrão).
+  const [registrandoRecebimento, setRegistrandoRecebimento] = React.useState(false);
+  const [formaEscolhida, setFormaEscolhida] = React.useState<FormaDePagamento>('PIX');
+  const [dataRecebimento, setDataRecebimento] = React.useState('');
+  const secaoFechamentoRef = React.useRef<HTMLElement | null>(null);
+  // Ao abrir o "Recebi" vindo do painel, leva a pessoa até o formulário (fica no fim da tela).
+  React.useEffect(() => {
+    if (registrandoRecebimento && abrirRecebimento) {
+      secaoFechamentoRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, [registrandoRecebimento, abrirRecebimento]);
   const [antesFoto, setAntesFoto] = React.useState<string>('');
   const [depoisFoto, setDepoisFoto] = React.useState<string>('');
   const [recorrenciaMeses, setRecorrenciaMeses] = React.useState<string>('');
@@ -92,6 +123,14 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           setAssinaturaImagem(servData.assinatura_imagem || '');
           setRecorrenciaMeses(servData.recorrencia_meses?.toString() || '');
           setDataAgendamento(formatISOToLocalDatetime(servData.data_agendamento));
+          setConcluidoEm(servData.concluido_em || null);
+          setPagoEm(servData.pago_em || null);
+          setFormaPagamento(servData.forma_pagamento || null);
+          if (abrirRecebimento && servData.status === 'CONCLUIDO' && !servData.pago_em) {
+            setFormaEscolhida('PIX');
+            setDataRecebimento(hojeISODate());
+            setRegistrandoRecebimento(true);
+          }
         }
         setConfig(configData);
       } catch (error) {
@@ -261,12 +300,12 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   // Salvar alterações
   const handleUpdate = async (newStatus?: string) => {
-    if (!servicoId) return;
+    if (!servicoId || salvando) return;
     try {
-      setLoading(true);
+      setSalvando(true);
       const nextStatus = newStatus || status;
 
-      await proService.saveServico({
+      const salvo = await proService.saveServico({
         id: servicoId,
         orcamento_id: servico.orcamento_id,
         checklist,
@@ -276,20 +315,121 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         assinatura_data: assinaturaImagem ? new Date().toISOString() : undefined,
         assinatura_imagem: assinaturaImagem || undefined,
         status: nextStatus,
+        concluido_em: concluidoEm,
         recorrencia_meses: recorrenciaMeses ? Number(recorrenciaMeses) : undefined,
         data_agendamento: dataAgendamento ? new Date(dataAgendamento).toISOString() : undefined
       });
 
       setStatus(nextStatus);
-      alert('Serviço atualizado com sucesso.');
-      if (nextStatus === 'CONCLUIDO') {
-        onSave();
-      }
-    } catch (error) {
+      setConcluidoEm(salvo?.concluido_em ?? concluidoEm);
+      // Concluir NÃO sai da tela: o fechamento (cobrar, comprovante, recebi) acontece aqui.
+      showToast(nextStatus === 'CONCLUIDO' ? 'Serviço concluído. Agora é cobrar e registrar o recebimento.' : 'Serviço salvo.');
+    } catch (error: any) {
       console.error('Erro ao atualizar serviço:', error);
-      alert('Erro ao salvar as atualizações.');
+      showToast(`Não foi possível salvar o serviço: ${error?.message || 'verifique a conexão e tente de novo.'}`, 'error');
     } finally {
-      setLoading(false);
+      setSalvando(false);
+    }
+  };
+
+  // "Finalizar" mostra o resumo antes: nada se conclui com um toque só, e o que falta é dito.
+  const finalizar = async () => {
+    const feitas = checklist.filter(c => c.completed).length;
+    const faltaEtapa = feitas < checklist.length;
+    const semAssinatura = !assinaturaImagem;
+    const comPendencia = faltaEtapa || semAssinatura;
+    const valorFmt = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(servico?.pro_orcamentos?.valor || 0));
+    const ok = await confirm({
+      title: comPendencia ? 'Concluir com pendência?' : 'Concluir o serviço?',
+      message: (
+        <ul className="space-y-1 text-left">
+          <li className={faltaEtapa ? 'text-amber-700' : 'text-gray-700'}>
+            Etapas feitas: {feitas} de {checklist.length}{faltaEtapa ? ' (faltam etapas)' : ''}
+          </li>
+          <li className={semAssinatura ? 'text-amber-700' : 'text-gray-700'}>
+            Assinatura do cliente: {semAssinatura ? 'não colhida' : `colhida (${assinaturaNome})`}
+          </li>
+          <li className="text-gray-700">Valor: {valorFmt}</li>
+        </ul>
+      ),
+      confirmLabel: comPendencia ? 'Concluir mesmo assim' : 'Concluir',
+      cancelLabel: 'Voltar',
+      variant: comPendencia ? 'warning' : 'default',
+    });
+    if (ok) await handleUpdate('CONCLUIDO');
+  };
+
+  const hojeISODate = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  };
+
+  const abrirRecebi = () => {
+    setFormaEscolhida('PIX');
+    setDataRecebimento(hojeISODate());
+    setRegistrandoRecebimento(true);
+  };
+
+  const confirmarRecebimento = async () => {
+    if (!servicoId || salvando || !dataRecebimento) return;
+    try {
+      setSalvando(true);
+      // Meio-dia local: a data escolhida não "volta um dia" ao virar UTC.
+      const pagoEmISO = new Date(`${dataRecebimento}T12:00:00`).toISOString();
+      const salvo = await proService.registrarRecebimento(servicoId, pagoEmISO, formaEscolhida);
+      setPagoEm(salvo?.pago_em ?? pagoEmISO);
+      setFormaPagamento(salvo?.forma_pagamento ?? formaEscolhida);
+      setRegistrandoRecebimento(false);
+      showToast('Recebimento registrado.');
+    } catch (error: any) {
+      console.error('Erro ao registrar recebimento:', error);
+      showToast(`Não foi possível registrar o recebimento: ${error?.message || 'tente de novo.'}`, 'error');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const desfazerRecebimento = async () => {
+    if (!servicoId || salvando) return;
+    const ok = await confirm({
+      title: 'Desfazer o recebimento?',
+      message: 'O serviço volta para "aguardando pagamento" e sai do Recebido no mês.',
+      confirmLabel: 'Desfazer',
+      cancelLabel: 'Manter',
+      variant: 'warning',
+    });
+    if (!ok) return;
+    try {
+      setSalvando(true);
+      await proService.desfazerRecebimento(servicoId);
+      setPagoEm(null);
+      setFormaPagamento(null);
+      showToast('Recebimento desfeito.');
+    } catch (error: any) {
+      console.error('Erro ao desfazer recebimento:', error);
+      showToast(`Não foi possível desfazer: ${error?.message || 'tente de novo.'}`, 'error');
+    } finally {
+      setSalvando(false);
+    }
+  };
+
+  const cobrarNoWhatsApp = () => {
+    const orcObj = servico?.pro_orcamentos;
+    const msg = mensagemDeCobranca({
+      cliente: orcObj?.pro_clientes?.nome || '',
+      descricao: orcObj?.descricao || '',
+      valor: Number(orcObj?.valor || 0),
+      pixCopiaECola: pix?.ok ? pix.payload : '',
+    });
+    window.open(linkWhatsApp(orcObj?.pro_clientes?.telefone, msg), '_blank');
+  };
+
+  const copiarPix = async (payload: string) => {
+    try {
+      await navigator.clipboard.writeText(payload);
+      showToast('Código Pix copiado.');
+    } catch {
+      showToast('Não foi possível copiar. Selecione o código e copie à mão.', 'error');
     }
   };
 
@@ -491,12 +631,9 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
     // Mensagem de WhatsApp rápida
     const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(orcObj?.valor || 0));
-    const message = `Olá, ${cliObj?.nome}! Serviço de *${orcObj?.descricao}* concluído com sucesso e assinado digitalmente.\n\n*Valor:* ${formattedVal}\n*Garantia:* ${orcObj?.garantia_dias || 90} dias\n\nEstou lhe enviando o comprovante oficial de execução em PDF por aqui. Agradeço a confiança!`;
-    const encoded = encodeURIComponent(message);
-    const cleanPhone = (cliObj?.telefone || '').replace(/\D/g, '');
-    const targetPhone = cleanPhone.length === 11 || cleanPhone.length === 10 ? `55${cleanPhone}` : cleanPhone;
-    const waUrl = `https://wa.me/${targetPhone}?text=${encoded}`;
-    window.open(waUrl, '_blank');
+    // "assinado digitalmente" só quando houve assinatura de fato.
+    const message = `Olá, ${cliObj?.nome}! Serviço de *${orcObj?.descricao}* concluído${assinaturaImagem ? ' e assinado digitalmente' : ''}.\n\n*Valor:* ${formattedVal}\n*Garantia:* ${orcObj?.garantia_dias || 90} dias\n\nEstou lhe enviando o comprovante de execução em PDF por aqui. Agradeço a confiança!`;
+    window.open(linkWhatsApp(cliObj?.telefone, message), '_blank');
   };
 
   if (loading) {
@@ -696,7 +833,8 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
         </div>
       )}
 
-      {/* Cobrança PIX - Copiar Código e QR Code */}
+      {/* Cobrança PIX - Copiar Código e QR Code (some depois de recebido) */}
+      {!pagoEm && (
       <div className="space-y-3">
         <h2 className="text-xs font-black text-slate-500">Cobrança PIX</h2>
         <div className="bg-white border border-slate-200/40 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)] flex flex-col items-center text-center gap-3">
@@ -729,10 +867,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 </div>
               </div>
               <button
-                onClick={() => {
-                  navigator.clipboard.writeText(pix.payload);
-                  alert('Código Pix Copia e Cola copiado com sucesso!');
-                }}
+                onClick={() => copiarPix(pix.payload)}
                 className="w-full py-2.5 bg-teal-500 text-white text-xs font-black uppercase tracking-widest rounded-xl hover:bg-teal-600 transition-colors shadow-sm flex items-center justify-center gap-1.5 active:scale-95"
               >
                 📋 Copiar Pix Copia e Cola
@@ -747,6 +882,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           )}
         </div>
       </div>
+      )}
 
       {/* Ações Finais */}
       <div className="pt-4 flex flex-col gap-3">
@@ -770,20 +906,24 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
             </div>
 
             <button
-              onClick={() => handleUpdate('CONCLUIDO')}
-              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-button uppercase tracking-widest rounded-full shadow-md shadow-teal-500/10 transition-all active:scale-[0.98]"
+              onClick={finalizar}
+              disabled={salvando}
+              className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors active:scale-[0.98] disabled:opacity-60"
             >
-              🏁 Finalizar e Concluir Serviço
+              {salvando ? <Loader2 className="w-4 h-4 animate-spin" aria-hidden /> : <CheckCircle2 className="w-4 h-4" aria-hidden />}
+              Finalizar serviço
             </button>
             <div className="grid grid-cols-2 gap-3">
               <button
                 onClick={() => handleUpdate(status === 'EM_ANDAMENTO' ? 'PENDENTE' : 'EM_ANDAMENTO')}
+                disabled={salvando}
                 className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-button rounded-xl border border-slate-200 transition-colors"
               >
                 {status === 'EM_ANDAMENTO' ? '⏸ Pausar' : '▶ Iniciar Trabalho'}
               </button>
               <button
                 onClick={() => handleUpdate('BLOQUEADO')}
+                disabled={salvando}
                 className="py-2.5 bg-red-50 hover:bg-red-100 text-red-500 font-bold text-button rounded-xl border border-red-200/50 transition-colors"
               >
                 ⚠️ Bloqueado / Parado
@@ -792,18 +932,125 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
           </>
         )}
         {status === 'CONCLUIDO' && (
-          <div className="space-y-3">
-            <div className="p-4 bg-emerald-50 border border-emerald-100 text-center rounded-[20px] text-emerald-700">
-              <span className="text-xs font-black uppercase tracking-widest">Serviço Concluído</span>
-              <p className="text-xs text-slate-500 mt-1">Todas as etapas foram finalizadas e o Pix de cobrança foi gerado.</p>
+          <section ref={secaoFechamentoRef} aria-labelledby="titulo-fechamento" className="bg-white border border-slate-200 rounded-[10px] p-4 space-y-4">
+            <div className="flex items-start gap-2.5">
+              <CheckCircle2 className={`w-5 h-5 shrink-0 mt-0.5 ${pagoEm ? 'text-emerald-600' : 'text-amber-600'}`} aria-hidden />
+              <div className="min-w-0">
+                <h2 id="titulo-fechamento" className="text-sm font-semibold text-slate-900">
+                  Serviço concluído{concluidoEm ? ` em ${new Date(concluidoEm).toLocaleDateString('pt-BR')}` : ''}
+                </h2>
+                <p className="text-sm text-slate-700 mt-0.5" role="status">
+                  {pagoEm
+                    ? `Recebido em ${new Date(pagoEm).toLocaleDateString('pt-BR')} · ${rotuloDaForma(formaPagamento)}`
+                    : `Aguardando pagamento de ${new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(valor)}.`}
+                </p>
+              </div>
             </div>
-            <button
-              onClick={generateComprovantePDF}
-              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-button uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 flex items-center justify-center gap-1.5 active:scale-95"
-            >
-              📄 Enviar Comprovante via WhatsApp
-            </button>
-          </div>
+
+            {!pagoEm && !registrandoRecebimento && (
+              <div className="space-y-2">
+                <button
+                  onClick={cobrarNoWhatsApp}
+                  className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors active:scale-[0.98]"
+                >
+                  <MessageCircle className="w-4 h-4" aria-hidden />
+                  Cobrar no WhatsApp
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    onClick={abrirRecebi}
+                    className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
+                  >
+                    <HandCoins className="w-4 h-4" aria-hidden />
+                    Recebi
+                  </button>
+                  <button
+                    onClick={generateComprovantePDF}
+                    className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
+                  >
+                    <FileText className="w-4 h-4" aria-hidden />
+                    Comprovante
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {!pagoEm && registrandoRecebimento && (
+              <div className="space-y-4 border-t border-slate-100 pt-4">
+                <fieldset className="space-y-1.5">
+                  <legend className="text-xs font-semibold text-slate-500">Como o cliente pagou?</legend>
+                  <div className="grid grid-cols-2 gap-2" role="radiogroup" aria-label="Forma de pagamento">
+                    {FORMAS_DE_PAGAMENTO.map(f => (
+                      <button
+                        key={f.valor}
+                        type="button"
+                        role="radio"
+                        aria-checked={formaEscolhida === f.valor}
+                        onClick={() => setFormaEscolhida(f.valor)}
+                        className={`h-11 rounded-[6px] border text-sm font-medium transition-colors ${
+                          formaEscolhida === f.valor
+                            ? 'border-blue-600 bg-blue-50 text-blue-800'
+                            : 'border-slate-300 bg-white text-slate-800 hover:bg-slate-50'
+                        }`}
+                      >
+                        {f.rotulo}
+                      </button>
+                    ))}
+                  </div>
+                </fieldset>
+                <div className="space-y-1.5">
+                  <label htmlFor="data-recebimento" className="text-xs font-semibold text-slate-500">Recebido em</label>
+                  <input
+                    id="data-recebimento"
+                    type="date"
+                    value={dataRecebimento}
+                    max={hojeISODate()}
+                    onChange={(e) => setDataRecebimento(e.target.value)}
+                    className="w-full h-11 bg-white border border-slate-300 rounded-[6px] px-3 text-sm text-slate-900 outline-none focus:border-blue-600"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setRegistrandoRecebimento(false)}
+                    disabled={salvando}
+                    className="h-11 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={confirmarRecebimento}
+                    disabled={salvando || !dataRecebimento}
+                    title={!dataRecebimento ? 'Escolha a data do recebimento.' : undefined}
+                    className="h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors disabled:opacity-60"
+                  >
+                    {salvando && <Loader2 className="w-4 h-4 animate-spin" aria-hidden />}
+                    Confirmar recebimento
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {pagoEm && (
+              <div className="space-y-2">
+                <button
+                  onClick={generateComprovantePDF}
+                  className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors active:scale-[0.98]"
+                >
+                  <FileText className="w-4 h-4" aria-hidden />
+                  Enviar comprovante
+                </button>
+                <button
+                  onClick={desfazerRecebimento}
+                  disabled={salvando}
+                  className="w-full h-11 text-sm font-medium text-slate-700 hover:text-slate-900 underline underline-offset-4"
+                >
+                  Desfazer recebimento
+                </button>
+              </div>
+            )}
+          </section>
         )}
       </div>
     </div>

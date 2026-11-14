@@ -15,6 +15,8 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
   // Estados para navegação interna de registros
   const [selectedOrcamentoId, setSelectedOrcamentoId] = React.useState<string | null>(null);
   const [selectedServicoId, setSelectedServicoId] = React.useState<string | null>(null);
+  // Vindo do "Recebi" do painel: a tela do serviço já abre com o formulário de recebimento.
+  const [abrirRecebimento, setAbrirRecebimento] = React.useState(false);
 
   // Manipuladores de transição rápidos
   const handleEditOrcamento = (id: string) => {
@@ -27,8 +29,9 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
     onChangeView('pro-orcamento-form');
   };
 
-  const handleViewServico = (id: string) => {
+  const handleViewServico = (id: string, opcoes?: { abrirRecebimento?: boolean }) => {
     setSelectedServicoId(id);
+    setAbrirRecebimento(!!opcoes?.abrirRecebimento);
     onChangeView('pro-servico-detalhe');
   };
 
@@ -65,6 +68,7 @@ export const ProModule: React.FC<ProModuleProps> = ({ activeView, onChangeView, 
           <ProServicoView
             userId={userId}
             servicoId={selectedServicoId}
+            abrirRecebimento={abrirRecebimento}
             onBack={() => onChangeView('pro-dashboard')}
             onSave={() => onChangeView('pro-dashboard')}
           />

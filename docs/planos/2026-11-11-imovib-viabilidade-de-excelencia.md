@@ -838,7 +838,7 @@ Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_f
 
 ## Pendências depois do plano
 
-> Atualizado em 2026-11-12, com o `main` em 91f89d66. **O plano está concluído: Fases 0 a 10 no ar.** O que
+> Atualizado em 2026-11-14. **O plano está concluído: Fases 0 a 10 no ar, e as 24 pendências registradas resolvidas (#396, #398, #403).** O que
 > segue são achados menores das revisões de cada fase, deixados para depois (nenhum muda número de estudo
 > existente sem aviso), e limites de dado que impediram conferir com dado real. Cada item diz de qual fase veio.
 > Conferido no código do `main` quando a linha diz "conferido".
@@ -853,38 +853,44 @@ Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_f
 - Fase 1: rótulo "Receitas e Capital" no Resumo — some com a divisão das abas (conferido: só sobra em comentários).
 - Fase 5: Excel sem as premissas da Fase 5 — a aba "Premissas" sai do memorial desde o 10.1.
 
-### Abertos — cálculo e premissas
+### Cálculo e premissas (resolvidos em 13–14/11)
 
-- [ ] Fase 1 · VGV líquido pode passar do VGV bruto (juros do pós-chaves entram nele); o rótulo na listagem e no portal não diz isso.
-- [ ] Fase 1 · Devolução do distrato calculada sobre o pago bruto, antes da inadimplência.
-- [ ] Fase 1 · Ajustes silenciosos: lançamento acima de 100%, permutas que somam mais de 100%, defasagem negativa, pesos da curva além do prazo — o motor corrige sem `ImovibAviso`.
-- [ ] Fase 1 · Distrato sem revenda tira a unidade do estoque sem aviso.
-- [ ] Fase 1 · Série de índice mensal mistura a série da organização com a global; escolher o índice sem clicar em "usar a média" não muda o cálculo.
-- [ ] Fase 2 · Payback "Mês 1" em fluxo que nunca fica negativo.
-- [ ] Fase 2 · Busca com TIR-alvo devolve "sem raiz" quando o fluxo com terreno 0 não tem TIR (sem uso em tela hoje).
-- [ ] Fase 4 · Custo × fração ≤ 0 não vira liberação negativa do financiamento (só com dado inválido; comentado no código).
-- [ ] Fase 6 · Lucro real compensa o prejuízo acumulado **sem** a trava de 30% (decisão do usuário de 11/11 — registrado aqui só para quem ler o texto do cartão).
-- [ ] Fase 10 · Estudo com fluxo só negativo (sem receita) tem TIR inexistente e o critério sai "sem como avaliar", embora reprove.
-- [ ] Fase 10 · Realizado anterior à data-base é descartado no Acompanhamento (a venda anterior entra no mês 1).
+- [x] Fase 1 · VGV líquido pode passar do VGV bruto (juros do pós-chaves entram nele); o rótulo na listagem e no portal não diz isso. — **#398**
+- [x] Fase 1 · Devolução do distrato calculada sobre o pago bruto, antes da inadimplência. — **#398**
+- [x] Fase 1 · Ajustes silenciosos: lançamento acima de 100%, permutas que somam mais de 100%, defasagem negativa, pesos da curva além do prazo — o motor corrige sem `ImovibAviso`. — **#398**
+- [x] Fase 1 · Distrato sem revenda tira a unidade do estoque sem aviso. — **#398**
+- [x] Fase 1 · Série de índice mensal mistura a série da organização com a global; escolher o índice sem clicar em "usar a média" não muda o cálculo. — **#398**
+- [x] Fase 2 · Payback "Mês 1" em fluxo que nunca fica negativo. — **#398**
+- [x] Fase 2 · Busca com TIR-alvo devolve "sem raiz" quando o fluxo com terreno 0 não tem TIR (sem uso em tela hoje). — **#398**
+- [x] Fase 4 · Custo × fração ≤ 0 não vira liberação negativa do financiamento (só com dado inválido; comentado no código). — **#398**
+- [x] Fase 6 · Lucro real compensa o prejuízo acumulado **sem** a trava de 30% (decisão do usuário de 11/11 — registrado aqui só para quem ler o texto do cartão). — **#398**
+- [x] Fase 10 · Estudo com fluxo só negativo (sem receita) tem TIR inexistente e o critério sai "sem como avaliar", embora reprove. — **#398**
+- [x] Fase 10 · Realizado anterior à data-base é descartado no Acompanhamento (a venda anterior entra no mês 1). — **#398**
 
-### Abertos — tela e usabilidade
+### Tela e usabilidade (resolvidos em 14/11)
 
-- [ ] Fase 1 · Apagar um campo de premissa grava 0 em vez de voltar ao padrão (alguns campos); apagar campo já vazio regrava null (sem efeito).
-- [ ] Fase 1/2 · Gráfico da curva de vendas: com VSO 0% diz "informe o preço"; sem vendas sempre culpa a VSO (permuta 100% é outra causa); usa `sales_start_month` cru.
-- [ ] Fase 2 · Pontos de equilíbrio levam ~325 ms ao abrir o Resumo em estudo de 108 meses (vendas mínimas repete o preço mínimo; TIR calculada à toa nas buscas).
-- [ ] Fase 2 · Margem-alvo vazia mostra "Não existe" em vez de pedir a margem; o Excel usa sempre 15% (conferido: `margem_alvo_terreno_percent` fixo em `montarPlanilhaImovib`).
-- [ ] Fase 2 · Dica do VGV líquido fica na célula, não no cabeçalho da listagem.
-- [ ] Fase 3 · Simulação de Monte Carlo síncrona (teto de 20.000 sorteios ≈ 10 s com a tela travada); semente 0 vira 1; estresse com limites e cor de linha iguais; riscos com erro e vazio juntos; exclusões sem `.select()`; erro de RLS em inglês; gráficos fora do §28 (role=img, cores fora do chartKit); "Editar o risco" no só leitura; renomear "Pessimista" reabre "criar padrão".
-- [ ] Fase 5 · "No cálculo" da rubrica muda com o momento por causa do índice (VPL igual); avisos de Premissas abrem em Identificação, não na sub-aba; `pre_obra` depois do início da obra sem aviso; due diligence sem `checked_by` e com `checked_at` mudando pela observação; valor antigo no campo depois de erro (observação da DD, meses de pós-obra); snapshot inteiro do empreendimento ao abrir o CAPEX vinculado.
-- [ ] Fase 6 · `salvarHipotese` corta negativo para 0 e monta o jsonb a partir do estudo da tela (duas edições seguidas antes da recarga perdem a primeira) (conferido); alíquota de regime não escolhido só é editável trocando o regime.
-- [ ] Fase 7 · Limiar de 15% do KPI "preço contra a média" fixo no código; estudo de mercado reaberto com hipóteses mudadas mostra a absorção gravada.
+- [x] Fase 1 · Apagar um campo de premissa grava 0 em vez de voltar ao padrão (alguns campos); apagar campo já vazio regrava null (sem efeito). — **#403**
+- [x] Fase 1/2 · Gráfico da curva de vendas: com VSO 0% diz "informe o preço"; sem vendas sempre culpa a VSO (permuta 100% é outra causa); usa `sales_start_month` cru. — **#403**
+- [x] Fase 2 · Pontos de equilíbrio levam ~325 ms ao abrir o Resumo em estudo de 108 meses (vendas mínimas repete o preço mínimo; TIR calculada à toa nas buscas). — **#403**
+- [x] Fase 2 · Margem-alvo vazia mostra "Não existe" em vez de pedir a margem; o Excel usa sempre 15% (conferido: `margem_alvo_terreno_percent` fixo em `montarPlanilhaImovib`). — **#403**
+- [x] Fase 2 · Dica do VGV líquido fica na célula, não no cabeçalho da listagem. — **#403**
+- [x] Fase 3 · Simulação de Monte Carlo síncrona (teto de 20.000 sorteios ≈ 10 s com a tela travada); semente 0 vira 1; estresse com limites e cor de linha iguais; riscos com erro e vazio juntos; exclusões sem `.select()`; erro de RLS em inglês; gráficos fora do §28 (role=img, cores fora do chartKit); "Editar o risco" no só leitura; renomear "Pessimista" reabre "criar padrão". — **#403**
+- [x] Fase 5 · "No cálculo" da rubrica muda com o momento por causa do índice (VPL igual); avisos de Premissas abrem em Identificação, não na sub-aba; `pre_obra` depois do início da obra sem aviso; due diligence sem `checked_by` e com `checked_at` mudando pela observação; valor antigo no campo depois de erro (observação da DD, meses de pós-obra); snapshot inteiro do empreendimento ao abrir o CAPEX vinculado. — **#403**
+- [x] Fase 6 · `salvarHipotese` corta negativo para 0 e monta o jsonb a partir do estudo da tela (duas edições seguidas antes da recarga perdem a primeira) (conferido); alíquota de regime não escolhido só é editável trocando o regime. — **#403**
+- [x] Fase 7 · Limiar de 15% do KPI "preço contra a média" fixo no código; estudo de mercado reaberto com hipóteses mudadas mostra a absorção gravada. — **#403**
 
-### Abertos — testes e guardas
+### Testes e guardas (resolvidos em 12/11)
 
-- [ ] Fase 0 · Guarda `secdefSemRevoke` (`__tests__/segurancaMigrations.test.ts`) só reconhece funções delimitadas por `$$` ou `$function$`; com outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde (conferido no `main`). Achado fora do escopo do plano.
-- [ ] Fase 0 · Guarda do 0.4 (campos do motor) escapa por desestruturação e por `study?.x`; `Premissas.study` não é lido por nenhuma etapa (campo morto).
-- [ ] Fase 0 · Teste das linhas do fluxo não cobre quitação no fim nem CAPEX simplificado; teste do portal usa resposta escrita à mão.
-- [ ] Fase 2 · Testes não exercitam a TMA nos indicadores; a checagem "é número" do Excel não pega NaN.
+- [x] Fase 0 · Guarda `secdefSemRevoke` (`__tests__/segurancaMigrations.test.ts`) só reconhece funções delimitadas por `$$` ou `$function$`; com outro delimitador, função `SECURITY DEFINER` sem `REVOKE` passa verde (conferido no `main`). Achado fora do escopo do plano. — **#396**
+- [x] Fase 0 · Guarda do 0.4 (campos do motor) escapa por desestruturação e por `study?.x`; `Premissas.study` não é lido por nenhuma etapa (campo morto). — **#396**
+- [x] Fase 0 · Teste das linhas do fluxo não cobre quitação no fim nem CAPEX simplificado; teste do portal usa resposta escrita à mão. — **#396**
+- [x] Fase 2 · Testes não exercitam a TMA nos indicadores; a checagem "é número" do Excel não pega NaN. — **#396**
+
+### Deixados para depois (minors das revisões das pendências)
+
+- [ ] Cálculo (#398) · versão antiga com payback "Mês 1" × nova com vazio parece mudança (não há versões); rótulos do gráfico do Acompanhamento usam a data-base do estudo atual quando o previsto é de versão com outra data-base; `receita_liquida_negativa` mostra valor positivo com inadimplência acima de 100%.
+- [ ] Tela (#403) · cenário personalizado chamado "Pessimista" deixa "criar padrão" habilitado sem efeito; corrida A→B→A na aba Dinâmica antes da recarga; texto da curva vazia limita a permuta a 0–100% (o motor não); teste de `tir_multipla` com `semTir` passa sem o aviso existir no estudo-base.
+- [ ] Fora do Imovib · testes instáveis que derrubaram o CI nesta rodada: `CelularTokenGate`, `DiaryMobileAppFonte`, `dealModalAvisoReceitaFinanceira` (passam isolados e na reexecução).
 
 ### Limites de dado (o código está no ar, mas não foi conferido com dado real)
 

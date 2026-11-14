@@ -1,5 +1,5 @@
 import { useState, useCallback } from 'react';
-import { registrarPersistido } from '../utils/projetoPersistido';
+import { marcarGravacao, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
 import { projectService } from '../services/projectService';
 import { resolveProjectBudget } from '../services/budgetResolver';
 import { contractService } from '../services/contractService';
@@ -165,6 +165,7 @@ export const useProjectOperations = ({
       if (savedProject) {
         // O banco acabou de receber isto: o salvamento automático não regrava igual.
         registrarPersistido(projectId || savedProject.id, s || INITIAL_PROJECT_SETTINGS, b);
+        marcarGravacao();
         // Só atualiza projectId se estava nulo (novo projeto) — evita disparar rehydrate
         if (!projectId) setProjectId(savedProject.id);
         if (!explicitBudget) showToast(`Obra "${s?.name}" salva com sucesso na nuvem!`);
@@ -290,6 +291,7 @@ export const useProjectOperations = ({
         // automático só grava se algo mudou — e o congelamento, que precisa ir para o banco,
         // aparece como mudança e é gravado (utils/projetoPersistido.ts).
         registrarPersistido(id, loadedSettings, projectData.budget || []);
+        zerarUltimaGravacao();
         if (resolved.snapshotToPersist) {
           // A resolução congelou a versão agora (primeira abertura ou migração).
           loadedSettings.basedOnBudgetSnapshot = resolved.snapshotToPersist;

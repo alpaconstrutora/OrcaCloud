@@ -117,7 +117,7 @@ export function InlineDisclosureMenu({
               style={{ transformOrigin: "top right" }}
             >
               <div className="border-b-2 border-[#EEEEF2] bg-[#FAFAFC] px-4 py-2">
-                <span className="text-xs font-medium text-[#828287]">Mais Opções</span>
+                <span className="text-xs font-medium text-gray-600">Mais opções</span>
               </div>
 
               <LayoutGroup>

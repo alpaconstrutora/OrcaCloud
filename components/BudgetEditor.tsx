@@ -3321,7 +3321,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                               <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
                                 <div className="flex items-center justify-end gap-1.5">
                                   <span className="font-medium text-gray-700 text-sm whitespace-nowrap">{valorOuTraco(itensDaSubetapa, subTotal)}</span>
-                                  <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-emerald-200 rounded-[6px] text-emerald-700" title="Adicionar item" aria-label="Adicionar item"><Plus className="w-4 h-4" /></button>
+                                  <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Adicionar item" aria-label="Adicionar item"><Plus className="w-4 h-4" /></button>
                                   <InlineDisclosureMenu
                                     menuItems={[
                                       { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMoveSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex, 'UP'), disabled: spIndex === 0 },
@@ -4122,7 +4122,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => onToggleFavorite(e, selectedCPUItem.sinapiItem?.code || '')}
-                      className={`p-1.5 px-2 rounded-[6px] shadow-sm transition-all z-10 border flex items-center gap-1.5 font-bold text-xs uppercase ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
+                      className={`p-1.5 px-2 rounded-[6px] shadow-sm transition-all z-10 border flex items-center gap-1.5 font-medium text-sm ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
                       title={favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                     >
                       <Star className={`w-3.5 h-3.5 ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'fill-amber-500 text-amber-500' : ''}`} />
@@ -4130,14 +4130,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </button>
                     <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm">{selectedCPUItem.sinapiItem?.code || '---'}</span>
                   </div>
-                  <p className="text-form-label text-gray-500 font-medium leading-tight max-w-2xl uppercase">
+                  <p className="text-form-label text-gray-600 font-medium leading-snug max-w-2xl">
                     {selectedCPUItem.sinapiItem?.description || 'Sem descrição'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="text-right whitespace-nowrap">
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Preço Unitário</p>
+                    <p className="text-sm text-gray-600 font-medium">Preço unitário</p>
                     <p className="text-2xl font-black text-emerald-600">
                       R$ {(selectedCPUItem.sinapiItem?.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>

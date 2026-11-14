@@ -44,4 +44,31 @@ export function precisaGravar(id: string, settings: ProjectSettings | null | und
 /** Só para testes. */
 export function limparPersistidos(): void {
     persistido.clear();
+    ultimaGravacao = null;
+}
+
+// ── Hora da última gravação do projeto aberto (2ª crítica, 2026-11-14): o salvamento
+// automático era invisível e o "Salvar" do topo não dizia se faltava algo — o usuário clicava
+// "por garantia". O topo mostra "Salvo às HH:MM" lendo daqui (useSyncExternalStore).
+let ultimaGravacao: Date | null = null;
+const ouvintes = new Set<() => void>();
+const avisar = () => ouvintes.forEach(f => f());
+
+/** Gravou de verdade (salvamento automático ou o botão Salvar). */
+export function marcarGravacao(): void {
+    ultimaGravacao = new Date();
+    avisar();
+}
+/** Abriu outro projeto: ainda não gravou nada nesta sessão. */
+export function zerarUltimaGravacao(): void {
+    if (ultimaGravacao === null) return;
+    ultimaGravacao = null;
+    avisar();
+}
+export function assinarGravacoes(cb: () => void): () => void {
+    ouvintes.add(cb);
+    return () => { ouvintes.delete(cb); };
+}
+export function obterUltimaGravacao(): Date | null {
+    return ultimaGravacao;
 }

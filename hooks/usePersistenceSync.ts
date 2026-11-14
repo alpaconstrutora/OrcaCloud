@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { projectService } from '../services/projectService';
 import { BudgetEntry, ProjectSettings } from '../types';
 import { INITIAL_BUDGET, INITIAL_PROJECT_SETTINGS } from '../constants';
-import { precisaGravar, registrarPersistido } from '../utils/projetoPersistido';
+import { marcarGravacao, precisaGravar, registrarPersistido, zerarUltimaGravacao } from '../utils/projetoPersistido';
 
 interface UsePersistenceSyncProps {
   projectSettings: ProjectSettings | null;
@@ -209,6 +209,7 @@ export const usePersistenceSync = ({
       if (!precisaGravar(savedProjectId, capturedSettings, capturedBudget)) return;
       await doSave(savedProjectId, capturedSettings, capturedBudget);
       registrarPersistido(savedProjectId, capturedSettings, capturedBudget);
+      marcarGravacao();
     };
 
     const timeoutId = setTimeout(async () => {
@@ -245,6 +246,7 @@ export const usePersistenceSync = ({
             const loadedSettings = { ...INITIAL_PROJECT_SETTINGS, ...projectData.settings };
             // O banco tem isto: o salvamento automático não regrava só por ter recarregado.
             registrarPersistido(projectId, loadedSettings, projectData.budget || []);
+            zerarUltimaGravacao();
             setProjectSettings(loadedSettings);
             setBudget(projectData.budget || []);
           } else {

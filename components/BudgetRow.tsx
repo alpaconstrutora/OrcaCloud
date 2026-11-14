@@ -240,14 +240,14 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 {/* Código — texto atenuado (§7) */}
                 <td style={fixa(esquerdaFixa?.codigo)} className={`${TD} text-center text-sm font-normal text-gray-600 ${esquerdaFixa ? FUNDO_FIXO : ''}`}>{item.sinapiItem?.code || '---'}</td>
 
-                <td style={fixa(esquerdaFixa?.descricao, true)} className={`${TD} text-sm text-gray-600 leading-tight ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
+                <td style={fixa(esquerdaFixa?.descricao, true)} className={`${TD} text-sm text-gray-600 leading-snug ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={(e) => onToggleFavorite?.(e, item.sinapiItem?.code)}
                             className="text-gray-400 hover:text-amber-500 transition-colors p-1 -ml-1 rounded-full hover:bg-amber-50 shrink-0"
                             title={isFavorite ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                         >
-                            <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
+                            <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500 text-amber-500' : 'text-gray-500'}`} />
                         </button>
                         {item.sinapiItem && getTypeBadge(item.sinapiItem.type, canOpenCPU ? handleToggleCPU : undefined)}
                         {/* Até 2 linhas (o texto SINAPI chega a 5): o inteiro fica no title. */}
@@ -269,7 +269,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 <td className={`${TD} text-center text-sm text-gray-500`}>{item.sinapiItem?.unit || '---'}</td>
 
                 <td className={TD}>
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : 'border-gray-200'} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <span className="text-xs text-gray-500 shrink-0">R$</span>
                         <MoneyCentsInput
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
@@ -291,7 +291,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 <td className={TD}>
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${isLocked ? 'bg-gray-50 border-gray-100' : 'border-gray-200 group-hover:border-blue-300'}`}>
                         <input
                             aria-label={`BDI do item ${codigoDoItem} (%); vazio usa o BDI global`}
                             type="number"
@@ -303,7 +303,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                 onUpdateBDI(item.id, val === '' ? undefined : Number(val));
                             }}
                             disabled={isLocked}
-                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 text-gray-900 placeholder:text-gray-300 ${isLocked ? 'cursor-not-allowed' : ''}`}
+                            className={`w-full text-center text-sm outline-none bg-transparent py-0.5 text-gray-900 placeholder:text-gray-500 ${isLocked ? 'cursor-not-allowed' : ''}`}
                         />
                         <span className="text-xs text-gray-400 shrink-0">%</span>
                     </div>
@@ -334,13 +334,14 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         <InlineDisclosureMenu
                             menuItems={[
                                 ...(onMoveItem ? [
-                                    { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => onMoveItem(SEM_EVENTO, item.id, 'UP'), disabled: !!isFirst },
-                                    { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => onMoveItem(SEM_EVENTO, item.id, 'DOWN'), disabled: !!isLast },
+                                    { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => onMoveItem(SEM_EVENTO, item.id, 'UP'), disabled: !!isFirst, title: isFirst ? 'Já é o primeiro item da subetapa' : undefined },
+                                    { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => onMoveItem(SEM_EVENTO, item.id, 'DOWN'), disabled: !!isLast, title: isLast ? 'Já é o último item da subetapa' : undefined },
                                 ] : []),
                                 { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar item', onClick: () => onDuplicateItem(SEM_EVENTO, item.id) },
                                 {
                                     icon: isSavingCustom ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Database className="w-[18px] h-[18px]" />,
-                                    label: 'Salvar na Base Própria',
+                                    // Pelo efeito: o item é COPIADO para a base própria (o orçamento não muda).
+                                    label: 'Copiar para a base própria',
                                     onClick: () => { void handleSave(SEM_EVENTO); },
                                     disabled: isSavingCustom || !!isLocked,
                                     title: isLocked ? 'Orçamento fechado: não pode ser alterado' : undefined,

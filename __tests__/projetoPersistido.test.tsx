@@ -7,7 +7,7 @@
 import React from 'react';
 import { render, act } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { assinaturaDoProjeto, precisaGravar, registrarPersistido, limparPersistidos } from '../utils/projetoPersistido';
+import { assinaturaDoProjeto, precisaGravar, registrarPersistido, limparPersistidos, obterUltimaGravacao } from '../utils/projetoPersistido';
 
 const saveProject = vi.fn().mockResolvedValue({ id: 'p1' });
 const loadProject = vi.fn();
@@ -85,6 +85,8 @@ describe('usePersistenceSync — salvamento automático', () => {
         await montar();
         expect(loadProject).toHaveBeenCalledWith('p1');
         expect(saveProject).not.toHaveBeenCalled();
+        // abriu e não gravou: nada de "Salvo às"
+        expect(obterUltimaGravacao()).toBeNull();
     });
 
     it('editar grava uma vez; voltar ao que o banco tem não grava de novo', async () => {
@@ -92,6 +94,8 @@ describe('usePersistenceSync — salvamento automático', () => {
         await act(async () => { c.current!.setBudget([{ ...ITEM, quantity: 3 } as BudgetEntry]); });
         await act(async () => { vi.advanceTimersByTime(2500); await Promise.resolve(); await Promise.resolve(); });
         expect(saveProject).toHaveBeenCalledTimes(1);
+        // o topo passa a mostrar "Salvo às HH:MM"
+        expect(obterUltimaGravacao()).not.toBeNull();
         // mesmo conteúdo de novo (objeto novo): já está no banco
         await act(async () => { c.current!.setBudget([{ ...ITEM, quantity: 3 } as BudgetEntry]); });
         await act(async () => { vi.advanceTimersByTime(2500); await Promise.resolve(); });

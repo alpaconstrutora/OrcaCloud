@@ -10,6 +10,7 @@ import { processarEventoAsaas } from "../_shared/asaasProcessar.ts"
 import { validarChavePix, tipoParaAsaas, type TipoChavePix } from "../../../utils/pixKey.ts"
 import { validateCpfCnpj } from "../../../lib/validators.ts"
 import { quarentenaDaChave, HORAS_QUARENTENA, bloqueiosDoSaqueProprio, type DestinoDoSaque } from "../../../utils/asaasGovernanca.ts"
+import { dataDoPagamentoDeBoleto, cancelamentoConfirmado } from "../../../utils/asaasBoletoPagamento.ts"
 
 declare const Deno: { env: { get(key: string): string | undefined } };
 
@@ -229,6 +230,7 @@ serve(async (req: Request) => {
         if (sp.status === 'CANCELLED') return json({ ok: true, already_cancelled: true });
         if (sp.status === 'DONE') return json({ error: 'Pagamento já concluído — não pode ser cancelado.' }, 422);
 
+        let confirmadoNaAsaas = true;
         if (sp.asaas_bill_id || sp.asaas_transfer_id) {
             // Cancela na conta que DISPAROU o pagamento, não na conta atual da org.
             let contaDoPagamento: ContaAsaas | null;
@@ -242,11 +244,28 @@ serve(async (req: Request) => {
                 method: sp.asaas_bill_id ? 'POST' : 'DELETE',
                 headers: cabecalhosAsaas(contaDoPagamento.apiKey),
             });
+            const corpo = await cancelRes.json().catch(() => null);
             if (!cancelRes.ok && cancelRes.status !== 404) {
-                const d = await cancelRes.json().catch(() => ({}));
-                const msg = d?.errors?.[0]?.description ?? `HTTP ${cancelRes.status}`;
-                return json({ error: `Asaas (cancelamento): ${msg}`, detail: d }, 502);
+                const msg = corpo?.errors?.[0]?.description ?? `HTTP ${cancelRes.status}`;
+                return json({ error: `Asaas (cancelamento): ${msg}`, detail: corpo }, 502);
             }
+            // Só é cancelado quando a Asaas DIZ que cancelou. Com autorização por token
+            // SMS/app exigida, a resposta não traz CANCELLED: até 13/11/2026 o OrçaCloud
+            // marcava "cancelado" e devolvia o boleto a "aprovado" enquanto, na Asaas, o
+            // pagamento seguia agendado (plano 2026-11-13-asaas-boleto-data-e-cancelamento).
+            confirmadoNaAsaas = cancelamentoConfirmado(cancelRes.status, corpo);
+        }
+
+        if (!confirmadoNaAsaas) {
+            // Registra quem pediu (o histórico atribui o cancelamento a essa pessoa quando a
+            // Asaas confirmar) e deixa o status como está: o aviso da Asaas (webhook, que
+            // confere na Asaas) ou a consulta automática fecham o ciclo.
+            await admin.from('supplier_payments').update({
+                cancelled_by_email: userEmail,
+                cancelled_at: new Date().toISOString(),
+                updated_at: new Date().toISOString(),
+            }).eq('id', sp.id);
+            return json({ ok: true, aguardando_autorizacao: true });
         }
 
         // cancelled_by_email: o histórico (gatilho de auditoria) atribui o
@@ -651,6 +670,10 @@ serve(async (req: Request) => {
             beneficiary_name_source: beneficiaryName ? 'asaas' : 'boleto_capturado',
             beneficiary_cpf_cnpj: info?.beneficiaryCpfCnpj ?? null,
             is_overdue: info?.isOverdue ?? null,
+            // Para o campo "Data do pagamento" da tela (plano 2026-11-13): a menor data que a
+            // Asaas aceita e o vencimento (limite do agendamento).
+            data_minima: simData.minimumScheduleDate ?? null,
+            vencimento: info?.dueDate ?? boleto.vencimento ?? null,
             real_value: realValue,
             captured_value: capturedValue,
             value_mismatch: valueMismatch,
@@ -662,6 +685,24 @@ serve(async (req: Request) => {
     if (!ehGestor) return soGestor();
     if (!boleto.supplier_id) return json({ error: 'Boleto sem fornecedor vinculado.' }, 422);
     if (portao.bloqueios.length) return json({ error: portao.bloqueios[0], bloqueios: portao.bloqueios }, 422);
+
+    // Data do pagamento SEMPRE explícita (medido em 13/11/2026: sem `scheduleDate` a Asaas
+    // agenda para o VENCIMENTO). Cliente sem data (tela antiga) → a data mínima da simulação,
+    // "o quanto antes". Conta vencida → sem data (imediato). Regra em utils/asaasBoletoPagamento.ts.
+    let dataMinima: string | null = null;
+    const vencidaAgora = !!boleto.vencimento && boleto.vencimento < hojeBRT();
+    if (!body.schedule_date && !vencidaAgora) {
+        const sim = await fetch(`${asaasBase}/bill/simulate`, {
+            method: 'POST', headers: asaasHeaders,
+            body: JSON.stringify({ identificationField: boleto.linha_digitavel }),
+        });
+        const simJson = await sim.json().catch(() => ({})) as BillSimulateResponse;
+        dataMinima = sim.ok ? (simJson.minimumScheduleDate ?? null) : null;
+    }
+    const dataPagamento = dataDoPagamentoDeBoleto({
+        hoje: hojeBRT(), vencimento: boleto.vencimento, escolhida: body.schedule_date ?? null, dataMinima,
+    });
+    if (dataPagamento.erro) return json({ error: dataPagamento.erro }, 422);
 
     const { data: spRow, error: spErr } = await admin
         .from('supplier_payments')
@@ -675,7 +716,7 @@ serve(async (req: Request) => {
             payment_type: 'BILL',
             identification_field: boleto.linha_digitavel,
             value: boleto.valor ?? 0, // valor real vem da linha digitável; este é o capturado por OCR, só para exibição local
-            scheduled_date: body.schedule_date ?? null,
+            scheduled_date: dataPagamento.agendado ? dataPagamento.scheduleDate : null,
             status: 'APPROVED',
             approved_by_email: userEmail,
             approved_at: new Date().toISOString(),
@@ -728,9 +769,8 @@ serve(async (req: Request) => {
         }
     }
     // Conta vencida não se agenda (doc da Asaas: "Contas vencidas não podem ser
-    // agendadas" — vencido é pagamento imediato).
-    const vencida = !!boleto.vencimento && boleto.vencimento < hojeBRT();
-    if (body.schedule_date && !vencida) payBody.scheduleDate = body.schedule_date;
+    // agendadas" — vencido é pagamento imediato): `dataPagamento.scheduleDate` é null.
+    if (dataPagamento.scheduleDate) payBody.scheduleDate = dataPagamento.scheduleDate;
 
     const payRes = await fetch(`${asaasBase}/bill`, {
         method: 'POST',
@@ -770,8 +810,8 @@ serve(async (req: Request) => {
 
     await admin.from('supplier_payments').update({
         asaas_bill_id: asaasBillId,
-        status: payBody.scheduleDate ? 'SCHEDULED' : 'PENDING',
-        scheduled_date: (payBody.scheduleDate as string | undefined) ?? null,
+        status: dataPagamento.agendado ? 'SCHEDULED' : 'PENDING',
+        scheduled_date: dataPagamento.agendado ? dataPagamento.scheduleDate : null,
         beneficiary_name: beneficiaryName,
         value: payData.value ?? boleto.valor, // sobrescreve pelo valor real confirmado pela Asaas
         fee: payData.fee ?? null,

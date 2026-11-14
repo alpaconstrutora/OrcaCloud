@@ -3,6 +3,8 @@ import { AlertTriangle, Check, Landmark, Loader2 } from 'lucide-react';
 import { Modal, ModalHeader, ModalBody, ModalFooter } from './ui/modal';
 import { supplierPaymentService } from '../services/supplierPaymentService';
 import type { QuoteResult } from '../services/supplierPaymentService';
+import { dataDoPagamentoDeBoleto } from '../utils/asaasBoletoPagamento';
+import { hojeLocal } from '../utils/baixaRecebivel';
 
 function fmt(v: number | undefined | null) {
     if (v == null) return '—';
@@ -28,6 +30,10 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
     const [quote, setQuote] = useState<QuoteResult | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [paying, setPaying] = useState(false);
+    // Data do pagamento (13/11/2026): sem ela a Asaas agendava para o VENCIMENTO. "O quanto
+    // antes" = a data mínima da simulação (normalmente hoje); ou uma data até o vencimento.
+    const [modoData, setModoData] = useState<'logo' | 'agendar'>('logo');
+    const [dataEscolhida, setDataEscolhida] = useState('');
 
     useEffect(() => {
         let active = true;
@@ -44,11 +50,23 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
         return () => { active = false; };
     }, [organizationId, boletoId]);
 
+    const hoje = hojeLocal();
+    const vencimento = quote?.vencimento ?? dueDate ?? null;
+    const vencida = !!vencimento && vencimento < hoje;
+    const dataMinima = quote?.data_minima ?? hoje;
+    const decisaoData = dataDoPagamentoDeBoleto({
+        hoje, vencimento, dataMinima,
+        escolhida: modoData === 'agendar' ? (dataEscolhida || null) : null,
+    });
+    const motivoData = modoData === 'agendar' && !vencida && !dataEscolhida
+        ? 'Escolha a data do pagamento.'
+        : decisaoData.erro ?? null;
+
     async function handleConfirm() {
         setPaying(true);
         setError(null);
         try {
-            await supplierPaymentService.pay(organizationId, boletoId);
+            await supplierPaymentService.pay(organizationId, boletoId, decisaoData.scheduleDate ?? undefined);
             onPaid();
         } catch (e) {
             setError(e instanceof Error ? e.message : 'Falha ao pagar boleto');
@@ -124,6 +142,38 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
                             <p className="text-xs text-amber-600">Este boleto está vencido — pode haver juros/multa aplicados pelo credor.</p>
                         )}
 
+                        <div className="space-y-2">
+                            <p className="text-sm font-medium text-gray-700">Data do pagamento</p>
+                            {vencida ? (
+                                <p className="text-sm text-gray-600">
+                                    Conta vencida: o pagamento é imediato, no mesmo dia útil — a Asaas não agenda conta vencida.
+                                </p>
+                            ) : (
+                                <div className="space-y-2">
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="radio" name="data-pagamento" checked={modoData === 'logo'} onChange={() => setModoData('logo')} />
+                                        O quanto antes — {fmtDate(dataMinima)}
+                                    </label>
+                                    <label className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
+                                        <input type="radio" name="data-pagamento" checked={modoData === 'agendar'} onChange={() => setModoData('agendar')} />
+                                        Agendar para
+                                        <input
+                                            type="date"
+                                            value={dataEscolhida}
+                                            min={dataMinima}
+                                            max={vencimento ?? undefined}
+                                            onChange={e => { setDataEscolhida(e.target.value); setModoData('agendar'); }}
+                                            className="h-9 px-3 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-700 focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none"
+                                        />
+                                    </label>
+                                    {vencimento && (
+                                        <p className="text-xs text-gray-500">Até o vencimento, {fmtDate(vencimento)}.</p>
+                                    )}
+                                    {motivoData && <p className="text-xs text-red-600">{motivoData}</p>}
+                                </div>
+                            )}
+                        </div>
+
                         {quote?.beneficiary_name_source === 'boleto_capturado' && (
                             <p className="text-xs text-amber-600">
                                 A Asaas não retornou o nome do beneficiário na simulação — o nome acima foi capturado
@@ -161,8 +211,8 @@ export default function PagarBoletoAsaasModal({ organizationId, boletoId, suppli
                 </button>
                 <button
                     onClick={handleConfirm}
-                    disabled={loading || paying || !quote || bloqueios.length > 0}
-                    title={bloqueios[0] ?? (loading ? 'Consultando o boleto na Asaas…' : !quote ? 'Não foi possível consultar o boleto.' : undefined)}
+                    disabled={loading || paying || !quote || bloqueios.length > 0 || !!motivoData}
+                    title={bloqueios[0] ?? (loading ? 'Consultando o boleto na Asaas…' : !quote ? 'Não foi possível consultar o boleto.' : motivoData ?? undefined)}
                     className="flex items-center gap-2 px-6 py-2 text-white font-bold rounded-lg text-sm transition-all bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50"
                 >
                     {paying ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}

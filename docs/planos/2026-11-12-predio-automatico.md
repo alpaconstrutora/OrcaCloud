@@ -228,6 +228,37 @@ andares, coluna em 7 andares, barrilete, recalque do térreo à cobertura, 2.480
 lote, pluvial da cobertura.
 **Pronto quando.** Teste do diâmetro do tubo de queda no R12; marco grava.
 
+**Dividida em duas (14/11/2026), como a PA5:** PA7a esgoto e ventilação (com o "pronto quando"); PA7b o pluvial da
+cobertura.
+
+**Execução da PA7a (14/11/2026, `utils/predioAutomatico/esgoto.ts`).** Etapa ESGOTO antes da marca `copiaInstalacoes`
+(como a água). Hipótese `esgoto` (ligada por padrão; pede a água — as louças vêm com ela).
+- **Tubo de queda por grupo molhado:** rente à face da parede da unidade mais perto do vaso (do lado da unidade — as
+  unidades espelhadas não se encontram na parede comum), escorregando para fora de vão, pilar e de outro tubo vertical;
+  a coluna de ventilação 200 mm ao lado, ao longo da parede.
+- **Ramais:** o motor da casa (`planejarEsgoto`) numa VISTA só com o tipo, os cômodos e os pontos da unidade, e como
+  "caixas de inspeção" os pontos dos tubos de queda (a −400 mm, no forro do andar de baixo). As verticais no ponto do
+  tubo saem; cada chegada vira um nó dele. O tubo que nenhum ramal alcança sai (o motor junta o grupo pela rede).
+- **Empilhamento:** o tubo de queda de cada andar vai da junção mais baixa do andar (j, sob o piso) até `pé-direito + j`
+  — a junção do andar de cima; partido em cada cota de chegada. A cópia viva empilha.
+- **DN (NBR 8160):** tubo de queda pela Tabela 6 (UHC do grupo × os andares, a UHC de um andar; ≥ 100 com bacia); coluna
+  de ventilação pela tabela (`dnDaColunaDeVentilacao`); desvio, saída e coletor pela Tabela 7.
+- **Ventilação:** primária — o tubo de queda atravessa a laje da cobertura e sobe a 2 m (terraço); a coluna de ventilação
+  liga-se a ele embaixo (no forro do térreo, abaixo do ramal mais baixo) e em cima (0,6 m acima da laje). Os ramais de
+  ventilação de cada bacia ficam para o projetista (premissa).
+- **Térreo:** o desvio suspenso no forro até a fachada da rua (bloco retangular: um coletor pelo eixo do corredor, com uma
+  derivação a cada tubo; em asas: em linha reta até a saída), descendo 1 %; na fachada desce até sob o piso, sai para a
+  caixa de inspeção a 1 m fora, e o coletor vai até a ligação na rede pública, presumida a 1,5 m de profundidade.
+
+**Achados no caminho:**
+1. Com a "caixa" do tubo de queda funda (−3 m), as ligações diretas desciam em rampa até ela, sem a vertical final que
+   marcava a junção — e só 84 das 315 louças do R8 chegavam à rede. Com a caixa no forro de baixo e o tubo partido em
+   cada chegada, 315 de 315 (R12: 836 de 836) — o teste confere toda louça de todo andar até a ligação.
+2. No coletor suspenso do térreo, a derivação chegava ao eixo numa cota e a linha principal passava ali em outra: dois
+   nós na mesma posição, rede partida. Toda posição do desvio com mais de uma cota ganha uma vertical.
+3. Custo (R12, máquina carregada): a etapa ~5 s (um lote só de ~1.000 comandos — as invariantes rodam a cada um) e a
+   conferência +~5 s.
+
 ### PA8 — Garagem e subsolo
 **O que muda.** `lancarGaragem` ampliado: rampa, pilares da malha da torre, iluminação/exaustão no quadro de serviço,
 drenagem + caixa separadora, bombas quando abaixo da rede; subsolos de R8 (1) e R12 (2) no marco.

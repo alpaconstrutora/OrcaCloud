@@ -94,8 +94,12 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   // Aba de volta à frente (celular desbloqueado, troca de app): o link pode ter sido revogado
   // ou ter vencido enquanto a tela estava parada — reconfere antes de qualquer toque.
   // Só a recusa do banco tira da tela; falha de rede aqui não derruba quem está usando.
+  // `useLayoutEffect`, não `useEffect`: o ouvinte fica preso no MESMO commit que mostra a
+  // tela. Com `useEffect` ele entrava numa tarefa depois, e nessa janela a volta da aba não
+  // reconferia nada (14/11: reproduzido com 16 processos em paralelo — 1 disparo em 32 sem
+  // ouvinte; era o teste "reconfere a sessão" que caía de vez em quando no CI).
   const aberta = estado.tipo === 'ok'
-  React.useEffect(() => {
+  React.useLayoutEffect(() => {
     if (!aberta || !token) return
     let ativo = true
     const aoMudarVisibilidade = () => {

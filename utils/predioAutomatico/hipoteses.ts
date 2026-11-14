@@ -1,18 +1,21 @@
 /**
  * Prédio automático — os tipos do motor (PA2 do plano docs/planos/2026-11-12-predio-automatico.md, 13/11/2026). Molde:
  * `utils/casaAutomatica/hipoteses.ts`. Na PA2 o prédio tem a arquitetura (pavimento tipo, cópias vivas e a planta das
- * unidades); a PA3 acrescenta o térreo, a cobertura e os reservatórios; cada fase seguinte acrescenta as suas etapas aqui.
+ * unidades); a PA3 acrescenta o térreo, a cobertura e os reservatórios; a PA4, a estrutura e as fundações; cada fase
+ * seguinte acrescenta as suas etapas aqui.
  */
 import type { BlueprintModel, Command, ObjectId } from '../blueprintKernel';
 import type { PendenciaDoPpci, SituacaoDaEtapa } from '../blueprintGeradorPpci';
 import type { EsquemaDoPavimento } from '../blueprintPavimentoTipoDaMassa';
 
-export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
+export type EtapaDoPredioId = 'PAVIMENTO_TIPO' | 'TERREO' | 'ESTRUTURA' | 'FUNDACOES' | 'PLANTAS' | 'COBERTURA' | 'RESERVATORIOS' | 'INSTALACOES_NO_TIPO' | 'CONFERENCIA';
 
 /** Rótulo de cada etapa, na ordem em que rodam (a tela e o relatório leem daqui). */
 export const ROTULO_DA_ETAPA_DO_PREDIO: Record<EtapaDoPredioId, string> = {
   PAVIMENTO_TIPO: 'Pavimento tipo (corredor, núcleo, unidades) e os andares como cópias vivas',
   TERREO: 'Térreo (hall e portaria, acesso, centro de medição, casa de bombas) e o núcleo desde ele',
+  ESTRUTURA: 'Estrutura (pilares, vigas e lajes no tipo — vão às cópias —, a mesma malha no térreo, os eixos)',
+  FUNDACOES: 'Fundações (blocos e estacas sob os pilares — pré-dimensionamento, exige cálculo)',
   PLANTAS: 'Planta interna das unidades (cômodos, portas e janelas)',
   COBERTURA: 'Cobertura (laje, platibanda, área técnica; a escada e o shaft chegam nela)',
   RESERVATORIOS: 'Reservatórios inferior (casa de bombas) e superior (sobre o núcleo)',
@@ -37,6 +40,8 @@ export interface HipotesesDoPredio {
   terreo: boolean;
   /** PA3: a cobertura sobre o último andar. */
   cobertura: boolean;
+  /** PA4: pilares, vigas, lajes, eixos e fundações (os planejadores da casa, com as hipóteses padrão das gavetas). */
+  estrutura: boolean;
   /** Largura da porta de entrada do prédio, no hall, mm. */
   larguraDoAcessoMm: number;
   /** Pé-direito do pavimento da cobertura (a área técnica), mm. */
@@ -53,6 +58,7 @@ export const HIPOTESES_DO_PREDIO_PADRAO: HipotesesDoPredio = {
   plantas: true,
   terreo: true,
   cobertura: true,
+  estrutura: true,
   larguraDoAcessoMm: 1200,
   peDireitoDaCoberturaMm: 3000,
   espessuraDaLajeMm: 120,
@@ -91,6 +97,11 @@ export interface PlanoDoPredio {
     terreo: { salas: string[]; acesso: boolean } | null;
     /** PA3: a cota do piso da cobertura, m; `null` sem cobertura. */
     cobertura: { cotaM: number } | null;
+    /**
+     * PA4: a estrutura — peças do tipo (cada cópia repete), as coladas no térreo, os eixos e a fundação; `null` com a
+     * estrutura desligada.
+     */
+    estrutura: { pilares: number; vigas: number; lajes: number; noTerreo: number; eixos: number; blocos: number; estacas: number } | null;
     /** PA3: a reservação — pessoas contadas e o volume de cada reservatório lançado (`null` = não lançado). */
     reservacao: { pessoas: number; totalL: number; inferiorL: number | null; superiorL: number | null } | null;
   };

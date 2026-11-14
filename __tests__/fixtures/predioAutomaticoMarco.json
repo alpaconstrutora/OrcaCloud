@@ -1,42 +1,46 @@
 {
   "R4": {
-    "modelo": "9508660973c55bda4e2f5cf6e09c9b82d488254d860a6a8e479299dbbc733528",
+    "modelo": "7ab66ce70a8fb0d96e11442e40553083fc0fcdbbbdf7e76cebffbe31c2222078",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
     "unidadesPorAndar": 2,
     "plantas": 2,
     "paredes": 83,
-    "nucleos": 1
+    "nucleos": 1,
+    "estruturas": 201
   },
   "R8": {
-    "modelo": "cbceb987ddf7d0b907dce22d4b702d376c9a7ccaa16288137e2487423fc8a0fc",
+    "modelo": "672c96391f4a871783fc6832d38950e4e5cf4c389e8be2e9a467ec326f74fe30",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 10,
     "copias": 6,
     "unidadesPorAndar": 5,
     "plantas": 5,
     "paredes": 371,
-    "nucleos": 2
+    "nucleos": 2,
+    "estruturas": 546
   },
   "R12": {
-    "modelo": "8aa5e552bc750ac9214696882f073754bfe146868a97280886b4d63463161142",
+    "modelo": "28df325de0d0e4d2fce48b4f8a99474c2cd3b8642649313a3455122573114d08",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 14,
     "copias": 10,
     "unidadesPorAndar": 8,
     "plantas": 8,
     "paredes": 908,
-    "nucleos": 3
+    "nucleos": 3,
+    "estruturas": 1059
   },
   "RL": {
-    "modelo": "9cd6a7ddba3a0f9d4ea4bd9304839a3b873b6031d195b03ca686916305decea5",
+    "modelo": "03a641563c101fc9d6bcee0a867d518661bd92cb81bdb55254cf5acd7ee8b701",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
     "unidadesPorAndar": 13,
     "plantas": 13,
     "paredes": 937,
-    "nucleos": 2
+    "nucleos": 2,
+    "estruturas": 1179
   }
 }

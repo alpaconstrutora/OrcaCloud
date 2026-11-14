@@ -101,7 +101,7 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(pavimento.value).toBe(PLANO.tipoLevelId);
     const opcoes = Array.from(pavimento.options).map((o) => o.textContent);
     expect(opcoes.filter((o) => o?.endsWith('· cópia do tipo'))).toHaveLength(PLANO.resumo.copias);
-    expect(within(screen.getByTestId('etapas-do-predio')).getAllByRole('listitem')).toHaveLength(7);
+    expect(within(screen.getByTestId('etapas-do-predio')).getAllByRole('listitem')).toHaveLength(PLANO.etapas.length);
     const lancar = screen.getByTestId('lancar-predio') as HTMLButtonElement;
     expect(lancar.textContent).toBe(`Lançar os ${PLANO.resumo.pavimentosLancados} pavimentos`);
     fireEvent.click(lancar);

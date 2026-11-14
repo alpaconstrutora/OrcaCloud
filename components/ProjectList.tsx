@@ -127,6 +127,16 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
     'obra-vinculada': 180, 'planejamento-vinculada': 180,
     client: 160, created: 140, updated: 172, 'status-budget': 130, 'status-obra': 149, lock: 128, actions: 200,
 };
+// Orçamentos não têm "Ver Detalhes" (a linha já abre o Analítico — §9.1): a coluna Ações
+// leva só lápis + duplicar + ⋮ (3 × ~30px, gap-1.5, px-6). Só o PADRÃO muda; largura que o
+// usuário arrastou continua valendo (useResizableColumns grava só as redimensionadas).
+// Status: "Em andamento" + px-6 não cabia em 130px e quebrava em duas linhas (crítica 2026-11-14).
+const DEFAULT_COL_WIDTHS_ORCAMENTO: Record<string, number> = { ...DEFAULT_COL_WIDTHS, actions: 152, 'status-budget': 150 };
+
+/** Borda direita da célula fixa: com border-collapse a `border-r` não acompanha o sticky. */
+const BORDA_FIXA = 'inset -1px 0 0 #f3f4f6';
+/** Última coluna fixa: a borda + uma sombra curta indicando que há conteúdo rolando por baixo. */
+const BORDA_FIXA_ULTIMA = `${BORDA_FIXA}, 6px 0 8px -6px rgba(15, 23, 42, 0.14)`;
 
 // Obra a que o projeto está vinculado (por id; legado: por nome entre as obras).
 function findLinkedProject(project: ProjectSummary, projects: ProjectSummary[]): ProjectSummary | null | undefined {
@@ -199,7 +209,7 @@ const StatusBadge = ({ status }: { status: string }) => {
         'Sem Registros': 'text-gray-600',
     };
     return (
-        <span className={`text-sm font-normal ${colors[status] || 'text-gray-600'}`}>
+        <span className={`text-sm font-normal whitespace-nowrap ${colors[status] || 'text-gray-600'}`}>
             {status}
         </span>
     );
@@ -245,6 +255,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const isPlanejamentoContext = classificationFilter === 'PLANEJAMENTO';
     const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
     const isDiaryContext = isDiarioContext;
+    const isOrcamentoContext = !isObraContext && !isPlanejamentoContext && !isDiarioContext;
 
     // Colunas ocultas por padrão conforme o contexto — evita tabela larga com colunas
     // sempre vazias (ui_ux_guia_unificado.md, avaliação 2026-08-12):
@@ -311,7 +322,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         resetColumns,
     } = tableColumns;
 
-    const cols = useResizableColumns(DEFAULT_COL_WIDTHS, 'projectListColWidths');
+    const cols = useResizableColumns(isOrcamentoContext ? DEFAULT_COL_WIDTHS_ORCAMENTO : DEFAULT_COL_WIDTHS, 'projectListColWidths');
     // Colunas visíveis, na ordem escolhida pelo usuário (arraste no header) — usada para
     // colgroup/thead/tbody. As 2 colunas extras do contexto Diário (obra-vinculada,
     // planejamento-vinculada) não fazem parte de COLUMNS (não são configuráveis/arrastáveis)
@@ -327,6 +338,41 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // Largura total = soma exata das colunas visíveis. NUNCA w-full/100% junto com
     // table-layout:fixed (§6.1).
     const tableTotalWidth = displayColumns.reduce((sum, key) => sum + cols.getWidth(key), 0) + cols.getWidth('actions');
+
+    // Colunas fixas à esquerda (Orçamentos; crítica de 2026-11-14): da 1ª coluna até "Orçamento",
+    // se ela estiver entre as duas primeiras (a ordem é arrastável). A tabela é mais larga que a
+    // tela; sem isso, quem rolava até Status/Bloqueio/Ações perdia o nome da linha.
+    const colunasFixas: Record<string, { left: number; ultima: boolean }> = {};
+    if (isOrcamentoContext) {
+        const iNome = displayColumns.indexOf('name');
+        if (iNome >= 0 && iNome <= 1) {
+            let left = 0;
+            displayColumns.slice(0, iNome + 1).forEach((k, i) => {
+                colunasFixas[k] = { left, ultima: i === iNome };
+                left += cols.getWidth(k);
+            });
+        }
+    }
+    // Com coluna fixa a tabela troca border-collapse por border-separate: no modelo collapse o
+    // Chrome deixa vazar texto das colunas roladas na costura entre as duas células fixas
+    // (medido 14/11/2026). No separate a borda do <tr> não é desenhada, então a divisória entre
+    // linhas passa para a célula (border-b), e some na última linha (o card já fecha embaixo).
+    const temColunasFixas = Object.keys(colunasFixas).length > 0;
+    const bordaLinhaTh = temColunasFixas ? ' border-b border-gray-200' : '';
+    const bordaLinhaTd = temColunasFixas ? ' border-b border-gray-200 group-last:border-b-0' : '';
+    const estiloFixo = (key: string, cabecalho: boolean): React.CSSProperties | undefined => {
+        const f = colunasFixas[key];
+        if (!f) return undefined;
+        return {
+            position: 'sticky',
+            left: f.left,
+            // 30 no cabeçalho: a alça de redimensionar (ResizeHandle) das colunas que rolam por
+            // baixo é z-20 e, vindo depois no DOM, cortava o rótulo da coluna fixa.
+            zIndex: cabecalho ? 30 : 1,
+            background: cabecalho ? '#fff' : undefined,
+            boxShadow: f.ultima ? BORDA_FIXA_ULTIMA : BORDA_FIXA,
+        };
+    };
 
     // Metadados de header por coluna — usados para renderizar o <thead> a partir de
     // `displayColumns` (ordem que o usuário arrasta + as 2 colunas fixas do Diário), em vez
@@ -364,7 +410,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 mr-3 shrink-0">
                             <FolderOpen className="w-4 h-4" />
                         </div>
-                        <div className="text-sm font-normal text-gray-900">
+                        <div className="text-sm font-normal text-gray-900 line-clamp-2" title={project.name}>
                             {project.name}
                         </div>
                     </div>
@@ -485,7 +531,9 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         {project.settings?.obraPropria ? (
                             <span className="text-sm font-normal text-indigo-700">Obra Própria</span>
                         ) : clientLabel ? (
-                            <span className="text-sm font-normal text-gray-600">
+                            // Uma linha só: nome longo ("Arquidiocese de … / Paróquia …") quebrava em
+                            // 5 linhas e inchava a linha da tabela; o texto inteiro fica no title.
+                            <span className="block truncate text-sm font-normal text-gray-600" title={clientLabel}>
                                 {clientLabel}
                             </span>
                         ) : (
@@ -549,12 +597,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 return (
                     <div className="flex justify-center">
                         {getEffectiveOrderCount(project.id) > 0 ? (
-                            <div className="flex items-center gap-1.5 text-amber-600" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
+                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-600" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
                                 <Lock className="w-4 h-4" />
                                 <span className="text-sm font-normal">Bloqueado</span>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-1.5 text-emerald-600" title="Sem pedidos vinculados - Exclusão Permitida">
+                            <div className="flex items-center gap-1.5 whitespace-nowrap text-emerald-600" title="Sem pedidos vinculados - Exclusão Permitida">
                                 <Unlock className="w-4 h-4" />
                                 <span className="text-sm font-normal">Livre</span>
                             </div>
@@ -900,7 +948,6 @@ const ProjectList: React.FC<ProjectListProps> = ({
     // lista já filtrada e ordenada; é recorte de exibição, não reconsulta (§6.12).
     // O rótulo do grupo é o MESMO texto da célula (status capitalizado, tipo traduzido,
     // bloqueio em cascata com a obra mestre).
-    const isOrcamentoContext = !isObraContext && !isPlanejamentoContext && !isDiarioContext;
     const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
     const campoAgrupar: CampoAgruparOrcamento | 'none' =
         isOrcamentoContext && viewMode === 'list' && OPCOES_AGRUPAR_ORCAMENTO.some(o => o.value === agrupamento.campo)
@@ -1117,7 +1164,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ) : (
                 viewMode === 'list' ? (
                         <div className="overflow-auto max-h-[70vh]">
-                        <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+                        <table ref={cols.tableRef} className={`text-left ${temColunasFixas ? 'border-separate border-spacing-0' : 'border-collapse'}`} style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
                             <colgroup>
                                 {displayColumns.map(key => (
                                     <col key={key} data-col-key={key} style={{ width: `${cols.getWidth(key)}px` }} />
@@ -1143,20 +1190,21 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 sortColumn={sortColumn} sortDirection={sortDirection}
                                                 onSort={handleColumnSort}
                                                 onMoveColumn={isFixedDiaryCol ? undefined : tableColumns.moveColumn}
-                                                className={def.className}>
+                                                style={estiloFixo(key, true)}
+                                                className={def.className + bordaLinhaTh}>
                                                 <cols.ResizeHandle colKey={key} />
                                             </SortableHeader>
                                         );
                                     })}
                                     {/* espaçador — casa com o <col /> sem largura, na mesma ordem */}
-                                    <th aria-hidden="true" className="border-r border-gray-100" />
-                                    <th className="px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500">
+                                    <th aria-hidden="true" className={`border-r border-gray-100${bordaLinhaTh}`} />
+                                    <th className={`px-6 py-2 text-right relative overflow-hidden text-table-header font-semibold text-gray-500${bordaLinhaTh}`}>
                                         Ações
                                         <cols.ResizeHandle colKey="actions" />
                                     </th>
                                 </tr>
                             </thead>
-                            <tbody className="divide-y divide-gray-200">
+                            <tbody className={temColunasFixas ? '' : 'divide-y divide-gray-200'}>
                                 {linhasDoCorpo.map(e => {
                                     if (e.tipo === 'grupo') {
                                         return (
@@ -1172,18 +1220,26 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                         className="hover:bg-blue-50/30 transition-colors group cursor-pointer"
                                     >
                                         {displayColumns.map(key => (
-                                            <td key={key} className="px-6 py-2.5 border-r border-gray-100 last:border-r-0">
+                                            <td
+                                                key={key}
+                                                style={estiloFixo(key, false)}
+                                                // Célula fixa precisa de fundo opaco (o resto da linha rola por baixo);
+                                                // #fafcff = o blue-50/30 do hover da linha já composto sobre o branco.
+                                                className={`px-6 py-2.5 border-r border-gray-100 last:border-r-0${bordaLinhaTd} ${colunasFixas[key] ? 'bg-white group-hover:bg-[#fafcff]' : ''}`}
+                                            >
                                                 {renderProjectCell(key, project)}
                                             </td>
                                         ))}
                                         {/* espaçador — casa com o <col /> sem largura, antes de "Ações" */}
-                                        <td aria-hidden="true" className="border-r border-gray-100"></td>
-                                        <td className="px-6 py-2.5 text-right">
-                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-3">
-                                                {/* Para Planejamento/Diário, o clique na linha já abre Cronograma/Diário
-                                                    (onRowClick) — um botão de texto repetindo a mesma ação duplicaria o
-                                                    controle (ui_ux_guia_unificado.md §9.1). */}
-                                                {(!isPlanejamentoContext && !isDiaryContext) && (
+                                        <td aria-hidden="true" className={`border-r border-gray-100${bordaLinhaTd}`}></td>
+                                        <td className={`px-6 py-2.5 text-right${bordaLinhaTd}`}>
+                                            <div onClick={(e) => e.stopPropagation()} className="flex items-center justify-end gap-1.5">
+                                                {/* "Ver Detalhes" só em Obras. Em Planejamento/Diário/Orçamentos o clique
+                                                    na linha já abre a ação dominante (Cronograma, Diário, Orçamento
+                                                    Analítico) — §9.1. Em Orçamentos ele ainda abria o formulário de dados,
+                                                    o mesmo do lápis: dois botões, um rótulo enganoso (crítica de
+                                                    2026-11-14). */}
+                                                {isObraContext && (
                                                     <button
                                                         onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }}
                                                         className="text-blue-600 hover:text-blue-800 text-sm font-medium p-1.5 hover:bg-blue-50 rounded-lg transition-all"
@@ -1191,7 +1247,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                         Ver Detalhes
                                                     </button>
                                                 )}
-                                                <ActionIconButton kind="edit" className="ml-1" onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
+                                                <ActionIconButton kind="edit" title={isOrcamentoContext ? 'Editar dados do orçamento' : undefined} onClick={(e) => { e.stopPropagation(); onEditProject(project.id); }} />
                                                 <ActionIconButton
                                                     kind="duplicate"
                                                     title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}
@@ -1299,22 +1355,12 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                     </div>
                                 </div>
 
-                                <div className="p-4 bg-gray-50 rounded-b-[10px] border-t border-gray-100 flex items-center justify-between">
-                                    <div className="flex items-center gap-1">
-                                        {!isObraContext && !isPlanejamentoContext && !isDiaryContext && (
-                                            <button
-                                                onClick={(e) => { e.stopPropagation(); onLoadProject(project.id, 'analytic'); }}
-                                                className="p-2 text-indigo-600 hover:bg-indigo-100 rounded-lg transition-colors"
-                                                title="Orçamento Analítico"
-                                            >
-                                                <Table2 className="w-4 h-4" />
-                                            </button>
-                                        )}
-                                        {/* Para Planejamento, o clique no card já abre o Cronograma (onRowClick) —
-                                            evita duplicar a ação em botão (§9.1). */}
-                                    </div>
-                                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-2">
-                                        <ActionIconButton kind="edit" title="Editar Dados" onClick={() => onEditProject(project.id)} />
+                                {/* O clique no card já abre a ação dominante (Orçamento Analítico, Cronograma,
+                                    Diário, visão da Obra) — sem botão repetindo (§9.1). Até 2026-11-14 havia
+                                    aqui um ícone "Orçamento Analítico" que fazia o mesmo que o card. */}
+                                <div className="p-4 bg-gray-50 rounded-b-[10px] border-t border-gray-100 flex items-center justify-end">
+                                    <div onClick={(e) => e.stopPropagation()} className="flex items-center gap-1.5">
+                                        <ActionIconButton kind="edit" title={isOrcamentoContext ? 'Editar dados do orçamento' : 'Editar Dados'} onClick={() => onEditProject(project.id)} />
                                         <ActionIconButton
                                             kind="duplicate"
                                             title={isObraContext ? 'Duplicar Obra' : isPlanejamentoContext ? 'Duplicar Planejamento' : isDiaryContext ? 'Duplicar Diário' : 'Duplicar Orçamento'}

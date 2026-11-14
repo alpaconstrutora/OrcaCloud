@@ -48,7 +48,7 @@ const pedidoDoR4 = (uso: 'RESIDENCIAL' | 'GARAGEM' = 'RESIDENCIAL') => pedidoDo(
 /** O R8 do marco (lote 40 × 60, bloco 30 × 16, 8 pavimentos: 5 unidades por andar, um elevador). */
 const pedidoDoR8 = () => pedidoDo([40000, 60000], [point(5000, 20000), point(35000, 20000), point(35000, 36000), point(5000, 36000)], 8);
 /** O caminho da PA2 (sem térreo nem cobertura) — o que o teste de equivalência compara com os botões de antes. */
-const SO_O_TIPO = { terreo: false, cobertura: false };
+const SO_O_TIPO = { terreo: false, cobertura: false, estrutura: false };
 
 /** O caminho de antes: "Montar neste estudo" e depois "Gerar a planta das unidades", dois lotes. */
 function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
@@ -64,14 +64,15 @@ function peloPainelDoBloco(p: PedidoDoPredio): BlueprintModel {
   return applyCommand(pl.model, { type: 'SetLevelProps', levelId: mont.tipoLevelId, copiaInstalacoes: true }).model;
 }
 
-describe('prédio automático — o motor (PA2)', () => {
+// PA4: o R8 com a estrutura leva uns 3 s por plano — e o teste da trava gera, reaplica e confere o hash.
+describe('prédio automático — o motor (PA2)', { timeout: 60_000 }, () => {
   it('as etapas rodam na ordem e o lote dá o mesmo prédio dos dois botões do painel do bloco, com o tipo levando as instalações', () => {
     const p = { ...pedidoDoR4(), hip: SO_O_TIPO };
     const avisos: string[] = [];
     const plano = planejarPredioDoPedido(p, { aoConcluirEtapa: (e, i, total) => avisos.push(`${i}/${total} ${e.id}`) });
     expect(plano.etapas.map((e) => e.id)).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO);
     expect(avisos).toEqual(ORDEM_DAS_ETAPAS_DO_PREDIO.map((id, i) => `${i + 1}/${ORDEM_DAS_ETAPAS_DO_PREDIO.length} ${id}`));
-    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
+    expect(plano.etapas.map((e) => `${e.id}:${e.situacao}`)).toEqual(['PAVIMENTO_TIPO:LANCOU', 'TERREO:NAO_EXIGIDA', 'ESTRUTURA:NAO_EXIGIDA', 'FUNDACOES:NAO_EXIGIDA', 'PLANTAS:LANCOU', 'COBERTURA:NAO_EXIGIDA', 'RESERVATORIOS:NAO_EXIGIDA', 'INSTALACOES_NO_TIPO:LANCOU', 'CONFERENCIA:CALCULOU']);
     expect(snapshotHash(plano.resultado)).toBe(snapshotHash(peloPainelDoBloco(p)));
     const tipo = plano.resultado.levels.find((l) => l.id === plano.tipoLevelId)!;
     expect(tipo.copiaInstalacoes).toBe(true);
@@ -180,7 +181,8 @@ describe('prédio automático — o motor (PA2)', () => {
   });
 
   it('a cobertura: sobre o último andar, com a laje, a platibanda na linha da fachada e a área técnica nomeada', () => {
-    const plano = planejarPredioDoPedido(pedidoDoR4());
+    // Sem a estrutura, a cobertura lança a laje dela (com a estrutura, a laje é a do teto do último andar — PA4).
+    const plano = planejarPredioDoPedido({ ...pedidoDoR4(), hip: { estrutura: false } });
     const r = plano.resultado;
     const cobertura = r.levels.find((l) => l.name === 'Torre · cobertura')!;
     expect(cobertura.elevationMm).toBe(12000);
@@ -229,5 +231,55 @@ describe('prédio automático — o motor (PA2)', () => {
     const plano = planejarPredioDoPedido(p);
     expect(applyBatch(p.original, plano.comandos).diff.created).toEqual(plano.criados);
     expect(conferirPlanoDoPredio(p.original, plano, p.entrada)).toEqual({ ok: true });
+  });
+
+  // ── PA4 (14/11/2026): a estrutura e as fundações ─────────────────────────────────────────────────────────────────
+
+  it('a estrutura: pilares, vigas e lajes no tipo, iguais em cada cópia, e a MESMA malha no térreo (pilares em prumada)', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR8());
+    const r = plano.resultado;
+    const e = plano.resumo.estrutura!;
+    expect(e.pilares).toBeGreaterThan(0);
+    expect(e.vigas).toBeGreaterThan(0);
+    expect(e.lajes).toBeGreaterThan(0);
+    const conta = (levelId: string, kind: string) => r.structures.filter((s) => s.levelId === levelId && s.kind === kind).length;
+    const andares = [plano.tipoLevelId, ...r.levels.filter((l) => l.tipoDeId === plano.tipoLevelId).map((l) => l.id)];
+    for (const id of andares) expect([conta(id, 'PILAR'), conta(id, 'VIGA'), conta(id, 'LAJE')]).toEqual([e.pilares, e.vigas, e.lajes]);
+    const terreo = r.levels.find((l) => l.name === 'Torre · 1º pav (térreo)')!;
+    const chave = (s: { pontos: Point[] }) => s.pontos.map((q) => `${q.x},${q.y}`).join(';');
+    const doTipo = new Set(r.structures.filter((s) => s.levelId === plano.tipoLevelId && s.kind === 'PILAR').map(chave));
+    const doTerreo = r.structures.filter((s) => s.levelId === terreo.id && s.kind === 'PILAR').map(chave);
+    expect(doTerreo).toHaveLength(e.pilares);
+    expect(doTerreo.every((k) => doTipo.has(k))).toBe(true);
+    // A laje do último andar é a da cobertura: nenhuma outra no pavimento da cobertura.
+    const cobertura = r.levels.find((l) => l.name === 'Torre · cobertura')!;
+    expect(conta(cobertura.id, 'LAJE')).toBe(0);
+    expect(r.eixos.length).toBe(e.eixos);
+  });
+
+  it('a estrutura roda antes das plantas e não as muda: os mesmos cômodos com e sem ela', () => {
+    const com = planejarPredioDoPedido(pedidoDoR4());
+    const sem = planejarPredioDoPedido({ ...pedidoDoR4(), hip: { estrutura: false } });
+    expect(com.resumo.plantas).toEqual(sem.resumo.plantas);
+  });
+
+  it('as fundações: um bloco sob cada pilar do térreo, e a pendência de que o prédio exige cálculo', () => {
+    const plano = planejarPredioDoPedido(pedidoDoR4());
+    const r = plano.resultado;
+    const terreo = r.levels.find((l) => l.name === 'Torre · 1º pav (térreo)')!;
+    expect(plano.resumo.estrutura!.blocos).toBe(plano.resumo.estrutura!.pilares);
+    expect(r.structures.filter((s) => s.levelId === terreo.id && s.kind === 'BLOCO_COROAMENTO')).toHaveLength(plano.resumo.estrutura!.pilares);
+    expect(plano.pendencias.some((x) => x.grupo === 'VERIFICACAO' && /exige cálculo com a sondagem \(NBR 6122\)/.test(x.texto))).toBe(true);
+    // Sem o térreo, o pavimento que assenta no chão fica para o projetista — e a fundação com ele.
+    const semTerreo = planejarPredioDoPedido({ ...pedidoDoR4(), hip: { terreo: false } });
+    expect(semTerreo.etapas.find((x) => x.id === 'FUNDACOES')!.situacao).toBe('NAO_EXIGIDA');
+    expect(semTerreo.resultado.structures.some((s) => s.kind === 'BLOCO_COROAMENTO')).toBe(false);
+  });
+
+  it('desligada nas hipóteses: nenhuma peça de estrutura nem fundação', () => {
+    const plano = planejarPredioDoPedido({ ...pedidoDoR4(), hip: { estrutura: false } });
+    expect(plano.etapas.find((x) => x.id === 'ESTRUTURA')!.situacao).toBe('NAO_EXIGIDA');
+    expect(plano.resumo.estrutura).toBeNull();
+    expect(plano.resultado.structures.filter((s) => s.kind !== 'LAJE')).toHaveLength(0);
   });
 });

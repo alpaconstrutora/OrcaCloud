@@ -76,10 +76,10 @@ describe('Orçamentos (lista) — Agrupar', () => {
         expect(grupos(container)).toEqual(['Em andamento', 'Não Iniciado']);
     });
 
-    it('agrupa por Bloqueio com o mesmo texto da célula (Bloqueado antes de Livre)', async () => {
+    it('agrupa por Pedidos com o mesmo texto da célula (Com pedidos antes de Sem pedidos)', async () => {
         const { container } = await montar('ORCAMENTO');
         fireEvent.change(screen.getByTitle('Agrupar os orçamentos'), { target: { value: 'bloqueio' } });
-        expect(grupos(container)).toEqual(['Bloqueado', 'Livre']);
+        expect(grupos(container)).toEqual(['Com pedidos', 'Sem pedidos']);
     });
 
     it('agrupa por Tipo de Obra: sem tipo cai em "Sem tipo de obra"', async () => {

@@ -61,3 +61,33 @@ describe('10.2 (revisão) — a comparação vê mudança em lista e na estrutur
         expect(resultadosDoEstudo(withCost(14_000)).exposicaoMaxima).toBeGreaterThan(0);
     });
 });
+
+/** Deixado para depois na revisão das pendências: payback "Mês 1" antigo × vazio novo parecia mudança. */
+describe('payback de estudo sem exposição', () => {
+    // Tudo à vista no sinal, sem terreno e sem obra: o caixa nunca fica negativo.
+    const semExposicao = () => {
+        const e = baseStudy({ land_cost: 0, revenue_downpayment_percent: 100, revenue_construction_percent: 0, revenue_handover_percent: 0, tax_rate: 0, brokerage_fee: 0 });
+        e.blocks[0].construction_cost_sqm = 0;
+        return e;
+    };
+
+    it('a versão nova guarda semExposicao', () => {
+        expect(resultadosDoEstudo(semExposicao()).semExposicao).toBe(true);
+        expect(resultadosDoEstudo(baseStudy()).semExposicao).toBe(false);
+    });
+
+    it('versão antiga (payback "Mês 1", sem o campo) × nova: não aparece como mudança, e diz "Sem exposição"', () => {
+        const nova = versao(semExposicao());
+        const antiga = { snapshot: nova.snapshot, results: { ...nova.results, paybackMes: 1, semExposicao: undefined } };
+        const linha = diferencaEntreVersoes(antiga as never, nova).indicadores.find(i => i.chave === 'paybackMes')!;
+        expect(linha.a).toBe(linha.b);
+        expect(linha.textoA).toBe('Sem exposição');
+        expect(linha.textoB).toBe('Sem exposição');
+    });
+
+    it('estudo com exposição: o payback segue como número', () => {
+        const linha = diferencaEntreVersoes(versao(baseStudy()), versao(baseStudy())).indicadores.find(i => i.chave === 'paybackMes')!;
+        expect(linha.textoA).toBeUndefined();
+        expect(typeof linha.a).toBe('number');
+    });
+});

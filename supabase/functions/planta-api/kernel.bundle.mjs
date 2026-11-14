@@ -1,7 +1,7 @@
 // GERADO por scripts/build-planta-api-kernel.mjs — não editar. Reexporta o kernel da Planta Inteligente para a Edge Function planta-api.
 
 // utils/blueprintKernel/units.ts
-var KERNEL_VERSION = "blueprint-kernel-ts-0.106.0";
+var KERNEL_VERSION = "blueprint-kernel-ts-0.107.0";
 var DEFAULT_TOLERANCE_MM = 5;
 var MAX_COORD_MM = 1e6;
 var KernelError = class extends Error {
@@ -2569,6 +2569,8 @@ function projetar(model) {
       circuito: t.circuitoId != null ? indiceDoCircuito.get(t.circuitoId) ?? 0 : void 0,
       // E4.3: o quadro da entrada/medidor, por índice — omitido quando ausente.
       quadro: t.quadroId != null && indiceDoQuadro.has(t.quadroId) ? indiceDoQuadro.get(t.quadroId) : void 0,
+      // 0.107.0: o pavimento da unidade medida, por índice — omitido quando ausente.
+      nivelDaUnidade: t.unidadeLevelId != null ? nivel(t.unidadeLevelId) : void 0,
       potenciaW: t.potenciaW ?? void 0,
       tipoEletrico: t.tipoEletrico ?? void 0,
       comando: t.comando ?? void 0,
@@ -3571,6 +3573,7 @@ function modelFromCanonicalPayload(payload) {
     const alvo = model.terminais[i];
     const u = model.unidades[t.unidade];
     if (alvo && u) alvo.unidadeId = u.id;
+    if (alvo && u && t.nivelDaUnidade != null && levelIds[t.nivelDaUnidade]) alvo.unidadeLevelId = levelIds[t.nivelDaUnidade];
   });
   (payload.terminais ?? []).forEach((t, i) => {
     if (t.principal == null) return;

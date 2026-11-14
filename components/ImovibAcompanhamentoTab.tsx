@@ -79,6 +79,9 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
         return compararComRealizado(r.monthlyFlows, previsto.base_date ?? study.base_date, dados.financeiro, dados.vendas, r.vendasPorMes, hojeAnoMes());
     }, [previsto, dados, study.base_date]);
 
+    // Os meses do previsto contam da data-base DELE: a versão congelada pode ter outra
+    // (deixado para depois na revisão das pendências — o gráfico usava a do estudo atual).
+    const dataBaseDoPrevisto = previsto?.base_date ?? study.base_date;
     const acumulados = useMemo(() => {
         let rp = 0, rr = 0, cp = 0, cr = 0;
         return meses.map((m, i) => {
@@ -86,13 +89,15 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
             const passado = m.vendasReaisAcum != null;
             if (passado) { rr += m.receitaRealizada ?? 0; cr += m.custoRealizado ?? 0; }
             return {
-                mes: nomeDoMes(study.base_date, i + 1),
+                mes: nomeDoMes(dataBaseDoPrevisto, i + 1),
                 receitaPrevista: rp, custoPrevisto: cp,
                 receitaRealizada: passado ? rr : null, custoRealizado: passado ? cr : null,
                 vendasPrevistas: m.vendasPrevistasAcum, vendasReais: m.vendasReaisAcum,
             };
         });
-    }, [meses, study.base_date]);
+    }, [meses, dataBaseDoPrevisto]);
+    const periodo = acumulados.length ? `de ${acumulados[0].mes} a ${acumulados[acumulados.length - 1].mes}` : '';
+    const ultimo = acumulados[acumulados.length - 1];
 
     if (!temData) {
         return (
@@ -166,9 +171,9 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                 {!semObra && (
                     <ChartCard title="Receita e custo acumulados" subtitle="Previsto (tracejado) e realizado até o mês atual.">
                         <Legend items={[{ label: 'Receita', color: RECEITA }, { label: 'Custo', color: CUSTO }]} />
-                        <div className="h-64">
+                        <div className="h-64" role="img" aria-label={`Receita e custo acumulados ${periodo}: previstos ${moneyBRL(ultimo?.receitaPrevista ?? 0)} e ${moneyBRL(ultimo?.custoPrevisto ?? 0)}.`}>
                             <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                                <LineChart data={acumulados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                                <LineChart accessibilityLayer={false} data={acumulados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                                     <CartesianGrid vertical={false} stroke={GRID} />
                                     <XAxis dataKey="mes" tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />
                                     <YAxis tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
@@ -184,9 +189,9 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                 )}
                 <ChartCard title="Vendas acumuladas" subtitle="VGV vendido: curva de vendas do estudo (tracejado) e vendas reais.">
                     <Legend items={[{ label: 'Vendas', color: RECEITA }]} />
-                    <div className="h-64">
+                    <div className="h-64" role="img" aria-label={`Vendas acumuladas ${periodo}: previstas ${moneyBRL(ultimo?.vendasPrevistas ?? 0)}.`}>
                         <ResponsiveContainer width="100%" height="100%" initialDimension={INITIAL_DIMENSION}>
-                            <LineChart data={acumulados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
+                            <LineChart accessibilityLayer={false} data={acumulados} margin={{ top: 4, right: 0, left: 0, bottom: 0 }}>
                                 <CartesianGrid vertical={false} stroke={GRID} />
                                 <XAxis dataKey="mes" tick={TICK} axisLine={false} tickLine={false} minTickGap={24} />
                                 <YAxis tick={TICK} axisLine={false} tickLine={false} tickFormatter={compactAxis} width={56} />
@@ -210,7 +215,7 @@ const ImovibAcompanhamentoTab: React.FC<Props> = ({ study }) => {
                     renderCell={(k, m) => {
                         const t = (s: string) => <span className="text-sm text-gray-700">{s}</span>;
                         switch (k) {
-                            case 'mes': return t(`${nomeDoMes(previsto.base_date ?? study.base_date, m.idx + 1)}${m.emCurso ? ' (em curso)' : ''}`);
+                            case 'mes': return t(`${nomeDoMes(dataBaseDoPrevisto, m.idx + 1)}${m.emCurso ? ' (em curso)' : ''}`);
                             case 'receitaPrevista': return t(brl(m.receitaPrevista));
                             case 'receitaRealizada': return t(semObra ? '—' : brl(m.receitaRealizada));
                             case 'desvioReceita': return t(semObra || m.emCurso ? '—' : desvio(m.receitaPrevista, m.receitaRealizada));

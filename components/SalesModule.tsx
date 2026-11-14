@@ -48,6 +48,10 @@ import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useConfirm } from './ui/confirm';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { entradasDaPagina, linhasDaTela, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparUnidadesVenda, OPCOES_AGRUPAR_UNIDADE_VENDA, type CampoAgruparUnidadeVenda } from '../utils/unidadeVendaGrupos';
 import MoneyCentsInput from './ui/MoneyCentsInput';
 import { useStore } from '../store/useStore';
 import { parseHashView } from '../lib/tabRouter';
@@ -176,6 +180,16 @@ const BROKERS_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean
     commission: { label: 'Comissão', className: 'px-6 py-2 border-r border-gray-100' },
     creci: { label: 'CRECI', className: 'px-6 py-2 border-r border-gray-100' },
 };
+
+/**
+ * Rótulo da coluna conforme a visão. Com um edifício aberto cada linha é uma
+ * UNIDADE dele (pedido do usuário, 14/11/2026: "Altere o nome da coluna Imovel
+ * para unidade"); na visão mestre as linhas são edifícios e imóveis avulsos, e
+ * "Imóvel" continua sendo o nome certo.
+ */
+function inventoryColumnLabel(key: string, label: string, buildingOpen: boolean): string {
+    return buildingOpen && key === 'name' ? 'Unidade' : label;
+}
 
 // Conteúdo de cada <td> da tabela de Unidades (visão de DETALHE — edifício
 // aberto) — extraído para função pura para que o <tbody> possa mapear
@@ -1169,6 +1183,28 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
         return result;
     }, [properties, searchTerm, selectedBuildingId, inventoryColumns.sortColumn, inventoryColumns.sortDirection, empreendimentoByProperty]);
 
+    // "Agrupar" das Unidades do edifício (guia §6.12, pedido de 14/11/2026: "filtro grupo +
+    // botão classificação + botão expandir / recolher"). Só com edifício aberto e no modo
+    // lista — na visão mestre as linhas são edifícios, e grade/torres não têm linha. Recorte
+    // de exibição sobre a lista já filtrada e ordenada, sem reconsulta. Trocar o campo zera
+    // a âncora do Shift+clique (os índices mudam).
+    const agrupamentoUnidades = useAgrupamento<CampoAgruparUnidadeVenda>('salesModuleInventoryGroupBy', () => setLastCheckedIndex(null));
+    const campoAgruparUnidades: CampoAgruparUnidadeVenda | 'none' =
+        selectedBuildingId && viewMode === 'list' && OPCOES_AGRUPAR_UNIDADE_VENDA.some(o => o.value === agrupamentoUnidades.campo)
+            ? agrupamentoUnidades.campo
+            : 'none';
+    const gruposUnidades = campoAgruparUnidades === 'none' ? [] : agruparUnidadesVenda(filteredProperties, campoAgruparUnidades, agrupamentoUnidades.direcao, {
+        bloco: p => p.block,
+        andar: p => p.floor,
+        status: p => getUnitStatusDisplay(p).label,
+        preco: p => p.price,
+    });
+    /** Linhas na ordem da tela, sem os grupos recolhidos — base do Shift+clique (§6.12). */
+    const unidadesNaTela = campoAgruparUnidades === 'none' ? filteredProperties : linhasDaTela(gruposUnidades, agrupamentoUnidades.recolhidos);
+    const entradasUnidades: EntradaDaTela<Property>[] = campoAgruparUnidades === 'none'
+        ? filteredProperties.map((item, indice) => ({ tipo: 'linha', item, indice }))
+        : entradasDaPagina(gruposUnidades, agrupamentoUnidades.recolhidos);
+
     const currentBuilding = selectedBuildingId ? properties.find(p => String(p.id).toLowerCase() === String(selectedBuildingId).toLowerCase()) : null;
 
     // Organização em cascata: quando há um edifício aberto (currentBuilding), a
@@ -1545,7 +1581,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
     const handleRowCheck = (propertyId: string, index: number, shiftKey: boolean) => {
         if (shiftKey && lastCheckedIndex !== null) {
             const [start, end] = lastCheckedIndex < index ? [lastCheckedIndex, index] : [index, lastCheckedIndex];
-            const rangeIds = filteredProperties.slice(start, end + 1).map(p => p.id);
+            // Agrupado, o índice é a posição em `unidadesNaTela` (sem os grupos recolhidos).
+            const rangeIds = unidadesNaTela.slice(start, end + 1).map(p => p.id);
             setSelectedProperties(prev => [...new Set([...prev, ...rangeIds])]);
         } else {
             handleSelectProperty(propertyId);
@@ -2147,6 +2184,21 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             <Filter className="w-4 h-4" />
                             Mais filtros
                         </button>
+                        {/* Agrupar + ordem dos grupos + recolher/expandir todos (§6.12), logo
+                            depois dos filtros. Só no edifício aberto e no modo lista. */}
+                        {selectedBuildingId && viewMode === 'list' && (
+                            <AgruparControles
+                                opcoes={OPCOES_AGRUPAR_UNIDADE_VENDA}
+                                campo={campoAgruparUnidades}
+                                onCampo={agrupamentoUnidades.setCampo}
+                                direcao={agrupamentoUnidades.direcao}
+                                onDirecao={agrupamentoUnidades.setDirecao}
+                                chavesDosGrupos={gruposUnidades.map(g => g.key)}
+                                algumRecolhido={agrupamentoUnidades.recolhidos.size > 0}
+                                onAlternarTodos={agrupamentoUnidades.alternarTodos}
+                                title="Agrupar as unidades"
+                            />
+                        )}
                         <button onClick={loadData} className="h-9 w-9 flex items-center justify-center bg-blue-50 text-blue-600 rounded-[6px] hover:bg-blue-600 hover:text-white transition-all active:scale-95 shrink-0" title="Atualizar">
                             <RefreshCw className="w-4 h-4" />
                         </button>
@@ -2157,7 +2209,9 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                             {viewMode === 'list' && (
                                 <>
                                     <ColumnConfigButton
-                                        columns={INVENTORY_COLUMNS.filter(c => c.key !== 'actions' && (c.context === 'all' || selectedBuildingId))}
+                                        columns={INVENTORY_COLUMNS
+                                            .filter(c => c.key !== 'actions' && (c.context === 'all' || selectedBuildingId))
+                                            .map(c => ({ ...c, label: inventoryColumnLabel(c.key, c.label, !!selectedBuildingId) }))}
                                         visibleColumns={inventoryColumns.visibleColumns}
                                         showColumnConfig={inventoryColumns.showColumnConfig}
                                         onToggleShow={() => inventoryColumns.setShowColumnConfig(!inventoryColumns.showColumnConfig)}
@@ -2289,7 +2343,7 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                     const def = INVENTORY_COLUMN_HEADERS[key];
                                                     if (!def) return null;
                                                     return (
-                                                        <SortableHeader key={key} colKey={key} label={def.label} sortable={def.sortable !== false} {...sortHeaderProps}
+                                                        <SortableHeader key={key} colKey={key} label={inventoryColumnLabel(key, def.label, !!selectedBuildingId)} sortable={def.sortable !== false} {...sortHeaderProps}
                                                             onMoveColumn={inventoryColumns.moveColumn}
                                                             className={def.className}>
                                                             <inventoryResize.ResizeHandle colKey={key} />
@@ -2307,7 +2361,17 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                         <tbody className="divide-y divide-gray-200">
                                             {selectedBuildingId ? (
                                                 filteredProperties.length > 0 ? (
-                                                    filteredProperties.map((property, index) => (
+                                                    entradasUnidades.map(e => {
+                                                        if (e.tipo === 'grupo') {
+                                                            return (
+                                                                <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                                    colSpan={orderedVisible.length + 3} onAlternar={agrupamentoUnidades.alternar}
+                                                                    tituloTotal="Soma do preço das unidades do grupo" />
+                                                            );
+                                                        }
+                                                        const property = e.item;
+                                                        const index = e.indice;
+                                                        return (
                                                         <tr key={property.id} className={`hover:bg-blue-50/50 transition-colors ${selectedProperties.includes(property.id) ? 'bg-blue-50/60' : ''}`}>
                                                             <td className="px-4 py-2.5 border-r border-gray-100 text-center">
                                                                 <input
@@ -2341,7 +2405,8 @@ const SalesModule: React.FC<SalesModuleProps> = ({ organizationId }) => {
                                                                 </div>
                                                             </td>
                                                         </tr>
-                                                    ))
+                                                        );
+                                                    })
                                                 ) : (
                                                     <tr>
                                                         <td colSpan={colSpan} className="px-6 py-10 text-center text-sm text-gray-400 border-b border-gray-100">Nenhuma unidade encontrada.</td>

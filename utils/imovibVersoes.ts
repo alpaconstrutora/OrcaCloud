@@ -26,6 +26,8 @@ export interface ResultadosDaVersao {
     margemLiquidaPct: number | null;
     paybackMes: number | null;
     multiplo: number | null;
+    /** Caixa acumulado nunca negativo: não há payback. Versões antigas não têm o campo (ver `semExposicaoDa`). */
+    semExposicao?: boolean;
 }
 
 export const INDICADORES_DA_VERSAO: { chave: keyof ResultadosDaVersao; rotulo: string; unidade: string }[] = [
@@ -66,6 +68,7 @@ export function resultadosDoEstudo(study: ImovibStudy): ResultadosDaVersao {
         margemLiquidaPct: ind.margemLiquidaSobreVgv == null ? null : ind.margemLiquidaSobreVgv * 100,
         paybackMes: ind.paybackSimplesMes,
         multiplo: finito(ind.multiploDoCapital),
+        semExposicao: ind.semExposicao,
     };
 }
 
@@ -89,7 +92,7 @@ export interface DiferencaEntreVersoes {
     /** Premissas do memorial cujo valor mudou, de A para B. */
     premissas: { campo: string; grupo: string; premissa: string; unidade: string; antes: number | string | null; depois: number | string | null }[];
     /** Todos os indicadores, lado a lado. */
-    indicadores: { chave: keyof ResultadosDaVersao; rotulo: string; unidade: string; a: number | null; b: number | null }[];
+    indicadores: { chave: keyof ResultadosDaVersao; rotulo: string; unidade: string; a: number | null; b: number | null; textoA?: string; textoB?: string }[];
 }
 
 /** O que mexe no número e não é premissa do memorial: torres, rubricas, espelho, fontes. */
@@ -101,6 +104,9 @@ const ESTRUTURA: { id: string; rotulo: string; chave: (s: ImovibStudy) => string
     { id: 'unit_instances', rotulo: 'Espelho de vendas', chave: s => JSON.stringify(semDatas(ordenado(s.unit_instances))), resumo: s => `${(s.unit_instances ?? []).length} unidade(s)` },
     { id: 'funding_sources', rotulo: 'Outras fontes de capital', chave: s => JSON.stringify(semDatas(ordenado(s.funding_sources))), resumo: s => `${(s.funding_sources ?? []).length} fonte(s)` },
 ];
+
+/** Versão antiga não guardava `semExposicao`: exposição máxima zero quer dizer o mesmo. */
+export const semExposicaoDa = (r: ResultadosDaVersao): boolean => r.semExposicao ?? r.exposicaoMaxima <= 0;
 
 export function diferencaEntreVersoes(a: LadoDaComparacao, b: LadoDaComparacao): DiferencaEntreVersoes {
     const ma = memorialDePremissas(a.snapshot);
@@ -121,6 +127,21 @@ export function diferencaEntreVersoes(a: LadoDaComparacao, b: LadoDaComparacao):
         const xb = e.chave(b.snapshot);
         if (xa !== xb) premissas.push({ campo: e.id, grupo: 'Estrutura', premissa: e.rotulo, unidade: '', antes: e.resumo(a.snapshot), depois: `${e.resumo(b.snapshot)} (alterado)` });
     }
-    const indicadores = INDICADORES_DA_VERSAO.map(i => ({ ...i, a: a.results[i.chave] ?? null, b: b.results[i.chave] ?? null }));
+    const indicadores = INDICADORES_DA_VERSAO.map(i => {
+        if (i.chave === 'paybackMes') {
+            // Sem exposição, o payback não existe: a regra antiga gravava "Mês 1", a de hoje
+            // grava vazio — os dois são o mesmo estudo e não podem aparecer como mudança.
+            const sa = semExposicaoDa(a.results);
+            const sb = semExposicaoDa(b.results);
+            return {
+                ...i,
+                a: sa ? null : a.results.paybackMes ?? null,
+                b: sb ? null : b.results.paybackMes ?? null,
+                ...(sa ? { textoA: 'Sem exposição' } : {}),
+                ...(sb ? { textoB: 'Sem exposição' } : {}),
+            };
+        }
+        return { ...i, a: (a.results[i.chave] as number | null | undefined) ?? null, b: (b.results[i.chave] as number | null | undefined) ?? null };
+    });
     return { premissas, indicadores };
 }

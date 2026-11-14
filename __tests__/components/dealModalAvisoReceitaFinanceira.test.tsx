@@ -10,7 +10,7 @@
  * rede trocada por stubs (mesmo arranjo de dealModalJuros.test.tsx).
  */
 import React from 'react';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 
 vi.mock('../../lib/supabase', () => {
@@ -22,7 +22,7 @@ vi.mock('../../lib/supabase', () => {
     });
     return { supabase: cadeia };
 });
-const estado = vi.hoisted(() => ({ categoria: null as { id: string } | null }));
+const estado = vi.hoisted(() => ({ categoria: null as { id: string } | null, atrasoDoContrato: 0 }));
 vi.mock('../../services/financialCategoryResolver', async (original) => ({
     ...(await original<typeof import('../../services/financialCategoryResolver')>()),
     resolverCategoriaReceitaFinanceira: vi.fn(async () => estado.categoria),
@@ -33,7 +33,10 @@ const contrato = vi.hoisted(() => ({
 }));
 vi.mock('../../services/contractService', async (original) => {
     const proprios: Record<string, unknown> = {
-        getContractByDealId: vi.fn(async () => contrato),
+        getContractByDealId: vi.fn(async () => {
+            if (estado.atrasoDoContrato) await new Promise(r => setTimeout(r, estado.atrasoDoContrato));
+            return contrato;
+        }),
         updateContract: vi.fn(async () => contrato),
         // 1 título lançado: o caminho de sucesso (o aviso vai junto da mensagem verde).
         // Com data, como o banco garante (internal_transactions.transaction_date é NOT NULL). Sem ela,
@@ -81,13 +84,19 @@ const abrir = () => render(
         initialTab="parcelas" initialData={comJuros as never} />,
 );
 const AVISO = /não tem a Conta Financeira "Receita Financeira"/;
+// O botão só liga depois de o contrato da negociação ser conferido — clicar antes não faz nada.
+const botaoLancarPronto = async () => {
+    const botao = await screen.findByRole('button', { name: /Lançar no Financeiro/ });
+    await waitFor(() => expect(botao).toBeEnabled(), { timeout: 3000 });
+    return botao;
+};
 
 describe('DealModal › Lançar no Financeiro com juros — aviso "Receita Financeira"', () => {
-    beforeEach(() => { estado.categoria = null; });
+    beforeEach(() => { estado.categoria = null; estado.atrasoDoContrato = 0; });
 
     it('org SEM Receita Financeira: a mensagem do lançamento avisa que a DRE não separa os juros', async () => {
         abrir();
-        fireEvent.click(await screen.findByRole('button', { name: /Lançar no Financeiro/ }));
+        fireEvent.click(await botaoLancarPronto());
         expect(await screen.findByText(/1 parcela\(s\) lançadas em Contas a Receber/)).toBeTruthy();
         expect(screen.getByText(AVISO)).toBeTruthy();
     });
@@ -95,8 +104,21 @@ describe('DealModal › Lançar no Financeiro com juros — aviso "Receita Finan
     it('org COM Receita Financeira: lança sem aviso', async () => {
         estado.categoria = { id: 'cat-fin' };
         abrir();
-        fireEvent.click(await screen.findByRole('button', { name: /Lançar no Financeiro/ }));
+        fireEvent.click(await botaoLancarPronto());
         expect(await screen.findByText(/1 parcela\(s\) lançadas em Contas a Receber/)).toBeTruthy();
         expect(screen.queryByText(AVISO)).toBeNull();
+    });
+
+    it('contrato ainda chegando: o botão espera e diz o motivo; quando chega, lança no contrato existente', async () => {
+        // A falha intermitente do CI (14/11): clicar antes da resposta do contrato levava a
+        // tela a tentar GERAR outro contrato, e a mensagem do lançamento nunca saía.
+        estado.atrasoDoContrato = 150;
+        abrir();
+        const botao = await screen.findByRole('button', { name: /Lançar no Financeiro/ });
+        expect(botao).toBeDisabled();
+        expect(botao.getAttribute('title')).toMatch(/Conferindo o contrato/);
+        await waitFor(() => expect(botao).toBeEnabled(), { timeout: 3000 });
+        fireEvent.click(botao);
+        expect(await screen.findByText(/1 parcela\(s\) lançadas em Contas a Receber pelo contrato CV-2026-001/)).toBeTruthy();
     });
 });

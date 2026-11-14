@@ -18,7 +18,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     Mail, Plus, RefreshCw, KeyRound, Pause, Play, FlaskConical, Inbox, Users, History,
-    CheckCircle2, Copy as CopyIcon, AlertTriangle, Loader2, CalendarSearch, ListFilter, EyeOff, UserX, FileCheck2,
+    CheckCircle2, Copy as CopyIcon, AlertTriangle, Loader2, CalendarSearch, ListFilter, EyeOff, UserX, FileCheck2, Clock,
 } from 'lucide-react';
 import { SegmentedProgress } from '../ui/SegmentedProgress';
 import { StandardTable, type StandardTableColumn } from '../ui/StandardTable';
@@ -52,10 +52,12 @@ import {
     type BuscaPeriodo,
     ROTULO_STATUS_BUSCA,
     progressoDaBusca,
+    rotuloHoraVarredura,
 } from '../../services/emailCaptureService';
 import type { SecaoCaptura } from './abasBoletos';
 import EmailCaptureAccountSheet from './EmailCaptureAccountSheet';
 import EmailCaptureBuscaSheet from './EmailCaptureBuscaSheet';
+import EmailCaptureVarreduraSheet from './EmailCaptureVarreduraSheet';
 import EmailCaptureRegraSheet from './EmailCaptureRegraSheet';
 import EmailCaptureSenderSheet, { type FornecedorDaOrg, type ResultadoDosPadroes } from './EmailCaptureSenderSheet';
 import type { Boleto } from '../../types';
@@ -155,6 +157,8 @@ const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMud
     const [mensagens, setMensagens] = useState<MensagemCaptura[]>([]);
     const [buscas, setBuscas] = useState<BuscaPeriodo[]>([]);
     const [sheetBusca, setSheetBusca] = useState<{ aberto: boolean; conta: ContaCaptura | null }>({ aberto: false, conta: null });
+    // Hora da varredura diária por caixa (14/11/2026, "Não vi o campo para ajustar hora").
+    const [sheetVarredura, setSheetVarredura] = useState(false);
     const [sheetRegra, setSheetRegra] = useState<ContaCaptura | null>(null);
     const [fornecedores, setFornecedores] = useState<FornecedorDaOrg[]>([]);
     const [carregando, setCarregando] = useState(true);
@@ -588,11 +592,20 @@ const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMud
                             searchText={b => `${caixaPorId[b.account_id] ?? ''} ${b.remetentes?.join(' ') ?? 'Todos'} ${b.pedida_por ?? ''} ${ROTULO_STATUS_BUSCA[b.status]}`}
                             searchPlaceholder="Buscar caixa, remetente ou quem pediu..."
                             toolbarRight={(
+                                <>
+                                <button onClick={() => setSheetVarredura(true)}
+                                    disabled={contasAtivas.length === 0}
+                                    title={contasAtivas.length === 0 ? 'Conecte (ou reative) uma caixa de e-mail antes.' : 'Hora em que cada caixa busca sozinha os e-mails dos últimos 30 dias'}
+                                    className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
+                                    <Clock className="w-[15px] h-[15px]" />
+                                    {contasAtivas.length === 1 ? `Varredura diária · ${rotuloHoraVarredura(contasAtivas[0].busca_diaria_hora)}` : 'Varredura diária'}
+                                </button>
                                 <button onClick={() => setSheetBusca({ aberto: true, conta: contasAtivas[0] })}
                                     disabled={!!motivoNovaBusca} title={motivoNovaBusca ?? undefined}
                                     className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed shrink-0">
                                     <CalendarSearch className="w-[15px] h-[15px]" /> {buscaDaUnicaCaixa ? 'Acompanhar busca' : 'Nova busca'}
                                 </button>
+                                </>
                             )}
                             sortValue={(k, b) => {
                                 switch (k) {
@@ -765,6 +778,17 @@ const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMud
                 onClose={() => setSheetRegra(null)}
                 conta={sheetRegra}
                 onSalva={regraSalva}
+            />
+            <EmailCaptureVarreduraSheet
+                open={sheetVarredura}
+                onClose={() => setSheetVarredura(false)}
+                contas={contasAtivas}
+                onSalvas={salvas => {
+                    setContas(prev => prev.map(c => salvas.find(x => x.id === c.id) ?? c));
+                    showToast(salvas.length === 1
+                        ? `Varredura diária de ${salvas[0].usuario}: ${rotuloHoraVarredura(salvas[0].busca_diaria_hora)}.`
+                        : `Varredura diária ajustada em ${salvas.length} caixas.`);
+                }}
             />
             <EmailCaptureBuscaSheet
                 open={sheetBusca.aberto}

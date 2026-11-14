@@ -19,6 +19,17 @@ Sessão de 13/11/2026 (Claude Code, VS Code), literal:
 Itens 7 e 8 já estão na PR #400 (`docs/planos/2026-11-13-asaas-boleto-data-e-cancelamento.md`,
 branch `feat/asaas-boleto-data-cancelamento`) — não se repetem aqui.
 
+### Pedido de 14/11/2026 (depois da publicação da #406), literal
+
+> 1. Não vi o campo para ajustar hora
+> 6. Renomear: o botão agora salva e renomeia de uma vez. OK, porem o campo com o código foi ocultado. Manter exibição
+> 8. Coluna Organização: nova coluna na tabela, ordenável e com filtro avançado. Incluir organizacao no filtro Grupo
+
+Item 6 esclarecido pelo usuário (pergunta com opções): o campo é o **nome do documento (código da
+Nomenclatura)**. Medido: o #1502, capturado às 04:04 com fornecedor, ficou "1.pdf" — a org não tem
+máscara de Boletos SALVA (o automático só renomeia com ela) e a CAPTURA nunca mostrou o nome nem o
+Renomear.
+
 ## O que foi medido (13/11/2026)
 
 - **10 — excluir vira "cancelado"**: o banco apaga de verdade (`boletoService.excluir` faz
@@ -90,4 +101,7 @@ branch `feat/asaas-boleto-data-cancelamento`) — não se repetem aqui.
 | 3 | Lote de importação: org vazia explícita, aviso, PDF+imagem | tsc; check-ui | ✅ teste + ui exit 0 |
 | 9 | Coluna Organização + filtro avançado | teste do filtro verde; tsc | ✅ 7/7; tsc 0 |
 | 1 | Remetente novo busca sozinho + varredura diária (`aplicar_20271113100000_email_capture_busca_diaria.sql`) | testes verdes; migration aplicada; job no `cron.job` | ✅ testes 4+6, tsc 0; ⏳ migration aplicada no merge |
-| — | PR, CI, merge, conferir-producao | CI verde; SHA no domínio | ⏳ |
+| — | PR, CI, merge, conferir-producao | CI verde; SHA no domínio | ✅ #406 → 333efbe no ar (14/11) |
+| 1b | Hora da varredura por caixa (`busca_diaria_hora`, padrão 03:00, "Desligada"); cron de hora em hora; painel "Varredura diária" na aba Buscas por período | teste da migration; tsc; ui | ✅ testes, tsc 0, ui 0; ⏳ migration no merge |
+| 6b | Captura: seção Documento (nome atual + Renomear que salva e renomeia) | tsc; ui | ✅ tsc 0, ui 0 |
+| 9b | Agrupar por Organização | teste de `agruparBoletos` | ✅ |

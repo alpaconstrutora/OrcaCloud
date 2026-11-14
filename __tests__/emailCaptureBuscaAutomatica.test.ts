@@ -12,7 +12,7 @@ import { join } from 'node:path';
 const invoke = vi.fn();
 vi.mock('../lib/supabase', () => ({ supabase: { functions: { invoke: (...a: unknown[]) => invoke(...a) } } }));
 
-import { emailCaptureService, periodoDosUltimosDias, DIAS_BUSCA_AUTOMATICA } from '../services/emailCaptureService';
+import { emailCaptureService, periodoDosUltimosDias, DIAS_BUSCA_AUTOMATICA, rotuloHoraVarredura } from '../services/emailCaptureService';
 
 describe('busca automática da captura de boletos', () => {
     beforeEach(() => { invoke.mockReset(); invoke.mockResolvedValue({ data: { busca: { id: 'b1' } }, error: null }); });
@@ -44,6 +44,18 @@ describe('busca automática da captura de boletos', () => {
         expect(sql).toContain(`v_hoje - ${DIAS_BUSCA_AUTOMATICA}`);
         expect(sql).toContain("a.status = 'ativa'");
         expect(sql).toMatch(/REVOKE EXECUTE ON FUNCTION public\.fn_email_capture_busca_diaria\(\) FROM PUBLIC, anon, authenticated/);
-        expect(sql).toContain("cron.schedule(\n    'email-capture-busca-diaria'");
+        expect(sql).toMatch(/cron\.schedule\(\s*'email-capture-busca-diaria'/);
+    });
+
+    it('hora da varredura (14/11/2026): por caixa, de hora em hora o banco escolhe quem roda; null = desligada', () => {
+        const sql = readFileSync(join(__dirname, '../supabase/migrations/aplicar_20271114100000_email_capture_busca_diaria_hora.sql'), 'utf8');
+        expect(sql).toContain('a.busca_diaria_hora = v_hora');
+        expect(sql).toContain(`v_hoje - ${DIAS_BUSCA_AUTOMATICA}`);
+        expect(sql).toContain("'0 * * * *'");
+        expect(sql).toMatch(/GRANT UPDATE \(busca_diaria_hora\) ON public\.email_capture_accounts TO authenticated/);
+        expect(sql).toMatch(/REVOKE EXECUTE ON FUNCTION public\.fn_email_capture_busca_diaria\(\) FROM PUBLIC, anon, authenticated/);
+        expect(rotuloHoraVarredura(3)).toBe('03:00');
+        expect(rotuloHoraVarredura(null)).toBe('Desligada');
     });
 });
+

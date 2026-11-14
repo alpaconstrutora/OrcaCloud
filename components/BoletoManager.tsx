@@ -851,7 +851,8 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         obra: b => (b.project_id ? projectMap[b.project_id] : null),
         centroCusto: b => (b.cost_center_id ? ccMap[b.cost_center_id] : null),
         capturadoPor: b => (b.created_by_email ? nomeCapturador(b, userNameMap) : null),
-    }, direcaoGrupos), [filtered, agrupando, groupBy, direcaoGrupos, supplierMap, projectMap, ccMap, userNameMap]);
+        organizacao: b => nomeDaOrganizacao(b, orgMap) || null,
+    }, direcaoGrupos), [filtered, agrupando, groupBy, direcaoGrupos, supplierMap, projectMap, ccMap, userNameMap, orgMap]);
 
     // As linhas NA ORDEM DA TELA (grupos recolhidos ficam de fora). É sobre esta lista que
     // o índice da linha e o Shift+clique trabalham — com `filtered`, agrupado, o intervalo

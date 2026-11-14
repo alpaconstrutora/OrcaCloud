@@ -36,6 +36,8 @@ export interface ContaCaptura {
     modo: ModoCaptura;
     data_inicial: string;
     modo_piloto: boolean;
+    /** Hora de Brasília (0–23) da varredura diária dos últimos 30 dias; null = desligada (14/11/2026). */
+    busca_diaria_hora: number | null;
     last_sync_at: string | null;
     ultimo_erro: string | null;
     created_by_email: string | null;
@@ -116,7 +118,7 @@ export function progressoDaBusca(b: Pick<BuscaPeriodo, 'status' | 'total_mensage
     return Math.min(100, Math.round((b.mensagens_processadas / b.total_mensagens) * 100));
 }
 
-const COLUNAS_CONTA = 'id, organization_id, provedor, host, porta, usuario, status, modo, data_inicial, modo_piloto, last_sync_at, ultimo_erro, created_by_email, created_at';
+const COLUNAS_CONTA = 'id, organization_id, provedor, host, porta, usuario, status, modo, data_inicial, modo_piloto, busca_diaria_hora, last_sync_at, ultimo_erro, created_by_email, created_at';
 const COLUNAS_REMETENTE = 'id, organization_id, account_id, supplier_id, nome, tipo, email, dominio, palavras_chave, importacao, exigir_dmarc, ativo, pdf_senha_atualizada_em, created_at, '
     + 'padrao_descricao, padrao_observacoes, padrao_project_id, padrao_cost_center_id, padrao_plano_de_contas_id, padrao_category_id, '
     + 'padrao_dia_vencimento, padrao_valor, padrao_multa, padrao_multa_percentual, padrao_juros_dia, padrao_juros_dia_tipo';
@@ -201,10 +203,15 @@ export function filtroDoPeriodo(p: PeriodoHistorico): string {
 
 /** Janela das buscas automáticas (remetente novo e varredura diária) — a mesma que o usuário
  *  usava à mão ("últimos 30 dias"). A varredura diária no banco usa o mesmo número
- *  (migration aplicar_20271113100000_email_capture_busca_diaria.sql). */
+ *  (migrations aplicar_20271113100000 e aplicar_20271114100000_email_capture_busca_diaria*.sql). */
 export const DIAS_BUSCA_AUTOMATICA = 30;
 
 /** Hoje e `dias` atrás, em AAAA-MM-DD LOCAL (toISOString é UTC: depois das 21h já é amanhã). */
+/** "03:00" — rótulo da hora da varredura diária; null = "Desligada". */
+export function rotuloHoraVarredura(hora: number | null | undefined): string {
+    return hora == null ? 'Desligada' : `${String(hora).padStart(2, '0')}:00`;
+}
+
 export function periodoDosUltimosDias(dias: number, agora = new Date()): { de: string; ate: string } {
     const fmt = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const ini = new Date(agora);
@@ -367,7 +374,7 @@ export const emailCaptureService = {
     },
 
     /** Configuração que o gestor altera direto (a RLS só deixa gestor; GRANT só nestas colunas). */
-    async atualizarConta(id: string, patch: Partial<Pick<ContaCaptura, 'modo' | 'data_inicial' | 'modo_piloto' | 'status'>>): Promise<void> {
+    async atualizarConta(id: string, patch: Partial<Pick<ContaCaptura, 'modo' | 'data_inicial' | 'modo_piloto' | 'status' | 'busca_diaria_hora'>>): Promise<void> {
         const { error } = await supabase.from('email_capture_accounts')
             .update({ ...patch, updated_at: new Date().toISOString() }).eq('id', id);
         if (error) throw error;

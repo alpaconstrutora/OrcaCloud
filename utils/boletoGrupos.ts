@@ -7,13 +7,15 @@ import type { DirecaoGrupos } from './agruparLinhas';
  * (components/TasksList.tsx), com total por grupo. Função pura: a tela passa os
  * resolvedores de nome (os MESMOS que as colunas usam) e recebe os grupos prontos.
  */
-export type CampoAgrupar = 'none' | 'status' | 'fornecedor' | 'obra' | 'centro_custo' | 'vencimento' | 'capturado_por';
+export type CampoAgrupar = 'none' | 'status' | 'fornecedor' | 'obra' | 'centro_custo' | 'organizacao' | 'vencimento' | 'capturado_por';
 
 export const OPCOES_AGRUPAR: { value: Exclude<CampoAgrupar, 'none'>; label: string }[] = [
     { value: 'status', label: 'Status' },
     { value: 'fornecedor', label: 'Fornecedor' },
     { value: 'obra', label: 'Obra' },
     { value: 'centro_custo', label: 'Centro de Custo' },
+    // 14/11/2026: a coluna Organização (13/11) entra também no Agrupar.
+    { value: 'organizacao', label: 'Organização' },
     { value: 'vencimento', label: 'Vencimento (mês)' },
     { value: 'capturado_por', label: 'Capturado por' },
 ];
@@ -23,6 +25,8 @@ export interface ResolvedoresGrupo {
     obra: (b: Boleto) => string | null | undefined;
     centroCusto: (b: Boleto) => string | null | undefined;
     capturadoPor: (b: Boleto) => string | null | undefined;
+    /** Nome da organização dona — o mesmo da coluna Organização. Opcional: sem ele, "Sem organização". */
+    organizacao?: (b: Boleto) => string | null | undefined;
 }
 
 export interface GrupoBoletos {
@@ -38,6 +42,7 @@ const SEM: Record<Exclude<CampoAgrupar, 'none'>, string> = {
     fornecedor: 'Sem fornecedor',
     obra: 'Sem obra',
     centro_custo: 'Sem centro de custo',
+    organizacao: 'Sem organização',
     vencimento: 'Sem vencimento',
     capturado_por: 'Sem responsável pela captura',
 };
@@ -64,6 +69,7 @@ function chaveERotulo(b: Boleto, campo: Exclude<CampoAgrupar, 'none'>, r: Resolv
         case 'obra': return nome(r.obra(b));
         case 'centro_custo': return nome(r.centroCusto(b));
         case 'capturado_por': return nome(r.capturadoPor(b));
+        case 'organizacao': return nome(r.organizacao?.(b));
         case 'vencimento': {
             const am = (b.vencimento ?? '').slice(0, 7);
             return /^\d{4}-\d{2}$/.test(am) ? [am, rotuloMes(am)] : [VAZIO, SEM.vencimento];

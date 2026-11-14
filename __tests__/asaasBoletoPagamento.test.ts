@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { dataDoPagamentoDeBoleto, cancelamentoConfirmado } from '../utils/asaasBoletoPagamento';
+import { dataDoPagamentoDeBoleto, cancelamentoConfirmado, decisaoDoCancelamento } from '../utils/asaasBoletoPagamento';
 
 const hoje = '2026-11-13';
 
@@ -43,5 +43,27 @@ describe('cancelamentoConfirmado', () => {
         expect(cancelamentoConfirmado(200, { status: 'PENDING', awaitingCriticalActionAuthorization: true })).toBe(false);
         expect(cancelamentoConfirmado(200, {})).toBe(false);
         expect(cancelamentoConfirmado(200, null)).toBe(false);
+    });
+});
+
+describe('decisaoDoCancelamento (consulta canBeCancelled antes de pedir)', () => {
+    it('pode cancelar: pede', () => {
+        expect(decisaoDoCancelamento({ status: 'PENDING', canBeCancelled: true })).toEqual({ acao: 'pedir' });
+    });
+
+    it('já cancelado na Asaas: não pede de novo', () => {
+        expect(decisaoDoCancelamento({ status: 'CANCELLED', canBeCancelled: false })).toEqual({ acao: 'ja_cancelado' });
+    });
+
+    it('não cancelável: devolve o motivo legível', () => {
+        expect(decisaoDoCancelamento({ status: 'BANK_PROCESSING', canBeCancelled: false }))
+            .toEqual({ acao: 'nao_cancelavel', motivo: 'Já está em processamento no banco — a Asaas não cancela mais.' });
+        expect(decisaoDoCancelamento({ status: 'PAID', canBeCancelled: false })).toMatchObject({ acao: 'nao_cancelavel' });
+        expect(decisaoDoCancelamento({ status: 'XYZ', canBeCancelled: false })).toMatchObject({ motivo: expect.stringMatching(/status XYZ/) });
+    });
+
+    it('consulta sem resposta útil: segue o pedido como antes', () => {
+        expect(decisaoDoCancelamento(null)).toEqual({ acao: 'pedir' });
+        expect(decisaoDoCancelamento({ status: 'PENDING' })).toEqual({ acao: 'pedir' });
     });
 });

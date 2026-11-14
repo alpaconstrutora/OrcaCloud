@@ -47,3 +47,28 @@ function br(iso: string): string {
     const [a, m, d] = iso.split('-');
     return `${d}/${m}/${a}`;
 }
+
+/**
+ * Antes de pedir o cancelamento, o estado ATUAL na Asaas decide (doc "Cancelar pagamento de
+ * contas": "Antes de solicitar o cancelamento, consulte o pagamento e valide `canBeCancelled`" —
+ * conferida em 14/11/2026). Evita disparar um pedido que a Asaas vai recusar — e o SMS à toa.
+ * - `ja_cancelado`: a Asaas já cancelou (ex.: autorizado pelo app e o aviso ainda não chegou);
+ * - `nao_cancelavel`: `canBeCancelled` falso — volta o motivo legível;
+ * - `pedir`: pode pedir (ou a consulta não disse nada: o pedido segue como antes).
+ */
+export function decisaoDoCancelamento(atual: { status?: unknown; canBeCancelled?: unknown } | null):
+    | { acao: 'pedir' }
+    | { acao: 'ja_cancelado' }
+    | { acao: 'nao_cancelavel'; motivo: string } {
+    if (!atual) return { acao: 'pedir' };
+    const status = typeof atual.status === 'string' ? atual.status.toUpperCase() : '';
+    if (status === 'CANCELLED') return { acao: 'ja_cancelado' };
+    if (atual.canBeCancelled !== false) return { acao: 'pedir' };
+    const motivo =
+        status === 'BANK_PROCESSING' ? 'Já está em processamento no banco — a Asaas não cancela mais.'
+        : status === 'PAID' || status === 'DONE' ? 'Já foi pago — não há o que cancelar.'
+        : status === 'FAILED' ? 'O pagamento falhou na Asaas — não há o que cancelar.'
+        : status === 'REFUNDED' ? 'O pagamento foi estornado — não há o que cancelar.'
+        : `A Asaas informa que este pagamento não pode mais ser cancelado${status ? ` (status ${status})` : ''}.`;
+    return { acao: 'nao_cancelavel', motivo };
+}

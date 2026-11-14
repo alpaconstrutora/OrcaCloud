@@ -92,6 +92,20 @@ BEGIN
     RETURN v;
 END $$;
 
+-- Registro(s) sem o carimbo de autoria (registradoPor/editadoPor), que o núcleo
+-- grava desde aplicar_20271113300000 com o ator e now(): as comparações abaixo
+-- são do CONTEÚDO gravado; o carimbo tem prova própria
+-- (scripts/teste-diario-registrado-por.sql). Sem carimbo, é a identidade.
+CREATE FUNCTION pg_temp.sa(p JSONB) RETURNS JSONB LANGUAGE sql AS $$
+    SELECT CASE jsonb_typeof(p)
+               WHEN 'object' THEN p - 'registradoPor' - 'editadoPor'
+               WHEN 'array'  THEN (SELECT coalesce(jsonb_agg(CASE WHEN jsonb_typeof(e) = 'object'
+                                                                 THEN e - 'registradoPor' - 'editadoPor' ELSE e END
+                                                            ORDER BY o), '[]'::jsonb)
+                                     FROM jsonb_array_elements(p) WITH ORDINALITY AS t(e, o))
+               ELSE p END
+$$;
+
 -- Estado entre seções: a seção B usa a org e as contas m, g e x da seção A.
 CREATE TEMP TABLE dc_ctx (org UUID, m UUID, g UUID, x UUID);
 
@@ -163,15 +177,15 @@ BEGIN
     v := pg_temp.como(m, 'authenticated', format(salvar, d1, e1));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'membro salva registro Rascunho (veio ' || v || ')');
     r := substr(v, 4)::jsonb;
-    PERFORM pg_temp.confere(r -> 'entries' = jsonb_build_array(e1) AND r -> 'anterior' = 'null'::jsonb,
+    PERFORM pg_temp.confere(pg_temp.sa(r -> 'entries') = jsonb_build_array(e1) AND pg_temp.sa(r -> 'anterior') = 'null'::jsonb,
         'primeira gravação: entries = [registro], anterior NULL (veio ' || r::text || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e1),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1)) = jsonb_build_array(e1),
         'registro gravado em settings.diaryEntries');
 
     v := pg_temp.como(m, 'authenticated', format(salvar, d1, e1b));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'membro salva de novo (veio ' || v || ')');
     r := substr(v, 4)::jsonb;
-    PERFORM pg_temp.confere(r -> 'entries' = jsonb_build_array(e1b) AND r -> 'anterior' = e1,
+    PERFORM pg_temp.confere(pg_temp.sa(r -> 'entries') = jsonb_build_array(e1b) AND pg_temp.sa(r -> 'anterior') = e1,
         'segunda gravação: substitui pelo id, anterior = o primeiro (veio ' || r::text || ')');
 
     -- Validações de entrada (22023), iguais às de hoje.
@@ -185,11 +199,11 @@ BEGIN
     -- ── 2. diário de organization_id NULL (org em settings.organizationId) ───
     v := pg_temp.como(m, 'authenticated', format(salvar, d2, e2));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'membro grava no diário de organization_id NULL (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d2) = jsonb_build_array(e2),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d2)) = jsonb_build_array(e2),
         'registro gravado no diário de organization_id NULL');
     v := pg_temp.como(m, 'authenticated', format(excluir, d2, 'tv-r2'));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = '[]'::jsonb
-                            AND (substr(v, 4)::jsonb) -> 'anterior' = e2,
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'entries') = '[]'::jsonb
+                            AND pg_temp.sa((substr(v, 4)::jsonb) -> 'anterior') = e2,
         'membro exclui o próprio Rascunho: entries vazio, anterior = o registro (veio ' || v || ')');
 
     -- ── 3. não membro ────────────────────────────────────────────────────────
@@ -199,7 +213,7 @@ BEGIN
     PERFORM pg_temp.confere(v = nao_encontrado, 'não membro excluindo → 42501 (veio ' || v || ')');
     v := pg_temp.como(x, 'authenticated', format(salvar, d2, e2));
     PERFORM pg_temp.confere(v = nao_encontrado, 'não membro no diário de organization_id NULL → 42501 (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e1b),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1)) = jsonb_build_array(e1b),
         'recusas não mexeram no diário');
 
     -- ── 4. aprovação ─────────────────────────────────────────────────────────
@@ -213,25 +227,25 @@ BEGIN
     PERFORM pg_temp.confere(v = msg_alterar, 'membro desaprovando → 42501 (veio ' || v || ')');
     v := pg_temp.como(m, 'authenticated', format(excluir, d1, 'tv-r1'));
     PERFORM pg_temp.confere(v = msg_excluir, 'membro excluindo o aprovado → 42501 (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(aprovado),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1)) = jsonb_build_array(aprovado),
         'o aprovado ficou como o admin gravou');
 
     -- ── 5. gatilho segue valendo (UPDATE sem a marca não mexe em diaryEntries) ─
     PERFORM pg_temp.confere(current_setting('orcacloud.diario_escrita', true) IS DISTINCT FROM 'on',
         'a marca orcacloud.diario_escrita não ficou ligada depois das RPCs');
     UPDATE public.projects SET settings = settings - 'diaryEntries' WHERE id = d1;
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(aprovado),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1)) = jsonb_build_array(aprovado),
         'UPDATE como postgres sem a marca → diaryEntries intacto');
 
     v := pg_temp.como(g, 'authenticated', format(excluir, d1, 'tv-r1'));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = '[]'::jsonb,
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'entries') = '[]'::jsonb,
         'admin exclui o aprovado (veio ' || v || ')');
 
     -- ── 5b. o núcleo decide pelo p_ator, não pela sessão (auth.uid()) ────────
     -- Chamado direto como postgres: sem claims, o ator membro grava e o não
     -- membro é recusado (pega núcleo que usasse is_org_member(v_org)).
     v := pg_temp.como_postgres(NULL, format(nucleo, m, d1, e3));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = jsonb_build_array(e3),
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'entries') = jsonb_build_array(e3),
         'núcleo sem claims, p_ator = membro → grava (veio ' || v || ')');
     v := pg_temp.como_postgres(NULL, format(nucleo, x, d1, e3));
     PERFORM pg_temp.confere(v = nao_encontrado, 'núcleo sem claims, p_ator = não membro → 42501 (veio ' || v || ')');
@@ -241,7 +255,7 @@ BEGIN
     PERFORM pg_temp.confere(v = msg_aprovar, 'claims do admin g, p_ator = m aprovando → 42501 (veio ' || v || ')');
     v := pg_temp.como_postgres(m, format(nucleo, g, d1, e4_aprovado));
     PERFORM pg_temp.confere(v LIKE 'ok:%', 'claims de m, p_ator = admin g aprovando → ok (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1)) = jsonb_build_array(e3, e4_aprovado),
         'diário ficou com o Rascunho do membro e o aprovado pelo ator admin');
 
     -- ── 5c. o núcleo de EXCLUSÃO também decide pelo p_ator ───────────────────
@@ -256,15 +270,15 @@ BEGIN
     -- → a frase da aprovação (pega núcleo que usasse fn_pode_aprovar_diario(v_org)).
     v := pg_temp.como_postgres(g, format(nucleo_excluir, m, d1, 'tv-r4'));
     PERFORM pg_temp.confere(v = msg_excluir, 'excluir pelo núcleo com claims do admin g, p_ator = m, registro Aprovado → 42501 (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1) = jsonb_build_array(e3, e4_aprovado),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = d1)) = jsonb_build_array(e3, e4_aprovado),
         'recusas do núcleo de exclusão não mexeram no diário');
     -- Lados que passam: sem claims, o ator membro exclui o Rascunho; com as
     -- claims de m, o ator admin g exclui o Aprovado.
     v := pg_temp.como_postgres(NULL, format(nucleo_excluir, m, d1, 'tv-r3'));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = jsonb_build_array(e4_aprovado),
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'entries') = jsonb_build_array(e4_aprovado),
         'excluir pelo núcleo sem claims, p_ator = membro, Rascunho → ok (veio ' || v || ')');
     v := pg_temp.como_postgres(m, format(nucleo_excluir, g, d1, 'tv-r4'));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'entries' = '[]'::jsonb,
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'entries') = '[]'::jsonb,
         'excluir pelo núcleo com claims de m, p_ator = admin g, Aprovado → ok (veio ' || v || ')');
 
     -- ── 6. equivalência fn_pode_aprovar_diario_de × fn_pode_aprovar_diario ───
@@ -575,17 +589,17 @@ BEGIN
         'recusas não mexeram no diário de outra org');
 
     v := pg_temp.cel(format(salvar, tk, da, e_rasc));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'anterior' = 'null'::jsonb
-                        AND (substr(v, 4)::jsonb) -> 'entries' = jsonb_build_array(e_rasc, e0),
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'anterior') = 'null'::jsonb
+                        AND pg_temp.sa((substr(v, 4)::jsonb) -> 'entries') = jsonb_build_array(e_rasc, e0),
         'salvar pelo link: {entries, anterior} do núcleo (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da) = jsonb_build_array(e_rasc, e0),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da)) = jsonb_build_array(e_rasc, e0),
         'salvar: o registro está em settings.diaryEntries (lido como postgres)');
     v := pg_temp.cel(format(salvar, tk, da, '{"date": "2026-11-12"}'));
     PERFORM pg_temp.confere(v = '22023:registro do diário sem id', 'salvar sem id → 22023 do núcleo (veio ' || v || ')');
     v := pg_temp.cel(format(excluir, tk, da, 'tvb-r'));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (substr(v, 4)::jsonb) -> 'anterior' = e_rasc,
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((substr(v, 4)::jsonb) -> 'anterior') = e_rasc,
         'excluir pelo link (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da) = jsonb_build_array(e0),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da)) = jsonb_build_array(e0),
         'excluir: o registro saiu de settings.diaryEntries');
 
     -- Aprovação: o ator é o dono do link (sem sessão nenhuma).
@@ -597,10 +611,10 @@ BEGIN
     PERFORM pg_temp.confere(v = msg_alterar, 'editar o aprovado pelo link de m → 42501 (veio ' || v || ')');
     v := pg_temp.cel(format(excluir, tk, da, 'tvb-a'));
     PERFORM pg_temp.confere(v = msg_excluir, 'excluir o aprovado pelo link de m → 42501 "excluí-lo" (veio ' || v || ')');
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da) = jsonb_build_array(e_aprov, e0),
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da)) = jsonb_build_array(e_aprov, e0),
         'o aprovado ficou como o link de g gravou');
     v := pg_temp.cel(format(excluir, tk_g, da, 'tvb-a'));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND (SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da) = jsonb_build_array(e0),
+    PERFORM pg_temp.confere(v LIKE 'ok:%' AND pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da)) = jsonb_build_array(e0),
         'o link de g exclui o aprovado (veio ' || v || ')');
 
     -- ── celular_efetivo_listar (D5) ──────────────────────────────────────────
@@ -769,7 +783,7 @@ BEGIN
         ref := pg_temp.cel(v);
         PERFORM pg_temp.confere(ref = recusa, 'token inválido → ' || recusa || ' em: ' || v || ' (veio ' || ref || ')');
     END LOOP;
-    PERFORM pg_temp.confere((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da) = jsonb_build_array(e0)
+    PERFORM pg_temp.confere(pg_temp.sa((SELECT settings -> 'diaryEntries' FROM public.projects WHERE id = da)) = jsonb_build_array(e0)
                         AND (SELECT settings FROM public.projects WHERE id = pl) = depois,
         'recusas por token não gravaram nada');
 

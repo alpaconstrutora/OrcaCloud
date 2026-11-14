@@ -114,7 +114,7 @@ const COLUMNS: ColumnConfig[] = [
     { key: 'updated',       label: 'Atualização', sortable: true },
     { key: 'status-budget', label: 'Status',      sortable: true },
     { key: 'status-obra',   label: 'Status Obra', sortable: true },
-    { key: 'lock',          label: 'Bloqueio',    sortable: true },
+    { key: 'lock',          label: 'Pedidos',     sortable: true },
     { key: 'actions',       label: 'Ações',       sortable: false }
 ];
 
@@ -256,6 +256,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
     const isDiarioContext = classificationFilter === 'DIARIO' || isDiaryView;
     const isDiaryContext = isDiarioContext;
     const isOrcamentoContext = !isObraContext && !isPlanejamentoContext && !isDiarioContext;
+    // Textos que mudam com o contexto, num lugar só (crítica 2026-11-14): o subtítulo era
+    // "Gerencie suas orçamentos com infraestrutura de alta performance" — concordância errada e
+    // frase de marketing; o vazio mandava cadastrar "Novo Orçamento" com o botão "Novo orçamento".
+    // O subtítulo diz o que a linha faz, já que não há mais botão de texto na coluna Ações.
+    const textos = isDiarioContext
+        ? { nenhum: 'Nenhum diário encontrado', novo: 'Novo diário', primeiro: 'o primeiro diário', subtitulo: 'Registros do dia a dia de cada obra.' }
+        : isPlanejamentoContext
+            ? { nenhum: 'Nenhum planejamento encontrado', novo: 'Novo planejamento', primeiro: 'o primeiro planejamento', subtitulo: 'Clique em um planejamento para abrir o cronograma; o lápis edita os dados cadastrais.' }
+            : isObraContext
+                ? { nenhum: 'Nenhuma obra encontrada', novo: 'Nova obra', primeiro: 'a primeira obra', subtitulo: 'Clique em uma obra para abri-la; o lápis edita os dados cadastrais.' }
+                : { nenhum: 'Nenhum orçamento encontrado', novo: 'Novo orçamento', primeiro: 'o primeiro orçamento', subtitulo: 'Clique em um orçamento para abri-lo; o lápis edita os dados cadastrais.' };
 
     // Colunas ocultas por padrão conforme o contexto — evita tabela larga com colunas
     // sempre vazias (ui_ux_guia_unificado.md, avaliação 2026-08-12):
@@ -394,7 +405,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
         updated: { label: isDiaryContext ? 'Clima' : 'Atualização', className: 'px-6 py-2 border-r border-gray-100 whitespace-nowrap overflow-hidden' },
         'status-budget': { label: isDiaryContext ? 'Status Diário' : 'Status', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
         'status-obra': { label: isDiaryContext ? 'Total Registros' : 'Status Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
-        lock: { label: 'Bloqueio', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
+        lock: { label: 'Pedidos', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     };
 
     // Conteúdo de cada <td> por coluna — extraído para função pura (fecha sobre helpers e
@@ -597,14 +608,17 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 return (
                     <div className="flex justify-center">
                         {getEffectiveOrderCount(project.id) > 0 ? (
-                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-600" title={`${getEffectiveOrderCount(project.id)} orçamento(s)/pedido(s) vinculados - Exclusão Bloqueada`}>
+                            // "Bloqueado/Livre" não dizia o quê (crítica 2026-11-14): o fato é ter pedido
+                            // vinculado; não poder excluir é a consequência, dita no title. "Sem pedidos"
+                            // em cinza, não verde — não é "tudo certo", é só a ausência do dado.
+                            <div className="flex items-center gap-1.5 whitespace-nowrap text-amber-600" title={`${getEffectiveOrderCount(project.id)} pedido(s) vinculado(s) — por isso não pode ser excluído`}>
                                 <Lock className="w-4 h-4" />
-                                <span className="text-sm font-normal">Bloqueado</span>
+                                <span className="text-sm font-normal">Com pedidos</span>
                             </div>
                         ) : (
-                            <div className="flex items-center gap-1.5 whitespace-nowrap text-emerald-600" title="Sem pedidos vinculados - Exclusão Permitida">
-                                <Unlock className="w-4 h-4" />
-                                <span className="text-sm font-normal">Livre</span>
+                            <div className="flex items-center gap-1.5 whitespace-nowrap text-gray-600" title="Nenhum pedido vinculado — pode ser excluído">
+                                <Unlock className="w-4 h-4 text-gray-400" />
+                                <span className="text-sm font-normal">Sem pedidos</span>
                             </div>
                         )}
                     </div>
@@ -971,7 +985,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                         <h1 className="text-3xl font-black text-gray-900 tracking-tight">
                             {isObraContext ? 'Obras' : (isPlanejamentoContext ? 'Gestão de Planejamento' : (isDiarioContext ? 'Gestão de Diário de Obras' : 'Orçamentos'))}
                         </h1>
-                        <p className="text-gray-400 text-sm mt-1.5 font-medium">Gerencie suas {isObraContext ? 'obras' : (isPlanejamentoContext ? 'planejamentos' : (isDiarioContext ? 'diários' : 'orçamentos'))} com infraestrutura de alta performance.</p>
+                        <p className="text-gray-500 text-sm mt-1.5 font-medium">{textos.subtitulo}</p>
                     </div>
                     {/* Variante compacta do CTA primário (ui_ux_guia_unificado.md §17) */}
                     <div className="flex items-center gap-2">
@@ -987,7 +1001,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                             className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95"
                         >
                             <Plus className="w-[15px] h-[15px]" />
-                            {isObraContext ? 'Nova obra' : (isPlanejamentoContext ? 'Novo planejamento' : (isDiarioContext ? 'Novo diário' : 'Novo orçamento'))}
+                            {textos.novo}
                         </button>
                     </div>
                 </div>
@@ -1041,7 +1055,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                     <input
                         type="text"
-                        placeholder="Buscar por obra ou cliente..."
+                        placeholder="Buscar por nome ou cliente…"
                         value={searchTerm}
                         onChange={(e) => setSearchTerm(e.target.value)}
                         className="w-full h-9 pl-9 pr-4 bg-white border border-gray-200 rounded-[6px] text-sm font-medium focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none transition-all"
@@ -1148,18 +1162,24 @@ const ProjectList: React.FC<ProjectListProps> = ({
             ) : filteredProjects.length === 0 ? (
                 <div className="text-center py-12">
                     <FolderOpen className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">
-                        {isDiaryContext ? 'Nenhum diário encontrado' : (activeTab === 'budgets' ? 'Nenhum orçamento encontrado' : 'Nenhuma obra encontrada')}
-                    </h3>
-                    <p className="text-sm text-gray-500">
-                        {searchTerm
-                            ? 'Tente buscar por outro termo.'
-                            : isDiaryContext
-                                ? 'Cadastre seu primeiro diário no botão "Novo Diário".'
-                                : activeTab === 'budgets'
-                                    ? 'Cadastre seu primeiro orçamento no botão "Novo Orçamento".'
-                                    : 'Cadastre sua primeira obra para usar como modelo.'}
-                    </p>
+                    <h3 className="text-lg font-bold text-gray-900 mb-2">{textos.nenhum}</h3>
+                    {/* Há registros na aba, mas a busca/o tipo/o filtro avançado esconderam todos: o
+                        caminho é limpar, não cadastrar. Antes, com filtro avançado e sem busca, a
+                        tela mandava "cadastrar o primeiro". */}
+                    {tabProjects.length > 0 ? (
+                        <>
+                            <p className="text-sm text-gray-500">Nenhum resultado para a busca e os filtros aplicados.</p>
+                            <button
+                                type="button"
+                                onClick={() => { setSearchTerm(''); setTipoFilter(''); advancedFilters.clearRules(); }}
+                                className="mt-3 text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline"
+                            >
+                                Limpar busca e filtros
+                            </button>
+                        </>
+                    ) : (
+                        <p className="text-sm text-gray-500">Cadastre {textos.primeiro} no botão "{textos.novo}".</p>
+                    )}
                 </div>
             ) : (
                 viewMode === 'list' ? (
@@ -1264,7 +1284,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                     showDelete
                                                     onDelete={() => handleDelete(project.id, project.name)}
                                                     deleteDisabled={getEffectiveOrderCount(project.id) > 0}
-                                                    deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Exclusão Bloqueada (Possui pedidos vinculados)' : undefined}
+                                                    deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Não pode ser excluído: tem pedidos vinculados' : undefined}
                                                 />
                                             </div>
                                         </td>
@@ -1302,14 +1322,14 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                                 </span>
                                             )}
                                             {getEffectiveOrderCount(project.id) > 0 ? (
-                                                <span className="flex items-center gap-1 text-sm font-normal text-amber-600">
+                                                <span className="flex items-center gap-1 text-sm font-normal text-amber-600" title={`${getEffectiveOrderCount(project.id)} pedido(s) vinculado(s) — por isso não pode ser excluído`}>
                                                     <Lock className="w-3.5 h-3.5" />
-                                                    Bloqueado
+                                                    Com pedidos
                                                 </span>
                                             ) : (
-                                                <span className="flex items-center gap-1 text-sm font-normal text-emerald-600">
-                                                    <Unlock className="w-3.5 h-3.5" />
-                                                    Livre
+                                                <span className="flex items-center gap-1 text-sm font-normal text-gray-600" title="Nenhum pedido vinculado — pode ser excluído">
+                                                    <Unlock className="w-3.5 h-3.5 text-gray-400" />
+                                                    Sem pedidos
                                                 </span>
                                             )}
                                         </div>
@@ -1377,7 +1397,7 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             showDelete
                                             onDelete={() => handleDelete(project.id, project.name)}
                                             deleteDisabled={getEffectiveOrderCount(project.id) > 0}
-                                            deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Exclusão Bloqueada (Possui pedidos vinculados)' : undefined}
+                                            deleteDisabledTitle={getEffectiveOrderCount(project.id) > 0 ? 'Não pode ser excluído: tem pedidos vinculados' : undefined}
                                         />
                                     </div>
                                 </div>

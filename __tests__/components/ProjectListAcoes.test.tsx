@@ -97,3 +97,39 @@ describe('Orçamentos — Código e Orçamento fixos à esquerda (crítica 2026-
         expect(fixa(screen.getByText('Obra Garden'))?.style.position).toBe('');
     });
 });
+
+describe('Orçamentos — textos (crítica 2026-11-14, passo 3)', () => {
+    it('subtítulo diz o que a linha e o lápis fazem; sem "suas orçamentos"', async () => {
+        await montar('ORCAMENTO');
+        expect(screen.getByText('Clique em um orçamento para abri-lo; o lápis edita os dados cadastrais.')).toBeTruthy();
+        expect(screen.queryByText(/alta performance/)).toBeNull();
+        expect(screen.getByRole('button', { name: /Novo orçamento/ })).toBeTruthy();
+    });
+
+    it('a coluna diz o fato (pedidos), e o title diz a consequência', async () => {
+        await montar('ORCAMENTO');
+        const celula = screen.getByText('Sem pedidos');
+        expect(celula.parentElement?.getAttribute('title')).toBe('Nenhum pedido vinculado — pode ser excluído');
+        expect(screen.queryByText('Livre')).toBeNull();
+    });
+
+    it('busca sem resultado oferece limpar (não manda cadastrar), e limpar traz a lista de volta', async () => {
+        await montar('ORCAMENTO');
+        fireEvent.change(screen.getByPlaceholderText('Buscar por nome ou cliente…'), { target: { value: 'zzzz' } });
+        expect(screen.getByText('Nenhum orçamento encontrado')).toBeTruthy();
+        expect(screen.queryByText(/Cadastre/)).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: 'Limpar busca e filtros' }));
+        expect(screen.getByText('Garden')).toBeTruthy();
+    });
+
+    it('lista vazia de verdade manda cadastrar com o MESMO rótulo do botão', async () => {
+        render(
+            <ConfirmProvider>
+                <ProjectList onLoadProject={vi.fn()} onEditProject={vi.fn()} onNewProject={vi.fn()} onDuplicateProject={vi.fn()}
+                    onImportProject={vi.fn()} onExportProject={vi.fn()} projects={[]} classificationFilter="ORCAMENTO" />
+            </ConfirmProvider>,
+        );
+        await act(async () => { await new Promise(res => setTimeout(res, 30)); });
+        expect(screen.getByText('Cadastre o primeiro orçamento no botão "Novo orçamento".')).toBeTruthy();
+    });
+});

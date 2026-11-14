@@ -38,9 +38,9 @@ describe('agruparOrcamentos', () => {
             .toEqual(['Concluída:1', 'Em andamento:1', 'Não Iniciado:1', 'Sem status da obra:1']);
     });
 
-    it('bloqueio: Bloqueado antes de Livre; Decrescente inverte', () => {
-        expect(rotulos(agruparOrcamentos(ORCS, 'bloqueio', 'asc', leitor))).toEqual(['Bloqueado:2', 'Livre:2']);
-        expect(rotulos(agruparOrcamentos(ORCS, 'bloqueio', 'desc', leitor))).toEqual(['Livre:2', 'Bloqueado:2']);
+    it('pedidos: "Com pedidos" antes de "Sem pedidos" (o texto da célula); Decrescente inverte', () => {
+        expect(rotulos(agruparOrcamentos(ORCS, 'bloqueio', 'asc', leitor))).toEqual(['Com pedidos:2', 'Sem pedidos:2']);
+        expect(rotulos(agruparOrcamentos(ORCS, 'bloqueio', 'desc', leitor))).toEqual(['Sem pedidos:2', 'Com pedidos:2']);
     });
 
     it('tipo de obra: alfabético, sem tipo no fim', () => {

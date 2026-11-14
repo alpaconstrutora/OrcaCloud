@@ -36,7 +36,9 @@ vi.mock('../../services/contractService', async (original) => {
         getContractByDealId: vi.fn(async () => contrato),
         updateContract: vi.fn(async () => contrato),
         // 1 título lançado: o caminho de sucesso (o aviso vai junto da mensagem verde).
-        listFinancialEntries: vi.fn(async () => [{ id: 't1', status: 'PENDING' }]),
+        // Com data, como o banco garante (internal_transactions.transaction_date é NOT NULL). Sem ela,
+        // a aba Parcelas quebrava ao ordenar e o teste falhava de forma intermitente (CI do #407, 14/11).
+        listFinancialEntries: vi.fn(async () => [{ id: 't1', status: 'PENDING', transaction_date: '2026-12-10', amount: 1000, description: null }]),
         getPaymentSchedule: vi.fn(async () => []),
     };
     return {

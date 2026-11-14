@@ -78,6 +78,7 @@ import CreditAnalysisPanel from './CreditAnalysisPanel';
 import { useConfirm } from './ui/confirm';
 import { useStore } from '../store/useStore';
 import { deveReterIrrfLocacao } from '../utils/retencaoIrrfLocacao';
+import { porDataDoLancamento } from '../utils/ordemDosLancamentos';
 
 type TabId = 'cliente' | 'unidade' | 'pagamento' | 'parcelas' | 'partes' | 'contrato' | 'garantias';
 
@@ -2369,8 +2370,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                 .catch(() => [])
         ));
 
-        const todas = [...dosContratos.flat()]
-            .sort((a, b) => (a.transaction_date || '').localeCompare(b.transaction_date || ''));
+        const todas = [...dosContratos.flat()].sort(porDataDoLancamento);
         setContractEntries(todas);
         return todas;
     }, [generateTargets, formData.id, formData.organization_id, organizationId]);
@@ -4778,7 +4778,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                         dizia que ela era a 1ª linha desta tabela; não é, e não
                                                         era o código desde a série única. */}
                                                         {[...contractEntries]
-                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+                                                            .sort(porDataDoLancamento)
                                                             .map((e, i) => {
                                                                 const pago = e.status !== 'PENDING';
                                                                 return (
@@ -4796,7 +4796,7 @@ const DealModal: React.FC<DealModalProps> = ({ isOpen, onClose, initialData, onS
                                                                                         e.id, i, ev.target.checked,
                                                                                         (ev.nativeEvent as MouseEvent).shiftKey,
                                                                                         [...contractEntries]
-                                                                                            .sort((a, b) => a.transaction_date.localeCompare(b.transaction_date))
+                                                                                            .sort(porDataDoLancamento)
                                                                                             .map(x => x.id),
                                                                                     )}
                                                                                     className="w-4 h-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500 cursor-pointer"

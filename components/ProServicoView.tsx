@@ -1,6 +1,6 @@
 import React from 'react';
 import { proService } from '../services/proService';
-import { ProServico, ProOSChecklistItem } from '../types';
+import { ProOSChecklistItem } from '../types';
 import jsPDF from 'jspdf';
 import QRCode from 'qrcode';
 import {
@@ -57,7 +57,6 @@ interface ProServicoViewProps {
   /** Vindo do "Recebi" do painel: abre o formulário de recebimento ao carregar. */
   abrirRecebimento?: boolean;
   onBack: () => void;
-  onSave: () => void;
 }
 
 const ProServicoView: React.FC<ProServicoViewProps> = ({
@@ -65,7 +64,6 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   servicoId,
   abrirRecebimento = false,
   onBack,
-  onSave
 }) => {
   const [loading, setLoading] = React.useState(true);
   // Falha de rede ≠ serviço inexistente: antes as duas viravam "Serviço não encontrado", sem saída.
@@ -352,7 +350,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       showToast(nextStatus === 'CONCLUIDO' ? 'Serviço concluído. Agora é cobrar e registrar o recebimento.' : 'Serviço salvo.');
     } catch (error: any) {
       console.error('Erro ao atualizar serviço:', error);
-      showToast(`Não foi possível salvar o serviço: ${error?.message || 'verifique a conexão e tente de novo.'}`, 'error');
+      showToast('Não foi possível salvar o serviço. Confira a internet e tente de novo.', 'error');
     } finally {
       setSalvando(false);
     }
@@ -409,7 +407,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       showToast('Recebimento registrado.');
     } catch (error: any) {
       console.error('Erro ao registrar recebimento:', error);
-      showToast(`Não foi possível registrar o recebimento: ${error?.message || 'tente de novo.'}`, 'error');
+      showToast('Não foi possível registrar o recebimento. Confira a internet e tente de novo.', 'error');
     } finally {
       setSalvando(false);
     }
@@ -433,7 +431,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
       showToast('Recebimento desfeito.');
     } catch (error: any) {
       console.error('Erro ao desfazer recebimento:', error);
-      showToast(`Não foi possível desfazer: ${error?.message || 'tente de novo.'}`, 'error');
+      showToast('Não foi possível desfazer o recebimento. Confira a internet e tente de novo.', 'error');
     } finally {
       setSalvando(false);
     }
@@ -492,7 +490,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
     doc.text(`OS Nº ${servico.id.substring(0, 8).toUpperCase()}`, 195, 20, { align: 'right' });
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(`Finalizado em: ${new Date(servico.assinatura_data || new Date()).toLocaleDateString('pt-BR')}`, 195, 28, { align: 'right' });
+    doc.text(`Concluído em: ${new Date(concluidoEm || servico.assinatura_data || new Date()).toLocaleDateString('pt-BR')}`, 195, 28, { align: 'right' });
 
     // Detalhes do Cliente
     doc.setTextColor(textColor[0], textColor[1], textColor[2]);
@@ -733,7 +731,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
       {/* Cartão de Informações */}
       <div className="bg-white border border-slate-200 rounded-[10px] p-4 space-y-2">
-        <span className="block text-xs font-semibold text-slate-600">Cliente & local</span>
+        <span className="block text-xs font-semibold text-slate-600">Cliente e local</span>
         <div className="space-y-0.5">
           <span className="block font-semibold text-base text-slate-900">{cli?.nome}</span>
           <span className="block text-sm text-slate-600">{cli?.telefone}</span>
@@ -1001,7 +999,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
               Não dá para gerar o Pix: {pix.motivo} Corrija a chave em Ajustes.
             </p>
           ) : (
-            <span className="text-sm text-slate-600">Configure sua chave Pix nas configurações do perfil para gerar o código Copia e Cola e o QR Code.</span>
+            <span className="text-sm text-slate-600">Cadastre sua chave Pix em Ajustes para gerar o QR Code e o Pix Copia e Cola.</span>
           )}
         </div>
       </div>
@@ -1026,7 +1024,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
                 <option value="6">Daqui a 6 meses (Semestral)</option>
                 <option value="12">Daqui a 12 meses (Anual)</option>
               </select>
-              <span className="block text-xs text-slate-600 mt-1">O sistema avisará no painel quando estiver na hora de refazer o serviço.</span>
+              <span className="block text-xs text-slate-600 mt-1">Na data, o cliente aparece no painel em “Serviços para oferecer de novo”.</span>
             </div>
 
             <button

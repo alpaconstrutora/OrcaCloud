@@ -69,7 +69,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   const handleVoiceInput = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      showToast('Seu navegador não suporta reconhecimento de voz nativo. Experimente usar o Google Chrome ou Safari Mobile.', 'error');
+      showToast('Este navegador não faz ditado por voz. Use o Chrome ou o Safari do celular, ou digite a descrição.', 'error');
       return;
     }
 
@@ -89,7 +89,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     recognition.onerror = (event: any) => {
       console.error('Erro no reconhecimento de voz:', event.error);
       setIsListening(false);
-      showToast('Não foi possível capturar sua voz. Tente novamente.', 'error');
+      showToast('Não deu para ouvir o ditado. Tente de novo, perto do microfone.', 'error');
     };
 
     recognition.onresult = (event: any) => {
@@ -185,7 +185,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     doc.setFont('helvetica', 'bold');
     doc.text('PRESTADOR:', 15, 58);
     doc.setFont('helvetica', 'normal');
-    doc.text('Profissional Autônomo Parceiro ÒPURA Pro', 15, 63);
+    doc.text(config?.template_header || 'Profissional autônomo', 15, 63);
+    if (config?.cidade) doc.text(config.cidade, 15, 73);
     if (config?.pix_key) {
       doc.text(`PIX: ${config.pix_key} (${config.pix_key_type})`, 15, 68);
     }
@@ -284,7 +285,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
   const handleSave = async (status: 'RASCUNHO' | 'ENVIADO' | 'APROVADO') => {
     if (!descricao || !valor) {
-      showToast('Por favor, preencha a descrição e o valor do orçamento.', 'error');
+      showToast('Preencha a descrição e o valor do orçamento.', 'error');
       return;
     }
 
@@ -304,7 +305,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
       // Se for um novo cliente, salvamos ele primeiro
       if (isNovoCliente) {
         if (!novoClienteNome || !novoClienteTelefone) {
-          showToast('Por favor, informe o nome e telefone do novo cliente.', 'error');
+          showToast('Informe nome e telefone do cliente novo.', 'error');
           janelaWhatsApp?.close();
           setLoading(false);
           return;
@@ -382,7 +383,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     } catch (error) {
       console.error('Erro ao salvar orçamento:', error);
       janelaWhatsApp?.close();
-      showToast('Não foi possível salvar o orçamento. Tente novamente.', 'error');
+      showToast('Não foi possível salvar o orçamento. Confira a internet e tente de novo.', 'error');
     } finally {
       setLoading(false);
     }
@@ -408,7 +409,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
       {loading && (
         <div className="text-center py-8">
           <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <span className="text-sm text-slate-600">Processando...</span>
+          <span className="text-sm text-slate-600">Salvando orçamento…</span>
         </div>
       )}
 
@@ -458,7 +459,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
               }}
               className={CAMPO}
             >
-              <option value="">Selecione um modelo...</option>
+              <option value="">Escolha um modelo…</option>
               {/* O value continua sendo o índice na lista completa (padrão + meus); o grupo
                   "Meus modelos" substitui o ✨ que marcava o modelo próprio. */}
               {(() => {
@@ -492,7 +493,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   clients={clientes.map(c => ({ id: c.id, name: c.nome }))}
                   value={isNovoCliente ? '' : clienteId}
                   onChange={(id) => { setIsNovoCliente(false); setClienteId(id); }}
-                  placeholder={isNovoCliente ? 'Novo cliente (preencha abaixo)' : 'Selecione um cliente...'}
+                  placeholder={isNovoCliente ? 'Cliente novo (preencha abaixo)' : 'Escolha um cliente…'}
                   icon={null}
                   triggerClassName="w-full h-11 bg-white border border-slate-300 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-colors"
                 />
@@ -522,7 +523,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   <input
                     id={`${idCampo}-cli-nome`}
                     type="text"
-                    placeholder="Nome completo do cliente"
+                    placeholder="Ex.: Maria Souza"
                     value={novoClienteNome}
                     onChange={(e) => setNovoClienteNome(e.target.value)}
                     className={CAMPO}
@@ -533,7 +534,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   <input
                     id={`${idCampo}-cli-telefone`}
                     type="tel"
-                    placeholder="Telefone (com DDD)"
+                    placeholder="(65) 99999-9999"
                     value={novoClienteTelefone}
                     onChange={(e) => setNovoClienteTelefone(e.target.value)}
                     className={CAMPO}
@@ -544,7 +545,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   <input
                     id={`${idCampo}-cli-endereco`}
                     type="text"
-                    placeholder="Endereço de execução (opcional)"
+                    placeholder="Rua, número, bairro (opcional)"
                     value={novoClienteEndereco}
                     onChange={(e) => setNovoClienteEndereco(e.target.value)}
                     className={CAMPO}
@@ -583,7 +584,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
             <textarea
               id={`${idCampo}-descricao`}
               rows={3}
-              placeholder="Ex: Instalação de ar-condicionado Split 12000 BTUs com fornecimento de fiação e tubulação de cobre até 3m."
+              placeholder="Ex.: Instalação de ar-condicionado split 12.000 BTUs, com fiação e tubulação de cobre até 3 m."
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
               className={CAMPO_TEXTO}
@@ -645,7 +646,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
             </div>
             {quantidade && valorUnitario && !isNaN(parseFloat(quantidade)) && !isNaN(parseFloat(valorUnitario)) && (
               <div className="bg-white p-2.5 rounded-[6px] border border-slate-200 flex justify-between items-center gap-2 text-xs font-medium text-slate-600">
-                <span>Cálculo do Total:</span>
+                <span>Total calculado:</span>
                 <span className="text-slate-700 font-semibold tabular-nums text-right">
                   {quantidade} x R$ {parseFloat(valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = R$ {((parseFloat(quantidade) || 0) * (parseFloat(valorUnitario) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
@@ -696,7 +697,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
             <textarea
               id={`${idCampo}-observacoes`}
               rows={2}
-              placeholder="Ex: Não incluso quebra de alvenaria. Chave Pix para pagamento no rodapé do documento."
+              placeholder="Ex.: Não inclui quebra de alvenaria."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
               className={CAMPO_TEXTO}

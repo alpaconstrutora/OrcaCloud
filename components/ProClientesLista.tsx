@@ -65,7 +65,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
   const handleSubmit = async () => {
     if (!nome || !telefone) {
-      showToast('Nome e telefone são campos obrigatórios.', 'error');
+      showToast('Informe nome e telefone do cliente.', 'error');
       return;
     }
 
@@ -80,7 +80,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
           endereco: endereco || undefined,
           observacoes: observacoes || undefined
         });
-        showToast('Cliente atualizado com sucesso!');
+        showToast('Cliente atualizado.');
       } else {
         await proService.saveCliente({
           user_id: userId,
@@ -103,7 +103,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
       await fetchClientes();
     } catch (error) {
       console.error('Erro ao salvar cliente:', error);
-      showToast('Erro ao salvar o cliente.', 'error');
+      showToast('Não foi possível salvar o cliente. Confira a internet e tente de novo.', 'error');
     } finally {
       setLoading(false);
     }
@@ -120,14 +120,14 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
     try {
       setLoading(true);
       await proService.deleteCliente(id);
-      showToast('Cliente e todo seu histórico foram excluídos com sucesso.');
+      showToast('Cliente excluído, com os orçamentos e serviços dele.');
       if (clienteExpandidoId === id) {
         setClienteExpandidoId(null);
       }
       await fetchClientes();
     } catch (error) {
       console.error('Erro ao excluir cliente:', error);
-      showToast('Não foi possível excluir o cliente.', 'error');
+      showToast('Não foi possível excluir o cliente. Confira a internet e tente de novo.', 'error');
     } finally {
       setLoading(false);
     }
@@ -214,7 +214,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
               <input
                 id={`${idCampo}-nome`}
                 type="text"
-                placeholder="Nome do Cliente"
+                placeholder="Ex.: Maria Souza"
                 value={nome}
                 onChange={(e) => setNome(e.target.value)}
                 className={CAMPO}
@@ -225,7 +225,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
               <input
                 id={`${idCampo}-telefone`}
                 type="tel"
-                placeholder="WhatsApp / Telefone (com DDD)"
+                placeholder="(65) 99999-9999"
                 value={telefone}
                 onChange={(e) => setTelefone(e.target.value)}
                 className={CAMPO}
@@ -236,7 +236,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
               <input
                 id={`${idCampo}-endereco`}
                 type="text"
-                placeholder="Endereço de execução"
+                placeholder="Rua, número, bairro"
                 value={endereco}
                 onChange={(e) => setEndereco(e.target.value)}
                 className={CAMPO}
@@ -247,7 +247,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
               <textarea
                 id={`${idCampo}-observacoes`}
                 rows={2}
-                placeholder="Observações úteis..."
+                placeholder="Ex.: portão azul, cachorro no quintal"
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-[6px] px-3 py-2.5 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600 resize-none"
@@ -268,7 +268,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
       <div className="space-y-3 flex-1 overflow-y-auto">
         {clientes.length === 0 ? (
           <div className="text-center py-12 text-slate-600 text-sm bg-white border border-dashed border-slate-300 rounded-[10px]">
-            Nenhum cliente cadastrado ainda.
+            Nenhum cliente ainda. Toque em “Cadastrar” ou crie um orçamento: o cliente novo entra aqui.
           </div>
         ) : (
           clientes.map(c => {
@@ -320,7 +320,7 @@ const ProClientesLista: React.FC<ProClientesListaProps> = ({ userId, onBack }) =
 
                     {c.observacoes && (
                       <div className="space-y-0.5">
-                        <span className="block text-xs font-semibold text-slate-600">Notas</span>
+                        <span className="block text-xs font-semibold text-slate-600">Observações</span>
                         <p className="text-sm text-slate-700">{c.observacoes}</p>
                       </div>
                     )}

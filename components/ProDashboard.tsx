@@ -1,6 +1,5 @@
 import React from 'react';
 import { proService } from '../services/proService';
-import { ProOrcamento, ProServico } from '../types';
 import { AlertTriangle, HandCoins, MessageCircle, RefreshCw, Clock, MapPin, Plus } from 'lucide-react';
 import { resumirPainelPro, diasDesde, mensagemDeCobranca, linkWhatsApp } from '../utils/proPainelResumo';
 import { separarAgenda } from '../utils/proAgenda';
@@ -11,7 +10,6 @@ interface ProDashboardProps {
   onNewOrcamento: () => void;
   onEditOrcamento: (id: string) => void;
   onViewServico: (id: string, opcoes?: { abrirRecebimento?: boolean }) => void;
-  onNavigate: (view: string) => void;
 }
 
 // Cidade vazia em Ajustes cai neste padrão (campo 60 do Pix é obrigatório). Mesmo valor do ProServicoView.
@@ -48,7 +46,6 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   onNewOrcamento,
   onEditOrcamento,
   onViewServico,
-  onNavigate
 }) => {
   const [loading, setLoading] = React.useState(true);
   const [orcamentos, setOrcamentos] = React.useState<any[]>([]);
@@ -218,7 +215,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       {/* Resumo financeiro: o que entrou, o que falta cobrar, o que ainda vai ser feito */}
       <dl className="grid grid-cols-3 bg-white border border-slate-200 rounded-[10px] divide-x divide-slate-100">
         {[
-          { rotulo: 'Recebido', valor: resumo.recebidoNoMes, apoio: 'neste mês', destaque: 'text-emerald-700' },
+          { rotulo: 'Recebido', valor: resumo.recebidoNoMes, apoio: 'neste mês', destaque: resumo.recebidoNoMes > 0 ? 'text-emerald-700' : 'text-slate-900' },
           { rotulo: 'A receber', valor: resumo.aReceber, apoio: 'concluídos', destaque: resumo.aReceber > 0 ? 'text-amber-700' : 'text-slate-900' },
           { rotulo: 'Em execução', valor: resumo.emExecucao, apoio: 'por fazer', destaque: 'text-slate-900' },
         ].map(k => (
@@ -255,7 +252,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
                   <button
                     type="button"
                     onClick={() => cobrarNoWhatsApp(s)}
-                    className="h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors"
+                    className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-blue-50 border border-blue-300 text-blue-800 rounded-[6px] font-medium text-sm transition-colors"
                   >
                     <MessageCircle className="w-4 h-4" aria-hidden />
                     Cobrar
@@ -280,7 +277,7 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
         <h2 id="titulo-hoje" className="text-sm font-semibold text-slate-900">Serviços para hoje</h2>
         {servicosHoje.length === 0 ? (
           <div className={VAZIO}>
-            Nenhum serviço agendado para hoje.
+            Nenhum serviço para hoje. Os serviços aprovados aparecem aqui no dia marcado.
           </div>
         ) : (
           <div className="space-y-3">
@@ -383,8 +380,16 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
           </button>
         </div>
         {orcamentos.length === 0 ? (
-          <div className={VAZIO}>
-            Nenhum orçamento criado ainda.
+          <div className={`${VAZIO} space-y-3`}>
+            <p>Nenhum orçamento ainda.</p>
+            <button
+              type="button"
+              onClick={onNewOrcamento}
+              className="inline-flex items-center justify-center gap-1.5 h-11 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors"
+            >
+              <Plus className="w-4 h-4" aria-hidden />
+              Criar o primeiro orçamento
+            </button>
           </div>
         ) : (
           <div className="space-y-3">

@@ -1544,6 +1544,8 @@ tabela passou a mostrar o rótulo ("Membro"), não o código do banco (`member`)
 
 Em 13/11/2026 para Minha Organização › **Contas de Pagamento** (`FinancialRegistryManager.tsx` com a prop `agrupar`, só nessa aba — o Plano de Contas continua árvore por código, com o próprio expandir/recolher; `docs/planos/2026-11-13-contas-pagamento-agrupar.md`). Opções: Organização (só em "Todas"), Banco e Situação (Ativa antes de Inativa, a ordem do interruptor da coluna Ações). Só contagem (`semTotal`). Agrupar achata a árvore de códigos e o expandir/recolher da árvore sai de cena. Função pura em `utils/contasPagamentoGrupos.ts`.
 
+Em 14/11/2026 para Engenharia › **Orçamentos** (a lista, `ProjectList.tsx`; pedido "filtro grupo + classificador do grupo + botão expandir / recolher"). Só no contexto Orçamentos e no modo lista — Obras, Planejamento e Diário usam o mesmo componente e não ganharam o controle. Opções: Status, Status Obra (na ordem do fluxo de `OBRA_STATUSES`), Bloqueio (Bloqueado antes de Livre, com a mesma contagem em cascata da célula) e Tipo de Obra. Só contagem (`semTotal`). Função pura em `utils/orcamentoGrupos.ts`; a tela passa o `leitor` com o texto de cada célula.
+
 **Total do grupo só onde há dinheiro.** Tela de cadastro/documento (fornecedores,
 clientes, documentos, ofícios, retiradas) mostra só a contagem — `LinhaDeGrupo` com
 `semTotal`; no `StandardTable`, basta não passar `agrupamento.valor`. "R$ 0,00" num

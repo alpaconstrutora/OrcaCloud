@@ -45,6 +45,10 @@ import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, useP
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparOrcamentos, OPCOES_AGRUPAR_ORCAMENTO, type CampoAgruparOrcamento } from '../utils/orcamentoGrupos';
 
 interface ProjectSettings {
     classification?: 'OBRA' | 'ORCAMENTO' | 'PLANEJAMENTO' | 'DIARIO' | string;
@@ -890,6 +894,28 @@ const ProjectList: React.FC<ProjectListProps> = ({
         return total;
     };
 
+    // "Agrupar" (guia de UI §6.12) — só na lista de Orçamentos (pedido de 2026-11-14):
+    // campo, ordem dos grupos e recolher/expandir todos. As outras listas que usam este
+    // componente (Obras, Planejamento, Diário) não ganharam o controle. Os grupos saem da
+    // lista já filtrada e ordenada; é recorte de exibição, não reconsulta (§6.12).
+    // O rótulo do grupo é o MESMO texto da célula (status capitalizado, tipo traduzido,
+    // bloqueio em cascata com a obra mestre).
+    const isOrcamentoContext = !isObraContext && !isPlanejamentoContext && !isDiarioContext;
+    const agrupamento = useAgrupamento<CampoAgruparOrcamento>('projectListGroupBy:orcamentos');
+    const campoAgrupar: CampoAgruparOrcamento | 'none' =
+        isOrcamentoContext && viewMode === 'list' && OPCOES_AGRUPAR_ORCAMENTO.some(o => o.value === agrupamento.campo)
+            ? agrupamento.campo
+            : 'none';
+    const gruposOrcamento = campoAgrupar === 'none' ? [] : agruparOrcamentos(filteredProjects, campoAgrupar, agrupamento.direcao, {
+        status: p => (p.settings?.budgetStatus ? capitalizeStatus(p.settings.budgetStatus) : ''),
+        statusObra: p => p.settings?.obraStatus,
+        bloqueado: p => getEffectiveOrderCount(p.id) > 0,
+        tipoObra: p => (p.settings?.tipoObra ? (TIPO_OBRA_LABELS[p.settings.tipoObra as TipoObra] || p.settings.tipoObra) : ''),
+    });
+    const linhasDoCorpo: EntradaDaTela<ProjectSummary>[] = campoAgrupar === 'none'
+        ? filteredProjects.map((item, indice) => ({ tipo: 'linha', item, indice }))
+        : entradasDaPagina(gruposOrcamento, agrupamento.recolhidos);
+
     return (
         <div className="space-y-6">
             {!hideHeader && (
@@ -994,6 +1020,22 @@ const ProjectList: React.FC<ProjectListProps> = ({
                 <div className="flex items-center h-9">
                     <AdvancedFilterPanel fields={advancedFields} state={advancedFilters} />
                 </div>
+
+                {/* Agrupar (§6.12): logo depois do Filtro avançado. Só no modo lista — no modo
+                    blocos não há linha para agrupar (mesma regra do autofit, mais abaixo). */}
+                {isOrcamentoContext && viewMode === 'list' && (
+                    <AgruparControles
+                        opcoes={OPCOES_AGRUPAR_ORCAMENTO}
+                        campo={campoAgrupar}
+                        onCampo={agrupamento.setCampo}
+                        direcao={agrupamento.direcao}
+                        onDirecao={agrupamento.setDirecao}
+                        chavesDosGrupos={gruposOrcamento.map(g => g.key)}
+                        algumRecolhido={agrupamento.recolhidos.size > 0}
+                        onAlternarTodos={agrupamento.alternarTodos}
+                        title="Agrupar os orçamentos"
+                    />
+                )}
 
                 <button
                     onClick={loadProjects}
@@ -1115,7 +1157,15 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                 </tr>
                             </thead>
                             <tbody className="divide-y divide-gray-200">
-                                {filteredProjects.map(project => (
+                                {linhasDoCorpo.map(e => {
+                                    if (e.tipo === 'grupo') {
+                                        return (
+                                            <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                colSpan={displayColumns.length + 2} onAlternar={agrupamento.alternar} semTotal />
+                                        );
+                                    }
+                                    const project = e.item;
+                                    return (
                                     <tr
                                         key={project.id}
                                         onClick={() => onRowClick ? onRowClick(project.id) : onEditProject(project.id)}
@@ -1163,7 +1213,8 @@ const ProjectList: React.FC<ProjectListProps> = ({
                                             </div>
                                         </td>
                                     </tr>
-                                ))}
+                                    );
+                                })}
                             </tbody>
                         </table>
                         </div>

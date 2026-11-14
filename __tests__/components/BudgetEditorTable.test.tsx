@@ -266,7 +266,8 @@ describe('Estrutura da tabela da WBS', () => {
 
         // A régua acoplada carrega só busca + autofit; escopo e ação primária
         // moram na barra própria acima.
-        for (const label of [/novo grupo/i, /ferramentas/i, /gerenciar eap/i, /salvar versão/i]) {
+        // "Salvar versão" mora no menu "Versões" desde 2026-11-14 (toolbar mais calma).
+        for (const label of [/novo grupo/i, /ferramentas/i, /gerenciar eap/i, /versões/i]) {
             const found = within(card).queryByText(label);
             expect(found, `"${label}" não pode estar dentro do card acoplado`).toBeNull();
             // ...mas tem que existir em algum lugar da tela.

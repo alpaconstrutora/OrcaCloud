@@ -189,6 +189,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
   const [manageEapMenuOpen, setManageEapMenuOpen] = React.useState(false);
   const [toolsMenuOpen, setToolsMenuOpen] = React.useState(false);
+  // Toolbar mais calma (crítica 2026-11-14, passo 6): "Exibir" (CPU Inline/Janela +
+  // detalhamento M.O/Mat/Equip) e "Versões" (histórico + salvar) viraram menus.
+  const [exibirMenuOpen, setExibirMenuOpen] = React.useState(false);
+  const [versoesMenuOpen, setVersoesMenuOpen] = React.useState(false);
 
   const [expandedGroups, setExpandedGroups] = React.useState<string[]>([]);
   const [expandedPhases, setExpandedPhases] = React.useState<string[]>([]);
@@ -389,6 +393,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   React.useEffect(() => {
     const aoTeclar = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || confirmandoDescarteRef.current) return;
+      if (exibirMenuOpen) { setExibirMenuOpen(false); return; }
+      if (versoesMenuOpen) { setVersoesMenuOpen(false); return; }
       if (toolsMenuOpen) { setToolsMenuOpen(false); return; }
       if (manageEapMenuOpen) { setManageEapMenuOpen(false); return; }
       if (selectedCPUItem) { void fecharCPU(); return; }
@@ -2257,98 +2263,138 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           mostra, não o recorte das linhas. O BDI (%) daqui é o que
           define o Preço Final e o BDI dos cards, que moram na linha do título
           (acima desta barra). */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col lg:flex-row gap-2 items-stretch lg:items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        {/* Esquerda: o que é DADO do orçamento (BDI global) e os dois menus de exibição/versões.
+            Eram 3 caixas aninhadas (card dentro de card) com 6 controles; no celular a barra
+            cortava à esquerda (BDI em x = −52). flex-wrap: quebra em vez de cortar. */}
+        <div className="flex flex-wrap items-center gap-2">
           {isLocked && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-[6px] border border-amber-200 text-xs font-bold animate-pulse">
+            <div className="flex items-center gap-2 h-9 px-3 bg-amber-50 text-amber-700 rounded-[6px] border border-amber-200 text-sm font-medium" title="Orçamento fechado: só consulta">
               <AlertTriangle className="w-4 h-4" />
-              BLOQUEADO
+              Fechado
             </div>
           )}
 
-          {/* Grupo 1: Visualização & Configurações */}
-          <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100 pr-4">
-            <div className="flex items-center gap-2 pl-1">
-              <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">BDI (%):</label>
-              <input
-                type="number"
-                value={settings.bdi}
-                onChange={(e) => onUpdateSettings({ ...settings, bdi: Number(e.target.value) })}
-                className="w-14 h-8 rounded-[6px] border border-gray-200 bg-white text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              />
-            </div>
+          <label className="flex items-center gap-2 h-9 pl-3 pr-1 rounded-[6px] border border-gray-200 bg-white" title="BDI global: vale para todo item sem BDI próprio e define o Preço Final">
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">BDI global (%)</span>
+            <input
+              type="number"
+              value={settings.bdi}
+              disabled={isLocked}
+              onChange={(e) => onUpdateSettings({ ...settings, bdi: Number(e.target.value) })}
+              className="w-16 h-7 rounded-[4px] border border-gray-200 bg-white text-center text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+            />
+          </label>
 
-            <div className="h-6 w-px bg-gray-200 mx-1" />
-
-            <div className="flex bg-gray-200/50 rounded-[6px] p-0.5">
-              <button
-                onClick={() => setCpuViewMode('inline')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${cpuViewMode === 'inline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Ver CPU abaixo do item"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Inline
-              </button>
-              <button
-                onClick={() => setCpuViewMode('modal')}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${cpuViewMode === 'modal' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Ver CPU em janela flutuante"
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                Janela
-              </button>
-            </div>
-
-            <div className="h-6 w-px bg-gray-200 mx-1" />
-
+          <div className="relative">
             <button
-              onClick={() => setShowNatureBreakdown(!showNatureBreakdown)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
-              title="Mostrar detalhamento de custos (Mão de Obra, Material, Equipamento)"
+              type="button"
+              onClick={() => setExibirMenuOpen(!exibirMenuOpen)}
+              aria-haspopup="menu"
+              aria-expanded={exibirMenuOpen}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${exibirMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              title="Como mostrar a composição e as colunas de custo"
             >
-              <Layers className="w-3.5 h-3.5" />
-              Composição
+              <Monitor className="w-3.5 h-3.5" />
+              Exibir
+              {showNatureBreakdown && <span className="w-1.5 h-1.5 rounded-full bg-blue-600" aria-label="(mão de obra, material e equipamento visíveis)" />}
+              <ChevronDown className={`w-3 h-3 transition-transform ${exibirMenuOpen ? 'rotate-180' : ''}`} />
             </button>
+            {exibirMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setExibirMenuOpen(false)}></div>
+                <div role="menu" className="absolute left-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Composição de preço (CPU)</p>
+                  {([['inline', 'Abaixo do item', Layers], ['modal', 'Em janela', Monitor]] as const).map(([modo, rotulo, Icone]) => (
+                    <button
+                      key={modo}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={cpuViewMode === modo}
+                      onClick={() => { setCpuViewMode(modo); setExibirMenuOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                    >
+                      <Icone className="w-4 h-4 text-gray-500" />
+                      <span className="flex-1">{rotulo}</span>
+                      {cpuViewMode === modo && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showNatureBreakdown}
+                    onClick={() => { setShowNatureBreakdown(!showNatureBreakdown); setExibirMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                    title="Colunas de mão de obra, material e equipamento"
+                  >
+                    <Layers className="w-4 h-4 text-gray-500" />
+                    <span className="flex-1">Mão de obra, material e equipamento</span>
+                    {showNatureBreakdown && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="h-8 w-px bg-gray-100 mx-1" />
-
-          {/* Grupo 2: Versões & Histórico */}
-          <div className="flex items-center gap-1.5 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100">
+          <div className="relative">
             <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] transition-all text-button font-bold border ${showHistory ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+              type="button"
+              onClick={() => setVersoesMenuOpen(!versoesMenuOpen)}
+              aria-haspopup="menu"
+              aria-expanded={versoesMenuOpen}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${versoesMenuOpen || showHistory ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              title="Histórico e versões salvas do orçamento"
             >
               <History className="w-3.5 h-3.5" />
-              Histórico ({settings.versions?.length || 0})
+              Versões ({settings.versions?.length || 0})
+              <ChevronDown className={`w-3 h-3 transition-transform ${versoesMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-            <button
-              onClick={() => setIsVersionModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all text-button font-bold"
-              title="Salvar uma nova versão (snapshot) deste orçamento"
-            >
-              <Save className="w-3.5 h-3.5" />
-              Salvar versão
-            </button>
-            {(() => {
-              const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
-              if (!activeVersion) return null;
-              return (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-[6px]" title={`Versão ativa: ${activeVersion.description}`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                  <span className="text-xs font-bold text-amber-700 max-w-[120px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
+            {versoesMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setVersoesMenuOpen(false)}></div>
+                <div role="menu" className="absolute left-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setShowHistory(!showHistory); setVersoesMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                  >
+                    <History className="w-4 h-4 text-gray-500" />
+                    {showHistory ? 'Ocultar histórico' : `Ver histórico (${settings.versions?.length || 0})`}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setIsVersionModalOpen(true); setVersoesMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                    title="Salvar uma nova versão (snapshot) deste orçamento"
+                  >
+                    <Save className="w-4 h-4 text-gray-500" />
+                    Salvar nova versão…
+                  </button>
                 </div>
-              );
-            })()}
+              </>
+            )}
           </div>
+          {(() => {
+            const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
+            if (!activeVersion) return null;
+            return (
+              <div className="flex items-center gap-1.5 h-9 px-2.5 bg-amber-50 border border-amber-200 rounded-[6px]" title={`Versão ativa: ${activeVersion.description}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-amber-800 max-w-[140px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
+              </div>
+            );
+          })()}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Grupo 3: Menu de Ferramentas (análise + import/export + contrato) */}
           <div className="relative">
             <button
               onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-[6px] text-button font-bold border transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               title="Ferramentas de análise, importação e exportação"
             >
               <Wrench className="w-3.5 h-3.5" />
@@ -2424,7 +2470,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           <div className="relative">
             <button
               onClick={() => setManageEapMenuOpen(!manageEapMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-[6px] transition-all text-button font-bold border ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] transition-all text-button font-bold border whitespace-nowrap ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               title="Gerenciar estrutura da EAP"
             >
               <Layers className="w-3.5 h-3.5" />
@@ -2457,7 +2503,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           {/* Ação primária (§17) — mora aqui, na toolbar de botões */}
           <Button
             onClick={handleAddGroup}
-            className="gap-2 text-button"
+            className="gap-2 text-button whitespace-nowrap"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             Novo Grupo

@@ -238,8 +238,9 @@ describe('Correção 3 — loadAuxiliaryItems: notificação de falha visível a
         renderEditor([entryWithComposition]);
 
         // Ativar Nature Breakdown via botão (se existir no render)
-        const breakdownBtn = screen.queryByTitle(/natureza|breakdown|composição/i)
-            ?? screen.queryByRole('button', { name: /natureza/i });
+        // Desde 2026-11-14 o detalhamento mora no menu "Exibir" (toolbar mais calma).
+        fireEvent.click(screen.getByRole('button', { name: /Exibir/ }));
+        const breakdownBtn = screen.queryByRole('menuitemcheckbox', { name: /Mão de obra, material e equipamento/ });
 
         if (breakdownBtn) {
             await act(async () => {
@@ -604,7 +605,8 @@ describe('Analítico — excluir e salvar seguros', () => {
     it('Inline/Janela é preferência de quem usa: não grava no orçamento', async () => {
         const r = montar([makeEntry('a')]);
         await esperar();
-        fireEvent.click(screen.getByTitle('Ver CPU abaixo do item'));
+        fireEvent.click(screen.getByRole('button', { name: /Exibir/ }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: /Abaixo do item/ }));
         expect(r.onUpdateSettings).not.toHaveBeenCalled();
         expect(window.localStorage.getItem('budgetEditor:cpuViewMode')).toContain('inline');
     });

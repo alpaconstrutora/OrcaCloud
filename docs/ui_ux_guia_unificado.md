@@ -1667,6 +1667,37 @@ aparecia.
 
 ---
 
+### 6.13.1 Coluna de identificação fixa à esquerda — quando a tabela é mais larga que a tela
+
+**Criado em 2026-11-14 (Engenharia › Orçamentos, `ProjectList.tsx`; crítica `/impeccable critique`
+20/40).** A tabela tinha 1777px numa área de 1122px: quem rolava até Status/Bloqueio/Ações perdia o
+nome da linha. Código e Orçamento passaram a ficar fixos (`position: sticky; left`), só quando a
+coluna do nome está entre as duas primeiras (a ordem é arrastável).
+
+Três armadilhas, todas medidas no navegador — cada uma passa limpa em teste de unidade:
+
+1. **`border-collapse` vaza texto na costura entre duas células fixas** (Chrome): as colunas roladas
+   aparecem em fragmentos nos últimos ~3px da 1ª coluna fixa, mesmo com `elementFromPoint` dizendo
+   que a célula fixa está por cima. Faixa branca por `box-shadow` não cobre. A tabela com coluna fixa
+   usa `border-separate border-spacing-0` — e então a borda do `<tr>` (`divide-y`) deixa de ser
+   desenhada: a divisória vai para a célula (`border-b border-gray-200 group-last:border-b-0`), no
+   `<th>` também. A borda direita da célula fixa vai por `box-shadow: inset -1px 0 0`, e a última
+   fixa leva uma sombra curta (`6px 0 8px -6px`) marcando o conteúdo que rola por baixo.
+2. **A alça de redimensionar (`ResizeHandle`) é `z-20`** e, vindo depois no DOM, corta o rótulo do
+   `<th>` fixo. O `<th>` fixo usa `zIndex: 30` (inline — o `SortableHeader` aceita `style`, porque
+   a classe `relative` dele impede pôr `sticky` por classe). Célula fixa do corpo: `zIndex: 1`,
+   fundo opaco (`bg-white` + `group-hover:` com a cor do hover da linha já composta sobre o branco).
+3. **Linha de grupo (§6.12) ficava vazia ao rolar** — o rótulo está à esquerda. Corrigido na peça
+   compartilhada: em `LinhaDeGrupo`, seta + rótulo + contagem + total ficam num `div`
+   `sticky left-0 -ml-6 pl-6 bg-inherit`. Vale para toda tabela com Agrupar; sem rolagem, nada muda.
+
+> ℹ️ A largura padrão de uma coluna pode ser própria do contexto (`DEFAULT_COL_WIDTHS_ORCAMENTO`):
+> `useResizableColumns` grava só o que o usuário arrastou, então mudar o padrão não pisa em ninguém.
+> ℹ️ Junto: célula de texto longo (Cliente) numa linha só (`block truncate` + `title`), nome com
+> `line-clamp-2`, e Status/Bloqueio com `whitespace-nowrap` — a linha caiu de 73px para 53px.
+
+---
+
 ## 7. TABELA — `<tbody>` e TDs
 
 ### Linha (`<tr>`)

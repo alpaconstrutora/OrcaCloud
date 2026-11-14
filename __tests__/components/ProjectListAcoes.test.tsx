@@ -74,3 +74,26 @@ describe('Orçamentos — coluna de ações sem duplicata (§9.1)', () => {
         expect(screen.getByText('Ver Detalhes')).toBeTruthy();
     });
 });
+
+describe('Orçamentos — Código e Orçamento fixos à esquerda (crítica 2026-11-14, passo 2)', () => {
+    const fixa = (el: HTMLElement | null) => el?.closest('th,td') as HTMLElement | null;
+
+    it('fixa Código e Orçamento, com border-separate (o collapse vazava texto na costura)', async () => {
+        await montar('ORCAMENTO');
+        const tabela = document.querySelector('table') as HTMLTableElement;
+        expect(tabela.className).toContain('border-separate');
+        const thNome = fixa(screen.getByText('Orçamento', { selector: 'th *' }));
+        expect(thNome?.style.position).toBe('sticky');
+        expect(thNome?.style.zIndex).toBe('30'); // acima da alça de redimensionar (z-20)
+        const tdNome = fixa(screen.getByText('Garden'));
+        expect(tdNome?.style.position).toBe('sticky');
+        expect(tdNome?.style.left).toBe('118px'); // depois da coluna Código
+        expect(tdNome?.className).toContain('border-b');
+    });
+
+    it('Obras não mudam: border-collapse e nada fixo', async () => {
+        await montar('OBRA');
+        expect((document.querySelector('table') as HTMLTableElement).className).toContain('border-collapse');
+        expect(fixa(screen.getByText('Obra Garden'))?.style.position).toBe('');
+    });
+});

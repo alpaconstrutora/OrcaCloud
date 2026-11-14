@@ -114,15 +114,23 @@ export function LinhaDeGrupo<T>({ grupo, recolhido, continua, colSpan, onAlterna
                     onClick={() => onAlternar(grupo.key)}
                     className="flex items-center gap-2.5 px-6 py-2 bg-slate-50 hover:bg-slate-100 cursor-pointer select-none border-b border-slate-200 transition-colors"
                 >
-                    <span className="text-slate-400 flex-shrink-0">
-                        {recolhido ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                    </span>
-                    {/* Nome muito longo (contraparte do extrato) empurrava contagem e total para fora da tela. */}
-                    <span className="font-semibold text-sm text-slate-800 truncate max-w-[22rem]" title={grupo.label}>{grupo.label}</span>
-                    {continua && <span className="text-xs font-normal text-slate-500">(continua)</span>}
-                    <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
-                    {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
-                    {!semTotal && <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title={tituloTotal}>{formatMoney(grupo.total)}</span>}
+                    {/* Rótulo, contagem e total ficam à vista quando a tabela rola na horizontal
+                        (`sticky left-0`; `-ml-6 pl-6` estende o fundo sobre o recuo, §6.13): numa tabela mais larga que a
+                        tela, rolar até Ações deixava a linha do grupo vazia (14/11/2026, lista de
+                        Orçamentos). `bg-inherit` acompanha o hover e cobre o filete que passa
+                        por baixo. Em tabela que não rola, nada muda. É `div` (não `span`) de propósito: os testes
+                        leem o cabeçalho por `closest('div')` e seus filhos (seta, rótulo, contagem, total). */}
+                    <div className="sticky left-0 -ml-6 pl-6 flex items-center gap-2.5 min-w-0 pr-2.5 bg-inherit">
+                        <span className="text-slate-400 flex-shrink-0">
+                            {recolhido ? <ChevronRight className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </span>
+                        {/* Nome muito longo (contraparte do extrato) empurrava contagem e total para fora da tela. */}
+                        <span className="font-semibold text-sm text-slate-800 truncate max-w-[22rem]" title={grupo.label}>{grupo.label}</span>
+                        {continua && <span className="text-xs font-normal text-slate-500">(continua)</span>}
+                        <span className="text-xs font-normal text-slate-500 bg-slate-200 px-1.5 py-0.5 rounded-[6px] flex-shrink-0">{grupo.itens.length}</span>
+                        {/* Total logo após a contagem: no fim da linha ele caía fora da tela (tabela larga). */}
+                        {!semTotal && <span className="text-sm font-medium text-gray-800 whitespace-nowrap" title={tituloTotal}>{formatMoney(grupo.total)}</span>}
+                    </div>
                     <div className="flex-1 h-px bg-slate-200" />
                 </div>
             </td>

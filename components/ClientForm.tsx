@@ -45,6 +45,9 @@ interface ClientFormProps {
     onClose: () => void;
 }
 
+/** O submit mora na linha do título, fora do <form> — liga-se a ele por este id. */
+const CLIENT_FORM_ID = 'client-form';
+
 const LABEL = 'block text-xs font-semibold text-slate-500 mb-1';
 const INPUT = 'w-full h-9 rounded-[6px] border border-gray-200 px-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
 const INPUT_ICON = 'w-full h-9 rounded-[6px] border border-gray-200 pl-9 pr-3 text-sm font-medium outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all';
@@ -269,7 +272,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                 >
                     <ArrowLeft className="w-4 h-4 group-hover:-translate-x-1 transition-transform" />
                 </button>
-                <div>
+                <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-1">
                         <span className="text-xs font-medium text-blue-600">
                             {initialData ? (initialData.code || 'Cliente') : 'Novo cadastro'}
@@ -277,9 +280,35 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                         <span className="w-1 h-1 bg-gray-300 rounded-full" />
                         <span className="text-xs font-medium text-gray-400">Meus Clientes</span>
                     </div>
-                    <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight">
-                        {initialData ? (formData.name || initialData.name) : 'Novo cliente'}
-                    </h1>
+                    {/* Ações na linha do título, à direita (pedido do usuário, 13/11/2026 —
+                        mesmo molde de SupplierForm, §25 "Variante — ações na linha do
+                        título"). Ficam fora do <form>, então o submit se liga a ele pelo
+                        atributo `form` — salvar continua gravando de qualquer aba.
+                        "Voltar" (não "Cancelar") em edição; salvar desligado sem pendência. */}
+                    <div className="flex items-center justify-between gap-4">
+                        <h1 className="text-2xl font-black text-gray-900 tracking-tight leading-tight min-w-0 truncate">
+                            {initialData ? (formData.name || initialData.name) : 'Novo cliente'}
+                        </h1>
+                        <div className="flex items-center gap-3 shrink-0">
+                            {initialData && <SaveStatus dirty={dirty} savedAt={savedAt} />}
+                            <button
+                                type="button"
+                                onClick={handleBack}
+                                className="flex items-center justify-center h-9 px-3.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
+                            >
+                                {initialData ? 'Voltar' : 'Cancelar'}
+                            </button>
+                            <button
+                                type="submit"
+                                form={CLIENT_FORM_ID}
+                                disabled={isSubmitting || !formData.name?.trim() || (!!initialData && !dirty)}
+                                title={!formData.name?.trim() ? 'Informe o nome do cliente' : initialData && !dirty ? 'Nenhuma alteração para salvar' : undefined}
+                                className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                                {isSubmitting ? 'Salvando...' : initialData ? 'Salvar alterações' : 'Salvar cliente'}
+                            </button>
+                        </div>
+                    </div>
                     <p className="text-gray-400 text-sm mt-1.5 font-medium">{TAB_SUBTITLES[activeTab]}</p>
                 </div>
             </div>
@@ -302,7 +331,7 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                 </div>
             </div>
 
-            <form onSubmit={handleSubmit}>
+            <form id={CLIENT_FORM_ID} onSubmit={handleSubmit}>
                 <div className="bg-white rounded-[10px] border border-gray-100 shadow-sm overflow-hidden">
                     <div className="p-6 space-y-6">
                         {activeTab === 'geral' && (
@@ -816,26 +845,6 @@ const ClientForm: React.FC<ClientFormProps> = ({ initialData, onSubmit, onClose 
                                 />
                             </div>
                         )}
-                    </div>
-
-                    {/* Rodapé canônico da §25 — "Voltar" (não "Cancelar") em edição:
-                        o que já foi salvo fica salvo. */}
-                    <div className="px-6 py-4 border-t border-gray-100 bg-gray-50/50 flex items-center justify-end gap-3">
-                        {initialData && <SaveStatus dirty={dirty} savedAt={savedAt} className="mr-auto" />}
-                        <button
-                            type="button"
-                            onClick={handleBack}
-                            className="flex items-center justify-center h-9 px-3.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95"
-                        >
-                            {initialData ? 'Voltar' : 'Cancelar'}
-                        </button>
-                        <button
-                            type="submit"
-                            disabled={isSubmitting || !formData.name?.trim() || (!!initialData && !dirty)}
-                            className="flex items-center gap-1.5 h-9 px-3.5 bg-blue-600 text-white rounded-[6px] hover:bg-blue-700 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
-                        >
-                            {isSubmitting ? 'Salvando...' : initialData ? 'Salvar alterações' : 'Salvar cliente'}
-                        </button>
                     </div>
                 </div>
             </form>

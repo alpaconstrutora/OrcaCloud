@@ -57,6 +57,23 @@ export function chavePorNome(nome: string | null | undefined): ChaveDeGrupo {
     return t ? { key: t.toLowerCase(), label: t } : null;
 }
 
+/**
+ * Campo de VÁRIOS valores por linha (ex.: empreendimentos de um cliente) →
+ * grupo da COMBINAÇÃO, com o mesmo texto que a célula lista ("X, Y"). Ordem
+ * alfabética pt-BR, para "X, Y" e "Y, X" caírem juntos; chave pelos ids (dois
+ * homônimos de organizações diferentes não se fundem). Lista vazia = sem valor.
+ * Cada linha continua em UM grupo só — contagem, seleção e paginação não mudam.
+ */
+export function chavePorCombinacao(itens: { id: string; name?: string | null }[]): ChaveDeGrupo {
+    const validos = itens.filter(e => e.id && (e.name ?? '').trim()) as { id: string; name: string }[];
+    if (!validos.length) return null;
+    const vistos = new Set<string>();
+    const unicos = validos.filter(e => (vistos.has(e.id) ? false : (vistos.add(e.id), true)));
+    const ordenados = unicos.sort((a, b) =>
+        a.name.trim().localeCompare(b.name.trim(), 'pt-BR', { numeric: true, sensitivity: 'base' }) || a.id.localeCompare(b.id));
+    return { key: ordenados.map(e => e.id).join('|'), label: ordenados.map(e => e.name.trim()).join(', ') };
+}
+
 /** Data 'AAAA-MM-DD…' → grupo do mês ("Julho/2026"). Use com `ordem: 'chave'`. */
 export function chavePorMes(data: string | null | undefined): ChaveDeGrupo {
     const am = (data ?? '').slice(0, 7);

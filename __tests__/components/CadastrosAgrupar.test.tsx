@@ -59,7 +59,12 @@ const CLIENTES = [
 vi.mock('../../services/clientService', () => ({ clientService: { listClients: vi.fn(async () => CLIENTES) } }));
 vi.mock('../../services/clientCategoryService', () => ({ clientCategoryService: { list: vi.fn(async () => []) } }));
 vi.mock('../../services/empreendimentoService', () => ({ empreendimentoService: { mapObrasToEmpreendimentos: vi.fn(async () => ({})) } }));
-vi.mock('../../services/clientEmpreendimentoService', () => ({ clientEmpreendimentoService: { listByClients: vi.fn(async () => ({})) } }));
+// Vínculo explícito cliente → empreendimento: Maria em um, Bruno em dois (na
+// ordem inversa da alfabética, para provar que a combinação é ordenada), Ana em nenhum.
+vi.mock('../../services/clientEmpreendimentoService', () => ({ clientEmpreendimentoService: { listByClients: vi.fn(async () => ({
+    c1: [{ id: 'e1', name: 'Residencial Aurora' }],
+    c3: [{ id: 'e2', name: 'Vila Sol' }, { id: 'e1', name: 'Residencial Aurora' }],
+})) } }));
 vi.mock('../../services/clientMessagesService', () => ({ clientMessagesService: { sendMessage: vi.fn() } }));
 
 // ── Ativos ──────────────────────────────────────────────────────────
@@ -136,6 +141,21 @@ describe('Meus Clientes', () => {
         // Decrescente (molde ClickUp) inverte a ordem do fluxo.
         fireEvent.change(screen.getByRole('combobox', { name: 'Ordem dos grupos' }), { target: { value: 'desc' } });
         expect(Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent)).toEqual(['Inativo', 'Ativo']);
+    });
+
+    // Pedido de 13/11/2026: "Filtro grupo falta empreendimento". Vários por
+    // cliente → um grupo por COMBINAÇÃO (o texto que a célula lista), cada
+    // cliente uma vez só.
+    it('agrupa por empreendimento: um grupo por combinação, sem vínculo vai para o fim', async () => {
+        render(<ClientList organizationId="org1" />);
+        await screen.findAllByText('Maria');
+        await screen.findAllByText('Vila Sol');
+        agrupar('Agrupar os clientes', 'empreendimento');
+        const rotulos = Array.from(document.querySelectorAll('tbody span.font-semibold')).map(e => e.textContent);
+        expect(rotulos).toEqual(['Residencial Aurora', 'Residencial Aurora, Vila Sol', 'Sem empreendimento']);
+        expect(pedacos('Residencial Aurora')).toBe('Residencial Aurora 1');
+        expect(pedacos('Residencial Aurora, Vila Sol')).toBe('Residencial Aurora, Vila Sol 1');
+        expect(pedacos('Sem empreendimento')).toBe('Sem empreendimento 1');
     });
 });
 

@@ -129,6 +129,8 @@ const OPCOES_RESULTADO: { value: ResultadoMensagem | ''; label: string }[] = [
 ];
 
 const MSG_DO_IGNORADO = 'Remetente salvo. Para trazer os PDFs dele que ficaram de fora, busque o período de novo na aba Buscas por período.';
+/* Remetente novo busca sozinho os e-mails dele (13/11/2026) — o aviso diz isso, não pede a busca. */
+const MSG_BUSCA_AUTOMATICA = 'Remetente salvo. Buscando os e-mails dele dos últimos 30 dias — acompanhe na aba Buscas por período.';
 
 interface Props {
     /** Qual aba da captura está aberta (`components/boletos/abasBoletos.ts`). */
@@ -361,9 +363,15 @@ const EmailCapturaConfig: React.FC<Props> = ({ secao, onAbrirBoleto, onResumoMud
     const buscaDaUnicaCaixa = contasAtivas.length === 1 ? buscaAtivaDa(contasAtivas[0].id) : null;
 
     // ─── ações dos remetentes ────────────────────────────────────────────────
-    function remetenteSalvo(r: RemetenteCaptura, resultado?: ResultadoDosPadroes) {
+    function remetenteSalvo(r: RemetenteCaptura, resultado?: ResultadoDosPadroes, buscaAutomatica?: Promise<BuscaPeriodo | null>) {
         const doIgnorado = !!sheetRemetente.doIgnorado;
         setRemetentes(prev => prev.some(x => x.id === r.id) ? prev.map(x => (x.id === r.id ? r : x)) : [...prev, r]);
+        if (buscaAutomatica) {
+            buscaAutomatica
+                .then(b => { if (b) buscaAtualizada(b); })
+                .catch(e => showToast(`Remetente salvo, mas a busca dos e-mails dele não começou: ${e instanceof Error ? e.message : String(e)} A varredura diária vai trazê-los.`, 'error'));
+            if (!resultado) { showToast(MSG_BUSCA_AUTOMATICA); return; }
+        }
         if (resultado) {
             if (resultado.atualizados.length) onBoletosAtualizados?.(resultado.atualizados);
             const pulados = resultado.pulados ? ` ${resultado.pulados} ficaram de fora: foram alterados por alguém enquanto isso.` : '';

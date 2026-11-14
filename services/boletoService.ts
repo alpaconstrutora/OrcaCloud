@@ -14,6 +14,7 @@ import { motivoParaNaoPagar } from '../utils/situacaoAprovacaoTitulo';
 import { validateCpfCnpj } from '../lib/validators';
 import { MOTIVO_STATUS_PROGRAMADO, planoDeStatusDoBoleto } from '../utils/boletoStatus';
 import { avaliarAprovacaoEmLote, MOTIVO_SEM_VENCIMENTO, MOTIVO_SEM_FORNECEDOR, MOTIVO_SEM_VALOR } from '../utils/boletoAprovacaoLote';
+import { podeMudarOrganizacao, motivoParaNaoMudarOrganizacao } from '../utils/boletoOrganizacaoLote';
 import type {
     Boleto,
     BoletoStatus,
@@ -883,8 +884,25 @@ export const boletoService = {
      * trava de 16/07/2026): sugere o mais antigo — é sugestão, o usuário confirma.
      */
     async sugerirFornecedor(boletoId: string, organizationId: string, documento: string): Promise<string | null> {
+        const supplierId = await this.fornecedorPorDocumento(organizationId, documento);
+        if (!supplierId) return null;
+
+        await supabase
+            .from(TABLE)
+            .update({ sugestao_supplier_id: supplierId, sugestao_confianca: 95 })
+            .eq('id', boletoId)
+            .eq('organization_id', organizationId);
+        return supplierId;
+    },
+
+    /**
+     * O fornecedor da organização com este CPF/CNPJ, ou null — sem gravar nada. É a busca da
+     * sugestão acima, também usada pela CAPTURA antes de o boleto existir (13/11/2026: a captura
+     * não mostrava o credor; agora já abre com o fornecedor do CNPJ lido do PDF).
+     */
+    async fornecedorPorDocumento(organizationId: string, documento: string): Promise<string | null> {
         const doc = onlyDigits(documento);
-        if (!validateCpfCnpj(doc)) return null;
+        if (!organizationId || !validateCpfCnpj(doc)) return null;
 
         const { data, error } = await supabase.rpc('find_supplier_in_org_by_document', {
             p_organization_id: organizationId,
@@ -895,14 +913,7 @@ export const boletoService = {
             return null;
         }
         const supplier = (Array.isArray(data) ? data[0] : data) as { id?: string } | null;
-        if (!supplier?.id) return null;
-
-        await supabase
-            .from(TABLE)
-            .update({ sugestao_supplier_id: supplier.id, sugestao_confianca: 95 })
-            .eq('id', boletoId)
-            .eq('organization_id', organizationId);
-        return supplier.id;
+        return supplier?.id ?? null;
     },
 
     /**
@@ -1451,16 +1462,13 @@ export const boletoService = {
      * Decidido com o usuário em 24/09/2026: só rascunho/revisão.
      */
     podeMudarOrganizacao(status: BoletoStatus): boolean {
-        return status === 'rascunho' || status === 'revisao';
+        // Fonte única com a Edição em Lote (13/11/2026): utils/boletoOrganizacaoLote.ts.
+        return podeMudarOrganizacao(status);
     },
 
     /** Por que o campo Organização está apagado — frase para a tela mostrar. */
     motivoParaNaoMudarOrganizacao(status: BoletoStatus): string | null {
-        if (this.podeMudarOrganizacao(status)) return null;
-        if (status === 'aprovado') return 'Boleto aprovado já tem título no financeiro desta organização. Exclua ou cancele para recapturar em outra.';
-        if (status === 'pago') return 'Boleto pago: reverta para rascunho antes de mudar de organização.';
-        if (status === 'cancelado') return 'Boleto cancelado fica no histórico da organização em que foi capturado.';
-        return 'Só é possível mudar a organização enquanto o boleto está em rascunho.';
+        return motivoParaNaoMudarOrganizacao(status);
     },
 
     /**

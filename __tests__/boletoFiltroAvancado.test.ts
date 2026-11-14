@@ -6,7 +6,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { applyFilterRules, type FilterRule } from '../components/ui/FilterUtils';
-import { buildAdvancedFilterFields, getAdvancedFilterValue, diaDaCaptura, type MapasDoBoleto } from '../utils/boletoFiltroAvancado';
+import { buildAdvancedFilterFields, getAdvancedFilterValue, diaDaCaptura, nomeDaOrganizacao, type MapasDoBoleto } from '../utils/boletoFiltroAvancado';
 import type { Boleto } from '../types';
 
 const mapas: MapasDoBoleto = {
@@ -14,6 +14,7 @@ const mapas: MapasDoBoleto = {
     projectMap: { p1: 'Garden Cambuhy', p2: 'Edifício Centro' },
     ccMap: { c1: 'Administrativo > Salários', c2: 'Obra > Material' },
     userNameMap: { 'ana@x.com': 'Ana Souza' },
+    orgMap: { o: 'ALPA Construtora', o2: 'Condomínio Garden' },
 };
 
 const bol = (x: Partial<Boleto>): Boleto => ({
@@ -24,7 +25,7 @@ const bol = (x: Partial<Boleto>): Boleto => ({
 const lista = [
     bol({ id: '1', numero: 201, supplier_id: 'f1', project_id: 'p1', cost_center_id: 'c1', created_by_email: 'ana@x.com' }),
     bol({ id: '2', numero: 198, project_id: 'p2', cost_center_id: 'c2', created_by_email: 'zé@x.com', documento_nome: 'energia.pdf' }),
-    bol({ id: '3', numero: 163 }),
+    bol({ id: '3', numero: 163, organization_id: 'o2' }),
 ];
 
 const regra = (fieldKey: string, operator: FilterRule['operator'], value?: unknown): FilterRule =>
@@ -35,7 +36,7 @@ const filtrar = (r: FilterRule) => {
 };
 
 describe('filtro avançado de boletos', () => {
-    const colunas = ['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor',
+    const colunas = ['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'organizacao', 'valor',
         'vencimento', 'status', 'capturado_em', 'capturado_por', 'origem'];
 
     it('tem um campo para cada coluna de dados da tabela', () => {
@@ -81,5 +82,13 @@ describe('filtro avançado de boletos', () => {
         const d = new Date(2026, 9, 20, 23, 30); // 20/10 23:30 local
         expect(diaDaCaptura(bol({ created_at: d.toISOString() }))).toBe('2026-10-20');
         expect(diaDaCaptura(bol({ created_at: '' }))).toBeNull();
+    });
+
+    it('Organização (13/11/2026): lista com o NOME da organização dona, e filtra por ele', () => {
+        const campos = Object.fromEntries(buildAdvancedFilterFields(lista, mapas).map(f => [f.key, f]));
+        expect(campos.organizacao.options?.map(o => o.value)).toEqual(['ALPA Construtora', 'Condomínio Garden']);
+        expect(filtrar(regra('organizacao', 'is', 'Condomínio Garden'))).toEqual(['3']);
+        expect(filtrar(regra('organizacao', 'contains', 'alpa'))).toEqual(['1', '2']);
+        expect(nomeDaOrganizacao(bol({ organization_id: 'desconhecida' }), mapas.orgMap)).toBe('');
     });
 });

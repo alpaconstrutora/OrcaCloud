@@ -28,7 +28,7 @@ import ActionIconButton from './ui/ActionIconButton';
 import { useStore } from '../store/useStore';
 import { ColumnConfig, useTableColumns, ColumnConfigButton, SortableHeader, usePersistedState, useResizableColumns } from './ui/TableUtils';
 import { useAdvancedFilters, AdvancedFilterPanel, applyFilterRules } from './ui/FilterUtils';
-import { buildAdvancedFilterFields, getAdvancedFilterValue, rotuloOrigem, nomeCapturador } from '../utils/boletoFiltroAvancado';
+import { buildAdvancedFilterFields, getAdvancedFilterValue, rotuloOrigem, nomeCapturador, nomeDaOrganizacao } from '../utils/boletoFiltroAvancado';
 import { formatDateBR, formatDateTimeBR } from './ui/Format';
 import Button from './ui/Button';
 import { KpiCard } from './ui/KpiCard';
@@ -61,6 +61,9 @@ const BOLETO_COLUMNS: ColumnConfig[] = [
     { key: 'descricao', label: 'Descrição', sortable: true },
     { key: 'obra', label: 'Obra', sortable: true },
     { key: 'centro_custo', label: 'Centro de Custo', sortable: true },
+    // Organização dona do boleto (13/11/2026): com o topo em "Todas", sem ela não dava para
+    // saber de qual empresa é cada linha.
+    { key: 'organizacao', label: 'Organização', sortable: true },
     { key: 'valor', label: 'Valor', sortable: true },
     { key: 'vencimento', label: 'Vencimento', sortable: true },
     { key: 'status', label: 'Status', sortable: true },
@@ -87,6 +90,7 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
     descricao: { label: 'Descrição', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     obra: { label: 'Obra', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     centro_custo: { label: 'Centro de Custo', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
+    organizacao: { label: 'Organização', className: 'px-6 py-2 border-r border-gray-100 overflow-hidden' },
     valor: { label: 'Valor', className: 'px-6 py-2 border-r border-gray-100 text-right overflow-hidden' },
     vencimento: { label: 'Vencimento', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
     status: { label: 'Status', className: 'px-6 py-2 border-r border-gray-100 text-center overflow-hidden' },
@@ -98,7 +102,7 @@ const BOLETO_COLUMN_HEADERS: Record<string, { label: string; sortable?: boolean;
 
 // Larguras padrão de coluna — redimensionável via useResizableColumns (§6.1).
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-    numero: 118, documento: 260, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, valor: 130,
+    numero: 118, documento: 260, beneficiario: 220, descricao: 220, obra: 160, centro_custo: 179, organizacao: 180, valor: 130,
     vencimento: 150, status: 130, capturado_em: 165, capturado_por: 167, origem: 100, actions: 100,
 };
 
@@ -113,6 +117,7 @@ function renderBoletoCell(
         supplierMap: Record<string, string>;
         projectMap: Record<string, string>;
         ccMap: Record<string, string>;
+        orgMap: Record<string, string>;
         userNameMap: Record<string, string>;
         onOpen: (b: Boleto) => void;
         onDelete: (b: Boleto) => void;
@@ -120,7 +125,7 @@ function renderBoletoCell(
         onAbrirDocumento: (b: Boleto) => void;
     },
 ): React.ReactNode {
-    const { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete, abrindoDocumento, onAbrirDocumento } = ctx;
+    const { atrasado, supplierMap, projectMap, ccMap, orgMap, userNameMap, onOpen, onDelete, abrindoDocumento, onAbrirDocumento } = ctx;
     switch (key) {
         case 'numero':
             return (
@@ -176,6 +181,12 @@ function renderBoletoCell(
                 </p>
             );
         }
+        case 'organizacao':
+            return (
+                <p className="break-words text-sm font-normal text-gray-700">
+                    {nomeDaOrganizacao(b, orgMap) || '—'}
+                </p>
+            );
         case 'valor':
             return (
                 <div className="text-sm font-medium text-gray-800 text-right whitespace-nowrap">
@@ -353,13 +364,14 @@ interface BoletoRowItemProps extends BoletoItemBaseProps {
     orderedVisibleColumns: string[];
     projectMap: Record<string, string>;
     ccMap: Record<string, string>;
+    orgMap: Record<string, string>;
     userNameMap: Record<string, string>;
     abrindoDocumento: boolean;
     onAbrirDocumento: (b: Boleto) => void;
 }
 
 const BoletoRowItem = React.memo(function BoletoRowItem({
-    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, orderedVisibleColumns, projectMap, ccMap, userNameMap,
+    boleto: b, idx, selected, isHighlighted, atrasado, supplierMap, orderedVisibleColumns, projectMap, ccMap, orgMap, userNameMap,
     abrindoDocumento, onAbrirDocumento,
     onOpen, onCheckboxMouseDown, onCheckboxChange, onDelete,
 }: BoletoRowItemProps) {
@@ -386,7 +398,7 @@ const BoletoRowItem = React.memo(function BoletoRowItem({
                     className="px-6 py-2.5 border-r border-gray-100 last:border-r-0"
                     onClick={key === 'actions' || key === 'documento' ? (e) => e.stopPropagation() : undefined}
                 >
-                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, userNameMap, onOpen, onDelete, abrindoDocumento, onAbrirDocumento })}
+                    {renderBoletoCell(key, b, { atrasado, supplierMap, projectMap, ccMap, orgMap, userNameMap, onOpen, onDelete, abrindoDocumento, onAbrirDocumento })}
                 </td>
             ))}
             {/* espaçador — casa com o <col /> sem largura, no final (ver colgroup) */}
@@ -419,7 +431,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     // w-full/100% junto com table-layout:fixed (§6.1). Sem coluna "Ações" (§9.1) —
     // o espaçador vai no FINAL, não antes de nada (não há coluna fixa pra ancorar).
     const tableTotalWidth = 40
-        + (['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'origem', 'actions'] as const)
+        + (['numero', 'documento', 'beneficiario', 'descricao', 'obra', 'centro_custo', 'organizacao', 'valor', 'vencimento', 'status', 'capturado_em', 'capturado_por', 'origem', 'actions'] as const)
             .reduce((sum, key) => sum + (tableColumns.visibleColumns.includes(key) ? cols.getWidth(key) : 0), 0);
 
     // Documento em abertura (path) — a célula mostra "Abrindo..." enquanto a URL assinada sai.
@@ -490,7 +502,9 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
     const [supplierMap, setSupplierMap] = useState<Record<string, string>>({});
     const [userNameMap, setUserNameMap] = useState<Record<string, string>>({});
     // Campos do filtro avançado dependem das linhas e dos mapas carregados (§5.5).
-    const mapasDoBoleto = useMemo(() => ({ supplierMap, projectMap, ccMap, userNameMap }), [supplierMap, projectMap, ccMap, userNameMap]);
+    // Nome da organização dona de cada boleto — a lista de organizações já vem do AppRouter.
+    const orgMap = useMemo(() => Object.fromEntries(organizations.map(o => [o.id, o.name])), [organizations]);
+    const mapasDoBoleto = useMemo(() => ({ supplierMap, projectMap, ccMap, userNameMap, orgMap }), [supplierMap, projectMap, ccMap, userNameMap, orgMap]);
     const advancedFields = useMemo(() => buildAdvancedFilterFields(boletos, mapasDoBoleto), [boletos, mapasDoBoleto]);
     const advancedFilters = useAdvancedFilters(advancedFields, 'boletoManagerFilters:advanced');
 
@@ -813,6 +827,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 case 'valor':         va = a.valor ?? 0;                        vb = b.valor ?? 0;                        break;
                 case 'obra':          va = projectMap[a.project_id ?? ''] ?? ''; vb = projectMap[b.project_id ?? ''] ?? ''; break;
                 case 'centro_custo':  va = ccMap[a.cost_center_id ?? ''] ?? '';  vb = ccMap[b.cost_center_id ?? ''] ?? '';  break;
+                case 'organizacao':   va = nomeDaOrganizacao(a, orgMap).toLowerCase(); vb = nomeDaOrganizacao(b, orgMap).toLowerCase(); break;
                 case 'beneficiario':  va = (beneficiarioDoBoleto(a, supplierMap).nome ?? '').toLowerCase(); vb = (beneficiarioDoBoleto(b, supplierMap).nome ?? '').toLowerCase(); break;
                 case 'descricao':     va = (a.descricao ?? '').toLowerCase();         vb = (b.descricao ?? '').toLowerCase();         break;
                 case 'status':        va = a.status;                            vb = b.status;                            break;
@@ -827,7 +842,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         });
 
         return list;
-    }, [boletos, buscaDebounced, vencDe, vencAte, vencAno, vencMes, valorMin, valorMax, advancedFilters.rules, advancedFields, mapasDoBoleto, supplierMap, projectMap, ccMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
+    }, [boletos, buscaDebounced, vencDe, vencAte, vencAno, vencMes, valorMin, valorMax, advancedFilters.rules, advancedFields, mapasDoBoleto, supplierMap, projectMap, ccMap, orgMap, userNameMap, tableColumns.sortColumn, tableColumns.sortDirection]);
 
     // Agrupamento só no modo lista (a grade não tem linha de grupo).
     const agrupando = viewMode === 'list' && groupBy !== 'none';
@@ -969,6 +984,19 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
         void recarregarStats();
     }
 
+    /** Excluído pelo formulário: some da lista (§22) — nunca vira "Cancelado". */
+    function handleExcluido(boletoId: string) {
+        setBoletos(prev => prev.filter(b => b.id !== boletoId));
+        setSelectedIds(prev => {
+            if (!prev.has(boletoId)) return prev;
+            const next = new Set(prev);
+            next.delete(boletoId);
+            return next;
+        });
+        notify('Boleto excluído com sucesso.');
+        void recarregarStats();
+    }
+
     async function handleExport(tipo: 'excel' | 'pdf') {
         if (!filtered.length) return;
         setExporting(true);
@@ -1001,6 +1029,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                 boleto={editing}
                 onClose={fecharModal}
                 onSaved={handleSaved}
+                onExcluido={handleExcluido}
                 onAbrirOutroBoleto={abrirBoletoPorId}
             />
         );
@@ -1503,6 +1532,7 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
                                             supplierMap={supplierMap}
                                             projectMap={projectMap}
                                             ccMap={ccMap}
+                                            orgMap={orgMap}
                                             userNameMap={userNameMap}
                                             abrindoDocumento={abrindoDocumento === b.documento_path}
                                             onAbrirDocumento={abrirDocumento}
@@ -1558,7 +1588,6 @@ const BoletoManager: React.FC<BoletoManagerProps> = ({
             {isLoteOpen && (
                 <BoletoLoteModal
                     organizationId={effectiveOrgId ?? organizationId}
-                    organizations={organizations}
                     userEmail={userEmail}
                     projectId={projectId}
                     onClose={() => setIsLoteOpen(false)}

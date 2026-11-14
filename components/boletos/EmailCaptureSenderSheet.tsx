@@ -36,6 +36,7 @@ import {
     type ContaCaptura,
     type RemetenteCaptura,
     type RemetenteRascunho,
+    type BuscaPeriodo,
 } from '../../services/emailCaptureService';
 
 export type FornecedorDaOrg = SupplierOption & { organization_id: string | null };
@@ -67,7 +68,7 @@ interface Props {
     /** "Monitorar remetente" pela revisão do boleto: já vem com e-mail, caixa, fornecedor e padrões. */
     prefill?: Partial<RemetenteRascunho> | null;
     /** `resultado`: boletos em revisão que receberam os padrões ao salvar (quando o usuário aceitou). */
-    onSalvo: (r: RemetenteCaptura, resultado?: ResultadoDosPadroes) => void;
+    onSalvo: (r: RemetenteCaptura, resultado?: ResultadoDosPadroes, buscaAutomatica?: Promise<BuscaPeriodo | null>) => void;
 }
 
 const SEM_PADROES = {
@@ -233,6 +234,7 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
         setSalvando(true);
         setErro(null);
         try {
+            const novo = !(remetente?.id ?? salvoId);
             const salvo = await emailCaptureService.salvarRemetente(remetente?.id ?? salvoId, {
                 ...form,
                 organization_id: conta.organization_id,
@@ -271,7 +273,11 @@ const EmailCaptureSenderSheet: React.FC<Props> = ({ open, onClose, contas, forne
                     return;
                 }
             }
-            onSalvo(salvo, resultado);
+            // Remetente novo: os e-mails dele dos últimos 30 dias são buscados sozinhos (13/11/2026,
+            // "Buscas por período: automático"). Não espera: quem chamou acompanha a promessa.
+            const buscaAutomatica = novo && salvo.ativo ? emailCaptureService.buscarDoRemetenteNovo(salvo) : undefined;
+            if (buscaAutomatica) onSalvo(salvo, resultado, buscaAutomatica);
+            else onSalvo(salvo, resultado);
             onClose();
         } catch (e) {
             setErro(e instanceof Error ? e.message : String(e));

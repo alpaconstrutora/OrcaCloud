@@ -1,11 +1,21 @@
 import React, { useEffect, useState } from 'react';
 import { proService } from '../services/proService';
 import { ProConfig, ProPixKeyType } from '../types';
-import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, AlertCircle } from 'lucide-react';
+import { Loader2, Sparkles, User, Landmark, FileText, ChevronLeft, Plus, X, AlertCircle, Check, Save } from 'lucide-react';
 import ActionIconButton from './ui/ActionIconButton';
 import { useConfirm } from './ui/confirm';
 import { useToast } from '../hooks/useToast';
 import { normalizarChavePix, EXEMPLO_CHAVE_PIX } from '../utils/pixCopiaECola';
+
+// Linguagem visual do app (§16/§17/§21/§32): cartão, campo (valor nunca cinza-claro), botões.
+const CARTAO = 'bg-white p-4 border border-slate-200 rounded-[10px] space-y-3.5';
+const TITULO_BLOCO = 'text-sm font-semibold text-slate-900 flex items-center gap-1.5';
+const CAMPO_SEM_BORDA = 'w-full bg-white border rounded-[6px] px-3 h-11 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600 font-medium';
+const CAMPO = `${CAMPO_SEM_BORDA} border-slate-300`;
+const CAMPO_TEXTO = 'w-full bg-white border border-slate-300 rounded-[6px] px-3 py-2.5 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600 resize-none font-medium';
+const BOTAO_SECUNDARIO = 'h-11 px-3 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors';
+// Alvo de toque ≥ 44px no celular para os ícones de editar/excluir.
+const ALVO_ICONE = 'w-11 h-11 flex items-center justify-center';
 
 interface ProConfigFormProps {
   userId: string;
@@ -20,6 +30,9 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
 
   // Estados dos campos de configuração
   const [templateHeader, setTemplateHeader] = useState('');
+  const [cidade, setCidade] = useState('');
+  // Rótulo ↔ campo (htmlFor/id): leitor de tela lê o rótulo, e tocar no rótulo foca o campo.
+  const idForm = React.useId();
   const [profissao, setProfissao] = useState('AR_CONDICIONADO');
   const [pixKeyType, setPixKeyType] = useState<ProPixKeyType>('CPF');
   const [pixKey, setPixKey] = useState('');
@@ -44,6 +57,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
         const data = await proService.getConfig(userId);
         if (data) {
           setTemplateHeader(data.template_header || '');
+          setCidade(data.cidade || '');
           setProfissao(data.profissao || 'AR_CONDICIONADO');
           setPixKeyType(data.pix_key_type || 'CPF');
           setPixKey(data.pix_key || '');
@@ -80,6 +94,7 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
       await proService.saveConfig({
         user_id: userId,
         template_header: templateHeader.trim(),
+        cidade: cidade.trim(),
         profissao,
         pix_key_type: pixKeyType,
         pix_key: pixKey.trim(),
@@ -179,8 +194,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center p-8 min-h-[400px]">
-        <Loader2 className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3 text-teal-500" />
-        <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Configurações...</span>
+        <Loader2 className="w-8 h-8 animate-spin mb-3 text-blue-600" aria-hidden />
+        <span className="text-sm text-slate-600">Carregando configurações…</span>
       </div>
     );
   }
@@ -189,72 +204,90 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
     <div className="flex flex-col text-slate-800">
       {/* Header — no computador quem mostra é a casca (ProModule) */}
       <div className="flex items-center gap-3 mb-6 md:hidden">
-        <button onClick={onBack} className="p-1 hover:bg-slate-100 rounded-lg text-slate-400 hover:text-slate-700 transition-colors">
-          <ChevronLeft className="w-5 h-5" />
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Voltar"
+          className="w-11 h-11 flex items-center justify-center rounded-[6px] text-slate-700 hover:bg-slate-100 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+        >
+          <ChevronLeft className="w-5 h-5" aria-hidden />
         </button>
         <div>
-          <h1 className="text-base font-black text-slate-800">Configurações do Perfil</h1>
-          <p className="text-xs text-slate-500 uppercase font-bold tracking-wider">ÒPURA Pro</p>
+          <h1 className="text-base font-black text-slate-900">Configurações do perfil</h1>
+          <p className="text-xs font-semibold text-slate-600">ÒPURA Pro</p>
         </div>
       </div>
 
       {/* Formulário */}
       <form onSubmit={handleSave} className="space-y-4 flex-1">
-        
+
         {/* Bloco: Identidade Fantasia */}
-        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
-            <User className="w-3.5 h-3.5" />
-            Dados do Profissional
-          </span>
+        <div className={CARTAO}>
+          <h2 className={TITULO_BLOCO}>
+            <User className="w-4 h-4 text-slate-600" aria-hidden />
+            Dados do profissional
+          </h2>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Nome Comercial / Fantasia</label>
-            <input
+            <label htmlFor={`${idForm}-nome`} className="block text-xs font-semibold text-slate-500">Nome comercial / fantasia</label>
+            <input id={`${idForm}-nome`}
               type="text"
               placeholder="Ex: Alpa Refrigeração & Climatização"
               value={templateHeader}
               onChange={(e) => setTemplateHeader(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+              className={CAMPO}
               required
             />
-            <span className="block text-[8px] text-slate-400">Este nome aparecerá em destaque no cabeçalho do PDF dos seus orçamentos.</span>
+            <span className="block text-xs text-slate-600">Este nome aparecerá em destaque no cabeçalho do PDF dos seus orçamentos.</span>
           </div>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Profissão Principal</label>
-            <select
+            <label htmlFor={`${idForm}-cidade`} className="block text-xs font-semibold text-slate-500">Cidade</label>
+            <input id={`${idForm}-cidade`}
+              type="text"
+              placeholder="Ex: Cuiabá"
+              autoComplete="address-level2"
+              value={cidade}
+              onChange={(e) => setCidade(e.target.value)}
+              className={CAMPO}
+            />
+            <span className="block text-xs text-slate-600">Vai no código Pix: aparece no comprovante de quem paga.</span>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor={`${idForm}-profissao`} className="block text-xs font-semibold text-slate-500">Profissão principal</label>
+            <select id={`${idForm}-profissao`}
               value={profissao}
               onChange={(e) => setProfissao(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+              className={CAMPO}
             >
               <option value="AR_CONDICIONADO">Ar-condicionado e Refrigeração</option>
               <option value="ELETRICISTA">Eletricista / Instalações Elétricas</option>
               <option value="ENCANADOR">Encanador / Sistemas Hidráulicos</option>
               <option value="PINTOR">Pintor / Acabamentos</option>
             </select>
-            <span className="block text-[8px] text-slate-400">Determina quais os modelos de orçamento padrão serão sugeridos.</span>
+            <span className="block text-xs text-slate-600">Determina quais os modelos de orçamento padrão serão sugeridos.</span>
           </div>
         </div>
 
         {/* Bloco: Dados de Faturamento PIX */}
-        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
-            <Landmark className="w-3.5 h-3.5" />
+        <div className={CARTAO}>
+          <h2 className={TITULO_BLOCO}>
+            <Landmark className="w-4 h-4 text-slate-600" aria-hidden />
             Faturamento & Pix
-          </span>
+          </h2>
 
           <div className="grid grid-cols-3 gap-2.5">
             <div className="col-span-1 space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500">Tipo de Chave</label>
-              <select
+              <label htmlFor={`${idForm}-tipo-pix`} className="block text-xs font-semibold text-slate-500">Tipo de chave</label>
+              <select id={`${idForm}-tipo-pix`}
                 value={pixKeyType}
                 onChange={(e) => {
                   const tipo = e.target.value as ProPixKeyType;
                   setPixKeyType(tipo);
                   if (erroChavePix) conferirChavePix(tipo);
                 }}
-                className="w-full bg-slate-50 border border-slate-200 rounded-[6px] px-2.5 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium"
+                className={`${CAMPO_SEM_BORDA} border-slate-300`}
               >
                 <option value="CPF">CPF</option>
                 <option value="CNPJ">CNPJ</option>
@@ -264,8 +297,8 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
               </select>
             </div>
             <div className="col-span-2 space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500">Chave PIX</label>
-              <input
+              <label htmlFor={`${idForm}-chave-pix`} className="block text-xs font-semibold text-slate-500">Chave Pix</label>
+              <input id={`${idForm}-chave-pix`}
                 type="text"
                 placeholder={EXEMPLO_CHAVE_PIX[pixKeyType]}
                 inputMode={pixKeyType === 'CPF' || pixKeyType === 'CELULAR' ? 'numeric' : pixKeyType === 'EMAIL' ? 'email' : 'text'}
@@ -275,98 +308,97 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
                 onBlur={() => conferirChavePix()}
                 aria-invalid={!!erroChavePix}
                 aria-describedby={erroChavePix ? 'erro-chave-pix' : undefined}
-                className={`w-full bg-slate-50 border rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 font-medium ${erroChavePix ? 'border-red-400' : 'border-slate-200'}`}
-                required
+                className={`${CAMPO_SEM_BORDA} ${erroChavePix ? 'border-red-400' : 'border-slate-300'}`}
               />
               {erroChavePix && (
                 <p id="erro-chave-pix" className="text-xs text-red-600" role="alert">{erroChavePix}</p>
               )}
             </div>
           </div>
-          <span className="block text-[8px] text-slate-400">Utilizada para gerar o QR Code Dinâmico e o código Copia e Cola ao concluir um serviço.</span>
+          <span className="block text-xs text-slate-600">Utilizada para gerar o QR Code Dinâmico e o código Copia e Cola ao concluir um serviço.</span>
         </div>
 
         {/* Bloco: Layout de Documentos */}
-        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5" />
-            Textos do Documento
-          </span>
+        <div className={CARTAO}>
+          <h2 className={TITULO_BLOCO}>
+            <FileText className="w-4 h-4 text-slate-600" aria-hidden />
+            Textos do documento
+          </h2>
 
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Mensagem / Rodapé do PDF</label>
-            <textarea
+            <label htmlFor={`${idForm}-rodape`} className="block text-xs font-semibold text-slate-500">Mensagem / rodapé do PDF</label>
+            <textarea id={`${idForm}-rodape`}
               rows={2}
               placeholder="Ex: Obrigado pela preferência! Garantia de 90 dias conforme CDC."
               value={templateFooter}
               onChange={(e) => setTemplateFooter(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none font-medium"
+              className={CAMPO_TEXTO}
             />
           </div>
         </div>
 
         {/* Bloco: Modelos Customizados */}
-        <div className="bg-white p-4 border border-slate-200/40 rounded-[24px] space-y-3.5 shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-          <span className="text-xs font-black uppercase tracking-widest text-teal-600 flex items-center gap-1.5">
-            <Sparkles className="w-3.5 h-3.5" />
-            Modelos de Orçamentos Customizados
-          </span>
+        <div className={CARTAO}>
+          <h2 className={TITULO_BLOCO}>
+            <Sparkles className="w-4 h-4 text-slate-600" aria-hidden />
+            Modelos de orçamentos customizados
+          </h2>
 
           {/* Form inline para cadastrar/editar template */}
-          <div className="bg-slate-50 p-3.5 rounded-2xl border border-slate-200/50 space-y-2.5">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">
-              {tempId ? 'Editar Modelo' : 'Adicionar Novo Modelo Rápido'}
+          <div className="bg-slate-50 p-3.5 rounded-[10px] border border-slate-200 space-y-2.5">
+            <span className="block text-xs font-semibold text-slate-600">
+              {tempId ? 'Editar modelo' : 'Adicionar novo modelo rápido'}
             </span>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Título do Modelo</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-titulo`} className="block text-xs font-semibold text-slate-500">Título do modelo</label>
+                <input id={`${idForm}-modelo-titulo`}
                   type="text"
                   placeholder="Ex: Instalação de Ar-condicionado de Janela"
                   value={tempTitulo}
                   onChange={(e) => setTempTitulo(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className={CAMPO}
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Valor Unitário / Estimado (R$)</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-valor`} className="block text-xs font-semibold text-slate-500">Valor unitário / estimado (R$)</label>
+                <input id={`${idForm}-modelo-valor`}
                   type="text"
                   placeholder="Ex: 350,00"
                   value={tempValor}
                   onChange={(e) => setTempValor(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className={`${CAMPO} tabular-nums`}
                 />
               </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Unidade de Medida</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-unidade`} className="block text-xs font-semibold text-slate-500">Unidade de medida</label>
+                <input id={`${idForm}-modelo-unidade`}
                   type="text"
                   placeholder="Ex: Área (m2), metro, unidade"
                   value={tempUnidade}
                   onChange={(e) => setTempUnidade(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className={CAMPO}
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Quantidade Padrão</label>
-                <input
+                <label htmlFor={`${idForm}-modelo-qtd`} className="block text-xs font-semibold text-slate-500">Quantidade padrão</label>
+                <input id={`${idForm}-modelo-qtd`}
                   type="number"
                   placeholder="Ex: 100"
                   value={tempQuantidade}
                   onChange={(e) => setTempQuantidade(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className={`${CAMPO} tabular-nums`}
                 />
               </div>
             </div>
 
             {/* Cálculo do Total Estimado */}
             {tempValor && tempQuantidade && (
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-xs font-bold text-slate-500">
-                <span>Cálculo do Total Estimado:</span>
-                <span className="text-teal-600 font-black">
+              <div className="bg-white p-2.5 rounded-[6px] border border-slate-200 flex justify-between items-center text-xs font-semibold text-slate-600">
+                <span>Cálculo do total estimado:</span>
+                <span className="text-sm text-slate-900 font-semibold tabular-nums">
                   {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(
                     (parseFloat(tempValor.replace(/[^\d.,]/g, '').replace(',', '.')) || 0) * (parseFloat(tempQuantidade) || 0)
                   )}
@@ -375,67 +407,69 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
             )}
 
             <div className="space-y-1">
-              <label className="block text-xs font-semibold text-slate-500">Descrição Detalhada do Serviço</label>
-              <textarea
+              <label htmlFor={`${idForm}-modelo-descricao`} className="block text-xs font-semibold text-slate-500">Descrição detalhada do serviço</label>
+              <textarea id={`${idForm}-modelo-descricao`}
                 rows={2}
                 placeholder="Descreva o que está incluso no serviço..."
                 value={tempDescricao}
                 onChange={(e) => setTempDescricao(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 resize-none font-medium"
+                className={CAMPO_TEXTO}
               />
             </div>
             <div className="flex gap-2 justify-end">
               {tempId && (
                 <button
+                  type="button"
                   onClick={handleCancelEdit}
-                  className="px-3 py-1.5 border border-slate-200 text-slate-500 text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-slate-100 transition-colors flex items-center gap-1"
+                  className={BOTAO_SECUNDARIO}
                 >
-                  <X className="w-3 h-3" />
+                  <X className="w-4 h-4" aria-hidden />
                   Cancelar
                 </button>
               )}
               <button
+                type="button"
                 onClick={handleAddOrUpdateTemplate}
-                className="px-3 py-1.5 bg-teal-500 text-white text-xs font-bold uppercase tracking-wider rounded-lg hover:bg-teal-600 transition-colors flex items-center gap-1"
+                className={BOTAO_SECUNDARIO}
               >
-                {tempId ? <Sparkles className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                {tempId ? 'Salvar Modelo' : 'Adicionar'}
+                {tempId ? <Check className="w-4 h-4" aria-hidden /> : <Plus className="w-4 h-4" aria-hidden />}
+                {tempId ? 'Salvar modelo' : 'Adicionar'}
               </button>
             </div>
           </div>
 
           {/* Lista de templates cadastrados */}
           {templatesCustom.length === 0 ? (
-            <div className="text-center py-6 bg-slate-50/50 rounded-2xl border border-dashed border-slate-200">
-              <p className="text-xs font-medium text-slate-400">Nenhum modelo customizado cadastrado ainda.</p>
+            <div className="text-center py-6 bg-slate-50 rounded-[10px] border border-dashed border-slate-300">
+              <p className="text-sm text-slate-600">Nenhum modelo customizado cadastrado ainda.</p>
             </div>
           ) : (
             <div className="space-y-2">
-              <label className="block text-xs font-semibold text-slate-500">Seus Modelos ({templatesCustom.length})</label>
-              <div className="divide-y divide-slate-100 bg-slate-50/30 rounded-2xl border border-slate-200/40 overflow-hidden animate-fadeIn">
+              <h3 className="text-xs font-semibold text-slate-600">Seus modelos ({templatesCustom.length})</h3>
+              <div className="divide-y divide-slate-100 bg-white rounded-[10px] border border-slate-200 overflow-hidden">
                 {templatesCustom.map((t) => {
                   const hasUnitInfo = t.unidade && t.quantidade;
                   const totalCalculated = hasUnitInfo ? t.valor * (t.quantidade || 0) : t.valor;
                   return (
-                    <div key={t.id} className="p-3 flex items-start justify-between gap-3 hover:bg-slate-50/80 transition-colors">
-                      <div className="flex-1 space-y-1">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-xs font-bold text-slate-700">{t.titulo}</span>
-                          <span className="text-[9px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-full border border-slate-200/40">
+                    <div key={t.id} className="p-3 flex items-start justify-between gap-3 hover:bg-slate-50 transition-colors">
+                      <div className="flex-1 min-w-0 space-y-1">
+                        <span className="block text-sm font-semibold text-slate-900">{t.titulo}</span>
+                        <div className="flex items-center gap-x-3 gap-y-0.5 flex-wrap text-xs tabular-nums">
+                          <span className="font-medium text-slate-700">
                             {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}
                             {t.unidade ? ` / ${t.unidade}` : ''}
                           </span>
                           {hasUnitInfo && (
-                            <span className="text-[9px] font-black text-teal-600 bg-teal-50 px-2.5 py-0.5 rounded-full border border-teal-150">
+                            <span className="font-semibold text-slate-900">
                               Total: {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(totalCalculated)} ({t.quantidade} un)
                             </span>
                           )}
                         </div>
-                        <p className="text-xs text-slate-500 font-medium line-clamp-2">{t.descricao}</p>
+                        <p className="text-xs text-slate-600 line-clamp-2">{t.descricao}</p>
                       </div>
-                      <div className="flex items-center gap-1">
-                        <ActionIconButton kind="edit" size="sm" title="Editar modelo" onClick={(e) => handleEditTemplate(e, t)} />
-                        <ActionIconButton kind="delete" size="sm" title="Excluir modelo" onClick={(e) => handleDeleteTemplate(e, t.id)} />
+                      <div className="flex items-center gap-1 shrink-0">
+                        <ActionIconButton kind="edit" title="Editar modelo" aria-label="Editar modelo" className={ALVO_ICONE} onClick={(e) => handleEditTemplate(e, t)} />
+                        <ActionIconButton kind="delete" title="Excluir modelo" aria-label="Excluir modelo" className={ALVO_ICONE} onClick={(e) => handleDeleteTemplate(e, t.id)} />
                       </div>
                     </div>
                   );
@@ -450,17 +484,17 @@ export const ProConfigForm: React.FC<ProConfigFormProps> = ({ userId, onBack }) 
           <button
             type="submit"
             disabled={saving}
-            className="w-full py-3 bg-gradient-to-tr from-teal-500 to-cyan-400 text-white text-button font-black uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-95 flex items-center justify-center gap-1.5 disabled:opacity-50"
+            className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors active:scale-[0.98] disabled:opacity-60"
           >
             {saving ? (
               <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Salvando...
+                <Loader2 className="w-4 h-4 animate-spin" aria-hidden />
+                Salvando…
               </>
             ) : (
               <>
-                <Sparkles className="w-4 h-4" />
-                Salvar Configurações
+                <Save className="w-4 h-4" aria-hidden />
+                Salvar configurações
               </>
             )}
           </button>

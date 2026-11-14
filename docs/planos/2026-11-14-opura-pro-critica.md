@@ -149,14 +149,89 @@ Pedido (mesma sessão): "autorizado".
   junto o "+ Cadastrar" no computador.
 - Não verificado: Safari/iPhone real (área segura conferida só por código).
 
-### 4. Linguagem visual do app (`/impeccable quieter` + `typeset`) — pendente
-Sem degradê/emoji/caixa alta; §16/§17; texto ≥ 12px; `useConfirm`/toast (§14);
-classes de cor inexistentes corrigidas.
+### 4. Linguagem visual do app (`/impeccable quieter` + `typeset`) — frente `pro-linguagem-visual`
 
-### 5. Números, acessibilidade e menores (`/impeccable harden`) — pendente
-"A Receber", "Total Acumulado", "Hoje/Próximos", erro de rede com "tentar de novo";
-teclado e nomes acessíveis; cidade do recebedor no cadastro; voz com acento;
-compressão de fotos; WhatsApp antes dos `await`.
+Pedido (mesma sessão): "autorizado". Direção já decidida no passo 0: "Seguir o app (§16/§17)".
+
+**O que muda** — as 5 telas (painel, orçamento, serviço, clientes, ajustes), por um mapa
+único de tradução (cartão `rounded-[10px]` sem sombra difusa; primário §17 azul, um por
+tela; secundários com borda; rótulo §21; status em texto colorido traduzido §8; emoji →
+lucide; teal/ciano → azul/slate; `alert`/`window.confirm` → toast/`useConfirm`; textos de
+8–10px → ≥ 12px; slate-400 em conteúdo → slate-600; classes inexistentes corrigidas;
+campos `h-11` brancos com valor escuro §32; cartões e etapas acessíveis por teclado).
+Feito por 3 agentes em paralelo (um por grupo de telas) com a mesma especificação; o
+coordenador revisou, conferiu na tela e corrigiu o que escapou.
+
+**Como sei que terminou**
+- `check-ui-standard.sh` sem ❌ nas 6 telas do Pro; busca por degradê/8–10px/teal/ciano/
+  classes inexistentes/`alert`/`window.confirm` vazia (fora do jsPDF).
+- `tsc` exit 0; as 10 travas `*Guard*` + testes do Pro verdes.
+- Navegador, computador e celular (390px), com dados fictícios: painel, serviço (3
+  alturas), orçamento, clientes (cartão aberto) e ajustes.
+
+**Estado (14/11/2026): implementado e conferido; falta publicar** (depende do #430).
+- 6 telas sem ❌; busca vazia; `tsc` exit 0; 12 arquivos de trava/teste, 89 testes verdes.
+- Achado na conferência e corrigido: dois azuis sólidos na tela do serviço ("Copiar Pix"
+  virou secundário — o primário é "Finalizar serviço"); Title Case que sobrou no
+  orçamento e em clientes ("Novo Orçamento Rápido", "Valor Cobrado", "Salvar e Enviar
+  via WhatsApp", "Meus Clientes"…) → capitalização normal, como nas outras telas.
+- Ajuste à especificação: `<label>` fica `text-slate-500` (a trava `rotuloPadraoGuard`
+  só aceita esse; 4,8:1 passa o contraste); rótulos `<span>` em slate-600.
+- Decisões dos agentes aceitas: "Colher assinatura" sem "Touch"; "×" das fotos com alvo
+  de 44px e quadrado visível de 32px; "Adicionar modelo" secundário (primário da tela é
+  "Salvar configurações"); emoji dentro de `<option>` virou `<optgroup>`; `ClientSelect`
+  alinhado por `triggerClassName` (sem tocar no componente); `BLOQUEADO` passa a
+  aparecer "Bloqueado" no painel (antes caía em "Pendente").
+- Fica para o passo 5: `htmlFor` nos rótulos de Ajustes; texto "QR Code Dinâmico" e
+  opções do select de profissão (passo 6).
+
+### 5. Números, acessibilidade e menores (`/impeccable harden`) — frente `pro-numeros-acessibilidade`
+
+Pedido (mesma sessão): "Autorizado". ("A receber" já tinha sido corrigido no passo 2.)
+
+**O que muda**
+- Agenda (`utils/proAgenda.ts`, testado): atrasado (agendado antes de hoje e aberto) vai
+  para o topo de "Hoje" em vermelho; serviço sem data vai para o fim de "Próximos" como
+  "Sem data marcada" (antes caía em "Hoje" pela criação do orçamento); "Próximos" em
+  ordem de data e sem corte; orçamentos com "Ver todos os N".
+- Erro de rede com saída: painel, clientes e serviço mostram aviso + "Tentar de novo"
+  (antes: painel "R$ 0,00 / Nenhum serviço", clientes vazio, serviço "não encontrado");
+  serviço inexistente ganha "Voltar à agenda".
+- Clientes: "Total acumulado" (somava ENVIADO) vira "Total aprovado" (só APROVADO).
+- Cidade do profissional: migration `aplicar_20271114800000_pro_config_cidade.sql`
+  (`pro_config.cidade`, aplicada) + campo em Ajustes; vai no campo 60 do Pix (vazio =
+  BRASILIA, como antes).
+- Ajustes: os 11 rótulos ligados ao campo (`htmlFor`/`id`); chave Pix opcional.
+- Ditado por voz (`utils/proDitado.ts`, testado): nomes com acento; "para" solto só vira
+  cliente se casar com um cadastrado.
+- Fotos do serviço passam pelo `utils/comprimirFoto.ts` que o Diário já usa (2048 px,
+  JPEG, EXIF, HEIC) antes do base64.
+- Orçamento: a aba do WhatsApp nasce no próprio toque (Safari bloqueia `window.open`
+  depois de `await`) e recebe o link depois de salvar; fecha se salvar falhar. PDF leva o
+  endereço do cliente já cadastrado (antes só o do cliente novo).
+
+**Como sei que terminou**
+- `proAgenda` 5 testes e `proDitado` 5 testes verdes; `tsc` exit 0; guia sem ❌; travas.
+- Navegador (celular 390px, dados fictícios, 0 escritas): agenda com atrasado/sem data/
+  ver todos; erro e recuperação no painel e no serviço; Pix com a cidade; foto
+  comprimida; rótulos ligados; total aprovado.
+
+**Estado (14/11/2026): implementado e conferido; PR depois do merge do #434.**
+- 16 arquivos de teste, 145 testes verdes (inclui `comprimirFoto` e `diarioFonte`, que
+  usam o utilitário de foto); `tsc` exit 0; 6 telas sem ❌.
+- Navegador: "Atrasado · 12/11" no topo de Hoje; "Sem data marcada" no fim de Próximos;
+  "Ver todos os 6 orçamentos"; queda de rede → aviso → "Tentar de novo" recupera (painel
+  e serviço); Pix com `6006CUIABA`; PNG de 20 MB/3000×2000 → JPEG 2048×1365 (pior caso,
+  ruído); 11/11 rótulos ligados, tocar em "Cidade" foca o campo; Ana: "Total aprovado
+  R$ 350,00" (o ENVIADO de R$ 260 não entra mais).
+- Achado e corrigido na conferência: o aviso de erro mostrava "(TypeError: Failed to
+  fetch)" — jargão; o detalhe fica só no console.
+- Deslize registrado: um `Write` sobrescreveu `utils/comprimirFoto.ts` (do Diário);
+  restaurado com `git checkout` antes de qualquer commit e passou a ser reutilizado.
+- Não verificado: ditado no microfone real e WhatsApp no Safari do iPhone (sem aparelho);
+  a lógica do ditado está coberta por teste.
+- Fica de fora: checklist fixo de 3 etapas (editar etapas é recurso novo) e profissão
+  padrão "Ar-condicionado" sem cadastro.
 
 ### 6. Textos (`/impeccable clarify`) — pendente
 Status traduzido, "Faturamento", "QR Code Dinâmico", PDF com dados do emissor,

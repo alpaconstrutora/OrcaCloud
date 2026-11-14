@@ -1,9 +1,16 @@
 import React from 'react';
 import { proService } from '../services/proService';
+import { interpretarDitado } from '../utils/proDitado';
 import { ProCliente, ProOrcamento } from '../types';
 import ClientSelect from './ClientSelect';
 import jsPDF from 'jspdf';
 import MoneyCentsInput from './ui/MoneyCentsInput';
+import { CheckCircle2, ChevronLeft, Mic, Plus, Save, Send, Square } from 'lucide-react';
+import { useToast } from '../hooks/useToast';
+
+// Campo de uma linha no celular: alvo de 44px, valor em slate-900 (§32), foco azul do app.
+const CAMPO = 'w-full h-11 bg-white border border-slate-300 rounded-[6px] px-3 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600';
+const CAMPO_TEXTO = 'w-full bg-white border border-slate-300 rounded-[6px] px-3 py-2.5 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600 resize-none';
 
 interface ProOrcamentoFormProps {
   userId: string;
@@ -18,6 +25,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   onBack,
   onSave
 }) => {
+  const { showToast } = useToast();
+  const idCampo = React.useId();
   const [loading, setLoading] = React.useState(false);
   const [clientes, setClientes] = React.useState<ProCliente[]>([]);
 
@@ -60,7 +69,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   const handleVoiceInput = () => {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert('Seu navegador não suporta reconhecimento de voz nativo. Experimente usar o Google Chrome ou Safari Mobile.');
+      showToast('Seu navegador não suporta reconhecimento de voz nativo. Experimente usar o Google Chrome ou Safari Mobile.', 'error');
       return;
     }
 
@@ -80,7 +89,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     recognition.onerror = (event: any) => {
       console.error('Erro no reconhecimento de voz:', event.error);
       setIsListening(false);
-      alert('Não foi possível capturar sua voz. Tente novamente.');
+      showToast('Não foi possível capturar sua voz. Tente novamente.', 'error');
     };
 
     recognition.onresult = (event: any) => {
@@ -91,53 +100,19 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     recognition.start();
   };
 
+  // Leitura do ditado em utils/proDitado.ts (testado): nomes com acento e "para" solto
+  // só vira cliente se casar com um cadastrado.
   const parseVoiceText = (text: string) => {
-    const textLower = text.toLowerCase();
-    
-    // 1. Extração de Valor: procura algo como "X reais" ou "R$ X" ou apenas números
-    let extractedValor = '';
-    const valorMatch = textLower.match(/(\d+(?:[\.,]\d+)?)\s*(?:reais|real)/) || textLower.match(/r\$\s*(\d+(?:[\.,]\d+)?)/);
-    if (valorMatch) {
-      extractedValor = valorMatch[1].replace(',', '.');
+    const d = interpretarDitado(text, clientes);
+    if (d.valor) setValor(d.valor);
+    if (d.clienteId) {
+      setIsNovoCliente(false);
+      setClienteId(d.clienteId);
+    } else if (d.novoClienteNome) {
+      setIsNovoCliente(true);
+      setNovoClienteNome(d.novoClienteNome);
     }
-
-    // 2. Extração de Cliente: procura "para o cliente X" ou "para a cliente X" ou "para X"
-    let extractedClienteId = '';
-    const clienteMatch = textLower.match(/para\s+(?:o|a)?\s*cliente\s+([a-zA-Z\s]+)/) || textLower.match(/para\s+([a-zA-Z\s]+)/);
-    if (clienteMatch) {
-      const nomeBuscado = clienteMatch[1].trim().toLowerCase();
-      // Tenta encontrar na lista de clientes existentes
-      const found = clientes.find(c => c.nome.toLowerCase().includes(nomeBuscado));
-      if (found) {
-        extractedClienteId = found.id;
-        setIsNovoCliente(false);
-      } else {
-        // Se não achar, preenche o campo de novo cliente com o nome extraído!
-        setIsNovoCliente(true);
-        setNovoClienteNome(clienteMatch[1].trim());
-      }
-    }
-
-    // 3. Descrição: o restante do texto ou a frase completa limpando o valor e o cliente
-    let extractedDesc = text;
-    // Limpa o padrão de valor do texto
-    if (valorMatch) {
-      extractedDesc = extractedDesc.replace(valorMatch[0], '');
-    }
-    // Limpa o padrão de cliente do texto
-    if (clienteMatch) {
-      extractedDesc = extractedDesc.replace(clienteMatch[0], '');
-    }
-    // Remove espaços extras e limpa termos comuns de início
-    extractedDesc = extractedDesc.replace(/crie um orçamento de|orçamento de|criar orçamento para/gi, '').trim();
-    // Capitaliza a primeira letra
-    if (extractedDesc) {
-      extractedDesc = extractedDesc.charAt(0).toUpperCase() + extractedDesc.slice(1);
-    }
-
-    if (extractedValor) setValor(extractedValor);
-    if (extractedClienteId) setClienteId(extractedClienteId);
-    if (extractedDesc) setDescricao(extractedDesc);
+    if (d.descricao) setDescricao(d.descricao);
   };
 
   React.useEffect(() => {
@@ -172,7 +147,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   }, [userId, orcamentoId]);
 
   // Função para gerar o PDF Premium (Stripe/Linear Style)
-  const generatePDF = (clientName: string, clientPhone: string, savedOrc: ProOrcamento) => {
+  const generatePDF = (clientName: string, clientPhone: string, clientAddress: string, savedOrc: ProOrcamento) => {
     const doc = new jsPDF({
       orientation: 'portrait',
       unit: 'mm',
@@ -221,8 +196,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
     doc.setFont('helvetica', 'normal');
     doc.text(clientName, 110, 63);
     doc.text(`Telefone: ${clientPhone}`, 110, 68);
-    if (novoClienteEndereco) {
-      doc.text(`Endereço: ${novoClienteEndereco}`, 110, 73);
+    if (clientAddress) {
+      doc.text(`Endereço: ${clientAddress}`, 110, 73);
     }
 
     // Linha divisória
@@ -309,9 +284,14 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
   const handleSave = async (status: 'RASCUNHO' | 'ENVIADO' | 'APROVADO') => {
     if (!descricao || !valor) {
-      alert('Por favor, preencha a descrição e o valor do orçamento.');
+      showToast('Por favor, preencha a descrição e o valor do orçamento.', 'error');
       return;
     }
+
+    // O Safari do iPhone bloqueia `window.open` que acontece depois de um `await` (deixa de
+    // contar como toque do usuário). A aba nasce aqui, vazia, e recebe o link do WhatsApp
+    // depois de salvar; se salvar falhar, ela fecha.
+    const janelaWhatsApp = status === 'ENVIADO' ? window.open('', '_blank') : null;
 
     try {
       setLoading(true);
@@ -319,11 +299,13 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
       let targetClienteId = clienteId;
       let targetClienteNome = '';
       let targetClienteTelefone = '';
+      let targetClienteEndereco = '';
 
       // Se for um novo cliente, salvamos ele primeiro
       if (isNovoCliente) {
         if (!novoClienteNome || !novoClienteTelefone) {
-          alert('Por favor, informe o nome e telefone do novo cliente.');
+          showToast('Por favor, informe o nome e telefone do novo cliente.', 'error');
+          janelaWhatsApp?.close();
           setLoading(false);
           return;
         }
@@ -339,10 +321,12 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         targetClienteId = newClient.id;
         targetClienteNome = newClient.nome;
         targetClienteTelefone = newClient.telefone;
+        targetClienteEndereco = newClient.endereco || novoClienteEndereco || '';
       } else {
         const selClient = clientes.find(c => c.id === clienteId);
         targetClienteNome = selClient?.nome || 'Cliente';
         targetClienteTelefone = selClient?.telefone || '';
+        targetClienteEndereco = selClient?.endereco || '';
       }
 
       // Salva o orçamento
@@ -361,7 +345,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
       // Se o status for ENVIADO, gera o PDF e abre o WhatsApp
       if (status === 'ENVIADO') {
-        generatePDF(targetClienteNome, targetClienteTelefone, savedOrc);
+        generatePDF(targetClienteNome, targetClienteTelefone, targetClienteEndereco, savedOrc);
 
         // Mensagem de WhatsApp rápida
         const formattedVal = new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(Number(valor));
@@ -371,7 +355,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         // Adiciona DDI Brasil (55) se não houver
         const targetPhone = cleanPhone.length === 11 || cleanPhone.length === 10 ? `55${cleanPhone}` : cleanPhone;
         const waUrl = `https://wa.me/${targetPhone}?text=${encoded}`;
-        window.open(waUrl, '_blank');
+        if (janelaWhatsApp) janelaWhatsApp.location.href = waUrl;
+        else window.open(waUrl, '_blank');
       }
 
       // Se o status for APROVADO, já cria automaticamente o Serviço (OS) correspondente
@@ -396,7 +381,8 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
       onSave();
     } catch (error) {
       console.error('Erro ao salvar orçamento:', error);
-      alert('Não foi possível salvar o orçamento. Tente novamente.');
+      janelaWhatsApp?.close();
+      showToast('Não foi possível salvar o orçamento. Tente novamente.', 'error');
     } finally {
       setLoading(false);
     }
@@ -405,19 +391,24 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   return (
     <div className="flex flex-col text-slate-800">
       {/* Header */}
-      <div className="flex items-center gap-3 mb-6">
-        <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-lg">
-          ←
+      <div className="flex items-center gap-1 mb-6">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Voltar"
+          className="w-11 h-11 -ml-2 flex items-center justify-center rounded-[6px] text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+        >
+          <ChevronLeft className="w-5 h-5" aria-hidden="true" />
         </button>
-        <h1 className="text-lg font-black text-slate-800">
-          {orcamentoId ? 'Editar Orçamento' : 'Novo Orçamento Rápido'}
+        <h1 className="text-lg font-black text-slate-900">
+          {orcamentoId ? 'Editar orçamento' : 'Novo orçamento rápido'}
         </h1>
       </div>
 
       {loading && (
         <div className="text-center py-8">
-          <div className="w-6 h-6 border-2 border-teal-500 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
-          <span className="text-xs text-slate-400">Processando...</span>
+          <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin mx-auto mb-2" />
+          <span className="text-sm text-slate-600">Processando...</span>
         </div>
       )}
 
@@ -425,8 +416,9 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
         <div className="space-y-4 flex-1">
           {/* Modelos Rápidos por Profissão */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Carregar Modelo Rápido</label>
+            <label htmlFor={`${idCampo}-modelo`} className="block text-xs font-semibold text-slate-500">Carregar modelo rápido</label>
             <select
+              id={`${idCampo}-modelo`}
               value={selectedTemplateIndex}
               onChange={(e) => {
                 const idx = e.target.value;
@@ -436,7 +428,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   const t = templates[Number(idx)] as any;
                   if (t) {
                     setDescricao(t.descricao);
-                    
+
                     let detectedUnidade = t.unidade || '';
                     let detectedQuantidade = t.quantidade !== undefined && t.quantidade !== null ? t.quantidade.toString() : '';
                     let detectedValorUnitario = '';
@@ -464,14 +456,28 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   }
                 }
               }}
-              className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className={CAMPO}
             >
               <option value="">Selecione um modelo...</option>
-              {getTodosTemplates().map((t: any, index) => (
-                <option key={index} value={index}>
-                  {t.tipo === 'CUSTOM' ? '✨ ' : ''}{t.titulo} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}{t.unidade ? `/${t.unidade}` : ''})
-                </option>
-              ))}
+              {/* O value continua sendo o índice na lista completa (padrão + meus); o grupo
+                  "Meus modelos" substitui o ✨ que marcava o modelo próprio. */}
+              {(() => {
+                const opcoes = getTodosTemplates().map((t: any, index) => (
+                  <option key={index} value={index}>
+                    {t.titulo} ({new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(t.valor)}{t.unidade ? `/${t.unidade}` : ''})
+                  </option>
+                ));
+                const todos = getTodosTemplates();
+                const padrao = opcoes.filter((_, i) => todos[i].tipo !== 'CUSTOM');
+                const meus = opcoes.filter((_, i) => todos[i].tipo === 'CUSTOM');
+                if (meus.length === 0) return padrao;
+                return (
+                  <>
+                    <optgroup label="Modelos padrão">{padrao}</optgroup>
+                    <optgroup label="Meus modelos">{meus}</optgroup>
+                  </>
+                );
+              })()}
             </select>
           </div>
 
@@ -488,92 +494,123 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                   onChange={(id) => { setIsNovoCliente(false); setClienteId(id); }}
                   placeholder={isNovoCliente ? 'Novo cliente (preencha abaixo)' : 'Selecione um cliente...'}
                   icon={null}
+                  triggerClassName="w-full h-11 bg-white border border-slate-300 rounded-[6px] text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-600 transition-colors"
                 />
               </div>
               <button
                 type="button"
                 onClick={() => { setIsNovoCliente(v => !v); setClienteId(''); }}
-                className={`h-9 px-3.5 rounded-[6px] text-[13px] font-medium border transition-all shrink-0 ${isNovoCliente ? 'bg-blue-600 text-white border-blue-600' : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'}`}
+                className={`h-11 inline-flex items-center gap-1 px-3 rounded-[6px] text-sm font-medium border transition-colors shrink-0 ${isNovoCliente ? 'bg-blue-600 text-white border-blue-600 hover:bg-blue-700' : 'bg-white text-blue-700 border-blue-200 hover:bg-blue-50'}`}
               >
-                {isNovoCliente ? 'Cancelar novo' : '+ Novo cliente'}
+                {isNovoCliente ? 'Cancelar novo' : (
+                  <>
+                    <Plus className="w-4 h-4" aria-hidden="true" />
+                    Novo cliente
+                  </>
+                )}
               </button>
             </div>
           </div>
 
           {/* Form Novo Cliente Inline */}
           {isNovoCliente && (
-            <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-[20px] space-y-3">
-              <span className="block text-[9px] font-black uppercase tracking-widest text-teal-600">Dados do Novo Cliente</span>
-              <div className="space-y-2">
-                <input
-                  type="text"
-                  placeholder="Nome completo do cliente"
-                  value={novoClienteNome}
-                  onChange={(e) => setNovoClienteNome(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
-                />
-                <input
-                  type="tel"
-                  placeholder="Telefone (com DDD)"
-                  value={novoClienteTelefone}
-                  onChange={(e) => setNovoClienteTelefone(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
-                />
-                <input
-                  type="text"
-                  placeholder="Endereço de execução (opcional)"
-                  value={novoClienteEndereco}
-                  onChange={(e) => setNovoClienteEndereco(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500"
-                />
+            <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-4 space-y-3">
+              <span className="block text-xs font-semibold text-slate-600">Dados do novo cliente</span>
+              <div className="space-y-3">
+                <div className="space-y-1.5">
+                  <label htmlFor={`${idCampo}-cli-nome`} className="block text-xs font-semibold text-slate-500">Nome</label>
+                  <input
+                    id={`${idCampo}-cli-nome`}
+                    type="text"
+                    placeholder="Nome completo do cliente"
+                    value={novoClienteNome}
+                    onChange={(e) => setNovoClienteNome(e.target.value)}
+                    className={CAMPO}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${idCampo}-cli-telefone`} className="block text-xs font-semibold text-slate-500">Telefone</label>
+                  <input
+                    id={`${idCampo}-cli-telefone`}
+                    type="tel"
+                    placeholder="Telefone (com DDD)"
+                    value={novoClienteTelefone}
+                    onChange={(e) => setNovoClienteTelefone(e.target.value)}
+                    className={CAMPO}
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <label htmlFor={`${idCampo}-cli-endereco`} className="block text-xs font-semibold text-slate-500">Endereço de execução</label>
+                  <input
+                    id={`${idCampo}-cli-endereco`}
+                    type="text"
+                    placeholder="Endereço de execução (opcional)"
+                    value={novoClienteEndereco}
+                    onChange={(e) => setNovoClienteEndereco(e.target.value)}
+                    className={CAMPO}
+                  />
+                </div>
               </div>
             </div>
           )}
 
           {/* Descrição do Serviço */}
           <div className="space-y-1.5">
-            <div className="flex items-center justify-between">
-              <label className="block text-xs font-semibold text-slate-500">Serviço a ser realizado</label>
+            <div className="flex items-center justify-between gap-2">
+              <label htmlFor={`${idCampo}-descricao`} className="block text-xs font-semibold text-slate-500">Serviço a ser realizado</label>
               <button
                 type="button"
                 onClick={handleVoiceInput}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[9px] font-black uppercase tracking-widest transition-all ${
+                className={`h-11 px-3 flex items-center justify-center gap-1.5 rounded-[6px] font-medium text-sm border transition-colors shrink-0 ${
                   isListening
-                    ? 'bg-red-50 text-red-500 border border-red-200 animate-pulse'
-                    : 'bg-white text-teal-600 hover:bg-teal-50 hover:text-teal-700 border border-slate-200 shadow-sm'
+                    ? 'bg-white hover:bg-red-50 border-red-300 text-red-700'
+                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800'
                 }`}
               >
-                {isListening ? '🛑 Ouvindo...' : '🎙️ Ditar por Voz'}
+                {isListening ? (
+                  <>
+                    <Square className="w-4 h-4 animate-pulse" aria-hidden="true" />
+                    Ouvindo...
+                  </>
+                ) : (
+                  <>
+                    <Mic className="w-4 h-4" aria-hidden="true" />
+                    Ditar por voz
+                  </>
+                )}
               </button>
             </div>
             <textarea
+              id={`${idCampo}-descricao`}
               rows={3}
               placeholder="Ex: Instalação de ar-condicionado Split 12000 BTUs com fornecimento de fiação e tubulação de cobre até 3m."
               value={descricao}
               onChange={(e) => setDescricao(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-button text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
+              className={CAMPO_TEXTO}
             />
           </div>
 
           {/* Cálculo por Unidade (Opcional) */}
-          <div className="bg-slate-50 border border-slate-200/60 p-3.5 rounded-2xl space-y-2.5 shadow-[inset_0_2px_4px_rgba(0,0,0,0.01)]">
-            <span className="block text-[9px] font-black uppercase tracking-widest text-slate-500">
-              Cálculo por Unidade de Medida (Opcional)
+          <div className="bg-slate-50 border border-slate-200 rounded-[10px] p-4 space-y-2.5">
+            <span className="block text-xs font-semibold text-slate-600">
+              Cálculo por unidade de medida (opcional)
             </span>
             <div className="grid grid-cols-3 gap-2">
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Unidade</label>
+                <label htmlFor={`${idCampo}-unidade`} className="block text-xs font-semibold text-slate-500">Unidade</label>
                 <input
+                  id={`${idCampo}-unidade`}
                   type="text"
                   placeholder="Ex: m², un, h"
                   value={unidade}
                   onChange={(e) => setUnidade(e.target.value)}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className={`${CAMPO} px-2.5`}
                 />
               </div>
               <div className="space-y-1">
-                <label className="block text-xs font-semibold text-slate-500">Qtd</label>
+                <label htmlFor={`${idCampo}-quantidade`} className="block text-xs font-semibold text-slate-500">Qtd</label>
                 <input
+                  id={`${idCampo}-quantidade`}
                   type="number"
                   placeholder="Ex: 100"
                   value={quantidade}
@@ -586,7 +623,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                       setValor((qNum * uNum).toFixed(2));
                     }
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className={`${CAMPO} px-2.5 tabular-nums`}
                 />
               </div>
               <div className="space-y-1">
@@ -602,14 +639,14 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
                       setValor((qNum * uNum).toFixed(2));
                     }
                   }}
-                  className="w-full bg-white border border-slate-200 rounded-lg px-2.5 py-1.5 text-form-input text-slate-700 outline-none focus:border-teal-500 font-medium"
+                  className="w-full h-11 bg-white border border-slate-300 rounded-[6px] px-2.5 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600 tabular-nums"
                 />
               </div>
             </div>
             {quantidade && valorUnitario && !isNaN(parseFloat(quantidade)) && !isNaN(parseFloat(valorUnitario)) && (
-              <div className="bg-white p-2.5 rounded-xl border border-slate-200/50 flex justify-between items-center text-xs font-bold text-slate-500 animate-fadeIn">
+              <div className="bg-white p-2.5 rounded-[6px] border border-slate-200 flex justify-between items-center gap-2 text-xs font-medium text-slate-600">
                 <span>Cálculo do Total:</span>
-                <span className="text-teal-600 font-black">
+                <span className="text-slate-700 font-semibold tabular-nums text-right">
                   {quantidade} x R$ {parseFloat(valorUnitario).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} = R$ {((parseFloat(quantidade) || 0) * (parseFloat(valorUnitario) || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
               </div>
@@ -618,72 +655,81 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
 
           {/* Valor */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Valor Cobrado (R$)</label>
+            <label className="block text-xs font-semibold text-slate-500">Valor cobrado (R$)</label>
             <MoneyCentsInput
               placeholder="0,00"
               value={valor}
               onChange={(v) => setValor(v)}
-              className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+              className="w-full h-11 bg-white border border-slate-300 rounded-[6px] px-3 text-form-input text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-blue-600 tabular-nums"
             />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
             {/* Validade */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500">Validade (dias)</label>
+              <label htmlFor={`${idCampo}-validade`} className="block text-xs font-semibold text-slate-500">Validade (dias)</label>
               <input
+                id={`${idCampo}-validade`}
                 type="number"
                 value={validadeDias}
                 onChange={(e) => setValidadeDias(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+                className={`${CAMPO} tabular-nums`}
               />
             </div>
 
             {/* Garantia */}
             <div className="space-y-1.5">
-              <label className="block text-xs font-semibold text-slate-500">Garantia (dias)</label>
+              <label htmlFor={`${idCampo}-garantia`} className="block text-xs font-semibold text-slate-500">Garantia (dias)</label>
               <input
+                id={`${idCampo}-garantia`}
                 type="number"
                 value={garantiaDias}
                 onChange={(e) => setGarantiaDias(e.target.value)}
-                className="w-full bg-white border border-slate-200 rounded-[6px] px-3 h-9 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 shadow-sm font-medium"
+                className={`${CAMPO} tabular-nums`}
               />
             </div>
           </div>
 
           {/* Observações */}
           <div className="space-y-1.5">
-            <label className="block text-xs font-semibold text-slate-500">Observações adicionais</label>
+            <label htmlFor={`${idCampo}-observacoes`} className="block text-xs font-semibold text-slate-500">Observações adicionais</label>
             <textarea
+              id={`${idCampo}-observacoes`}
               rows={2}
               placeholder="Ex: Não incluso quebra de alvenaria. Chave Pix para pagamento no rodapé do documento."
               value={observacoes}
               onChange={(e) => setObservacoes(e.target.value)}
-              className="w-full bg-white border border-slate-200 rounded-xl px-3 py-2.5 text-form-input text-slate-700 outline-none focus:border-teal-500 focus:ring-teal-500 resize-none shadow-sm font-medium"
+              className={CAMPO_TEXTO}
             />
           </div>
 
           {/* Ações do Formulário */}
           <div className="pt-4 flex flex-col gap-3">
             <button
+              type="button"
               onClick={() => handleSave('ENVIADO')}
-              className="w-full py-3.5 bg-gradient-to-tr from-teal-500 to-cyan-400 hover:from-teal-600 hover:to-cyan-500 text-white font-black text-button uppercase tracking-widest rounded-full transition-all shadow-md shadow-teal-500/10 active:scale-[0.98]"
+              className="w-full h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors active:scale-[0.98] disabled:opacity-60"
             >
-              🚀 Salvar e Enviar via WhatsApp
+              <Send className="w-4 h-4" aria-hidden="true" />
+              Salvar e enviar no WhatsApp
             </button>
 
             <div className="grid grid-cols-2 gap-3">
               <button
+                type="button"
                 onClick={() => handleSave('RASCUNHO')}
-                className="py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-650 font-bold text-button rounded-full border border-slate-250 transition-colors"
+                className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
               >
-                💾 Rascunho
+                <Save className="w-4 h-4" aria-hidden="true" />
+                Rascunho
               </button>
               <button
+                type="button"
                 onClick={() => handleSave('APROVADO')}
-                className="py-2.5 bg-gradient-to-tr from-emerald-500 to-teal-400 hover:from-emerald-600 hover:to-teal-500 text-white font-bold text-button rounded-full transition-colors shadow-md shadow-emerald-500/10"
+                className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
               >
-                ✅ Direto p/ Serviço
+                <CheckCircle2 className="w-4 h-4" aria-hidden="true" />
+                Direto para serviço
               </button>
             </div>
           </div>

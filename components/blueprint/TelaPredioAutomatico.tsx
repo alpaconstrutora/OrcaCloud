@@ -281,6 +281,13 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">No tipo, com as hipóteses padrão das gavetas de lançamento — vai às cópias; a mesma malha no térreo, com os pilares em prumada. A fundação é pré-dimensionamento: o prédio exige cálculo.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.eletrica} onChange={(e) => props.onHipoteses({ ...props.hipoteses, eletrica: e.target.checked })} data-testid="hipotese-eletrica" />
+            <span>
+              Lançar a elétrica coletiva (pontos, QD por unidade, QGBT e medidores, quadro de serviço)
+              <span className="block text-xs text-slate-500">O QD de cada unidade no tipo vai às cópias; no térreo, um medidor por unidade de cada andar e o do condomínio. A demanda do QGBT soma as unidades pela diversidade.</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -319,6 +326,15 @@ export default function TelaPredioAutomatico(props: Props) {
               nota={plano.resumo.terreo ? `${plano.resumo.terreo.salas.join(' · ')}${plano.resumo.terreo.acesso ? '' : ' · sem porta de entrada'}` : undefined}
             />
             <Dado rotulo="Cobertura" valor={plano.resumo.cobertura ? `+${f2(plano.resumo.cobertura.cotaM)} m` : '—'} nota={plano.resumo.cobertura ? 'laje, platibanda e área técnica' : undefined} />
+            <Dado
+              rotulo="Elétrica"
+              valor={plano.resumo.eletrica ? `${plano.resumo.eletrica.medidores} medidor(es)` : '—'}
+              nota={
+                plano.resumo.eletrica
+                  ? `${plano.resumo.eletrica.quadros} QD(s) e ${plano.resumo.eletrica.circuitos} circuito(s) por andar · ${plano.resumo.eletrica.unidadesMedidas} de ${plano.resumo.eletrica.unidadesAtendidas} unidade(s) medidas${plano.resumo.eletrica.demandaKva != null ? ` · ${plano.resumo.eletrica.demandaKva.toLocaleString('pt-BR')} kVA no QGBT` : ''}`
+                  : 'desligada nas hipóteses'
+              }
+            />
             <Dado
               rotulo="Estrutura por andar"
               valor={plano.resumo.estrutura ? `${plano.resumo.estrutura.pilares} pilar(es)` : '—'}

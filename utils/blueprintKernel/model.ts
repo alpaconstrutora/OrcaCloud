@@ -5017,11 +5017,14 @@ export function giroTransformadoDoGrupo(i: Pick<InstanciaDeGrupo, 'rotacaoGraus'
  */
 export function copiasDeInstancia(model: BlueprintModel): Map<ElementUid, { grupo: Grupo; instancia: InstanciaDeGrupo }> {
   const m = new Map<ElementUid, { grupo: Grupo; instancia: InstanciaDeGrupo }>();
+  // PA5 do prédio (14/11/2026): o uid da parede por id, uma vez — o `walls.find` por abertura era quadrático (mil
+  // paredes × mil aberturas a cada comando num prédio com grupos de unidades iguais).
+  const uidDaParede = (model.grupos ?? []).length ? new Map(model.walls.map((w) => [w.id, w.uid])) : null;
   for (const g of model.grupos ?? []) {
     const paredesDaOrigem = new Set(g.origem.walls);
     const aberturas = model.openings.filter((o) => {
-      const w = model.walls.find((x) => x.id === o.wallId);
-      return w && paredesDaOrigem.has(w.uid);
+      const uid = uidDaParede!.get(o.wallId);
+      return uid !== undefined && paredesDaOrigem.has(uid);
     });
     for (const i of g.instancias) {
       for (const uid of [...g.origem.walls, ...g.origem.structures, ...g.origem.labels, ...aberturas.map((o) => o.uid)]) {
@@ -6008,6 +6011,13 @@ function conferirMedidas(
 }
 
 export function assertModelInvariants(model: BlueprintModel): void {
+  // PA5 do prédio (14/11/2026): as buscas por id, uma vez — a invariante roda a cada comando, e "cada ponto procura o
+  // circuito dele" era quadrática (no RL: 5 mil pontos × 2 mil circuitos; 16 s num lote da elétrica).
+  const paredePorId = new Map(model.walls.map((w) => [w.id, w]));
+  const circuitosDoModelo = new Set((model.circuitos ?? []).map((c) => c.id));
+  const circuitoPorId = new Map((model.circuitos ?? []).map((c) => [c.id, c]));
+  const quadrosDoModelo = new Set((model.quadros ?? []).map((q) => q.id));
+  const unidadesDoModelo = new Set((model.unidades ?? []).map((u) => u.id));
   // ── Identidade ────────────────────────────────────────────────────────────
   //
   // Um uid, um elemento. É a rede que pega o `{ ...original, id }` que copiou
@@ -6290,7 +6300,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     seen.add(opening.id);
 
-    const wall = model.walls.find((w) => w.id === opening.wallId);
+    const wall = paredePorId.get(opening.wallId);
     if (!wall) {
       // §9.1: cada abertura tem no máximo uma parede hospedeira na mesma versão.
       throw new KernelError('ORPHAN_OPENING', `Abertura ${opening.id} sem parede hospedeira`);
@@ -7171,7 +7181,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
         throw new KernelError('BAD_RUN_CIRCUIT', `Trecho ${t.id} repete circuito`);
       }
       for (const cid of circuitosDoTrechoAqui) {
-        if (!(model.circuitos ?? []).some((c) => c.id === cid)) {
+        if (!circuitosDoModelo.has(cid)) {
           throw new KernelError(
             'CIRCUIT_NOT_FOUND',
             `Trecho ${t.id} aponta para um circuito inexistente: ${cid}`,
@@ -7233,7 +7243,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     // ⚠️ O circuito tem de EXISTIR. Um ponto apontando para circuito apagado
     // não some da tela: ele fica alimentado por nada, e some do quadro de
     // cargas — a soma sai menor sem ninguém saber por quê.
-    if (t.circuitoId && !(model.circuitos ?? []).some((c) => c.id === t.circuitoId)) {
+    if (t.circuitoId && !circuitosDoModelo.has(t.circuitoId)) {
       throw new KernelError(
         'CIRCUIT_NOT_FOUND',
         `Terminal ${t.id} aponta para um circuito inexistente: ${t.circuitoId}`,
@@ -7241,13 +7251,13 @@ export function assertModelInvariants(model: BlueprintModel): void {
     }
     // E4.3: o vínculo com o quadro (entrada/medidor) exige o quadro e o tipo certo.
     if (t.quadroId) {
-      if (!(model.quadros ?? []).some((q) => q.id === t.quadroId)) throw new KernelError('BOARD_NOT_FOUND', `Terminal ${t.id} aponta para um quadro inexistente: ${t.quadroId}`);
+      if (!quadrosDoModelo.has(t.quadroId)) throw new KernelError('BOARD_NOT_FOUND', `Terminal ${t.id} aponta para um quadro inexistente: ${t.quadroId}`);
       if (t.tipoEletrico !== 'ENTRADA_SERVICO' && t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não se liga a quadro — só entrada de serviço e medidor`);
     }
     // E4.4: só o MEDIDOR mede uma unidade — e ela existe.
     if (t.unidadeId) {
       if (t.tipoEletrico !== 'MEDIDOR') throw new KernelError('BAD_TERMINAL_KIND', `Terminal ${t.id} (${t.tipoEletrico ?? 'sem tipo'}) não mede unidade — só o medidor`);
-      if (!(model.unidades ?? []).some((u) => u.id === t.unidadeId)) throw new KernelError('BAD_UNIT', `Terminal ${t.id} aponta para unidade inexistente: ${t.unidadeId}`);
+      if (!unidadesDoModelo.has(t.unidadeId)) throw new KernelError('BAD_UNIT', `Terminal ${t.id} aponta para unidade inexistente: ${t.unidadeId}`);
     }
     // 0.107.0: o pavimento da unidade medida só com a unidade, e ele existe.
     if (t.unidadeLevelId) {
@@ -7465,7 +7475,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
       if (d.geral && d.circuitoIds.length > 0) throw new KernelError('BAD_BOARD_VALUE', `DR geral ${d.id} não lista circuitos`);
       if (new Set(d.circuitoIds).size !== d.circuitoIds.length) throw new KernelError('BAD_BOARD_VALUE', `DR ${d.id} repete circuito`);
       for (const cid of d.circuitoIds) {
-        const c = (model.circuitos ?? []).find((x) => x.id === cid);
+        const c = circuitoPorId.get(cid);
         if (!c) throw new KernelError('CIRCUIT_NOT_FOUND', `DR ${d.id} cita circuito inexistente: ${cid}`);
         if (c.quadroId !== q.id) throw new KernelError('BAD_BOARD_VALUE', `DR ${d.id} do quadro ${q.id} cita circuito ${cid} de outro quadro`);
       }
@@ -7484,7 +7494,7 @@ export function assertModelInvariants(model: BlueprintModel): void {
     // ⚠️ Circuito ÓRFÃO não existe: ele é o que um disjuntor DE UM QUADRO
     // protege. Sem quadro, não há disjuntor, e o "circuito" é uma etiqueta solta
     // que apareceria no quadro de cargas de ninguém.
-    if (!(model.quadros ?? []).some((q) => q.id === c.quadroId)) {
+    if (!quadrosDoModelo.has(c.quadroId)) {
       throw new KernelError(
         'BOARD_NOT_FOUND',
         `Circuito ${c.id} num quadro inexistente: ${c.quadroId}`,

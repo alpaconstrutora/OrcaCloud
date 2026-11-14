@@ -7,3 +7,4 @@ export * from './predioAutomatico/orquestrador';
 export * from './predioAutomatico/pedido';
 export * from './predioAutomatico/terreoECobertura';
 export * from './predioAutomatico/estrutura';
+export * from './predioAutomatico/eletrica';

@@ -6072,13 +6072,19 @@ function aplicarSemHash(
     }
   }
 
-  // GRUPOS (E2.3): origem sem peça viva perde a peça; as instâncias se re-derivam da origem.
+  // GRUPOS (E2.3): origem sem peça viva perde a peça; as instâncias se re-derivam da origem. PA5 do prédio (0.107.0): a
+  // re-derivação só quando o comando tocou uma origem, um grupo ou um pavimento — ela marca as cópias das instâncias
+  // (no tipo) como mudadas, e isso disparava a cópia viva dos andares a cada ponto elétrico (medido no RL: 77 s).
   diff.updated.push(...limparOrigensOrfasDosGrupos(next));
-  sincronizarGrupos(next, diff, copiasAntes);
+  if (tocouGrupo(model, next, diff, command)) sincronizarGrupos(next, diff, copiasAntes);
   // PAVIMENTO TIPO (E2.1): as cópias vivas se re-derivam do tipo (inclusive as cópias de grupo). As INSTALAÇÕES (0.106.0)
   // só quando o comando mexeu nas do tipo ou em pavimento — a cópia delas é a parte cara (medido: 78 ms por comando com
   // 301 pontos × 10 andares), e um comando que não as toca não as muda.
-  sincronizarPavimentosVinculados(next, diff, { instalacoes: tocouInstalacaoDeTipo(model, next, diff, command) });
+  // PA5 do prédio (0.107.0): e a re-derivação INTEIRA só quando o comando mexeu na arquitetura ou nas instalações de um
+  // tipo (ou em pavimento) — medido no R8: 2,1 s de 3,1 s do kernel iam para re-derivar as 7 cópias a cada ponto
+  // elétrico lançado no tipo, sem nada a copiar. O diff é lido ANTES da sincronização, que marca as cópias todas.
+  const instalacoesDoTipo = tocouInstalacaoDeTipo(model, next, diff, command);
+  if (instalacoesDoTipo || tocouArquiteturaDeTipo(model, next, diff, command)) sincronizarPavimentosVinculados(next, diff, { instalacoes: instalacoesDoTipo });
   // Restrição sem alvo ou referência viva some com o comando que os apagou.
   diff.deleted.push(...limparRestricoesOrfas(next));
   // Etiqueta apagada sai da unidade; a unidade fica (E2.2).
@@ -6097,10 +6103,50 @@ function aplicarSemHash(
       if (!diff.updated.includes(c.id) && !diff.created.includes(c.id)) diff.updated.push(c.id);
     }
   }
-  recomputeSpaces(next);
+  // PA5 do prédio (0.107.0): os ambientes só dependem de paredes, limites, estruturas (as pontes), etiquetas e
+  // pavimentos — sem nada disso no diff, os do modelo anterior (clonados) valem; recalcular custava a montagem dos
+  // segmentos de todos os pavimentos a cada comando (34 s no RL).
+  if (tocouPlanta(model, next, diff, command)) recomputeSpaces(next);
   assertModelInvariants(next);
 
   return { model: next, diff };
+}
+
+/** Os comandos de grupo — criar, instanciar, mudar, desfazer — re-derivam as instâncias por si. */
+const COMANDO_DE_GRUPO = /Grupo|Instancia/;
+
+/** O comando mexeu em peça da ORIGEM de um grupo, num grupo, em grupo por comando de grupo, ou em pavimento. */
+function tocouGrupo(model: BlueprintModel, next: BlueprintModel, diff: Diff, command: Command): boolean {
+  const grupos = [...(next.grupos ?? []), ...(model.grupos ?? [])];
+  if (grupos.length === 0) return false;
+  if (COMANDO_DE_GRUPO.test(command.type) || COMANDOS_DE_PAVIMENTO.has(command.type)) return true;
+  const ids = new Set([...diff.created, ...diff.updated, ...diff.deleted]);
+  if (ids.size === 0) return false;
+  if (grupos.some((g) => ids.has(g.id))) return true;
+  const daOrigem = new Set(grupos.flatMap((g) => [...g.origem.walls, ...g.origem.structures, ...g.origem.labels]));
+  for (const m of [next, model]) {
+    const paredesDaOrigem = new Set<ObjectId>();
+    for (const w of m.walls) {
+      if (!daOrigem.has(w.uid)) continue;
+      if (ids.has(w.id)) return true;
+      paredesDaOrigem.add(w.id);
+    }
+    for (const o of m.openings) if (ids.has(o.id) && paredesDaOrigem.has(o.wallId)) return true;
+    for (const x of [...m.structures, ...m.labels]) if (ids.has(x.id) && daOrigem.has(x.uid)) return true;
+  }
+  return false;
+}
+
+/** O comando mexeu no que os ambientes derivam: paredes, limites, estruturas, etiquetas, pavimentos. */
+function tocouPlanta(model: BlueprintModel, next: BlueprintModel, diff: Diff, command: Command): boolean {
+  if (COMANDOS_DE_PAVIMENTO.has(command.type)) return true;
+  if (next.levels.length !== model.levels.length) return true;
+  const ids = new Set([...diff.created, ...diff.updated, ...diff.deleted]);
+  if (ids.size === 0) return false;
+  for (const m of [next, model]) {
+    for (const lista of [m.walls, m.boundaries, m.structures, m.labels ?? [], m.levels] as { id: ObjectId }[][]) for (const x of lista) if (ids.has(x.id)) return true;
+  }
+  return false;
 }
 
 /**
@@ -6541,6 +6587,20 @@ export class ModelHistory {
     return result;
   }
 
+  /**
+   * Um lote JÁ APLICADO fora daqui (o prédio automático no Web Worker, PA5) vira UM passo do histórico sem reaplicar —
+   * reaplicar o R8 (mil comandos) travava a tela segundos. Só quando o estado atual é o de onde o lote partiu: o
+   * `snapshotHash` dele tem de ser `hashDaBase` (o kernel é determinístico — a mesma base e os mesmos comandos dão o
+   * mesmo `resultado`). Diferente, recusa; nada entra no histórico.
+   */
+  applyPrecomputed(hashDaBase: string, resultado: CommandResult): CommandResult {
+    if (snapshotHash(this.current) !== hashDaBase) throw new KernelError('STALE_BASE', 'O desenho mudou desde a prévia — gere de novo.');
+    this.states.splice(this.cursor + 1);
+    this.states.push(resultado.model);
+    this.cursor = this.states.length - 1;
+    return resultado;
+  }
+
   undo(): BlueprintModel {
     if (!this.canUndo) throw new KernelError('NOTHING_TO_UNDO', 'Nada a desfazer');
     this.cursor -= 1;
@@ -6720,6 +6780,30 @@ function tocouInstalacaoDeTipo(model: BlueprintModel, next: BlueprintModel, diff
   return false;
 }
 
+/**
+ * PA5 do prédio (0.107.0): o comando mexeu em alguma peça que a cópia viva re-deriva (parede, abertura, estrutura, telhado,
+ * etiqueta) num pavimento TIPO — ou em pavimento. Sem isso, a re-derivação não teria o que mudar: o tipo é a única fonte das
+ * cópias, e editar uma cópia é recusado antes (`recusarEdicaoEmPavimentoVinculado`).
+ */
+function tocouArquiteturaDeTipo(model: BlueprintModel, next: BlueprintModel, diff: Diff, command: Command): boolean {
+  const tipos = new Set([...next.levels, ...model.levels].filter((l) => l.tipoDeId !== undefined).map((l) => l.tipoDeId!));
+  if (tipos.size === 0) return false;
+  if (COMANDOS_DE_PAVIMENTO.has(command.type)) return true;
+  const ids = new Set([...diff.created, ...diff.updated, ...diff.deleted]);
+  if (ids.size === 0) return false;
+  for (const m of [next, model]) {
+    const paredesDoTipo = new Set<ObjectId>();
+    for (const w of m.walls) {
+      if (!tipos.has(w.levelId)) continue;
+      if (ids.has(w.id)) return true;
+      paredesDoTipo.add(w.id);
+    }
+    for (const o of m.openings) if (ids.has(o.id) && paredesDoTipo.has(o.wallId)) return true;
+    for (const x of [...m.structures, ...(m.roofs ?? []), ...m.labels]) if (ids.has(x.id) && tipos.has(x.levelId)) return true;
+  }
+  return false;
+}
+
 /** Os comandos que mexem em pavimento (criar, remover, vincular) — eles cuidam das instalações do pavimento por si. */
 const COMANDOS_DE_PAVIMENTO = new Set(['AddLevel', 'SetLevelProps', 'RemoveLevel', 'DuplicateLevel']);
 /** Os comandos que CRIAM instalação num pavimento (pelo `levelId`). */
@@ -6796,8 +6880,11 @@ function recusarEdicaoEmPavimentoVinculado(model: BlueprintModel, command: Comma
 /** Cópia de instância de grupo não se edita: edita-se a origem (propaga) ou desagrupa-se. */
 function recusarEdicaoEmInstanciaDeGrupo(model: BlueprintModel, command: Command): void {
   if (!(model.grupos ?? []).some((g) => g.instancias.length > 0)) return;
-  const copias = copiasDeInstancia(model);
   const al = alvosDoComando(command);
+  // PA5 do prédio: comando que não mira peça de arquitetura (ponto, circuito, quadro) não pode editar instância — sem
+  // montar o mapa das cópias, que custava a cada comando num prédio com grupos de unidades iguais.
+  if (!al.wallIds.length && !al.openingIds.length && !al.structuralIds.length && !al.labelIds.length && !al.spaceIds.length) return;
+  const copias = copiasDeInstancia(model);
   const uids: (ElementUid | undefined)[] = [
     ...al.wallIds.map((id) => model.walls.find((w) => w.id === id)?.uid),
     ...al.openingIds.map((id) => model.openings.find((o) => o.id === id)?.uid),
@@ -7018,6 +7105,9 @@ function sincronizarInstalacoesDaCopia(
     return copiaProfunda(resto) as Omit<T, 'id' | 'uid' | 'levelId'>;
   };
   const quadrosDaCopiaAntes = new Set((next.quadros ?? []).filter((q) => q.levelId === nivel.id).map((q) => q.id));
+  // PA5 (0.107.0): os DRs são peças DENTRO do quadro, com id próprio — a cópia não pode levar o id do DR do tipo (o
+  // kernel recusa id repetido). Os da cópia de antes, por posição, ficam estáveis entre uma sincronização e outra.
+  const drsAntes = new Map((next.quadros ?? []).filter((q) => q.levelId === nivel.id).map((q) => [q.id, (q.drs ?? []).map((d) => d.id)]));
   next.quadros = sincronizarLista(next.quadros ?? [], 'qdr', semIds);
   next.terminais = sincronizarLista(next.terminais ?? [], 'trm', semIds);
   next.trechos = sincronizarLista(next.trechos ?? [], 'trc', semIds);
@@ -7090,7 +7180,14 @@ function sincronizarInstalacoesDaCopia(
   for (const q of next.quadros) {
     if (q.levelId !== nivel.id || !idsDaCopia.has(q.id)) continue;
     if (q.quadroPaiId != null) q.quadroPaiId = ref(q.quadroPaiId);
-    if (q.drs) for (const d of q.drs) d.circuitoIds = d.circuitoIds.map((id) => ref(id)!);
+    if (q.drs) {
+      const antes = drsAntes.get(q.id) ?? [];
+      q.drs = q.drs.map((d, i) => {
+        const id = antes[i] ?? nextId(next, 'dif');
+        if (!antes[i]) tocar(diff.created, id);
+        return { ...d, id, circuitoIds: d.circuitoIds.map((c) => ref(c)!) };
+      });
+    }
   }
   const uidsDoTipo = new Set(next.componentes.filter((c) => c.levelId === tipo.id).map((c) => c.uid));
   for (const c of next.componentes) {

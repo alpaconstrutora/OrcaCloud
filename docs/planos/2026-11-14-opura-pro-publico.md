@@ -114,7 +114,8 @@ conta de teste que o usuário criar).
 
 **Pendentes:** P4 (página de apresentação), P5 (termos/privacidade — rascunho para revisão), P6.
 
-**P4 (página de apresentação): implementada e revisada; falta o teste com teclado real.**
+**P4 (página de apresentação): concluída.** Teste com teclado real feito pelo usuário no celular
+(servidor da frente na rede local, `http://<IP>:5188/pro`) — resposta: "aprovado!" (14/11/2026).
 - Perguntas: preço = "Grátis", sem prazo (+ "sem cartão"); primeira tela = orçamento pronto no
   WhatsApp; rodapé = "feito por uma construtora" (sem citar a Alpa).
 - `concept-seed --scope surface --mode persuade` (seed:fed77fbe51f9c0e4) sorteou 3 de 7 estruturas;

@@ -27,6 +27,8 @@ export interface SupplierPayment {
     favorecido_origem?: 'fornecedor' | 'colaborador' | 'socio' | 'avulso';
     asaas_authorized?: boolean | null;
     created_at?: string;
+    /** Cancelamento pedido à Asaas (pode estar aguardando autorização por token). */
+    cancelled_at?: string | null;
 }
 
 export interface QuoteResult {
@@ -37,6 +39,10 @@ export interface QuoteResult {
     beneficiary_name_source: 'asaas' | 'boleto_capturado';
     beneficiary_cpf_cnpj: string | null;
     is_overdue: boolean | null;
+    /** Menor data que a Asaas aceita para pagar ("o quanto antes"). */
+    data_minima?: string | null;
+    /** Vencimento do boleto — limite do agendamento. */
+    vencimento?: string | null;
     real_value: number | null;
     captured_value: number | null;
     value_mismatch: boolean;
@@ -129,7 +135,7 @@ export interface PayResult {
     beneficiary_name: string | null;
 }
 
-const COLS = 'id,organization_id,transaction_id,boleto_id,supplier_id,provider,payment_type,asaas_bill_id,asaas_transfer_id,identification_field,beneficiary_name,value,fee,scheduled_date,status,failure_reason,receipt_url,pix_key_type,favorecido_origem,asaas_authorized,created_at';
+const COLS = 'id,organization_id,transaction_id,boleto_id,supplier_id,provider,payment_type,asaas_bill_id,asaas_transfer_id,identification_field,beneficiary_name,value,fee,scheduled_date,status,failure_reason,receipt_url,pix_key_type,favorecido_origem,asaas_authorized,cancelled_at,created_at';
 
 async function invokeAsaasPayment<T>(body: Record<string, unknown>): Promise<T> {
     const { data, error } = await supabase.functions.invoke('asaas-payment', { body });
@@ -191,8 +197,10 @@ export const supplierPaymentService = {
     },
 
     /** Cancela uma ordem de pagamento ainda não concluída. */
-    async cancel(organizationId: string, supplierPaymentId: string): Promise<{ ok: boolean }> {
-        return invokeAsaasPayment<{ ok: boolean }>({
+    /** `aguardando_autorizacao`: a Asaas pediu token (SMS/app) para cancelar; o status muda
+     *  quando ela confirmar (plano 2026-11-13-asaas-boleto-data-e-cancelamento). */
+    async cancel(organizationId: string, supplierPaymentId: string): Promise<{ ok: boolean; aguardando_autorizacao?: boolean; already_cancelled?: boolean }> {
+        return invokeAsaasPayment<{ ok: boolean; aguardando_autorizacao?: boolean; already_cancelled?: boolean }>({
             organization_id: organizationId,
             supplier_payment_id: supplierPaymentId,
             action: 'cancel',

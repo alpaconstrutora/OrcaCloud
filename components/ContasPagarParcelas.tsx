@@ -539,8 +539,10 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         if (!ok) return;
         setCancelandoAsaas(sp.id);
         try {
-            await supplierPaymentService.cancel(row.organization_id, sp.id);
-            notify('Pagamento cancelado na Asaas. O título continua em aberto.');
+            const r = await supplierPaymentService.cancel(row.organization_id, sp.id);
+            notify(r.aguardando_autorizacao
+                ? 'A Asaas pediu autorização (SMS ou app da Asaas) para cancelar. Autorize lá — o OrçaCloud marca como cancelado sozinho quando ela confirmar.'
+                : 'Pagamento cancelado na Asaas. O título continua em aberto.');
         } catch (e) {
             notify('Não foi possível cancelar: ' + ((e as Error).message ?? 'erro desconhecido'), 'error');
         } finally {
@@ -971,7 +973,8 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
        título, então entra aqui como segunda linha; Ações fica só com ações. */
     function renderStatusCell(row: ParcelaRow): React.ReactNode {
         const sp = pagamentoAsaasEmCurso(row);
-        const asaas = sp && (sp.asaas_authorized === false ? 'Aguardando token'
+        const asaas = sp && (sp.cancelled_at ? 'Cancelamento pedido — autorize na Asaas'
+            : sp.asaas_authorized === false ? 'Aguardando token'
             : sp.status === 'SCHEDULED' ? `Agendado ${formatDateBR(sp.scheduled_date)}`
             : 'Pagamento enviado');
         if (row.darf && row.effective_status === 'PARCIAL') {
@@ -987,7 +990,9 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
         const dica = [
             [STATUS_PT[situacao.chave] ?? situacao.chave, ...situacao.detalhes, asaas].filter(Boolean).join(' · '),
             situacao.motivoRejeicao ? `Rejeitado: ${situacao.motivoRejeicao}` : null,
-            asaas ? (sp?.asaas_authorized === false
+            asaas ? (sp?.cancelled_at
+                ? 'O cancelamento foi pedido, mas a Asaas exige autorização por SMS ou pelo app da Asaas. Até autorizar, o pagamento continua valendo na Asaas.'
+                : sp?.asaas_authorized === false
                 ? 'A Asaas está esperando a autorização por token no app/SMS da conta.'
                 : 'A baixa acontece sozinha quando a Asaas confirmar.') : null,
         ].filter(Boolean).join('\n');
@@ -1345,14 +1350,21 @@ export default function ContasPagarParcelas({ rows, organizationId, vencDe, venc
                                                                pelo painel da Asaas (visto no teste do sandbox, 17/10). A
                                                                Asaas só aceita cancelar antes de concluir — PIX imediato
                                                                costuma concluir em segundos; agendado, até o dia. */
+                                                            // Cancelamento já pedido e aguardando autorização na Asaas: o
+                                                            // botão desliga com o motivo (o span carrega o title — botão
+                                                            // desligado não mostra o próprio).
+                                                            const pedido = !!emCurso.cancelled_at;
+                                                            const motivoCancelar = pedido ? 'Cancelamento já pedido — autorize na Asaas (SMS ou app)' : null;
                                                             return (
-                                                                <ActionIconButton
-                                                                    kind="delete"
-                                                                    title={cancelandoAsaas === emCurso.id ? 'Cancelando…' : 'Cancelar este pagamento na Asaas'}
-                                                                    icon={cancelandoAsaas === emCurso.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
-                                                                    disabled={cancelandoAsaas === emCurso.id}
-                                                                    onClick={() => cancelarPagamentoAsaas(row, emCurso)}
-                                                                />
+                                                                <span className="inline-flex" title={motivoCancelar ?? undefined}>
+                                                                    <ActionIconButton
+                                                                        kind="delete"
+                                                                        title={motivoCancelar ?? (cancelandoAsaas === emCurso.id ? 'Cancelando…' : 'Cancelar este pagamento na Asaas')}
+                                                                        icon={cancelandoAsaas === emCurso.id ? <Loader2 className="w-4 h-4 animate-spin" /> : <X className="w-4 h-4" />}
+                                                                        disabled={pedido || cancelandoAsaas === emCurso.id}
+                                                                        onClick={() => cancelarPagamentoAsaas(row, emCurso)}
+                                                                    />
+                                                                </span>
                                                             );
                                                         }
                                                         return (

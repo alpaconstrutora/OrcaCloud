@@ -1517,6 +1517,13 @@ A tela é uma **árvore** (grupo → centro de custo): agrupar a **achata** nos 
 Centro de custo (grupo), Organização (só em "Todas"), Empreendimento ou Obra; grupo-pai sem filho não aparece
 agrupado, e o expandir/recolher da árvore sai de cena (o do Agrupar faz o papel).
 
+Em 13/11/2026 para ÒPURA · Relatórios › aba **Centro de Custo** (`OpuraReports.tsx`,
+`docs/planos/2026-11-13-relatorios-centro-de-custo-colunas-agrupar.md`). A árvore numa coluna só (que não ordenava)
+virou lista plana com as colunas **Grupo de centro de custo** e **Centro de custo**, todas ordenáveis; a leitura por
+grupo é o Agrupar com a única opção "Grupo de centro de custo", que **abre agrupado** (`agrupamento.padrao` do
+`StandardTable` / 3º parâmetro do `useAgrupamento` — o campo da 1ª visita; depois vale o que o usuário escolheu).
+Total do grupo = soma do realizado. Lançamento legado gravado direto no grupo aparece como "(lançado no grupo)" dentro dele.
+
 Em 12/11/2026 para Minha Organização › Usuários › **Membros** (`OrganizationUsers.tsx`, `docs/planos/2026-11-12-usuarios-agrupar.md`).
 Opções: Função (na hierarquia Proprietário → Admin → Membro → Visitante, não alfabética), Cargo (o nome que a célula mostra;
 sem cargo vai para "Sem cargo") e Entrou em (mês). Só contagem, sem total (`semTotal`). Nome e e-mail ficam fora: um

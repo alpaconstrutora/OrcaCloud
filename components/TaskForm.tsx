@@ -5,6 +5,7 @@ import type { TaskStatus } from '../services/taskService'
 import { statusNameKey } from '../utils/taskStatusByName'
 import { useConfirm } from './ui/confirm'
 import { notificationService } from '../services/notificationService'
+import { DICA_VISIBILIDADE_TAREFA, MSG_SO_QUEM_CRIOU_EXCLUI, explicarErroTarefa } from '../utils/tarefaPermissoes'
 import Button from './ui/Button';
 
 export type TaskRecord = {
@@ -241,8 +242,7 @@ const TaskForm: React.FC<Props> = ({
 
       onSaved()
     } catch (e) {
-      const err = e as { message?: string; details?: string }
-      setError(err.message || err.details || 'Erro desconhecido')
+      setError(explicarErroTarefa(e as { code?: string; message?: string; details?: string }))
     } finally {
       setSaving(false)
     }
@@ -257,9 +257,12 @@ const TaskForm: React.FC<Props> = ({
       confirmLabel: 'Excluir',
     })) return
     setSaving(true)
-    const { error: e } = await supabase.from('tasks').delete().eq('id', task.id)
+    // A RLS esconde o que não pode ser apagado: o DELETE volta 0 linhas, sem erro.
+    // Sem a comparação, o formulário fechava como se tivesse excluído.
+    const { data, error: e } = await supabase.from('tasks').delete().eq('id', task.id).select('id')
     setSaving(false)
-    if (e) { setError(e.message); return }
+    if (e) { setError(explicarErroTarefa(e)); return }
+    if (!data || data.length === 0) { setError(MSG_SO_QUEM_CRIOU_EXCLUI); return }
     onSaved()
   }
 
@@ -333,6 +336,7 @@ const TaskForm: React.FC<Props> = ({
                 <option value="">Nenhum</option>
                 {employees.map(emp => <option key={emp.id} value={emp.id}>{emp.name}{emp.role ? ` — ${emp.role}` : ''}</option>)}
               </select>
+              <p className="mt-1 text-xs text-slate-500">{DICA_VISIBILIDADE_TAREFA}</p>
             </div>
             <div>
               <label className="text-xs font-semibold text-slate-500">Obra / Projeto</label>
@@ -346,7 +350,7 @@ const TaskForm: React.FC<Props> = ({
           {/* Envolvidos — multi-select */}
           {employees.length > 0 && (
             <div ref={collabRef}>
-              <label className="text-xs font-semibold text-slate-500">Envolvidos</label>
+              <label className="text-xs font-semibold text-slate-500">Envolvidos (visualização)</label>
               <div className="mt-1.5 relative">
                 {collaboratorIds.length > 0 && (
                   <div className="flex flex-wrap gap-1 mb-1.5">

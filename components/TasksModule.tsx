@@ -20,6 +20,7 @@ import TaskSpaceManager from './TaskSpaceManager'
 import TaskSpacesSheet from './TaskSpacesSheet'
 import TaskBulkEditSheet, { type TaskBulkPatch } from './TaskBulkEditSheet'
 import { useConfirm } from './ui/confirm'
+import { resumirExclusao } from '../utils/tarefaPermissoes'
 import { FilterPopover } from './ui/FilterPopover'
 import { usePersistedState } from './ui/TableUtils'
 import { useOrgContext, useOrgWriteTarget } from '../hooks/useOrgContext'
@@ -432,6 +433,18 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     const { data, error } = await supabase.from('tasks').delete().in('id', ids).select('id')
     if (error) { console.error('[tasks] bulkDelete', error); load(); return false }
     const gone = new Set((data ?? []).map((r: { id: string }) => r.id))
+    // A RLS esconde o que não pode ser apagado (só quem criou apaga): o DELETE devolve
+    // menos linhas, sem erro. Diz quantas ficaram e por quê, em vez de não fazer nada.
+    const { recusadas, mensagem } = resumirExclusao(ids, Array.from(gone))
+    if (mensagem) {
+      await confirm({
+        title: recusadas.length === ids.length ? 'Nada foi excluído' : 'Algumas tarefas não foram excluídas',
+        message: mensagem,
+        variant: 'warning',
+        confirmLabel: 'Entendi',
+        hideCancel: true,
+      })
+    }
     // subtarefas caem em cascata no banco (FK ON DELETE CASCADE) — some da lista também
     let changed = true
     while (changed) {
@@ -440,7 +453,7 @@ const TasksModule: React.FC<Props> = ({ organizations = [], projects = [], onCha
     }
     setTasks(prev => prev.filter(t => !gone.has(t.id)))
     loadSpaces(orgKey)
-    return true
+    return recusadas.length < ids.length
   }
 
   const handleNavigate = (route: string) => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import { RefreshCw, AlertTriangle, Download, BarChart3, ChevronRight, ChevronDown, ArrowLeft, ArrowLeftRight, TrendingUp, TrendingDown, ArrowDownUp, Activity } from 'lucide-react';
+import { RefreshCw, AlertTriangle, Download, BarChart3, ArrowLeft, ArrowLeftRight, TrendingUp, TrendingDown, ArrowDownUp, Activity } from 'lucide-react';
 import {
     opuraAnalyticsService,
     type OpuraDimension,
@@ -19,7 +19,8 @@ import { usePersistedState } from './ui/TableUtils';
 import { SegmentedProgress } from './ui/SegmentedProgress';
 import { costCenterService } from '../services/costCenterService';
 import type { CostCenterV2 } from '../types/financial';
-import { buildCostCenterTree, flattenCostCenterTree, type CostCenterTreeNode } from '../utils/opuraCostCenterTree';
+import { buildCostCenterRows, rotuloDoGrupo, SEM_GRUPO_LABEL } from '../utils/opuraCostCenterTree';
+import { chavePorNome } from '../utils/agruparLinhas';
 
 // ── Formatadores ──────────────────────────────────────────────────────────────
 
@@ -83,21 +84,19 @@ const STATUS_OPTIONS: { value: Status; label: string }[] = [
 
 /**
  * Uma linha do pivot pronta para a tabela. Nas dimensões planas é a linha da
- * RPC; em Centro de Custo é um nó da árvore (grupo → centros), com `depth`,
- * `isGroup` e `collapsed` para o chevron.
+ * RPC; em Centro de Custo é um centro de custo com o seu grupo ao lado
+ * (`buildCostCenterRows`) — colunas Grupo de centro de custo / Centro de custo.
  */
 interface ReportRow {
     rowId: string;
     key: string | null;
     label: string;
     code: string | null;
-    depth: number;
-    isGroup: boolean;
+    /** Linha "(lançado no grupo)" — lançamento legado gravado direto no grupo. */
     synthetic: boolean;
-    collapsed: boolean;
-    /** Nome do grupo (só no nó sintético "(lançado no grupo)"), para o título do extrato. */
+    /** Grupo do centro de custo, como a célula mostra ("006 Condomínios"); null = sem grupo. */
     groupLabel: string | null;
-    /** Texto em que a busca procura — um grupo inclui os nomes dos filhos. */
+    /** Texto em que a busca procura — em Centro de Custo inclui o grupo. */
     searchText: string;
     qtd: number;
     /** Para o TOTAL da tela (ver OpuraPivotRow.qtd_titulos); a coluna Qtd mostra `qtd`. */
@@ -113,10 +112,7 @@ function flatRowsToReport(rows: OpuraPivotRow[]): ReportRow[] {
         key: r.dimension_key,
         label: r.dimension_label,
         code: null,
-        depth: 0,
-        isGroup: false,
         synthetic: false,
-        collapsed: false,
         groupLabel: null,
         searchText: r.dimension_label,
         qtd: r.qtd,
@@ -127,26 +123,33 @@ function flatRowsToReport(rows: OpuraPivotRow[]): ReportRow[] {
     }));
 }
 
-function subtreeNames(n: CostCenterTreeNode): string {
-    return [n.code, n.name, ...n.children.map(subtreeNames)].filter(Boolean).join(' ');
-}
-
-// Colunas de DADO (§2/§6.10). O rótulo da 1ª muda com a aba; em Centro de Custo
-// nenhuma coluna ordena (§6.3 — exceção documentada): a ordem é a hierarquia do
-// cadastro (grupo → centros por código), e ordenar por valor a desmontaria.
-function pivotColumns(dimLabel: string, tree: boolean): StandardTableColumn[] {
+// Colunas de DADO (§2/§6.10). O rótulo da 1ª muda com a aba. Em Centro de Custo
+// a 1ª vira DUAS — Grupo de centro de custo e Centro de custo (pedido de
+// 13/11/2026; até então era uma árvore recuada numa coluna só, que não ordenava).
+// Agora toda coluna ordena (§6.3); a leitura por grupo vem do "Agrupar" (§6.12).
+function pivotColumns(dimLabel: string, costCenter: boolean): StandardTableColumn[] {
+    const first: StandardTableColumn[] = costCenter
+        ? [
+            { key: 'grupo',  label: 'Grupo de centro de custo', sortable: true, width: 260 },
+            { key: 'centro', label: 'Centro de custo',          sortable: true, width: 300 },
+        ]
+        : [{ key: 'label', label: dimLabel, sortable: true, width: 360 }];
     return [
-        { key: 'label',     label: dimLabel,    sortable: !tree, width: 360 },
-        { key: 'qtd',       label: 'Qtd',       sortable: !tree, width: 90,  align: 'right' },
-        { key: 'realizado', label: 'Realizado', sortable: !tree, width: 170, align: 'right' },
-        { key: 'previsto',  label: 'Previsto',  sortable: !tree, width: 170, align: 'right' },
-        { key: 'vencido',   label: 'Vencido',   sortable: !tree, width: 170, align: 'right' },
+        ...first,
+        { key: 'qtd',       label: 'Qtd',       sortable: true, width: 90,  align: 'right' },
+        { key: 'realizado', label: 'Realizado', sortable: true, width: 170, align: 'right' },
+        { key: 'previsto',  label: 'Previsto',  sortable: true, width: 170, align: 'right' },
+        { key: 'vencido',   label: 'Vencido',   sortable: true, width: 170, align: 'right' },
         // Barra de proporção do realizado (|realizado| ÷ maior da lista) — última
         // coluna, depois de Vencido (pedido de 2026-09-13; antes vivia dentro do
         // rótulo). Ordena por |realizado|.
-        { key: 'progresso', label: 'Progresso', sortable: !tree, width: 170 },
+        { key: 'progresso', label: 'Progresso', sortable: true, width: 170 },
     ];
 }
+
+// "Agrupar" (§6.12) da aba Centro de Custo — uma opção só: o grupo. Abre agrupado
+// (era a leitura que a árvore dava); o usuário pode tirar, e a escolha persiste.
+const CC_AGRUPAR_OPCOES = [{ value: 'grupo', label: 'Grupo de centro de custo' }];
 
 // Extrato da linha clicada — tela in-flow (não drawer): com a largura da página,
 // as datas e os vínculos que no drawer viravam uma linha cinza ganham coluna.
@@ -258,15 +261,14 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
     React.useEffect(() => { load(); }, [load]);
 
     const dimLabel = DIMENSIONS.find(d => d.value === dimension)?.label ?? 'Dimensão';
-    const isTree = dimension === 'cost_center';
+    const isCc = dimension === 'cost_center';
 
-    // Centro de Custo: mesma hierarquia de Organização › Centro de Custo
-    // (cost_centers_v2.parent_id). O catálogo vem da mesma fonte daquela tela;
-    // REGRA #5 — organizationId vazio ("Todas") lista todas as orgs do usuário.
+    // Centro de Custo: o grupo de cada centro vem da hierarquia de Organização ›
+    // Centro de Custo (cost_centers_v2.parent_id). O catálogo vem da mesma fonte
+    // daquela tela; REGRA #5 — organizationId vazio ("Todas") lista todas as orgs do usuário.
     const [costCenters, setCostCenters] = React.useState<CostCenterV2[]>([]);
-    const [collapsedCc, setCollapsedCc] = React.useState<Set<string>>(new Set());
     React.useEffect(() => {
-        if (!isTree) return;
+        if (!isCc) return;
         let alive = true;
         costCenterService.list(organizationId || null)
             .then(list => { if (alive) setCostCenters(list); })
@@ -275,54 +277,35 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 showToast(`Erro ao carregar centros de custo: ${e instanceof Error ? e.message : String(e)}`, 'error');
             });
         return () => { alive = false; };
-    }, [isTree, organizationId, showToast]);
+    }, [isCc, organizationId, showToast]);
 
     const flatRows = React.useMemo(() => flatRowsToReport(pivotRows), [pivotRows]);
 
-    // Grupos nascem expandidos (é relatório: o detalhe já estava visível na
-    // lista plana); o chevron recolhe. `collapsedCc` guarda os recolhidos.
-    const treeRows = React.useMemo<ReportRow[]>(() => {
-        if (!isTree) return [];
-        const tree = buildCostCenterTree(flatRows.map(r => ({
+    const ccRows = React.useMemo<ReportRow[]>(() => {
+        if (!isCc) return [];
+        return buildCostCenterRows(flatRows.map(r => ({
             dimension_key: r.key, dimension_label: r.label,
             qtd: r.qtd, realizado: r.realizado, previsto: r.previsto, vencido: r.vencido,
-        })), costCenters);
-        const expanded = new Set<string>();
-        const collect = (list: CostCenterTreeNode[]) => list.forEach(n => {
-            if (n.key && n.children.length > 0 && !collapsedCc.has(n.key)) expanded.add(n.key);
-            collect(n.children);
+        })), costCenters).map((n, i) => {
+            const groupLabel = rotuloDoGrupo(n);
+            return {
+                rowId: `${n.key ?? 'sem'}-${i}`,
+                key: n.key,
+                label: n.name,
+                code: n.code,
+                synthetic: n.synthetic,
+                groupLabel,
+                searchText: [groupLabel, n.code, n.name].filter(Boolean).join(' '),
+                qtd: n.qtd,
+                qtdTitulos: n.qtd,
+                realizado: n.realizado,
+                previsto: n.previsto,
+                vencido: n.vencido,
+            };
         });
-        collect(tree);
-        const flat = flattenCostCenterTree(tree, expanded);
-        return flat.map((n, i) => ({
-            rowId: `${n.synthetic ? 'own-' : ''}${n.key ?? 'sem'}-${i}`,
-            key: n.key,
-            label: n.name,
-            code: n.code,
-            depth: n.depth,
-            isGroup: n.children.length > 0,
-            synthetic: !!n.synthetic,
-            collapsed: !!(n.key && collapsedCc.has(n.key)),
-            // O nó sintético é sempre o 1º filho: a linha anterior é o grupo dele.
-            groupLabel: n.synthetic ? flat[i - 1]?.name ?? null : null,
-            searchText: subtreeNames(n),
-            qtd: n.totals.qtd,
-            qtdTitulos: n.totals.qtd,
-            realizado: n.totals.realizado,
-            previsto: n.totals.previsto,
-            vencido: n.totals.vencido,
-        }));
-    }, [isTree, flatRows, costCenters, collapsedCc]);
+    }, [isCc, flatRows, costCenters]);
 
-    const rows = isTree ? treeRows : flatRows;
-
-    const toggleCc = React.useCallback((key: string) => {
-        setCollapsedCc(prev => {
-            const next = new Set(prev);
-            if (next.has(key)) next.delete(key); else next.add(key);
-            return next;
-        });
-    }, []);
+    const rows = isCc ? ccRows : flatRows;
 
     const openDrill = React.useCallback(async (key: string | null, label: string) => {
         const patch = opuraAnalyticsService.drillFilter(dimension, key);
@@ -379,13 +362,13 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
         return a;
     }, { entradas: 0, saidas: 0 }), [entries]);
 
-    // §9.1 — a linha inteira é a ação: grupo recolhe/expande, folha abre o extrato.
+    // §9.1 — a linha inteira é a ação: abre o extrato. O cabeçalho do grupo
+    // (Agrupar) recolhe/expande — é o `LinhaDeGrupo` do StandardTable.
     const onRowClick = React.useCallback((r: ReportRow) => {
-        if (r.isGroup && r.key) toggleCc(r.key);
-        else openDrill(r.key, r.synthetic ? `${r.groupLabel ?? ''} ${r.label}`.trim() : r.label);
-    }, [toggleCc, openDrill]);
+        openDrill(r.key, r.synthetic ? `${r.groupLabel ?? ''} ${r.label}`.trim() : r.label);
+    }, [openDrill]);
 
-    // Totais sempre da lista plana — no modo árvore os grupos já somam os filhos.
+    // Totais sempre da lista da RPC (uma linha por chave).
     const totals = React.useMemo(() => flatRows.reduce((acc, r) => ({
         qtd:       acc.qtd + r.qtdTitulos,
         realizado: acc.realizado + r.realizado,
@@ -425,9 +408,13 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
         : (compareTotals.valorA - compareTotals.valorB) / Math.abs(compareTotals.valorB) * 100;
 
     const exportCsv = () => {
-        const header = [dimLabel, 'Qtd', 'Realizado', 'Previsto', 'Vencido'];
-        const lines = flatRows.map(r => [
-            `"${(r.label ?? '').replace(/"/g, '""')}"`,
+        const q = (t: string | null) => `"${(t ?? '').replace(/"/g, '""')}"`;
+        // Centro de Custo sai com Grupo e Centro em colunas separadas, como na tela.
+        const header = isCc
+            ? ['Grupo de centro de custo', 'Centro de custo', 'Qtd', 'Realizado', 'Previsto', 'Vencido']
+            : [dimLabel, 'Qtd', 'Realizado', 'Previsto', 'Vencido'];
+        const lines = (isCc ? ccRows : flatRows).map(r => [
+            ...(isCc ? [q(r.groupLabel), q([r.code, r.label].filter(Boolean).join(' '))] : [q(r.label)]),
             r.qtd,
             r.realizado.toFixed(2),
             r.previsto.toFixed(2),
@@ -443,25 +430,24 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
         URL.revokeObjectURL(url);
     };
 
-    const pivotCols = React.useMemo(() => pivotColumns(dimLabel, isTree), [dimLabel, isTree]);
+    const pivotCols = React.useMemo(() => pivotColumns(dimLabel, isCc), [dimLabel, isCc]);
     const compareCols = React.useMemo(() => compareColumns(dimLabel), [dimLabel]);
 
     const renderPivotCell = (key: string, r: ReportRow): React.ReactNode => {
         switch (key) {
             case 'label':
+                return <span className="block truncate text-sm font-normal text-gray-700" title={r.label}>{r.label}</span>;
+            case 'grupo':
+                return r.groupLabel
+                    ? <span className="block truncate text-sm font-normal text-gray-700" title={r.groupLabel}>{r.groupLabel}</span>
+                    : <span className="text-sm font-normal text-gray-300">—</span>;
+            case 'centro':
                 return (
-                    // Na árvore, toda linha reserva o espaço do chevron: sem isso o recuo do
-                    // filho era "comido" pelo chevron do grupo e o código ficava alinhado ao do pai.
-                    <div className="flex items-center gap-3 min-w-0" style={{ paddingLeft: r.depth * 28 }}>
-                        {r.isGroup ? (
-                            r.collapsed
-                                ? <ChevronRight className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                                : <ChevronDown className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
-                        ) : isTree && <span className="w-3.5 flex-shrink-0" aria-hidden />}
+                    <div className="flex items-center gap-3 min-w-0">
                         {r.code && <span className="text-sm font-normal text-gray-400 tabular-nums flex-shrink-0">{r.code}</span>}
                         <span
-                            className={`block truncate text-sm font-normal ${r.isGroup ? 'text-gray-900' : r.synthetic ? 'text-gray-500 italic' : 'text-gray-700'}`}
-                            title={r.label}
+                            className={`block truncate text-sm font-normal ${r.synthetic ? 'text-gray-500 italic' : 'text-gray-700'}`}
+                            title={r.synthetic ? 'Lançamento gravado direto no grupo (anterior à trava de 09/11/2026)' : r.label}
                         >
                             {r.label}
                         </span>
@@ -732,17 +718,32 @@ const OpuraReports: React.FC<OpuraReportsProps> = ({ organizationId }) => {
                 />
             ) : (
                 <StandardTable<ReportRow>
-                    key={isTree ? 'opuraReports:pivotTree' : 'opuraReports:pivot'}
-                    storageKey={isTree ? 'opuraReports:pivotTree' : 'opuraReports:pivot'}
+                    // Chave nova em 13/11/2026 (era 'opuraReports:pivotTree', de uma coluna só):
+                    // colunas/larguras guardadas da árvore não servem às duas colunas novas.
+                    key={isCc ? 'opuraReports:pivotCc' : 'opuraReports:pivot'}
+                    storageKey={isCc ? 'opuraReports:pivotCc' : 'opuraReports:pivot'}
                     columns={pivotCols}
                     rows={rows}
                     rowKey={r => r.rowId}
                     searchText={r => r.searchText}
-                    searchPlaceholder={`Buscar por ${dimLabel.toLowerCase()}...`}
-                    sortValue={(key, r) => key === 'label' ? r.label : key === 'progresso' ? Math.abs(r.realizado) : (r as unknown as Record<string, number>)[key]}
+                    searchPlaceholder={isCc ? 'Buscar por grupo ou centro de custo...' : `Buscar por ${dimLabel.toLowerCase()}...`}
+                    sortValue={(key, r) => key === 'label' ? r.label
+                        : key === 'grupo' ? r.groupLabel
+                        : key === 'centro' ? [r.code, r.label].filter(Boolean).join(' ')
+                        : key === 'progresso' ? Math.abs(r.realizado)
+                        : (r as unknown as Record<string, number>)[key]}
                     renderCell={renderPivotCell}
                     onRowClick={onRowClick}
-                    rowClassName={r => r.isGroup ? 'bg-gray-50/60' : ''}
+                    agrupamento={isCc ? {
+                        opcoes: CC_AGRUPAR_OPCOES,
+                        padrao: 'grupo',
+                        chave: (_campo, r) => chavePorNome(r.groupLabel),
+                        semRotulo: () => SEM_GRUPO_LABEL,
+                        ordem: () => 'rotulo',
+                        valor: r => r.realizado,
+                        title: 'Agrupar os centros de custo',
+                        tituloTotal: 'Soma do realizado do grupo',
+                    } : undefined}
                     loading={loading}
                     empty={{ icon: <BarChart3 className="w-12 h-12 text-gray-300 mx-auto mb-4" />, title: 'Nenhum lançamento encontrado', subtitle: 'Ajuste os filtros ou o período selecionado.' }}
                     footer={flatRows.length > 0 && !loading ? (

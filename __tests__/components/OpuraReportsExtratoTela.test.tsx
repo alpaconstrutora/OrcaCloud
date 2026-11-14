@@ -35,7 +35,9 @@ vi.mock('../../services/opuraAnalyticsService', async () => {
 vi.mock('../../services/costCenterService', () => ({
     costCenterService: {
         list: vi.fn(async () => [
-            { id: 'adm', organization_id: 'org1', parent_id: null, code: '002', name: 'Administrativo' },
+            // Centro dentro de um grupo: grupo (parent_id nulo) não recebe lançamento desde 09/11/2026.
+            { id: 'geral', organization_id: 'org1', parent_id: null, code: '001', name: 'Geral' },
+            { id: 'adm', organization_id: 'org1', parent_id: 'geral', code: '002', name: 'Administrativo' },
         ]),
     },
 }));

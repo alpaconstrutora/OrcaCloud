@@ -83,6 +83,11 @@ describe('TelaPredioAutomatico (PA2)', () => {
     expect(p.onHipoteses).toHaveBeenCalledWith({ ...HIPOTESES_DO_PREDIO_PADRAO, plantas: false });
     fireEvent.click(screen.getByTestId('hipotese-terreo'));
     expect(p.onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_DO_PREDIO_PADRAO, terreo: false });
+    // PA6: a água fria, ligada por padrão.
+    const agua = screen.getByTestId('hipotese-agua') as HTMLInputElement;
+    expect(agua.checked).toBe(true);
+    fireEvent.click(agua);
+    expect(p.onHipoteses).toHaveBeenLastCalledWith({ ...HIPOTESES_DO_PREDIO_PADRAO, agua: false });
   });
 
   it('gerando: o progresso por etapa e o Parar', () => {
@@ -97,6 +102,8 @@ describe('TelaPredioAutomatico (PA2)', () => {
     const p = tela({ predio: estado({ plano: PLANO, assinatura: 'a' }), prova: { ok: true } });
     const resumo = screen.getByTestId('resumo-do-predio');
     expect(within(resumo).getByText(String(PLANO.resumo.unidades))).toBeTruthy();
+    // PA6: os hidrômetros do prédio inteiro (um por unidade).
+    expect(within(resumo).getByText(`${PLANO.resumo.agua!.unidadesMedidas} hidrômetro(s)`)).toBeTruthy();
     const pavimento = screen.getByLabelText('Pavimento da prévia') as HTMLSelectElement;
     expect(pavimento.value).toBe(PLANO.tipoLevelId);
     const opcoes = Array.from(pavimento.options).map((o) => o.textContent);

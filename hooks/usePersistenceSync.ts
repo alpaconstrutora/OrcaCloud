@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { projectService } from '../services/projectService';
 import { BudgetEntry, ProjectSettings } from '../types';
 import { INITIAL_BUDGET, INITIAL_PROJECT_SETTINGS } from '../constants';
+import { precisaGravar, registrarPersistido } from '../utils/projetoPersistido';
 
 interface UsePersistenceSyncProps {
   projectSettings: ProjectSettings | null;
@@ -201,11 +202,20 @@ export const usePersistenceSync = ({
       });
     };
 
+    // Grava só se o estado difere do que o banco tem (utils/projetoPersistido.ts): até
+    // 14/11/2026 só ABRIR o projeto já regravava tudo — mudava a data de atualização e, com
+    // "quem grava por último vence", podia atropelar a edição de um colega.
+    const gravarSeMudou = async () => {
+      if (!precisaGravar(savedProjectId, capturedSettings, capturedBudget)) return;
+      await doSave(savedProjectId, capturedSettings, capturedBudget);
+      registrarPersistido(savedProjectId, capturedSettings, capturedBudget);
+    };
+
     const timeoutId = setTimeout(async () => {
       // Cancela se o projeto foi trocado durante o debounce
       if (currentProjectIdRef.current !== savedProjectId) return;
       try {
-        await doSave(savedProjectId, capturedSettings, capturedBudget);
+        await gravarSeMudou();
       } catch (error) {
         console.error('Erro no salvamento automático:', error);
       }
@@ -217,7 +227,7 @@ export const usePersistenceSync = ({
       // Isso evita perda silenciosa quando o usuário troca de projeto dentro do
       // janela de debounce de 2 s.
       if (currentProjectIdRef.current !== savedProjectId) {
-        doSave(savedProjectId, capturedSettings, capturedBudget).catch(err =>
+        gravarSeMudou().catch(err =>
           console.error('Erro no salvamento ao trocar projeto:', err)
         );
       }
@@ -233,6 +243,8 @@ export const usePersistenceSync = ({
           const projectData = await projectService.loadProject(projectId);
           if (projectData) {
             const loadedSettings = { ...INITIAL_PROJECT_SETTINGS, ...projectData.settings };
+            // O banco tem isto: o salvamento automático não regrava só por ter recarregado.
+            registrarPersistido(projectId, loadedSettings, projectData.budget || []);
             setProjectSettings(loadedSettings);
             setBudget(projectData.budget || []);
           } else {

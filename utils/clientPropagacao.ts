@@ -89,6 +89,18 @@ export function patchDaLinha(
     return Object.keys(patch).length ? patch : null;
 }
 
+/**
+ * Conta a pagar em RASCUNHO que o UPDATE mandaria para a aprovação: o gatilho
+ * `trg_titulo_volta_a_alcada` (fn_titulo_nasce_na_alcada) põe em PENDENTE
+ * qualquer título DEBIT/PENDING/RASCUNHO alterado, seja qual for a coluna.
+ * Trocar o nome não pode submeter um rascunho, então ele fica como está.
+ */
+export function mandariaParaAlcada(l: { direction?: string | null; status?: string | null; approval_status?: string | null }): boolean {
+    return l.direction === 'DEBIT'
+        && (l.status ?? 'PENDING') === 'PENDING'
+        && (l.approval_status ?? 'RASCUNHO') === 'RASCUNHO';
+}
+
 export type DestinoPropagacao = 'financeiro' | 'cobrancas' | 'garantia' | 'obras';
 
 export const ROTULO_DESTINO: Record<DestinoPropagacao, { um: string; varios: string; onde: string }> = {

@@ -58,7 +58,7 @@ function predio(c: Caso) {
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
   const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
   const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
-  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0 };
+  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua };
 }
 
 /** O que o marco guarda de um prédio. */
@@ -79,6 +79,9 @@ function marcoDoPredio(c: Caso) {
     // PA5: quadros e pontos (elétricos, hidráulicos) de todos os pavimentos.
     quadros: (m.quadros ?? []).length,
     terminais: (m.terminais ?? []).length,
+    // PA6: a água fria — trechos de todos os pavimentos e o resumo (hidrômetros, coluna, recalque, reserva, pressão).
+    trechosDeAgua: (m.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA').length,
+    agua: p.agua,
   };
 }
 
@@ -96,8 +99,12 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         }
         expect(gravado[nome], `sem marco gravado para ${nome} — grave com GRAVAR_MARCO_PREDIO=1`).toBeDefined();
         expect(agora).toEqual(gravado[nome]);
+        // PA6, "pronto quando": o R12 pede VRP (a estática passa de 400 kPa embaixo); em nenhum prédio fica ponto sem pressão.
+        expect(agora.agua?.vrp).toBe(nome === 'R12');
+        expect(agora.agua?.insuficientes).toBe(0);
+        expect(agora.agua?.excessivas).toBe(0);
       },
-      300_000,
+      600_000,
     );
   }
 });

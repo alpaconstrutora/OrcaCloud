@@ -6,6 +6,14 @@ import { GripVertical } from 'lucide-react';
 import { Layers, Box, Loader2, ChevronDown, ChevronRight, Maximize2, Star, Pencil, ArrowUp, ArrowDown, ClipboardList, Database } from 'lucide-react';
 import { BudgetEntry, SinapiItem, SinapiType, CompositionComponent } from '../types';
 import ActionIconButton from './ui/ActionIconButton';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
+import { Copy } from 'lucide-react';
+
+/** Posição das colunas fixas à esquerda (BudgetEditor calcula pelas larguras atuais). */
+export interface EsquerdaFixa { drag: number; item: number; base: number; codigo: number; descricao: number }
+const SOMBRA_FIXA = '6px 0 8px -6px rgba(15, 23, 42, 0.14)';
+/** Os handlers de mover/duplicar recebem o evento só para stopPropagation. */
+const SEM_EVENTO = { stopPropagation() { /* nada */ }, preventDefault() { /* nada */ } } as unknown as React.MouseEvent;
 
 interface BudgetRowProps {
     item: BudgetEntry;
@@ -31,6 +39,8 @@ interface BudgetRowProps {
     natureBreakdown?: { material: number; labor: number; equipment: number; other: number };
     auxiliaryItems?: Map<string, SinapiItem>;
     isLocked?: boolean;
+    /** Colunas fixas (arraste, Item, Base, Código, Descrição) — guia §6.13.1. */
+    esquerdaFixa?: EsquerdaFixa;
 }
 
 /** Classe base de toda célula de dado — separador vertical + altura de linha (§6.6/§7.2).
@@ -91,7 +101,8 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     showNatureBreakdown,
     natureBreakdown,
     auxiliaryItems,
-    isLocked
+    isLocked,
+    esquerdaFixa,
 }) => {
     const {
         attributes,
@@ -115,6 +126,12 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
     // Colunas da tabela (BudgetEditor.tsx monta o mesmo <colgroup>): drag + 10
     // redimensionáveis + espaçador (§6.1.1) + preço total, mais 3 de natureza.
     const totalCols = showNatureBreakdown ? 16 : 13;
+
+    // Célula fixa: fundo opaco (o resto da linha rola por baixo). #fafcff = o hover blue-50/30
+    // da linha já composto sobre o branco.
+    const FUNDO_FIXO = `bg-white group-hover:bg-[#fafcff] ${isExpanded ? '!bg-[#fbfdff]' : ''}`;
+    const fixa = (left: number | undefined, ultima = false): React.CSSProperties | undefined =>
+        left === undefined ? undefined : { position: 'sticky', left, zIndex: 1, ...(ultima ? { boxShadow: SOMBRA_FIXA } : {}) };
 
     const handleToggleCPU = (e: React.MouseEvent) => {
         e.stopPropagation();
@@ -144,13 +161,13 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 style={style}
                 className={`border-b border-gray-100 hover:bg-blue-50/30 transition-colors group ${isExpanded ? 'bg-blue-50/20' : ''} ${isDragging ? 'relative z-50 bg-white shadow-xl' : ''}`}
             >
-                <td className={`${TD} text-center`}>
-                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-300 hover:text-gray-500" title="Arrastar para reordenar">
+                <td style={fixa(esquerdaFixa?.drag)} className={`${TD} text-center ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
+                    <button {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing text-gray-500 hover:text-gray-700" title="Arrastar para reordenar">
                         <GripVertical className="w-3.5 h-3.5" />
                     </button>
                 </td>
 
-                <td className={`${TD} text-sm font-normal text-gray-400 whitespace-nowrap`}>
+                <td style={fixa(esquerdaFixa?.item)} className={`${TD} text-sm font-normal text-gray-600 whitespace-nowrap ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
                     <div className="flex items-center gap-1.5">
                         {canOpenCPU && (
                             <button
@@ -177,14 +194,14 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 {/* Origem — texto colorido simples (§8) */}
-                <td className={`${TD} text-center text-sm font-normal ${item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'text-emerald-700' : 'text-blue-700'}`}>
+                <td style={fixa(esquerdaFixa?.base)} className={`${TD} text-center text-sm font-normal ${item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'text-emerald-700' : 'text-blue-700'} ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
                     {item.sinapiItem?.source === 'Própria' || item.sinapiItem?.isOverride ? 'Própria' : 'SINAPI'}
                 </td>
 
                 {/* Código — texto atenuado (§7) */}
-                <td className={`${TD} text-center text-sm font-normal text-gray-600`}>{item.sinapiItem?.code || '---'}</td>
+                <td style={fixa(esquerdaFixa?.codigo)} className={`${TD} text-center text-sm font-normal text-gray-600 ${esquerdaFixa ? FUNDO_FIXO : ''}`}>{item.sinapiItem?.code || '---'}</td>
 
-                <td className={`${TD} text-sm text-gray-600 leading-tight`}>
+                <td style={fixa(esquerdaFixa?.descricao, true)} className={`${TD} text-sm text-gray-600 leading-tight ${esquerdaFixa ? FUNDO_FIXO : ''}`}>
                     <div className="flex items-center gap-2">
                         <button
                             onClick={(e) => onToggleFavorite?.(e, item.sinapiItem?.code)}
@@ -194,7 +211,8 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                             <Star className={`w-3.5 h-3.5 ${isFavorite ? 'fill-amber-500 text-amber-500' : 'text-gray-300'}`} />
                         </button>
                         {item.sinapiItem && getTypeBadge(item.sinapiItem.type, canOpenCPU ? handleToggleCPU : undefined)}
-                        <span>{item.sinapiItem?.description || 'Descrição não disponível'}</span>
+                        {/* Até 2 linhas (o texto SINAPI chega a 5): o inteiro fica no title. */}
+                        <span className="line-clamp-2" title={item.sinapiItem?.description || undefined}>{item.sinapiItem?.description || 'Descrição não disponível'}</span>
                     </div>
                 </td>
 
@@ -204,15 +222,15 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                         value={item.quantity}
                         onChange={(e) => onUpdateQuantity(item.id, Number(e.target.value))}
                         disabled={isLocked}
-                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-1 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
+                        className={`w-full text-center text-sm border rounded-[6px] py-0.5 focus:ring-2 focus:ring-blue-500 outline-none ${isLocked ? 'bg-gray-50 text-gray-900 border-gray-100 cursor-not-allowed' : 'border-gray-200'}`}
                     />
                 </td>
 
                 <td className={`${TD} text-center text-sm text-gray-500`}>{item.sinapiItem?.unit || '---'}</td>
 
                 <td className={TD}>
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
-                        <span className="text-xs text-gray-400 shrink-0">R$</span>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${item.sinapiItem?.isOverride ? 'border-amber-200 bg-amber-50/30' : ''} ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                        <span className="text-xs text-gray-500 shrink-0">R$</span>
                         <MoneyCentsInput
                             value={Number(item.sinapiItem?.price || 0).toFixed(2)}
                             onChange={(v) => onUpdatePrice(item.id, v === '' ? 0 : Number(v))}
@@ -232,7 +250,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 <td className={TD}>
-                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
+                    <div className={`flex items-center justify-center gap-1 bg-white border rounded-[6px] px-1 transition-colors focus-within:ring-2 focus-within:ring-blue-500 ${isLocked ? 'bg-gray-50 border-gray-100' : 'group-hover:border-blue-300'}`}>
                         <input
                             type="number"
                             step="0.1"
@@ -250,7 +268,7 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                 </td>
 
                 <td className={`${TD} text-right text-sm font-medium text-blue-600 whitespace-nowrap`}>
-                    R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                    R$ {((item.sinapiItem?.price || 0) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </td>
 
                 {/* Espaçador (§6.1.1) — casa com o <col /> sem largura do colgroup */}
@@ -258,69 +276,47 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
 
                 {/* Preço total + ações. Total = valor financeiro (§7, font-medium); ações sempre visíveis (§9). */}
                 <td className={TD}>
-                    <div className="flex flex-col items-end gap-1">
+                    {/* Valor + memória de cálculo + ⋮ numa linha (§9.2): eram 7 botões soltos
+                        embaixo do valor, e a lixeira ficava colada em "Salvar na Base Própria". A
+                        memória fica à vista: é pendência técnica (âmbar quando falta). */}
+                    <div className="flex items-center justify-end gap-1.5">
                         <span className="text-sm font-medium text-gray-800 whitespace-nowrap">R$ {((item.quantity * (item.sinapiItem?.price || 0)) * (1 + (item.bdi ?? globalBDI) / 100)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
-                        <div className="flex items-center gap-1.5">
-                            {onMoveItem && (
-                                <div className="flex items-center border-r border-gray-100 pr-1.5 mr-0.5 gap-1.5">
-                                    {!isFirst && (
-                                        <ActionIconButton
-                                            kind="move"
-                                            size="sm"
-                                            icon={<ArrowUp className="w-3.5 h-3.5" />}
-                                            title="Mover para Cima"
-                                            onClick={(e) => onMoveItem(e, item.id, 'UP')}
-                                        />
-                                    )}
-                                    {!isLast && (
-                                        <ActionIconButton
-                                            kind="move"
-                                            size="sm"
-                                            icon={<ArrowDown className="w-3.5 h-3.5" />}
-                                            title="Mover para Baixo"
-                                            onClick={(e) => onMoveItem(e, item.id, 'DOWN')}
-                                        />
-                                    )}
-                                </div>
-                            )}
-                            <ActionIconButton
-                                kind="annotate"
-                                size="sm"
-                                tone={hasCalculationMemory ? 'neutral' : 'attention'}
-                                icon={<ClipboardList className={`w-3.5 h-3.5 ${hasCalculationMemory ? 'text-emerald-600' : 'text-amber-500'}`} />}
-                                title={hasCalculationMemory ? "Editar memória de cálculo" : "Item sem memória de cálculo"}
-                                onClick={(e) => { e.stopPropagation(); onOpenDetails?.(item); }}
-                            />
-                            <ActionIconButton
-                                kind="duplicate"
-                                size="sm"
-                                title="Duplicar Item"
-                                onClick={(e) => onDuplicateItem(e, item.id)}
-                            />
-                            <ActionIconButton
-                                kind="download"
-                                size="sm"
-                                icon={isSavingCustom ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Database className="w-3.5 h-3.5" />}
-                                title="Salvar na Base Própria"
-                                disabled={isSavingCustom || isLocked}
-                                onClick={handleSave}
-                            />
-                            <ActionIconButton
-                                kind="delete"
-                                size="sm"
-                                title="Excluir item"
-                                disabled={isLocked}
-                                onClick={(e) => onDeleteItem(e, item.id)}
-                            />
-                        </div>
+                        <ActionIconButton
+                            kind="annotate"
+                            size="sm"
+                            tone={hasCalculationMemory ? 'neutral' : 'attention'}
+                            icon={<ClipboardList className={`w-3.5 h-3.5 ${hasCalculationMemory ? 'text-emerald-600' : 'text-amber-500'}`} />}
+                            title={hasCalculationMemory ? "Editar memória de cálculo" : "Item sem memória de cálculo"}
+                            onClick={(e) => { e.stopPropagation(); onOpenDetails?.(item); }}
+                        />
+                        <InlineDisclosureMenu
+                            menuItems={[
+                                ...(onMoveItem ? [
+                                    { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => onMoveItem(SEM_EVENTO, item.id, 'UP'), disabled: !!isFirst },
+                                    { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => onMoveItem(SEM_EVENTO, item.id, 'DOWN'), disabled: !!isLast },
+                                ] : []),
+                                { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar item', onClick: () => onDuplicateItem(SEM_EVENTO, item.id) },
+                                {
+                                    icon: isSavingCustom ? <Loader2 className="w-[18px] h-[18px] animate-spin" /> : <Database className="w-[18px] h-[18px]" />,
+                                    label: 'Salvar na Base Própria',
+                                    onClick: () => { void handleSave(SEM_EVENTO); },
+                                    disabled: isSavingCustom || !!isLocked,
+                                    title: isLocked ? 'Orçamento fechado: não pode ser alterado' : undefined,
+                                },
+                            ]}
+                            showDelete
+                            onDelete={() => onDeleteItem(SEM_EVENTO, item.id)}
+                            deleteDisabled={!!isLocked}
+                            deleteDisabledTitle={isLocked ? 'Orçamento fechado: não pode ser alterado' : undefined}
+                        />
                     </div>
                 </td>
 
                 {showNatureBreakdown && natureBreakdown && (
                     <>
-                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.labor).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.material).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className={`${TD} text-right text-sm text-blue-700 font-medium bg-blue-50/30 whitespace-nowrap`}>{(natureBreakdown.equipment).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     </>
                 )}
             </tr>
@@ -365,23 +361,26 @@ export const BudgetRow: React.FC<BudgetRowProps> = ({
                                                 step="0.0001"
                                                 value={comp.quantity || 0}
                                                 onChange={(e) => onUpdateComposition(item.id, idx, { quantity: Number(e.target.value) })}
-                                                className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400"
+                                                // Orçamento fechado: a CPU Inline ficava editável (medido 14/11/2026).
+                                                disabled={isLocked}
+                                                className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-0.5 text-sm focus:ring-1 focus:ring-blue-400 disabled:bg-gray-50 disabled:cursor-not-allowed"
                                             />
                                         </div>
                                         <div className="col-span-1 text-center text-gray-400 text-sm">{comp.unit || '-'}</div>
                                         <div className="col-span-1 text-center">
                                             <div className="flex items-center justify-center gap-0.5 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-1 focus-within:ring-blue-400">
-                                                <span className="text-[9px] text-gray-400">R$</span>
+                                                <span className="text-xs text-gray-500">R$</span>
                                                 <MoneyCentsInput
                                                     value={displayPrice}
                                                     onChange={(v) => onUpdateComposition(item.id, idx, { price: v === '' ? 0 : Number(v) })}
-                                                    className="w-full text-center outline-none bg-transparent py-0.5 text-sm"
+                                                    disabled={isLocked}
+                                                    className="w-full text-center outline-none bg-transparent py-0.5 text-sm disabled:cursor-not-allowed"
                                                 />
                                             </div>
                                         </div>
                                         <div className="col-span-1"></div>
                                         <div className="col-span-2 text-right font-medium text-gray-800 text-sm">
-                                            R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                                            R$ {displaySubtotal.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                         </div>
                                     </div>
                                 );

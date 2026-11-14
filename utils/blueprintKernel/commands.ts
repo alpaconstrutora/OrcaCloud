@@ -897,7 +897,7 @@ export type Command =
       rotacaoGraus?: number | null;
       /** E4.3: o quadro da entrada/medidor, quando já se sabe. */
       quadroId?: ObjectId | null;
-      /** E4.4: a unidade que o medidor mede. */
+      /** E4.4: a unidade que o medidor (e, 0.108.0, o hidrômetro) mede. */
       unidadeId?: ObjectId | null;
       /** 0.107.0: o pavimento da unidade medida (a cópia viva do tipo); ausente = o da própria unidade. */
       unidadeLevelId?: ObjectId | null;

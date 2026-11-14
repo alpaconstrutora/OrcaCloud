@@ -856,17 +856,17 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   grid3: {
     walls: grid(3),
     spaces: 9,
-    hash: 'fc5de7421530f67006ccf1f132e8cbda6ef93e222e7f66f20a0568e743ceee10',
+    hash: '711ef8c272b9cee9dd9fca7763c4dc048d3cdc9dc516252c90bd912a8a9f0887',
   },
   grid7: {
     walls: grid(7),
     spaces: 49,
-    hash: '38cc96538893c546837828824946680f348d42350149ee14cb12d741ca8dd088',
+    hash: 'a325299f9ef308f60b47efdff8b83689e09eb5036778ec096a641475714d992f',
   },
   grid12: {
     walls: grid(12),
     spaces: 144,
-    hash: 'ca84ab2210aba03a680c6a7677d39afc67c352b92cc5d5ab2d7eba7ea6ae2c11',
+    hash: 'a09689245587643eafdced1e24c79d28f5d306fcbe1882067b81e088d59c5b3c',
   },
 
   // Três anéis encaixados sem se tocarem: exercita contenção entre componentes
@@ -874,7 +874,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   ilhaAninhada: {
     walls: [...grid(1, 24000), ...grid(1, 12000, 6000, 6000), ...grid(1, 4000, 10000, 10000)],
     spaces: 3,
-    hash: '983a4d1cbed0bbba2f95893bdf76b905b894307aeb3bef14f5aa3be8bdb3c359',
+    hash: 'a8068f62d6e755764a6b35fa4a2c1087af9172a4b00a17b46e7ca7aedb19d95d',
   },
 
   // 14 retas oblíquas em posição geral. O deslocamento quadrático na ponta superior
@@ -884,7 +884,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
   obliquos: {
     walls: Array.from({ length: 14 }, (_, i) => line(i * 700, 0, 9000 - i * i * 40, 9000)),
     spaces: 78,
-    hash: '312400e0de9325e16150caf7e391089dd8b17d43eb2f1b5a530dd957125512b8',
+    hash: '59aab6e08524fe192ab76c896b3c65d2a479ad6125721872935f624a5a1a0bfe',
   },
 
   // Verticais a 0 / 4000 / 4003 / 8000 / 8004 mm: pares dentro e fora da tolerância
@@ -895,7 +895,7 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
       ...[0, 3000, 6000].map((y) => line(0, y, 8004, y)),
     ],
     spaces: 4,
-    hash: '6f17b1054ae5cd9e37a3ed83be7107bd0051199de84e303f6fe2931e3afc4ff4',
+    hash: '22fa21807190af9590ca70723fd504c2ffe1adbecf9c35a60965ceb482b5275b',
   },
 };
 
@@ -1008,6 +1008,10 @@ const CASES: Record<string, { walls: Wall[]; spaces: number; hash: string }> = {
  *   a 101 no 5º pavimento; PA5 do prédio automático), omitido quando ausente — nenhum dos seis casos tem medidor.
  *   Mesma prova, ANTES de tocar num hash: com a string em 0.106.0, a suíte da planta inteira (5.217 testes, com os
  *   goldens, os dois marcos e a planta-api) passou; depois do bump as seis falhas foram todas de hash.
+ *
+ *   0.107.0 → 0.108.0 (14/11/2026): `Terminal.unidadeId` vale também no HIDRÔMETRO (o individual da unidade; PA6 do
+ *   prédio automático) — só a invariante muda. Mesma prova: com a string em 0.107.0, os goldens, os dois marcos e o teste
+ *   do uso coletivo passaram; depois do bump as seis falhas foram todas de hash.
  */
 describe('kernel geométrico · golden files', () => {
   it.each(Object.entries(CASES))('%s mantém o payload canônico', (_name, expected) => {

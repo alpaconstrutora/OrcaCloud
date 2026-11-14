@@ -739,8 +739,15 @@
  * (sem id, sem diff). No canônico o alvo vai por índice e a ordem é por motor e alvo; registro de alvo apagado não vai.
  * Omitido quando não há: desenho antigo só muda pela string. Provado antes do bump: com a string em 0.104.0 e tudo no
  * lugar, 1.652 testes dos 125 arquivos de kernel/payload/hash/versão passaram.
+ *
+ * ─── 0.107.0 → 0.108.0 (14/11/2026) — O HIDRÔMETRO DA UNIDADE ───────────────
+ *
+ * Prédio automático, PA6 (`docs/planos/2026-11-12-predio-automatico.md`): `Terminal.unidadeId` passa a valer também no
+ * HIDRÔMETRO (o individual de cada unidade, no hall) — antes a invariante só aceitava no MEDIDOR. Só a invariante muda: o
+ * canônico já levava a unidade de qualquer terminal. Desenho antigo só muda pela string. Provado antes do bump: com a
+ * string em 0.107.0, os goldens, os dois marcos e o teste do uso coletivo passaram.
  */
-export const KERNEL_VERSION = 'blueprint-kernel-ts-0.107.0';
+export const KERNEL_VERSION = 'blueprint-kernel-ts-0.108.0';
 
 /**
  * Tolerância de junção/snap em milímetros.

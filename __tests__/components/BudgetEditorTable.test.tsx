@@ -266,7 +266,8 @@ describe('Estrutura da tabela da WBS', () => {
 
         // A régua acoplada carrega só busca + autofit; escopo e ação primária
         // moram na barra própria acima.
-        for (const label of [/novo grupo/i, /ferramentas/i, /gerenciar eap/i, /salvar versão/i]) {
+        // "Salvar versão" mora no menu "Versões" desde 2026-11-14 (toolbar mais calma).
+        for (const label of [/novo grupo/i, /ferramentas/i, /gerenciar eap/i, /versões/i]) {
             const found = within(card).queryByText(label);
             expect(found, `"${label}" não pode estar dentro do card acoplado`).toBeNull();
             // ...mas tem que existir em algum lugar da tela.
@@ -302,11 +303,18 @@ describe('Estrutura da tabela da WBS', () => {
         const { container } = renderEditor([]);
         const table = getWbsTable(container);
         const colCount = table.querySelectorAll('colgroup > col').length;
+        const linhaCom = (texto: string) => Array.from(table.querySelectorAll('tbody tr')).find(r =>
+            r.textContent?.includes(texto)) as HTMLTableRowElement | undefined;
 
-        const emptyRow = Array.from(table.querySelectorAll('tbody tr')).find(r =>
-            r.textContent?.includes('Nenhum item nesta subetapa')
-        ) as HTMLTableRowElement | undefined;
+        // Desde 2026-11-14 as subetapas sem itens começam numa linha-resumo
+        // ("N subetapas sem itens · Mostrar") — ela também ocupa a linha inteira.
+        const resumo = linhaCom('subetapa sem itens');
+        expect(resumo).toBeDefined();
+        expect(countCells(resumo!)).toBe(colCount);
 
+        fireEvent.click(within(container).getByRole('button', { name: /subetapa sem itens · Mostrar/ }));
+        fireEvent.click(within(container).getByText('01.01.01.'));
+        const emptyRow = linhaCom('Nenhum item nesta subetapa');
         expect(emptyRow).toBeDefined();
         expect(countCells(emptyRow!)).toBe(colCount);
     });

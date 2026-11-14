@@ -1,14 +1,24 @@
 import React from 'react';
 import { proService } from '../services/proService';
 import { ProOrcamento, ProServico } from '../types';
+import { HandCoins, MessageCircle } from 'lucide-react';
+import { resumirPainelPro, diasDesde, mensagemDeCobranca, linkWhatsApp } from '../utils/proPainelResumo';
+import { montarPixCopiaECola } from '../utils/pixCopiaECola';
 
 interface ProDashboardProps {
   userId: string;
   onNewOrcamento: () => void;
   onEditOrcamento: (id: string) => void;
-  onViewServico: (id: string) => void;
+  onViewServico: (id: string, opcoes?: { abrirRecebimento?: boolean }) => void;
   onNavigate: (view: string) => void;
 }
+
+// Mesmo valor de utils/pixCopiaECola + ProServicoView: o cadastro do Pro ainda não tem cidade.
+const CIDADE_RECEBEDOR_PADRAO = 'BRASILIA';
+const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+
+const textoDiasAguardando = (dias: number | null) =>
+  dias === null ? 'Concluído' : dias === 0 ? 'Concluído hoje' : dias === 1 ? 'Concluído ontem' : `Concluído há ${dias} dias`;
 
 const ProDashboard: React.FC<ProDashboardProps> = ({
   userId,
@@ -21,43 +31,20 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   const [orcamentos, setOrcamentos] = React.useState<any[]>([]);
   const [servicos, setServicos] = React.useState<any[]>([]);
   const [recorrentes, setRecorrentes] = React.useState<any[]>([]);
-  const [faturamento, setFaturamento] = React.useState(0);
-  const [pendente, setPendente] = React.useState(0);
+  const [config, setConfig] = React.useState<any>(null);
 
   const fetchData = React.useCallback(async () => {
     try {
       setLoading(true);
-      const [orcData, servData] = await Promise.all([
+      const [orcData, servData, configData] = await Promise.all([
         proService.listOrcamentos(userId),
-        proService.listServicos(userId)
+        proService.listServicos(userId),
+        proService.getConfig(userId).catch(() => null),
       ]);
 
       setOrcamentos(orcData);
       setServicos(servData);
-
-      // Calcular faturamento (concluídos) e valores pendentes
-      let fatSum = 0;
-      let pendSum = 0;
-
-      servData.forEach((s: any) => {
-        const value = s.pro_orcamentos?.valor || 0;
-        if (s.status === 'CONCLUIDO') {
-          fatSum += Number(value);
-        } else {
-          pendSum += Number(value);
-        }
-      });
-
-      // Inclui também orçamentos aprovados que ainda não viraram OS ou estão pendentes
-      orcData.forEach((o: any) => {
-        if (o.status === 'APROVADO') {
-          // Se não houver serviço criado ainda, conta como pendente
-          const hasOS = servData.some((s: any) => s.orcamento_id === o.id);
-          if (!hasOS) {
-            pendSum += Number(o.valor);
-          }
-        }
-      });
+      setConfig(configData);
 
       // Filtrar serviços recorrentes vencidos ou próximos (proximo_agendamento definido e no passado ou nos próximos 7 dias)
       const rec = servData.filter((s: any) => {
@@ -68,8 +55,6 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
       });
 
       setRecorrentes(rec);
-      setFaturamento(fatSum);
-      setPendente(pendSum);
     } catch (error) {
       console.error('Erro ao buscar dados do dashboard:', error);
     } finally {
@@ -80,6 +65,23 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
   React.useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Números do topo e lista "Aguardando pagamento" (utils/proPainelResumo.ts).
+  const resumo = React.useMemo(() => resumirPainelPro(servicos, orcamentos), [servicos, orcamentos]);
+
+  const cobrarNoWhatsApp = (s: any) => {
+    const valor = Number(s.pro_orcamentos?.valor || 0);
+    const pix = config?.pix_key
+      ? montarPixCopiaECola({ tipo: config.pix_key_type, chave: config.pix_key, valor, nome: config.template_header || '', cidade: CIDADE_RECEBEDOR_PADRAO })
+      : null;
+    const msg = mensagemDeCobranca({
+      cliente: s.pro_orcamentos?.pro_clientes?.nome || '',
+      descricao: s.pro_orcamentos?.descricao || '',
+      valor,
+      pixCopiaECola: pix?.ok ? pix.payload : '',
+    });
+    window.open(linkWhatsApp(s.pro_orcamentos?.pro_clientes?.telefone, msg), '_blank');
+  };
 
   // Mensagens rápidas de WhatsApp
   const handleWhatsAppLembrarOrcamento = (o: any) => {
@@ -169,23 +171,65 @@ const ProDashboard: React.FC<ProDashboardProps> = ({
         </button>
       </div>
 
-      {/* Resumo Financeiro - Stripe Light Style */}
-      <div className="grid grid-cols-2 gap-4 bg-white border border-slate-200/50 p-4 rounded-[24px] shadow-[0_8px_30px_rgb(0,0,0,0.03)]">
-        <div className="space-y-1">
-          <span className="block text-xs font-black uppercase tracking-widest text-teal-600">Faturamento</span>
-          <span className="text-lg font-black text-slate-800">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(faturamento)}
-          </span>
-          <span className="block text-[9px] text-slate-500">Serviços concluídos</span>
-        </div>
-        <div className="space-y-1 border-l border-slate-100 pl-4">
-          <span className="block text-xs font-black uppercase tracking-widest text-cyan-600">A Receber</span>
-          <span className="text-lg font-black text-slate-800">
-            {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(pendente)}
-          </span>
-          <span className="block text-[9px] text-slate-500">Em andamento</span>
-        </div>
-      </div>
+      {/* Resumo financeiro: o que entrou, o que falta cobrar, o que ainda vai ser feito */}
+      <dl className="grid grid-cols-3 bg-white border border-slate-200 rounded-[10px] divide-x divide-slate-100">
+        {[
+          { rotulo: 'Recebido', valor: resumo.recebidoNoMes, apoio: 'neste mês', destaque: 'text-emerald-700' },
+          { rotulo: 'A receber', valor: resumo.aReceber, apoio: 'concluídos', destaque: resumo.aReceber > 0 ? 'text-amber-700' : 'text-slate-900' },
+          { rotulo: 'Em execução', valor: resumo.emExecucao, apoio: 'por fazer', destaque: 'text-slate-900' },
+        ].map(k => (
+          <div key={k.rotulo} className="px-3 py-3 min-w-0">
+            <dt className="text-xs font-semibold text-slate-600">{k.rotulo}</dt>
+            <dd className={`mt-1 text-sm font-semibold tabular-nums truncate ${k.destaque}`} title={brl(k.valor)}>{brl(k.valor)}</dd>
+            <dd className="text-xs text-slate-600">{k.apoio}</dd>
+          </div>
+        ))}
+      </dl>
+
+      {/* Aguardando pagamento: concluídos sem recebimento, do mais antigo ao mais novo, sem corte */}
+      {resumo.aguardandoPagamento.length > 0 && (
+        <section aria-labelledby="titulo-aguardando" className="space-y-2">
+          <h2 id="titulo-aguardando" className="text-sm font-semibold text-slate-900">
+            Aguardando pagamento <span className="text-slate-600 font-normal">({resumo.aguardandoPagamento.length})</span>
+          </h2>
+          <ul className="bg-white border border-slate-200 rounded-[10px] divide-y divide-slate-100">
+            {resumo.aguardandoPagamento.map((s: any) => (
+              <li key={s.id} className="p-3 space-y-2.5">
+                <button
+                  type="button"
+                  onClick={() => onViewServico(s.id)}
+                  className="w-full flex items-start justify-between gap-3 text-left rounded-[6px] focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-600"
+                >
+                  <span className="min-w-0">
+                    <span className="block text-sm font-semibold text-slate-900 truncate">{s.pro_orcamentos?.pro_clientes?.nome || 'Cliente sem nome'}</span>
+                    <span className="block text-xs text-slate-600 truncate">{s.pro_orcamentos?.descricao}</span>
+                    <span className="block text-xs text-amber-700">{textoDiasAguardando(diasDesde(s.concluido_em))}</span>
+                  </span>
+                  <span className="text-sm font-semibold tabular-nums text-slate-900 shrink-0">{brl(Number(s.pro_orcamentos?.valor || 0))}</span>
+                </button>
+                <div className="grid grid-cols-2 gap-2">
+                  <button
+                    type="button"
+                    onClick={() => cobrarNoWhatsApp(s)}
+                    className="h-11 flex items-center justify-center gap-1.5 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-sm transition-colors"
+                  >
+                    <MessageCircle className="w-4 h-4" aria-hidden />
+                    Cobrar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onViewServico(s.id, { abrirRecebimento: true })}
+                    className="h-11 flex items-center justify-center gap-1.5 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-sm transition-colors"
+                  >
+                    <HandCoins className="w-4 h-4" aria-hidden />
+                    Recebi
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* Serviços de Hoje (Agenda) */}
       <div className="space-y-3">

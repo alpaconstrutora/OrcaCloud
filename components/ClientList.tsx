@@ -29,8 +29,8 @@ import { isObra } from '../utils/projectClassification';
 import { agruparLinhas, chavePorCombinacao, chavePorNome, entradasDaPagina, type ChaveDeGrupo, type EntradaDaTela } from '../utils/agruparLinhas';
 import { useAgrupamento } from '../hooks/useAgrupamento';
 import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
-import { clientPropagacaoService, contagemDoPlano, type PlanoDePropagacao } from '../services/clientPropagacaoService';
-import { camposAlterados, descreverCampos, descreverCamposComDe, linhasDoResumo } from '../utils/clientPropagacao';
+import { clientPropagacaoService } from '../services/clientPropagacaoService';
+import { useOferecerPropagacao } from '../hooks/useOferecerPropagacao';
 
 interface ClientListProps {
     onClientsChange?: () => void;
@@ -521,54 +521,15 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
      * 25: quem decide fechar e o formulario (so na criacao) -- este handler
      * nunca fecha nada, so sincroniza a lista local (22).
      */
-    /**
-     * Depois de salvar uma EDIÇÃO: se mudou um campo que tem cópia em outras
-     * tabelas (nome, e-mail), pergunta se propaga — e só pergunta se houver
-     * cópia para corrigir. Pedido de 13/11/2026; mapa dos destinos em
-     * `utils/clientPropagacao.ts`. Roda DEPOIS do `return saved` (não é
-     * aguardada), para o formulário sair do "Salvando..." antes da pergunta.
-     */
-    const oferecerPropagacao = async (anterior: Client | undefined, saved: Client) => {
-        const campos = camposAlterados(anterior, saved);
-        if (!campos) return;
-        let plano: PlanoDePropagacao;
-        try {
-            plano = await clientPropagacaoService.planejar(saved.id, campos);
-        } catch (err) {
-            console.error('Erro ao procurar cópias do cliente para propagar:', err);
-            showToast(`O cadastro foi salvo, mas não foi possível verificar onde mais ${descreverCampos(campos)} aparece no app.`, 'error');
-            return;
-        }
-        const linhas = linhasDoResumo(contagemDoPlano(plano));
-        // Nada a corrigir também é resposta: calada, a tela parecia ter
-        // esquecido a pergunta (relato de 14/11/2026).
-        if (!linhas.length) {
-            showToast(`Nenhum outro registro do app guarda cópia ${descreverCamposComDe(campos)} deste cliente — nada a propagar.`, 'success');
-            return;
-        }
-        const ok = await confirm({
-            title: `Propagar ${descreverCampos(campos)} pelo app?`,
-            message: `O cadastro foi salvo. Estes registros guardam uma cópia ${descreverCamposComDe(campos)} do cliente e ainda mostram o valor antigo:\n\n${linhas.map(l => `• ${l}`).join('\n')}\n\nRecibos, notas fiscais e o histórico de cobrança já emitidos não mudam.`,
-            confirmLabel: 'Propagar',
-            cancelLabel: 'Só no cadastro',
-        });
-        if (!ok) return;
-        try {
-            const r = await clientPropagacaoService.aplicar(plano);
-            if (r.obrasAlteradas) void useStore.getState().fetchProjects();
-            if (r.recusados > 0) {
-                showToast(
-                    `${r.atualizados} registro(s) atualizado(s); ${r.recusados} não puderam ser alterados${r.motivo ? ` — ${r.motivo}` : ' (sem permissão de edição)'}.`,
-                    'error',
-                );
-            } else {
-                showToast(`Propagado: ${r.atualizados} registro(s) atualizado(s).`, 'success');
-            }
-        } catch (err) {
-            console.error('Erro ao propagar alteração do cliente:', err);
-            showToast('O cadastro foi salvo, mas não foi possível propagar a alteração.', 'error');
-        }
-    };
+    // Depois de salvar uma EDIÇÃO: pergunta se propaga nome/e-mail para as cópias
+    // (pedido de 13/11/2026). Fluxo em hooks/useOferecerPropagacao.ts; destinos
+    // em utils/clientPropagacao.ts.
+    const oferecerPropagacao = useOferecerPropagacao({
+        sujeito: 'cliente',
+        planejar: clientPropagacaoService.planejar,
+        foraDoEscopo: 'Recibos, notas fiscais e o histórico de cobrança já emitidos não mudam.',
+        avisar: showToast,
+    });
 
     const handleSubmit = async (data: Partial<Client>, empreendimentoIds: string[]): Promise<Client | null> => {
         // Valores ANTES deste salvamento, para saber o que mudou (propagação).
@@ -597,7 +558,7 @@ const ClientList: React.FC<ClientListProps> = ({ onClientsChange, onSelectClient
 
             if (onClientsChange) onClientsChange();
             showToast('Cliente salvo com sucesso!', 'success');
-            if (anterior) void oferecerPropagacao(anterior, saved);
+            if (anterior) void oferecerPropagacao(saved.id, anterior, saved);
             return saved;
         } catch (error) {
             console.error("Erro ao salvar cliente:", error);

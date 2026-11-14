@@ -128,16 +128,37 @@ export function menorCaminhoEntre(origem: No, destino: No, arestas: readonly Are
  * quando a rede não os liga. É por ele que cada trecho fica sabendo quem passa
  * por ali (os circuitos no eletroduto, os pesos na água, as UHC no esgoto).
  */
-export function caminhoEntre(origem: No, destino: No, arestas: readonly Aresta[]): number[] | null {
+/**
+ * Os vizinhos de cada nó, por lista de arestas — montados uma vez (PA5b do prédio automático, 14/11/2026: a composição
+ * da rede chama `caminhoEntre` para cada ponto de cada circuito com a MESMA lista, e remontar o mapa — copiando a lista
+ * do nó a cada aresta — e a fila com `shift()` faziam a conferência dos eletrodutos levar 27 s num prédio de 8 andares).
+ * Guardado pelo tamanho da lista: quem ACRESCENTA arestas e chama de novo recebe o mapa refeito. A ordem dos vizinhos é a
+ * mesma de antes (na ordem das arestas), e a busca em largura visita na mesma ordem — o caminho achado não muda.
+ */
+const VIZINHOS_DAS_ARESTAS = new WeakMap<readonly Aresta[], { tamanho: number; vizinhos: Map<No, { para: No; aresta: number }[]> }>();
+function vizinhosDasArestas(arestas: readonly Aresta[]): Map<No, { para: No; aresta: number }[]> {
+  const guardado = VIZINHOS_DAS_ARESTAS.get(arestas);
+  if (guardado && guardado.tamanho === arestas.length) return guardado.vizinhos;
   const vizinhos = new Map<No, { para: No; aresta: number }[]>();
+  const em = (n: No) => {
+    let l = vizinhos.get(n);
+    if (!l) vizinhos.set(n, (l = []));
+    return l;
+  };
   arestas.forEach((ar, i) => {
-    vizinhos.set(ar.de, [...(vizinhos.get(ar.de) ?? []), { para: ar.para, aresta: i }]);
-    vizinhos.set(ar.para, [...(vizinhos.get(ar.para) ?? []), { para: ar.de, aresta: i }]);
+    em(ar.de).push({ para: ar.para, aresta: i });
+    em(ar.para).push({ para: ar.de, aresta: i });
   });
+  VIZINHOS_DAS_ARESTAS.set(arestas, { tamanho: arestas.length, vizinhos });
+  return vizinhos;
+}
+
+export function caminhoEntre(origem: No, destino: No, arestas: readonly Aresta[]): number[] | null {
+  const vizinhos = vizinhosDasArestas(arestas);
   const anterior = new Map<No, { de: No; aresta: number } | null>([[origem, null]]);
   const fila = [origem];
-  while (fila.length > 0) {
-    const n = fila.shift()!;
+  for (let k = 0; k < fila.length; k++) {
+    const n = fila[k];
     if (n === destino) {
       const caminho: number[] = [];
       let atual: No = n;

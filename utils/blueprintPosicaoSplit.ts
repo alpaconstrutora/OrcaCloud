@@ -131,7 +131,16 @@ export interface OpcoesDaPosicaoDoSplit {
    * eletroduto desce até o ponto). Ausente = `AFASTAMENTO_DO_PONTO_AS_REDES_MM` (60).
    */
   afastamentoDoPontoAsRedesMm?: number;
+  /**
+   * PA5b do prédio automático (14/11/2026): a condensadora do cômodo sem fachada vai ao ambiente técnico MAIS PERTO dele
+   * (no prédio, o da própria unidade — o primeiro do pavimento era o de outra) e nunca no lugar de outra condensadora
+   * (`DISTANCIA_ENTRE_CONDENSADORAS_MM`): sem isso o tipo empilhava seis no mesmo ponto. Ausente = a regra de antes.
+   */
+  condensadorasSeparadas?: boolean;
 }
+
+/** A distância mínima entre duas condensadoras (largura dela e a folga de manutenção), mm. */
+export const DISTANCIA_ENTRE_CONDENSADORAS_MM = 900;
 
 /** F14d: a faixa de parede cheia por onde a linha e o dreno atravessam juntos (12 cm entre eles e os raios), mm. */
 const FAIXA_DA_SAIDA_MM = 200;
@@ -478,7 +487,10 @@ export function lugarDaCondensadora(
   evaporadora: LugarDaEvaporadora,
   profundidadeMm: number,
   ehExterna: (wallId: string) => boolean,
+  separadas: { ocupados: readonly Point[] } | null = null,
 ): { at: Point; lugar: 'FACHADA' | 'AMBIENTE_TECNICO' } | null {
+  // PA5b do prédio: com `separadas`, nenhum lugar a menos de DISTANCIA_ENTRE_CONDENSADORAS_MM de uma já posta.
+  const livre = (p: Point) => !separadas || separadas.ocupados.every((o) => Math.hypot(o.x - p.x, o.y - p.y) >= DISTANCIA_ENTRE_CONDENSADORAS_MM);
   // F14d: com a saída dos tubos na parede externa, a condensadora fica do lado de fora, sob ela.
   if (evaporadora.saida && evaporadora.lado.wallId && ehExterna(evaporadora.lado.wallId)) {
     const parede = model.walls.find((w) => w.id === evaporadora.lado.wallId);
@@ -486,7 +498,7 @@ export function lugarDaCondensadora(
       const recuo = parede.thicknessMm + FOLGA_DA_CONDENSADORA_MM + profundidadeMm / 2;
       const n = evaporadora.normal;
       const p = { x: Math.round(evaporadora.saida.x - n.x * recuo), y: Math.round(evaporadora.saida.y - n.y * recuo) } as Point;
-      if (!model.spaces.some((x) => x.levelId === space.levelId && pointInPolygon(x.ring, p))) return { at: p, lugar: 'FACHADA' };
+      if (!model.spaces.some((x) => x.levelId === space.levelId && pointInPolygon(x.ring, p)) && livre(p)) return { at: p, lugar: 'FACHADA' };
     }
   }
   const walls = model.walls.filter((w) => w.levelId === space.levelId);
@@ -494,12 +506,37 @@ export function lugarDaCondensadora(
   const ordem = [...lados].sort((a, b) => Number(b.wallId === evaporadora.lado.wallId) - Number(a.wallId === evaporadora.lado.wallId) || comprimento(b.a, b.b) - comprimento(a.a, a.b));
   for (const lado of ordem) {
     const p = foraDaParede(model, space, lado, profundidadeMm);
-    if (p) return { at: p, lugar: 'FACHADA' };
+    if (p && livre(p)) return { at: p, lugar: 'FACHADA' };
   }
-  const tecnico = model.spaces
+  const centroDe = (ring: readonly Point[]) => ({ x: ring.reduce((s, q) => s + q.x, 0) / ring.length, y: ring.reduce((s, q) => s + q.y, 0) / ring.length });
+  const aqui = centroDe(space.ring);
+  const tecnicos = model.spaces
     .filter((s) => s.levelId === space.levelId && s.id !== space.id)
     .map((s) => ({ s, nome: model.labels.find((l) => l.levelId === s.levelId && pointInPolygon(s.ring, l.at))?.name ?? '' }))
-    .find((x) => AMBIENTE_TECNICO.test(x.nome));
+    .filter((x) => AMBIENTE_TECNICO.test(x.nome));
+  // PA5b do prédio: o MAIS PERTO do cômodo (desempate pelo id, determinístico); sem `separadas`, o primeiro, como antes.
+  if (separadas) tecnicos.sort((a, b) => Math.hypot(centroDe(a.s.ring).x - aqui.x, centroDe(a.s.ring).y - aqui.y) - Math.hypot(centroDe(b.s.ring).x - aqui.x, centroDe(b.s.ring).y - aqui.y) || (a.s.id < b.s.id ? -1 : 1));
+  if (separadas) {
+    // Ao longo dos vãos livres das paredes de cada técnico, de perto para longe, o primeiro lugar sem outra condensadora.
+    for (const t of tecnicos) {
+      const ladosT = ladosDePiso(t.s, walls).filter((l) => !!l.wallId && comprimento(l.a, l.b) >= 1000);
+      const ordemT = [...ladosT].sort((a, b) => Number(!!b.wallId && ehExterna(b.wallId)) - Number(!!a.wallId && ehExterna(a.wallId)) || comprimento(b.a, b.b) - comprimento(a.a, a.b));
+      for (const l of ordemT) {
+        const L = comprimento(l.a, l.b);
+        const n = normalInterna(l, t.s.ring);
+        const d = profundidadeMm / 2 + FOLGA_DA_CONDENSADORA_MM;
+        const vaos = trechosUtilizaveis(l, walls, model.openings.filter((o) => o.wallId === l.wallId), FOLGA_DA_CONDENSADORA_MM).filter((v) => v.ate - v.de >= 1000);
+        for (const v of vaos) {
+          for (let s = v.de + 500; s <= v.ate - 500; s += DISTANCIA_ENTRE_CONDENSADORAS_MM) {
+            const p = { x: Math.round(l.a.x + ((l.b.x - l.a.x) * s) / L + n.x * d), y: Math.round(l.a.y + ((l.b.y - l.a.y) * s) / L + n.y * d) } as Point;
+            if (livre(p)) return { at: p, lugar: 'AMBIENTE_TECNICO' };
+          }
+        }
+      }
+    }
+    return null;
+  }
+  const tecnico = tecnicos[0];
   if (tecnico) {
     // F18 da casa automática: ENCOSTADA numa parede do ambiente técnico (a externa primeiro), fora de porta e vão —
     // no ponto interior (o meio da garagem) ela ficava sob a luz de teto, e a linha descia pelo eletroduto dela.
@@ -524,6 +561,8 @@ export function lugarDaCondensadora(
 export function planejarEquipamentosSplit(model: BlueprintModel, selecao: SelecaoDoNivel, carga: CargaTermicaDoNivel, hip: HipotesesDeSelecao, opcoes: OpcoesDaPosicaoDoSplit = {}): PlanoDeEquipamentosSplit {
   const vazio = (motivo: string, apagados = 0, comandos: Command[] = []): PlanoDeEquipamentosSplit => ({ comandos, aCriar: [], condensadorasParaExistentes: [], capacidadesPreenchidas: [], jaAtendidos: [], semLugar: [], apagados, motivo, resumo: [] });
   const levelId = selecao.levelId;
+  /** PA5b do prédio: as condensadoras do pavimento (as que ficam e as que este plano põe), para não empilhar. */
+  const condensadorasPostas: Point[] = (model.terminais ?? []).filter((t) => t.levelId === levelId && !t.sugerida && (t.tipoHidraulico === 'CONDENSADORA_SPLIT' || t.tipoHidraulico === 'CONDENSADORA_VRF')).map((t) => t.at);
   // As sugestões anteriores deste planejador somem no relançar (peça de climatização sugerida + o ponto elétrico sugerido do aparelho).
   // ⚠️ E6 (05/10/2026): só as peças que ESTE planejador cria (evaporadora, condensadora de split, ponto de
   // força). Antes apagava qualquer peça de climatização sugerida — levava junto o ponto/bomba de dreno da E5
@@ -645,7 +684,8 @@ export function planejarEquipamentosSplit(model: BlueprintModel, selecao: Seleca
     }
     const fichaCond = FICHA_DO_PONTO_HIDRAULICO.CONDENSADORA_SPLIT;
     const medCond = fichaCond.medidasMm ?? { larguraMm: 850, profundidadeMm: 330, alturaMm: 700 };
-    const cond = lugarDaCondensadora(model, space, lugar, medCond.profundidadeMm, ehExterna);
+    const cond = lugarDaCondensadora(model, space, lugar, medCond.profundidadeMm, ehExterna, opcoes.condensadorasSeparadas ? { ocupados: condensadorasPostas } : null);
+    if (cond && opcoes.condensadorasSeparadas) condensadorasPostas.push(cond.at);
     const potenciaVA = modelo.potenciaVA ?? potenciaEletricaVA(modelo.capacidadeBtuH, hip.eerWW);
     const rotacaoGraus = giroParaSoprarParaDentro(lugar.normal);
     const iEvap = adds.length;

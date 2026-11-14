@@ -37,7 +37,7 @@
  * peças nos mesmos lugares (é a lei do teste). Aceitar as sugestões (painéis
  * Split e Linha e dreno) é o que as fixa.
  */
-import type { BlueprintModel, Command, ObjectId } from './blueprintKernel';
+import type { BlueprintModel, Command, ObjectId, Terminal } from './blueprintKernel';
 import { POLITICA_PADRAO, applyBatch, computeQuantities, conflitosArquitetonicos, conflitosDoModelo, TIPOS_DE_EVAPORADORA, TIPOS_DE_TERMINAL_DE_AR } from './blueprintKernel';
 import type { HipotesesClimatizacao } from './blueprintClimatizacao';
 import { cargaTermicaDoEstudo, type CargaTermicaDoNivel, type ContextoDaCarga } from './blueprintCargaTermica';
@@ -94,6 +94,19 @@ export interface ContextoDoGeradorDeClimatizacao {
    * furos para o calculista), não conflito. Ausente = conflito, como antes.
    */
   travessiaDeVigaEhFuro?: boolean;
+  /**
+   * PA5b do prédio automático (14/11/2026): só estes pavimentos — no prédio, o TIPO (as cópias vivas recebem pela cópia
+   * das instalações; ponto lançado direto numa cópia impediria ligá-la). Ausente = todos, como antes.
+   */
+  niveis?: readonly ObjectId[] | null;
+  /**
+   * PA5b do prédio automático: o QUADRO de cada ponto de ar-condicionado — no prédio, o QD da unidade onde o split caiu
+   * (o tipo tem um QD por unidade e o QDS; a regra de "um quadro só" não escolhe). Com ela, os circuitos saem POR QUADRO,
+   * cada um planejado só com os pontos dele; ponto sem quadro vira pendência. Ausente = a regra de antes.
+   */
+  quadroDoPonto?: ((m: BlueprintModel, t: Terminal) => ObjectId | null) | null;
+  /** PA5b do prédio automático: ver `OpcoesDaPosicaoDoSplit.condensadorasSeparadas`. Ausente = a regra de antes. */
+  condensadorasSeparadas?: boolean;
 }
 
 /** Medidas do orçamento que a climatização alimenta (E9). */
@@ -141,7 +154,7 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   };
 
   // ── Carga térmica (E2) ─────────────────────────────────────────────────────
-  const cargas = cargaTermicaDoEstudo(m, hip, cx.carga ?? {});
+  const cargas = cargaTermicaDoEstudo(m, hip, cx.carga ?? {}).filter((n) => !cx.niveis || cx.niveis.includes(n.levelId));
   const climatizados = cargas.flatMap((n) => n.ambientes.filter((a) => a.climatizado));
   if (climatizados.length === 0) {
     pendencia('PREMISSA', 'Nenhum ambiente climatizado — nomeie os ambientes (sala e quarto entram pelo nome) ou marque-os em Premissas de climatização › Ambientes.');
@@ -169,7 +182,7 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       for (const a of selecao.ambientes) {
         if (!a.sugestao.escolhido && a.sugestao.motivo && a.evaporadoras.length === 0) pendencia('SEM_SOLUCAO', `${nomeDoNivel(nivel.levelId)} › ${a.nome}: ${a.sugestao.motivo}`);
       }
-      const plano = planejarEquipamentosSplit(m, selecao, nivel, hip.selecao, { naParedeExterna: cx.splitNaParedeExterna ?? null });
+      const plano = planejarEquipamentosSplit(m, selecao, nivel, hip.selecao, { naParedeExterna: cx.splitNaParedeExterna ?? null, ...(cx.condensadorasSeparadas ? { condensadorasSeparadas: true } : {}) });
       n += aplicar(plano.comandos);
       // 11/10/2026: as pendências do ambiente sobre o desenho DEPOIS do lote — antes saía "evaporadora sem
       // condensadora" para a evaporadora que acabou de ganhar a dela.
@@ -193,7 +206,7 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   }
 
   // ── Linha frigorígena e dreno (E5); VRF (E6) ───────────────────────────────
-  const niveis = m.levels.map((l) => l.id);
+  const niveis = m.levels.map((l) => l.id).filter((id) => !cx.niveis || cx.niveis.includes(id));
   {
     let n = 0;
     const notas: string[] = [];
@@ -261,7 +274,25 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
       // (quadro de outro pavimento vale — 17/09/2026). Mais de um possível: o gerador não escolhe.
       const doPavimento = (m.quadros ?? []).filter((q) => q.levelId === levelId);
       const quadros = doPavimento.length > 0 ? doPavimento : (m.quadros ?? []);
-      if (outros > 0) {
+      if (cx.quadroDoPonto && cx.circuitos) {
+        // PA5b do prédio: por quadro, cada plano com a VISTA só dos pontos dele (o planejador liga os soltos do pavimento).
+        const porQuadro = new Map<ObjectId, Set<ObjectId>>();
+        for (const t of doGerador) {
+          const q = cx.quadroDoPonto(m, t);
+          if (!q) {
+            pendencia('NAO_DECIDIDO', `${nome}: ponto ${t.id} de ar-condicionado sem quadro de destino — ligue pela Elétrica › Circuitos.`);
+            continue;
+          }
+          porQuadro.set(q, (porQuadro.get(q) ?? new Set()).add(t.id));
+        }
+        for (const [q, ids] of porQuadro) {
+          const vista: BlueprintModel = { ...m, terminais: (m.terminais ?? []).filter((t) => t.levelId !== levelId || t.disciplina !== 'ELETRICA' || t.circuitoId != null || ids.has(t.id)) };
+          const plano = planejarCircuitos(vista, levelId, q, cx.circuitos.hip, cx.circuitos.eletricas);
+          if (plano.motivo) pendencia('NAO_DECIDIDO', `${nome}: circuito do ar-condicionado — ${plano.motivo}`);
+          n += aplicar(plano.comandos);
+          for (const f of plano.foraDoPlano) if (novos.has(f.terminalId)) pendencia('SEM_SOLUCAO', `${nome}: ponto ${f.terminalId} fora do plano de circuitos — ${f.motivo}`);
+        }
+      } else if (outros > 0) {
         pendencia('NAO_DECIDIDO', `${nome}: ${doGerador.length} ponto(s) de ar-condicionado sem circuito — há outros ${outros} ponto(s) solto(s) no pavimento, e o planejador de circuitos liga todos juntos; ligue pela Elétrica › Circuitos.`);
       } else if (quadros.length !== 1) {
         pendencia('NAO_DECIDIDO', `${nome}: ${doGerador.length} ponto(s) de ar-condicionado sem circuito — ${quadros.length === 0 ? 'não há quadro no desenho' : `há ${quadros.length} quadros possíveis; escolha o de destino`} na Elétrica › Circuitos.`);
@@ -323,7 +354,9 @@ export function gerarClimatizacao(original: BlueprintModel, hip: HipotesesClimat
   );
 
   // ── A conferência do resultado (a da emissão, menos o responsável) ────────
-  const r = verificacoesClimatizacao(m, cargaTermicaDoEstudo(m, hip, cx.carga ?? {}), hip, RESPONSAVEL_VAZIO, nomeDoNivel);
+  // PA5b do prédio: a conferência nos mesmos pavimentos (`niveis`) — as cópias vivas recebem o resultado depois, pela cópia
+  // das instalações, e aqui sairiam "sem equipamento".
+  const r = verificacoesClimatizacao(m, cargaTermicaDoEstudo(m, hip, cx.carga ?? {}).filter((n) => !cx.niveis || cx.niveis.includes(n.levelId)), hip, RESPONSAVEL_VAZIO, nomeDoNivel);
   for (const v of r.verificacoes) {
     if (v.atende || v.grupo === 'RESPONSAVEL') continue;
     pendencia('VERIFICACAO', `${ROTULO_DO_GRUPO_DE_CLIMATIZACAO[v.grupo]} — ${v.item}: exigido ${v.exigido}; obtido ${v.obtido}.`);

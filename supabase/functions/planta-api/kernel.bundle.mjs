@@ -3954,16 +3954,29 @@ function distanciasDesde(origem, arestas) {
   }
   return dist;
 }
-function caminhoEntre(origem, destino, arestas) {
+var VIZINHOS_DAS_ARESTAS = /* @__PURE__ */ new WeakMap();
+function vizinhosDasArestas(arestas) {
+  const guardado = VIZINHOS_DAS_ARESTAS.get(arestas);
+  if (guardado && guardado.tamanho === arestas.length) return guardado.vizinhos;
   const vizinhos = /* @__PURE__ */ new Map();
+  const em = (n4) => {
+    let l = vizinhos.get(n4);
+    if (!l) vizinhos.set(n4, l = []);
+    return l;
+  };
   arestas.forEach((ar, i) => {
-    vizinhos.set(ar.de, [...vizinhos.get(ar.de) ?? [], { para: ar.para, aresta: i }]);
-    vizinhos.set(ar.para, [...vizinhos.get(ar.para) ?? [], { para: ar.de, aresta: i }]);
+    em(ar.de).push({ para: ar.para, aresta: i });
+    em(ar.para).push({ para: ar.de, aresta: i });
   });
+  VIZINHOS_DAS_ARESTAS.set(arestas, { tamanho: arestas.length, vizinhos });
+  return vizinhos;
+}
+function caminhoEntre(origem, destino, arestas) {
+  const vizinhos = vizinhosDasArestas(arestas);
   const anterior = /* @__PURE__ */ new Map([[origem, null]]);
   const fila = [origem];
-  while (fila.length > 0) {
-    const n4 = fila.shift();
+  for (let k = 0; k < fila.length; k++) {
+    const n4 = fila[k];
     if (n4 === destino) {
       const caminho = [];
       let atual = n4;
@@ -4122,12 +4135,17 @@ function composicaoDaRede(model) {
     porCircuito.set(circuitoId, a);
     return a;
   };
+  const arestasPorCircuito = /* @__PURE__ */ new Map();
   const arestasDo = (c) => {
+    const guardada = arestasPorCircuito.get(c.id);
+    if (guardada) return guardada;
     const proprias = arestas.filter((a) => {
       const t = trechos[indiceDoTrecho.get(a.ref.existente)];
       return (t.circuitoIds ?? []).includes(c.id);
     });
-    return proprias.length > 0 ? proprias : arestas;
+    const lista = proprias.length > 0 ? proprias : arestas;
+    arestasPorCircuito.set(c.id, lista);
+    return lista;
   };
   const caminho = (de, para, c) => {
     const tentar = (lista) => {

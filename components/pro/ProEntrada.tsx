@@ -12,7 +12,7 @@ import { ENDERECO_PRO, ORIGEM_PRO } from '../../utils/proPublico';
  * dentro. Conta nova criada por aqui nasce com `user_metadata.origem = 'pro'`.
  */
 
-const CAMPO = 'w-full h-12 bg-white border border-slate-300 rounded-[6px] px-3 text-base text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600';
+const CAMPO = 'w-full h-12 bg-white border border-slate-300 rounded-[6px] px-3 text-base text-slate-900 placeholder:text-slate-400 caret-blue-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600';
 const PRIMARIO = 'w-full h-12 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 text-white rounded-[6px] font-medium text-base transition-colors disabled:opacity-60';
 const SECUNDARIO = 'w-full h-12 flex items-center justify-center gap-2 bg-white hover:bg-slate-50 border border-slate-300 text-slate-800 rounded-[6px] font-medium text-base transition-colors disabled:opacity-60';
 const ESPERA_REENVIO_S = 60;
@@ -28,7 +28,7 @@ const LogoGoogle: React.FC = () => (
   </svg>
 );
 
-export const ProEntrada: React.FC = () => {
+export const ProEntrada: React.FC<{ onVoltar?: () => void }> = ({ onVoltar }) => {
   const [etapa, setEtapa] = React.useState<'email' | 'codigo'>('email');
   const [email, setEmail] = React.useState('');
   const [codigo, setCodigo] = React.useState('');
@@ -101,8 +101,18 @@ export const ProEntrada: React.FC = () => {
   return (
     <div className="min-h-[100dvh] bg-slate-50 flex flex-col">
       <main className="flex-1 w-full max-w-sm mx-auto px-4 pt-[max(2.5rem,env(safe-area-inset-top))] pb-8 flex flex-col">
+        {onVoltar && etapa === 'email' && (
+          <button
+            type="button"
+            onClick={onVoltar}
+            className="self-start inline-flex items-center gap-1 min-h-11 -ml-2 mb-4 px-2 text-sm font-medium text-blue-700"
+          >
+            <ArrowLeft className="w-4 h-4" aria-hidden />
+            Voltar
+          </button>
+        )}
         <div className="mb-8">
-          <p className="text-2xl font-black text-slate-900">ÒPURA Pro</p>
+          <p className="text-2xl font-bold text-slate-900">ÒPURA Pro</p>
           <p className="text-base text-slate-700 mt-1.5">
             Orçamento no WhatsApp, Pix na hora e a agenda do seu serviço. Grátis.
           </p>

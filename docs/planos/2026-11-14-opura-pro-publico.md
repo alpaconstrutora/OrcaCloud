@@ -113,3 +113,24 @@ PR só porque publicar = merge no `main`: o `/pro` não pode ir ao ar com a entr
 conta de teste que o usuário criar).
 
 **Pendentes:** P4 (página de apresentação), P5 (termos/privacidade — rascunho para revisão), P6.
+
+**P4 (página de apresentação): implementada e revisada; falta o teste com teclado real.**
+- Perguntas: preço = "Grátis", sem prazo (+ "sem cartão"); primeira tela = orçamento pronto no
+  WhatsApp; rodapé = "feito por uma construtora" (sem citar a Alpa).
+- `concept-seed --scope surface --mode persuade` (seed:fed77fbe51f9c0e4) sorteou 3 de 7 estruturas;
+  na página de decisão o usuário escolheu "Monte o seu orçamento agora" (a sorteada para liderar).
+  Contrato de direção em `.impeccable/surfaces/components-pro-proapresentacao-tsx.md`; esboços da
+  decisão em `.impeccable/mocks/decision/`.
+- `components/pro/ProApresentacao.tsx`: demonstração viva (serviço, cliente, valor → balão do
+  WhatsApp com PDF, ✓ enviando → ✓✓ entregue), "o resto do dia" com pedaços do Pro (QR de exemplo
+  NÃO pagável, assinatura, quem deve), "Grátis.", rodapé; ação fixa "Mandar de verdade — conta
+  grátis"; `/pro/entrar` com voltar no histórico; `lib/tabRouter.ts` não grava `#/…` no `/pro`.
+- Revisão final independente (impeccable-finish-reviewer): 1ª rodada `fix` com 7 correções
+  materiais (teclado cobrindo o balão, botão quebrando a 360 px, QR de Pix pagável real, ✓✓ azul =
+  "lida", nome no PDF, peso de fonte 900 não carregado, foco/caret); 1ª passada de veredito 3
+  resolvidas + 4 parciais + 2 regressões (valor sumiu do PDF, salto ao focar); 2ª rodada → 2ª
+  passada: tudo resolvido **exceto teclado real** (Android/iOS) — sem aparelho, fica com o usuário.
+- `tsc` exit 0; detector 1 aviso intencional (`md:text-[44px]` fora da régua do DESIGN.md do
+  Portal do Colaborador); guia sem ❌.
+- **DESIGN.md não descreve o mundo do Pro/app** (é o do Portal do Colaborador): registrar o mundo do
+  Pro é mudança de sistema — pendente de decisão do usuário.

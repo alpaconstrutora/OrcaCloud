@@ -5,8 +5,9 @@ import { supabase } from '../../lib/supabase';
 import { proService } from '../../services/proService';
 import { ProModule } from '../ProModule';
 import { ProEntrada } from './ProEntrada';
+import { ProApresentacao } from './ProApresentacao';
 import { ProPrimeiroAcesso } from './ProPrimeiroAcesso';
-import { ORIGEM_PRO } from '../../utils/proPublico';
+import { ORIGEM_PRO, ENDERECO_PRO } from '../../utils/proPublico';
 
 /**
  * ÒPURA Pro público — a casca de `/pro` (14/11/2026, docs/planos/2026-11-14-opura-pro-publico.md).
@@ -20,6 +21,8 @@ import { ORIGEM_PRO } from '../../utils/proPublico';
  */
 
 const VIEW_INICIAL = 'pro-dashboard';
+// Sem sessão: `/pro` é a apresentação; `/pro/entrar` vai direto à entrada (link de "Entrar").
+const ENDERECO_ENTRAR = `${ENDERECO_PRO}/entrar`;
 const MANIFESTO_PRO = '/pro.webmanifest';
 
 // Conta nova vinda do Google não traz `origem` (o OAuth não aceita metadados no cadastro).
@@ -31,6 +34,30 @@ export const ProPublico: React.FC = () => {
   const [carregando, setCarregando] = React.useState(true);
   const [temCadastro, setTemCadastro] = React.useState<boolean | null>(null);
   const [view, setView] = React.useState(VIEW_INICIAL);
+  const [naEntrada, setNaEntrada] = React.useState(() => window.location.pathname.startsWith(ENDERECO_ENTRAR));
+
+  // Apresentação ↔ entrada no histórico: o "voltar" do celular volta para a apresentação.
+  React.useEffect(() => {
+    const aoVoltar = () => setNaEntrada(window.location.pathname.startsWith(ENDERECO_ENTRAR));
+    window.addEventListener('popstate', aoVoltar);
+    return () => window.removeEventListener('popstate', aoVoltar);
+  }, []);
+
+  // Só volta no histórico se FOI a apresentação que empurrou a entrada; quem chegou direto em
+  // /pro/entrar (link) troca o endereço no lugar — senão o "voltar" sairia do site.
+  const empurrouEntrada = React.useRef(false);
+  const irParaEntrada = () => {
+    window.history.pushState(null, '', ENDERECO_ENTRAR);
+    empurrouEntrada.current = true;
+    setNaEntrada(true);
+    window.scrollTo(0, 0);
+  };
+  const voltarParaApresentacao = () => {
+    if (empurrouEntrada.current) window.history.back();
+    else window.history.replaceState(null, '', ENDERECO_PRO);
+    empurrouEntrada.current = false;
+    setNaEntrada(false);
+  };
 
   // Instalável como "ÒPURA Pro" (manifesto próprio), não como o app da construtora.
   React.useEffect(() => {
@@ -101,7 +128,11 @@ export const ProPublico: React.FC = () => {
     );
   }
 
-  if (!session) return <ProEntrada />;
+  if (!session) {
+    return naEntrada
+      ? <ProEntrada onVoltar={voltarParaApresentacao} />
+      : <ProApresentacao onCriarConta={irParaEntrada} onEntrar={irParaEntrada} />;
+  }
 
   if (!temCadastro) {
     return (

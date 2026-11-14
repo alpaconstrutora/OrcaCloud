@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=390">
+<title>ÒPURA Pro — monte o seu orçamento agora</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  html, body { width: 390px; height: 844px; overflow: hidden; }
+  body { font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; background: #F8FAFC; color: #0F172A; }
+  .topo { display: flex; justify-content: space-between; align-items: center; padding: 18px 16px 0; }
+  .marca { font-weight: 900; font-size: 18px; }
+  .entrar { font-size: 15px; font-weight: 500; color: #1D4ED8; }
+  h1 { font-weight: 900; font-size: 30px; line-height: 1.12; letter-spacing: -0.02em; padding: 22px 16px 0; }
+  .sub { font-size: 16px; color: #334155; padding: 10px 16px 0; line-height: 1.45; }
+  .demo { margin: 18px 16px 0; background: #fff; border: 1px solid #E2E8F0; border-radius: 10px; padding: 14px; }
+  .rot { font-size: 12px; font-weight: 600; color: #64748B; margin-bottom: 6px; }
+  .campo { height: 44px; border: 1px solid #CBD5E1; border-radius: 6px; padding: 0 12px; display: flex; align-items: center; font-size: 16px; margin-bottom: 12px; }
+  .campo .cursor { width: 1.5px; height: 20px; background: #2563EB; margin-left: 2px; }
+  .linha { display: grid; grid-template-columns: 1fr 120px; gap: 10px; }
+  .zap { margin: 14px 16px 0; background: #E7DED5; border-radius: 10px; padding: 12px; }
+  .zap-topo { font-size: 13px; font-weight: 600; color: #075E54; margin-bottom: 8px; }
+  .balao { background: #DCF8C6; border-radius: 8px 0 8px 8px; padding: 8px; margin-left: 34px; box-shadow: 0 1px 1px rgba(0,0,0,.08); }
+  .pdf { display: flex; gap: 10px; align-items: center; background: #fff; border-radius: 6px; padding: 8px; }
+  .pdf-ic { width: 32px; height: 40px; border-radius: 4px; background: #EF4444; color: #fff; font-size: 11px; font-weight: 700; display: flex; align-items: center; justify-content: center; }
+  .pdf b { font-size: 14px; display: block; }
+  .pdf span { font-size: 12px; color: #475569; }
+  .msg { font-size: 14px; line-height: 1.4; padding: 6px 2px 0; }
+  .hora { text-align: right; font-size: 11px; color: #64748B; }
+  .acao { position: absolute; left: 16px; right: 16px; bottom: 24px; }
+  .btn { height: 52px; border-radius: 6px; background: #2563EB; color: #fff; font-weight: 600; font-size: 17px; display: flex; align-items: center; justify-content: center; }
+  .nota { text-align: center; font-size: 13px; color: #475569; margin-top: 10px; }
+</style>
+</head>
+<body>
+  <div class="topo"><span class="marca">ÒPURA Pro</span><span class="entrar">Entrar</span></div>
+  <h1>Seu orçamento no WhatsApp do cliente em 1 minuto.</h1>
+  <p class="sub">Experimente aqui: escreva o serviço e o valor.</p>
+  <div class="demo">
+    <p class="rot">Serviço</p>
+    <div class="campo">Limpeza de split 12.000 BTUs<span class="cursor"></span></div>
+    <div class="linha">
+      <div><p class="rot">Cliente</p><div class="campo" style="margin:0">Dona Marta</div></div>
+      <div><p class="rot">Valor</p><div class="campo" style="margin:0">R$ 180,00</div></div>
+    </div>
+  </div>
+  <div class="zap">
+    <p class="zap-topo">Assim chega para a Dona Marta</p>
+    <div class="balao">
+      <div class="pdf"><div class="pdf-ic">PDF</div><div><b>Orçamento — João Refrigeração</b><span>Limpeza de split · R$ 180,00 · garantia 90 dias</span></div></div>
+      <p class="msg">Olá, Dona Marta! Segue o orçamento da limpeza do ar. Qualquer dúvida, me chama.</p>
+      <p class="hora">09:41 ✓✓</p>
+    </div>
+  </div>
+  <div class="acao">
+    <div class="btn">Mandar de verdade — criar conta grátis</div>
+    <p class="nota">Grátis. Sem cartão, sem senha.</p>
+  </div>
+</body>
+</html>

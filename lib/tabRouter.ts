@@ -1,3 +1,4 @@
+import { ehEnderecoDoPro } from '../utils/proPublico';
 /**
  * URL hash-based tab routing.
  * Each browser tab/window has its own URL hash, so multiple tabs can show
@@ -28,6 +29,8 @@ export function getInitialView(): string {
  */
 export function syncViewToUrl(view: string): void {
   if (typeof window === 'undefined') return;
+  // ÒPURA Pro público (/pro): não há telas do app ali — sem `#/central` no endereço do autônomo.
+  if (ehEnderecoDoPro(window.location.pathname)) return;
   if (parseHashView(window.location.hash) === view) return;
   window.history.replaceState(null, '', `#/${view}`);
 }

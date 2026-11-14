@@ -15,7 +15,7 @@ const PROFISSOES = [
   { valor: 'PINTOR', rotulo: 'Pintor / acabamentos' },
 ] as const;
 
-const CAMPO = 'w-full h-12 bg-white border border-slate-300 rounded-[6px] px-3 text-base text-slate-900 placeholder:text-slate-400 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600';
+const CAMPO = 'w-full h-12 bg-white border border-slate-300 rounded-[6px] px-3 text-base text-slate-900 placeholder:text-slate-400 caret-blue-600 outline-none focus:border-blue-600 focus:ring-1 focus:ring-blue-600';
 
 export const ProPrimeiroAcesso: React.FC<{ userId: string; onConcluir: () => void; onSair: () => void }> = ({ userId, onConcluir, onSair }) => {
   const [nome, setNome] = React.useState('');
@@ -51,7 +51,7 @@ export const ProPrimeiroAcesso: React.FC<{ userId: string; onConcluir: () => voi
   return (
     <div className="min-h-[100dvh] bg-slate-50">
       <main className="w-full max-w-sm mx-auto px-4 pt-[max(2.5rem,env(safe-area-inset-top))] pb-8">
-        <p className="text-2xl font-black text-slate-900">Bem-vindo ao ÒPURA Pro</p>
+        <p className="text-2xl font-bold text-slate-900">Bem-vindo ao ÒPURA Pro</p>
         <p className="text-base text-slate-700 mt-1.5">Duas coisas e você já faz o primeiro orçamento.</p>
 
         <form onSubmit={salvar} className="mt-8 space-y-5">

@@ -10,6 +10,8 @@ import { boletoService } from '../services/boletoService';
 import { supplierService } from '../services/supplierService';
 import { financialRegistryService } from '../services/financialRegistryService';
 import { projectService } from '../services/projectService';
+import { useWritableOrganizations } from '../hooks/useOrgContext';
+import { aceitoNoLote } from '../utils/boletoArquivoAceito';
 import type { Boleto, BoletoExtractionResult, CostCenter } from '../types';
 
 // ─── Tipos internos ─────────────────────────────────────────────────────────
@@ -27,7 +29,6 @@ interface LoteItem {
 
 interface BoletoLoteModalProps {
     organizationId: string;
-    organizations?: { id: string; name: string }[];
     userEmail?: string;
     projectId?: string;
     onClose: () => void;
@@ -49,13 +50,21 @@ const formatDate = (d?: string | null) => {
 
 const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
     organizationId: initialOrgId,
-    organizations = [],
     userEmail,
     projectId: initialProjectId,
     onClose,
     onConcluir,
 }) => {
+    /* 13/11/2026 ("não cadastra multa de trânsito em lote"): com o topo em "Todas" o seletor
+       daqui MOSTRAVA a 1ª organização (não tinha opção vazia) mas o estado era '' — e a fila só
+       anda com organização. Os arquivos ficavam "Aguardando na fila…" para sempre, sem aviso.
+       Agora: só as organizações em que o usuário grava, opção vazia explícita, e com UMA só
+       ela já vem escolhida (REGRA #5 — não se pergunta o que só tem uma resposta). */
+    const orgsGravaveis = useWritableOrganizations();
     const [organizationId, setOrganizationId] = useState(initialOrgId);
+    useEffect(() => {
+        if (!organizationId && orgsGravaveis.length === 1) setOrganizationId(orgsGravaveis[0].id);
+    }, [organizationId, orgsGravaveis]);
     const [items, setItems] = useState<LoteItem[]>([]);
     const [dragging, setDragging] = useState(false);
     const [processing, setProcessing] = useState(false);
@@ -92,7 +101,7 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
 
     // ─── Adicionar arquivos ───────────────────────────────────────────────
     function addFiles(files: FileList | File[]) {
-        const arr = Array.from(files).filter(f => f.type === 'application/pdf' || f.name.toLowerCase().endsWith('.pdf'));
+        const arr = Array.from(files).filter(aceitoNoLote);
         if (!arr.length) return;
 
         setCommonApplied(false);
@@ -204,32 +213,43 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
     const dupCount= items.filter(i => i.status === 'duplicado').length;
     const pendCount= items.filter(i => i.status === 'aguardando' || i.status === 'processando').length;
     const done    = pendCount === 0 && total > 0;
+    const esperandoOrganizacao = !organizationId && pendCount > 0;
 
     // ─── UI ───────────────────────────────────────────────────────────────
     return (
         <Modal open dismissable={!processing} onClose={onClose} size="2xl" zIndex={80}>
             <ModalHeader
                 title="Importação em Lote"
-                description="Envie múltiplos boletos PDF de uma vez. Os dados são extraídos automaticamente."
+                description="Envie vários boletos de uma vez (PDF ou imagem). Os dados são extraídos automaticamente."
                 icon={<div className="p-2 bg-blue-50 rounded-xl"><Upload className="w-5 h-5 text-blue-600" /></div>}
                 onClose={processing ? undefined : onClose}
             />
 
             <ModalBody className="space-y-5">
-                {/* Seletor de org (multi-tenant) */}
-                {organizations.length > 0 && (
-                    <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
-                        <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
-                        <select
-                            value={organizationId}
-                            onChange={e => setOrganizationId(e.target.value)}
-                            className="flex-1 bg-transparent text-sm font-semibold text-gray-700 outline-none"
-                            disabled={processing}
-                        >
-                            {organizations.map(o => (
-                                <option key={o.id} value={o.id}>{o.name}</option>
-                            ))}
-                        </select>
+                {/* Organização dos boletos — obrigatória: sem ela a fila não anda. */}
+                {orgsGravaveis.length > 0 && (
+                    <div className="space-y-1.5">
+                        <div className="flex items-center gap-2 bg-gray-50 border border-gray-200 rounded-xl px-3 py-2">
+                            <Building2 className="w-4 h-4 text-gray-400 shrink-0" />
+                            <select
+                                aria-label="Organização dos boletos"
+                                value={organizationId}
+                                onChange={e => setOrganizationId(e.target.value)}
+                                className="flex-1 bg-transparent text-sm text-gray-900 outline-none"
+                                disabled={processing}
+                            >
+                                <option value="">— Selecione a organização —</option>
+                                {orgsGravaveis.map(o => (
+                                    <option key={o.id} value={o.id}>{o.name}</option>
+                                ))}
+                            </select>
+                        </div>
+                        {esperandoOrganizacao && (
+                            <p className="flex items-center gap-1.5 text-xs text-amber-700">
+                                <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                                Escolha a organização para começar — os arquivos esperam na fila.
+                            </p>
+                        )}
                     </div>
                 )}
 
@@ -247,13 +267,13 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                 >
                     <Upload className={`w-8 h-8 mx-auto mb-3 transition-colors ${dragging ? 'text-blue-500' : 'text-gray-300'}`} />
                     <p className="text-sm font-bold text-gray-700">
-                        {dragging ? 'Solte os arquivos aqui' : 'Arraste PDFs aqui ou clique para selecionar'}
+                        {dragging ? 'Solte os arquivos aqui' : 'Arraste os boletos aqui ou clique para selecionar'}
                     </p>
-                    <p className="text-xs text-gray-400 mt-1">Apenas arquivos PDF. Pode selecionar vários de uma vez.</p>
+                    <p className="text-xs text-gray-500 mt-1">PDF ou imagem (JPG/PNG). Pode selecionar vários de uma vez.</p>
                     <input
                         ref={fileInputRef}
                         type="file"
-                        accept=".pdf,application/pdf"
+                        accept=".pdf,application/pdf,image/*"
                         multiple
                         className="hidden"
                         onChange={e => { if (e.target.files) addFiles(e.target.files); e.target.value = ''; }}
@@ -304,7 +324,9 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                                         <p className="text-xs text-red-500 mt-0.5 truncate">{item.error}</p>
                                     )}
                                     {item.status === 'aguardando' && (
-                                        <p className="text-xs text-gray-400 mt-0.5">Aguardando na fila…</p>
+                                        <p className={`text-xs mt-0.5 ${organizationId ? 'text-gray-500' : 'text-amber-700'}`}>
+                                            {organizationId ? 'Aguardando na fila…' : 'Aguardando a organização'}
+                                        </p>
                                     )}
                                     {item.status === 'processando' && (
                                         <p className="text-xs text-blue-500 mt-0.5">Processando…</p>
@@ -434,12 +456,17 @@ const BoletoLoteModal: React.FC<BoletoLoteModalProps> = ({
                 <button
                     onClick={onConcluir}
                     disabled={processing || !done}
+                    title={esperandoOrganizacao ? 'Escolha a organização: a fila só anda com ela' : undefined}
                     className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-xl font-black text-sm uppercase tracking-widest hover:bg-emerald-700 disabled:opacity-40 disabled:cursor-not-allowed transition-all shadow-lg shadow-emerald-900/20"
                 >
                     {processing && <Loader2 className="w-4 h-4 animate-spin" />}
                     {done
                         ? `Concluir (${okCount} boleto${okCount !== 1 ? 's' : ''})`
-                        : `Processando… (${pendCount} restante${pendCount !== 1 ? 's' : ''})`
+                        : esperandoOrganizacao
+                            ? 'Escolha a organização'
+                            : total === 0
+                                ? 'Concluir'
+                                : `Processando… (${pendCount} restante${pendCount !== 1 ? 's' : ''})`
                     }
                 </button>
             </ModalFooter>

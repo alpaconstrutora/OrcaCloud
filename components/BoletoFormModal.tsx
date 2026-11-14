@@ -37,6 +37,10 @@ interface BoletoFormModalProps {
     boleto?: Boleto;
     onClose: () => void;
     onSaved: (boleto: Boleto) => void;
+    /** O boleto foi EXCLUÍDO (apagado do banco): a lista tira a linha. Não é "cancelado" —
+     *  até 13/11/2026 a exclusão avisava a lista com `status: 'cancelado'` e a linha ficava
+     *  na tela como Cancelado (docs/planos/2026-11-13-boletos-a-pagar-dez-pedidos.md, item 10). */
+    onExcluido: (boletoId: string) => void;
     /** Abre outro boleto no lugar deste — o aviso de linha repetida leva ao boleto que já a tem. */
     onAbrirOutroBoleto?: (boletoId: string) => void;
 }
@@ -146,7 +150,7 @@ const VENCIMENTO_MAX = `${new Date().getFullYear() + 5}-12-31`;
 
 const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
     organizationId: initialOrgId, organizations = [], onOrgChange,
-    userEmail, projectId, boleto: initial, onClose, onSaved, onAbrirOutroBoleto,
+    userEmail, projectId, boleto: initial, onClose, onSaved, onExcluido, onAbrirOutroBoleto,
 }) => {
     const [organizationId, setOrganizationId] = React.useState(initialOrgId);
     // Orgs em que o usuário REALMENTE pode gravar. `useStore().organizations`
@@ -348,6 +352,26 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         onSaved(atual);
     }
 
+    // Captura (boleto ainda não gravado): o fornecedor sugerido pelo CNPJ lido do PDF, na
+    // organização escolhida — a mesma busca que a gravação faz depois (13/11/2026, item 5).
+    const [sugestaoCaptura, setSugestaoCaptura] = useState<string | null>(null);
+    const beneficiarioLido = pendingExtraction
+        ? { nome: pendingExtraction.campos.beneficiario_nome?.valor ?? '', cnpj: pendingExtraction.campos.beneficiario_cnpj?.valor ?? '' }
+        : null;
+    useEffect(() => {
+        setSugestaoCaptura(null);
+        if (boleto || !beneficiarioLido || !organizationId) return;
+        const doc = beneficiarioLido.cnpj || (beneficiarioLido.nome.match(/\b(\d{14}|\d{11})\b/)?.[1] ?? '');
+        if (!doc) return;
+        let vivo = true;
+        boletoService.fornecedorPorDocumento(organizationId, doc)
+            .then(id => { if (vivo && id) { setSugestaoCaptura(id); setSupplierId(prev => prev || id); } })
+            .catch(() => { /* sem sugestão, o usuário escolhe */ });
+        return () => { vivo = false; };
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [boleto?.id, pendingExtraction, organizationId]);
+    const sugestaoFornecedor = boleto ? (boleto.sugestao_supplier_id ?? null) : sugestaoCaptura;
+
     // Aplica sugestão de fornecedor caso nenhum esteja selecionado
     useEffect(() => {
         if (boleto?.sugestao_supplier_id && !supplierId) {
@@ -355,11 +379,14 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }, [boleto?.sugestao_supplier_id]);
 
-    // Pré-preenche formulário de novo fornecedor com dados do boleto
+    // Pré-preenche formulário de novo fornecedor com dados do boleto (ou, na captura, do PDF lido)
     useEffect(() => {
-        if (boleto) {
-            let nome = boleto.beneficiario_nome ?? '';
-            let cnpj = boleto.beneficiario_cnpj ?? '';
+        const origem = boleto
+            ? { nome: boleto.beneficiario_nome ?? '', cnpj: boleto.beneficiario_cnpj ?? '' }
+            : beneficiarioLido;
+        if (origem) {
+            let nome = origem.nome;
+            let cnpj = origem.cnpj;
 
             // Extrai CNPJ/CPF embutido no nome (ex: "... - CNPJ: 07604526000120  Ven")
             if (!cnpj) {
@@ -381,7 +408,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                 type: digits.length === 14 ? 'PJ' : digits.length === 11 ? 'PF' : prev.type,
             }));
         }
-    }, [boleto?.id]);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [boleto?.id, pendingExtraction]);
 
     // Bucket 'boletos' privado: resolve a signed URL (async) em estado.
     const [documentoUrl, setDocumentoUrl] = useState<string | null>(null);
@@ -629,21 +657,35 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
 
     const MOTIVO_RENOMEAR: Record<string, string> = {
         nao_encontrado: 'Boleto não encontrado.',
-        sem_fornecedor: 'Escolha o fornecedor e salve o boleto antes: o nome da Nomenclatura usa o fornecedor.',
+        sem_fornecedor: 'Escolha o fornecedor antes: o nome da Nomenclatura usa o fornecedor.',
         sem_mudanca: 'O documento mudou enquanto você renomeava. Recarregue o boleto e tente de novo.',
         erro: 'Não foi possível renomear o documento.',
     };
 
-    /** Renomeia de novo o documento pela máscara atual (usa fornecedor/obra já salvos). */
+    /**
+     * Renomeia de novo o documento pela máscara atual. Grava os campos da tela ANTES (13/11/2026,
+     * "tenho que salvar para renomear"): a Nomenclatura lê o fornecedor e a obra do banco, então
+     * renomear sem salvar usava o fornecedor antigo — ou recusava por falta dele.
+     */
     async function handleRenomearDocumento() {
         if (!boleto) return;
+        if (!supplierId) { setError(MOTIVO_RENOMEAR.sem_fornecedor); return; }
         const ok = await confirm({
             title: 'Renomear o documento pela Nomenclatura?',
-            message: `"${boleto.documento_nome}" será trocado pelo próximo nome da Nomenclatura de Boletos (usa o fornecedor e a obra já salvos — salve o boleto antes se mudou algum). Gasta um número da sequência. O nome do arquivo enviado continua guardado.`,
+            message: `"${boleto.documento_nome}" será trocado pelo próximo nome da Nomenclatura de Boletos, com o fornecedor e a obra desta tela — as alterações feitas aqui são salvas junto. Gasta um número da sequência. O nome do arquivo enviado continua guardado.`,
             variant: 'warning',
-            confirmLabel: 'Renomear',
+            confirmLabel: 'Salvar e renomear',
         });
         if (!ok) return;
+        const nomeAntes = boleto.documento_nome;
+        const salvo = await handleSalvar();
+        if (!salvo) return;
+        // O 1º salvamento com fornecedor já renomeia sozinho (máscara salva): renomear de novo
+        // gastaria outro número da sequência por nada.
+        if (salvo.documento_nome !== nomeAntes) {
+            setInfo(`Documento renomeado para ${salvo.documento_nome}.`);
+            return;
+        }
         setBusy(true);
         setError(null);
         try {
@@ -662,8 +704,9 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         }
     }
 
-    async function handleSalvar() {
-        if (!boleto) return;
+    /** Grava os campos da tela. Devolve o boleto salvo, ou null se falhou (o erro já está na tela). */
+    async function handleSalvar(): Promise<Boleto | null> {
+        if (!boleto) return null;
         setBusy(true);
         setError(null);
         try {
@@ -691,9 +734,11 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setBoleto(updated);
             setInfo('Boleto atualizado.');
             onSaved(updated);
+            return updated;
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
             setError(error.message || 'Falha ao salvar');
+            return null;
         } finally {
             setBusy(false);
         }
@@ -882,7 +927,8 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
         setBusy(true);
         try {
             await boletoService.excluir(boleto.id, organizationId, userEmail);
-            onSaved({ ...boleto, status: 'cancelado' }); // sinal de atualização
+            // Excluir APAGA: a lista remove a linha. Cancelar é outro caminho (fica no histórico).
+            onExcluido(boleto.id);
             onClose();
         } catch (err: unknown) {
             const error = err instanceof Error ? err : new Error(String(err));
@@ -890,6 +936,201 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
             setBusy(false);
         }
     }
+
+    /* Campo Fornecedor (credor) — o MESMO na captura e na edição (13/11/2026: a captura não
+       tinha o campo; o fornecedor só aparecia depois de salvar). */
+    const campoFornecedor = (
+        <FormField label="Fornecedor">
+            <>
+                {sugestaoFornecedor && supplierId === sugestaoFornecedor && (
+                    <div className="flex items-center gap-2 mb-1.5">
+                        <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-700">
+                            <CheckCircle2 className="w-3.5 h-3.5" /> Sugerido via CNPJ
+                        </span>
+                        <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-700 hover:text-gray-900 underline">limpar</button>
+                    </div>
+                )}
+                <div className="flex gap-2 items-stretch">
+                    {/* Drawer lateral em tabela (Nome · CNPJ/CPF · Categoria,
+                        ordenável, com busca e filtro de categoria) — o <select>
+                        nativo não permitia pesquisar num catálogo longo. */}
+                    <div className="flex-1 min-w-0 overflow-hidden">
+                        <SupplierSelect
+                            suppliers={suppliers}
+                            value={supplierId}
+                            onChange={(v) => { setSupplierId(v); setShowNovoFornecedor(false); }}
+                            placeholder="Selecione um fornecedor"
+                        />
+                    </div>
+                    <button
+                        type="button"
+                        onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
+                        title="Cadastrar novo fornecedor com dados do boleto"
+                        className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-9 rounded-[6px] border text-sm font-medium transition-colors ${
+                            showNovoFornecedor
+                                ? 'bg-blue-600 text-white border-blue-600'
+                                : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
+                        }`}
+                    >
+                        <UserPlus className="w-3.5 h-3.5" />
+                        Novo
+                    </button>
+                </div>
+
+                {/* Mini-formulário de cadastro rápido */}
+                {showNovoFornecedor && (
+                    <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-[10px] space-y-4">
+                        <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
+                            <UserPlus className="w-3 h-3" /> Cadastrar novo fornecedor
+                        </p>
+
+                        <div>
+                            <label className={`${ROTULO} block mb-1.5`}>Razão Social *</label>
+                            <input
+                                type="text"
+                                required
+                                value={novoForn.name}
+                                onChange={e => setNovoForn(p => ({ ...p, name: e.target.value }))}
+                                className={CAMPO}
+                                placeholder="Nome do fornecedor"
+                            />
+                        </div>
+
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                            <div>
+                                <label className={`${ROTULO} block mb-1.5`}>CNPJ / CPF</label>
+                                <input
+                                    type="text"
+                                    value={novoForn.document}
+                                    onChange={e => setNovoForn(p => ({ ...p, document: e.target.value }))}
+                                    className={`${CAMPO} font-mono`}
+                                    placeholder="00.000.000/0000-00"
+                                />
+                            </div>
+                            <div>
+                                <label className={`${ROTULO} block mb-1.5`}>Tipo</label>
+                                <select
+                                    value={novoForn.type}
+                                    onChange={e => setNovoForn(p => ({ ...p, type: e.target.value as 'PJ' | 'PF' }))}
+                                    className={CAMPO}
+                                >
+                                    <option value="PJ">Pessoa Jurídica</option>
+                                    <option value="PF">Pessoa Física</option>
+                                </select>
+                            </div>
+                        </div>
+
+                        <div>
+                            <label className={`${ROTULO} block mb-1.5`}>Categoria</label>
+                            <select
+                                value={novoForn.category}
+                                onChange={e => setNovoForn(p => ({ ...p, category: e.target.value }))}
+                                className={CAMPO}
+                            >
+                                {['Materiais de Construção','Mão de Obra / Serviços','Equipamentos / Ferramentas','Consultoria / Projetos','Transporte / Logística','Outros'].map(c => (
+                                    <option key={c} value={c}>{c}</option>
+                                ))}
+                            </select>
+                        </div>
+
+                        {/* Endereço */}
+                        <div className="pt-1 border-t border-blue-100">
+                            <p className="text-xs font-semibold text-slate-500 mb-2">Endereço</p>
+                            <div className="grid grid-cols-3 gap-x-6 gap-y-4 mb-2">
+                                <div className="col-span-2">
+                                    <label className={`${ROTULO} block mb-1.5`}>Rua / Logradouro</label>
+                                    <input
+                                        type="text"
+                                        value={novoForn.street}
+                                        onChange={e => setNovoForn(p => ({ ...p, street: e.target.value }))}
+                                        className={CAMPO}
+                                        placeholder="Av. Paulista"
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`${ROTULO} block mb-1.5`}>Número</label>
+                                    <input
+                                        type="text"
+                                        value={novoForn.number}
+                                        onChange={e => setNovoForn(p => ({ ...p, number: e.target.value }))}
+                                        className={CAMPO}
+                                        placeholder="123"
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-2">
+                                <div>
+                                    <label className={`${ROTULO} block mb-1.5`}>Bairro</label>
+                                    <input
+                                        type="text"
+                                        value={novoForn.neighborhood}
+                                        onChange={e => setNovoForn(p => ({ ...p, neighborhood: e.target.value }))}
+                                        className={CAMPO}
+                                        placeholder="Centro"
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`${ROTULO} block mb-1.5`}>CEP</label>
+                                    <input
+                                        type="text"
+                                        value={novoForn.zip_code}
+                                        onChange={e => setNovoForn(p => ({ ...p, zip_code: e.target.value }))}
+                                        className={`${CAMPO} font-mono`}
+                                        placeholder="00000-000"
+                                        maxLength={9}
+                                    />
+                                </div>
+                            </div>
+                            <div className="grid grid-cols-3 gap-x-6 gap-y-4">
+                                <div className="col-span-2">
+                                    <label className={`${ROTULO} block mb-1.5`}>Cidade</label>
+                                    <input
+                                        type="text"
+                                        value={novoForn.city}
+                                        onChange={e => setNovoForn(p => ({ ...p, city: e.target.value }))}
+                                        className={CAMPO}
+                                        placeholder="São Paulo"
+                                    />
+                                </div>
+                                <div>
+                                    <label className={`${ROTULO} block mb-1.5`}>UF</label>
+                                    <select
+                                        value={novoForn.state}
+                                        onChange={e => setNovoForn(p => ({ ...p, state: e.target.value }))}
+                                        className={CAMPO}
+                                    >
+                                        <option value="">—</option>
+                                        {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
+                                            <option key={uf} value={uf}>{uf}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div className="flex gap-2 pt-1">
+                            <button
+                                type="button"
+                                onClick={handleSalvarNovoFornecedor}
+                                disabled={salvandoForn || !novoForn.name.trim()}
+                                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                            >
+                                {salvandoForn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
+                                Salvar e selecionar
+                            </button>
+                            <button
+                                type="button"
+                                onClick={() => setShowNovoFornecedor(false)}
+                                className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
+                            >
+                                Cancelar
+                            </button>
+                        </div>
+                    </div>
+                )}
+            </>
+        </FormField>
+    );
 
     return (
         <div className="flex flex-col">
@@ -938,6 +1179,38 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                         )}
                         </div>
                     </div>
+                    {/* Captura (arquivo escolhido, boleto ainda não gravado): as ações ficam na linha
+                        do título, como na edição — estavam no fim da coluna direita, abaixo de todos os
+                        campos (13/11/2026, item 4; guia §25, variante "ações na linha do título"). */}
+                    {!boleto && pendingFile && (
+                        <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
+                            <button
+                                onClick={() => { setPendingFile(null); setPendingExtraction(null); setDocumentoBlobUrl(null); }}
+                                disabled={busy}
+                                className="px-4 py-2 text-gray-700 hover:bg-gray-100 rounded-[6px] text-sm font-medium disabled:opacity-50"
+                            >
+                                Trocar arquivo
+                            </button>
+                            <button
+                                onClick={() => handleUploadAndSave(false)}
+                                disabled={busy || !organizationId}
+                                className="flex items-center gap-2 px-5 py-2 bg-gray-100 text-gray-900 rounded-[6px] text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
+                                title={!organizationId ? 'Selecione a organização antes de salvar' : 'Grava o boleto e continua nele'}
+                            >
+                                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                Salvar rascunho
+                            </button>
+                            <button
+                                onClick={() => handleUploadAndSave(true)}
+                                disabled={busy || !organizationId}
+                                className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                                title={!organizationId ? 'Selecione a organização antes de salvar' : 'Grava o boleto e volta para a lista'}
+                            >
+                                {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
+                                Salvar e fechar
+                            </button>
+                        </div>
+                    )}
                     {boleto && (
                         <div className="flex flex-wrap items-center justify-end gap-2 shrink-0">
                         {boleto.status === 'pago' && (
@@ -1081,17 +1354,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         <div className="grid grid-cols-2 gap-x-6 gap-y-4">
                                             <ReadOnlyField icon={Building2} label="Banco" value={pendingExtraction.campos.banco_nome?.valor ?? '—'} />
                                             <ReadOnlyField icon={Hash} label="Confiança" value={`${pendingExtraction.confidence_score ?? 0}%`} />
-                                            {pendingExtraction.campos.beneficiario_nome?.valor && (
-                                                <ReadOnlyField label="Beneficiário" value={
-                                                    pendingExtraction.campos.beneficiario_nome.valor
-                                                        .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
-                                                        .replace(/\s+\d{11,14}\b.*/g, '')
-                                                        .trim()
-                                                } />
-                                            )}
-                                            {pendingExtraction.campos.beneficiario_cnpj?.valor && (
-                                                <ReadOnlyField label="CNPJ / CPF" value={pendingExtraction.campos.beneficiario_cnpj.valor} mono />
-                                            )}
                                         </div>
                                     )}
 
@@ -1106,7 +1368,13 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         >
                                             <select
                                                 value={organizationId}
-                                                onChange={e => { setOrganizationId(e.target.value); onOrgChange?.(e.target.value); }}
+                                                onChange={e => {
+                                                    // Fornecedor, CC, plano e conta são cadastro DA organização:
+                                                    // o da anterior não existe na nova (o fornecedor volta pela sugestão do CNPJ).
+                                                    setSupplierId(''); setCostCenterId(''); setPlanoDeContasId(''); setCategoryId('');
+                                                    setShowNovoFornecedor(false);
+                                                    setOrganizationId(e.target.value); onOrgChange?.(e.target.value);
+                                                }}
                                                 className={CAMPO}
                                                 autoFocus={!organizationId}
                                             >
@@ -1135,6 +1403,26 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         jurosDiaTipo={jurosDiaTipo} setJurosDiaTipo={setJurosDiaTipo}
                                     />
 
+                                </Secao>
+
+                                {/* Credor já na captura (13/11/2026, item 5) — a mesma seção da edição:
+                                    o beneficiário lido do PDF enquanto não há fornecedor, e o campo
+                                    Fornecedor já sugerido pelo CNPJ. */}
+                                <Secao titulo="Quem recebe" icone={UserPlus}>
+                                    {beneficiarioLido?.nome && !supplierId && (
+                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4">
+                                            <ReadOnlyField label="Beneficiário" value={
+                                                beneficiarioLido.nome
+                                                    .replace(/[\s\-–]+(?:CNPJ|CPF)[:\s]*[\d.\/\-]+.*/i, '')
+                                                    .replace(/\s+\d{11,14}\b.*/g, '')
+                                                    .trim() || beneficiarioLido.nome
+                                            } />
+                                            <ReadOnlyField label="CNPJ / CPF" value={beneficiarioLido.cnpj || beneficiarioLido.nome.match(/\b(\d{14}|\d{11})\b/)?.[1] || '—'} mono />
+                                        </div>
+                                    )}
+                                    {organizationId
+                                        ? campoFornecedor
+                                        : <p className="text-sm text-gray-500">Escolha a organização acima: o fornecedor é do cadastro dela.</p>}
                                 </Secao>
 
                                 <Secao titulo="Classificação" icone={Tag}>
@@ -1205,30 +1493,6 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                     </FormField>
                                 </Secao>
 
-                                <div className="flex justify-end gap-2">
-                                    <button onClick={() => { setPendingFile(null); setPendingExtraction(null); setDocumentoBlobUrl(null); }}
-                                        className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-[6px] text-sm font-medium">
-                                        Trocar arquivo
-                                    </button>
-                                    <button
-                                        onClick={() => handleUploadAndSave(false)}
-                                        disabled={busy || !organizationId}
-                                        className="flex items-center gap-2 px-5 py-2 bg-gray-100 text-gray-900 rounded-[6px] text-sm font-medium hover:bg-gray-200 disabled:opacity-50"
-                                        title={!organizationId ? 'Selecione a organização antes de salvar' : undefined}
-                                    >
-                                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Save className="w-3.5 h-3.5" />}
-                                        Salvar rascunho
-                                    </button>
-                                    <button
-                                        onClick={() => handleUploadAndSave(true)}
-                                        disabled={busy || !organizationId}
-                                        className="flex items-center gap-2 px-5 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                                        title={!organizationId ? 'Selecione a organização antes de salvar' : undefined}
-                                    >
-                                        {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ThumbsUp className="w-3.5 h-3.5" />}
-                                        Salvar e fechar
-                                    </button>
-                                </div>
                             </div>
                         </div>
                     )}
@@ -1342,13 +1606,14 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         <button
                                             type="button"
                                             onClick={handleRenomearDocumento}
-                                            disabled={busy}
+                                            disabled={busy || !supplierId}
+                                            title={!supplierId ? MOTIVO_RENOMEAR.sem_fornecedor : 'Salva o boleto e renomeia o documento pela Nomenclatura'}
                                             className="flex items-center gap-1.5 h-9 px-3.5 bg-white border border-gray-200 text-gray-700 rounded-[6px] hover:bg-gray-50 font-medium text-[13px] transition-all active:scale-95 disabled:opacity-50"
                                         >
                                             <Pencil className="w-[15px] h-[15px]" /> Renomear
                                         </button>
                                         <p className="text-xs text-gray-500">
-                                            Segue a Nomenclatura de Boletos, com o fornecedor e a obra já salvos.
+                                            Segue a Nomenclatura de Boletos, com o fornecedor e a obra desta tela — salva o boleto junto.
                                         </p>
                                     </div>
                                 </Secao>
@@ -1468,196 +1733,7 @@ const BoletoFormModal: React.FC<BoletoFormModalProps> = ({
                                         );
                                     })()}
 
-                                    <FormField label="Fornecedor">
-                                        <>
-                                            {boleto.sugestao_supplier_id && supplierId === boleto.sugestao_supplier_id && (
-                                                <div className="flex items-center gap-2 mb-1.5">
-                                                    <span className="inline-flex items-center gap-1 text-sm font-normal text-emerald-700">
-                                                        <CheckCircle2 className="w-3.5 h-3.5" /> Sugerido via CNPJ
-                                                    </span>
-                                                    <button type="button" onClick={() => setSupplierId('')} className="text-xs text-gray-700 hover:text-gray-900 underline">limpar</button>
-                                                </div>
-                                            )}
-                                            <div className="flex gap-2 items-stretch">
-                                                {/* Drawer lateral em tabela (Nome · CNPJ/CPF · Categoria,
-                                                    ordenável, com busca e filtro de categoria) — o <select>
-                                                    nativo não permitia pesquisar num catálogo longo. */}
-                                                <div className="flex-1 min-w-0 overflow-hidden">
-                                                    <SupplierSelect
-                                                        suppliers={suppliers}
-                                                        value={supplierId}
-                                                        onChange={(v) => { setSupplierId(v); setShowNovoFornecedor(false); }}
-                                                        placeholder="Selecione um fornecedor"
-                                                    />
-                                                </div>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => { setShowNovoFornecedor(v => !v); setSupplierId(''); }}
-                                                    title="Cadastrar novo fornecedor com dados do boleto"
-                                                    className={`shrink-0 whitespace-nowrap flex items-center gap-1.5 px-3 h-9 rounded-[6px] border text-sm font-medium transition-colors ${
-                                                        showNovoFornecedor
-                                                            ? 'bg-blue-600 text-white border-blue-600'
-                                                            : 'bg-white text-blue-600 border-blue-200 hover:bg-blue-50'
-                                                    }`}
-                                                >
-                                                    <UserPlus className="w-3.5 h-3.5" />
-                                                    Novo
-                                                </button>
-                                            </div>
-
-                                            {/* Mini-formulário de cadastro rápido */}
-                                            {showNovoFornecedor && (
-                                                <div className="mt-3 p-4 bg-blue-50 border border-blue-200 rounded-[10px] space-y-4">
-                                                    <p className="text-xs font-semibold text-blue-700 flex items-center gap-1.5">
-                                                        <UserPlus className="w-3 h-3" /> Cadastrar novo fornecedor
-                                                    </p>
-
-                                                    <div>
-                                                        <label className={`${ROTULO} block mb-1.5`}>Razão Social *</label>
-                                                        <input
-                                                            type="text"
-                                                            required
-                                                            value={novoForn.name}
-                                                            onChange={e => setNovoForn(p => ({ ...p, name: e.target.value }))}
-                                                            className={CAMPO}
-                                                            placeholder="Nome do fornecedor"
-                                                        />
-                                                    </div>
-
-                                                    <div className="grid grid-cols-2 gap-x-6 gap-y-4">
-                                                        <div>
-                                                            <label className={`${ROTULO} block mb-1.5`}>CNPJ / CPF</label>
-                                                            <input
-                                                                type="text"
-                                                                value={novoForn.document}
-                                                                onChange={e => setNovoForn(p => ({ ...p, document: e.target.value }))}
-                                                                className={`${CAMPO} font-mono`}
-                                                                placeholder="00.000.000/0000-00"
-                                                            />
-                                                        </div>
-                                                        <div>
-                                                            <label className={`${ROTULO} block mb-1.5`}>Tipo</label>
-                                                            <select
-                                                                value={novoForn.type}
-                                                                onChange={e => setNovoForn(p => ({ ...p, type: e.target.value as 'PJ' | 'PF' }))}
-                                                                className={CAMPO}
-                                                            >
-                                                                <option value="PJ">Pessoa Jurídica</option>
-                                                                <option value="PF">Pessoa Física</option>
-                                                            </select>
-                                                        </div>
-                                                    </div>
-
-                                                    <div>
-                                                        <label className={`${ROTULO} block mb-1.5`}>Categoria</label>
-                                                        <select
-                                                            value={novoForn.category}
-                                                            onChange={e => setNovoForn(p => ({ ...p, category: e.target.value }))}
-                                                            className={CAMPO}
-                                                        >
-                                                            {['Materiais de Construção','Mão de Obra / Serviços','Equipamentos / Ferramentas','Consultoria / Projetos','Transporte / Logística','Outros'].map(c => (
-                                                                <option key={c} value={c}>{c}</option>
-                                                            ))}
-                                                        </select>
-                                                    </div>
-
-                                                    {/* Endereço */}
-                                                    <div className="pt-1 border-t border-blue-100">
-                                                        <p className="text-xs font-semibold text-slate-500 mb-2">Endereço</p>
-                                                        <div className="grid grid-cols-3 gap-x-6 gap-y-4 mb-2">
-                                                            <div className="col-span-2">
-                                                                <label className={`${ROTULO} block mb-1.5`}>Rua / Logradouro</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={novoForn.street}
-                                                                    onChange={e => setNovoForn(p => ({ ...p, street: e.target.value }))}
-                                                                    className={CAMPO}
-                                                                    placeholder="Av. Paulista"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className={`${ROTULO} block mb-1.5`}>Número</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={novoForn.number}
-                                                                    onChange={e => setNovoForn(p => ({ ...p, number: e.target.value }))}
-                                                                    className={CAMPO}
-                                                                    placeholder="123"
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-x-6 gap-y-4 mb-2">
-                                                            <div>
-                                                                <label className={`${ROTULO} block mb-1.5`}>Bairro</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={novoForn.neighborhood}
-                                                                    onChange={e => setNovoForn(p => ({ ...p, neighborhood: e.target.value }))}
-                                                                    className={CAMPO}
-                                                                    placeholder="Centro"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className={`${ROTULO} block mb-1.5`}>CEP</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={novoForn.zip_code}
-                                                                    onChange={e => setNovoForn(p => ({ ...p, zip_code: e.target.value }))}
-                                                                    className={`${CAMPO} font-mono`}
-                                                                    placeholder="00000-000"
-                                                                    maxLength={9}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                        <div className="grid grid-cols-3 gap-x-6 gap-y-4">
-                                                            <div className="col-span-2">
-                                                                <label className={`${ROTULO} block mb-1.5`}>Cidade</label>
-                                                                <input
-                                                                    type="text"
-                                                                    value={novoForn.city}
-                                                                    onChange={e => setNovoForn(p => ({ ...p, city: e.target.value }))}
-                                                                    className={CAMPO}
-                                                                    placeholder="São Paulo"
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className={`${ROTULO} block mb-1.5`}>UF</label>
-                                                                <select
-                                                                    value={novoForn.state}
-                                                                    onChange={e => setNovoForn(p => ({ ...p, state: e.target.value }))}
-                                                                    className={CAMPO}
-                                                                >
-                                                                    <option value="">—</option>
-                                                                    {['AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => (
-                                                                        <option key={uf} value={uf}>{uf}</option>
-                                                                    ))}
-                                                                </select>
-                                                            </div>
-                                                        </div>
-                                                    </div>
-
-                                                    <div className="flex gap-2 pt-1">
-                                                        <button
-                                                            type="button"
-                                                            onClick={handleSalvarNovoFornecedor}
-                                                            disabled={salvandoForn || !novoForn.name.trim()}
-                                                            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-[6px] text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
-                                                        >
-                                                            {salvandoForn ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CheckCircle2 className="w-3.5 h-3.5" />}
-                                                            Salvar e selecionar
-                                                        </button>
-                                                        <button
-                                                            type="button"
-                                                            onClick={() => setShowNovoFornecedor(false)}
-                                                            className="px-3 py-2 text-gray-500 hover:text-gray-700 text-sm font-medium"
-                                                        >
-                                                            Cancelar
-                                                        </button>
-                                                    </div>
-                                                </div>
-                                            )}
-                                        </>
-                                    </FormField>
+                                    {campoFornecedor}
 
                                     <FormField label="Descrição">
                                         <input

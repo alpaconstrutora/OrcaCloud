@@ -11,6 +11,8 @@ import HierarchicalSelect, { HierarchicalSelectItem } from './HierarchicalSelect
 import { financialRegistryService } from '../services/financialRegistryService';
 import { nomeDoBeneficiario } from '../utils/boletoBeneficiario';
 import { resumoDaAprovacaoEmLote } from '../utils/boletoAprovacaoLote';
+import { resumoDeOrganizacaoEmLote } from '../utils/boletoOrganizacaoLote';
+import { useWritableOrganizations } from '../hooks/useOrgContext';
 
 /** Valor da opção "— Sem vínculo —" da Obra: tira a obra dos boletos (grava null). */
 const SEM_VINCULO = '__sem_vinculo__';
@@ -36,8 +38,10 @@ type ActionResult = {
     ok: string[];
     errors: Array<{ id: string; error: string }>;
     ficaram?: Array<{ id: string; motivo: string }>;
-    acao?: 'aprovar' | 'status';
+    acao?: 'aprovar' | 'status' | 'organizacao';
     para?: BoletoStatus;
+    /** Nome da organização de destino (acao 'organizacao'). */
+    destino?: string;
 } | null;
 
 const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
@@ -68,6 +72,10 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
     /* Mudar status em lote (23/10/2026): mesma regra do campo Status da página. */
     const [novoStatus, setNovoStatus] = useState<BoletoStatus | ''>('');
     const [motivoStatus, setMotivoStatus] = useState('');
+    /* Mudar organização em lote (13/11/2026): mesma regra do campo Organização do boleto
+       (utils/boletoOrganizacaoLote.ts) — só rascunho/revisão; as dimensões vão a null. */
+    const orgsGravaveis = useWritableOrganizations();
+    const [novaOrg, setNovaOrg] = useState('');
 
     const totalValor = boletos.reduce((s, b) => s + (b.valor ?? 0), 0);
 
@@ -154,6 +162,27 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
         if (r.ok.length > 0) onSaved();
     }
 
+    async function handleAplicarOrganizacao() {
+        if (!novaOrg || !resumoOrg) return;
+        setSaving(true);
+        const destino = orgsGravaveis.find(o => o.id === novaOrg)?.name ?? 'a organização escolhida';
+        const r: NonNullable<ActionResult> = { ok: [], errors: [], ficaram: [], acao: 'organizacao', destino };
+        // Um a um, em sequência: cada boleto passa pela trava do serviço (status relido do banco).
+        for (const b of boletos) {
+            const plano = resumoOrg.porId.get(b.id);
+            if (!plano?.muda) { if (plano) r.ficaram!.push({ id: b.id, motivo: plano.motivo }); continue; }
+            try {
+                await boletoService.moverParaOrganizacao(b.id, b.organization_id || organizationId, novaOrg, userEmail);
+                r.ok.push(b.id);
+            } catch (err: unknown) {
+                r.errors.push({ id: b.id, error: err instanceof Error ? err.message : String(err) });
+            }
+        }
+        setSaving(false);
+        setResult(r);
+        if (r.ok.length > 0) onSaved();
+    }
+
     const allDone = result !== null && result.errors.length === 0;
     const noneChanged = !supplierId && !projectId && !costCenterId && !planoDeContasId && !categoryId && !descricao.trim();
 
@@ -171,6 +200,11 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
             + (resumo.pendencias.length === 1 ? ' O outro fica como está.'
                 : resumo.pendencias.length > 1 ? ` Os outros ${resumo.pendencias.length} ficam como estão.` : '');
     const resumoStatus = novoStatus ? resumoDeStatusEmLote(boletos, novoStatus) : null;
+    const resumoOrg = novaOrg ? resumoDeOrganizacaoEmLote(boletos, novaOrg) : null;
+    const nomeNovaOrg = orgsGravaveis.find(o => o.id === novaOrg)?.name ?? '';
+    const motivoParaNaoMoverOrg: string | null = !resumoOrg ? null
+        : resumoOrg.mudam === 0 ? 'Nenhum dos boletos selecionados pode mudar para esta organização — veja o motivo de cada um na lista.'
+        : null;
     const faltaMotivoStatus = novoStatus === 'cancelado' && !motivoStatus.trim();
     const motivoParaNaoAplicarStatus: string | null = !resumoStatus ? null
         : resumoStatus.mudam === 0 ? 'Nenhum dos boletos selecionados pode ir para este status — veja o motivo de cada um na lista.'
@@ -228,6 +262,7 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                         {boletos.map(b => {
                             const avaliacao = resumo.porId.get(b.id);
                             const planoStatus = resumoStatus?.porId.get(b.id);
+                            const planoOrg = !planoStatus ? resumoOrg?.porId.get(b.id) : undefined;
                             return (
                                 <div key={b.id} className="flex items-start justify-between px-4 py-2 text-xs">
                                     <span className="min-w-0 max-w-[70%]">
@@ -239,10 +274,13 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                         {!result && planoStatus && (planoStatus.muda
                                             ? <span className="block text-gray-500">→ {STATUS_LABELS[planoStatus.transicao.para]}</span>
                                             : <span className="block text-amber-700">{planoStatus.motivo}</span>)}
-                                        {!result && !planoStatus && avaliacao && !avaliacao.pronto && (
+                                        {!result && planoOrg && (planoOrg.muda
+                                            ? <span className="block text-gray-500">→ {nomeNovaOrg}</span>
+                                            : <span className="block text-amber-700">{planoOrg.motivo}</span>)}
+                                        {!result && !planoStatus && !planoOrg && avaliacao && !avaliacao.pronto && (
                                             <span className="block text-amber-700">{avaliacao.motivo}</span>
                                         )}
-                                        {!result && !planoStatus && avaliacao?.pronto && avaliacao.usaSugestao && (
+                                        {!result && !planoStatus && !planoOrg && avaliacao?.pronto && avaliacao.usaSugestao && (
                                             <span className="block text-gray-500">
                                                 Fornecedor sugerido: {nomesFornecedor[avaliacao.fornecedor] ?? 'cadastrado'}
                                             </span>
@@ -264,7 +302,9 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                         {result.ok.length} boleto{result.ok.length !== 1 ? 's' : ''}{' '}
                                         {result.acao === 'status' && result.para
                                             ? `passa${result.ok.length !== 1 ? 'ram' : 'ou'} para "${STATUS_LABELS[result.para]}".`
-                                            : `aprovado${result.ok.length !== 1 ? 's' : ''} com sucesso.`}
+                                            : result.acao === 'organizacao'
+                                                ? `movido${result.ok.length !== 1 ? 's' : ''} para ${result.destino}.`
+                                                : `aprovado${result.ok.length !== 1 ? 's' : ''} com sucesso.`}
                                     </span>
                                 </div>
                             )}
@@ -335,6 +375,54 @@ const BoletoEdicaoEmLoteModal: React.FC<BoletoEdicaoEmLoteModalProps> = ({
                                         >
                                             {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
                                             Aplicar status
+                                        </button>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+                    )}
+
+                    {/* Mudar organização (13/11/2026) — ação própria, como o status: limpa fornecedor,
+                        obra, centro de custo, plano e conta (são cadastro da organização de origem).
+                        Só aparece para quem grava em mais de uma organização. */}
+                    {!allDone && orgsGravaveis.length > 1 && (
+                        <div className="space-y-3">
+                            <div>
+                                <label htmlFor="lote-organizacao" className="block text-xs font-semibold text-slate-500 mb-1">Mudar organização</label>
+                                <select
+                                    id="lote-organizacao"
+                                    value={novaOrg}
+                                    onChange={e => { setNovaOrg(e.target.value); setResult(null); }}
+                                    disabled={saving}
+                                    className="w-full px-3 h-9 bg-white border border-gray-200 rounded-[6px] text-sm text-gray-900 outline-none focus:border-blue-400 disabled:opacity-50"
+                                >
+                                    <option value="">— Não alterar —</option>
+                                    {orgsGravaveis.map(o => <option key={o.id} value={o.id}>{o.name}</option>)}
+                                </select>
+                                <p className="text-xs text-gray-500 mt-1">Só rascunho e em revisão mudam: aprovado já tem título no financeiro da organização dele.</p>
+                            </div>
+                            {resumoOrg && (
+                                <div role="region" aria-label="Mudança de organização em lote" className="p-3 rounded-xl bg-amber-50 border border-amber-200 space-y-2 text-xs text-gray-900">
+                                    <p>
+                                        <span className="font-semibold">{resumoOrg.mudam} de {boletos.length}</span> passa{resumoOrg.mudam !== 1 ? 'm' : ''} para {nomeNovaOrg}
+                                        {resumoOrg.ficam > 0 && <> · {resumoOrg.ficam} fica{resumoOrg.ficam !== 1 ? 'm' : ''} onde {resumoOrg.ficam !== 1 ? 'estão' : 'está'}</>}
+                                    </p>
+                                    {resumoOrg.perdemDimensoes > 0 && (
+                                        <p>
+                                            Fornecedor, obra, centro de custo, plano de contas e conta financeira de {resumoOrg.perdemDimensoes} boleto{resumoOrg.perdemDimensoes !== 1 ? 's' : ''} serão limpos: são do cadastro da organização atual e não existem na de destino.
+                                        </p>
+                                    )}
+                                    <div className="flex justify-end">
+                                        <button
+                                            type="button"
+                                            onClick={handleAplicarOrganizacao}
+                                            disabled={saving || !!motivoParaNaoMoverOrg}
+                                            title={motivoParaNaoMoverOrg ?? `Move ${resumoOrg.mudam} boleto${resumoOrg.mudam !== 1 ? 's' : ''} para ${nomeNovaOrg}.`}
+                                            /* Mesma escala do "Aplicar status" logo acima (§16 — não misturar na janela). */
+                                            className="flex items-center gap-2 px-4 py-2.5 rounded-2xl text-white font-bold text-button uppercase tracking-widest transition-colors disabled:opacity-40 disabled:cursor-not-allowed bg-blue-600 hover:bg-blue-700"
+                                        >
+                                            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
+                                            Mover
                                         </button>
                                     </div>
                                 </div>

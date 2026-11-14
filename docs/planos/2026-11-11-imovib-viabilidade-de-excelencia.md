@@ -900,6 +900,16 @@ Conferido no navegador em 12/11 (Garden Cambuhy, roteiro `c:/tmp/pwtest/imovib_f
 - Nenhuma versão congelada existe ainda: congelar e comparar (10.2) e a trava de apagar estudo foram provados em transação desfeita.
 - Relatório completo (10.5) sai sem gráficos (decisão registrada: os gráficos ficam no "Resumo em PDF").
 
+### Pedidos depois do plano
+
+> imovib > premissas > cronograma: o cronograma nao e editavel? de onde vem os dados?
+>
+> (resposta: só aquisição, aprovação e registro eram editáveis ali; obra e vendas vinham da aba Dinâmica — "quer que eu traga esses quatro campos para o Cronograma?") → "sim"
+>
+> Sessão: 21a9ea95-c34e-43cc-8a0f-7d21ef9ed2a0 · 2026-11-14
+
+- [ ] Premissas › Cronograma · início e duração da obra e das vendas editáveis na própria sub-aba (seção "Obra e vendas", com "Usar as datas do empreendimento"), nas MESMAS colunas da Dinâmica; gravam com "Salvar Premissas"; vazio = padrão no placeholder; a linha do tempo acompanha antes de salvar. **Pronto quando:** teste `início e prazo da obra e das vendas se editam no Cronograma…` e `só leitura: os campos de obra e vendas ficam travados` passam; no Garden (escritas bloqueadas) mudar a duração da obra move o habite-se e o PATCH leva a duração nova com as outras três iguais.
+
 ## Verificação
 
 Ao fim de cada fase, na frente:

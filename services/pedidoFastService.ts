@@ -3,14 +3,16 @@ import { comprimirFoto } from '../utils/comprimirFoto';
 import { totalEfetivoDoPedido } from '../utils/pedidoItemValor';
 import type { LeituraFast, ResultadoDoPedidoFast } from '../lib/pedidoFast';
 import { MAX_FOTOS_FAST } from '../lib/pedidoFast';
+import { MENSAGEM_LINK_RECUSADO } from './celular/tarefasFonte';
+import type { ObraDoFast } from '../components/suprimentos/PedidoFastFluxo';
 
 /**
  * Pedido Fast no navegador — a FONTE que a tela usa (docs/planos/2026-11-14-pedido-fast.md).
  *
  * Tudo que grava passa pela Edge Function `pedido-fast` (a regra mora em
  * `lib/pedidoFast.ts`, importada por ela). Molde de fonte: `services/celular/*Fonte.ts`
- * — `modo: 'logado'` hoje; a Parte 2 acrescenta `fonteDoLink(token)` com o
- * mesmo contrato, e a tela (`PedidoFastFluxo`) não muda.
+ * — `fontePedidoFastLogado` (JWT) e `fontePedidoFastDoLink(token)` (link do celular,
+ * Parte 2) têm o mesmo contrato, e a tela (`PedidoFastFluxo`) não muda.
  *
  * Sem fallback silencioso: o erro chega à tela com o motivo que a Edge deu.
  */
@@ -60,7 +62,7 @@ export async function fotoParaEnvio(file: File): Promise<{ base64: string; media
     return { base64: dataUrl.slice(dataUrl.indexOf(',') + 1), mediaType: foto.type };
 }
 
-async function chamar<T>(corpo: Record<string, unknown>): Promise<T> {
+async function chamar<T>(corpo: Record<string, unknown>, aoRecusarLink?: () => void): Promise<T> {
     const { data, error } = await supabase.functions.invoke('pedido-fast', { body: corpo });
     if (error) {
         const ctx = (error as { context?: Response }).context;
@@ -71,6 +73,8 @@ async function chamar<T>(corpo: Record<string, unknown>): Promise<T> {
             const c = await ctx.json().catch(() => null) as { error?: string } | null;
             msg = c?.error ?? null;
         }
+        // Pelo link: a recusa do token (mesma mensagem do banco) derruba o gate.
+        if (aoRecusarLink && status === 403 && msg === MENSAGEM_LINK_RECUSADO) aoRecusarLink();
         throw new ErroPedidoFast(
             msg || (/Failed to send/i.test(error.message)
                 ? 'Sem conexão com o servidor. Confira a internet e tente de novo.'
@@ -86,17 +90,49 @@ async function chamar<T>(corpo: Record<string, unknown>): Promise<T> {
 export const fontePedidoFastLogado: FontePedidoFast = {
     modo: 'logado',
     async ler(fotos) {
-        if (fotos.length < 1 || fotos.length > MAX_FOTOS_FAST) {
-            throw new ErroPedidoFast(`Envie de 1 a ${MAX_FOTOS_FAST} fotos.`);
-        }
-        const enviar = [];
-        for (const f of fotos) enviar.push(await fotoParaEnvio(f));
-        return chamar<LeituraDoLote>({ acao: 'ler', fotos: enviar });
+        return chamar<LeituraDoLote>({ acao: 'ler', fotos: await fotosParaEnvio(fotos) });
     },
     async criar(lote, projectId) {
         return chamar<ResultadoDoPedidoFast>({ acao: 'criar', lote, projectId });
     },
 };
+
+async function fotosParaEnvio(fotos: File[]) {
+    if (fotos.length < 1 || fotos.length > MAX_FOTOS_FAST) {
+        throw new ErroPedidoFast(`Envie de 1 a ${MAX_FOTOS_FAST} fotos.`);
+    }
+    const enviar = [];
+    for (const f of fotos) enviar.push(await fotoParaEnvio(f));
+    return enviar;
+}
+
+/**
+ * Link do celular (`/celular?token=`, sem login): o token vai no corpo e o banco
+ * decide quem é o comprador (`_celular_pedido_fast_autoriza`). Recusa do token →
+ * `aoRecusar` (o gate mostra "link inválido"); "sem acesso a Pedidos de Compra" e o
+ * limite de uso por hora chegam como erro normal, com a mensagem.
+ */
+export function fontePedidoFastDoLink(token: string, opts: { aoRecusar?: () => void } = {}): FontePedidoFast {
+    return {
+        modo: 'link',
+        async ler(fotos) {
+            return chamar<LeituraDoLote>({ acao: 'ler', fotos: await fotosParaEnvio(fotos), token }, opts.aoRecusar);
+        },
+        async criar(lote, projectId) {
+            return chamar<ResultadoDoPedidoFast>({ acao: 'criar', lote, projectId, token }, opts.aoRecusar);
+        },
+    };
+}
+
+/** Obras do passo 2 pelo link (só OBRA da org do link, sem projeto de sistema — no banco). */
+export async function listarObrasDoLink(token: string, opts: { aoRecusar?: () => void } = {}): Promise<ObraDoFast[]> {
+    const { data, error } = await supabase.rpc('celular_obras_listar', { p_token: token });
+    if (error) {
+        if (error.code === '42501' && error.message === MENSAGEM_LINK_RECUSADO) opts.aoRecusar?.();
+        throw new ErroPedidoFast(error.message || 'Não consegui carregar as obras.');
+    }
+    return ((data ?? []) as { id: string; nome: string }[]).map(o => ({ id: o.id, nome: o.nome }));
+}
 
 export interface PedidoFastRecente {
     id: string;

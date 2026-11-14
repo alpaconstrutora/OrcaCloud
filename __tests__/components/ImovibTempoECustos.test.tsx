@@ -69,6 +69,44 @@ describe('Premissas › Cronograma (5.1)', () => {
         await user.click(screen.getByRole('button', { name: 'Salvar Premissas' }));
         expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', expect.objectContaining({ incorporation_registry_month: 5 }));
     });
+
+    // Pedido de 14/11/2026: "o cronograma não é editável?" — início e prazo da obra e das
+    // vendas passam a se editar aqui também (mesmas colunas da aba Dinâmica).
+    it('início e prazo da obra e das vendas se editam no Cronograma; a linha do tempo acompanha; grava com "Salvar Premissas"', async () => {
+        const user = userEvent.setup();
+        premissas();
+        await user.click(screen.getByRole('button', { name: /2\. Cronograma/ }));
+        const duracaoObra = screen.getByLabelText('Duração da obra (meses)') as HTMLInputElement;
+        expect(duracaoObra.value).toBe('24');
+        expect((screen.getByLabelText('Início da obra (mês)') as HTMLInputElement).value).toBe('6');
+        expect((screen.getByLabelText('Início das vendas (mês)') as HTMLInputElement).value).toBe('1');
+        expect((screen.getByLabelText('Duração das vendas (meses)') as HTMLInputElement).value).toBe('24');
+
+        const linha = screen.getByRole('list', { name: 'Linha do tempo dos marcos' });
+        const habiteSe = () => within(linha).getByText('Habite-se (fim da obra)').closest('li')!.textContent;
+        expect(habiteSe()).toContain('Mês 29');
+        await user.clear(duracaoObra);
+        await user.type(duracaoObra, '12');
+        expect(habiteSe()).toContain('Mês 17');
+
+        // Apagar volta ao padrão (vazio = coluna vazia, o motor usa o padrão).
+        await user.clear(screen.getByLabelText('Duração das vendas (meses)'));
+        expect((screen.getByLabelText('Duração das vendas (meses)') as HTMLInputElement).placeholder).toBe('Vazio = 36 meses');
+
+        expect(svc.updateStudy).not.toHaveBeenCalled();
+        await user.click(screen.getByRole('button', { name: 'Salvar Premissas' }));
+        expect(svc.updateStudy).toHaveBeenCalledWith('estudo-teste', expect.objectContaining({
+            construction_duration_months: 12, construction_start_month: 6, sales_start_month: 1, sales_duration_months: null,
+        }));
+    });
+
+    it('só leitura: os campos de obra e vendas ficam travados', async () => {
+        const user = userEvent.setup();
+        premissas({}, true);
+        await user.click(screen.getByRole('button', { name: /2\. Cronograma/ }));
+        expect(screen.getByLabelText('Duração da obra (meses)')).toBeDisabled();
+        expect(screen.getByLabelText('Início das vendas (mês)')).toBeDisabled();
+    });
 });
 
 describe('Premissas › Terreno (5.2 e 5.9)', () => {

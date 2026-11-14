@@ -8,6 +8,8 @@ import SupplierForm from './SupplierForm';
 import { ColumnConfigButton, SortableHeader, usePersistedState, ColumnConfig, useTableColumns, useResizableColumns } from './ui/TableUtils';
 import { FilterFieldConfig, useAdvancedFilters, AdvancedFilterPanel, applyFilterRules, distinctOptions } from './ui/FilterUtils';
 import { useConfirm } from './ui/confirm';
+import { useOferecerPropagacao } from '../hooks/useOferecerPropagacao';
+import { supplierPropagacaoService } from '../services/supplierPropagacaoService';
 import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { KpiCard } from './ui/KpiCard';
 import Button from './ui/Button';
@@ -196,6 +198,21 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
         setTimeout(() => setNotification(null), 4500);
     };
 
+    // Depois de salvar uma EDIÇÃO: pergunta se propaga nome/e-mail para as cópias
+    // de texto no Financeiro (pedido de 14/11/2026). Fluxo em
+    // hooks/useOferecerPropagacao.ts; destinos em services/supplierPropagacaoService.ts.
+    const oferecerPropagacao = useOferecerPropagacao({
+        sujeito: 'fornecedor',
+        planejar: supplierPropagacaoService.planejar,
+        foraDoEscopo: 'Boletos e notas fiscais recebidos, recibos emitidos e os dados bancários de pagamentos já feitos não mudam.',
+        avisar: notify,
+    });
+    // Último nome/e-mail GRAVADO de cada fornecedor nesta tela. Editar não fecha
+    // (§25), e o `formState.supplier` continua com o valor de quando a tela
+    // abriu. Sem isto, o segundo salvamento compararia com o valor de antes do
+    // primeiro e ofereceria propagar de novo.
+    const ultimoGravadoRef = React.useRef(new Map<string, { name?: string | null; email?: string | null }>());
+
     const clearSelection = () => setSelectedIds(new Set());
     const [lastCheckedIndex, setLastCheckedIndex] = React.useState<number | null>(null);
     const zerarAncora = React.useCallback(() => setLastCheckedIndex(null), []);
@@ -273,6 +290,10 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
     };
 
     const handleEdit = async (id: string, data: Omit<Supplier, 'id' | 'created_at'>): Promise<boolean> => {
+        // Valores ANTES deste salvamento, para saber o que mudou (propagação).
+        const anterior = ultimoGravadoRef.current.get(id)
+            ?? suppliers.find(s => s.id === id)
+            ?? (formState?.mode === 'edit' ? formState.supplier : undefined);
         try {
             await supplierService.updateSupplier(id, sanitize(data));
             // §25 do guia — editar não fecha a tela (só a criação, em
@@ -280,6 +301,8 @@ export const SupplierList: React.FC<SupplierListProps> = ({ organizationId }) =>
             // reabrir o fornecedor. Ver docs/planos/2026-08-27-salvar-sem-fechar-formularios-multiaba.md.
             loadSuppliers();
             notify('Fornecedor atualizado com sucesso.');
+            ultimoGravadoRef.current.set(id, { name: data.name, email: data.email });
+            if (anterior) void oferecerPropagacao(id, anterior, data);
             return true;
         } catch (error) {
             console.error("Erro ao editar fornecedor:", error);

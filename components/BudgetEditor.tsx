@@ -5,6 +5,7 @@ import { sinapiService, SinapiReference, resolveReferenceDate } from '../service
 import { Search, Plus, Trash2, ChevronDown, ChevronRight, Folder, FolderOpen, MoreVertical, X, ArrowUp, ArrowDown, Loader2, Layers, Box, History, Save, Calendar, CheckCircle, Database, Monitor, Maximize2, ChevronsUpDown, ChevronsDownUp, Pencil, Copy, AlertTriangle, Star, StarOff, FileDown, FileText, LayoutDashboard, Wrench, ClipboardList, Wallet, Percent, Banknote, AlertCircle, MoveHorizontal, ArrowUpDown } from 'lucide-react';
 import { KpiCard } from './ui/KpiCard';
 import ActionIconButton from './ui/ActionIconButton';
+import { InlineDisclosureMenu } from './ui/inline-disclosure-menu';
 import { customDatabaseService } from '../services/customDatabaseService';
 import { parametricService } from '../services/parametricService';
 import { BudgetRow } from './BudgetRow';
@@ -113,6 +114,12 @@ const getTypeBadge = (type: SinapiType) => {
   );
 };
 
+/** Sombra da última coluna fixa: marca que há conteúdo rolando por baixo (§6.13.1). */
+const SOMBRA_FIXA_EAP = '6px 0 8px -6px rgba(15, 23, 42, 0.14)';
+/** Os handlers de grupo/etapa/subetapa recebem o evento do clique só para stopPropagation;
+ *  no menu ⋮ não há linha embaixo para proteger. */
+const SEM_EVENTO = { stopPropagation() { /* nada */ }, preventDefault() { /* nada */ } } as unknown as React.MouseEvent;
+
 /** Colunas redimensionáveis, na ordem em que aparecem — "preco-total" fica fora
  *  porque vem DEPOIS do espaçador do §6.1.1. */
 const WBS_COLUMN_KEYS = ['item', 'base', 'codigo', 'descricao', 'qtd', 'unid', 'custo-unit', 'custo-total', 'bdi', 'preco-unit'] as const;
@@ -133,10 +140,15 @@ const DRAG_COL_WIDTH = 32;
  *  planilha densa. "Descrição" é a coluna que absorve a diferença, por ser a
  *  única com texto longo. */
 const DEFAULT_COL_WIDTHS: Record<string, number> = {
-  item: 96,
-  base: 84,
-  codigo: 104,
-  descricao: 520,
+  // 112 (era 96): "04.01.01.01" + o ícone da CPU não cabiam (medido 87 × 71 px).
+  item: 112,
+  // Parte fixa à esquerda (arraste+Item+Base+Código+Descrição) 652 → 564 px: na 2ª crítica ela
+  // tomava 58% da área a 1280 e sobravam 3–4 colunas numéricas para rolar.
+  base: 72,
+  codigo: 88,
+  // 320 (era 520): a descrição vai em até 2 linhas com o texto inteiro no title, e as colunas
+  // de identificação ficam FIXAS à esquerda — com 520 a parte fixa tomava metade da tela.
+  descricao: 260,
   qtd: 84,
   unid: 72,
   'custo-unit': 128,
@@ -179,10 +191,54 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [isTemplateModalOpen, setIsTemplateModalOpen] = React.useState(false);
   const [manageEapMenuOpen, setManageEapMenuOpen] = React.useState(false);
   const [toolsMenuOpen, setToolsMenuOpen] = React.useState(false);
+  // Toolbar mais calma (crítica 2026-11-14, passo 6): "Exibir" (CPU Inline/Janela +
+  // detalhamento M.O/Mat/Equip) e "Versões" (histórico + salvar) viraram menus.
+  const [exibirMenuOpen, setExibirMenuOpen] = React.useState(false);
+  const [versoesMenuOpen, setVersoesMenuOpen] = React.useState(false);
+  // Menus da barra pelo teclado (2ª crítica, 2026-11-14): ao abrir, o foco vai ao 1º item; ↑/↓,
+  // Home/End navegam; ao fechar (Esc, escolha, clique fora) o foco volta ao botão que abriu.
+  const menuRefs = {
+    ferramentas: React.useRef<HTMLDivElement>(null), eap: React.useRef<HTMLDivElement>(null),
+    exibir: React.useRef<HTMLDivElement>(null), versoes: React.useRef<HTMLDivElement>(null),
+  };
+  const gatilhoRefs = {
+    ferramentas: React.useRef<HTMLButtonElement>(null), eap: React.useRef<HTMLButtonElement>(null),
+    exibir: React.useRef<HTMLButtonElement>(null), versoes: React.useRef<HTMLButtonElement>(null),
+  };
+  const menuAbertoAntesRef = React.useRef<keyof typeof menuRefs | null>(null);
+  const navegarMenu = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(e.key)) return;
+    const itens = [...e.currentTarget.querySelectorAll<HTMLElement>('[role^="menuitem"]:not([disabled])')];
+    if (itens.length === 0) return;
+    e.preventDefault();
+    const atual = itens.indexOf(document.activeElement as HTMLElement);
+    const proximo = e.key === 'Home' ? 0
+      : e.key === 'End' ? itens.length - 1
+      : e.key === 'ArrowDown' ? (atual + 1) % itens.length
+      : (atual - 1 + itens.length) % itens.length;
+    itens[proximo].focus();
+  };
 
   const [expandedGroups, setExpandedGroups] = React.useState<string[]>([]);
   const [expandedPhases, setExpandedPhases] = React.useState<string[]>([]);
   const [expandedSubPhases, setExpandedSubPhases] = React.useState<string[]>([]);
+  // Etapas em que o usuário pediu para ver as subetapas sem itens (por padrão viram uma linha
+  // "N subetapas sem itens · Mostrar" — crítica 2026-11-14).
+  const [etapasComVaziasVisiveis, setEtapasComVaziasVisiveis] = React.useState<string[]>([]);
+  // Expansão inicial "onde há itens": uma vez quando os itens chegam (o orçamento pode chegar
+  // depois da tela montar); antes disso, com orçamento vazio, abre só o 1º grupo.
+  const expandiuComItensRef = React.useRef(false);
+  const expandiuVazioRef = React.useRef(false);
+  React.useEffect(() => {
+    const wbs = settings.wbs as (WBSGroup | WBSPhase)[] | undefined;
+    if (expandiuComItensRef.current || !wbs?.length || !('phases' in wbs[0])) return;
+    if (budget.length === 0) {
+      if (expandiuVazioRef.current) return;
+      expandiuVazioRef.current = true;
+    }
+    expandiuComItensRef.current = expandirOndeHaItens(wbs as WBSGroup[], budget);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [budget, settings.wbs]);
   const [addingTo, setAddingTo] = React.useState<AddingTarget | null>(null);
   // §3 — preferência de busca (o que o usuário digita/alterna) sobrevive a navegação/reload.
   // Exceção documentada no guia §3.2 (o check-ui-standard acusa as linhas abaixo):
@@ -217,7 +273,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   const [budgetControlError, setBudgetControlError] = React.useState<string | null>(null);
   const [isTechnicalDashboardOpen, setIsTechnicalDashboardOpen] = React.useState(false);
   const [technicalDashboardFilter, setTechnicalDashboardFilter] = React.useState<TechnicalDashboardFilter>('ALL');
-  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error' } | null>(null);
+  const [notification, setNotification] = React.useState<{ message: string; type: 'success' | 'error'; acao?: { label: string; onClick: () => void } } | null>(null);
   const [isVersionModalOpen, setIsVersionModalOpen] = React.useState(false);
   const [versionDescription, setVersionDescription] = React.useState('');
   const [showHistory, setShowHistory] = React.useState(false);
@@ -261,9 +317,75 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       ? base + NATURE_COLUMN_KEYS.reduce((sum, key) => sum + cols.getWidth(key), 0)
       : base;
   }, [cols, showNatureBreakdown]);
+  // Colunas FIXAS à esquerda (crítica 2026-11-14, passo 4): arraste + Item + Base + Código +
+  // Descrição. A tabela é mais larga que a tela; sem isso, rolar até Preço total/ações perdia
+  // o item. Mesmo recurso da lista de Orçamentos (guia §6.13.1): tabela em border-separate
+  // (o collapse vaza texto na costura entre células fixas) e fundo opaco em cada célula fixa.
+  const esquerdaFixa = (() => {
+    const left: Record<'drag' | 'item' | 'base' | 'codigo' | 'descricao', number> = { drag: 0, item: 0, base: 0, codigo: 0, descricao: 0 };
+    let x = DRAG_COL_WIDTH;
+    for (const k of ['item', 'base', 'codigo', 'descricao'] as const) { left[k] = x; x += cols.getWidth(k); }
+    return left;
+  })();
+  const fixaEap = (left: number, opts: { cabecalho?: boolean; ultima?: boolean } = {}): React.CSSProperties => ({
+    position: 'sticky',
+    left,
+    // 30 no cabeçalho: a alça de redimensionar das colunas roladas é z-20 (§6.13.1).
+    zIndex: opts.cabecalho ? 30 : 1,
+    ...(opts.cabecalho ? { background: '#fff' } : {}),
+    ...(opts.ultima ? { boxShadow: SOMBRA_FIXA_EAP } : {}),
+  });
   const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
   const [hasCPUChanges, setHasCPUChanges] = React.useState(false);
+  // Inline/Janela é preferência de quem usa, não dado do orçamento: até 14/11/2026 gravava em
+  // settings.cpuViewMode (todo mundo herdava a escolha do último, e cada troca regravava o
+  // projeto inteiro). O valor antigo do orçamento só vale como ponto de partida.
+  const [cpuViewMode, setCpuViewMode] = usePersistedState<'inline' | 'modal'>(
+    'budgetEditor:cpuViewMode',
+    settings.cpuViewMode === 'inline' ? 'inline' : 'modal',
+  );
+  // Trava do Esc enquanto a pergunta "descartar alterações?" está aberta (o modal de
+  // confirmação tem o próprio Esc; sem isto o nosso reabriria a pergunta).
+  const confirmandoDescarteRef = React.useRef(false);
+  // Janela da CPU acessível pelo teclado (PRODUCT.md: AA com teclado completo): ao abrir, o foco
+  // entra (1º campo, ou o fechar); o Tab fica preso dentro; ao fechar, volta para quem abriu.
+  const janelaCpuRef = React.useRef<HTMLDivElement>(null);
+  const quemAbriuCpuRef = React.useRef<HTMLElement | null>(null);
+  React.useEffect(() => {
+    const aberto: keyof typeof menuRefs | null =
+      toolsMenuOpen ? 'ferramentas' : manageEapMenuOpen ? 'eap' : exibirMenuOpen ? 'exibir' : versoesMenuOpen ? 'versoes' : null;
+    if (aberto) {
+      menuRefs[aberto].current?.querySelector<HTMLElement>('[role^="menuitem"]:not([disabled])')?.focus();
+    } else if (menuAbertoAntesRef.current) {
+      // Fechou: devolve o foco ao botão — salvo se o usuário já foi para outro lugar (clique).
+      const ativo = document.activeElement;
+      if (!ativo || ativo === document.body) gatilhoRefs[menuAbertoAntesRef.current].current?.focus();
+    }
+    menuAbertoAntesRef.current = aberto;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [toolsMenuOpen, manageEapMenuOpen, exibirMenuOpen, versoesMenuOpen]);
+  const cpuAberta = !!selectedCPUItem;
+  React.useEffect(() => {
+    if (cpuAberta) {
+      quemAbriuCpuRef.current = document.activeElement as HTMLElement | null;
+      const raiz = janelaCpuRef.current;
+      const primeiro = raiz?.querySelector<HTMLElement>('input:not([disabled])') ?? raiz?.querySelector<HTMLElement>('button');
+      primeiro?.focus();
+    } else if (quemAbriuCpuRef.current) {
+      quemAbriuCpuRef.current.focus?.();
+      quemAbriuCpuRef.current = null;
+    }
+  }, [cpuAberta]);
+  const prenderTabNaJanela = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (e.key !== 'Tab' || !janelaCpuRef.current) return;
+    const focaveis = [...janelaCpuRef.current.querySelectorAll<HTMLElement>('button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])')];
+    if (focaveis.length === 0) return;
+    const primeiro = focaveis[0];
+    const ultimo = focaveis[focaveis.length - 1];
+    if (e.shiftKey && document.activeElement === primeiro) { e.preventDefault(); ultimo.focus(); }
+    else if (!e.shiftKey && document.activeElement === ultimo) { e.preventDefault(); primeiro.focus(); }
+  };
 
   const sensors = useSensors(
     useSensor(PointerSensor, {
@@ -305,6 +427,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     setSelectedCPUItem(null);
     setHasCPUChanges(false);
   };
+
+  React.useEffect(() => {
+    const aoTeclar = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented || confirmandoDescarteRef.current) return;
+      if (exibirMenuOpen) { setExibirMenuOpen(false); return; }
+      if (versoesMenuOpen) { setVersoesMenuOpen(false); return; }
+      if (toolsMenuOpen) { setToolsMenuOpen(false); return; }
+      if (manageEapMenuOpen) { setManageEapMenuOpen(false); return; }
+      if (selectedCPUItem) { void fecharCPU(); return; }
+      if (isTechnicalDashboardOpen) { setIsTechnicalDashboardOpen(false); return; }
+    };
+    document.addEventListener('keydown', aoTeclar);
+    return () => document.removeEventListener('keydown', aoTeclar);
+  });
 
   const hasCalculationMemory = (item: BudgetEntry) => !!(
     item.calculationMemory?.formula?.trim() ||
@@ -711,15 +847,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         onUpdateBudget(newBudget);
         setExpandedGroups(['01']);
       } else {
-        // It's already new structure - Expand ALL by default
-        const wbsGroups = currentWBS as WBSGroup[];
-        const allGroupIds = wbsGroups.map((g) => g.id);
-        const allPhaseIds = wbsGroups.flatMap((g) => g.phases.map((p) => p.id));
-        const allSubPhaseNames = wbsGroups.flatMap((g) => g.phases.flatMap((p) => p.subPhases));
-
-        setExpandedGroups(allGroupIds);
-        setExpandedPhases(allPhaseIds);
-        setExpandedSubPhases(allSubPhaseNames);
+        // Estrutura nova: a expansão inicial é do efeito "expandir onde há itens" (abaixo),
+        // que espera os itens chegarem. Até 14/11/2026 abria TUDO aqui — no Garden, 664
+        // linhas (302 "Nenhum item") e o 1º item a 16 telas de rolagem.
       }
     }
 
@@ -903,17 +1033,34 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     return () => clearTimeout(delayDebounceFn);
   }, [searchTerm, searchCode, searchGroupFilter, searchType, searchLocation, searchCharges, searchDatabase, searchScope, searchMode, searchReference, favorites, showOnlyFavorites]);
 
-  const handleExpandAll = () => {
-    const allGroupIds = settings.wbs.map(g => g.id);
-    const allPhaseIds = settings.wbs.flatMap(g => g.phases.map(p => p.id));
-    const allSubPhaseNames = settings.wbs.flatMap(g => g.phases.flatMap(p => p.subPhases));
+  /** Abre só grupo/etapa/subetapa que têm item (mesma comparação exata do desenho da árvore).
+   *  Orçamento sem item: abre o 1º grupo e a 1ª etapa, para mostrar onde começar. Devolve
+   *  true se havia itens (a expansão "de verdade" foi feita). */
+  const expandirOndeHaItens = (wbs: WBSGroup[], itens: BudgetEntry[]): boolean => {
+    if (itens.length === 0) {
+      const primeiro = wbs[0];
+      setExpandedGroups(primeiro ? [primeiro.id] : []);
+      setExpandedPhases(primeiro?.phases?.[0] ? [primeiro.phases[0].id] : []);
+      setExpandedSubPhases([]);
+      return false;
+    }
+    const tem = (g: string, ph?: string, sp?: string) =>
+      itens.some(b => b.group === g && (ph === undefined || b.phase === ph) && (sp === undefined || b.subPhase === sp));
+    setExpandedGroups(wbs.filter(g => tem(g.name)).map(g => g.id));
+    setExpandedPhases(wbs.flatMap(g => (g.phases || []).filter(ph => tem(g.name, ph.name)).map(ph => ph.id)));
+    setExpandedSubPhases(wbs.flatMap(g => (g.phases || []).flatMap(ph => (ph.subPhases || []).filter(sp => tem(g.name, ph.name, sp)))));
+    return true;
+  };
 
-    setExpandedGroups(allGroupIds);
-    setExpandedPhases(allPhaseIds);
-    setExpandedSubPhases(allSubPhaseNames);
+  /** "Expandir tudo" abre só grupo/etapa/subetapa com itens (2ª crítica, 2026-11-14): abrir
+   *  tudo dava 704 linhas no Garden (302 "Nenhum item") para 2 itens. Para chegar a uma etapa
+   *  vazia, o clique no grupo ou o "N subetapas sem itens · Mostrar" continuam lá. */
+  const handleExpandAll = () => {
+    expandirOndeHaItens(settings.wbs, budget);
   };
 
   const handleCollapseAll = () => {
+    setEtapasComVaziasVisiveis([]);
     setExpandedGroups([]);
     setExpandedPhases([]);
     setExpandedSubPhases([]);
@@ -1702,40 +1849,71 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     onUpdateBudget(updated);
   };
 
-  const handleUpdateComposition = (itemId: string, compIndex: number, updates: Partial<CompositionComponent>) => {
-    const updated = budget.map(item => {
-      if (item.id === itemId) {
-        const newComposition = [...(item.sinapiItem?.composition || [])];
-        newComposition[compIndex] = { ...newComposition[compIndex], ...updates };
+  /** Item com o componente `compIndex` da composição alterado e o preço da composição pai
+   *  recalculado (fallback de auxiliaryItems). Puro: quem decide onde aplicar é o chamador. */
+  /** Item com a composição trocada e o preço unitário recalculado (soma de coef. × preço, com
+   *  fallback de auxiliaryItems). Única conta de CPU — janela e "abaixo do item" usam esta. */
+  const comComposicao = (item: BudgetEntry, newComposition: CompositionComponent[]): BudgetEntry => {
+    const newPrice = newComposition.reduce((acc, comp) => {
+      const fallbackPrice = auxiliaryItems.get(comp.code)?.price || 0;
+      const price = comp.price || fallbackPrice;
+      return acc + (comp.quantity || 0) * price;
+    }, 0);
+    return {
+      ...item,
+      sinapiItem: item.sinapiItem ? { ...item.sinapiItem, composition: newComposition, price: newPrice, isOverride: true } : item.sinapiItem,
+    } as BudgetEntry;
+  };
+  const aplicarNaComposicao = (item: BudgetEntry, compIndex: number, updates: Partial<CompositionComponent>): BudgetEntry => {
+    const newComposition = [...(item.sinapiItem?.composition || [])];
+    newComposition[compIndex] = { ...newComposition[compIndex], ...updates };
+    return comComposicao(item, newComposition);
+  };
 
-        // Recalcular preço total da composição pai usando fallback de auxiliaryItems
-        const newPrice = newComposition.reduce((acc, comp) => {
-          const fallbackPrice = auxiliaryItems.get(comp.code)?.price || 0;
-          const price = comp.price || fallbackPrice;
-          return acc + (comp.quantity || 0) * price;
-        }, 0);
+  /** Janela da CPU: edita só o RASCUNHO (selectedCPUItem). O orçamento muda no "Salvar";
+   *  "Cancelar", X e Esc descartam. Até 14/11/2026 cada tecla já ia para o orçamento (e para
+   *  o banco), e o "Salvar Alterações" só mostrava "salvas com sucesso" e fechava. */
+  const handleUpdateCompositionRascunho = (compIndex: number, updates: Partial<CompositionComponent>) => {
+    if (!selectedCPUItem || isLocked) return;
+    setSelectedCPUItem(aplicarNaComposicao(selectedCPUItem, compIndex, updates));
+    setHasCPUChanges(true);
+  };
 
-        const updatedEntry = {
-          ...item,
-          sinapiItem: item.sinapiItem ? {
-            ...item.sinapiItem,
-            composition: newComposition,
-            price: newPrice,
-            isOverride: true
-          } : item.sinapiItem
-        } as BudgetEntry;
+  const salvarCPU = () => {
+    if (!selectedCPUItem || !hasCPUChanges) return;
+    const rascunho = selectedCPUItem;
+    onUpdateBudget(budget.map(item => (item.id === rascunho.id ? rascunho : item)));
+    setNotification({ message: 'Composição salva no orçamento.', type: 'success' });
+    setTimeout(() => setNotification(null), 3000);
+    handleCloseCPU();
+  };
 
-        // Sincroniza com o modal se estiver aberto
-        if (selectedCPUItem?.id === itemId) {
-          setSelectedCPUItem(updatedEntry);
-          setHasCPUChanges(true);
-        }
+  /** Fechar a janela (Cancelar, X, Esc): com alteração no rascunho, pergunta antes de descartar. */
+  const fecharCPU = async () => {
+    if (!selectedCPUItem) return;
+    if (hasCPUChanges) {
+      if (confirmandoDescarteRef.current) return;
+      confirmandoDescarteRef.current = true;
+      const descartar = await confirm({
+        title: 'Descartar as alterações da composição?',
+        message: 'As quantidades e preços alterados nesta janela não vão para o orçamento.',
+        variant: 'warning',
+        confirmLabel: 'Descartar',
+        cancelLabel: 'Continuar editando',
+      });
+      confirmandoDescarteRef.current = false;
+      if (!descartar) return;
+    }
+    handleCloseCPU();
+  };
 
-        return updatedEntry;
-      }
-      return item;
-    });
-    onUpdateBudget(updated as BudgetEntry[]);
+  /** CPU "abaixo do item": o BudgetRow edita um RASCUNHO e só chama isto no "Salvar no
+   *  orçamento" — a mesma regra da janela (2ª crítica, 2026-11-14). Antes cada tecla gravava. */
+  const handleSalvarComposicao = (itemId: string, novaComposicao: CompositionComponent[]) => {
+    if (isLocked) return;
+    onUpdateBudget(budget.map(item => (item.id === itemId ? comComposicao(item, novaComposicao) : item)));
+    setNotification({ message: 'Composição salva no orçamento.', type: 'success' });
+    setTimeout(() => setNotification(null), 3000);
   };
 
   const handleSaveToCustomDB = (item: SinapiItem) => {
@@ -1777,9 +1955,33 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     }
   };
 
+  /** Excluir item: sai na hora, com "Desfazer" no aviso (8 s). Até 14/11/2026 sumia sem
+   *  confirmação nem volta — e a lixeira fica colada em "Salvar na Base Própria". */
   const handleDeleteItem = (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    const posicao = budget.findIndex(item => item.id === id);
+    if (posicao === -1) return;
+    const removido = budget[posicao];
     onUpdateBudget(budget.filter(item => item.id !== id));
+    const nome = removido.sinapiItem?.description || removido.sinapiItem?.code || 'Item';
+    setNotification({
+      message: `"${nome.length > 60 ? nome.slice(0, 57) + '…' : nome}" excluído do orçamento.`,
+      type: 'success',
+      acao: {
+        label: 'Desfazer',
+        onClick: () => {
+          // budgetRef (declarado acima) = orçamento mais recente: entre excluir e desfazer o
+          // usuário pode ter editado outra coisa, e voltar a um retrato antigo apagaria a edição.
+          const atual = budgetRef.current;
+          if (atual.some(item => item.id === removido.id)) return;
+          const volta = [...atual];
+          volta.splice(Math.min(posicao, volta.length), 0, removido);
+          onUpdateBudget(volta);
+          setNotification(null);
+        },
+      },
+    });
+    setTimeout(() => setNotification(prev => (prev?.acao ? null : prev)), 8000);
   };
 
   // --- Calculations ---
@@ -1789,6 +1991,25 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   // Contador do ícone no título: ITENS com pendência (um item pode ter as duas),
   // para bater com o "Todas" do Painel de pendências técnicas.
   const itemsComPendenciaTecnica = budget.filter(item => !hasCalculationMemory(item) || !item.precisionClass).length;
+
+  // Base de preço à vista (2ª crítica, 2026-11-14): "SINAPI de quando, de onde, com ou sem
+  // desoneração?" é a 1ª pergunta de quem audita um orçamento, e só existia dentro da janela
+  // de adicionar item. É a base do ORÇAMENTO (busca e atualização de competência); a coluna
+  // Base de cada item continua dizendo de onde aquele item veio.
+  const rotuloBasePreco = (() => {
+    const db = settings.database || 'SINAPI';
+    if (db === 'SINAPI') {
+      const ref = resolveReferenceDate(settings.referenceMonth, references);
+      const competencia = references.find(r => r.referenceDate === ref)?.label || settings.referenceMonth || 'competência não definida';
+      const encargos = (settings.socialChargesMode || 'SEM_DESONERACAO') === 'COM_DESONERACAO' ? 'com desoneração' : 'sem desoneração';
+      return `SINAPI ${competencia} · ${settings.location || 'MG'} · ${encargos}`;
+    }
+    if (db === 'GENERAL') return 'Base geral (itens avulsos)';
+    return `Base própria: ${customDatabases.find(d => d.id === db)?.name || db}`;
+  })();
+  // BDI global zerado: o Preço Final sai igual ao Custo Direto. Pode ser intencional, mas
+  // não pode passar calado (2ª crítica).
+  const bdiZerado = !settings.bdi && budget.length > 0;
   const totalWithBDI = budget.reduce((acc, item) => acc + (item.quantity * (item.sinapiItem?.price || 0) * (1 + (item.bdi ?? settings.bdi) / 100)), 0);
 
   const calculateSubPhaseTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
@@ -1828,6 +2049,30 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
     const dir = groupOrder === 'value-desc' ? -1 : 1;
     return [...base].sort((a, b) => dir * ((totals.get(a.group.id) ?? 0) - (totals.get(b.group.id) ?? 0)));
   })();
+
+  // Quantos itens há em cada grupo/etapa/subetapa (mesma comparação exata do desenho).
+  // Nível sem item mostra "—", não "R$ 0,00": zero de verdade (itens sem preço) é outra
+  // coisa, e "R$ 0,00" em grupo vazio lia como "perdi o orçamento" (crítica 2026-11-14).
+  const contagemDeItens = React.useMemo(() => {
+    const porGrupo = new Map<string, number>();
+    const porEtapa = new Map<string, number>();
+    const porSubetapa = new Map<string, number>();
+    for (const b of budget) {
+      const kE = `${b.group}\u0000${b.phase}`;
+      const kS = `${kE}\u0000${b.subPhase}`;
+      porGrupo.set(b.group, (porGrupo.get(b.group) || 0) + 1);
+      porEtapa.set(kE, (porEtapa.get(kE) || 0) + 1);
+      porSubetapa.set(kS, (porSubetapa.get(kS) || 0) + 1);
+    }
+    return {
+      grupo: (g: string) => porGrupo.get(g) || 0,
+      etapa: (g: string, ph: string) => porEtapa.get(`${g}\u0000${ph}`) || 0,
+      subetapa: (g: string, ph: string, sp: string) => porSubetapa.get(`${g}\u0000${ph}\u0000${sp}`) || 0,
+    };
+  }, [budget]);
+  const valorOuTraco = (qtdItens: number, total: number) =>
+    qtdItens === 0 ? '—' : `R$ ${total.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  const rotuloItens = (n: number) => (n === 0 ? 'sem itens' : n === 1 ? '1 item' : `${n} itens`);
 
   const calculateSubPhaseNatureTotal = (groupName: string, phaseName: string, subPhaseName: string) => {
     const total = { labor: 0, material: 0, equipment: 0 };
@@ -2051,12 +2296,27 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
         <div>
           <h1 className="text-3xl font-black text-gray-900 tracking-tight">Orçamento Analítico</h1>
-          <p className="text-gray-500 text-sm mt-1.5 font-medium">Composição detalhada com WBS (Work Breakdown Structure).</p>
+          {/* Qual orçamento e com que base de preço (2ª crítica): o título genérico não dizia
+              nem o nome — "Garden" só aparecia truncado no seletor de contexto. */}
+          <p className="text-gray-500 text-sm mt-1.5 font-medium">
+            {settings.name && <span className="text-gray-900">{settings.name}</span>}
+            {settings.name && <span aria-hidden="true"> · </span>}
+            <span title="Base de preço do orçamento: competência, UF e encargos usados na busca de itens e na atualização de competência SINAPI">{rotuloBasePreco}</span>
+          </p>
         </div>
         <div className="flex flex-wrap items-center justify-end gap-3 ml-auto">
-          <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
-          <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
-          <KpiCard size="sm" className="shrink-0" label={`BDI (${settings.bdi}%)`} value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`} icon={<Percent className="w-4 h-4" />} color="blue" />
+          <KpiCard size="lg" className="shrink-0" label="Preço Final" value={`R$ ${totalWithBDI.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Banknote className="w-4 h-4" />} color="emerald" />
+          <KpiCard size="sm" className="shrink-0" label="Custo Direto" value={`R$ ${totalDirectCost.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} icon={<Wallet className="w-4 h-4" />} color="gray" />
+          <KpiCard
+            size="sm"
+            className="shrink-0"
+            label={`BDI (${settings.bdi}%)`}
+            value={`+ R$ ${(totalWithBDI - totalDirectCost).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+            sub={bdiZerado ? 'BDI zerado: Preço Final = Custo Direto' : undefined}
+            title={bdiZerado ? 'O BDI global está em 0%. Itens sem BDI próprio entram sem lucro, impostos e despesas indiretas. Confira se é intencional.' : undefined}
+            icon={bdiZerado ? <AlertTriangle className="w-4 h-4" /> : <Percent className="w-4 h-4" />}
+            color={bdiZerado ? 'amber' : 'blue'}
+          />
           {(itemsWithoutCalculationMemory > 0 || itemsWithoutPrecisionClass > 0) && (
             <div className="relative shrink-0">
               <ActionIconButton
@@ -2066,7 +2326,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 aria-label="Abrir painel de pendências técnicas"
                 onClick={() => { setTechnicalDashboardFilter('ALL'); setIsTechnicalDashboardOpen(true); }}
               />
-              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-blue-600 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
+              <span className="absolute -top-1.5 -right-1.5 min-w-[18px] h-[18px] px-1 rounded-full bg-amber-700 text-white text-[10px] font-bold flex items-center justify-center pointer-events-none">
                 {itemsComPendenciaTecnica}
               </span>
             </div>
@@ -2079,98 +2339,152 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           mostra, não o recorte das linhas. O BDI (%) daqui é o que
           define o Preço Final e o BDI dos cards, que moram na linha do título
           (acima desta barra). */}
-      <div className="flex flex-col lg:flex-row gap-3 items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
-        <div className="flex flex-wrap items-center gap-3">
+      <div className="flex flex-col lg:flex-row gap-2 items-stretch lg:items-center justify-between bg-white p-2 rounded-[10px] border border-gray-100 shadow-sm mb-3">
+        {/* Esquerda: o que é DADO do orçamento (BDI global) e os dois menus de exibição/versões.
+            Eram 3 caixas aninhadas (card dentro de card) com 6 controles; no celular a barra
+            cortava à esquerda (BDI em x = −52). flex-wrap: quebra em vez de cortar. */}
+        <div className="flex flex-wrap items-center gap-2">
           {isLocked && (
-            <div className="flex items-center gap-2 px-3 py-1.5 bg-amber-50 text-amber-600 rounded-[6px] border border-amber-200 text-xs font-bold animate-pulse">
+            <div className="flex items-center gap-2 h-9 px-3 bg-amber-50 text-amber-700 rounded-[6px] border border-amber-200 text-sm font-medium" title="Orçamento fechado: só consulta">
               <AlertTriangle className="w-4 h-4" />
-              BLOQUEADO
+              Fechado
             </div>
           )}
 
-          {/* Grupo 1: Visualização & Configurações */}
-          <div className="flex items-center gap-3 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100 pr-4">
-            <div className="flex items-center gap-2 pl-1">
-              <label className="text-xs font-semibold text-slate-500 whitespace-nowrap">BDI (%):</label>
-              <input
-                type="number"
-                value={settings.bdi}
-                onChange={(e) => onUpdateSettings({ ...settings, bdi: Number(e.target.value) })}
-                className="w-14 h-8 rounded-[6px] border border-gray-200 bg-white text-center text-sm font-bold text-gray-700 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              />
-            </div>
+          <label
+            className={`flex items-center gap-2 h-9 pl-3 pr-1 rounded-[6px] border bg-white ${bdiZerado ? 'border-amber-400 bg-amber-50' : 'border-gray-200'}`}
+            title={bdiZerado ? 'BDI global em 0%: o Preço Final sai igual ao Custo Direto. Confira se é intencional.' : 'BDI global: vale para todo item sem BDI próprio e define o Preço Final'}
+          >
+            <span className="text-sm font-medium text-gray-700 whitespace-nowrap">BDI global (%)</span>
+            <input
+              type="number"
+              value={settings.bdi}
+              disabled={isLocked}
+              onChange={(e) => onUpdateSettings({ ...settings, bdi: Number(e.target.value) })}
+              className="w-16 h-7 rounded-[4px] border border-gray-200 bg-white text-center text-sm font-medium text-gray-900 focus:ring-2 focus:ring-blue-500 outline-none disabled:bg-gray-50 disabled:cursor-not-allowed"
+            />
+          </label>
 
-            <div className="h-6 w-px bg-gray-200 mx-1" />
-
-            <div className="flex bg-gray-200/50 rounded-[6px] p-0.5">
-              <button
-                onClick={() => onUpdateSettings({ ...settings, cpuViewMode: 'inline' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${settings.cpuViewMode === 'inline' ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Ver CPU abaixo do item"
-              >
-                <Layers className="w-3.5 h-3.5" />
-                Inline
-              </button>
-              <button
-                onClick={() => onUpdateSettings({ ...settings, cpuViewMode: 'modal' })}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-[6px] text-button font-bold transition-all ${(!settings.cpuViewMode || settings.cpuViewMode === 'modal') ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-500 hover:text-gray-700'}`}
-                title="Ver CPU em janela flutuante"
-              >
-                <Monitor className="w-3.5 h-3.5" />
-                Janela
-              </button>
-            </div>
-
-            <div className="h-6 w-px bg-gray-200 mx-1" />
-
+          <div className="relative">
             <button
-              onClick={() => setShowNatureBreakdown(!showNatureBreakdown)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] text-xs font-black uppercase tracking-wider transition-all border ${showNatureBreakdown ? 'bg-blue-600 text-white border-blue-700 shadow-sm' : 'bg-white text-gray-500 border-gray-200 hover:bg-gray-50'}`}
-              title="Mostrar detalhamento de custos (Mão de Obra, Material, Equipamento)"
+              type="button"
+              ref={gatilhoRefs.exibir}
+              onClick={() => setExibirMenuOpen(!exibirMenuOpen)}
+              aria-haspopup="menu"
+              aria-expanded={exibirMenuOpen}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${exibirMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              title="Como mostrar a composição e as colunas de custo"
             >
-              <Layers className="w-3.5 h-3.5" />
-              Composição
+              <Monitor className="w-3.5 h-3.5" />
+              Exibir
+              {showNatureBreakdown && (
+                <>
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-600" aria-hidden="true" />
+                  <span className="sr-only">(colunas de mão de obra, material e equipamento visíveis)</span>
+                </>
+              )}
+              <ChevronDown className={`w-3 h-3 transition-transform ${exibirMenuOpen ? 'rotate-180' : ''}`} />
             </button>
+            {exibirMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setExibirMenuOpen(false)}></div>
+                <div ref={menuRefs.exibir} role="menu" aria-label="Exibir" onKeyDown={navegarMenu} className="absolute left-0 top-full mt-2 w-72 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Composição de preço (CPU)</p>
+                  {([['inline', 'Abaixo do item', Layers], ['modal', 'Em janela', Monitor]] as const).map(([modo, rotulo, Icone]) => (
+                    <button
+                      key={modo}
+                      type="button"
+                      role="menuitemradio"
+                      aria-checked={cpuViewMode === modo}
+                      onClick={() => { setCpuViewMode(modo); setExibirMenuOpen(false); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                    >
+                      <Icone className="w-4 h-4 text-gray-500" />
+                      <span className="flex-1">{rotulo}</span>
+                      {cpuViewMode === modo && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                    </button>
+                  ))}
+                  <div className="border-t border-gray-100 my-1"></div>
+                  <button
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={showNatureBreakdown}
+                    onClick={() => { setShowNatureBreakdown(!showNatureBreakdown); setExibirMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                    title="Colunas de mão de obra, material e equipamento"
+                  >
+                    <Layers className="w-4 h-4 text-gray-500" />
+                    <span className="flex-1">Mão de obra, material e equipamento</span>
+                    {showNatureBreakdown && <CheckCircle className="w-4 h-4 text-blue-600" />}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
 
-          <div className="h-8 w-px bg-gray-100 mx-1" />
-
-          {/* Grupo 2: Versões & Histórico */}
-          <div className="flex items-center gap-1.5 bg-gray-50/80 p-1.5 rounded-[10px] border border-gray-100">
+          <div className="relative">
             <button
-              onClick={() => setShowHistory(!showHistory)}
-              className={`flex items-center gap-2 px-3 py-1.5 rounded-[6px] transition-all text-button font-bold border ${showHistory ? 'bg-blue-600 text-white border-blue-600 shadow-sm' : 'bg-white text-gray-600 border-gray-200 hover:bg-gray-50'}`}
+              type="button"
+              ref={gatilhoRefs.versoes}
+              onClick={() => setVersoesMenuOpen(!versoesMenuOpen)}
+              aria-haspopup="menu"
+              aria-expanded={versoesMenuOpen}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${versoesMenuOpen || showHistory ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              title="Histórico e versões salvas do orçamento"
             >
               <History className="w-3.5 h-3.5" />
-              Histórico ({settings.versions?.length || 0})
+              Versões ({settings.versions?.length || 0})
+              <ChevronDown className={`w-3 h-3 transition-transform ${versoesMenuOpen ? 'rotate-180' : ''}`} />
             </button>
-            <button
-              onClick={() => setIsVersionModalOpen(true)}
-              className="flex items-center gap-2 px-3 py-1.5 bg-white text-gray-600 border border-gray-200 rounded-[6px] hover:bg-gray-50 transition-all text-button font-bold"
-              title="Salvar uma nova versão (snapshot) deste orçamento"
-            >
-              <Save className="w-3.5 h-3.5" />
-              Salvar versão
-            </button>
-            {(() => {
-              const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
-              if (!activeVersion) return null;
-              return (
-                <div className="flex items-center gap-1.5 px-2.5 py-1 bg-amber-50 border border-amber-200 rounded-[6px]" title={`Versão ativa: ${activeVersion.description}`}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
-                  <span className="text-xs font-bold text-amber-700 max-w-[120px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
+            {versoesMenuOpen && (
+              <>
+                <div className="fixed inset-0 z-40" onClick={() => setVersoesMenuOpen(false)}></div>
+                <div ref={menuRefs.versoes} role="menu" aria-label="Versões" onKeyDown={navegarMenu} className="absolute left-0 top-full mt-2 w-64 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setShowHistory(!showHistory); setVersoesMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                  >
+                    <History className="w-4 h-4 text-gray-500" />
+                    {showHistory ? 'Ocultar histórico' : `Ver histórico (${settings.versions?.length || 0})`}
+                  </button>
+                  <button
+                    type="button"
+                    role="menuitem"
+                    onClick={() => { setIsVersionModalOpen(true); setVersoesMenuOpen(false); }}
+                    className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
+                    title="Salvar uma nova versão (snapshot) deste orçamento"
+                  >
+                    <Save className="w-4 h-4 text-gray-500" />
+                    Salvar nova versão…
+                  </button>
                 </div>
-              );
-            })()}
+              </>
+            )}
           </div>
+          {(() => {
+            const activeVersion = settings.versions?.find(v => v.id === settings.activeVersionId);
+            if (!activeVersion) return null;
+            return (
+              <div className="flex items-center gap-1.5 h-9 px-2.5 bg-amber-50 border border-amber-200 rounded-[6px]" title={`Versão ativa: ${activeVersion.description}`}>
+                <span className="w-1.5 h-1.5 rounded-full bg-amber-500 flex-shrink-0" />
+                <span className="text-sm font-medium text-amber-800 max-w-[140px] truncate">v{activeVersion.item} · {activeVersion.description}</span>
+              </div>
+            );
+          })()}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Grupo 3: Menu de Ferramentas (análise + import/export + contrato) */}
           <div className="relative">
             <button
+              ref={gatilhoRefs.ferramentas}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={toolsMenuOpen}
               onClick={() => setToolsMenuOpen(!toolsMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-[6px] text-button font-bold border transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] text-button font-bold border whitespace-nowrap transition-all ${toolsMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               title="Ferramentas de análise, importação e exportação"
             >
               <Wrench className="w-3.5 h-3.5" />
@@ -2181,9 +2495,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             {toolsMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setToolsMenuOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div ref={menuRefs.ferramentas} role="menu" aria-label="Ferramentas" onKeyDown={navegarMenu} className="absolute right-0 top-full mt-2 w-56 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Análise</p>
                   <button
+                    role="menuitem"
                     onClick={() => { handleOpenParametric(); setToolsMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-indigo-50 hover:text-indigo-700 flex items-center gap-2 transition-colors"
                   >
@@ -2191,6 +2506,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   </button>
                   {onOpenDashboard && (
                     <button
+                    role="menuitem"
                       onClick={() => { onOpenDashboard(); setToolsMenuOpen(false); }}
                       className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
                     >
@@ -2198,12 +2514,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </button>
                   )}
                   <button
+                    role="menuitem"
                     onClick={() => { handleOpenBudgetControl(); setToolsMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-amber-50 hover:text-amber-700 flex items-center gap-2 transition-colors"
                   >
                     <AlertTriangle className="w-4 h-4 text-amber-500" /> Controle orçado x realizado
                   </button>
                   <button
+                    role="menuitem"
                     onClick={() => { setIsTechnicalDashboardOpen(true); setToolsMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-rose-50 hover:text-rose-700 flex items-center gap-2 transition-colors"
                   >
@@ -2213,12 +2531,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="border-t border-gray-100 my-1"></div>
                   <p className="px-4 pt-1 pb-1.5 text-xs font-semibold text-slate-500">Importar / Exportar</p>
                   <button
+                    role="menuitem"
                     onClick={() => { setIsImportModalOpen(true); setToolsMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                   >
                     <FileDown className="w-4 h-4 text-gray-500" /> Importar EAP
                   </button>
                   <button
+                    role="menuitem"
                     onClick={() => { handleExportWBS(); setToolsMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 flex items-center gap-2 transition-colors"
                   >
@@ -2229,6 +2549,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     <>
                       <div className="border-t border-gray-100 my-1"></div>
                       <button
+                    role="menuitem"
                         disabled={generatingContract}
                         onClick={() => { handleGenerateContract(); setToolsMenuOpen(false); }}
                         className="w-full text-left px-4 py-2.5 text-sm text-emerald-700 hover:bg-emerald-50 flex items-center gap-2 transition-colors disabled:opacity-50"
@@ -2245,8 +2566,12 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           {/* Grupo 4: Gestão da EAP */}
           <div className="relative">
             <button
+              ref={gatilhoRefs.eap}
+              type="button"
+              aria-haspopup="menu"
+              aria-expanded={manageEapMenuOpen}
               onClick={() => setManageEapMenuOpen(!manageEapMenuOpen)}
-              className={`flex items-center gap-2 px-3 py-2 rounded-[6px] transition-all text-button font-bold border ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
+              className={`flex items-center gap-2 h-9 px-3 rounded-[6px] transition-all text-button font-bold border whitespace-nowrap ${manageEapMenuOpen ? 'bg-gray-50 border-gray-300 text-gray-800 shadow-sm' : 'bg-white border-gray-200 text-gray-600 hover:bg-gray-50'}`}
               title="Gerenciar estrutura da EAP"
             >
               <Layers className="w-3.5 h-3.5" />
@@ -2257,8 +2582,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             {manageEapMenuOpen && (
               <>
                 <div className="fixed inset-0 z-40" onClick={() => setManageEapMenuOpen(false)}></div>
-                <div className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div ref={menuRefs.eap} role="menu" aria-label="Gerenciar EAP" onKeyDown={navegarMenu} className="absolute right-0 top-full mt-2 w-52 bg-white border border-gray-200 rounded-[10px] shadow-2xl z-50 py-2 animate-in fade-in slide-in-from-top-2 duration-200">
                   <button
+                    role="menuitem"
                     onClick={() => { setIsTemplateModalOpen(true); setManageEapMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-700 flex items-center gap-2 transition-colors"
                   >
@@ -2266,6 +2592,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   </button>
                   <div className="border-t border-gray-100 my-1"></div>
                   <button
+                    role="menuitem"
                     onClick={() => { handleClearWBS(); setManageEapMenuOpen(false); }}
                     className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition-colors"
                   >
@@ -2279,7 +2606,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           {/* Ação primária (§17) — mora aqui, na toolbar de botões */}
           <Button
             onClick={handleAddGroup}
-            className="gap-2 text-button"
+            className="gap-2 text-button whitespace-nowrap"
           >
             <Plus className="w-4 h-4 stroke-[3]" />
             Novo Grupo
@@ -2784,7 +3111,13 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       }
         {/* Conteúdo — SEM bg/border/rounded/shadow próprios: o card pai já supre (§5.2) */}
         <div className="flex-1 overflow-auto min-h-0">
-          <table ref={cols.tableRef} className="text-left border-collapse" style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}>
+          <table
+            ref={cols.tableRef}
+            // border-separate (colunas fixas — §6.13.1): a divisória entre linhas vai nas
+            // células; entre grupos, a faixa de 4px que era borda do <tbody>.
+            className="text-left border-separate border-spacing-0 [&_td]:border-b [&_td]:border-b-gray-100 [&_th]:border-b [&_th]:border-b-gray-200 [&>tbody+tbody>tr:first-child>td]:border-t-4 [&>tbody+tbody>tr:first-child>td]:border-t-gray-100"
+            style={{ tableLayout: 'fixed', width: tableTotalWidth, minWidth: '100%' }}
+          >
             {/* Uma única definição de coluna para TODAS as linhas (cabeçalho, grupo,
                 etapa, subetapa e item) — antes eram 3 templates de grid distintos
                 (11, 9 e 12 colunas), e por isso as colunas nunca alinhavam.
@@ -2806,16 +3139,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             </colgroup>
             <thead>
               <tr className="sticky top-0 z-10 bg-white border-b border-gray-200 text-sm font-semibold text-gray-700">
-                <th className="px-3 py-2 border-r border-gray-100"></th>
-                <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Item<cols.ResizeHandle colKey="item" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Base<cols.ResizeHandle colKey="base" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Código<cols.ResizeHandle colKey="codigo" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Descrição<cols.ResizeHandle colKey="descricao" /></th>
+                <th style={fixaEap(esquerdaFixa.drag, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100"></th>
+                <th style={fixaEap(esquerdaFixa.item, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Item<cols.ResizeHandle colKey="item" /></th>
+                <th style={fixaEap(esquerdaFixa.base, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Base<cols.ResizeHandle colKey="base" /></th>
+                <th style={fixaEap(esquerdaFixa.codigo, { cabecalho: true })} className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Código<cols.ResizeHandle colKey="codigo" /></th>
+                <th style={fixaEap(esquerdaFixa.descricao, { cabecalho: true, ultima: true })} className="px-3 py-2 border-r border-gray-100 relative overflow-hidden">Descrição<cols.ResizeHandle colKey="descricao" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Qtd.<cols.ResizeHandle colKey="qtd" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Unid.<cols.ResizeHandle colKey="unid" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">Custo unit.<cols.ResizeHandle colKey="custo-unit" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Custo total<cols.ResizeHandle colKey="custo-total" /></th>
-                <th className="px-3 py-2 border-r border-gray-100 text-center text-red-500 relative overflow-hidden">BDI<cols.ResizeHandle colKey="bdi" /></th>
+                <th title="BDI do item (%). Vazio = usa o BDI global da barra acima." className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">BDI (%)<cols.ResizeHandle colKey="bdi" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Preço unit.<cols.ResizeHandle colKey="preco-unit" /></th>
                 <th aria-hidden="true" className="border-r border-gray-100"></th>
                 <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right relative overflow-hidden">Preço total<cols.ResizeHandle colKey="preco-total" /></th>
@@ -2835,70 +3168,63 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             // dentro de um grupo recolhido.
             const isGroupExpanded = isSearching_wbs || expandedGroups.includes(group.id);
             const groupTotal = calculateGroupTotal(group.name);
+            const itensDoGrupo = contagemDeItens.grupo(group.name);
+            // Grupo SEM item: linha clara e compacta; a faixa escura fica para quem tem orçamento.
+            // Na 2ª crítica (2026-11-14) 14 das 16 faixas pretas do Garden eram vazias e pesavam
+            // igual às que somavam R$ 173 mil.
+            const grupoVazio = itensDoGrupo === 0;
+            const tomGrupo = grupoVazio
+              ? { tr: 'bg-white hover:bg-gray-50 text-gray-700', fixo: 'bg-white group-hover:bg-gray-50', borda: 'border-gray-200', py: 'py-1.5', seta: 'text-gray-500', anel: 'focus-visible:ring-blue-500', meta: 'text-gray-600', mais: 'hover:bg-gray-100 text-blue-700' }
+              : { tr: 'bg-gray-800 hover:bg-gray-700 text-white', fixo: 'bg-gray-800 group-hover:bg-gray-700', borda: 'border-gray-700', py: 'py-2.5', seta: 'text-gray-300', anel: 'focus-visible:ring-white', meta: 'text-gray-300', mais: 'hover:bg-gray-600 text-blue-300' };
             const { name: groupNameDisplay } = splitName(group.name);
 
             return (
-              <tbody key={group.id} className="border-b-4 border-gray-100 last:border-b-0">
+              <tbody key={group.id}>
                 {/* GROUP HEADER */}
-                <tr className="bg-gray-800 hover:bg-gray-700 transition-colors text-white group">
-                  <td className="px-3 py-2.5 border-r border-gray-700"></td>
-                  <td className="px-3 py-2.5 border-r border-gray-700">
-                    <div className="flex items-center gap-1 cursor-pointer font-semibold text-sm" onClick={() => toggleGroup(group.id)}>
-                      {isGroupExpanded ? <ChevronDown className="w-4 h-4 text-gray-300 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />}
+                <tr className={`${tomGrupo.tr} transition-colors group`}>
+                  <td style={fixaEap(esquerdaFixa.drag)} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} ${tomGrupo.fixo}`}></td>
+                  <td style={fixaEap(esquerdaFixa.item)} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} ${tomGrupo.fixo}`}>
+                    {/* Botão de verdade (teclado + leitor de tela): até 14/11/2026 era div sem foco. */}
+                    <button type="button" aria-expanded={isGroupExpanded} aria-label={`${isGroupExpanded ? 'Recolher' : 'Abrir'} grupo ${group.id} ${groupNameDisplay}`} onClick={() => toggleGroup(group.id)} className={`flex items-center gap-1 cursor-pointer font-semibold text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 ${tomGrupo.anel}`}>
+                      {isGroupExpanded ? <ChevronDown className={`w-4 h-4 ${tomGrupo.seta} shrink-0`} /> : <ChevronRight className={`w-4 h-4 ${tomGrupo.seta} shrink-0`} />}
                       {group.id}
+                    </button>
+                  </td>
+                  <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} ${tomGrupo.fixo}`}>
+                    {/* Contagem e total logo depois do nome (§6.12): a coluna Preço total cai fora
+                        da tela numa tabela larga, e o grupo precisa dizer o que tem. */}
+                    <div className="flex items-baseline gap-2 min-w-0">
+                      <span className="font-semibold text-sm leading-tight truncate" title={groupNameDisplay}>{groupNameDisplay}</span>
+                      <span className={`shrink-0 text-sm font-normal ${tomGrupo.meta} whitespace-nowrap`}>
+                        · {rotuloItens(itensDoGrupo)}{itensDoGrupo > 0 ? ` · ${valorOuTraco(itensDoGrupo, groupTotal)}` : ''}
+                      </span>
                     </div>
                   </td>
-                  <td colSpan={3} className="px-3 py-2.5 border-r border-gray-700">
-                    <div className="font-semibold text-sm leading-tight truncate" title={groupNameDisplay}>
-                      {groupNameDisplay}
-                    </div>
-                  </td>
-                  <td colSpan={7} className="px-3 py-2.5 border-r border-gray-700"></td>
-                  <td className="px-3 py-2.5 border-r border-gray-700 last:border-r-0 relative">
-                    <div className="flex flex-col items-end gap-1">
-                      <span className="font-medium text-sm whitespace-nowrap">R$ {groupTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                      <div className="flex gap-1 items-center">
-                        <div className="flex items-center">
-                          {canReorderGroups ? (
-                            <>
-                              {gIndex > 0 && (
-                                <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'UP')} className="text-gray-400 hover:text-white p-1" title="Mover para Cima">
-                                  <ArrowUp className="w-3 h-3" />
-                                </button>
-                              )}
-                              {gIndex < settings.wbs.length - 1 && (
-                                <button type="button" onClick={(e) => handleMoveGroup(e, gIndex, 'DOWN')} className="text-gray-400 hover:text-white p-1" title="Mover para Baixo">
-                                  <ArrowDown className="w-3 h-3" />
-                                </button>
-                              )}
-                            </>
-                          ) : (
-                            // Filtro/ordem ativos: a posição na tela não é a da EAP, então mover
-                            // aqui faria o grupo "pular" sem lógica. Desligado, com o motivo.
-                            <>
-                              <span title={MOTIVO_SEM_MOVER_GRUPO}>
-                                <button type="button" disabled aria-label="Mover para Cima" className="text-gray-400 p-1 opacity-40 cursor-not-allowed"><ArrowUp className="w-3 h-3" /></button>
-                              </span>
-                              <span title={MOTIVO_SEM_MOVER_GRUPO}>
-                                <button type="button" disabled aria-label="Mover para Baixo" className="text-gray-400 p-1 opacity-40 cursor-not-allowed"><ArrowDown className="w-3 h-3" /></button>
-                              </span>
-                            </>
-                          )}
-                        </div>
-                        <button type="button" onClick={(e) => handleDuplicateGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-gray-400 hover:text-white" title="Duplicar Grupo"><Copy className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={(e) => handleEditGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-amber-400" title="Editar Grupo"><Pencil className="w-3.5 h-3.5" /></button>
-                        <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-blue-300" title="Nova Etapa"><Plus className="w-4 h-4" /></button>
-                        <button type="button" onClick={(e) => handleDeleteGroup(e, gIndex)} className="p-1.5 hover:bg-gray-600 rounded-[6px] text-red-400" title="Excluir Grupo"><Trash2 className="w-4 h-4" /></button>
-                      </div>
+                  <td colSpan={7} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda}`}></td>
+                  <td className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} last:border-r-0 relative`}>
+                      {/* Valor + "Nova etapa" + ⋮ numa linha só (§9.2): eram 6 ícones empilhados
+                          embaixo do valor, e a faixa do grupo tinha 72px de altura. */}
+                    <div className="flex items-center justify-end gap-1.5">
+                      <span className="font-medium text-sm whitespace-nowrap">{valorOuTraco(itensDoGrupo, groupTotal)}</span>
+                      <button type="button" onClick={(e) => handleAddPhase(e, gIndex)} className={`p-1.5 rounded-[6px] ${tomGrupo.mais}`} title="Nova etapa" aria-label="Nova etapa"><Plus className="w-4 h-4" /></button>
+                      <InlineDisclosureMenu
+                        menuItems={[
+                          { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMoveGroup(SEM_EVENTO, gIndex, 'UP'), disabled: !canReorderGroups || gIndex === 0, title: !canReorderGroups ? MOTIVO_SEM_MOVER_GRUPO : undefined },
+                          { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => handleMoveGroup(SEM_EVENTO, gIndex, 'DOWN'), disabled: !canReorderGroups || gIndex === settings.wbs.length - 1, title: !canReorderGroups ? MOTIVO_SEM_MOVER_GRUPO : undefined },
+                          { icon: <Pencil className="w-[18px] h-[18px]" />, label: 'Editar grupo', onClick: () => handleEditGroup(SEM_EVENTO, gIndex) },
+                          { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar grupo', onClick: () => handleDuplicateGroup(SEM_EVENTO, gIndex) },
+                          { icon: <Trash2 className="w-[18px] h-[18px] text-red-600" />, label: 'Excluir grupo', className: 'text-red-600', onClick: () => { void handleDeleteGroup(SEM_EVENTO, gIndex); } },
+                        ]}
+                      />
                     </div>
                   </td>
                   {showNatureBreakdown && (() => {
                     const nat = calculateGroupNatureTotal(group.name);
                     return (
                       <>
-                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                        <td className="px-3 py-2.5 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 border-r border-gray-700 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                        <td className="px-3 py-2.5 text-right text-sm font-medium text-blue-200 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                       </>
                     );
                   })()}
@@ -2910,55 +3236,53 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   if (isSearching_wbs && !budget.some(b => b.group === group.name && b.phase === phase.name && matchesWbsSearch(b))) return null;
                   const isPhaseExpanded = isSearching_wbs || expandedPhases.includes(phase.id);
                   const phaseTotal = calculatePhaseTotal(group.name, phase.name);
+                  const itensDaEtapa = contagemDeItens.etapa(group.name, phase.name);
                   const { id: phaseIdDisplay, name: phaseNameDisplay } = splitName(phase.name);
+                  // Subetapas sem itens viram UMA linha "N subetapas sem itens · Mostrar" (salvo
+                  // com busca, ou se o usuário pediu para ver).
+                  const subetapasVazias = (phase.subPhases || []).filter(sp => sp && contagemDeItens.subetapa(group.name, phase.name, sp) === 0);
+                  const vaziasVisiveis = isSearching_wbs || etapasComVaziasVisiveis.includes(phase.id);
 
                   return (
                     <React.Fragment key={phase.id}>
                       {/* PHASE HEADER */}
                       <tr className="bg-gray-100 hover:bg-gray-200 border-b border-gray-200 group">
-                        <td className="px-3 py-2.5 border-r border-gray-200"></td>
-                        <td className="px-3 py-2.5 border-r border-gray-200">
-                          <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-800 text-sm" onClick={() => togglePhase(phase.id)}>
+                        <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200"></td>
+                        <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200">
+                          <button type="button" aria-expanded={isPhaseExpanded} aria-label={`${isPhaseExpanded ? 'Recolher' : 'Abrir'} etapa ${phaseIdDisplay} ${phaseNameDisplay}`} onClick={() => togglePhase(phase.id)} className="flex items-center gap-1 cursor-pointer font-semibold text-gray-800 text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                             {isPhaseExpanded ? <ChevronDown className="w-4 h-4 text-gray-600 shrink-0" /> : <ChevronRight className="w-4 h-4 text-gray-600 shrink-0" />}
                             {phaseIdDisplay}
-                          </div>
+                          </button>
                         </td>
-                        <td colSpan={3} className="px-3 py-2.5 border-r border-gray-200">
-                          <div className="font-semibold text-gray-800 text-sm leading-tight truncate" title={phaseNameDisplay}>
-                            {phaseNameDisplay}
+                        <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-200 bg-gray-100 group-hover:bg-gray-200">
+                          <div className="flex items-baseline gap-2 min-w-0">
+                            <span className="font-semibold text-gray-800 text-sm leading-tight truncate" title={phaseNameDisplay}>{phaseNameDisplay}</span>
+                            <span className="shrink-0 text-sm font-normal text-gray-600 whitespace-nowrap">· {rotuloItens(itensDaEtapa)}</span>
                           </div>
                         </td>
                         <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
                         <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
-                          <div className="flex flex-col items-end gap-1">
-                            <span className="font-medium text-gray-800 text-sm whitespace-nowrap">R$ {phaseTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                            <div className="flex gap-1 items-center">
-                              <div className="flex items-center">
-                                {pIndex > 0 && (
-                                  <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'UP')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Cima">
-                                    <ArrowUp className="w-3 h-3" />
-                                  </button>
-                                )}
-                                {pIndex < group.phases.length - 1 && (
-                                  <button type="button" onClick={(e) => handleMovePhase(e, gIndex, pIndex, 'DOWN')} className="text-gray-500 hover:text-blue-600 p-1" title="Mover para Baixo">
-                                    <ArrowDown className="w-3 h-3" />
-                                  </button>
-                                )}
-                              </div>
-                              <button type="button" onClick={(e) => handleDuplicatePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-gray-200 rounded-[6px] text-gray-600" title="Duplicar Etapa"><Copy className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={(e) => handleEditPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-amber-100 rounded-[6px] text-amber-600" title="Editar Etapa"><Pencil className="w-3.5 h-3.5" /></button>
-                              <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Nova Subetapa"><Plus className="w-4 h-4" /></button>
-                              <button type="button" onClick={(e) => handleDeletePhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-red-200 rounded-[6px] text-red-600" title="Excluir Etapa"><Trash2 className="w-4 h-4" /></button>
-                            </div>
+                          <div className="flex items-center justify-end gap-1.5">
+                            <span className="font-medium text-gray-800 text-sm whitespace-nowrap">{valorOuTraco(itensDaEtapa, phaseTotal)}</span>
+                            <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Nova subetapa" aria-label="Nova subetapa"><Plus className="w-4 h-4" /></button>
+                            <InlineDisclosureMenu
+                              menuItems={[
+                                { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMovePhase(SEM_EVENTO, gIndex, pIndex, 'UP'), disabled: pIndex === 0 },
+                                { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => handleMovePhase(SEM_EVENTO, gIndex, pIndex, 'DOWN'), disabled: pIndex === group.phases.length - 1 },
+                                { icon: <Pencil className="w-[18px] h-[18px]" />, label: 'Editar etapa', onClick: () => handleEditPhase(SEM_EVENTO, gIndex, pIndex) },
+                                { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar etapa', onClick: () => handleDuplicatePhase(SEM_EVENTO, gIndex, pIndex) },
+                                { icon: <Trash2 className="w-[18px] h-[18px] text-red-600" />, label: 'Excluir etapa', className: 'text-red-600', onClick: () => { void handleDeletePhase(SEM_EVENTO, gIndex, pIndex); } },
+                              ]}
+                            />
                           </div>
                         </td>
                         {showNatureBreakdown && (() => {
                           const nat = calculatePhaseNatureTotal(group.name, phase.name);
                           return (
                             <>
-                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                              <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 border-r border-gray-200 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                              <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-500 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                             </>
                           );
                         })()}
@@ -2967,6 +3291,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                       {/* SUBPHASES LOOP */}
                       {isPhaseExpanded && (phase.subPhases || []).map((subPhaseName, spIndex) => {
                         if (!subPhaseName) return null;
+                        const itensDaSubetapa = contagemDeItens.subetapa(group.name, phase.name, subPhaseName);
+                        if (itensDaSubetapa === 0 && !vaziasVisiveis) return null;
                         const isSubExpanded = isSearching_wbs || expandedSubPhases.includes(subPhaseName);
                         const subTotal = calculateSubPhaseTotal(group.name, phase.name, subPhaseName);
                         const allItems = budget.filter(b => b.group === group.name && b.phase === phase.name && b.subPhase === subPhaseName);
@@ -2979,49 +3305,41 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                         return (
                           <React.Fragment key={subPhaseName}>
                             <tr className="bg-gray-50 hover:bg-gray-100 border-b border-gray-100 group">
-                              <td className="px-3 py-2.5 border-r border-gray-100"></td>
-                              <td className="px-3 py-2.5 border-r border-gray-100">
-                                <div className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm" onClick={() => toggleSubPhase(subPhaseName)}>
+                              <td style={fixaEap(esquerdaFixa.drag)} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100"></td>
+                              <td style={fixaEap(esquerdaFixa.item)} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100">
+                                <button type="button" aria-expanded={isSubExpanded} aria-label={`${isSubExpanded ? 'Recolher' : 'Abrir'} subetapa ${subIdDisplay} ${subNameDisplay}`} onClick={() => toggleSubPhase(subPhaseName)} className="flex items-center gap-1 cursor-pointer font-semibold text-gray-700 text-sm rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500">
                                   {isSubExpanded ? <FolderOpen className="w-3 h-3 text-blue-500 shrink-0" /> : <Folder className="w-3 h-3 text-blue-500 shrink-0" />}
                                   {subIdDisplay}
-                                </div>
+                                </button>
                               </td>
-                              <td colSpan={3} className="px-3 py-2.5 border-r border-gray-100">
+                              <td colSpan={3} style={fixaEap(esquerdaFixa.base, { ultima: true })} className="px-3 py-2.5 border-r border-gray-100 bg-gray-50 group-hover:bg-gray-100">
                                 <div className="font-semibold text-gray-700 text-sm leading-tight truncate" title={subNameDisplay}>
                                   {subNameDisplay}
                                 </div>
                               </td>
                               <td colSpan={7} className="px-3 py-2.5 border-r border-gray-100"></td>
                               <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
-                                <div className="flex flex-col items-end gap-1">
-                                  <span className="font-medium text-gray-700 text-sm whitespace-nowrap">R$ {subTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                                  <div className="flex gap-1 items-center">
-                                    <div className="flex items-center">
-                                      {spIndex > 0 && (
-                                        <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'UP')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Cima">
-                                          <ArrowUp className="w-3 h-3" />
-                                        </button>
-                                      )}
-                                      {spIndex < phase.subPhases.length - 1 && (
-                                        <button type="button" onClick={(e) => handleMoveSubPhase(e, gIndex, pIndex, spIndex, 'DOWN')} className="text-gray-400 hover:text-blue-600 p-1" title="Mover para Baixo">
-                                          <ArrowDown className="w-3 h-3" />
-                                        </button>
-                                      )}
-                                    </div>
-                                    <button type="button" onClick={(e) => handleDuplicateSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-gray-200 rounded-[6px] text-gray-600" title="Duplicar Subetapa"><Copy className="w-3 h-3" /></button>
-                                    <button type="button" onClick={(e) => handleEditSubPhase(e, gIndex, pIndex, spIndex)} className="p-1.5 hover:bg-amber-100 rounded-[6px] text-amber-600" title="Editar Subetapa"><Pencil className="w-3 h-3" /></button>
-                                    <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-emerald-200 rounded-[6px] text-emerald-700 flex items-center gap-1 text-button px-2" title="Adicionar Item"><Plus className="w-3 h-3" /></button>
-                                    <button type="button" onClick={(e) => handleDeleteSubPhase(e, gIndex, pIndex, subPhaseName)} className="p-1.5 hover:bg-red-200 rounded-[6px] text-red-600" title="Excluir Subetapa"><Trash2 className="w-3 h-3" /></button>
-                                  </div>
+                                <div className="flex items-center justify-end gap-1.5">
+                                  <span className="font-medium text-gray-700 text-sm whitespace-nowrap">{valorOuTraco(itensDaSubetapa, subTotal)}</span>
+                                  <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Adicionar item" aria-label="Adicionar item"><Plus className="w-4 h-4" /></button>
+                                  <InlineDisclosureMenu
+                                    menuItems={[
+                                      { icon: <ArrowUp className="w-[18px] h-[18px]" />, label: 'Mover para cima', onClick: () => handleMoveSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex, 'UP'), disabled: spIndex === 0 },
+                                      { icon: <ArrowDown className="w-[18px] h-[18px]" />, label: 'Mover para baixo', onClick: () => handleMoveSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex, 'DOWN'), disabled: spIndex === phase.subPhases.length - 1 },
+                                      { icon: <Pencil className="w-[18px] h-[18px]" />, label: 'Editar subetapa', onClick: () => handleEditSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex) },
+                                      { icon: <Copy className="w-[18px] h-[18px]" />, label: 'Duplicar subetapa', onClick: () => handleDuplicateSubPhase(SEM_EVENTO, gIndex, pIndex, spIndex) },
+                                      { icon: <Trash2 className="w-[18px] h-[18px] text-red-600" />, label: 'Excluir subetapa', className: 'text-red-600', onClick: () => { void handleDeleteSubPhase(SEM_EVENTO, gIndex, pIndex, subPhaseName); } },
+                                    ]}
+                                  />
                                 </div>
                               </td>
                               {showNatureBreakdown && (() => {
                                 const nat = calculateSubPhaseNatureTotal(group.name, phase.name, subPhaseName);
                                 return (
                                   <>
-                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
-                                    <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.labor.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 border-r border-gray-100 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.material.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                                    <td className="px-3 py-2.5 text-right text-sm font-medium text-gray-600 whitespace-nowrap">{nat.equipment.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                                   </>
                                 );
                               })()}
@@ -3030,8 +3348,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             {isSubExpanded && (
                               items.length === 0 ? (
                                 <tr className="border-b border-gray-100">
-                                  <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-400 italic">
-                                    Nenhum item nesta subetapa. Clique em "+ Item" para adicionar.
+                                  <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-2.5 pl-16 text-sm text-gray-500 italic">
+                                    <span className="sticky left-16">Nenhum item nesta subetapa. Use o botão + (Adicionar item) à direita.</span>
                                   </td>
                                 </tr>
                               ) : (
@@ -3045,14 +3363,14 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       onUpdateQuantity={handleUpdateQuantity}
                                       onUpdatePrice={handleUpdateItemPrice}
                                       onUpdateBDI={handleUpdateBDI}
-                                      onUpdateComposition={handleUpdateComposition}
+                                      onSaveComposition={handleSalvarComposicao}
                                       onSaveToCustomDB={handleSaveToCustomDB}
                                       onDeleteItem={handleDeleteItem}
                                       onMoveItem={!isLocked ? handleMoveItem : undefined}
                                       isFirst={itemIndex === 0}
                                       isLast={itemIndex === items.length - 1}
                                       globalBDI={settings.bdi}
-                                      viewMode={settings.cpuViewMode}
+                                      viewMode={cpuViewMode}
                                       onOpenModal={handleOpenCPU}
                                       onDuplicateItem={handleDuplicateItem}
                                       onOpenDetails={handleOpenDetails}
@@ -3062,6 +3380,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
                                       auxiliaryItems={auxiliaryItems}
                                       isLocked={isLocked}
+                                      esquerdaFixa={esquerdaFixa}
                                     />
                                   ))}
                                 </SortableContext>
@@ -3070,6 +3389,22 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </React.Fragment>
                         );
                       })}
+                      {isPhaseExpanded && !isSearching_wbs && subetapasVazias.length > 0 && (
+                        <tr className="border-b border-gray-100">
+                          <td colSpan={showNatureBreakdown ? 16 : 13} className="px-3 py-1.5 pl-10">
+                            <button
+                              type="button"
+                              onClick={() => setEtapasComVaziasVisiveis(prev => (prev.includes(phase.id) ? prev.filter(id => id !== phase.id) : [...prev, phase.id]))}
+                              aria-expanded={vaziasVisiveis}
+                              className="sticky left-10 text-sm text-gray-600 hover:text-blue-700 hover:underline rounded-[4px] focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
+                            >
+                              {vaziasVisiveis
+                                ? `Ocultar ${subetapasVazias.length === 1 ? 'a subetapa sem itens' : `as ${subetapasVazias.length} subetapas sem itens`}`
+                                : `${subetapasVazias.length === 1 ? '1 subetapa sem itens' : `${subetapasVazias.length} subetapas sem itens`} · Mostrar`}
+                            </button>
+                          </td>
+                        </tr>
+                      )}
                     </React.Fragment>
                   );
                 })}
@@ -3081,7 +3416,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
             <tbody>
               <tr>
                 <td colSpan={showNatureBreakdown ? 16 : 13} className="p-8 text-center text-gray-400">
-                  Nenhum grupo definido. Clique em "Nova Etapa" para começar.
+                  Nenhum grupo definido. Clique em "Novo Grupo" para começar.
                 </td>
               </tr>
             </tbody>
@@ -3769,18 +4104,25 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         selectedCPUItem && (
           <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm animate-in fade-in duration-200">
-            <div className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200">
+            <div
+              ref={janelaCpuRef}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="cpu-janela-titulo"
+              onKeyDown={prenderTabNaJanela}
+              className="bg-white rounded-[10px] shadow-2xl w-full max-w-7xl h-full max-h-[90vh] flex flex-col animate-in zoom-in-95 duration-200 overflow-hidden border border-gray-200"
+            >
               <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                 <div className="grid grid-cols-[auto_1fr] gap-x-4 gap-y-1.5 items-center">
                   <div className="bg-blue-600 p-2.5 rounded-[6px] text-white shadow-lg shadow-blue-100 flex items-center justify-center w-12 h-12">
                     <Layers className="w-6 h-6" />
                   </div>
-                  <h3 className="text-xl font-extrabold text-gray-900 tracking-tight">Composição de Preço Unitário (CPU)</h3>
+                  <h3 id="cpu-janela-titulo" className="text-xl font-extrabold text-gray-900 tracking-tight">Composição de Preço Unitário (CPU)</h3>
 
                   <div className="flex items-center gap-2">
                     <button
                       onClick={(e) => onToggleFavorite(e, selectedCPUItem.sinapiItem?.code || '')}
-                      className={`p-1.5 px-2 rounded-[6px] shadow-sm transition-all z-10 border flex items-center gap-1.5 font-bold text-xs uppercase ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
+                      className={`p-1.5 px-2 rounded-[6px] shadow-sm transition-all z-10 border flex items-center gap-1.5 font-medium text-sm ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'bg-amber-50 text-amber-600 border-amber-200' : 'bg-white text-gray-400 border-gray-100 hover:border-amber-200'}`}
                       title={favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? "Remover dos favoritos" : "Adicionar aos favoritos"}
                     >
                       <Star className={`w-3.5 h-3.5 ${favorites.includes(selectedCPUItem.sinapiItem?.code || '') ? 'fill-amber-500 text-amber-500' : ''}`} />
@@ -3788,20 +4130,20 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </button>
                     <span className="text-xs font-mono font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 shadow-sm">{selectedCPUItem.sinapiItem?.code || '---'}</span>
                   </div>
-                  <p className="text-form-label text-gray-500 font-medium leading-tight max-w-2xl uppercase">
+                  <p className="text-form-label text-gray-600 font-medium leading-snug max-w-2xl">
                     {selectedCPUItem.sinapiItem?.description || 'Sem descrição'}
                   </p>
                 </div>
 
                 <div className="flex items-center gap-4">
                   <div className="text-right whitespace-nowrap">
-                    <p className="text-xs text-gray-400 font-bold uppercase tracking-wider">Preço Unitário</p>
+                    <p className="text-sm text-gray-600 font-medium">Preço unitário</p>
                     <p className="text-2xl font-black text-emerald-600">
                       R$ {(selectedCPUItem.sinapiItem?.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </p>
                   </div>
                   <button
-                    onClick={handleCloseCPU}
+                    onClick={fecharCPU}
                     className="text-gray-400 hover:text-gray-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
                     title="Fechar (Esc)"
                   >
@@ -3816,9 +4158,9 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                   <div className="col-span-1 text-center">Tipo</div>
                   <div className="col-span-3">Insumo/Composição</div>
                   <div className="col-span-1 text-center">Unid.</div>
-                  <div className="col-span-2 text-center">Qtd</div>
-                  <div className="col-span-2 text-center">R$ Unitário</div>
-                  <div className="col-span-2 text-right">Subtotal</div>
+                  <div className="col-span-2 text-center" title="Coeficiente: quanto do insumo entra em 1 unidade do serviço">Coef.</div>
+                  <div className="col-span-2 text-center">Preço (R$)</div>
+                  <div className="col-span-2 text-right">Parcial por {selectedCPUItem.sinapiItem?.unit || 'un'}</div>
                 </div>
 
                 <div className="space-y-1">
@@ -3826,14 +4168,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     // Fallback to auxiliary items if price is 0
                     const auxItem = auxiliaryItems.get(comp.code);
                     const displayPrice = comp.price || auxItem?.price || 0;
-                    const displaySubtotal = selectedCPUItem.quantity * (comp.quantity || 0) * displayPrice;
+                    // Por UNIDADE do serviço (2ª crítica): antes cada linha vinha multiplicada pela
+                    // quantidade do item, ao lado de um cabeçalho "Preço unitário".
+                    const parcialPorUnidade = (comp.quantity || 0) * displayPrice;
 
                     return (
                       <div key={`${selectedCPUItem.id}-modal-comp-${idx}`} className="grid grid-cols-12 gap-2 items-center text-sm text-gray-600 hover:bg-blue-50/50 py-2.5 px-4 rounded-[6px] border border-transparent hover:border-blue-100 transition-all">
                         <div className="col-span-1 font-mono text-xs text-center text-gray-500">{comp.code}</div>
                         <div className="col-span-1 flex justify-center">
-                          <span className={`px-2 py-0.5 rounded text-[9px] font-bold border ${comp.type === SinapiType.COMPOSITION ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-amber-50 text-amber-600 border-amber-100'}`}>
-                            {comp.type === SinapiType.COMPOSITION ? 'COMP' : 'INS'}
+                          <span className={`text-sm font-normal ${comp.type === SinapiType.COMPOSITION ? 'text-blue-700' : 'text-amber-700'}`}>
+                            {comp.type === SinapiType.COMPOSITION ? 'Composição' : 'Insumo'}
                           </span>
                         </div>
                         <div className="col-span-3 flex flex-col">
@@ -3845,22 +4189,24 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                             type="number"
                             step="0.0001"
                             value={comp.quantity || 0}
-                            onChange={(e) => handleUpdateComposition(selectedCPUItem.id, idx, { quantity: Number(e.target.value) })}
+                            onChange={(e) => handleUpdateCompositionRascunho(idx, { quantity: Number(e.target.value) })}
+                            disabled={isLocked}
                             className="w-full text-center outline-none bg-white border border-gray-200 rounded-[6px] py-1 text-sm focus:ring-2 focus:ring-blue-500 font-medium"
                           />
                         </div>
                         <div className="col-span-2">
                           <div className="flex items-center justify-center gap-1 bg-white border border-gray-200 rounded-[6px] px-1 focus-within:ring-2 focus-within:ring-blue-500 transition-all">
-                            <span className="text-xs text-gray-400">R$</span>
+                            <span className="text-xs text-gray-500">R$</span>
                             <MoneyCentsInput
                               value={displayPrice.toFixed(2)}
-                              onChange={(v) => handleUpdateComposition(selectedCPUItem.id, idx, { price: v === '' ? 0 : Number(v) })}
+                              onChange={(v) => handleUpdateCompositionRascunho(idx, { price: v === '' ? 0 : Number(v) })}
+                                disabled={isLocked}
                               className="w-full text-center outline-none bg-transparent py-1 text-sm font-medium"
                             />
                           </div>
                         </div>
                         <div className="col-span-2 text-right font-bold text-blue-600">
-                          R$ {((selectedCPUItem.quantity * (comp.quantity || 0)) * displayPrice).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                          R$ {parcialPorUnidade.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                         </div>
                       </div>
                     );
@@ -3870,29 +4216,40 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
 
               <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex justify-between items-center text-xs font-medium text-gray-500 italic">
                 <div className="flex flex-col gap-1">
-                  <div>* Os valores mostrados referem-se à quantidade total de {selectedCPUItem.quantity} {selectedCPUItem.sinapiItem?.unit || 'un'} no projeto.</div>
-                  {hasCPUChanges && <div className="text-amber-600 font-bold not-italic flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Alterações pendentes</div>}
+                  <div>* Valores por {selectedCPUItem.sinapiItem?.unit || 'un'} do serviço; o total do item multiplica pela quantidade ({selectedCPUItem.quantity.toLocaleString('pt-BR')} {selectedCPUItem.sinapiItem?.unit || 'un'}).</div>
+                  {hasCPUChanges && <div className="text-amber-700 font-bold not-italic flex items-center gap-1"><AlertTriangle className="w-3 h-3" /> Alterações ainda não salvas no orçamento</div>}
+                  {isLocked && <div className="text-gray-600 not-italic">Orçamento fechado: a composição só pode ser consultada.</div>}
                 </div>
                 <div className="flex items-center gap-6">
                   <div className="text-gray-900 not-italic font-bold text-base flex items-center gap-4">
-                    <span className="text-gray-500 font-medium text-xs uppercase tracking-wider">Custo Total do Item:</span>
+                    <span className="text-gray-600 font-medium text-sm">
+                      R$ {(selectedCPUItem.sinapiItem?.price || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}/{selectedCPUItem.sinapiItem?.unit || 'un'} × {selectedCPUItem.quantity.toLocaleString('pt-BR')} {selectedCPUItem.sinapiItem?.unit || 'un'} =
+                    </span>
                     <span className="bg-white px-4 py-2 rounded-[6px] border border-gray-200 shadow-sm text-blue-600">
-                      R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      R$ {(selectedCPUItem.quantity * (selectedCPUItem.sinapiItem?.price || 0)).toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                     </span>
                   </div>
-                  <button
-                    onClick={() => {
-                      if (hasCPUChanges) {
-                        setNotification({ message: 'Alterações na composição salvas com sucesso!', type: 'success' });
-                        setTimeout(() => setNotification(null), 3000);
-                      }
-                      handleCloseCPU();
-                    }}
-                    className={`px-6 py-2.5 rounded-[6px] font-bold text-sm transition-all shadow-sm flex items-center gap-2 ${hasCPUChanges ? 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-100' : 'bg-gray-200 text-gray-500 cursor-default'}`}
-                  >
-                    <Save className="w-4 h-4" />
-                    Salvar Alterações
-                  </button>
+                  <div className="flex items-center gap-2 not-italic">
+                    <button
+                      type="button"
+                      onClick={fecharCPU}
+                      className="px-4 py-2.5 rounded-[6px] font-bold text-sm text-gray-600 hover:bg-gray-100 transition-all"
+                    >
+                      {hasCPUChanges ? 'Cancelar' : 'Fechar'}
+                    </button>
+                    {/* Botão desligado diz o porquê (title no invólucro: nem todo navegador mostra em disabled). */}
+                    <span title={hasCPUChanges ? undefined : (isLocked ? 'Orçamento fechado: não pode ser alterado' : 'Altere uma quantidade ou um preço para salvar')}>
+                      <button
+                        type="button"
+                        onClick={salvarCPU}
+                        disabled={!hasCPUChanges}
+                        className="px-6 py-2.5 rounded-[6px] font-bold text-sm transition-all shadow-sm flex items-center gap-2 bg-blue-600 text-white hover:bg-blue-700 disabled:bg-gray-200 disabled:text-gray-600 disabled:cursor-not-allowed disabled:shadow-none"
+                      >
+                        <Save className="w-4 h-4" />
+                        Salvar no orçamento
+                      </button>
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -3904,7 +4261,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
       {
         notification && (
           <div className="fixed bottom-6 right-6 z-[100] animate-in fade-in slide-in-from-bottom-4 duration-300">
-            <div className={`px-4 py-3 rounded-[10px] shadow-2xl flex items-center gap-3 min-w-[300px] text-white ${notification.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
+            <div role={notification.type === 'error' ? 'alert' : 'status'} className={`px-4 py-3 rounded-[10px] shadow-2xl flex items-center gap-3 min-w-[300px] text-white ${notification.type === 'error' ? 'bg-red-600' : 'bg-emerald-600'}`}>
               {notification.type === 'error' ? (
                 <AlertCircle className="w-4 h-4 shrink-0" />
               ) : (
@@ -3913,7 +4270,16 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
               <div>
                 <p className="text-sm font-medium">{notification.message}</p>
               </div>
-              <button onClick={() => setNotification(null)} className="ml-auto text-white/70 hover:text-white">
+              {notification.acao && (
+                <button
+                  type="button"
+                  onClick={notification.acao.onClick}
+                  className="ml-2 px-2.5 py-1 rounded-[6px] text-sm font-bold bg-white/15 hover:bg-white/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                >
+                  {notification.acao.label}
+                </button>
+              )}
+              <button onClick={() => setNotification(null)} aria-label="Fechar aviso" className="ml-auto text-white/70 hover:text-white">
                 <X className="w-4 h-4" />
               </button>
             </div>

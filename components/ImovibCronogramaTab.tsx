@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { CalendarClock, AlertTriangle } from 'lucide-react';
+import { CalendarClock, AlertTriangle, HardHat, Flag } from 'lucide-react';
+import { SecaoTitulo } from './ui/SecaoTitulo';
 import { ImovibStudy } from '../types';
 import { useImovibMath } from '../hooks/useImovibMath';
 import { useImovibEdicao } from '../hooks/useImovibEdicao';
@@ -19,8 +20,11 @@ const CAMPO = 'h-9 w-full px-3 bg-white border border-gray-200 rounded-[6px] tex
 /**
  * Sub-aba Cronograma de Premissas (item 5.1 do plano
  * docs/planos/2026-11-11-imovib-viabilidade-de-excelencia.md): linha do tempo dos
- * marcos e os três marcos que só existem aqui (aquisição, aprovação, registro). Os
- * prazos da obra e das vendas continuam na Dinâmica. Sem data-base, "Mês N".
+ * marcos e os três marcos que só existem aqui (aquisição, aprovação, registro). Sem
+ * data-base, "Mês N".
+ * Pedido de 14/11/2026 ("o cronograma não é editável?"): início e prazo da obra e das
+ * vendas também se editam aqui. São as MESMAS colunas da aba Dinâmica — aqui gravam com
+ * "Salvar Premissas", lá ao sair do campo.
  */
 const ImovibCronogramaTab: React.FC<ImovibCronogramaTabProps> = ({ study, formData, setCampo }) => {
     const { pode, motivo } = useImovibEdicao();
@@ -61,14 +65,17 @@ const ImovibCronogramaTab: React.FC<ImovibCronogramaTabProps> = ({ study, formDa
         if (mesEntrega != null) setCampo('construction_duration_months', mesEntrega - inicioObra + 1);
     };
 
-    const campoMes = (rotulo: string, campo: 'acquisition_month' | 'approval_month' | 'incorporation_registry_month', padrao?: number) => (
-        <div>
-            <label htmlFor={`imovib-${campo}`} className="block text-xs font-semibold text-slate-500 mb-1.5">{rotulo}</label>
+    type CampoDeMes = 'acquisition_month' | 'approval_month' | 'incorporation_registry_month'
+        | 'construction_start_month' | 'construction_duration_months' | 'sales_start_month' | 'sales_duration_months';
+    // Vazio grava vazio (null) e o motor usa o padrão, que aparece no placeholder.
+    const campoMes = (rotulo: string, campo: CampoDeMes, vazio: string) => (
+        <div className="space-y-1.5">
+            <label htmlFor={`imovib-${campo}`} className="block text-xs font-semibold text-slate-500">{rotulo}</label>
             <input
                 id={`imovib-${campo}`}
                 type="number" min="1" step="1"
                 value={(formData[campo] as number | null | undefined) ?? ''}
-                placeholder={padrao != null ? `Vazio = mês ${padrao}` : 'Sem marco'}
+                placeholder={vazio}
                 onChange={e => setCampo(campo, e.target.value === '' ? null : Math.max(1, Math.round(Number(e.target.value))))}
                 className={CAMPO}
             />
@@ -76,28 +83,15 @@ const ImovibCronogramaTab: React.FC<ImovibCronogramaTabProps> = ({ study, formDa
     );
 
     return (
-        <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm space-y-6">
-            <div className="flex flex-wrap items-start justify-between gap-3">
-                <div>
-                    <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
-                        <CalendarClock className="w-5 h-5 text-indigo-500" />
-                        Módulo 2 — Cronograma e marcos
-                    </h2>
-                    <p className="text-slate-500 text-sm mt-1">
-                        Início e prazo da obra e das vendas ficam na aba Dinâmica. {estudo.base_date ? 'Cada mês ganha o nome pela data-base.' : 'Sem data-base, os marcos ficam em "Mês N".'}
-                    </p>
-                </div>
-                {empId && (
-                    <button
-                        type="button"
-                        onClick={usarDatas}
-                        disabled={!!motivoDatas}
-                        title={motivoDatas ?? 'Preenche o início das vendas pelo lançamento e o prazo da obra pela entrega. Grava com "Salvar Premissas".'}
-                        className="h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
-                    >
-                        Usar as datas do empreendimento
-                    </button>
-                )}
+        <div className="bg-white rounded-[10px] p-6 border border-slate-100 shadow-sm space-y-8">
+            <div>
+                <h2 className="text-lg font-semibold text-slate-900 flex items-center gap-2">
+                    <CalendarClock className="w-5 h-5 text-indigo-500" />
+                    Módulo 2 — Cronograma e marcos
+                </h2>
+                <p className="text-slate-500 text-sm mt-1">
+                    Os campos de obra e vendas são os mesmos da aba Dinâmica. {estudo.base_date ? 'Cada mês ganha o nome pela data-base.' : 'Sem data-base, os marcos ficam em "Mês N".'}
+                </p>
             </div>
 
             {avisos.map(a => (
@@ -106,11 +100,38 @@ const ImovibCronogramaTab: React.FC<ImovibCronogramaTabProps> = ({ study, formDa
                 </div>
             ))}
 
-            <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-3 gap-6">
-                {campoMes('Aquisição do terreno (mês)', 'acquisition_month', D.acquisition_month)}
-                {campoMes('Aprovação do projeto (mês)', 'approval_month')}
-                {campoMes('Registro da incorporação (mês)', 'incorporation_registry_month')}
-            </fieldset>
+            <div className="space-y-4">
+                <SecaoTitulo
+                    icon={HardHat}
+                    titulo="Obra e vendas"
+                    acoes={empId && (
+                        <button
+                            type="button"
+                            onClick={usarDatas}
+                            disabled={!!motivoDatas}
+                            title={motivoDatas ?? 'Preenche o início das vendas pelo lançamento e o prazo da obra pela entrega. Grava com "Salvar Premissas".'}
+                            className="h-9 px-3.5 text-[13px] font-medium rounded-[6px] border border-gray-200 bg-white text-slate-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            Usar as datas do empreendimento
+                        </button>
+                    )}
+                />
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-2 md:grid-cols-4 gap-x-6 gap-y-4">
+                    {campoMes('Início da obra (mês)', 'construction_start_month', `Vazio = mês ${D.construction_start_month}`)}
+                    {campoMes('Duração da obra (meses)', 'construction_duration_months', `Vazio = ${D.construction_duration_months} meses`)}
+                    {campoMes('Início das vendas (mês)', 'sales_start_month', `Vazio = mês ${D.sales_start_month}`)}
+                    {campoMes('Duração das vendas (meses)', 'sales_duration_months', `Vazio = ${D.sales_duration_months} meses`)}
+                </fieldset>
+            </div>
+
+            <div className="space-y-4">
+                <SecaoTitulo icon={Flag} titulo="Terreno e incorporação" />
+                <fieldset disabled={!pode} title={!pode ? motivo : undefined} className="imovib-ro min-w-0 border-0 p-0 m-0 grid grid-cols-1 md:grid-cols-3 gap-x-6 gap-y-4">
+                    {campoMes('Aquisição do terreno (mês)', 'acquisition_month', `Vazio = mês ${D.acquisition_month}`)}
+                    {campoMes('Aprovação do projeto (mês)', 'approval_month', 'Sem marco')}
+                    {campoMes('Registro da incorporação (mês)', 'incorporation_registry_month', 'Sem marco')}
+                </fieldset>
+            </div>
 
             <ol className="relative border-l border-slate-200 ml-2 space-y-3" aria-label="Linha do tempo dos marcos">
                 {[...marcos].sort((a, b) => (a.mes ?? Infinity) - (b.mes ?? Infinity)).map(m => (

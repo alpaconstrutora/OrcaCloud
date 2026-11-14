@@ -84,14 +84,18 @@ export const ConfirmProvider: React.FC<{ children: React.ReactNode }> = ({ child
           {!state?.hideCancel && (
             <button
               onClick={() => settle(false)}
-              className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg text-sm transition-all"
+              // O foco entra na pergunta (teclado/leitor de tela), no botão SEGURO — Enter não
+              // confirma uma exclusão por engano. Até 14/11/2026 o foco ficava atrás do modal.
+              autoFocus
+              className="px-4 py-2 text-gray-600 font-bold hover:bg-gray-200 rounded-lg text-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-blue-500"
             >
               {state?.cancelLabel ?? 'Cancelar'}
             </button>
           )}
           <button
             onClick={() => settle(true)}
-            className={`px-6 py-2 text-white font-bold rounded-lg text-sm transition-all ${v.button}`}
+            autoFocus={!!state?.hideCancel}
+            className={`px-6 py-2 text-white font-bold rounded-lg text-sm transition-all focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-blue-500 ${v.button}`}
           >
             {state?.confirmLabel ?? 'Confirmar'}
           </button>

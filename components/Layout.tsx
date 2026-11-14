@@ -1,4 +1,5 @@
 import React from 'react';
+import { assinarGravacoes, obterUltimaGravacao } from '../utils/projetoPersistido';
 import { LayoutDashboard, Calculator, PieChart, Settings, FolderOpen, LogOut, Loader2, Cloud, FileText, FileSpreadsheet, Building2, Menu, X, User, Users, Database, BookOpen, Calendar, Sun, ChevronRight, DollarSign, TrendingUp, TrendingDown, Shield, Truck, Package, Bell, Briefcase, Trophy, MessageSquare, BarChart3, Activity, Clock, Target, Percent, Receipt, ClipboardList, ClipboardPen, Search, Moon, MoonStar, SunMoon, Contrast, Layers, CheckSquare, UtensilsCrossed, Gift, Palette, Hammer, Warehouse, Brain, ArrowRightLeft, Banknote, LineChart, Workflow, HelpCircle, Command, Plus, ArrowUpDown, Columns3, Filter, Map, HandCoins, GraduationCap, PencilRuler, Landmark, Home, Boxes, Smartphone, Wallet, ShieldAlert } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useStore } from '../store/useStore';
@@ -536,6 +537,8 @@ const Layout: React.FC<LayoutProps> = ({
     return () => window.removeEventListener('keydown', handler);
   }, [commandItems, openCommandPalette, runCommand]);
   const [unreadCount, setUnreadCount] = React.useState(0);
+  // Hora da última gravação do projeto aberto — "Salvo às HH:MM" ao lado do Salvar (utils/projetoPersistido.ts).
+  const ultimaGravacao = React.useSyncExternalStore(assinarGravacoes, obterUltimaGravacao);
   const [openTaskCount, setOpenTaskCount] = React.useState(0);
   const [pendingTrainingCount, setPendingTrainingCount] = React.useState(0);
   const [toast, setToast] = React.useState<{ title: string; message: string } | null>(null);
@@ -1422,9 +1425,17 @@ const Layout: React.FC<LayoutProps> = ({
               {unreadCount > 0 && <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-red-500 ring-2 ring-white" />}
             </button>
 
+            {activeView === 'analytic' && ultimaGravacao && !isSaving && (
+              // Diz que o salvamento automático já gravou (2ª crítica): sem isso o usuário
+              // clicava "Salvar" por garantia, sem saber se precisava.
+              <span className="hidden md:inline text-sm text-gray-600 whitespace-nowrap" aria-live="polite">
+                Salvo às {ultimaGravacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+              </span>
+            )}
             {activeView === 'analytic' && (
               <button
                 onClick={onSaveProject}
+                title={ultimaGravacao ? `Salvo automaticamente às ${ultimaGravacao.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}. Clique para salvar agora.` : 'Salvar agora (o orçamento também é salvo automaticamente a cada alteração)'}
                 disabled={isSaving}
                 className="flex h-10 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 text-sm font-semibold text-emerald-700 hover:bg-emerald-100 disabled:opacity-50"
               >

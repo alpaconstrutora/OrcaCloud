@@ -11,7 +11,7 @@
  * Todos os serviços externos e sub-componentes pesados são mockados.
  */
 import React from 'react';
-import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act, within } from '@testing-library/react';
 import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SinapiType } from '../../types';
 import type { BudgetEntry, ProjectSettings } from '../../types';
@@ -65,8 +65,14 @@ vi.mock('../../services/parametricService', () => ({
 // o BudgetRow é renderizado dentro de <tbody>. Um <div> aqui geraria warning de
 // validateDOMNesting e mascararia problemas reais de estrutura.
 vi.mock('../../components/BudgetRow', () => ({
-    BudgetRow: ({ item }: { item: BudgetEntry }) => (
-        <tr data-testid={`budget-row-${item.id}`}><td>{item.sinapiItem?.description}</td></tr>
+    // Botões que chamam as funções REAIS do editor (excluir, abrir a CPU) — passo 2 da
+    // crítica de 2026-11-14 testa excluir com "Desfazer" e a janela da CPU com rascunho.
+    BudgetRow: ({ item, onDeleteItem, onOpenModal }: { item: BudgetEntry; onDeleteItem: (e: React.MouseEvent, id: string) => void; onOpenModal?: (i: BudgetEntry) => void }) => (
+        <tr data-testid={`budget-row-${item.id}`}><td>
+            {item.sinapiItem?.description}
+            <button type="button" aria-label={`excluir ${item.id}`} onClick={(e) => onDeleteItem(e, item.id)} />
+            <button type="button" aria-label={`cpu ${item.id}`} onClick={() => onOpenModal?.(item)} />
+        </td></tr>
     ),
 }));
 vi.mock('../../components/WBSImportModal', () => ({
@@ -232,8 +238,9 @@ describe('Correção 3 — loadAuxiliaryItems: notificação de falha visível a
         renderEditor([entryWithComposition]);
 
         // Ativar Nature Breakdown via botão (se existir no render)
-        const breakdownBtn = screen.queryByTitle(/natureza|breakdown|composição/i)
-            ?? screen.queryByRole('button', { name: /natureza/i });
+        // Desde 2026-11-14 o detalhamento mora no menu "Exibir" (toolbar mais calma).
+        fireEvent.click(screen.getByRole('button', { name: /Exibir/ }));
+        const breakdownBtn = screen.queryByRole('menuitemcheckbox', { name: /Mão de obra, material e equipamento/ });
 
         if (breakdownBtn) {
             await act(async () => {
@@ -488,15 +495,271 @@ describe('Filtro de grupo e ordem dos grupos', () => {
         expect(nomesDosGrupos(container)).toEqual(['Zeta', 'Alfa', 'Mike']);
     });
 
-    it('com filtro ou ordem ativos, as setas de mover grupo ficam desligadas e dizem o motivo', async () => {
+    it('com filtro ou ordem ativos, mover grupo (no ⋮) fica desligado e diz o motivo', async () => {
         const { container } = await montar();
-        // EAP + todos: há seta ativa (Zeta desce).
-        expect(screen.getAllByRole('button', { name: /Mover para Baixo/ }).some(b => !(b as HTMLButtonElement).disabled)).toBe(true);
+        // Desde o passo 4 da crítica do Analítico, mover/editar/duplicar/excluir ficam no ⋮
+        // da linha do grupo. EAP + todos: "Mover para baixo" do 1º grupo está ativo.
+        const menuDoPrimeiroGrupo = () => within(container.querySelector('tr.bg-gray-800') as HTMLElement).getByRole('button', { name: 'Mais ações' });
+        fireEvent.click(menuDoPrimeiroGrupo());
+        expect((screen.getByRole('button', { name: 'Mover para baixo' }) as HTMLButtonElement).disabled).toBe(false);
+        fireEvent.click(menuDoPrimeiroGrupo()); // fecha
 
         fireEvent.change(screen.getByLabelText('Ordem dos grupos'), { target: { value: 'name' } });
-        const baixo = screen.getAllByRole('button', { name: 'Mover para Baixo' }) as HTMLButtonElement[];
-        expect(baixo.length).toBe(nomesDosGrupos(container).length);
-        expect(baixo.every(b => b.disabled)).toBe(true);
-        expect(baixo[0].parentElement?.getAttribute('title')).toContain('Ordem da EAP');
+        fireEvent.click(menuDoPrimeiroGrupo());
+        // o menu anterior pode ainda estar saindo (animação): vale o último, o do menu aberto
+        const baixo = within(container.querySelector('tr.bg-gray-800') as HTMLElement).getAllByRole('button', { name: 'Mover para baixo' }).at(-1) as HTMLButtonElement;
+        expect(baixo.disabled).toBe(true);
+        expect(baixo.getAttribute('title')).toContain('Ordem da EAP');
+        expect(nomesDosGrupos(container).length).toBe(3);
+    });
+});
+
+// ─── Excluir e salvar seguros (crítica do Analítico, 2026-11-14, passo 2) ─────
+
+describe('Analítico — excluir e salvar seguros', () => {
+    const comCPU = (id: string): BudgetEntry => ({
+        ...makeEntry(id),
+        sinapiItem: {
+            ...makeEntry(id).sinapiItem,
+            type: SinapiType.COMPOSITION,
+            composition: [{ code: 'INS-1', description: 'Areia', unit: 'm3', quantity: 2, price: 10, type: SinapiType.INPUT }],
+        } as BudgetEntry['sinapiItem'],
+    } as BudgetEntry);
+
+    const montar = (budget: BudgetEntry[], settingsOverride: Partial<ProjectSettings> = {}) => {
+        const onUpdateBudget = vi.fn();
+        const onUpdateSettings = vi.fn();
+        const el = (b: BudgetEntry[]) => (
+            <ConfirmProvider>
+                <BudgetEditor budget={b} settings={makeSettings(settingsOverride)} favorites={[]} onToggleFavorite={vi.fn()}
+                    onUpdateBudget={onUpdateBudget} onUpdateSettings={onUpdateSettings} />
+            </ConfirmProvider>
+        );
+        const utils = render(el(budget));
+        return { ...utils, onUpdateBudget, onUpdateSettings, rerenderCom: (b: BudgetEntry[]) => utils.rerender(el(b)) };
+    };
+    const esperar = () => act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    const janela = () => screen.queryByRole('button', { name: /Salvar no orçamento/ });
+
+    beforeEach(() => { try { window.localStorage.clear(); } catch { /* sem storage */ } });
+
+    it('excluir item tira na hora e o "Desfazer" devolve na MESMA posição', async () => {
+        const [a, b, c] = [makeEntry('a'), makeEntry('b'), makeEntry('c')];
+        const r = montar([a, b, c]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'excluir b' }));
+        expect(r.onUpdateBudget).toHaveBeenLastCalledWith([a, c]);
+        r.rerenderCom([a, c]); // o pai aplicou a exclusão
+        fireEvent.click(screen.getByRole('button', { name: 'Desfazer' }));
+        expect(r.onUpdateBudget).toHaveBeenLastCalledWith([a, b, c]);
+    });
+
+    it('a janela da CPU edita um rascunho: o orçamento só muda no "Salvar no orçamento"', async () => {
+        const item = comCPU('x');
+        const r = montar([item]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        expect((janela() as HTMLButtonElement).disabled).toBe(true); // sem alteração, nada a salvar
+        const qtd = screen.getByDisplayValue('2');
+        fireEvent.change(qtd, { target: { value: '5' } });
+        expect(r.onUpdateBudget).not.toHaveBeenCalled();
+        expect(screen.getByText('Alterações ainda não salvas no orçamento')).toBeTruthy();
+        fireEvent.click(janela()!);
+        const salvo = r.onUpdateBudget.mock.calls.at(-1)![0] as BudgetEntry[];
+        expect(salvo[0].sinapiItem?.composition?.[0].quantity).toBe(5);
+        expect(salvo[0].sinapiItem?.price).toBe(50); // 5 × 10, recalculado
+        expect(janela()).toBeNull();
+    });
+
+    it('"Cancelar" com alteração pergunta; "Descartar" fecha sem tocar no orçamento', async () => {
+        const r = montar([comCPU('x')]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        fireEvent.change(screen.getByDisplayValue('2'), { target: { value: '7' } });
+        fireEvent.click(screen.getByRole('button', { name: 'Cancelar' }));
+        expect(await screen.findByText('Descartar as alterações da composição?')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Descartar' }));
+        await esperar();
+        expect(janela()).toBeNull();
+        expect(r.onUpdateBudget).not.toHaveBeenCalled();
+    });
+
+    it('Esc fecha a janela da CPU (sem alteração, sem pergunta)', async () => {
+        montar([comCPU('x')]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        expect(janela()).toBeTruthy();
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await esperar();
+        expect(janela()).toBeNull();
+    });
+
+    it('orçamento fechado: a composição na janela só pode ser consultada', async () => {
+        montar([comCPU('x')], { budgetStatus: 'Fechado' });
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: 'cpu x' }));
+        expect((screen.getByDisplayValue('2') as HTMLInputElement).disabled).toBe(true);
+        expect(screen.getByText('Orçamento fechado: a composição só pode ser consultada.')).toBeTruthy();
+    });
+
+    it('Inline/Janela é preferência de quem usa: não grava no orçamento', async () => {
+        const r = montar([makeEntry('a')]);
+        await esperar();
+        fireEvent.click(screen.getByRole('button', { name: /Exibir/ }));
+        fireEvent.click(screen.getByRole('menuitemradio', { name: /Abaixo do item/ }));
+        expect(r.onUpdateSettings).not.toHaveBeenCalled();
+        expect(window.localStorage.getItem('budgetEditor:cpuViewMode')).toContain('inline');
+    });
+});
+
+// ─── A EAP mostra o orçamento (crítica do Analítico, 2026-11-14, passo 3) ─────
+
+describe('Analítico — a EAP abre mostrando os itens', () => {
+    const WBS = [
+        { id: '01', name: '01. VAZIO', phases: [{ id: '01.01', name: '01.01. Etapa vazia', subPhases: ['01.01.01. Sub vazia A', '01.01.02. Sub vazia B'] }] },
+        { id: '02', name: '02. COM ITEM', phases: [{ id: '02.01', name: '02.01. Etapa cheia', subPhases: ['02.01.01. Sub cheia', '02.01.02. Sub vazia C'] }] },
+    ];
+    const item = { ...makeEntry('x'), group: '02. COM ITEM', phase: '02.01. Etapa cheia', subPhase: '02.01.01. Sub cheia' } as BudgetEntry;
+
+    const abrir = async () => {
+        const r = renderEditor([item], { wbs: WBS as ProjectSettings['wbs'] });
+        await act(async () => { await new Promise(res => setTimeout(res, 30)); });
+        return r;
+    };
+
+    it('abre direto no item (só grupo/etapa/subetapa com itens ficam abertos)', async () => {
+        await abrir();
+        expect(screen.getByTestId('budget-row-x')).toBeTruthy();
+        // o grupo vazio fica fechado: a etapa dele não aparece
+        expect(screen.queryByText('Etapa vazia')).toBeNull();
+    });
+
+    it('grupo com itens diz quantos e quanto junto do nome; grupo vazio diz "sem itens" e "—", nunca R$ 0,00', async () => {
+        const { container } = await abrir();
+        expect(container.textContent).toContain('· 1 item · R$ 125,00');
+        expect(container.textContent).toContain('· sem itens');
+        expect(container.textContent).not.toContain('R$ 0,00');
+        expect(screen.getAllByText('—').length).toBeGreaterThan(0);
+    });
+
+    it('grupo sem itens não usa a faixa escura (2ª crítica)', async () => {
+        await abrir();
+        const vazio = screen.getByRole('button', { name: /grupo 01 VAZIO/ }).closest('tr') as HTMLElement;
+        const cheio = screen.getByRole('button', { name: /grupo 02 COM ITEM/ }).closest('tr') as HTMLElement;
+        expect(vazio.className).not.toContain('bg-gray-800');
+        expect(cheio.className).toContain('bg-gray-800');
+    });
+
+    it('"Expandir tudo" abre só o que tem itens', async () => {
+        await abrir();
+        fireEvent.click(screen.getByTitle('Recolher tudo'));
+        fireEvent.click(screen.getByTitle('Expandir tudo'));
+        expect(screen.getByTestId('budget-row-x')).toBeTruthy();
+        expect(screen.queryByText('Etapa vazia')).toBeNull();
+    });
+
+    it('subetapas vazias ficam numa linha "Mostrar"; mostrar e ocultar', async () => {
+        await abrir();
+        expect(screen.queryByText('Sub vazia C')).toBeNull();
+        fireEvent.click(screen.getByRole('button', { name: '1 subetapa sem itens · Mostrar' }));
+        expect(screen.getByText('Sub vazia C')).toBeTruthy();
+        fireEvent.click(screen.getByRole('button', { name: 'Ocultar a subetapa sem itens' }));
+        expect(screen.queryByText('Sub vazia C')).toBeNull();
+    });
+});
+
+// ─── Teclado na EAP (crítica do Analítico, 2026-11-14, passo 5) ───────────────
+
+describe('Analítico — teclado', () => {
+    it('grupo e etapa abrem/recolhem por botão com aria-expanded', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        const grupo = screen.getByRole('button', { name: /grupo 01 Grupo Geral/ });
+        expect(grupo.getAttribute('aria-expanded')).toBe('true'); // tem item: abre sozinho
+        fireEvent.click(grupo);
+        expect(grupo.getAttribute('aria-expanded')).toBe('false');
+        expect(screen.queryByTestId('budget-row-e1')).toBeNull();
+    });
+
+    it('a janela da CPU é um diálogo: o foco entra ao abrir e volta a quem abriu ao fechar', async () => {
+        const item = {
+            ...makeEntry('x'),
+            sinapiItem: { ...makeEntry('x').sinapiItem, type: SinapiType.COMPOSITION,
+                composition: [{ code: 'INS-1', description: 'Areia', unit: 'm3', quantity: 2, price: 10, type: SinapiType.INPUT }] },
+        } as BudgetEntry;
+        renderEditor([item]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        const abrir = screen.getByRole('button', { name: 'cpu x' });
+        abrir.focus();
+        fireEvent.click(abrir);
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        const dialogo = screen.getByRole('dialog', { name: 'Composição de Preço Unitário (CPU)' });
+        expect(dialogo.contains(document.activeElement)).toBe(true);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        expect(screen.queryByRole('dialog')).toBeNull();
+        expect(document.activeElement).toBe(abrir);
+    });
+});
+
+// ─── Base de preço e BDI zerado (2ª crítica do Analítico, 2026-11-14, passo 1) ─
+
+describe('Analítico — base de preço à vista e BDI zerado', () => {
+    const abrir = async (over: Partial<ProjectSettings> = {}) => {
+        renderEditor([makeEntry('e1')], over);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+    };
+
+    it('o subtítulo diz qual orçamento e com que base (competência, UF, encargos)', async () => {
+        await abrir({ name: 'Garden', referenceMonth: '12/2025', location: 'SP', socialChargesMode: 'COM_DESONERACAO' });
+        expect(screen.getByText('Garden')).toBeTruthy();
+        expect(screen.getByText('SINAPI 12/2025 · SP · com desoneração')).toBeTruthy();
+    });
+
+    it('base própria aparece pelo tipo, sem competência SINAPI', async () => {
+        await abrir({ database: 'GENERAL' });
+        expect(screen.getByText('Base geral (itens avulsos)')).toBeTruthy();
+    });
+
+    it('BDI global 0% avisa no card; com BDI o aviso some', async () => {
+        await abrir({ bdi: 0 });
+        expect(screen.getByText('BDI zerado: Preço Final = Custo Direto')).toBeTruthy();
+    });
+
+    it('com BDI 25% não há aviso', async () => {
+        await abrir({ bdi: 25 });
+        expect(screen.queryByText('BDI zerado: Preço Final = Custo Direto')).toBeNull();
+    });
+});
+
+// ─── Teclado nos menus e na confirmação (2ª crítica, passo 4) ─────────────────
+
+describe('Analítico — menus e confirmação pelo teclado', () => {
+    it('Ferramentas: foco no 1º item ao abrir, ↓ avança, Esc fecha e devolve o foco ao botão', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        const gatilho = screen.getByRole('button', { name: /Ferramentas/ });
+        expect(gatilho.getAttribute('aria-haspopup')).toBe('menu');
+        fireEvent.click(gatilho);
+        expect(gatilho.getAttribute('aria-expanded')).toBe('true');
+        const menu = screen.getByRole('menu', { name: 'Ferramentas' });
+        const itens = within(menu).getAllByRole('menuitem');
+        expect(document.activeElement).toBe(itens[0]);
+        fireEvent.keyDown(menu, { key: 'ArrowDown' });
+        expect(document.activeElement).toBe(itens[1]);
+        fireEvent.keyDown(document, { key: 'Escape' });
+        await act(async () => { await new Promise(r => setTimeout(r, 0)); });
+        expect(screen.queryByRole('menu', { name: 'Ferramentas' })).toBeNull();
+        expect(document.activeElement).toBe(gatilho);
+    });
+
+    it('a pergunta de confirmação recebe o foco no botão seguro', async () => {
+        renderEditor([makeEntry('e1')]);
+        await act(async () => { await new Promise(r => setTimeout(r, 30)); });
+        fireEvent.click(screen.getByRole('button', { name: /Gerenciar EAP/ }));
+        fireEvent.click(screen.getByRole('menuitem', { name: /Limpar Toda EAP/ }));
+        const cancelar = await screen.findByRole('button', { name: 'Cancelar' });
+        expect(document.activeElement).toBe(cancelar);
+        fireEvent.click(cancelar);
     });
 });

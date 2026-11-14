@@ -1,5 +1,6 @@
 import { supabase } from '../lib/supabase';
 import {
+    mandariaParaAlcada,
     patchDaLinha,
     type CamposPropagaveis,
     type DestinoPropagacao,
@@ -19,7 +20,7 @@ import {
  * recusa volta contada, com a mensagem do banco, para a tela dizer.
  */
 
-interface Alteracao {
+export interface Alteracao {
     tabela: 'internal_transactions' | 'client_charges' | 'warranty_claims' | 'projects';
     id: string;
     patch: Record<string, unknown>;
@@ -28,6 +29,8 @@ interface Alteracao {
 export interface PlanoDePropagacao {
     campos: CamposPropagaveis;
     porDestino: Partial<Record<DestinoPropagacao, Alteracao[]>>;
+    /** Contas a pagar em rascunho com cópia antiga que ficam como estão (ver `mandariaParaAlcada`). */
+    rascunhosMantidos?: number;
 }
 
 export interface ResultadoDaPropagacao {
@@ -40,16 +43,33 @@ export interface ResultadoDaPropagacao {
 
 const LOTE = 200;
 
-async function linhasDoFinanceiro(clientId: string, campos: CamposPropagaveis): Promise<Alteracao[]> {
+/** Linha do financeiro já lida: separa o que muda dos rascunhos que ficam. */
+export function alteracoesDoFinanceiro(
+    linhas: Array<{ id: string; party_name?: string | null; party_email?: string | null; entity_name?: string | null; source_system?: string | null; direction?: string | null; status?: string | null; approval_status?: string | null }>,
+    campos: CamposPropagaveis,
+): { alteracoes: Alteracao[]; rascunhosMantidos: number } {
+    const alteracoes: Alteracao[] = [];
+    let rascunhosMantidos = 0;
+    for (const l of linhas) {
+        // BOLETO: `entity_name` é o beneficiário lido do código, usado pela
+        // conciliação (utils/reconciliationRules.ts). Só o `party_name` muda.
+        const patch = patchDaLinha(l, campos, l.source_system !== 'BOLETO');
+        if (!patch) continue;
+        if (mandariaParaAlcada(l)) { rascunhosMantidos += 1; continue; }
+        alteracoes.push({ tabela: 'internal_transactions', id: l.id, patch });
+    }
+    return { alteracoes, rascunhosMantidos };
+}
+
+export const COLUNAS_FINANCEIRO = 'id, party_name, party_email, entity_name, source_system, direction, status, approval_status';
+
+async function linhasDoFinanceiro(clientId: string, campos: CamposPropagaveis) {
     const { data, error } = await supabase
         .from('internal_transactions')
-        .select('id, party_name, party_email, entity_name')
+        .select(COLUNAS_FINANCEIRO)
         .eq('party_id', clientId);
     if (error) throw error;
-    return (data ?? []).flatMap(l => {
-        const patch = patchDaLinha(l, campos, true);
-        return patch ? [{ tabela: 'internal_transactions' as const, id: l.id as string, patch }] : [];
-    });
+    return alteracoesDoFinanceiro(data ?? [], campos);
 }
 
 async function linhasDasCobrancas(clientId: string, campos: CamposPropagaveis): Promise<Alteracao[]> {
@@ -98,8 +118,9 @@ export const clientPropagacaoService = {
      * na leitura (tabela sem acesso) fica de fora em vez de derrubar a pergunta.
      */
     async planejar(clientId: string, campos: CamposPropagaveis): Promise<PlanoDePropagacao> {
+        let rascunhosMantidos = 0;
         const destinos: [DestinoPropagacao, Promise<Alteracao[]>][] = [
-            ['financeiro', linhasDoFinanceiro(clientId, campos)],
+            ['financeiro', linhasDoFinanceiro(clientId, campos).then(r => { rascunhosMantidos = r.rascunhosMantidos; return r.alteracoes; })],
             ['cobrancas', linhasDasCobrancas(clientId, campos)],
             ['garantia', linhasDaGarantia(clientId, campos)],
             ['obras', linhasDasObras(clientId, campos)],
@@ -114,7 +135,7 @@ export const clientPropagacaoService = {
                 console.error(`Propagar cliente: leitura de ${destino} falhou`, r.reason);
             }
         });
-        return { campos, porDestino };
+        return { campos, porDestino, rascunhosMantidos };
     },
 
     async aplicar(plano: PlanoDePropagacao): Promise<ResultadoDaPropagacao> {

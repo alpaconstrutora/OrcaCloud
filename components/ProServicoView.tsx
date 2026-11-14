@@ -638,7 +638,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   if (loading) {
     return (
-      <div className="flex-1 flex flex-col items-center justify-center p-8 bg-[#F3F7F9] text-slate-800">
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-slate-800">
         <div className="w-8 h-8 border-4 border-teal-500 border-t-transparent rounded-full animate-spin mb-3" />
         <span className="text-xs font-black uppercase tracking-widest text-slate-400">Carregando Serviço...</span>
       </div>
@@ -647,7 +647,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
 
   if (!servico) {
     return (
-      <div className="flex-1 p-5 text-center text-slate-500 bg-[#F3F7F9] h-full">
+      <div className="flex-1 p-5 text-center text-slate-600">
         Serviço não encontrado.
       </div>
     );
@@ -659,7 +659,7 @@ const ProServicoView: React.FC<ProServicoViewProps> = ({
   const valor = Number(orc?.valor || 0);
 
   return (
-    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-24 space-y-5">
+    <div className="flex flex-col text-slate-800 space-y-5">
       {/* Header */}
       <div className="flex items-center gap-3">
         <button onClick={onBack} className="text-slate-400 hover:text-slate-750 text-lg">

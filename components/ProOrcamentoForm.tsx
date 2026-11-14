@@ -403,7 +403,7 @@ const ProOrcamentoForm: React.FC<ProOrcamentoFormProps> = ({
   };
 
   return (
-    <div className="p-5 flex flex-col h-full bg-[#F3F7F9] text-slate-800 pb-20">
+    <div className="flex flex-col text-slate-800">
       {/* Header */}
       <div className="flex items-center gap-3 mb-6">
         <button onClick={onBack} className="text-slate-400 hover:text-slate-700 text-lg">

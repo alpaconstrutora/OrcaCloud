@@ -1,11 +1,13 @@
 import React from 'react'
-import { AlertCircle, BookOpen, CheckSquare, Loader2, LinkIcon, type LucideIcon } from 'lucide-react'
+import { AlertCircle, BookOpen, CheckSquare, Loader2, LinkIcon, Receipt, type LucideIcon } from 'lucide-react'
 import Button from '../ui/Button'
 import TasksMobileApp from '../TasksMobileApp'
 import DiarioDoLink from './DiarioDoLink'
+import PedidoFastDoLink from './PedidoFastDoLink'
 import { celularSessao, type SessaoCelular } from '../../services/celular/celularLinkService'
 import { fonteDoLink, TarefasFonteContext } from '../../services/celular/tarefasFonte'
 import { fonteDiarioDoLink } from '../../services/celular/diarioFonte'
+import { fontePedidoFastDoLink } from '../../services/pedidoFastService'
 
 /**
  * Entrada do link do celular (`/celular?token=`): abre Minhas Tarefas SEM login.
@@ -31,10 +33,12 @@ type Estado =
 export const TEXTO_LINK_INVALIDO = 'Link inválido ou vencido — peça um novo ao administrador'
 
 /** Seções do seletor (pílula) no topo — a única barra de baixo é a de cada seção. */
-type AbaId = 'tarefas' | 'diario'
+type AbaId = 'tarefas' | 'diario' | 'pedido'
 const ABAS: { id: AbaId; rotulo: string; Icone: LucideIcon }[] = [
   { id: 'tarefas', rotulo: 'Tarefas', Icone: CheckSquare },
   { id: 'diario', rotulo: 'Diário', Icone: BookOpen },
+  // Pedido Fast (docs/planos/2026-11-14-pedido-fast.md, Parte 2): compra de balcão pela foto.
+  { id: 'pedido', rotulo: 'Pedido', Icone: Receipt },
 ]
 
 // ── Telas de estado (mesmo desenho do EmptyState/ErrorState de Minhas Tarefas) ──
@@ -70,6 +74,9 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
   // criaria um objeto novo a cada render do gate e a tela recarregaria em laço. Por isso
   // só `token` (e, no Diário, o `pode_aprovar_diario` da sessão — um booleano) nas deps.
   const fonte = React.useMemo(() => fonteDoLink(token, { aoRecusar }), [token, aoRecusar])
+
+  // Mesma regra de estabilidade: `PedidoFastFluxo` tem a fonte na dependência da leitura.
+  const fontePedido = React.useMemo(() => fontePedidoFastDoLink(token, { aoRecusar }), [token, aoRecusar])
 
   const podeAprovarDiario = estado.tipo === 'ok' ? estado.sessao.pode_aprovar_diario === true : false
   const fonteDiario = React.useMemo(
@@ -201,8 +208,10 @@ const CelularTokenGate: React.FC<{ token: string | '' }> = ({ token }) => {
           <TarefasFonteContext.Provider value={fonte}>
             <TasksMobileApp orgId={sessao.org_id} />
           </TarefasFonteContext.Provider>
-        ) : (
+        ) : aba === 'diario' ? (
           <DiarioDoLink fonte={fonteDiario} />
+        ) : (
+          <PedidoFastDoLink token={token} fonte={fontePedido} aoRecusar={aoRecusar} />
         )}
       </div>
     </div>

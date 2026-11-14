@@ -9,7 +9,7 @@ import {
     BUCKET, RAIZ_TEMPORARIA, IDADE_MAXIMA_DO_LOTE_MS, TIPOS_DE_IMAGEM,
     ARQUIVO_DA_LEITURA, ARQUIVO_DO_RESULTADO,
     validarPedido, pastaDoLote, pathDaFotoTemporaria, indiceDaFoto, pathDoAnexo,
-    hojeEmBrasilia, nomeDoComprador, destinatariosDoAviso,
+    hojeEmBrasilia, nomeDoComprador, destinatariosDoAviso, respostaDoErroDoLink,
     type FotoRecebida,
 } from "./regras.ts"
 import { lerFotos } from "./leitura.ts"
@@ -41,7 +41,11 @@ import { isSystemProject } from "../../../utils/systemProjects.ts"
  *   · o lote é SEMPRE `fast-tmp/<usuário autorizado>/<lote>` — o cliente manda
  *     só o uuid do lote, nunca um path; e a leitura que vira pedido é a que a
  *     Edge guardou, não uma que o navegador reenvie.
- *   · Parte 2 (link do celular, `token` no corpo) ainda não ligada: recusa 400.
+ *   · link do celular (Parte 2, `token` no corpo): quem decide é o banco —
+ *     `_celular_pedido_fast_autoriza(token, ação)` (só service_role) resolve o dono
+ *     do link, aplica o limite de uso e exige acesso a Compras; a obra tem de ser da
+ *     org do link. O Authorization do pedido é IGNORADO nesse modo: um navegador
+ *     logado como outra pessoa não muda de quem é o link.
  */
 
 declare const Deno: { env: { get(key: string): string | undefined } };
@@ -79,26 +83,45 @@ serve(async (req: Request) => {
     if (!validado.ok) return json({ error: validado.erro }, 400);
     const pedido = validado.pedido;
 
-    if (pedido.token) {
-        return json({ error: 'O Pedido Fast pelo link do celular ainda não está disponível.' }, 400);
-    }
-    const usuario = await exigirUsuario(req);
-    if (!usuario.ok) return json({ error: usuario.erro }, usuario.status);
-
     const admin: Admin = createClient(
         Deno.env.get('SUPABASE_URL') ?? '',
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
         { auth: { autoRefreshToken: false, persistSession: false } },
     );
 
+    // Quem é o comprador: o dono do LINK (token no corpo) ou o usuário do JWT.
+    let userId: string;
+    let email: string;
+    let orgDoLink: string | null = null;
+    if (pedido.token) {
+        const { data, error } = await admin.rpc('_celular_pedido_fast_autoriza', { p_token: pedido.token, p_acao: pedido.acao });
+        if (error) {
+            const r = respostaDoErroDoLink(error);
+            if (r.logar) console.error('[pedido-fast] autorização do link:', error);
+            return json(r.corpo, r.status);
+        }
+        const linha = ((data ?? []) as { user_id: string; org_id: string; email: string | null }[])[0];
+        if (!linha?.user_id) return json({ error: 'link inválido ou vencido' }, 403);
+        userId = linha.user_id;
+        email = (linha.email ?? '').toLowerCase();
+        orgDoLink = linha.org_id;
+    } else {
+        const usuario = await exigirUsuario(req);
+        if (!usuario.ok) return json({ error: usuario.erro }, usuario.status);
+        userId = usuario.userId;
+        email = usuario.email;
+    }
+
     try {
         if (pedido.acao === 'ler') {
-            const { data: pode, error } = await admin.rpc('fn_pode_criar_pedido_em_alguma_de', { p_user: usuario.userId });
-            if (error) throw error;
-            if (pode !== true) return json({ error: 'Você não tem acesso a Pedidos de Compra.' }, 403);
-            return await acaoLer(admin, usuario.userId, pedido.fotos);
+            if (!orgDoLink) {
+                const { data: pode, error } = await admin.rpc('fn_pode_criar_pedido_em_alguma_de', { p_user: userId });
+                if (error) throw error;
+                if (pode !== true) return json({ error: 'Você não tem acesso a Pedidos de Compra.' }, 403);
+            }
+            return await acaoLer(admin, userId, pedido.fotos);
         }
-        return await acaoCriar(admin, usuario.userId, usuario.email, pedido.lote, pedido.projectId);
+        return await acaoCriar(admin, userId, email, pedido.lote, pedido.projectId, orgDoLink);
     } catch (e) {
         console.error('[pedido-fast] falha:', e);
         return json({ error: 'Falha ao processar o Pedido Fast. Tente de novo.' }, 500);
@@ -137,7 +160,7 @@ async function acaoLer(admin: Admin, userId: string, fotos: FotoRecebida[]): Pro
 }
 
 // ── criar ────────────────────────────────────────────────────────────────────
-async function acaoCriar(admin: Admin, userId: string, email: string, lote: string, projectId: string): Promise<Response> {
+async function acaoCriar(admin: Admin, userId: string, email: string, lote: string, projectId: string, orgDoLink: string | null): Promise<Response> {
     const pasta = pastaDoLote(userId, lote);
 
     // Idempotente: o mesmo lote devolve o mesmo pedido (toque duplo, rede que caiu).
@@ -158,6 +181,8 @@ async function acaoCriar(admin: Admin, userId: string, email: string, lote: stri
     if (!obra || !isObra(obra) || isSystemProject(obra)) return json({ error: 'Obra não encontrada.' }, 404);
     const orgId: string | null = obra.organization_id ?? null;
     if (!orgId) return json({ error: 'A obra escolhida não está vinculada a uma organização.' }, 422);
+    // Pelo link, só obra da org do link (a lista vem de celular_obras_listar).
+    if (orgDoLink && orgId !== orgDoLink) return json({ error: 'Obra não encontrada.' }, 404);
 
     const { data: pode, error: errPode } = await admin.rpc('fn_pode_criar_pedido_de', { p_user: userId, p_org: orgId });
     if (errPode) throw errPode;

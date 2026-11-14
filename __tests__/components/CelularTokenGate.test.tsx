@@ -116,7 +116,8 @@ describe('CelularTokenGate', () => {
     expect(seletor.compareDocumentPosition(conteudo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     // Nada de seletor (nem navegação "Seções") DEPOIS do conteúdo.
     expect(screen.queryByRole('navigation', { name: 'Seções' })).toBeNull()
-    expect(screen.getAllByRole('tab')).toHaveLength(2)
+    // Tarefas | Diário | Pedido (Pedido Fast, docs/planos/2026-11-14-pedido-fast.md, Parte 2).
+    expect(screen.getAllByRole('tab').map(t => t.textContent)).toEqual(['Tarefas', 'Diário', 'Pedido'])
     for (const aba of screen.getAllByRole('tab')) {
       expect(aba.compareDocumentPosition(conteudo) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy()
     }

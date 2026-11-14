@@ -146,3 +146,22 @@ export function destinatariosDoAviso(
     }
     return [...vistos];
 }
+
+/** Recusa do token que o gate do link reconhece (`MENSAGEM_LINK_RECUSADO` em services/celular/tarefasFonte.ts). */
+export const MENSAGEM_LINK_RECUSADO = 'link inválido ou vencido';
+
+/**
+ * Erro do banco na autorização pelo LINK (`_celular_pedido_fast_autoriza`) → resposta HTTP.
+ *   42501 → 403 com a mensagem do banco: "link inválido ou vencido" (o gate derruba a
+ *           tela) ou "sem acesso a Pedidos de Compra" (o link segue válido);
+ *   54000 → 429 (limite de uso por hora — não é recusa do link);
+ *   22023 → 400; o resto → 500 (e só ele vai para o log).
+ */
+export function respostaDoErroDoLink(erro: { code?: string; message?: string } | null | undefined): { status: number; corpo: { error: string }; logar: boolean } {
+    const code = erro?.code;
+    const msg = (erro?.message ?? '').trim();
+    if (code === '42501') return { status: 403, corpo: { error: msg || MENSAGEM_LINK_RECUSADO }, logar: false };
+    if (code === '54000') return { status: 429, corpo: { error: msg || 'Limite de uso do link atingido — tente de novo na próxima hora.' }, logar: false };
+    if (code === '22023') return { status: 400, corpo: { error: msg || 'Pedido inválido.' }, logar: false };
+    return { status: 500, corpo: { error: 'Falha ao conferir o link. Tente de novo.' }, logar: true };
+}

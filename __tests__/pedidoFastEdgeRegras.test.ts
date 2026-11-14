@@ -89,3 +89,23 @@ describe('pedido-fast · data, comprador e aviso', () => {
         expect(destinatariosDoAviso(membros, 'Comprador@x.com')).toEqual(['dono@x.com', 'admin@x.com']);
     });
 });
+
+describe('pedido-fast · erros do link do celular (Parte 2)', () => {
+    it('42501 → 403 com a mensagem do banco; a recusa do token sai igual à do gate', async () => {
+        const { respostaDoErroDoLink, MENSAGEM_LINK_RECUSADO } = await import('../supabase/functions/pedido-fast/regras');
+        const { MENSAGEM_LINK_RECUSADO: doGate } = await import('../services/celular/tarefasFonte');
+        expect(MENSAGEM_LINK_RECUSADO).toBe(doGate);
+        expect(respostaDoErroDoLink({ code: '42501', message: 'link inválido ou vencido' }))
+            .toEqual({ status: 403, corpo: { error: 'link inválido ou vencido' }, logar: false });
+        expect(respostaDoErroDoLink({ code: '42501', message: 'sem acesso a Pedidos de Compra' }).corpo.error)
+            .toBe('sem acesso a Pedidos de Compra');
+    });
+
+    it('54000 → 429, 22023 → 400, resto → 500 logado', async () => {
+        const { respostaDoErroDoLink } = await import('../supabase/functions/pedido-fast/regras');
+        expect(respostaDoErroDoLink({ code: '54000', message: 'Limite de uso do link atingido — tente de novo na próxima hora.' }).status).toBe(429);
+        expect(respostaDoErroDoLink({ code: '22023', message: 'ação inválida' }).status).toBe(400);
+        expect(respostaDoErroDoLink({ code: 'XX000', message: 'boom' })).toMatchObject({ status: 500, logar: true });
+        expect(respostaDoErroDoLink(null).status).toBe(500);
+    });
+});

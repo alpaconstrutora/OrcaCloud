@@ -117,7 +117,7 @@ Frente: `bash scripts/nova-frente.sh pedido-fast` (REGRA #8).
 11. **`types/supplyChain.ts` + mapeadores de `orderService`**: `origem`, `criadoPor` (nome resolvido em lote) e `leituraIa`. *Pronto quando* tsc passar e a lista e o detalhe lerem os campos.
 12. **`utils/linkNotificacao.ts`**: `pedido_fast_criado` abre o detalhe do pedido. *Pronto quando* clicar no sino abrir o pedido.
 
-## Parte 2 — Aba "Pedido" no link `/celular?token=`. 0 de 5
+## Parte 2 — Aba "Pedido" no link `/celular?token=`. 4 de 5 (falta a prova no celular real)
 
 Só começa depois da Parte 1 no ar.
 
@@ -185,3 +185,20 @@ Só começa depois da Parte 1 no ar.
   modo "compra nunca se perde": cria o pedido com a foto e sem itens. Para ligar a leitura:
   `npx supabase secrets set ANTHROPIC_API_KEY=<chave>` (o usuário cadastra; a chave não passa pelo chat).
 - Prova real do `criar` (item 5) e o print do aviso do detalhe (item 10) — dependem de criar um pedido de verdade.
+
+### 14/11/2026 (tarde) — Parte 2 implementada na frente `pedido-fast-link`
+
+**Pedido do usuário (mesma sessão):** *"como vejo o modulo pedido fast? ainda somente aparece tarefas e diario"* → expliquei que
+o link `/celular` era a Parte 2 → *"sim"*.
+
+| Item | Situação | Evidência |
+|---|---|---|
+| 1 migration `aplicar_20271114700000_link_celular_pedido_fast` | ✅ APLICADA | `scripts/teste-link-celular-pedido-fast.sql` → TUDO OK (falha sem a migration); `_celular_pedido_fast_autoriza` só service_role, `celular_obras_listar` anon/authenticated |
+| 2 Edge: modo token | ✅ | deploy; sem header 401, token falso 403 "link inválido ou vencido", anon sem token 401; `respostaDoErroDoLink` testada |
+| 3 `fontePedidoFastDoLink` + `listarObrasDoLink` | ✅ | `__tests__/pedidoFastFonte.test.ts` (5) |
+| 4 aba "Pedido" no `CelularTokenGate` | ✅ | `CelularTokenGate.test.tsx` (3 abas); Playwright 390×844 sem login (RPCs e Edge interceptadas): aba → foto → obra → recusa do token derruba para "link inválido" |
+| 5 `PedidoFastDoLink` | ⏳ | falta a prova no celular real com o link de verdade (usuário) |
+
+**Achado na prova:** o contador de uso por link (`user_mobile_link_uso.acao`) tinha CHECK fechado em `subir`/`assinar` — a 1ª
+leitura pelo link daria 23514. A migration amplia o CHECK com `pedido_fast_ler` (40/h) e `pedido_fast_criar` (30/h).
+**Não gerei link real para testar:** gerar troca o link atual da pessoa (mesma linha de `user_mobile_links`).

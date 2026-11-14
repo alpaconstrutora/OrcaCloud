@@ -79,6 +79,8 @@ DECLARE
     st_done UUID; tk TEXT; v TEXT; ref TEXT; tr RECORD;
     sql_conta CONSTANT TEXT := 'SELECT count(*)::text FROM public.tasks t WHERE t.id = %L';
     recusa_resp CONSTANT TEXT := '42501:o responsável só altera título, descrição, datas, prioridade e status da tarefa';
+    -- desde a revisão de 13/11 de aplicar_20271112998000, trocar user_id cai antes na trava da autoria
+    recusa_autoria CONSTANT TEXT := '42501:a autoria da tarefa não muda: quem a criou, o id e a data de criação ficam como estão';
 BEGIN
     SELECT au.email INTO iago_email FROM auth.users au WHERE au.id = iago;
     PERFORM pg_temp.confere(iago_email IS NOT NULL, 'fixture: conta do Iago');
@@ -194,7 +196,7 @@ BEGIN
     PERFORM pg_temp.confere(v = recusa_resp, 'Iago tirando o responsável → 42501 (veio ' || v || ')');
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET user_id = %L WHERE id = %L RETURNING id::text', iago, t_a));
-    PERFORM pg_temp.confere(v = recusa_resp, 'Iago tomando a posse (SET user_id = ele) → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere(v IN (recusa_resp, recusa_autoria), 'Iago tomando a posse (SET user_id = ele) → 42501 (veio ' || v || ')');
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET space_id = %L WHERE id = %L RETURNING id::text', s_iago, t_a));
     PERFORM pg_temp.confere(v = recusa_resp, 'Iago levando a tarefa para um espaço dele → 42501 (veio ' || v || ')');
@@ -209,10 +211,10 @@ BEGIN
     PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando source_module → 42501 (veio ' || v || ')');
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET id = gen_random_uuid() WHERE id = %L RETURNING id::text', t_a));
-    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando o id → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere(v IN (recusa_resp, recusa_autoria), 'Iago trocando o id → 42501 (veio ' || v || ')');
     v := pg_temp.como(iago, 'authenticated', format(
         'UPDATE public.tasks SET created_at = created_at - interval ''1 day'' WHERE id = %L RETURNING id::text', t_a));
-    PERFORM pg_temp.confere(v = recusa_resp, 'Iago trocando created_at → 42501 (veio ' || v || ')');
+    PERFORM pg_temp.confere(v IN (recusa_resp, recusa_autoria), 'Iago trocando created_at → 42501 (veio ' || v || ')');
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.tasks WHERE id = t_a), 'recusa do id: a tarefa segue com o id de antes');
     SELECT * INTO tr FROM public.tasks WHERE id = t_a;
     PERFORM pg_temp.confere(tr.assignee_employee_id = e_iago AND tr.user_id = o2 AND tr.space_id IS NULL
@@ -243,15 +245,26 @@ BEGIN
         s_iago, p_tr, t_vazio));
     PERFORM pg_temp.confere(v = 'ok:1', 'dono muda espaço e obra (o gatilho não o atinge) (veio ' || v || ')');
     UPDATE public.tasks SET assignee_employee_id = e_vazio, space_id = NULL, project_id = NULL WHERE id = t_vazio;
-    -- id e created_at: o dono continua podendo (t_vazio não tem colaborador nem
-    -- subtarefa, então trocar o id não esbarra em FK); o id volta depois.
-    v := pg_temp.como(o2, 'authenticated', format(
-        'WITH u AS (UPDATE public.tasks SET created_at = created_at - interval ''1 day'' WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_vazio));
-    PERFORM pg_temp.confere(v = 'ok:1', 'dono muda created_at (veio ' || v || ')');
-    v := pg_temp.como(o2, 'authenticated', format(
-        'UPDATE public.tasks SET id = gen_random_uuid() WHERE id = %L RETURNING id::text', t_vazio));
-    PERFORM pg_temp.confere(v LIKE 'ok:%' AND v <> 'ok:<null>' AND v <> 'ok:' || t_vazio, 'dono muda o id (veio ' || v || ')');
-    UPDATE public.tasks SET id = t_vazio WHERE id = substr(v, 4)::uuid;
+    -- id e created_at: até aplicar_20271112998000 o dono podia (t_vazio não tem colaborador
+    -- nem subtarefa, então trocar o id não esbarra em FK; o id volta depois). Com ela
+    -- (revisão de 13/11), a autoria é fixa para todo mundo da API — o dono também recebe a
+    -- recusa. A prova reconhece qual regra está no banco pela função minhas_orgs_gestor().
+    IF to_regprocedure('public.minhas_orgs_gestor()') IS NULL THEN
+        v := pg_temp.como(o2, 'authenticated', format(
+            'WITH u AS (UPDATE public.tasks SET created_at = created_at - interval ''1 day'' WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_vazio));
+        PERFORM pg_temp.confere(v = 'ok:1', 'dono muda created_at (veio ' || v || ')');
+        v := pg_temp.como(o2, 'authenticated', format(
+            'UPDATE public.tasks SET id = gen_random_uuid() WHERE id = %L RETURNING id::text', t_vazio));
+        PERFORM pg_temp.confere(v LIKE 'ok:%' AND v <> 'ok:<null>' AND v <> 'ok:' || t_vazio, 'dono muda o id (veio ' || v || ')');
+        UPDATE public.tasks SET id = t_vazio WHERE id = substr(v, 4)::uuid;
+    ELSE
+        v := pg_temp.como(o2, 'authenticated', format(
+            'WITH u AS (UPDATE public.tasks SET created_at = created_at - interval ''1 day'' WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u', t_vazio));
+        PERFORM pg_temp.confere(v = recusa_autoria, 'dono NÃO muda created_at (autoria fixa) (veio ' || v || ')');
+        v := pg_temp.como(o2, 'authenticated', format(
+            'UPDATE public.tasks SET id = gen_random_uuid() WHERE id = %L RETURNING id::text', t_vazio));
+        PERFORM pg_temp.confere(v = recusa_autoria, 'dono NÃO muda o id (autoria fixa) (veio ' || v || ')');
+    END IF;
     PERFORM pg_temp.confere(EXISTS (SELECT 1 FROM public.tasks WHERE id = t_vazio), 'fixture: id de t_vazio restaurado');
 
     -- ── responsável vinculado que NÃO é membro da org da tarefa (Importante 2)

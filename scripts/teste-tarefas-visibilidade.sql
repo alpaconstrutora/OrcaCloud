@@ -23,8 +23,16 @@
 --
 -- BEGIN … ROLLBACK: não grava nada. Falha = RAISE EXCEPTION 'FALHOU: …';
 -- sucesso = a linha final 'TUDO OK'. Sem a migration (linha MIGRATION vazia), falha em
--- "sm (membro do espaço) vê só a própria" (é o RED: hoje o espaço dá visão).
+-- "sm (membro do espaço) vê só a própria" (é o RED: hoje o espaço dá visão). Com a
+-- versão da migration anterior à revisão de 13/11 (gatilho isentava o owner/admin da
+-- trava de user_id), falha em "admin não troca a autoria para si".
+-- Autoria (user_id, id, created_at): ninguém da API muda — nem criador, nem admin.
 --
+-- Ensaio (migration ainda não aplicada; o montador tira o BEGIN;/COMMIT; dela):
+--   bash scripts/montar-ensaio.sh -o /tmp/e.sql scripts/teste-tarefas-visibilidade.sql \
+--        supabase/migrations/aplicar_20271112998000_tarefas_visibilidade_por_responsavel.sql
+--   npx supabase db query --linked -f /tmp/e.sql
+-- Depois de aplicada:
 --   npx supabase db query --linked -f scripts/teste-tarefas-visibilidade.sql
 
 BEGIN;
@@ -78,6 +86,7 @@ DECLARE
     vals TEXT; vis TEXT; v TEXT; ref TEXT; u UUID; tk TEXT; j JSONB;
     recusa_resp     CONSTANT TEXT := '42501:o responsável só altera título, descrição, datas, prioridade e status da tarefa';
     recusa_pessoal  CONSTANT TEXT := '42501:só quem criou a tarefa pode deixá-la sem responsável e fora de espaço (ela vira a agenda pessoal de quem a criou)';
+    recusa_autoria  CONSTANT TEXT := '42501:a autoria da tarefa não muda: quem a criou, o id e a data de criação ficam como estão';
     upd  CONSTANT TEXT := 'WITH u AS (UPDATE public.tasks SET %s WHERE id = %L RETURNING 1) SELECT count(*)::text FROM u';
     del  CONSTANT TEXT := 'WITH d AS (DELETE FROM public.tasks WHERE id = %L RETURNING 1) SELECT count(*)::text FROM d';
     colab CONSTANT TEXT := 'INSERT INTO public.task_collaborators (task_id, employee_id) VALUES (%L, %L) RETURNING 1::text';
@@ -173,6 +182,20 @@ BEGIN
     PERFORM pg_temp.confere(v = 'ok:1', 'admin tira o responsável de tarefa de espaço (continua vendo) (veio ' || v || ')');
     v := pg_temp.au(g, format(upd, 'title = ''TVZ x''', t_p));
     PERFORM pg_temp.confere(v = 'ok:0', 'admin não edita agenda pessoal alheia (veio ' || v || ')');
+    -- autoria: o admin não toma a tarefa para si (nem a passa a outro) — senão apagaria
+    v := pg_temp.au(g, format(upd, format('user_id = %L', g), t_r));
+    PERFORM pg_temp.confere(v = recusa_autoria, 'admin não troca a autoria para si (veio ' || v || ')');
+    v := pg_temp.au(g, format(upd, format('user_id = %L', sm), t_s));
+    PERFORM pg_temp.confere(v = recusa_autoria, 'admin não troca a autoria para um terceiro (veio ' || v || ')');
+    v := pg_temp.au(g, format(upd, 'id = gen_random_uuid()', t_r));
+    PERFORM pg_temp.confere(v = recusa_autoria, 'admin não troca o id (veio ' || v || ')');
+    v := pg_temp.au(g, format(upd, 'created_at = created_at - interval ''1 day''', t_r));
+    PERFORM pg_temp.confere(v = recusa_autoria, 'admin não troca o created_at (veio ' || v || ')');
+    v := pg_temp.au(sa, format(upd, format('user_id = %L', sa), t_s));
+    PERFORM pg_temp.confere(v = recusa_autoria, 'superadmin não troca a autoria (veio ' || v || ')');
+    v := pg_temp.au(g, format(del, t_r));
+    PERFORM pg_temp.confere(v = 'ok:0' AND (SELECT user_id FROM public.tasks WHERE id = t_r) = c,
+        'depois da tentativa, a tarefa segue de c e o admin não apaga (veio ' || v || ')');
     v := pg_temp.au(sa, format(upd, 'title = ''TVZ S por sa''', t_s));
     PERFORM pg_temp.confere(v = 'ok:1', 'superadmin edita tarefa de espaço (veio ' || v || ')');
     v := pg_temp.au(sa, format(upd, 'title = ''TVZ x''', t_e));
@@ -186,7 +209,9 @@ BEGIN
     v := pg_temp.au(c, format(upd, format('assignee_employee_id = %L', e_r), t_r));
     PERFORM pg_temp.confere(v = 'ok:1', 'criador põe o responsável de volta (veio ' || v || ')');
     v := pg_temp.au(c, format(upd, format('user_id = %L', g), t_p));
-    PERFORM pg_temp.confere(v LIKE '42501:%row-level security%', 'criador não passa a autoria adiante (veio ' || v || ')');
+    PERFORM pg_temp.confere(v = recusa_autoria, 'criador não passa a autoria adiante (veio ' || v || ')');
+    v := pg_temp.au(c, format(upd, 'created_at = created_at - interval ''1 day''', t_p));
+    PERFORM pg_temp.confere(v = recusa_autoria, 'criador não troca o created_at (veio ' || v || ')');
 
     -- ── APAGAR: só quem criou ────────────────────────────────────────────────
     v := pg_temp.au(c, format(del, t_sm));
@@ -217,6 +242,13 @@ BEGIN
     PERFORM pg_temp.confere(v LIKE '42501:%', 'envolvido não põe envolvido (veio ' || v || ')');
     v := pg_temp.au(en, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id = %L', t_e));
     PERFORM pg_temp.confere(v = 'ok:1', 'envolvido lê os envolvidos da tarefa (veio ' || v || ')');
+    -- t_s tem e_outro (posto por g) e t_e tem e_en: quem não gere nem é envolvido lê 0
+    PERFORM pg_temp.confere((SELECT count(*) FROM public.task_collaborators WHERE task_id IN (t_s, t_e)) = 2,
+        'fixture: t_s e t_e com um envolvido cada');
+    v := pg_temp.au(sm, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id IN (%L, %L)', t_s, t_e));
+    PERFORM pg_temp.confere(v = 'ok:0', 'quem não gere nem é envolvido não lê os envolvidos (sm em t_s/t_e) (veio ' || v || ')');
+    v := pg_temp.au(r, format('SELECT count(*)::text FROM public.task_collaborators WHERE task_id = %L', t_e));
+    PERFORM pg_temp.confere(v = 'ok:0', 'quem não gere nem é envolvido não lê os envolvidos (r em t_e) (veio ' || v || ')');
     v := pg_temp.au(g, format('WITH d AS (DELETE FROM public.task_collaborators WHERE task_id = %L RETURNING 1) SELECT count(*)::text FROM d', t_s));
     PERFORM pg_temp.confere(v = 'ok:1', 'admin apaga os envolvidos que lê (o TaskForm apaga e reinsere) (veio ' || v || ')');
 
@@ -263,6 +295,8 @@ BEGIN
     PERFORM pg_temp.confere(v = ref, 'link de g: no espaço S, as três (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, ''{"title":"TVZ x"}'')::text', tk, t_p));
     PERFORM pg_temp.confere(v LIKE '42501:%', 'link de g: não edita agenda pessoal alheia (veio ' || v || ')');
+    v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, %L::jsonb)::text', tk, t_r, jsonb_build_object('user_id', g)));
+    PERFORM pg_temp.confere(v = '22023:campo não aceito: user_id', 'link de g: autoria fora da lista branca (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, %L::jsonb)->>''assignee_employee_id''', tk, t_r, jsonb_build_object('assignee_employee_id', e_outro)));
     PERFORM pg_temp.confere(v = 'ok:' || e_outro, 'link de g: admin troca o responsável (veio ' || v || ')');
     v := pg_temp.cel(format('SELECT public.celular_tarefa_atualizar(%L, %L, ''{"assignee_employee_id":null}'')::text', tk, t_r));

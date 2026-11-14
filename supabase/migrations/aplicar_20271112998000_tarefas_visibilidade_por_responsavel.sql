@@ -64,23 +64,26 @@
 -- _celular_tarefa_visivel e acompanham sem mudança. No app, a contagem de tarefas do espaço
 -- (taskSpaceService.listSpaces) lê tasks pela RLS e acompanha sozinha.
 --
--- Idempotente. Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
+-- Autoria (revisão de 13/11/2026): ninguém da API troca user_id, id ou created_at — nem o
+-- criador, nem o owner/admin. Sem isso o admin fazia `UPDATE tasks SET user_id = ele` (a
+-- WITH CHECK de tasks_update_gestor não olha user_id) e depois apagava a tarefa alheia,
+-- furando "apagar só quem criou". Nenhuma tela grava user_id num UPDATE (TaskForm,
+-- TaskBulkPatch, tarefasFonte; a lista branca de celular_tarefa_atualizar não tem a chave).
 --
--- ROLLBACK (volta à regra de aplicar_20271112997000):
---   DROP POLICY tasks_select_gestor, tasks_update_gestor ON public.tasks;
---   CREATE POLICY tasks_select ON public.tasks FOR SELECT
---     USING (user_id = auth.uid() OR (space_id IS NOT NULL AND is_task_space_member(space_id)));
---   CREATE POLICY tasks_update ON public.tasks FOR UPDATE
---     USING      (user_id = auth.uid() OR (space_id IS NOT NULL AND is_task_space_member(space_id)))
---     WITH CHECK (user_id = auth.uid() OR (space_id IS NOT NULL AND is_task_space_member(space_id)));
---   CREATE POLICY tasks_delete ON public.tasks FOR DELETE
---     USING (user_id = auth.uid() OR (space_id IS NOT NULL AND EXISTS (SELECT 1 FROM task_space_members m
---            WHERE m.space_id = tasks.space_id AND m.user_id = auth.uid() AND m.role = 'owner')));
---   (cada uma precedida de DROP POLICY IF EXISTS) + reaplicar aplicar_20271112997000 inteiro
---   (tasks_*_superadmin, _tasks_responsavel_so_conteudo, pode_gerir_envolvidos_da_tarefa) +
---   CREATE OR REPLACE de _celular_tarefa_visivel e celular_tarefa_atualizar do arquivo
---   aplicar_20271111995000 (seção 3) + DROP FUNCTION public.is_org_gestor_de(UUID, UUID),
---   public.minhas_orgs_gestor() (depois das policies, que dependem dela).
+-- Idempotente. Uma transação só, com lock_timeout de 2 s (cada DROP/CREATE POLICY e o
+-- CREATE OR REPLACE do gatilho travam `tasks` por milissegundos; tabela ocupada = o
+-- comando falha em vez de enfileirar o app — rodar de novo; nada fica pela metade).
+-- Aplicar com `npx supabase db query --linked -f` — nunca `db push`.
+-- Ensaio: as provas inlinam este arquivo dentro do BEGIN … ROLLBACK delas por
+-- `bash scripts/montar-ensaio.sh`, que tira as linhas `BEGIN;`/`COMMIT;` daqui (senão o
+-- COMMIT daqui gravaria o ensaio de verdade).
+--
+-- ROLLBACK (volta à regra de hoje — aplicar_20271112997000 sobre 995000/800000):
+--   npx supabase db query --linked -f scripts/rollback-tarefas-visibilidade.sql
+--   Ensaiado em scripts/teste-rollback-tarefas-visibilidade.sql (migration + volta = hoje).
+
+BEGIN;
+SET LOCAL lock_timeout = '2s';
 
 -- ── 1. "Em que orgs sou owner/admin?" ───────────────────────────────────────
 CREATE OR REPLACE FUNCTION public.minhas_orgs_gestor()
@@ -158,7 +161,9 @@ CREATE POLICY tasks_delete ON public.tasks
     FOR DELETE
     USING (user_id = (SELECT auth.uid()));
 
--- ── 3. Gatilho: o responsável só mexe no conteúdo; agenda pessoal só pelo criador ──
+-- ── 3. Gatilho: autoria fixa; o responsável só mexe no conteúdo; agenda pessoal só pelo criador ──
+-- Autoria (user_id, id, created_at): ninguém da API muda, qualquer que seja o papel — é o
+-- que segura "apagar só quem criou" (tasks_delete olha user_id).
 -- Isento da trava do conteúdo: o criador e o owner/admin da org da linha ANTIGA (que, pela
 -- RLS, só chega aqui numa tarefa que vê). Sai a perna de membro do espaço e a de
 -- superadmin (coberta pela de owner/admin).
@@ -170,12 +175,16 @@ SET search_path = public, pg_temp
 AS $$
 BEGIN
     IF current_user IN ('authenticated', 'anon')
+       AND (   NEW.id         IS DISTINCT FROM OLD.id
+            OR NEW.created_at IS DISTINCT FROM OLD.created_at
+            OR NEW.user_id    IS DISTINCT FROM OLD.user_id) THEN
+        RAISE EXCEPTION 'a autoria da tarefa não muda: quem a criou, o id e a data de criação ficam como estão'
+            USING ERRCODE = '42501';
+    END IF;
+    IF current_user IN ('authenticated', 'anon')
        AND NOT coalesce(OLD.user_id = auth.uid()
                         OR OLD.org_id IN (SELECT public.minhas_orgs_gestor()), false)
-       AND (   NEW.id                   IS DISTINCT FROM OLD.id
-            OR NEW.created_at           IS DISTINCT FROM OLD.created_at
-            OR NEW.user_id              IS DISTINCT FROM OLD.user_id
-            OR NEW.org_id               IS DISTINCT FROM OLD.org_id
+       AND (   NEW.org_id               IS DISTINCT FROM OLD.org_id
             OR NEW.space_id             IS DISTINCT FROM OLD.space_id
             OR NEW.folder_id            IS DISTINCT FROM OLD.folder_id
             OR NEW.assignee_employee_id IS DISTINCT FROM OLD.assignee_employee_id
@@ -353,3 +362,5 @@ END;
 $$;
 REVOKE EXECUTE ON FUNCTION public.celular_tarefa_atualizar(TEXT, UUID, JSONB) FROM PUBLIC, anon;
 GRANT  EXECUTE ON FUNCTION public.celular_tarefa_atualizar(TEXT, UUID, JSONB) TO anon, authenticated;
+
+COMMIT;

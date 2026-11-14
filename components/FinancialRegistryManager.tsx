@@ -8,6 +8,10 @@ import { useConfirm } from './ui/confirm';
 import { KpiCard } from './ui/KpiCard';
 import TableSwitch from './ui/TableSwitch';
 import { TIPOS_CHAVE_PIX, validarChavePix } from '../utils/pixKey';
+import { useAgrupamento } from '../hooks/useAgrupamento';
+import { AgruparControles, LinhaDeGrupo } from './ui/Agrupamento';
+import { entradasDaPagina, type EntradaDaTela } from '../utils/agruparLinhas';
+import { agruparContasPagamento, OPCOES_AGRUPAR_CONTA, type CampoAgruparConta } from '../utils/contasPagamentoGrupos';
 
 type PaymentAccountPixTipo = 'cpf' | 'cnpj' | 'email' | 'telefone' | 'aleatoria' | null;
 
@@ -179,6 +183,10 @@ interface FinancialRegistryManagerProps {
      *  a coluna é o que os distingue, e a árvore passa a ser por org + código. */
     showOrganization?: boolean;
     organizationNameById?: Map<string, string>;
+    /** Oferece o "Agrupar" (guia de UI §6.12) na toolbar: campo, ordem dos grupos e recolher/expandir
+     *  todos. Só Contas de Pagamento — o Plano de Contas é uma árvore por código e tem o próprio
+     *  expandir/recolher. */
+    agrupar?: boolean;
     /** Seção extra no drawer ao EDITAR um registro existente (ex.: "Conta Asaas"
      *  em Contas de Pagamento). Os controles dela devem ser type="button". O que
      *  ela tiver para gravar entra no "Salvar" do drawer por `registrarAoSalvar`
@@ -209,6 +217,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
     defaultOrganizationId,
     showOrganization = false,
     organizationNameById,
+    agrupar = false,
     sheetLabels = { create: 'Novo registro', edit: 'Editar registro' },
     servedOrgOptions,
     empresaOptions,
@@ -505,6 +514,29 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
         return rows;
     }, [isFiltering, filteredItems, rootItems, childrenByParentCode, expandedIds]);
 
+    // "Agrupar" — guia de UI §6.12. Os grupos saem da lista já filtrada e ordenada; agrupar
+    // ACHATA a árvore de códigos (o recolher/expandir do Agrupar faz o papel do da árvore).
+    // Campo guardado que deixou de ser opção (Organização, que só existe em "Todas") vale
+    // como sem agrupamento.
+    const agrupamento = useAgrupamento<CampoAgruparConta>(`financialRegistryGroupBy:${title}`);
+    const opcoesAgrupar = useMemo(
+        () => OPCOES_AGRUPAR_CONTA.filter(o => o.value !== 'organizacao' || showOrganization),
+        [showOrganization],
+    );
+    const campoAgrupar: CampoAgruparConta | 'none' = agrupar && opcoesAgrupar.some(o => o.value === agrupamento.campo) ? agrupamento.campo : 'none';
+    const agrupando = campoAgrupar !== 'none';
+    const grupos = useMemo(
+        () => (campoAgrupar === 'none' ? [] : agruparContasPagamento(filteredItems, campoAgrupar, agrupamento.direcao, orgId => (orgId ? organizationNameById?.get(orgId) : undefined))),
+        [filteredItems, campoAgrupar, agrupamento.direcao, organizationNameById],
+    );
+    const entradas: EntradaDaTela<RegistryItem>[] = useMemo(
+        () => (agrupando
+            ? entradasDaPagina(grupos, agrupamento.recolhidos)
+            : visibleRows.map((r, indice) => ({ tipo: 'linha' as const, item: r.item, indice }))),
+        [agrupando, grupos, agrupamento.recolhidos, visibleRows],
+    );
+    const hasChildrenById = useMemo(() => new Map(visibleRows.map(r => [r.item.id, r.hasChildren])), [visibleRows]);
+
     // Auto-ajuste único na 1ª visita (sem largura salva ainda): preenche o
     // container de cara, em vez de deixar a tabela presa à soma dos defaults
     // até o usuário clicar no botão manual (§6.1.2). Depois disso o controle
@@ -580,6 +612,21 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         <AdvancedFilterPanel fields={advancedFilterFields} state={advancedFilters} />
                     </div>
 
+                    {/* Agrupar — guia de UI §6.12 */}
+                    {agrupar && (
+                        <AgruparControles
+                            opcoes={opcoesAgrupar}
+                            campo={campoAgrupar}
+                            onCampo={agrupamento.setCampo}
+                            direcao={agrupamento.direcao}
+                            onDirecao={agrupamento.setDirecao}
+                            chavesDosGrupos={grupos.map(g => g.key)}
+                            algumRecolhido={agrupamento.recolhidos.size > 0}
+                            onAlternarTodos={agrupamento.alternarTodos}
+                            title="Agrupar as contas"
+                        />
+                    )}
+
                     {(onDownloadTemplate || onImport || onExport) && (
                         <>
                             <div className="hidden md:block w-px h-6 bg-gray-200 shrink-0"></div>
@@ -606,7 +653,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                         </>
                     )}
 
-                    {parentIds.length > 0 && !isFiltering && (
+                    {parentIds.length > 0 && !isFiltering && !agrupando && (
                         <button
                             onClick={toggleExpandAll}
                             title={allExpanded ? 'Recolher tudo' : 'Expandir tudo'}
@@ -683,7 +730,7 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-200 bg-white">
-                            {visibleRows.length === 0 ? (
+                            {entradas.length === 0 ? (
                                 <tr>
                                     <td colSpan={orderedVisible.length + 2} className="px-6 py-12 text-center">
                                         <AlertCircle className="w-12 h-12 text-gray-300 mx-auto mb-4" />
@@ -692,7 +739,15 @@ const FinancialRegistryManager: React.FC<FinancialRegistryManagerProps> = ({
                                     </td>
                                 </tr>
                             ) : (
-                                visibleRows.map(({ item, hasChildren }) => {
+                                entradas.map((e) => {
+                                    if (e.tipo === 'grupo') {
+                                        return (
+                                            <LinhaDeGrupo key={`grupo:${e.grupo.key}`} grupo={e.grupo} recolhido={e.recolhido} continua={e.continua}
+                                                colSpan={orderedVisible.length + 2} onAlternar={agrupamento.alternar} semTotal />
+                                        );
+                                    }
+                                    const item = e.item;
+                                    const hasChildren = !agrupando && !!hasChildrenById.get(item.id);
                                     const lvl = showCode ? getLevelStyle(item.code) : getLevelStyle(undefined);
                                     const expanded = !!expandedIds[item.id];
                                     return (

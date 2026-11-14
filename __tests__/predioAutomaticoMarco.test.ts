@@ -9,6 +9,7 @@
  * PA2 (13/11/2026): o prédio sai do ORQUESTRADOR (`planejarPredioDoPedido`), que encadeia os mesmos motores e marca o tipo
  * com `copiaInstalacoes` — o hash do modelo muda só por essa marca; contagens iguais.
  */
+import { dnDoTuboDeQueda } from '../utils/blueprintNbr8160';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { applyBatch, emptyModel, point, sha256, snapshotHash, type Command, type Point } from '../utils/blueprintKernel';
@@ -58,7 +59,7 @@ function predio(c: Caso) {
   const massa = medirMassa(m, { terreno: medirTerreno(divisasDoLote(m.boundaries)), limites: m.boundaries, recuosBase: RECUOS_ZERO, zona: ZONA_DA_MASSA_VAZIA });
   const doBloco = distribuirProduto(m, massa, MEDIO).blocos[0];
   const plano = planejarPredioDoPedido({ original: m, entrada: { blocoId: m.blocos![0].id, produto: MEDIO, doBloco, rotacaoNorteDeg: null, climatizacao: CLIMATIZACAO }, hip: {} });
-  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua };
+  return { model: plano.resultado, unidadesPorAndar: plano.resumo.unidadesPorAndar, plantas: plano.resumo.plantas?.unidades ?? 0, agua: plano.resumo.agua, esgoto: plano.resumo.esgoto, pavimentos: plano.resumo.pavimentos };
 }
 
 /** O que o marco guarda de um prédio. */
@@ -82,6 +83,10 @@ function marcoDoPredio(c: Caso) {
     // PA6: a água fria — trechos de todos os pavimentos e o resumo (hidrômetros, coluna, recalque, reserva, pressão).
     trechosDeAgua: (m.trechos ?? []).filter((t) => t.disciplina === 'AGUA_FRIA').length,
     agua: p.agua,
+    // PA7a: o esgoto — trechos de todos os pavimentos e o resumo (tubos de queda, DN, ventilação, coletor).
+    trechosDeEsgoto: (m.trechos ?? []).filter((t) => t.disciplina === 'ESGOTO').length,
+    esgoto: p.esgoto,
+    andaresComUnidade: p.pavimentos,
   };
 }
 
@@ -103,6 +108,14 @@ describe('marco dos prédios de referência (prédio automático)', () => {
         expect(agora.agua?.vrp).toBe(nome === 'R12');
         expect(agora.agua?.insuficientes).toBe(0);
         expect(agora.agua?.excessivas).toBe(0);
+        // PA7a, "pronto quando": o diâmetro do tubo de queda pela Tabela 6 da NBR 8160 — UHC do grupo × os andares, a
+        // UHC de um andar, e nunca abaixo de 100 com bacia. No R12 (11 andares com unidades), todos DN 100.
+        const n = agora.andaresComUnidade;
+        for (const t of agora.esgoto!.tubos) expect(t.dnMm).toBe(Math.max(dnDoTuboDeQueda(t.uhcPorAndar * n, t.uhcPorAndar, n), t.comBacia ? 100 : 0));
+        if (nome === 'R12') {
+          expect(n).toBe(11);
+          expect(agora.esgoto!.tubos.map((t) => t.dnMm)).toEqual(agora.esgoto!.tubos.map(() => 100));
+        }
       },
       600_000,
     );

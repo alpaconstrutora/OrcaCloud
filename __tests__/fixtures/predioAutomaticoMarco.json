@@ -1,6 +1,6 @@
 {
   "R4": {
-    "modelo": "d2e807d39060df8537e803dfd079aaf7aa5f86b455dfb0f3d8409fd3e7652dea",
+    "modelo": "7e2c2f4b18a5774db6efa074e0e5a4bb988473e6b294426829fa0fdd4cbe4714",
     "unidades": "6874fb31f521eb11f704a287f9a5f001e3e131e09027eadc777e3c2205ef1740",
     "pavimentos": 6,
     "copias": 2,
@@ -10,7 +10,7 @@
     "nucleos": 1,
     "estruturas": 201,
     "quadros": 11,
-    "terminais": 644,
+    "terminais": 646,
     "trechosDeAgua": 472,
     "agua": {
       "pontos": 36,
@@ -31,10 +31,36 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
-    }
+    },
+    "trechosDeEsgoto": 173,
+    "esgoto": {
+      "tubosDeQueda": 2,
+      "pontos": 19,
+      "uhcPorAndar": 51,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 100,
+        "declividadePct": 6.47,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 3
   },
   "R8": {
-    "modelo": "8d70aacba45b771e3980bf940a709d60d36f2f8bca8314cf9da070085a777597",
+    "modelo": "9c764313b2f38b891206d3dc791b998c96805a43388db60d80d3bdca49e211a9",
     "unidades": "5f228917bcb3aee5f02aa4964ec86fa55d03b67a463ed425efada7f131b42505",
     "pavimentos": 10,
     "copias": 6,
@@ -44,7 +70,7 @@
     "nucleos": 2,
     "estruturas": 546,
     "quadros": 44,
-    "terminais": 3344,
+    "terminais": 3346,
     "trechosDeAgua": 2480,
     "agua": {
       "pontos": 85,
@@ -65,10 +91,51 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
-    }
+    },
+    "trechosDeEsgoto": 899,
+    "esgoto": {
+      "tubosDeQueda": 5,
+      "pontos": 45,
+      "uhcPorAndar": 120,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 150,
+        "declividadePct": 4.74,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 7
   },
   "R12": {
-    "modelo": "22b4b56794fa06d9ab9322bc84d274090a44dde3b4c8643adc5c6b078d51d843",
+    "modelo": "50dc7f53b4b9b122114f33b522b5d561b243a334638207dc5afb2ce4f2bb155a",
     "unidades": "b0d15ecac85bf662251e16f26a94519aeed74647dd18cbd5f9e3ea74abe0d906",
     "pavimentos": 14,
     "copias": 10,
@@ -78,7 +145,7 @@
     "nucleos": 3,
     "estruturas": 1059,
     "quadros": 101,
-    "terminais": 8657,
+    "terminais": 8659,
     "trechosDeAgua": 6110,
     "agua": {
       "pontos": 144,
@@ -99,10 +166,66 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
-    }
+    },
+    "trechosDeEsgoto": 2348,
+    "esgoto": {
+      "tubosDeQueda": 8,
+      "pontos": 76,
+      "uhcPorAndar": 204,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 200,
+        "declividadePct": 4.74,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 11
   },
   "RL": {
-    "modelo": "722e579b12dd37c8650ae68163b245195a636941a1ad0bb12a4f060995548924",
+    "modelo": "abb79ced7ec022e21163ed81f5d3d39f5913fc1a9113632258684285042e75bf",
     "unidades": "5a94fe3ecef93fb40957f6e09edff38f94f1df340db13e5d5b00f657b55ccf84",
     "pavimentos": 10,
     "copias": 6,
@@ -112,7 +235,7 @@
     "nucleos": 2,
     "estruturas": 1179,
     "quadros": 100,
-    "terminais": 8812,
+    "terminais": 8814,
     "trechosDeAgua": 6708,
     "agua": {
       "pontos": 229,
@@ -133,6 +256,87 @@
       "insuficientes": 0,
       "excessivas": 0,
       "naoAvaliados": 0
-    }
+    },
+    "trechosDeEsgoto": 2368,
+    "esgoto": {
+      "tubosDeQueda": 13,
+      "pontos": 121,
+      "uhcPorAndar": 324,
+      "dnTuboDeQuedaMm": 100,
+      "dnVentilacaoMm": 75,
+      "tubos": [
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 18,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        },
+        {
+          "uhcPorAndar": 33,
+          "comBacia": true,
+          "dnMm": 100
+        }
+      ],
+      "coletor": {
+        "dnMm": 200,
+        "declividadePct": 23.97,
+        "porGravidade": true
+      }
+    },
+    "andaresComUnidade": 7
   }
 }

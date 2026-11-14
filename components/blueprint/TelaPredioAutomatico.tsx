@@ -302,6 +302,13 @@ export default function TelaPredioAutomatico(props: Props) {
               <span className="block text-xs text-slate-500">Um hidrômetro por unidade na parede do hall; a pressão é conferida no prédio inteiro — pressurizador no superior se o último andar não chega à mínima, VRP no ramal das unidades se a estática passa de 400 kPa.</span>
             </span>
           </label>
+          <label className="flex items-start gap-2 text-sm text-gray-700">
+            <input type="checkbox" className="mt-0.5 h-4 w-4 rounded border-gray-300" checked={props.hipoteses.esgoto} disabled={!props.hipoteses.agua} title={props.hipoteses.agua ? undefined : 'O esgoto liga as louças, que vêm com a água — ligue a água fria'} onChange={(e) => props.onHipoteses({ ...props.hipoteses, esgoto: e.target.checked })} data-testid="hipotese-esgoto" />
+            <span>
+              Lançar o esgoto e a ventilação (ramais, tubo de queda por grupo molhado, desvio no térreo, coletor)
+              <span className="block text-xs text-slate-500">O tubo de queda de cada unidade empilha pelos andares e sobe 2 m acima da cobertura, com a coluna de ventilação ao lado; o DN sai das UHC acumuladas (NBR 8160).</span>
+            </span>
+          </label>
           <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <Numero rotulo="Porta de entrada (mm)" valor={props.hipoteses.larguraDoAcessoMm} min={900} max={3000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, larguraDoAcessoMm: v })} />
             <Numero rotulo="Pé-direito da cobertura (mm)" valor={props.hipoteses.peDireitoDaCoberturaMm} min={2200} max={6000} passo={50} onValor={(v) => v != null && props.onHipoteses({ ...props.hipoteses, peDireitoDaCoberturaMm: v })} />
@@ -365,6 +372,15 @@ export default function TelaPredioAutomatico(props: Props) {
                 plano.resumo.reservacao
                   ? `${plano.resumo.reservacao.pessoas} pessoa(s)${plano.resumo.reservacao.inferiorL != null ? ` · inferior ${plano.resumo.reservacao.inferiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.reservacao.superiorL != null ? ` · superior ${plano.resumo.reservacao.superiorL.toLocaleString('pt-BR')} L` : ''}${plano.resumo.agua?.rtiL ? ` + ${(plano.resumo.agua.rtiL / 1000).toLocaleString('pt-BR')} m³ de reserva de incêndio` : ''}`
                   : undefined
+              }
+            />
+            <Dado
+              rotulo="Esgoto"
+              valor={plano.resumo.esgoto ? `${plano.resumo.esgoto.tubosDeQueda} tubo(s) de queda por andar` : '—'}
+              nota={
+                plano.resumo.esgoto
+                  ? `DN ${plano.resumo.esgoto.dnTuboDeQuedaMm} · ${plano.resumo.esgoto.uhcPorAndar} UHC por andar · ventilação DN ${plano.resumo.esgoto.dnVentilacaoMm}${plano.resumo.esgoto.coletor ? ` · coletor DN ${plano.resumo.esgoto.coletor.dnMm}` : ''}`
+                  : 'desligado nas hipóteses'
               }
             />
             <Dado

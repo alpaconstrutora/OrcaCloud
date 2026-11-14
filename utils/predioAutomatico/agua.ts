@@ -158,7 +158,7 @@ export interface AguaFriaDoPredio {
 }
 
 /** Os cômodos do tipo de cada unidade (pela fatia da divisão) e os do hall (os demais com nome). */
-function comodosDoTipo(m: BlueprintModel, base: BaseDoPredio) {
+export function comodosDoTipo(m: BlueprintModel, base: BaseDoPredio) {
   const tipo = base.tipoLevelId;
   const espacos = m.spaces.filter((s) => s.levelId === tipo);
   // Um ponto DENTRO de cada cômodo: a etiqueta dele, senão o centro do anel (se cair dentro).

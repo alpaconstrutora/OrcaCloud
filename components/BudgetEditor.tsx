@@ -148,14 +148,17 @@ const DEFAULT_COL_WIDTHS: Record<string, number> = {
   codigo: 88,
   // 320 (era 520): a descrição vai em até 2 linhas com o texto inteiro no title, e as colunas
   // de identificação ficam FIXAS à esquerda — com 520 a parte fixa tomava metade da tela.
-  descricao: 260,
-  qtd: 84,
-  unid: 72,
-  'custo-unit': 128,
-  'custo-total': 128,
-  bdi: 76,
-  'preco-unit': 128,
-  'preco-total': 216,
+  // 240 (era 260): sem a palavra "Insumo"/"Serviço" ao lado do ícone (pedido 2026-11-14).
+  descricao: 240,
+  // Colunas numéricas enxutas (14/11/2026): com Item…Descrição fixos à esquerda e Preço total
+  // fixo à direita, é o meio que rola — quanto mais estreito, mais dele cabe na tela.
+  qtd: 72,
+  unid: 60,
+  'custo-unit': 116,
+  'custo-total': 120,
+  bdi: 72,
+  'preco-unit': 116,
+  'preco-total': 200,
   mo: 112,
   mat: 112,
   equip: 112,
@@ -321,19 +324,40 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   // Descrição. A tabela é mais larga que a tela; sem isso, rolar até Preço total/ações perdia
   // o item. Mesmo recurso da lista de Orçamentos (guia §6.13.1): tabela em border-separate
   // (o collapse vaza texto na costura entre células fixas) e fundo opaco em cada célula fixa.
+  const [telaLarga, setTelaLarga] = React.useState(() =>
+    typeof window === 'undefined' || typeof window.matchMedia !== 'function' || window.matchMedia('(min-width: 768px)').matches);
+  React.useEffect(() => {
+    if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return;
+    const mq = window.matchMedia('(min-width: 768px)');
+    const aoMudar = () => setTelaLarga(mq.matches);
+    mq.addEventListener?.('change', aoMudar);
+    return () => mq.removeEventListener?.('change', aoMudar);
+  }, []);
   const esquerdaFixa = (() => {
     const left: Record<'drag' | 'item' | 'base' | 'codigo' | 'descricao', number> = { drag: 0, item: 0, base: 0, codigo: 0, descricao: 0 };
     let x = DRAG_COL_WIDTH;
     for (const k of ['item', 'base', 'codigo', 'descricao'] as const) { left[k] = x; x += cols.getWidth(k); }
     return left;
   })();
-  const fixaEap = (left: number, opts: { cabecalho?: boolean; ultima?: boolean } = {}): React.CSSProperties => ({
+  const fixaEap = (left: number, opts: { cabecalho?: boolean; ultima?: boolean } = {}): React.CSSProperties | undefined => (!telaLarga ? undefined : {
     position: 'sticky',
     left,
     // 30 no cabeçalho: a alça de redimensionar das colunas roladas é z-20 (§6.13.1).
     zIndex: opts.cabecalho ? 30 : 1,
     ...(opts.cabecalho ? { background: '#fff' } : {}),
     ...(opts.ultima ? { boxShadow: SOMBRA_FIXA_EAP } : {}),
+  });
+  // Preço total FIXO à DIREITA (pedido 2026-11-14: "Preço total a 1280 ainda exige rolar"). Com
+  // 12 colunas a tabela não cabe a 1280; fixando identificação à esquerda e total à direita, só
+  // o meio (Qtd…Preço unit.) rola. Com M.O/Mat/Equip ligado o total não é a última coluna — aí
+  // não fixa.
+  const precoTotalFixo = telaLarga && !showNatureBreakdown;
+  const fixaDireita = (cabecalho = false): React.CSSProperties | undefined => (!precoTotalFixo ? undefined : {
+    position: 'sticky',
+    right: 0,
+    zIndex: cabecalho ? 30 : 1,
+    ...(cabecalho ? { background: '#fff' } : {}),
+    boxShadow: '-6px 0 8px -6px rgba(15, 23, 42, 0.14)',
   });
   const [auxiliaryItems, setAuxiliaryItems] = React.useState<Map<string, SinapiItem>>(new Map());
   const [isLoadingAuxiliary, setIsLoadingAuxiliary] = React.useState(false);
@@ -2223,7 +2247,10 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
   };
 
   return (
-    <div className="h-full flex flex-col space-y-4 relative">
+    // lg:h-full: no desktop a tabela ocupa o que sobra da tela (rola dentro). No celular o
+    // cabeçalho + barras tomavam a altura toda e a tabela ficava com 15 px (2ª crítica): ali a
+    // página rola e a tabela ganha altura mínima própria.
+    <div className="lg:h-full flex flex-col space-y-4 relative">
       {orphanedItems.length > 0 && (
         <div className="mx-0 p-4 bg-amber-50 border border-amber-200 rounded-[10px] animate-in slide-in-from-top-2">
           <div className="flex items-center justify-between">
@@ -2636,7 +2663,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
           separada do conteúdo pelo border-b. Aqui ficam só os controles do
           RECORTE das linhas (busca) e da apresentação das colunas (autofit) —
           o resto é escopo e mora na toolbar de botões acima (§5.3). */}
-      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-0">
+      <div className="flex-1 bg-white rounded-[10px] shadow-sm border border-gray-200 overflow-hidden flex flex-col min-h-[60vh] lg:min-h-0">
         <div className="p-3 border-b border-gray-100 flex flex-col md:flex-row gap-2.5 items-center">
           <div className="flex-1 relative w-full">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" />
@@ -3110,7 +3137,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
         })()
       }
         {/* Conteúdo — SEM bg/border/rounded/shadow próprios: o card pai já supre (§5.2) */}
-        <div className="flex-1 overflow-auto min-h-0">
+        <div className="flex-1 overflow-auto min-h-0 max-h-[75vh] lg:max-h-none">
           <table
             ref={cols.tableRef}
             // border-separate (colunas fixas — §6.13.1): a divisória entre linhas vai nas
@@ -3151,7 +3178,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                 <th title="BDI do item (%). Vazio = usa o BDI global da barra acima." className="px-3 py-2 border-r border-gray-100 text-center relative overflow-hidden">BDI (%)<cols.ResizeHandle colKey="bdi" /></th>
                 <th className="px-3 py-2 border-r border-gray-100 text-right relative overflow-hidden">Preço unit.<cols.ResizeHandle colKey="preco-unit" /></th>
                 <th aria-hidden="true" className="border-r border-gray-100"></th>
-                <th className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right relative overflow-hidden">Preço total<cols.ResizeHandle colKey="preco-total" /></th>
+                <th style={fixaDireita(true)} className="px-3 py-2 border-r border-gray-100 last:border-r-0 text-right relative overflow-hidden">Preço total<cols.ResizeHandle colKey="preco-total" /></th>
                 {showNatureBreakdown && (
                   <>
                     <th className="px-3 py-2 border-r border-gray-100 text-right text-blue-600 bg-blue-50/50 relative overflow-hidden">M.O<cols.ResizeHandle colKey="mo" /></th>
@@ -3201,7 +3228,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                     </div>
                   </td>
                   <td colSpan={7} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda}`}></td>
-                  <td className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} last:border-r-0 relative`}>
+                  <td style={fixaDireita()} className={`px-3 ${tomGrupo.py} border-r ${tomGrupo.borda} last:border-r-0 relative ${precoTotalFixo ? tomGrupo.fixo : ''}`}>
                       {/* Valor + "Nova etapa" + ⋮ numa linha só (§9.2): eram 6 ícones empilhados
                           embaixo do valor, e a faixa do grupo tinha 72px de altura. */}
                     <div className="flex items-center justify-end gap-1.5">
@@ -3261,7 +3288,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                           </div>
                         </td>
                         <td colSpan={7} className="px-3 py-2.5 border-r border-gray-200"></td>
-                        <td className="px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative">
+                        <td style={fixaDireita()} className={`px-3 py-2.5 border-r border-gray-200 last:border-r-0 relative ${precoTotalFixo ? 'bg-gray-100 group-hover:bg-gray-200' : ''}`}>
                           <div className="flex items-center justify-end gap-1.5">
                             <span className="font-medium text-gray-800 text-sm whitespace-nowrap">{valorOuTraco(itensDaEtapa, phaseTotal)}</span>
                             <button type="button" onClick={(e) => handleAddSubPhase(e, gIndex, pIndex)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Nova subetapa" aria-label="Nova subetapa"><Plus className="w-4 h-4" /></button>
@@ -3318,7 +3345,7 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                 </div>
                               </td>
                               <td colSpan={7} className="px-3 py-2.5 border-r border-gray-100"></td>
-                              <td className="px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative">
+                              <td style={fixaDireita()} className={`px-3 py-2.5 border-r border-gray-100 last:border-r-0 relative ${precoTotalFixo ? 'bg-gray-50 group-hover:bg-gray-100' : ''}`}>
                                 <div className="flex items-center justify-end gap-1.5">
                                   <span className="font-medium text-gray-700 text-sm whitespace-nowrap">{valorOuTraco(itensDaSubetapa, subTotal)}</span>
                                   <button type="button" onClick={(e) => handleOpenAddItem(e, group.name, phase.name, subPhaseName)} className="p-1.5 hover:bg-blue-200 rounded-[6px] text-blue-700" title="Adicionar item" aria-label="Adicionar item"><Plus className="w-4 h-4" /></button>
@@ -3380,7 +3407,8 @@ const BudgetEditor: React.FC<BudgetEditorProps> = ({
                                       natureBreakdown={showNatureBreakdown ? getNatureBreakdown(item) : undefined}
                                       auxiliaryItems={auxiliaryItems}
                                       isLocked={isLocked}
-                                      esquerdaFixa={esquerdaFixa}
+                                      esquerdaFixa={telaLarga ? esquerdaFixa : undefined}
+                                      precoTotalFixo={precoTotalFixo}
                                     />
                                   ))}
                                 </SortableContext>

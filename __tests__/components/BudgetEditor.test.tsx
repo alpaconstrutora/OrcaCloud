@@ -506,8 +506,9 @@ describe('Filtro de grupo e ordem dos grupos', () => {
 
         fireEvent.change(screen.getByLabelText('Ordem dos grupos'), { target: { value: 'name' } });
         fireEvent.click(menuDoPrimeiroGrupo());
-        // o menu anterior pode ainda estar saindo (animação): vale o último, o do menu aberto
-        const baixo = within(container.querySelector('tr.bg-gray-800') as HTMLElement).getAllByRole('button', { name: 'Mover para baixo' }).at(-1) as HTMLButtonElement;
+        // O painel do ⋮ abre no <body> (portal, 14/11/2026), não dentro da linha. O menu anterior
+        // pode ainda estar saindo (animação): vale o último, o do menu aberto.
+        const baixo = screen.getAllByRole('button', { name: 'Mover para baixo' }).at(-1) as HTMLButtonElement;
         expect(baixo.disabled).toBe(true);
         expect(baixo.getAttribute('title')).toContain('Ordem da EAP');
         expect(nomesDosGrupos(container).length).toBe(3);

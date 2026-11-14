@@ -1703,6 +1703,18 @@ Três armadilhas, todas medidas no navegador — cada uma passa limpa em teste d
    ⚠️ Ao conferir foco no Playwright, espere ~300 ms: o `index.css` dá `transition: all 0.2s` a todo
    `button`, e o anel lido no mesmo instante do Tab sai transparente (parece defeito e não é).
 
+5. **Total fixo à DIREITA** (Orçamento Analítico, 14/11/2026 — "Preço total a 1280 ainda exige
+   rolar"): com a identificação fixa à esquerda e a coluna do total fixa à direita (`sticky right:0`,
+   sombra para a esquerda `-6px 0 8px -6px`), só o meio rola. Só fixa quando o total é a última
+   coluna (com M.O/Mat/Equip ligados ele não é). Abaixo de 768px **nenhuma** coluna fica fixa: no
+   celular elas tomariam a largura toda.
+6. **Menu ⋮ em célula de tabela** (`InlineDisclosureMenu`): o painel vai para o `<body>` com
+   `position: fixed` e abre PARA CIMA quando não cabe embaixo — antes, nas últimas linhas, abria
+   para baixo e a área de rolagem o cortava; numa célula fixa (`zIndex: 1`) as linhas seguintes
+   ainda o cobriam. Dentro de diálogo Radix (`[role="dialog"]`) fica no lugar (portal para o body
+   ali seria inclicável), virando para cima pela classe. Rolar/redimensionar fecha; Esc devolve o
+   foco ao botão. Teste que procurava o item `within(linha)` passa a usar `screen`.
+
 > ℹ️ A largura padrão de uma coluna pode ser própria do contexto (`DEFAULT_COL_WIDTHS_ORCAMENTO`):
 > `useResizableColumns` grava só o que o usuário arrastou, então mudar o padrão não pisa em ninguém.
 > ℹ️ Junto: célula de texto longo (Cliente) numa linha só (`block truncate` + `title`), nome com
